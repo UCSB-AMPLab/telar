@@ -146,6 +146,9 @@ def process_objects(df):
     Process objects CSV
     Expected columns: object_id, title, creator, date, description, etc.
     """
+    # Tracking for summary
+    warnings = []
+
     # Drop example column if it exists
     if 'example' in df.columns:
         df = df.drop(columns=['example'])
@@ -155,6 +158,59 @@ def process_objects(df):
 
     # Remove rows where object_id is empty
     df = df[df['object_id'].astype(str).str.strip() != '']
+
+    # Validate thumbnail field
+    if 'thumbnail' in df.columns:
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.tif', '.tiff']
+        placeholder_values = ['n/a', 'null', 'none', 'placeholder', 'na', 'thumbnail']
+
+        for idx, row in df.iterrows():
+            thumbnail = str(row.get('thumbnail', '')).strip()
+            object_id = row.get('object_id', 'unknown')
+
+            # Skip if already empty
+            if not thumbnail:
+                continue
+
+            # Check for placeholder values
+            if thumbnail.lower() in placeholder_values:
+                df.at[idx, 'thumbnail'] = ''
+                msg = f"Cleared invalid thumbnail placeholder '{thumbnail}' for object {object_id}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+                continue
+
+            # Check for valid image extension
+            has_valid_extension = any(thumbnail.lower().endswith(ext) for ext in valid_extensions)
+
+            if not has_valid_extension:
+                df.at[idx, 'thumbnail'] = ''
+                msg = f"Cleared invalid thumbnail '{thumbnail}' for object {object_id} (not an image file)"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+                continue
+
+            # Normalize path to avoid duplicate slashes
+            # Accept both /path and path, ensure single leading slash if present
+            if thumbnail.startswith('/'):
+                # Remove duplicate slashes
+                normalized = '/' + '/'.join(filter(None, thumbnail.split('/')))
+                if normalized != thumbnail:
+                    df.at[idx, 'thumbnail'] = normalized
+                    thumbnail = normalized
+                    print(f"  [INFO] Normalized thumbnail path for object {object_id}: {normalized}")
+
+            # Check if file exists (remove leading slash for filesystem check)
+            file_path = thumbnail.lstrip('/')
+            if not Path(file_path).exists():
+                msg = f"Thumbnail file not found for object {object_id}: {thumbnail}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+                # Don't clear - file might be added later or exist in different environment
+
+    # Print summary if there were issues
+    if warnings:
+        print(f"\n  Objects validation summary: {len(warnings)} warning(s)")
 
     return df
 
