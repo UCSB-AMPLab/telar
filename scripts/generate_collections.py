@@ -40,6 +40,7 @@ location: "{obj.get('location', '')}"
 credit: "{obj.get('credit', '')}"
 thumbnail: {obj.get('thumbnail', '')}
 iiif_manifest: {obj.get('iiif_manifest', '')}
+object_warning: "{obj.get('object_warning', '')}"
 layout: object
 ---
 

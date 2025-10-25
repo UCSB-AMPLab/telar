@@ -1,5 +1,5 @@
 ---
-object_id: example-bogota-1614
+object_id: example-bogota-1616
 title: "Painting of the lands marshes and swamps of the town of Bogotá"
 creator: "Juan de Aguilar Rendón (painter) and Alonso Ruiz Gadálmez (guarantor)"
 period: "April 1614"
@@ -9,7 +9,7 @@ location: "Archivo General de Indias"
 credit: "Archivo General de Indias, Seville"
 thumbnail: 
 iiif_manifest: 
-object_warning: ""
+object_warning: "the image file for the object ID you specified (example-bogota-1616) in your configuration CSV or Google Sheet was not found in components/images/objects/"
 layout: object
 ---
 

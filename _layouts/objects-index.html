@@ -15,6 +15,34 @@ layout: default
   </div>
 
   {% if site.objects.size > 0 %}
+
+  {% comment %}Check for objects with warnings{% endcomment %}
+  {% assign objects_with_warnings = "" | split: "" %}
+  {% for object in site.objects %}
+    {% if object.object_warning and object.object_warning != "" %}
+      {% assign objects_with_warnings = objects_with_warnings | push: object %}
+    {% endif %}
+  {% endfor %}
+
+  {% if objects_with_warnings.size > 0 %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="alert alert-warning" role="alert" style="max-width: 800px;">
+        <strong>⚠️ Configuration Issues Detected</strong>
+        <p class="mb-2 mt-2"><small>The following objects have configuration issues:</small></p>
+        <ul class="mb-2" style="font-size: 0.9rem;">
+        {% for object in objects_with_warnings %}
+          <li>
+            <strong><a href="{{ object.url | relative_url }}" class="alert-link">{{ object.title }}</a>:</strong> {{ object.object_warning | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+          </li>
+        {% endfor %}
+        </ul>
+        <p class="mb-0"><small>These objects will fail to load in the viewer.</small></p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="collection-grid">
     {% for object in site.objects %}
     <a href="{{ object.url | relative_url }}" class="collection-item">

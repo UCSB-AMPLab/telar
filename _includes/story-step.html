@@ -20,22 +20,30 @@
     <!-- Answer (Main Content) -->
     <div class="step-answer">
       {{ include.answer | markdownify }}
-
-      <!-- Layer 1 Panel Trigger -->
-      {% if (include.layer1_title and include.layer1_title != "") or (include.layer1_text and include.layer1_text != "") %}
-      <p>
-        <button class="panel-trigger" data-panel="layer1" data-step="{{ include.step_number }}">
-          {% if include.layer1button and include.layer1button != "" %}
-            {{ include.layer1button }}
-          {% else %}
-            Learn more
-          {% endif %} →
-        </button>
-      </p>
-      {% endif %}
-
-      <!-- Layer 2 Panel Trigger: Dynamically added by JavaScript inside layer1 panel -->
     </div>
+
+    <!-- Viewer Warning (if object or IIIF manifest is missing) -->
+    {% if include.viewer_warning and include.viewer_warning != "" %}
+    <div class="alert alert-warning mt-3" role="alert">
+      <strong>Image viewer unavailable:</strong> {{ include.viewer_warning }}<br>
+      Please check <code>components/structures/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
+    </div>
+    {% endif %}
+
+    <!-- Layer 1 Panel Trigger -->
+    {% if (include.layer1_title and include.layer1_title != "") or (include.layer1_text and include.layer1_text != "") %}
+    <p class="mt-3">
+      <button class="panel-trigger" data-panel="layer1" data-step="{{ include.step_number }}">
+        {% if include.layer1button and include.layer1button != "" %}
+          {{ include.layer1button }}
+        {% else %}
+          Learn more
+        {% endif %} →
+      </button>
+    </p>
+    {% endif %}
+
+    <!-- Layer 2 Panel Trigger: Dynamically added by JavaScript inside layer1 panel -->
   </div>
 
   <!-- Return Home Button (only on last step) - positioned at bottom -->

@@ -1,5 +1,15 @@
 [
   {
+    "_metadata": true,
+    "viewer_warnings": [
+      {
+        "step": 4,
+        "type": "panel",
+        "message": "the file for the layer 1 panel, <code>story2/step4-layer6.md</code>, was not found"
+      }
+    ]
+  },
+  {
     "step": 1,
     "question": "Where can Telar get its materials from?",
     "answer": "Telar works with IIIF images from any institution. This map comes from the Huntington Library's digital collection.",
@@ -9,6 +19,7 @@
     "zoom": "1.0",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "IIIF Compatibility",
     "layer1_text": "<p>Telar is built on <strong>IIIF</strong> (International Image Interoperability Framework), an open standard that makes it easy to deliver, view, and annotate high-resolution images on the web.</p>\n<p><strong>Why IIIF matters:</strong><br />\n- Access images from thousands of cultural heritage institutions worldwide<br />\n- Work with materials from museums, libraries, and archives<br />\n- No need to download or store large image files<br />\n- Images remain on the institution's servers with proper attribution</p>\n<p><strong>This map</strong> comes from the Huntington Library's IIIF collection and loads seamlessly in Telar.</p>\n<p><strong>Find IIIF resources:</strong><br />\n- <a href=\"https://iiif.io/guides/finding_resources/\">IIIF Guide to Finding Resources</a> - Discover collections<br />\n- <a href=\"https://iiif.io/community/\">IIIF Community</a> - Connect with institutions<br />\n- <a href=\"https://iiif.io/api/cookbook/\">IIIF Cookbook</a> - Technical recipes</p>\n<p>Telar works with any IIIF-compliant repository - simply paste the manifest URL.</p>",
     "layer2_title": "",
@@ -24,6 +35,7 @@
     "zoom": "1.0",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "Your Own Materials",
     "layer1_text": "<p>You don't need to rely only on institutional collections - <strong>Telar can work with your own images</strong>.</p>\n<p><strong>How it works:</strong><br />\n1. Place high-resolution images in <code>components/images/objects/</code><br />\n2. Telar automatically generates IIIF tiles during the build process<br />\n3. Your images get the same zoom and pan capabilities as materials from major institutions</p>\n<p><strong>The result:</strong> This ceramic figure uses locally-generated IIIF tiles, while the previous map came from the Huntington Library. Notice how they work seamlessly together - readers can't tell the difference.</p>\n<p><strong>Mix and match:</strong> Combine your own photographs, documents, and artifacts with materials from museums and archives worldwide to tell rich, multi-source stories.</p>",
     "layer2_title": "",
@@ -39,6 +51,7 @@
     "zoom": "1.0",
     "layer1_button": "See Markdown Examples",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "Markdown Formatting",
     "layer1_text": "<p>Telar panels support <strong>full Markdown syntax</strong> for rich text formatting:</p>\n<ul>\n<li><strong>Bold text</strong> for emphasis</li>\n<li><em>Italic text</em> for nuance</li>\n<li><a href=\"https://iiif.io\">External links</a> to resources</li>\n<li>Numbered and bulleted lists</li>\n</ul>\n<p>Block quotations, like this: </p>\n<blockquote>\n<p>This gold figure, dating from 600-1600 CE, is an example of the Muisca's sophisticated <em>metalworking techniques</em>.<sup id=\"fnref:1\"><a class=\"footnote-ref\" href=\"#fn:1\">2</a></sup></p>\n</blockquote>\n<p>You can even include footnotes<sup id=\"fnref:2\"><a class=\"footnote-ref\" href=\"#fn:2\">1</a></sup> for citations and references.</p>\n<div class=\"footnote\">\n<hr />\n<ol>\n<li id=\"fn:2\">\n<p>Footnotes appear at the bottom of panel content with proper styling.&#160;<a class=\"footnote-backref\" href=\"#fnref:2\" title=\"Jump back to footnote 1 in the text\">&#8617;</a></p>\n</li>\n<li id=\"fn:1\">\n<p>The Museo del Oro in Bogotá holds extensive collections of these artifacts.&#160;<a class=\"footnote-backref\" href=\"#fnref:1\" title=\"Jump back to footnote 2 in the text\">&#8617;</a></p>\n</li>\n</ol>\n</div>",
     "layer2_title": "",
@@ -54,8 +67,9 @@
     "zoom": "1.0",
     "layer1_button": "Context",
     "layer2_button": "Deep Dive",
-    "layer1_title": "Progressive Disclosure",
-    "layer1_text": "<p>Telar's <strong>two-layer panel system</strong> lets you provide information at different depths:</p>\n<p><strong>Layer 1</strong> (this panel) offers context and overview - perfect for readers who want the essential story.</p>\n<p><strong>Layer 2</strong> (click \"Deep Dive\" below) provides detailed analysis, scholarly citations, and extended discussion for readers who want to go deeper.</p>\n<p>This approach accommodates different reading styles and levels of interest without cluttering the main narrative.</p>",
+    "viewer_warning": "",
+    "layer1_title": "Content Missing",
+    "layer1_text": "<div class=\"alert alert-warning\" role=\"alert\">\n    <strong>Content file missing:</strong> <code>story2/step4-layer6.md</code><br>\n    Please add this file to <code>components/texts/stories/</code> or remove the reference from the CSV.\n</div>",
     "layer2_title": "Deeper Analysis",
     "layer2_text": "<p><strong>Layer 2</strong> content like this can include:<br />\n- Extended context and sources<br />\n- Detailed technical analysis<br />\n- Scholarly citations and references<br />\n- Connections to other materials</p>\n<p>Readers access this additional depth only when they choose to, keeping your main narrative accessible while allowing you to further include information for different audiences.</p>"
   },
@@ -69,6 +83,7 @@
     "zoom": "1.5",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "Pan and Zoom Control",
     "layer1_text": "<p>Telar gives you precise control over what your reader sees. Each story step defines x, y coordinates and zoom level.</p>\n<p>For example, this image features portrait medallions of seven supposed indigenous rulers of the Muisca before the Spanish invasion (Sacuan, Sugamuxi, Nemeguene, Vbaqui, Saquesazippa, Thysquesuca, and Guatabita). You might pan and zoom into each and then provide panels like these with more information at each step.</p>",
     "layer2_title": "",
@@ -84,6 +99,7 @@
     "zoom": "4.0",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "",
     "layer1_text": "",
     "layer2_title": "",
@@ -99,6 +115,7 @@
     "zoom": "4.0",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "",
     "layer1_text": "",
     "layer2_title": "",
@@ -114,6 +131,7 @@
     "zoom": "4.0",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "",
     "layer1_text": "",
     "layer2_title": "",
@@ -129,6 +147,7 @@
     "zoom": "1.0",
     "layer1_button": "",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "",
     "layer1_text": "",
     "layer2_title": "",
@@ -144,6 +163,7 @@
     "zoom": "1.0",
     "layer1_button": "Storytelling Possibilities",
     "layer2_button": "",
+    "viewer_warning": "",
     "layer1_title": "Rich Media in Panels",
     "layer1_text": "<p>Telar panels can include <strong>rich media</strong> alongside text:</p>\n<p><img alt=\"AMPL Logo\" src=\"/components/images/additional/ampl-logo.png\" /></p>\n<p><strong>Images</strong> can be embedded directly in panel content using Markdown syntax. Simply reference images from your project's assets.</p>\n<p><strong>Videos</strong> can also be embedded, allowing you to combine IIIF images with multimedia explanations, oral histories, or documentary footage:</p>\n<div style=\"position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 1.5rem 0;\">\n  <iframe style=\"position: absolute; top: 0; left: 0; width: 100%; height: 100%;\" src=\"https://www.youtube.com/embed/EKOJgD0vLUI\" frameborder=\"0\" allowfullscreen></iframe>\n</div>\n\n<p><strong>Combine everything</strong>: Mix IIIF images from global repositories, locally-hosted materials, pan and zoom navigation, layered information, Markdown formatting, and rich media to create compelling scholarly narratives.</p>",
     "layer2_title": "",

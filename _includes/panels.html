@@ -81,4 +81,72 @@
     line-height: 1.8;
     margin-bottom: 1rem;
   }
+
+  /* Image error styling */
+  .offcanvas-body .img-error {
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 1rem;
+    margin: 1rem 0;
+    color: #856404;
+  }
+
+  .offcanvas-body .img-error code {
+    background-color: #ffe69c;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.875em;
+  }
 </style>
+
+<script>
+  // Handle image loading errors in panels
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add error handlers to existing images
+    document.querySelectorAll('.offcanvas-body img').forEach(function(img) {
+      img.addEventListener('error', function() {
+        handleImageError(this);
+      });
+    });
+
+    // Watch for new images added dynamically
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.tagName === 'IMG') {
+            node.addEventListener('error', function() {
+              handleImageError(this);
+            });
+          } else if (node.querySelectorAll) {
+            node.querySelectorAll('img').forEach(function(img) {
+              img.addEventListener('error', function() {
+                handleImageError(this);
+              });
+            });
+          }
+        });
+      });
+    });
+
+    // Observe all panel bodies for image additions
+    document.querySelectorAll('.offcanvas-body').forEach(function(body) {
+      observer.observe(body, { childList: true, subtree: true });
+    });
+  });
+
+  function handleImageError(img) {
+    // Only process once
+    if (img.dataset.errorHandled) return;
+    img.dataset.errorHandled = 'true';
+
+    const src = img.getAttribute('src') || '';
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'img-error';
+    errorDiv.innerHTML = '<strong>Image file not found:</strong> <code>' + src + '</code><br>' +
+                         'Please add this file or update the path in the markdown.';
+
+    // Replace image with error message
+    img.parentNode.replaceChild(errorDiv, img);
+  }
+</script>

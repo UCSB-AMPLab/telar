@@ -1,5 +1,5 @@
 ---
-object_id: example-piedrahita-title_page
+object_id: example-piedrahita-title_page2
 title: "Historia general de la conqvistas del nvevo reyno de Granada"
 creator: "Fernández de Piedrahita, Lucas (1624-1688); Engraved by Joseph Mulder"
 period: "1688"
@@ -8,8 +8,8 @@ dimensions: "28.6 x 19.7 cm"
 location: "John Carter Brown Library"
 credit: "John Carter Brown Library, Brown University, Providence, R.I."
 thumbnail: 
-iiif_manifest: https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest
-object_warning: ""
+iiif_manifest: https://jcb.lunaimaging.com/
+object_warning: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
 layout: object
 ---
 

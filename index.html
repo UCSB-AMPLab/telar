@@ -27,6 +27,54 @@ title: Home
   </div>
   {% endif %}
 
+  <!-- Configuration Issues Warning -->
+  {% assign has_object_issues = false %}
+  {% assign stories_with_issues = "" | split: "" %}
+
+  {%- comment -%}Check for object warnings{%- endcomment -%}
+  {% for object in site.objects %}
+    {% if object.object_warning and object.object_warning != "" %}
+      {% assign has_object_issues = true %}
+      {% break %}
+    {% endif %}
+  {% endfor %}
+
+  {%- comment -%}Collect stories with warnings{%- endcomment -%}
+  {% for story in site.stories %}
+    {% assign story_data = site.data[story.data_file] %}
+    {% if story_data.size > 0 and story_data[0]._metadata %}
+      {% assign metadata = story_data[0] %}
+      {% if metadata.viewer_warnings.size > 0 %}
+        {% assign stories_with_issues = stories_with_issues | push: story %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+
+  {% if has_object_issues or stories_with_issues.size > 0 %}
+  <div class="row">
+    <div class="col-lg-11 mx-auto">
+      <div class="alert alert-warning" role="alert" style="max-width: 800px;">
+        <strong>⚠️ Configuration Issues Detected</strong>
+        <p class="mb-0 mt-2"><small>
+          {% if has_object_issues and stories_with_issues.size > 0 %}
+            Some objects and stories have configuration issues. Navigate to the <a href="{{ '/objects/' | relative_url }}" class="alert-link">objects page</a> or
+            {% for story in stories_with_issues %}
+              <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == stories_with_issues.size | minus: 1 %} or {% else %}, {% endif %}{% endunless %}
+            {% endfor %} to see more details.
+          {% elsif has_object_issues %}
+            Some objects have configuration issues. Navigate to the <a href="{{ '/objects/' | relative_url }}" class="alert-link">objects page</a> to see more details.
+          {% elsif stories_with_issues.size > 0 %}
+            Some stories have configuration issues. Navigate to
+            {% for story in stories_with_issues %}
+              <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == stories_with_issues.size | minus: 1 %} or {% else %}, {% endif %}{% endunless %}
+            {% endfor %} to see more details.
+          {% endif %}
+        </small></p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Stories List -->
   <div class="row">
     <div class="col-lg-11 mx-auto">

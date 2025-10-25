@@ -97,6 +97,16 @@ def csv_to_json(csv_path, json_path, process_func=None):
         # Convert to JSON
         data = df.to_dict('records')
 
+        # If dataframe has metadata (e.g., viewer warnings), prepend as first element
+        if hasattr(df, 'attrs') and 'viewer_warnings' in df.attrs:
+            viewer_warnings = df.attrs['viewer_warnings']
+            if viewer_warnings:  # Only add if there are warnings
+                metadata = {
+                    '_metadata': True,
+                    'viewer_warnings': viewer_warnings
+                }
+                data.insert(0, metadata)
+
         # Write JSON file
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -163,6 +173,35 @@ def process_objects(df):
     # Remove rows where object_id is empty
     df = df[df['object_id'].astype(str).str.strip() != '']
 
+    # Validate and clean object_id values
+    valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg']
+    for idx, row in df.iterrows():
+        object_id = str(row.get('object_id', '')).strip()
+        original_id = object_id
+        modified = False
+
+        # Check for file extensions and strip them
+        for ext in valid_extensions:
+            if object_id.lower().endswith(ext):
+                object_id = object_id[:-len(ext)]
+                modified = True
+                print(f"  [INFO] Stripped file extension from object_id: '{original_id}' → '{object_id}'")
+                break
+
+        # Check for spaces in object_id
+        if ' ' in object_id:
+            msg = f"Object ID '{object_id}' contains spaces - this may cause issues with file paths"
+            print(f"  [WARN] {msg}")
+            warnings.append(msg)
+
+        # Update the dataframe if modified
+        if modified:
+            df.at[idx, 'object_id'] = object_id
+
+    # Add object_warning column for IIIF/image validation
+    if 'object_warning' not in df.columns:
+        df['object_warning'] = ''
+
     # Validate thumbnail field
     if 'thumbnail' in df.columns:
         valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.tif', '.tiff']
@@ -226,6 +265,7 @@ def process_objects(df):
             parsed = urlparse(manifest_url)
             if not parsed.scheme in ['http', 'https']:
                 df.at[idx, 'iiif_manifest'] = ''
+                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet is not valid"
                 msg = f"Cleared invalid IIIF manifest for object {object_id}: not a valid URL"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
@@ -246,10 +286,11 @@ def process_objects(df):
 
                     # Check if response is JSON
                     if 'json' not in content_type.lower():
+                        df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
                         msg = f"IIIF manifest for object {object_id} does not return JSON (Content-Type: {content_type})"
                         print(f"  [WARN] {msg}")
                         warnings.append(msg)
-                        # Don't clear - might still work despite wrong content type
+                        # Don't clear manifest URL - might still work despite wrong content type
                         continue
 
                     # Fetch full content to validate structure
@@ -265,6 +306,7 @@ def process_objects(df):
                             has_type = 'type' in data or '@type' in data
 
                             if not (has_context or has_type):
+                                df.at[idx, 'object_warning'] = f"the IIIF manifest you specified in your configuration CSV or Google Sheet is not properly formatted"
                                 msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
                                 print(f"  [WARN] {msg}")
                                 warnings.append(msg)
@@ -272,22 +314,57 @@ def process_objects(df):
                                 print(f"  [INFO] Validated IIIF manifest for object {object_id}")
 
                         except json.JSONDecodeError:
+                            df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
                             msg = f"IIIF manifest for object {object_id} is not valid JSON"
                             print(f"  [WARN] {msg}")
                             warnings.append(msg)
 
             except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not exist (error 404)"
+                else:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {e.code})"
                 msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except urllib.error.URLError as e:
+                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
                 msg = f"IIIF manifest for object {object_id} could not be reached: {e.reason}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except Exception as e:
+                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
                 msg = f"Error validating IIIF manifest for object {object_id}: {str(e)}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
+
+    # Validate that objects have either IIIF manifest OR local image file
+    for idx, row in df.iterrows():
+        object_id = row.get('object_id', 'unknown')
+        iiif_manifest = str(row.get('iiif_manifest', '')).strip()
+
+        # Skip if already has a valid IIIF manifest
+        if iiif_manifest:
+            continue
+
+        # No external IIIF manifest - check for local image file
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff']
+        has_local_image = False
+
+        for ext in valid_extensions:
+            local_image_path = Path(f'components/images/objects/{object_id}{ext}')
+            if local_image_path.exists():
+                has_local_image = True
+                print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")
+                break
+
+        # Warn if object has neither external manifest nor local image
+        if not has_local_image:
+            error_msg = f"the image file for the object ID you specified ({object_id}) in your configuration CSV or Google Sheet was not found in components/images/objects/"
+            df.at[idx, 'object_warning'] = error_msg
+            msg = f"Object {object_id} has no IIIF manifest or local image file"
+            print(f"  [WARN] {msg}")
+            warnings.append(msg)
 
     # Print summary if there were issues
     if warnings:
@@ -331,6 +408,9 @@ def process_story(df):
     Process story CSV with file references
     Expected columns: step, question, answer, object, x, y, zoom, layer1_file, layer2_file, etc.
     """
+    # Tracking for summary
+    warnings = []
+
     # Drop example column if it exists
     if 'example' in df.columns:
         df = df.drop(columns=['example'])
@@ -340,6 +420,66 @@ def process_story(df):
 
     # Remove completely empty rows
     df = df[df.astype(str).apply(lambda x: x.str.strip()).ne('').any(axis=1)]
+
+    # Load objects data for validation
+    objects_data = {}
+    objects_json_path = Path('_data/objects.json')
+    if objects_json_path.exists():
+        try:
+            with open(objects_json_path, 'r', encoding='utf-8') as f:
+                objects_list = json.load(f)
+                # Create lookup dictionary by object_id
+                objects_data = {obj['object_id']: obj for obj in objects_list}
+        except Exception as e:
+            print(f"  [WARN] Could not load objects.json for validation: {e}")
+
+    # Add viewer_warning column if it doesn't exist
+    if 'viewer_warning' not in df.columns:
+        df['viewer_warning'] = ''
+
+    # Validate object references
+    if 'object' in df.columns and objects_data:
+        for idx, row in df.iterrows():
+            object_id = str(row.get('object', '')).strip()
+            step_num = row.get('step', 'unknown')
+
+            # Skip if no object specified
+            if not object_id:
+                continue
+
+            # Check if object exists
+            if object_id not in objects_data:
+                error_msg = f"the object <code>{object_id}</code> was not found in <code>objects.csv</code>"
+                df.at[idx, 'viewer_warning'] = error_msg
+                msg = f"Story step {step_num} references missing object: {object_id}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+                continue
+
+            # Check if object has IIIF manifest or local image
+            obj = objects_data[object_id]
+            iiif_manifest = obj.get('iiif_manifest', '').strip()
+
+            # If no external IIIF manifest, check for local image file
+            if not iiif_manifest:
+                # Check for local image in components/images/objects/
+                valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff']
+                has_local_image = False
+
+                for ext in valid_extensions:
+                    local_image_path = Path(f'components/images/objects/{object_id}{ext}')
+                    if local_image_path.exists():
+                        has_local_image = True
+                        print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")
+                        break
+
+                # Only warn if object has neither external manifest nor local image
+                if not has_local_image:
+                    error_msg = f"the object <code>{object_id}</code> has no IIIF manifest or local image file"
+                    df.at[idx, 'viewer_warning'] = error_msg
+                    msg = f"Story step {step_num} references object without IIIF source: {object_id}"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
 
     # Process file reference columns
     for col in df.columns:
@@ -368,8 +508,17 @@ def process_story(df):
                         df.at[idx, title_col] = markdown_data['title']
                         df.at[idx, text_col] = markdown_data['content']
                     else:
-                        df.at[idx, title_col] = ''
-                        df.at[idx, text_col] = ''
+                        # Insert error message for missing file
+                        step_num = row.get('step', 'unknown')
+                        df.at[idx, title_col] = 'Content Missing'
+                        error_html = f'''<div class="alert alert-warning" role="alert">
+    <strong>Content file missing:</strong> <code>{file_ref.strip()}</code><br>
+    Please add this file to <code>components/texts/stories/</code> or remove the reference from the CSV.
+</div>'''
+                        df.at[idx, text_col] = error_html
+                        msg = f"Missing markdown file for story step {step_num}, {base_name}: {file_ref.strip()}"
+                        print(f"  [WARN] {msg}")
+                        warnings.append(msg)
 
             # Drop the _file column as it's no longer needed in JSON
             df = df.drop(columns=[col])
@@ -387,6 +536,55 @@ def process_story(df):
                 df.loc[df[col].isin(['', 'nan']), col] = '0.5'
             elif col == 'zoom':
                 df.loc[df[col].isin(['', 'nan']), col] = '1'
+
+    # Collect all warnings for intro display
+    all_warnings = []
+    for idx, row in df.iterrows():
+        step_num = row.get('step', 'unknown')
+
+        # Check for viewer warnings (missing object/IIIF)
+        viewer_warning = row.get('viewer_warning', '').strip()
+        if viewer_warning:
+            all_warnings.append({
+                'step': step_num,
+                'type': 'viewer',
+                'message': viewer_warning
+            })
+
+        # Check for panel content warnings (missing markdown files)
+        # Look for "Content Missing" title which indicates missing files
+        for layer in ['layer1', 'layer2']:
+            title_col = f'{layer}_title'
+            if title_col in row and row[title_col] == 'Content Missing':
+                # Extract the filename from the error HTML in the text column
+                text_col = f'{layer}_text'
+                text = row.get(text_col, '')
+                # Extract filename from the HTML (it's between <code> tags)
+                import re
+                filename_match = re.search(r'<code>(.*?)</code>', text)
+                # Get layer number for display (1 or 2)
+                layer_num = layer[-1]  # Get '1' or '2' from 'layer1' or 'layer2'
+                if filename_match:
+                    filename = filename_match.group(1)
+                    all_warnings.append({
+                        'step': step_num,
+                        'type': 'panel',
+                        'message': f'the file for the layer {layer_num} panel, <code>{filename}</code>, was not found'
+                    })
+                else:
+                    # Fallback if regex fails
+                    all_warnings.append({
+                        'step': step_num,
+                        'type': 'panel',
+                        'message': f'the file for the layer {layer_num} panel was not found'
+                    })
+
+    # Store warnings in dataframe as metadata (will be added to JSON)
+    df.attrs['viewer_warnings'] = all_warnings
+
+    # Print summary if there were issues
+    if warnings:
+        print(f"\n  Story validation summary: {len(warnings)} warning(s)")
 
     return df
 

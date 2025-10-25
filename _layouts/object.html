@@ -57,6 +57,13 @@ layout: default
   <div class="row">
     <!-- Object Viewer -->
     <div class="col-lg-8">
+      {% if page.object_warning and page.object_warning != "" %}
+      <div class="alert alert-danger mb-3" role="alert">
+        <strong>⚠️ Image Viewer Unavailable</strong>
+        <p class="mb-0 mt-2">{{ page.object_warning | markdownify | remove: '<p>' | remove: '</p>' | strip }}</p>
+      </div>
+      {% endif %}
+
       <div id="object-viewer" style="width: 100%; height: 600px; background: #000;"></div>
 
       <!-- Coordinate Tools Button -->
