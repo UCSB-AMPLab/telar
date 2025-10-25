@@ -3,6 +3,7 @@
     "object_id": "example-terrafirma-map",
     "title": "Terra firma et novum regnum Granatense et Popayan",
     "description": "Historical map of New Granada (present-day Colombia) and Popayan region, created by Jan Jansson and Hendrik Hondius. This copper-engraved map appeared in only two Jansson/Hondius atlases with a blank verso.",
+    "iiif_manifest": "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json",
     "creator": "Jan Jansson (1588-1664) and Hendrik Hondius (1597-1651)",
     "period": "1630-1631",
     "medium": "Copper engraving",
@@ -10,13 +11,13 @@
     "location": "Huntington Library",
     "credit": "Huntington Digital Library",
     "thumbnail": "",
-    "iiif_manifest": "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json",
     "object_warning": ""
   },
   {
     "object_id": "example-bogota-1614",
     "title": "Painting of the lands marshes and swamps of the town of Bogotá",
     "description": "A legal map/painting used as evidence in a land ownership dispute between the crown prosecutor and Francisco Maldonado y Mendoza over land in the Bogotá savannah.",
+    "iiif_manifest": "",
     "creator": "Juan de Aguilar Rendón (painter) and Alonso Ruiz Gadálmez (guarantor)",
     "period": "April 1614",
     "medium": "Oil on canvas, cartographic painting",
@@ -24,27 +25,13 @@
     "location": "Archivo General de Indias",
     "credit": "Archivo General de Indias, Seville",
     "thumbnail": "",
-    "iiif_manifest": "",
     "object_warning": ""
-  },
-  {
-    "object_id": "example-bogota-1616",
-    "title": "Painting of the lands marshes and swamps of the town of Bogotá",
-    "description": "A legal map/painting used as evidence in a land ownership dispute between the crown prosecutor and Francisco Maldonado y Mendoza over land in the Bogotá savannah.",
-    "creator": "Juan de Aguilar Rendón (painter) and Alonso Ruiz Gadálmez (guarantor)",
-    "period": "April 1614",
-    "medium": "Oil on canvas, cartographic painting",
-    "dimensions": "",
-    "location": "Archivo General de Indias",
-    "credit": "Archivo General de Indias, Seville",
-    "thumbnail": "",
-    "iiif_manifest": "",
-    "object_warning": "the image file for the object ID you specified (example-bogota-1616) in your configuration CSV or Google Sheet was not found in components/images/objects/"
   },
   {
     "object_id": "example-muisca-goldwork",
     "title": "Votive Figure in the Shape of a Residential Compound (Cercado)",
     "description": "Gold votive figure from the Muisca culture, demonstrating sophisticated metalworking techniques and ritual practices.",
+    "iiif_manifest": "",
     "creator": "Unknown Muisca Artist",
     "period": "600-1600",
     "medium": "Gold alloy",
@@ -52,13 +39,13 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá. Registration Number: O08319",
     "thumbnail": "",
-    "iiif_manifest": "",
     "object_warning": ""
   },
   {
     "object_id": "example-ceramic-figure",
     "title": "Anthropomorphic Ceramic Figure",
     "description": "Ceramic figure from the Muisca period representing indigenous material culture and ritual practices before Spanish colonization.",
+    "iiif_manifest": "",
     "creator": "Unknown Muisca Artist",
     "period": "Pre-colonial era",
     "medium": "Ceramic",
@@ -66,27 +53,13 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá",
     "thumbnail": "",
-    "iiif_manifest": "",
     "object_warning": ""
   },
   {
     "object_id": "example-piedrahita-title_page",
     "title": "Historia general de la conqvistas del nvevo reyno de Granada",
     "description": "Title page with portrait medallions of seven indigenous rulers or caciques (Sacuan, Sugamuxi, Nemeguene, Vbaqui, Saquesazippa, Thysquesuca, and Guatabita), four battle scenes (battles of Choconta, las Bueltas, Portachuelo, and Voqueron), and two coats of arms.",
-    "creator": "Fernández de Piedrahita, Lucas (1624-1688); Engraved by Joseph Mulder",
-    "period": "1688",
-    "medium": "Engraving, ink on paper",
-    "dimensions": "28.6 x 19.7 cm",
-    "location": "John Carter Brown Library",
-    "credit": "John Carter Brown Library, Brown University, Providence, R.I.",
-    "thumbnail": "",
     "iiif_manifest": "https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest",
-    "object_warning": ""
-  },
-  {
-    "object_id": "example-piedrahita-title_page2",
-    "title": "Historia general de la conqvistas del nvevo reyno de Granada",
-    "description": "Title page with portrait medallions of seven indigenous rulers or caciques (Sacuan, Sugamuxi, Nemeguene, Vbaqui, Saquesazippa, Thysquesuca, and Guatabita), four battle scenes (battles of Choconta, las Bueltas, Portachuelo, and Voqueron), and two coats of arms.",
     "creator": "Fernández de Piedrahita, Lucas (1624-1688); Engraved by Joseph Mulder",
     "period": "1688",
     "medium": "Engraving, ink on paper",
@@ -94,7 +67,6 @@
     "location": "John Carter Brown Library",
     "credit": "John Carter Brown Library, Brown University, Providence, R.I.",
     "thumbnail": "",
-    "iiif_manifest": "https://jcb.lunaimaging.com/",
-    "object_warning": "the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
+    "object_warning": ""
   }
 ]

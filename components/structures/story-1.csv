@@ -1,5 +1,5 @@
-step,question,answer,object,x,y,zoom,layer1_button,layer1_file,layer2_button,layer2_file
-1,"Why was this map drawn?","This 1614 map was created as legal evidence in a land ownership dispute presented by the crown prosecutor against Francisco Maldonado y Mendoza.","example-bogota-1614",0.5,0.5,1,"","story1/step1-layer1.md","","story1/step1-layer2.md"
-2,"What does the map show?","The map depicts the Bogotá savannah, a high plateau in the northern Andes originally occupied by the Indigenous Muisca people.","example-bogota-1614",0.25,0.35,2.5,"","","",""
-3,"Is it a map or a painting?","This unique 'legal painting' functions as both map and landscape art, rare for being signed by its creator Juan de Aguilar Rendón.","example-bogota-1614",0.75,0.3,3,"","story1/step3-layer1.md","","story1/step3-layer2.md"
-4,"Who were the owners of this land?","The land belonged to Francisco Maldonado y Mendoza and became the center of the Marquisate of San Jorge.","example-bogota-1614",0.6,0.7,2.2,"","story1/step4-layer1.md","",""
+step,object,x,y,zoom,question,answer,layer1_button,layer1_file,layer2_button,layer2_file
+1,example-bogota-1614,0.5,0.5,1.0,Why was this map drawn?,This 1614 map was created as legal evidence in a land ownership dispute presented by the crown prosecutor against Francisco Maldonado y Mendoza.,,story1/step1-layer1.md,,story1/step1-layer2.md
+2,example-bogota-1614,0.25,0.35,2.5,What does the map show?,"The map depicts the Bogotá savannah, a high plateau in the northern Andes originally occupied by the Indigenous Muisca people.",,,,
+3,example-bogota-1614,0.75,0.3,3.0,Is it a map or a painting?,"This unique 'legal painting' functions as both map and landscape art, rare for being signed by its creator Juan de Aguilar Rendón.",,story1/step3-layer1.md,,story1/step3-layer2.md
+4,example-bogota-1614,0.6,0.7,2.2,Who were the owners of this land?,The land belonged to Francisco Maldonado y Mendoza and became the center of the Marquisate of San Jorge.,,story1/step4-layer1.md,,

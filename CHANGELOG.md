@@ -2,6 +2,31 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.3.0-beta] - [Unreleased]
+
+### Added
+
+- **Comprehensive error messaging system**: User-friendly warnings displayed on index, objects, and story pages when configuration issues are detected
+- **Object ID validation**: Automatic stripping of file extensions from object IDs and warnings for spaces in filenames
+- **IIIF manifest validation**: Full validation of external IIIF manifests with detailed error messages
+- **Thumbnail validation**: Automatic detection and clearing of invalid thumbnail values (placeholders, non-image files)
+- **Build-time warnings**: Console logging with structured [INFO] and [WARN] messages during CSV to JSON conversion
+- **Index page issue summary**: Context-aware warnings that link directly to affected objects or stories
+- **Objects gallery warnings**: Summary of all objects with configuration issues with links to details
+- **Story intro warnings**: Display of configuration issues before users scroll, preventing confusion
+- **Panel error handling**: JavaScript-based detection and display of missing images in panel content
+
+### Fixed
+
+- **Orphaned file cleanup**: generate_collections.py now properly removes old files before generating new ones, preventing stale content
+
+### Changed
+
+- **Error message clarity**: All user-facing errors reference "configuration CSV or Google Sheet" for clarity
+- **Object warning field**: Added object_warning to Jekyll collection frontmatter for template access
+- **Objects CSV column order**: Moved iiif_manifest to position 4 (after description) for better visibility and logical grouping
+- **Story CSV column order**: Reordered columns to group related fields - object and coordinates (x, y, zoom) now appear at start after step number, followed by question/answer, then panel configuration
+
 ## [0.2.0-beta] - 2025-10-20
 
 ### Changed
