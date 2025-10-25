@@ -185,20 +185,16 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
 }
 
-/* Intro Step - Full screen title card spanning both columns */
+/* Intro Step - First step in narrative column */
 .story-intro {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 10000;
+  /* Uses same absolute positioning as normal steps */
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   border-left: none !important;
   background: #f5f7fa;
+  /* Start visible (like normal step) */
   transform: translateY(0) !important;
   opacity: 1 !important;
 }

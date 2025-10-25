@@ -58,14 +58,23 @@ function initializeFirstViewer() {
 
   console.log('Initializing first viewer for object:', firstObjectId);
 
-  // Get first step coordinates from story data
-  const firstStep = window.storyData?.steps?.[0];
-  const x = firstStep ? parseFloat(firstStep.x) : undefined;
-  const y = firstStep ? parseFloat(firstStep.y) : undefined;
-  const zoom = firstStep ? parseFloat(firstStep.zoom) : undefined;
+  // Find the first step that has this object (skip intro and metadata)
+  const steps = window.storyData?.steps || [];
+  const firstRealStep = steps.find(step => step.object === firstObjectId);
 
-  // Create first viewer card with z-index 1 (preload it, but don't set as current yet)
-  createViewerCard(firstObjectId, 1, x, y, zoom);
+  const x = firstRealStep ? parseFloat(firstRealStep.x) : undefined;
+  const y = firstRealStep ? parseFloat(firstRealStep.y) : undefined;
+  const zoom = firstRealStep ? parseFloat(firstRealStep.zoom) : undefined;
+
+  // Create first viewer card with z-index 1 and make it active immediately
+  const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom);
+
+  // Set as current and activate it so it's visible on intro
+  if (viewerCard) {
+    currentViewerCard = viewerCard;
+    viewerCard.element.classList.remove('card-below');
+    viewerCard.element.classList.add('card-active');
+  }
 }
 
 /**
