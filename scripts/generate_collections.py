@@ -4,6 +4,7 @@ Generate Jekyll collection markdown files from JSON data
 """
 
 import json
+import shutil
 from pathlib import Path
 
 def generate_objects():
@@ -12,6 +13,12 @@ def generate_objects():
         objects = json.load(f)
 
     objects_dir = Path('_jekyll-files/_objects')
+
+    # Clean up old files to remove orphaned objects
+    if objects_dir.exists():
+        shutil.rmtree(objects_dir)
+        print(f"✓ Cleaned up old object files")
+
     objects_dir.mkdir(parents=True, exist_ok=True)
 
     for obj in objects:
@@ -54,6 +61,12 @@ def generate_glossary():
         return
 
     glossary_dir = Path('_jekyll-files/_glossary')
+
+    # Clean up old files to remove orphaned glossary terms
+    if glossary_dir.exists():
+        shutil.rmtree(glossary_dir)
+        print(f"✓ Cleaned up old glossary files")
+
     glossary_dir.mkdir(parents=True, exist_ok=True)
 
     for source_file in source_dir.glob('*.md'):
@@ -117,6 +130,12 @@ def generate_stories():
                     })
 
     stories_dir = Path('_jekyll-files/_stories')
+
+    # Clean up old files to remove orphaned stories
+    if stories_dir.exists():
+        shutil.rmtree(stories_dir)
+        print(f"✓ Cleaned up old story files")
+
     stories_dir.mkdir(parents=True, exist_ok=True)
 
     for story in stories:
