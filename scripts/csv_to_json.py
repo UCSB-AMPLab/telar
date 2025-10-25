@@ -9,6 +9,10 @@ import os
 import re
 from pathlib import Path
 import markdown
+import urllib.request
+import urllib.error
+from urllib.parse import urlparse
+import ssl
 
 def read_markdown_file(file_path):
     """
@@ -207,6 +211,83 @@ def process_objects(df):
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
                 # Don't clear - file might be added later or exist in different environment
+
+    # Validate IIIF manifest field
+    if 'iiif_manifest' in df.columns:
+        for idx, row in df.iterrows():
+            manifest_url = str(row.get('iiif_manifest', '')).strip()
+            object_id = row.get('object_id', 'unknown')
+
+            # Skip if empty
+            if not manifest_url:
+                continue
+
+            # Check if it's a valid URL
+            parsed = urlparse(manifest_url)
+            if not parsed.scheme in ['http', 'https']:
+                df.at[idx, 'iiif_manifest'] = ''
+                msg = f"Cleared invalid IIIF manifest for object {object_id}: not a valid URL"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+                continue
+
+            # Try to fetch the manifest (with timeout)
+            # Create SSL context that doesn't verify certificates (avoid false positives)
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            try:
+                req = urllib.request.Request(manifest_url, method='HEAD')
+                req.add_header('User-Agent', 'Telar/0.3.0 (IIIF validator)')
+
+                with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+                    content_type = response.headers.get('Content-Type', '')
+
+                    # Check if response is JSON
+                    if 'json' not in content_type.lower():
+                        msg = f"IIIF manifest for object {object_id} does not return JSON (Content-Type: {content_type})"
+                        print(f"  [WARN] {msg}")
+                        warnings.append(msg)
+                        # Don't clear - might still work despite wrong content type
+                        continue
+
+                    # Fetch full content to validate structure
+                    req_get = urllib.request.Request(manifest_url)
+                    req_get.add_header('User-Agent', 'Telar/0.3.0 (IIIF validator)')
+
+                    with urllib.request.urlopen(req_get, timeout=10, context=ssl_context) as resp:
+                        try:
+                            data = json.loads(resp.read().decode('utf-8'))
+
+                            # Check for basic IIIF structure
+                            has_context = '@context' in data
+                            has_type = 'type' in data or '@type' in data
+
+                            if not (has_context or has_type):
+                                msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
+                                print(f"  [WARN] {msg}")
+                                warnings.append(msg)
+                            else:
+                                print(f"  [INFO] Validated IIIF manifest for object {object_id}")
+
+                        except json.JSONDecodeError:
+                            msg = f"IIIF manifest for object {object_id} is not valid JSON"
+                            print(f"  [WARN] {msg}")
+                            warnings.append(msg)
+
+            except urllib.error.HTTPError as e:
+                msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+            except urllib.error.URLError as e:
+                msg = f"IIIF manifest for object {object_id} could not be reached: {e.reason}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+            except Exception as e:
+                msg = f"Error validating IIIF manifest for object {object_id}: {str(e)}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
 
     # Print summary if there were issues
     if warnings:
