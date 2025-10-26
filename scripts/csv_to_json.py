@@ -122,40 +122,32 @@ def csv_to_json(csv_path, json_path, process_func=None):
 def process_project_setup(df):
     """
     Process project setup CSV
-    Expected columns: key, value, example (optional)
+    Expected columns: order, title, subtitle (optional)
     """
-    # Drop example column if it exists
-    if 'example' in df.columns:
-        df = df.drop(columns=['example'])
-
-    # Convert key-value pairs to dictionary
-    project_dict = {}
     stories_list = []
 
-    in_stories_section = False
-
     for _, row in df.iterrows():
-        key = str(row.get('key', '')).strip()
-        value = row.get('value', '')
+        order = str(row.get('order', '')).strip()
+        title = row.get('title', '')
+        subtitle = row.get('subtitle', '')
 
-        if key == 'STORIES':
-            in_stories_section = True
+        # Skip rows with empty order (placeholder rows)
+        if not order or not pd.notna(title):
             continue
 
-        if in_stories_section:
-            # Parse story entries
-            if pd.notna(value):
-                stories_list.append({
-                    'number': key,
-                    'title': value
-                })
-        else:
-            # Regular project settings
-            if key and pd.notna(value):
-                project_dict[key] = value
+        story_entry = {
+            'number': order,
+            'title': title
+        }
 
-    # Return combined structure
-    result = {**project_dict, 'stories': stories_list}
+        # Add subtitle if present
+        if pd.notna(subtitle) and str(subtitle).strip():
+            story_entry['subtitle'] = str(subtitle).strip()
+
+        stories_list.append(story_entry)
+
+    # Return stories list structure
+    result = {'stories': stories_list}
     return pd.DataFrame([result])
 
 def process_objects(df):
