@@ -89,14 +89,23 @@ def discover_gids_from_published(published_url):
         with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
             html = response.read().decode('utf-8', errors='ignore')
 
-            # Try parsing with HTMLParser first
+            # Try parsing JavaScript items.push() calls first
+            # Pattern: items.push({name: "TabName", pageUrl: "...", gid: "123456"});
+            js_pattern = r'items\.push\(\{name:\s*"([^"]+)"[^}]*gid:\s*"(\d+)"'
+            js_matches = re.findall(js_pattern, html)
+
+            if js_matches:
+                # Found tab names and GIDs in JavaScript
+                return [(name, gid) for name, gid in js_matches]
+
+            # Try parsing with HTMLParser
             parser = SheetTabParser()
             parser.feed(html)
 
             if parser.tabs:
                 return parser.tabs
 
-            # Fallback: regex-based extraction
+            # Fallback: regex-based GID extraction only
             # Look for patterns like: gid=123456 in the HTML
             gid_pattern = r'gid=(\d+)'
             gids = list(set(re.findall(gid_pattern, html)))
@@ -107,12 +116,8 @@ def discover_gids_from_published(published_url):
             # If we found GIDs but no names, create generic names
             if gids:
                 tabs = []
-                # Always include gid=0 as the first tab (project)
-                if '0' not in gids:
-                    tabs.append(('Tab 1', '0'))
-
-                for i, gid in enumerate(sorted(gids, key=int)):
-                    tabs.append((f'Tab {i+2}', gid))
+                for i, gid in enumerate(sorted(gids, key=int), start=1):
+                    tabs.append((f'Tab {i}', gid))
 
                 return tabs
 
@@ -259,21 +264,11 @@ Example:
         # Human-readable output
         print()
         print("-" * 70)
-        print("GitHub Secrets Configuration:")
+        print("Discovered Tabs:")
         print("-" * 70)
         print()
-        print("Add these secrets to your GitHub repository:")
-        print("(Settings > Secrets and variables > Actions > New repository secret)")
-        print()
-        print(f"GOOGLE_SHEETS_ID={sheet_id}")
-
         for tab_name, gid in working_tabs:
-            var_name = tab_mapping.get(tab_name.lower())
-            if var_name:
-                print(f"{var_name}={gid}")
-            else:
-                safe_name = re.sub(r'[^A-Z0-9_]', '_', tab_name.upper())
-                print(f"{safe_name}_GID={gid}")
+            print(f"✓ {tab_name:20s} (gid={gid})")
 
         print()
         print("-" * 70)
@@ -287,8 +282,11 @@ Example:
             print()
 
         print("-" * 70)
-        print("✓ Setup complete!")
+        print("✓ Discovery complete!")
         print("-" * 70)
+        print()
+        print("Your Google Sheets URLs are already configured in _config.yml")
+        print("No additional setup needed for GitHub Actions.")
 
 if __name__ == '__main__':
     main()

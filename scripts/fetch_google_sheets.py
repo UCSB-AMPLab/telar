@@ -11,6 +11,7 @@ Usage:
 
 import sys
 import os
+import re
 import yaml
 import urllib.request
 import urllib.error
@@ -112,22 +113,6 @@ def main():
     print(f"✓ Found {len(tabs)} tab(s)")
     print()
 
-    # Map tab names to file names
-    tab_file_mapping = {
-        'project': 'project.csv',
-        'objects': 'objects.csv',
-        'story-1': 'story-1.csv',
-        'story-2': 'story-2.csv',
-        'story-3': 'story-3.csv',
-        'story-4': 'story-4.csv',
-        # Fallback for generic tab names
-        'tab 1': 'project.csv',
-        'tab 2': 'project.csv',
-        'tab 3': 'objects.csv',
-        'tab 4': 'story-1.csv',
-        'tab 5': 'story-2.csv',
-    }
-
     # Create output directory
     output_dir = Path('components/structures')
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -141,18 +126,25 @@ def main():
 
     success_count = 0
     for tab_name, gid in tabs:
+        tab_lower = tab_name.lower()
+
         # Skip instruction/help tabs
-        if tab_name.lower() in skip_tabs:
+        if tab_lower in skip_tabs:
             print(f"⊘ {tab_name:20s} → Skipped (instruction tab)")
             continue
 
-        # Determine output filename
-        filename = tab_file_mapping.get(tab_name.lower())
-
-        if not filename:
-            # For unknown tabs, create filename from tab name
-            safe_name = tab_name.lower().replace(' ', '-')
-            filename = f'{safe_name}.csv'
+        # Determine output filename based on tab name
+        if tab_lower == 'project':
+            filename = 'project.csv'
+        elif tab_lower == 'objects':
+            filename = 'objects.csv'
+        elif re.match(r'story-\d+', tab_lower):
+            # Dynamic story matching: story-1, story-2, story-3, etc.
+            filename = f'{tab_lower}.csv'
+        else:
+            # Unknown tab - skip it
+            print(f"⊘ {tab_name:20s} → Skipped (unknown tab type)")
+            continue
 
         output_path = output_dir / filename
 
