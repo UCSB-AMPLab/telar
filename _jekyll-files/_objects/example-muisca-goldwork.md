@@ -10,6 +10,7 @@ credit: "Museo del Oro, Bogotá. Registration Number: O08319"
 thumbnail: 
 iiif_manifest: 
 object_warning: ""
+object_warning_short: ""
 layout: object
 ---
 

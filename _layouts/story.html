@@ -8,17 +8,25 @@
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts - Dynamic based on theme -->
+  {% assign theme = site.data.themes[site.telar_theme] %}
+  {% assign heading_font = theme.fonts.headings | remove: "'" | split: ',' | first | strip %}
+  {% assign body_font = theme.fonts.body | remove: "'" | split: ',' | first | strip %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family={{ heading_font | replace: ' ', '+' }}:wght@400;700&family={{ body_font | replace: ' ', '+' }}:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
 
   {% seo %}
 </head>
 <body class="story-page">
+  <!-- Fixed Back to Home Button -->
+  <a href="{{ '/' | relative_url }}" class="btn-home">
+    ← Back to Home
+  </a>
+
   <div class="story-container">
     <!-- Left Column: Card Stacking Narrative -->
     <div class="narrative-column">
@@ -65,9 +73,6 @@
               </p>
             </div>
           </div>
-          <a href="{{ '/' | relative_url }}" class="btn-home">
-            ← Back to Home
-          </a>
         </div>
         {% if page.data_file %}
           {% assign data_file_name = page.data_file %}
@@ -99,28 +104,7 @@
       </div>
 
       <!-- Story Navigation -->
-      <div class="story-navigation mt-5 pt-4 border-top">
-        <div class="row">
-          {% if page.previous_story %}
-          <div class="col-6">
-            <a href="{{ page.previous_story | relative_url }}" class="btn btn-outline-primary">
-              ← Previous Story
-            </a>
-          </div>
-          {% endif %}
-
-          <div class="col-6 text-end">
-            {% if page.next_story %}
-            <a href="{{ page.next_story | relative_url }}" class="btn btn-primary">
-              Next Story →
-            </a>
-            {% else %}
-            <a href="{{ '/' | relative_url }}" class="btn btn-outline-primary">
-              Return Home
-            </a>
-            {% endif %}
-          </div>
-        </div>
+      <div class="story-navigation" style="padding-bottom: 2rem;">
       </div>
     </div>
 
