@@ -5,8 +5,9 @@
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
 > **⚠️ Beta Release - v0.3.0-beta**
-> Beta Release - v0.3.0-beta This release introduces comprehensive error messaging, Google Sheets integration for easier content management, and improved copy functionality for IIIF coordinates. Choose between CSV-based or Google Sheets workflows.
-> This release introduces breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
+> This release introduces comprehensive error messaging, Google Sheets integration for easier content management, and improved copy functionality for IIIF coordinates. Choose between CSV-based or Google Sheets workflows.
+
+> **Warning:** this latest release introduces breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
 
 ## Overview
 
