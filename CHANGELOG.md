@@ -27,6 +27,12 @@ All notable changes to Telar will be documented in this file.
 - **Panel error handling**: JavaScript-based detection and display of missing images in panel content
 - **IIIF manifest copy button**: Object pages now display the full IIIF manifest URL in a copyable code box with one-click copy functionality
 - **Individual coordinate copy buttons**: Each coordinate (X, Y, Zoom) in the coordinate identification panel now has its own copy button for quick copying of individual values
+- **Theme system**: Flexible theming system with 4 preset themes and support for custom themes
+  - Preset themes: Paisajes Coloniales (default), Neogranadina, Santa Barbara, and Austin
+  - Easy theme switching via `_config.yml` with single-line configuration
+  - Customizable colors (primary, secondary, panel backgrounds) and fonts (headings, body)
+  - Advanced users can create `_data/themes/custom.yml` for fully custom themes (gitignored by default)
+  - Dynamic CSS generation using SCSS with Liquid templating
 
 ### Fixed
 
@@ -40,10 +46,22 @@ All notable changes to Telar will be documented in this file.
 - **Objects CSV column order**: Moved iiif_manifest to position 4 (after description) for better visibility and logical grouping
 - **Story CSV column order**: Reordered columns to group related fields - object and coordinates (x, y, zoom) now appear at start after step number, followed by question/answer, then panel configuration
 - **Story intro layout**: Intro slide now appears in the narrative column (left side) instead of full-screen, with step 1's viewer visible immediately on the right for a cleaner, more consistent experience
+- **Glossary page styling**: Glossary term links now use theme link colors and body font for consistent theming
+- **Glossary navigation**: Clicking glossary terms on the glossary index page now opens a slide-over panel instead of navigating to separate pages, providing a smoother browsing experience
+  - Panels slide away and then back in when switching between terms for smooth transitions
+  - Glossary panels are narrower than story layer 2 panels (45% vs 55%) for clear visual hierarchy
+  - Back button added to glossary panel header for easy dismissal, matching story panel design
+- **Theme fallback system**: Multi-tier protection against theme configuration errors
+  - Three types of error detection: missing theme, malformed YAML, or critical system failure
+  - Automatic fallback to paisajes (default) theme when configured theme is unavailable
+  - Protected fallback copy in `scripts/defaults/themes/` as ultimate backup
+  - Hardcoded CSS defaults ensure site functions even if all theme files are damaged
+  - User-friendly warning messages on index page explain issues and suggest fixes
 
 ### Removed
 
 - **Deprecated glossary CSV workflow**: Glossary feature now sources content exclusively from markdown files in `_glossary/`. CSV-based glossary input has been removed.
+- **Non-functional project.csv fields**: Removed `primary_color`, `secondary_color`, `font_headings`, and `font_body` from `project.csv` (these values were not being used by templates). Theme customization now handled via the new theme system in `_data/themes/`.
 
 ## [0.2.0-beta] - 2025-10-20
 

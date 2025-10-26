@@ -174,7 +174,11 @@ Write markdown files for your story layer content (the detailed text that appear
    - Set `enabled: true`
    - Paste shared URL into `shared_url`
    - Paste published URL into `published_url`
-   - Commit changes
+   – **Choose your theme** (optional): Telar includes 4 preset visual themes. The default is Paisajes Coloniales, but you can switch to Neogranadina, Santa Barbara, or Austin.
+     - In your GitHub repository, navigate to `_config.yml`
+     - Find the line `telar_theme: "paisajes"` (around line 11)
+     - Change to `"neogranadina"`, `"santa-barbara"`, or `"austin"` if desired
+   - Commit your changes
 
 5. **Wait 2-5 minutes** for automatic build
 6. **View your site** at `https://[username].github.io/[repository]/`
@@ -581,13 +585,28 @@ After editing your Google Sheet, trigger a rebuild without making code changes:
 
 ## Customization
 
-### Styling
+### Themes
 
-Edit `assets/css/telar.css` to customize:
-- Colors (CSS variables in `:root`)
-- Typography
-- Layout spacing
-- Responsive breakpoints
+Telar includes 4 preset themes that can be easily switched via `_config.yml`:
+
+1. **Paisajes Coloniales** (default) - Earth tones with terracotta and olive
+2. **Neogranadina** - Colonial burgundy and gold
+3. **Santa Barbara** - Modern teal and coral
+4. **Austin** - Burnt orange and slate blue
+
+To change themes, edit the `telar_theme` setting in `_config.yml`:
+```yaml
+telar_theme: "santa-barbara"  # Options: paisajes, neogranadina, santa-barbara, austin
+```
+
+For advanced customization, create `_data/themes/custom.yml` with your own colors and fonts. See existing theme files for structure.
+
+### Advanced Styling
+
+For deeper customization beyond themes, edit `assets/css/telar.scss`:
+- CSS variables (colors, fonts)
+- Layout spacing and responsive breakpoints
+- Component-specific styles
 
 ### Layouts
 
@@ -681,11 +700,12 @@ For issues, questions, or contributions:
 - [x] **Google Sheets integration**: Edit content via spreadsheet interface with automatic CSV fetching
 - [x] **Comprehensive error messaging**: User-friendly warnings for configuration issues
 - [x] **IIIF manifest copy functionality**: One-click copying of manifest URLs and coordinates
+- [x] **Theme system**: 4 preset themes (Paisajes, Neogranadina, Santa Barbara, Austin) with customizable colors and fonts, plus support for custom themes
+- [x] **Theme fallback protection**: Multi-tier error detection and automatic fallback to prevent broken styling
 
 ### Future Features
 
 - [ ] **Improved documentation**: Video tutorials and examples
-- [ ] **Theme system**: Customizable color schemes, typography, and layout options via project.csv configuration
 - [ ] **Visual story editor**: Point-and-click coordinate selection with live preview
 - [ ] **Annotation support**: Clickable markers on IIIF images that open panels with additional information (IIIF annotations)
 - [ ] **Glossary auto-linking**: Automatic detection and linking of terms within narrative text
@@ -695,4 +715,3 @@ For issues, questions, or contributions:
 - [ ] **Multi-language support**: Internationalization and localization
 - [ ] **3D object support**: Integration with 3D viewers
 - [ ] **Timeline visualizations**: Temporal navigation for chronological narratives
-- [ ] **Advanced theming options**: Customizable design templates
