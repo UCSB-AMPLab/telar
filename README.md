@@ -1,15 +1,15 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.2.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-0.3.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-A minimal computing framework for creating digital storytelling exhibitions with IIIF images and scrollytelling narratives.
+A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
 > **⚠️ Beta Release - v0.3.0-beta**
 > This release introduces comprehensive error messaging, Google Sheets integration for easier content management, and improved copy functionality for IIIF coordinates. Choose between CSV-based or Google Sheets workflows.
 
 ## Overview
 
-Telar (Spanish for "loom") is a static site generator built on Jekyll that weaves together IIIF images, narrative text, and layered contextual information into interactive digital exhibitions. It follows minimal computing principles: plain text authoring, static generation, and sustainable hosting.
+Telar (Spanish for "loom") is a static site generator built on Jekyll that weaves together IIIF images, narrative text, and layered contextual information into interactive visual narrative exhibitions. It follows minimal computing principles: plain text authoring, static generation, and sustainable hosting.
 
 Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), the UT Archives, Mapping, and Preservation Lab, and [Neogranadina](https://neogranadina.org).
 
@@ -25,9 +25,9 @@ Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, an
 
 ## Quick Start
 
-### Before You Begin: Plan Your Exhibition
+### Before You Begin: Plan Your Narrative
 
-Telar exhibitions are built around a layered storytelling structure. Understanding this model will help you plan your content effectively.
+Telar narratives are built around a layered storytelling structure. Understanding this model will help you plan your content effectively.
 
 Each page in your Telar site contains one or more stories, which can be independent narratives or chapters of a longer piece. Stories unfold through successive steps that show an image (or a detail of an image) alongside brief text. Each step follows a question/answer/invitation pattern: a question draws viewers in, a brief answer (1-2 sentences) responds, and an invitation to "learn more" opens a layer panel with extended information. You can provide up to two of these layer panels in each step, allowing viewers who want to go deeper to obtain even more detail.
 
@@ -41,13 +41,13 @@ Once you're ready, choose one of the workflows below based on your needs and tec
 
 ### Content Management Options
 
-Telar offers two ways to manage your exhibition content:
+Telar offers two ways to manage your narrative content:
 
-#### CSV Files (Default)
-Edit CSV files directly in your repository using GitHub's web interface or a local text editor. This approach provides full control and works entirely through GitHub.
+#### Google Sheets (Recommended)
+Manage content through a familiar spreadsheet interface. Ideal for teams and most users. Simply configure two URLs in `_config.yml` and the system automatically fetches your content. See the `google_sheets` section in [`_config.yml`](_config.yml) for setup instructions, or [`docs/google_sheets_integration/README.md`](docs/google_sheets_integration/README.md) for local development.
 
-#### Google Sheets (Optional)
-Manage content through a familiar spreadsheet interface with helper scripts for validation and formatting. Ideal for teams or those who prefer spreadsheet editing. See [`docs/google_sheets_integration/README.md`](docs/google_sheets_integration/README.md) for setup instructions.
+#### CSV Files (Optional)
+Edit CSV files directly in your repository using GitHub's web interface or a local text editor. This approach provides full control and works entirely through GitHub without requiring external services.
 
 ---
 
@@ -62,8 +62,8 @@ Manage content through a familiar spreadsheet interface with helper scripts for 
    - Navigate to `_config.yml` in your repository
    - Click the pencil icon to edit
    - Update these settings:
-     - `title`: Your exhibition name
-     - `description`: A brief description of your exhibition
+     - `title`: Your narrative title
+     - `description`: A brief description of your narrative
      - `baseurl`: `"/your-repository-name"` (include the quotes)
      - `url`: `"https://your-username.github.io"` (include the quotes)
      - `author` and `email` (optional)
@@ -79,7 +79,7 @@ Manage content through a familiar spreadsheet interface with helper scripts for 
 
 #### Step 1: Gather Your Images
 
-You have two options for adding images to your exhibition:
+You have two options for adding images to your narrative:
 
 **Option A: Upload Your Own Images**
 
@@ -101,7 +101,7 @@ If you want to use images from institutional collections (museums, libraries, ar
 3. **Create an object_id** - Choose a simple ID for this object (e.g., `museum-textile-001`)
 4. **Save for next step** - You'll add this URL to the `iiif_manifest` column in objects.csv in Step 3
 
-**Note:** Both options work equally well. You can even mix both approaches in the same exhibition.
+**Note:** Both options work equally well. You can even mix both approaches in the same narrative.
 
 #### Step 2: Write Your Narrative Text
 
@@ -196,7 +196,7 @@ Now connect your narrative to your objects with coordinates:
 
 #### Step 7: Add Glossary Terms (Optional)
 
-Enhance your exhibition with term definitions:
+Enhance your narrative with term definitions:
 
 1. **Navigate to** `components/texts/glossary/`
 2. **Click "Add file"** → **"Create new file"**
@@ -238,8 +238,8 @@ pip install -r requirements.txt
 **Configure your site settings:**
 
 Edit `_config.yml` and update:
-- `title`: Your exhibition name
-- `description`: A brief description of your exhibition
+- `title`: Your narrative title
+- `description`: A brief description of your narrative
 - `baseurl`: `"/your-repository-name"` for GitHub Pages, or `""` for root domain
 - `url`: Your site URL (e.g., `"https://your-username.github.io"`)
 - `author` and `email` (optional)
@@ -366,7 +366,7 @@ Connect your narrative to your objects:
 
 #### Step 7: Add Glossary Terms (Optional)
 
-Enhance your exhibition with term definitions:
+Enhance your narrative with term definitions:
 
 1. **Create markdown file** in `components/texts/glossary/` (e.g., `colonial-period.md`)
 2. **Add frontmatter and definition**:
@@ -533,12 +533,12 @@ iiif_manifest: https://example.org/iiif/image/abc123/info.json
 ### Site Settings (_config.yml)
 
 ```yaml
-title: Your Exhibition Title
+title: Your Narrative Title
 baseurl: /repository-name  # For GitHub Pages
 url: https://username.github.io
 
 telar:
-  project_title: "Exhibition Title"
+  project_title: "Narrative Title"
   primary_color: "#2c3e50"
   font_headings: "Playfair Display, serif"
 ```
@@ -673,12 +673,17 @@ For issues, questions, or contributions:
 
 ## Roadmap
 
+### Recently Completed (v0.3.0-beta)
+
+- [x] **Google Sheets integration**: Edit content via spreadsheet interface with automatic CSV fetching
+- [x] **Comprehensive error messaging**: User-friendly warnings for configuration issues
+- [x] **IIIF manifest copy functionality**: One-click copying of manifest URLs and coordinates
+
 ### Future Features
 
-- [ ] **Google Sheets integration (v0.3)**: Edit content via web interface without CSV files
 - [ ] **Improved documentation**: Video tutorials and examples
 - [ ] **Theme system**: Customizable color schemes, typography, and layout options via project.csv configuration
-- [ ] **Visual story editor**: Point-and-click coordinate selection
+- [ ] **Visual story editor**: Point-and-click coordinate selection with live preview
 - [ ] **Annotation support**: Clickable markers on IIIF images that open panels with additional information (IIIF annotations)
 - [ ] **Glossary auto-linking**: Automatic detection and linking of terms within narrative text
 - [ ] **Mobile-optimized responsive design**: Improved mobile and tablet experience

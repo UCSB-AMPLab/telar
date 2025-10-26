@@ -6,6 +6,12 @@ All notable changes to Telar will be documented in this file.
 
 ### Added
 
+- **Google Sheets integration**: Config-based workflow supporting both GitHub Pages and local development. Users paste shared and published URLs into `_config.yml` for automatic GID discovery and CSV fetching. No GitHub Secrets required.
+  - `fetch_google_sheets.py` script for local CSV fetching
+  - `discover_sheet_gids.py` for automatic tab GID discovery from published sheets
+  - Excel template with demo data at `docs/google_sheets_integration/telar-template.xlsx`
+  - Template duplication option at https://bit.ly/telar-template
+  - Local development guide at `docs/google_sheets_integration/README.md`
 - **Comprehensive error messaging system**: User-friendly warnings displayed on index, objects, and story pages when configuration issues are detected
 - **Object ID validation**: Automatic stripping of file extensions from object IDs and warnings for spaces in filenames
 - **IIIF manifest validation**: Full validation of external IIIF manifests with detailed error messages
@@ -24,11 +30,16 @@ All notable changes to Telar will be documented in this file.
 
 ### Changed
 
+- **Default content management**: Google Sheets is now the recommended default workflow, with CSV files as an optional alternative for users who prefer direct file editing
 - **Error message clarity**: All user-facing errors reference "configuration CSV or Google Sheet" for clarity
 - **Object warning field**: Added object_warning to Jekyll collection frontmatter for template access
 - **Objects CSV column order**: Moved iiif_manifest to position 4 (after description) for better visibility and logical grouping
 - **Story CSV column order**: Reordered columns to group related fields - object and coordinates (x, y, zoom) now appear at start after step number, followed by question/answer, then panel configuration
 - **Story intro layout**: Intro slide now appears in the narrative column (left side) instead of full-screen, with step 1's viewer visible immediately on the right for a cleaner, more consistent experience
+
+### Removed
+
+- **Deprecated glossary CSV workflow**: Glossary feature now sources content exclusively from markdown files in `_glossary/`. CSV-based glossary input has been removed.
 
 ## [0.2.0-beta] - 2025-10-20
 
