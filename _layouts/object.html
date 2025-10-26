@@ -100,13 +100,28 @@ layout: default
                     <div style="max-width: 280px; margin: 0 auto;">
                       <dl class="row mb-4">
                         <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">X</dt>
-                        <dd class="col-sm-6" style="color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; text-align: center;"><code id="coord-x" style="color: #c8d8e8;">0.500</code></dd>
+                        <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
+                          <code id="coord-x" style="color: #c8d8e8;">0.500</code>
+                          <button class="btn btn-sm" id="copy-x" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="Copy X coordinate">
+                            <i class="bi bi-clipboard"></i>
+                          </button>
+                        </dd>
 
                         <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">Y</dt>
-                        <dd class="col-sm-6" style="color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; text-align: center;"><code id="coord-y" style="color: #c8d8e8;">0.500</code></dd>
+                        <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
+                          <code id="coord-y" style="color: #c8d8e8;">0.500</code>
+                          <button class="btn btn-sm" id="copy-y" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="Copy Y coordinate">
+                            <i class="bi bi-clipboard"></i>
+                          </button>
+                        </dd>
 
                         <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">Zoom</dt>
-                        <dd class="col-sm-6" style="color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; text-align: center;"><code id="coord-zoom" style="color: #c8d8e8;">1.0</code></dd>
+                        <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
+                          <code id="coord-zoom" style="color: #c8d8e8;">1.0</code>
+                          <button class="btn btn-sm" id="copy-zoom" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="Copy Zoom level">
+                            <i class="bi bi-clipboard"></i>
+                          </button>
+                        </dd>
                       </dl>
                     </div>
 
@@ -170,10 +185,25 @@ layout: default
 
         {% if page.iiif_manifest %}
         <dt class="col-sm-4">IIIF Manifest</dt>
-        <dd class="col-sm-8"><a href="{{ page.iiif_manifest }}" target="_blank" rel="noopener">View manifest</a></dd>
+        <dd class="col-sm-8">
+          <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+            <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ page.iiif_manifest }}</code>
+            <button class="btn btn-sm btn-copy" id="copy-manifest" data-manifest="{{ page.iiif_manifest }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: #f8f9fa;" title="Copy manifest URL">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
+        </dd>
         {% elsif page.object_id %}
         <dt class="col-sm-4">IIIF Manifest</dt>
-        <dd class="col-sm-8"><a href="{{ '/iiif/objects/' | append: page.object_id | append: '/manifest.json' | relative_url }}" target="_blank" rel="noopener">View manifest</a></dd>
+        <dd class="col-sm-8">
+          {% assign manifest_url = site.url | append: site.baseurl | append: '/iiif/objects/' | append: page.object_id | append: '/manifest.json' %}
+          <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+            <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ manifest_url }}</code>
+            <button class="btn btn-sm btn-copy" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: #f8f9fa;" title="Copy manifest URL">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
+        </dd>
         {% endif %}
       </dl>
 
@@ -423,5 +453,70 @@ layout: default
         }, 2000);
       });
     });
+
+    // Copy manifest URL button
+    const copyManifestBtn = document.getElementById('copy-manifest');
+    if (copyManifestBtn) {
+      copyManifestBtn.addEventListener('click', function() {
+        const manifestUrl = this.getAttribute('data-manifest');
+
+        navigator.clipboard.writeText(manifestUrl).then(function() {
+          const btn = document.getElementById('copy-manifest');
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          setTimeout(function() {
+            btn.innerHTML = originalHTML;
+          }, 2000);
+        }).catch(function(err) {
+          console.error('Failed to copy manifest URL:', err);
+        });
+      });
+    }
+
+    // Individual coordinate copy buttons
+    const copyXBtn = document.getElementById('copy-x');
+    if (copyXBtn) {
+      copyXBtn.addEventListener('click', function() {
+        const x = document.getElementById('coord-x').textContent;
+        navigator.clipboard.writeText(x).then(function() {
+          const btn = document.getElementById('copy-x');
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          setTimeout(function() {
+            btn.innerHTML = originalHTML;
+          }, 2000);
+        });
+      });
+    }
+
+    const copyYBtn = document.getElementById('copy-y');
+    if (copyYBtn) {
+      copyYBtn.addEventListener('click', function() {
+        const y = document.getElementById('coord-y').textContent;
+        navigator.clipboard.writeText(y).then(function() {
+          const btn = document.getElementById('copy-y');
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          setTimeout(function() {
+            btn.innerHTML = originalHTML;
+          }, 2000);
+        });
+      });
+    }
+
+    const copyZoomBtn = document.getElementById('copy-zoom');
+    if (copyZoomBtn) {
+      copyZoomBtn.addEventListener('click', function() {
+        const zoom = document.getElementById('coord-zoom').textContent;
+        navigator.clipboard.writeText(zoom).then(function() {
+          const btn = document.getElementById('copy-zoom');
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          setTimeout(function() {
+            btn.innerHTML = originalHTML;
+          }, 2000);
+        });
+      });
+    }
   });
 </script>

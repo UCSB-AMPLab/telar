@@ -15,6 +15,8 @@ All notable changes to Telar will be documented in this file.
 - **Objects gallery warnings**: Summary of all objects with configuration issues with links to details
 - **Story intro warnings**: Display of configuration issues before users scroll, preventing confusion
 - **Panel error handling**: JavaScript-based detection and display of missing images in panel content
+- **IIIF manifest copy button**: Object pages now display the full IIIF manifest URL in a copyable code box with one-click copy functionality
+- **Individual coordinate copy buttons**: Each coordinate (X, Y, Zoom) in the coordinate identification panel now has its own copy button for quick copying of individual values
 
 ### Fixed
 
@@ -26,6 +28,7 @@ All notable changes to Telar will be documented in this file.
 - **Object warning field**: Added object_warning to Jekyll collection frontmatter for template access
 - **Objects CSV column order**: Moved iiif_manifest to position 4 (after description) for better visibility and logical grouping
 - **Story CSV column order**: Reordered columns to group related fields - object and coordinates (x, y, zoom) now appear at start after step number, followed by question/answer, then panel configuration
+- **Story intro layout**: Intro slide now appears in the narrative column (left side) instead of full-screen, with step 1's viewer visible immediately on the right for a cleaner, more consistent experience
 
 ## [0.2.0-beta] - 2025-10-20
 
