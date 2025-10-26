@@ -90,7 +90,7 @@ layout: default
                     Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling. 
                   </p>
                   <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0;">
-                    Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three at once, or an entire row also including the image identifier.
+                    Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once.
                   </p>
                 </div>
 
@@ -125,13 +125,10 @@ layout: default
                       </dl>
                     </div>
 
-                    <!-- Copy Buttons -->
-                    <div class="d-flex gap-2">
-                      <button class="btn btn-sm btn-copy" id="copy-coords" style="flex: 1;">
+                    <!-- Copy Button -->
+                    <div>
+                      <button class="btn btn-sm btn-copy w-100" id="copy-coords">
                         <i class="bi bi-clipboard"></i> Copy x,y,zoom
-                      </button>
-                      <button class="btn btn-sm btn-copy" id="copy-csv" style="flex: 1;">
-                        <i class="bi bi-file-earmark-spreadsheet"></i> Copy entire row
                       </button>
                     </div>
                   </div>
@@ -429,23 +426,6 @@ layout: default
 
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
-        setTimeout(function() {
-          btn.innerHTML = originalHTML;
-        }, 2000);
-      });
-    });
-
-    document.getElementById('copy-csv').addEventListener('click', function() {
-      const objectId = '{{ page.object_id }}';
-      const x = document.getElementById('coord-x').textContent;
-      const y = document.getElementById('coord-y').textContent;
-      const zoom = document.getElementById('coord-zoom').textContent;
-      const text = `1,"Your question","Your answer","${objectId}",${x},${y},${zoom},"","","",""`;
-
-      navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('copy-csv');
         const originalHTML = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
         setTimeout(function() {

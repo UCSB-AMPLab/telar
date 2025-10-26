@@ -2,7 +2,7 @@
 
 All notable changes to Telar will be documented in this file.
 
-## [0.3.0-beta] - [Unreleased]
+## [0.3.0-beta] - 2025-10-25
 
 ### Added
 
@@ -10,7 +10,7 @@ All notable changes to Telar will be documented in this file.
   - `fetch_google_sheets.py` script for local CSV fetching
   - `discover_sheet_gids.py` for automatic tab GID discovery from published sheets
   - Excel template with demo data at `docs/google_sheets_integration/telar-template.xlsx`
-  - Template duplication option at https://bit.ly/telar-template
+  - Google Sheets Template available and can easily be duplicated, at https://bit.ly/telar-template
   - Local development guide at `docs/google_sheets_integration/README.md`
   - **Instruction rows and columns**: Add notes and instructions directly in Google Sheets or CSVs that are automatically filtered out during processing
     - Rows starting with `#` are skipped (useful for section breaks, TODOs, and temporary comments)

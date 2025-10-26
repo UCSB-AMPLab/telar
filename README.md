@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.3.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-0.3.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
@@ -41,7 +41,7 @@ Once you're ready, choose one of the workflows below based on your needs and tec
 
 ### Content Management Options
 
-Telar offers two ways to manage your narrative content:
+Telar offers two ways to weave your materials together:
 
 #### Google Sheets (Recommended)
 Manage content through a familiar spreadsheet interface. Ideal for teams and most users. Simply configure two URLs in `_config.yml` and the system automatically fetches your content. See the `google_sheets` section in [`_config.yml`](_config.yml) for setup instructions, or [`docs/google_sheets_integration/README.md`](docs/google_sheets_integration/README.md) for local development.
@@ -53,64 +53,68 @@ Edit CSV files directly in your repository using GitHub's web interface or a loc
 
 ### Track 1: GitHub Web Interface Only (Recommended for Storytellers)
 
-**No installation required!** Edit everything directly on GitHub.
+**No installation required!** Follow these phases to build your narrative.
 
-#### Initial Setup
+> **Quick start:** If you're eager to experiment or already know your story, skip ahead to [Phase 2: Quick Setup](#phase-2-quick-setup-get-your-workspace-ready) to get your workspace ready, then jump to [Phase 4: Structure Your Story](#phase-4-structure-your-story).
 
-1. **Use this template** - Click the green "Use this template" button above to create your own copy
-2. **Configure site settings**:
-   - Navigate to `_config.yml` in your repository
-   - Click the pencil icon to edit
-   - Update these settings:
-     - `title`: Your narrative title
-     - `description`: A brief description of your narrative
-     - `baseurl`: `"/your-repository-name"` (include the quotes)
-     - `url`: `"https://your-username.github.io"` (include the quotes)
-     - `author` and `email` (optional)
-   - Commit changes
-3. **Enable GitHub Pages**:
-   - Go to your new repository
-   - Click **Settings** tab
-   - Click **Pages** in left sidebar
-   - Under "Source", select **GitHub Actions**
-   - Click **Save**
-4. **Wait 2-5 minutes** for the initial build to complete
-5. **View your site** at `https://[your-username].github.io/[repository-name]/`
+#### Phase 1: Narrative Planning
 
-#### Step 1: Gather Your Images
+**Before diving in, plan your story:**
 
-You have two options for adding images to your narrative:
+- Browse the [Telar example site](https://ampl.clair.ucsb.edu/telar) for inspiration
+- What story do you want to tell?
+- What are the key steps or moments in your story?
+- For each step, draft a **question** (heading) and **answer** (brief 1-2 sentence response)
+- What image or images can you use to anchor your story?
+- What details in these images matter most and when?
+- Sketch your narrative structure on paper before using tools
 
-**Option A: Upload Your Own Images**
+#### Phase 2: Get Your Telar Workspace Ready
 
-If you have your own high-resolution images:
+**Create your workspace:**
 
-1. **Navigate to** `components/images/objects/`
-2. **Click "Add file"** → **"Upload files"**
-3. **Drag your images** into the upload area
-4. **Name files** with simple IDs (e.g., `textile-001.jpg`, `ceramic-002.jpg`)
-5. **Commit changes**
-6. **Remember these filenames** - you'll use them as `object_id` values in Step 3
+1. **Create GitHub repository**: Click the green "Use this template" button above to create your own copy. If you can't see the button, make sure you are logged in. You will need to createa GitHub account if you don't have one.
+2. **Duplicate Google Sheets template**: Go to https://bit.ly/telar-template
+   - Click **File** → **Make a copy**
+   - Save to your Google Drive and give it a name that makes sense for your project
+3. **You're ready!** Now you have places to upload images and organize content
 
-**Option B: Use External IIIF Manifests**
+#### Phase 3: Gather Materials
 
-If you want to use images from institutional collections (museums, libraries, archives):
+**Collect and organize your content:**
 
-1. **Find IIIF resources** - Many institutions publish their collections with IIIF support. See the [IIIF Guide to Finding Resources](https://iiif.io/guides/finding_resources/) for help locating collections
-2. **Copy the info.json URL** - Look for the IIIF Image API info.json URL (e.g., `https://example.org/iiif/image/abc123/info.json`)
-3. **Create an object_id** - Choose a simple ID for this object (e.g., `museum-textile-001`)
-4. **Save for next step** - You'll add this URL to the `iiif_manifest` column in objects.csv in Step 3
+Telar lets you upload your own images or insert them directly from digital repositories hosted by museums, libraries, and other institutions using [IIIF](https://en.wikipedia.org/wiki/International_Image_Interoperability_Framework). You can also mix and match.
 
-**Note:** Both options work equally well. You can even mix both approaches in the same narrative.
+**To Upload Your Own Images**
 
-#### Step 2: Write Your Narrative Text
+1. Navigate to `components/images/objects/` in your GitHub repository
+2. Click **Add file** → **Upload files**
+3. Drag images into upload area
+4. Name files with simple object IDs (e.g., `textile-001.jpg`, `ceramic-002.jpg`). Make sure to avoid spaces in your filenames.
+5. Add the object ID (with or without the file extension) to the "objects" tab of your spreadsheet
+6. Commit changes to save
 
-Create markdown files for your story layers:
+**To Use IIIF Images**
 
-1. **Navigate to** `components/texts/stories/story1/`
-2. **Click "Add file"** → **"Create new file"**
-3. **Name the file** (e.g., `step1-layer1.md`)
-4. **Add frontmatter and content**:
+1. Find IIIF resources from institutions ([IIIF Guide to Finding Resources](https://iiif.io/guides/finding_resources/))
+2. Copy the URL for the manifest into the "objects" tab of your spreadsheet (e.g., `https://iiif.io/api/cookbook/recipe/0001-mvm-image/manifest.json`)
+3. Give it a simple object_id in the same sheet(e.g., `museum-textile-001`)
+
+**Add other details to your objects sheet as you collect your images:**
+- Fill as many of the other fields in the objects tab of your spreadsheet as you like
+- Make sure you've included the IIIF manifest URLs for all external resources
+- Make sure that the filenames of images you are uploading match the object_id column of your spreadsheet, and that you haven't put any spaces in them.
+
+**Create Narrative Texts**
+
+Write markdown files for your story layer content (the detailed text that appears in slide-out panels):
+
+1. Navigate to `components/texts/stories/story1/` in your GitHub repository
+2. Click **Add file** → **Create new file**
+3. Name the file - you can call it whatever you like (e.g., `step1-layer1.md`, `weaving-techniques.md`, `context.md`)
+   - Avoid spaces in filenames (use hyphens or underscores instead)
+   - Use `.md` extension for markdown files
+4. Add frontmatter and content:
    ```markdown
    ---
    title: "Weaving Techniques"
@@ -118,102 +122,81 @@ Create markdown files for your story layers:
 
    The interlocking warp pattern visible here indicates...
    ```
-5. **Commit the file**
-6. **Repeat** for each layer of content you want to add
+5. Commit the file
+6. Repeat for each layer of content you want to add
+7. **Important**: Keep a note of your filenames and their locations. You can organize the files inside the "texts" folder how you like, for example by creating subfolders for each story as we have for our demo, but this is not required. Either way, you'll need to make a note of the exact paths and filenames (e.g., `story1/weaving-techniques.md`) to include in your story spreadsheet in Phase 4, below
 
-#### Step 3: Catalog Your Objects
+#### Phase 4: Structure Your Story
 
-Add metadata about your images in the objects catalog:
+**Connect everything in your Google Sheets story sheet:**
 
-1. **Navigate to** `components/structures/`
-2. **Click on** `objects.csv`
-3. **Click the ✏️ pencil icon** (top right) to edit
-4. **Add a new row** for each object:
+1. **Add story steps**: For each step in your story, add a row with:
+   - **Question**: The heading text (e.g., "What is this textile?")
+   - **Answer**: A brief 1-2 sentence response
+   - **Object ID**: The object to display (matching your objects sheet)
+   - **Coordinates**: Use placeholders for now (0.5, 0.5, 1.0) - you'll refine in Phase 6
 
-   **For Option A (uploaded images):**
-   ```
-   textile-001,Colonial Textile Fragment,"A woven textile from...",Unknown Artist,circa 1650-1700,Wool,45 x 60 cm,,,
-   ```
-   The `object_id` (first column) must match your uploaded image filename.
+2. **Connect your narrative content**: Reference the markdown files you created in Phase 3:
+   - In the `layer1_file` column, add the path (e.g., `story1/step1-layer1.md`)
+   - In the `layer2_file` column, add the path if you have a second layer
+   - Leave blank if a step doesn't need a panel
 
-   **For Option B (external IIIF):**
-   ```
-   museum-textile-001,Colonial Textile Fragment,"A woven textile from...",Unknown Artist,circa 1650-1700,Wool,45 x 60 cm,,https://example.org/iiif/image/abc123/info.json,
-   ```
-   Add the info.json URL in the second-to-last column (`iiif_manifest`).
+3. **Customize panel buttons** (optional):
+   - Add custom button text in `layer1_button` and `layer2_button` columns
+   - Leave blank to use defaults ("Learn more" and "Go deeper")
 
-5. **Commit changes**
-6. **Wait 2-5 minutes** for GitHub Actions to rebuild your site
+4. **You can tell the system to ignore a row or column, e.g. for a draft, or a note to yourself or a collaborator**: Just add a `#` prefix, e.g.:
+   - `# TODO: verify this date`
+   - The template includes a `# Instructions` column for field guidance
 
-#### Step 4: Preview Your Objects
+#### Phase 5: Connect and Publish
 
-Once the build completes:
+**Make your site live:**
 
-1. **Visit your site** at `https://[username].github.io/[repository]/`
-2. **Click "Objects"** in the navigation
-3. **Verify** all your images appear with their metadata
-4. **Click on any object** to see it in the IIIF viewer
+1. **Enable GitHub Pages**:
+   - Go to repository **Settings** → **Pages**
+   - Source: **GitHub Actions**
+   - Click **Save**
 
-#### Step 5: Find Coordinates for Story Moments
+2. **Share your Google Sheet**:
+   - Click **Share** button → Anyone with the link (Viewer)
+   - Copy the shared URL
 
-Use the built-in coordinate tool to identify specific areas of your images:
+3. **Publish your Google Sheet**:
+   - **File** → **Share** → **Publish to web**
+   - Click **Publish**
+   - Copy the published URL
 
-1. **Navigate to an object page** (click any object from the gallery)
-2. **Click "Identify coordinates"** button below the viewer
-3. **Pan and zoom** to the area you want to feature in your story
-4. **Watch coordinates update** in real-time (x, y, zoom)
-5. **Click "Copy entire row"** to copy a CSV template with the coordinates
-6. **Save these coordinates** - you'll paste them into your story CSV
+4. **Configure `_config.yml`**:
+   - Navigate to `_config.yml` in your repository
+   - Click pencil icon to edit
+   - Find `google_sheets` section
+   - Set `enabled: true`
+   - Paste shared URL into `shared_url`
+   - Paste published URL into `published_url`
+   - Commit changes
 
-**Coordinate system:**
-- `x, y`: 0-1 normalized coordinates (0,0 = top-left)
-- `zoom`: 1 = full view, 2 = 2x zoom, etc.
+5. **Wait 2-5 minutes** for automatic build
+6. **View your site** at `https://[username].github.io/[repository]/`
 
-**Tip:** Keep the object page open in one tab while editing your story CSV in another.
+#### Phase 6: Refine
 
-#### Step 6: Build Your Story
+**Polish your narrative:**
 
-Now connect your narrative to your objects with coordinates:
-
-1. **Navigate to** `components/structures/`
-2. **Click "Add file"** → **"Create new file"**
-3. **Name it** `story-1.csv` (or `story-2.csv`, etc.)
-4. **Add the header row**:
-   ```
-   step,question,answer,object,x,y,zoom,layer1_button,layer1_file,layer2_button,layer2_file
-   ```
-5. **Add story steps**, one row per step:
-   ```
-   1,"What is this textile?","This fragment shows...","textile-001",0.5,0.5,1.0,"","story1/step1-layer1.md","",""
-   2,"Notice the pattern","The geometric motifs...","textile-001",0.3,0.4,2.5,"","story1/step2-layer1.md","",""
-   ```
-6. **Commit the file**
-7. **Add story to project**:
-   - Edit `components/structures/project.csv`
-   - Scroll to the `STORIES` section
-   - Add a new row: `1,Your Story Title`
-8. **Commit** and wait for rebuild
-
-#### Step 7: Add Glossary Terms (Optional)
-
-Enhance your narrative with term definitions:
-
-1. **Navigate to** `components/texts/glossary/`
-2. **Click "Add file"** → **"Create new file"**
-3. **Name it** `term-name.md`
-4. **Add frontmatter and definition**:
-   ```markdown
-   ---
-   term_id: colonial-period
-   title: "Colonial Period"
-   related_terms: encomienda,viceroyalty
-   ---
-
-   The Colonial Period in the Americas began with...
-   ```
-5. **Commit the file**
-
-**Note:** In v0.1.0-beta, glossary terms appear as standalone pages at `/glossary/{term_id}/`. In v0.2, we plan for automatic linking within narrative text.
+1. **Review your live site** - Browse through pages and stories
+2. **Check warning messages** - Telar shows helpful warnings for configuration issues
+   - The home page of your site will show you a summary of issues
+   - The story pages themselves will display warnings for missing objects and texts
+   - You will also see error messages for any invalid IIIF manifests in the objects pages
+3. **Fix configuration issues** - Update Google Sheets based on warnings, then trigger rebuild (see below)
+4. **Use coordinate identification tool**:
+   - Navigate to any object page
+   - Click "Identify coordinates" button below viewer
+   - Pan and zoom to find the perfect view for each story step
+   - Copy and paste the correct values for X, Y, and Zoom into your story sheet
+5. **Trigger rebuild** (see [Manual Build Trigger](#manual-build-trigger) section below)
+6. **Add additional content layers**: Add any other layer panels, glossary terms, or other information as needed
+7. **Iterate and polish** until your story shines
 
 ---
 
@@ -442,7 +425,7 @@ components/
 │   └── additional/       # Other images used around the site
 └── texts/
     ├── stories/          # Story layer content (markdown)
-    │   └── story1/
+    │   └── story1/       # You can add subfolders like this to group text files together, but this is optional 
     │       ├── step1-layer1.md
     │       ├── step1-layer2.md
     │       └── ...
@@ -456,11 +439,11 @@ components/
 - Markdown files contain long-form narrative content
 - Images are processed into IIIF tiles automatically
 
-### CSV Data Files
+### Structure Data Files
 
-CSV files in `components/structures/` define your site's structure and reference content files.
+CSV files in `components/structures/` define your site's structure and reference content files. If using Google Sheets (recommended), the scripts will create these CSV files on the basis of your Google Sheet. If not, you can create them manually
 
-#### Story CSV Structure
+#### Story CSV Structure (for users not using Google Sheets)
 
 Each story CSV (e.g., `story-1.csv`) contains step-by-step navigation data:
 
@@ -551,7 +534,7 @@ When you deploy via GitHub Pages, the build process is **fully automated**. Here
 
 Edit content directly on GitHub or push from local:
 
-1. **Edit CSVs** in `components/structures/` (story structure, object metadata)
+1. **Edit Google Sheets or CSVs** in `components/structures/` (story structure, object metadata)
 2. **Edit markdown** in `components/texts/` (narrative content)
 3. **Add images** to `components/images/objects/` (IIIF source images)
 4. **Commit and push** to main branch
@@ -575,6 +558,26 @@ The workflow (`.github/workflows/build.yml`) automatically:
 **Triggers:**
 - Push to main branch
 - Manual workflow dispatch (Actions tab)
+
+### Manual Build Trigger
+
+After editing your Google Sheet, trigger a rebuild without making code changes:
+
+1. Click the build badge at top of this README (or go to your repository's Actions tab)
+2. Click **Build and Deploy** workflow
+3. Click **Run workflow** button (top right)
+4. Select branch (usually `main`)
+5. Click green **Run workflow** button
+6. Wait 2-5 minutes for completion
+
+**When to trigger manually:**
+- After editing Google Sheets content
+- After adding objects or story steps
+- To rebuild without code changes
+
+**Automatic triggers:**
+- Any push to main branch
+- Changes to `_config.yml`, CSVs, or markdown files
 
 ## Customization
 

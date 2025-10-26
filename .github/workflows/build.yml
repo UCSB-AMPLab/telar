@@ -2,7 +2,7 @@ name: Build and Deploy Telar Site
 
 on:
   push:
-    branches: [main, develop]  # Temporarily added develop for testing
+    branches: [main]
   workflow_dispatch:  # Allow manual trigger
   schedule:
     - cron: '0 0 * * *'  # Daily at midnight (optional, for auto-updates from Google Sheets)

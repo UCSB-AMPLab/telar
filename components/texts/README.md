@@ -11,7 +11,7 @@ These markdown files are **content components** that can be referenced and reuse
 ```
 texts/
 ├── stories/         - Narrative content for story layers/panels
-│   └── story1/
+│   └── story1/      - Optional subfolder for organizing files
 │       ├── step1-layer1.md
 │       ├── step1-layer2.md
 │       └── ...
@@ -19,6 +19,8 @@ texts/
     ├── term1.md
     └── term2.md
 ```
+
+**Note:** Subfolders like `story1/` are **optional**. You can organize your story markdown files however you like - all in the `stories/` folder directly, grouped by story in subfolders, or any other structure that makes sense for your project. Just make sure to reference the correct path (e.g., `story1/step1-layer1.md` or `step1-layer1.md`) in your story spreadsheet or CSV files.
 
 ## Markdown File Format
 
