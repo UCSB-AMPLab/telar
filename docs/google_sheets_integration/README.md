@@ -129,6 +129,34 @@ Special section: After the `STORIES` key, list your stories as:
 
 ## Tips and Best Practices
 
+### Using Instruction Rows and Columns
+
+You can add instructions and notes directly in your Google Sheets that will be ignored during processing:
+
+**Instruction Rows** - Entire rows starting with `#` will be skipped:
+```
+# This entire row will be ignored during processing
+# TODO: Add more objects from the XYZ collection
+# SECTION: Colonial Period Objects
+```
+
+Use instruction rows for:
+- Section breaks between groups of items
+- TODO reminders and notes
+- Temporary comments during editing
+
+**Instruction Columns** - Any column with a name starting with `#` will be ignored:
+```
+# Instructions    # Notes    # TODO
+```
+
+Use instruction columns for:
+- Row-by-row guidance (e.g., "Use short title here")
+- Field-specific examples and tips
+- Tracking which rows need review
+
+The template includes a `# Instructions` column with examples. You can rename it, add more instruction columns, or remove them entirely.
+
 ### Coordinate Precision
 - Use exactly 3 decimal places for x, y, zoom (e.g., `0.500`, not `0.5`)
 

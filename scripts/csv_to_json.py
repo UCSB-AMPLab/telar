@@ -90,6 +90,9 @@ def csv_to_json(csv_path, json_path, process_func=None):
         csv_content = ''.join(lines)
         df = pd.read_csv(StringIO(csv_content), on_bad_lines='warn')
 
+        # Filter out columns starting with # (instruction columns)
+        df = df[[col for col in df.columns if not col.startswith('#')]]
+
         # Apply processing function if provided
         if process_func:
             df = process_func(df)

@@ -12,6 +12,10 @@ All notable changes to Telar will be documented in this file.
   - Excel template with demo data at `docs/google_sheets_integration/telar-template.xlsx`
   - Template duplication option at https://bit.ly/telar-template
   - Local development guide at `docs/google_sheets_integration/README.md`
+  - **Instruction rows and columns**: Add notes and instructions directly in Google Sheets or CSVs that are automatically filtered out during processing
+    - Rows starting with `#` are skipped (useful for section breaks, TODOs, and temporary comments)
+    - Columns with names starting with `#` (e.g., `# Instructions`, `# Notes`) are ignored during JSON conversion
+    - Template includes `# Instructions` column with examples for user guidance
 - **Comprehensive error messaging system**: User-friendly warnings displayed on index, objects, and story pages when configuration issues are detected
 - **Object ID validation**: Automatic stripping of file extensions from object IDs and warnings for spaces in filenames
 - **IIIF manifest validation**: Full validation of external IIIF manifests with detailed error messages
