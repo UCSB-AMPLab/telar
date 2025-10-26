@@ -2,7 +2,7 @@ name: Build and Deploy Telar Site
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]  # Temporarily added develop for testing
   workflow_dispatch:  # Allow manual trigger
   schedule:
     - cron: '0 0 * * *'  # Daily at midnight (optional, for auto-updates from Google Sheets)
@@ -36,36 +36,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Google Sheets integration - optional
-      # To use: Add these secrets to your GitHub repo (Settings > Secrets and variables > Actions):
-      #   - GOOGLE_SHEETS_ID: Your Google Sheet ID
-      #   - PROJECT_GID, OBJECTS_GID, STORY_1_GID, STORY_2_GID: Tab GIDs from your sheet
-      # Then uncomment the step below and comment out the CSV-to-JSON conversion
-      # See docs/google_sheets_integration/README.md for full instructions
+      - name: Fetch data from Google Sheets (if enabled)
+        run: |
+          # Check if Google Sheets integration is enabled in _config.yml
+          ENABLED=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('google_sheets', {}).get('enabled', False))")
 
-      # - name: Fetch data from Google Sheets
-      #   env:
-      #     SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
-      #     PROJECT_GID: ${{ secrets.PROJECT_GID }}
-      #     OBJECTS_GID: ${{ secrets.OBJECTS_GID }}
-      #     STORY_1_GID: ${{ secrets.STORY_1_GID }}
-      #     STORY_2_GID: ${{ secrets.STORY_2_GID }}
-      #   if: ${{ env.SHEETS_ID != '' }}
-      #   run: |
-      #     # Create structures directory
-      #     mkdir -p components/structures
-      #
-      #     # Base URL for Google Sheets CSV export
-      #     BASE_URL="https://docs.google.com/spreadsheets/d/${SHEETS_ID}/export?format=csv"
-      #
-      #     # Fetch each tab as CSV
-      #     curl -L "${BASE_URL}&gid=${PROJECT_GID}" -o components/structures/project.csv
-      #     curl -L "${BASE_URL}&gid=${OBJECTS_GID}" -o components/structures/objects.csv
-      #     curl -L "${BASE_URL}&gid=${STORY_1_GID}" -o components/structures/story-1.csv
-      #     curl -L "${BASE_URL}&gid=${STORY_2_GID}" -o components/structures/story-2.csv
-      #
-      #     # Add more story tabs as needed:
-      #     # curl -L "${BASE_URL}&gid=${STORY_3_GID}" -o components/structures/story-3.csv
+          if [ "$ENABLED" = "True" ]; then
+            echo "✓ Google Sheets integration enabled - fetching CSVs..."
+            python3 scripts/fetch_google_sheets.py
+          else
+            echo "✓ Google Sheets integration disabled - using existing CSV files"
+          fi
 
       - name: Convert CSV to JSON
         run: |
