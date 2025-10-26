@@ -2,6 +2,14 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.3.1-beta] - 2025-10-26
+
+### Fixed
+
+- **Critical thumbnail loading bug**: Fixed thumbnails not displaying on objects page due to empty string handling in Liquid templates. Objects with empty `thumbnail` or `iiif_manifest` values now properly fall through to appropriate fallback logic.
+- **Local image viewer bug**: Fixed local images (self-hosted IIIF) not loading in object detail pages due to empty `iiif_manifest` string being treated as truthy in Liquid conditionals.
+- **Objects gallery thumbnails**: Fixed local image thumbnails not loading in objects gallery by adding non-empty string checks to all `iiif_manifest` conditionals.
+
 ## [0.3.0-beta] - 2025-10-25
 
 ### Added

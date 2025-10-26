@@ -1,13 +1,13 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.3.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
+![Version](https://img.shields.io/badge/version-0.3.1--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
-> **⚠️ Beta Release - v0.3.0-beta**
+> **⚠️ Beta Release - v0.3.1-beta**
 > This release introduces comprehensive error messaging, Google Sheets integration for easier content management, and improved copy functionality for IIIF coordinates. Choose between CSV-based or Google Sheets workflows.
 
-> **Warning:** this latest release introduces breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
+> **Warning:** the v0.3.0 release introduced breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
 
 ## Overview
 
