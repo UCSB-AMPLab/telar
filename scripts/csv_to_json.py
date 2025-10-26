@@ -325,18 +325,40 @@ def process_objects(df):
             except urllib.error.HTTPError as e:
                 if e.code == 404:
                     df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not exist (error 404)"
+                    df.at[idx, 'object_warning_short'] = "Error 404: manifest not found"
+                elif e.code == 429:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means \"Too Many Requests\": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away."
+                    df.at[idx, 'object_warning_short'] = "Error 429: rate limiting (try again in 15-30 minutes)"
+                elif e.code == 403:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 403). Error 403 means \"Forbidden\": the IIIF server is blocking access to this manifest. This usually means the manifest requires authentication, has IP restrictions, or is not publicly available. Contact the institution to confirm the manifest can be accessed publicly, or use a different IIIF resource."
+                    df.at[idx, 'object_warning_short'] = "Error 403: access forbidden (likely requires authentication or has IP restrictions)"
+                elif e.code == 401:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 401). Error 401 means \"Unauthorized\": this manifest requires authentication to access. Telar does not support authenticated IIIF manifests. You'll need to use a publicly accessible IIIF manifest instead."
+                    df.at[idx, 'object_warning_short'] = "Error 401: authentication required (not supported by Telar)"
+                elif e.code == 500:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 500). Error 500 means \"Internal Server Error\": the IIIF server is experiencing technical problems. This is not a problem with your configuration - the institution's server is having issues. Try rebuilding your site later to see if the issue has been resolved."
+                    df.at[idx, 'object_warning_short'] = "Error 500: server error (try again later)"
+                elif e.code == 503:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 503). Error 503 means \"Service Unavailable\": the IIIF server is temporarily unavailable, possibly due to maintenance or being overloaded. This is not a problem with your configuration. Try rebuilding your site later - the server should come back online."
+                    df.at[idx, 'object_warning_short'] = "Error 503: server temporarily unavailable (try again later)"
+                elif e.code == 502:
+                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 502). Error 502 means \"Bad Gateway\": there's a problem with the IIIF server's infrastructure. This is not a problem with your configuration - the institution's server is having connectivity issues. Try rebuilding your site later to see if the issue has been resolved."
+                    df.at[idx, 'object_warning_short'] = "Error 502: server connectivity issue (try again later)"
                 else:
                     df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {e.code})"
+                    df.at[idx, 'object_warning_short'] = f"Error {e.code}: could not be accessed"
                 msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except urllib.error.URLError as e:
                 df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
+                df.at[idx, 'object_warning_short'] = "Network error: could not be reached"
                 msg = f"IIIF manifest for object {object_id} could not be reached: {e.reason}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except Exception as e:
                 df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
+                df.at[idx, 'object_warning_short'] = "Validation error: could not be validated"
                 msg = f"Error validating IIIF manifest for object {object_id}: {str(e)}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)

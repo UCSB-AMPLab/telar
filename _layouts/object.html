@@ -82,23 +82,25 @@ layout: default
               <!-- Close Button -->
               <button type="button" class="btn-close btn-close-white" data-bs-toggle="collapse" data-bs-target="#coordinatePanel" style="position: absolute; top: 0.5rem; right: 0.5rem;"></button>
 
-              <div class="row">
+              <div class="row" style="padding-top: 1rem;">
                 <!-- Instructions -->
-                <div class="col-md-7">
-                  <h6 style="color: #c8d8e8; font-weight: 600; margin-bottom: 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.875rem;">Instructions</h6>
-                  <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0.5rem;">
-                    Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling. 
-                  </p>
-                  <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0;">
-                    Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once.
-                  </p>
+                <div class="col-md-6">
+                  <div style="padding-left: 2rem;">
+                    <h6 style="color: #c8d8e8; font-weight: 600; margin-bottom: 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.875rem;">Instructions</h6>
+                    <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0.5rem;">
+                      Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling.
+                    </p>
+                    <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0;">
+                      Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once.
+                    </p>
+                  </div>
                 </div>
 
                 <!-- Current Coordinates Table and Buttons -->
-                <div class="col-md-5">
+                <div class="col-md-6">
                   <div style="padding-top: 2rem;">
                     <div style="max-width: 280px; margin: 0 auto;">
-                      <dl class="row mb-4">
+                      <dl class="row mb-0">
                         <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">X</dt>
                         <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
                           <code id="coord-x" style="color: #c8d8e8;">0.500</code>
@@ -122,14 +124,15 @@ layout: default
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </dd>
-                      </dl>
-                    </div>
 
-                    <!-- Copy Button -->
-                    <div>
-                      <button class="btn btn-sm btn-copy w-100" id="copy-coords">
-                        <i class="bi bi-clipboard"></i> Copy x,y,zoom
-                      </button>
+                        <!-- Copy Button Row -->
+                        <dt class="col-sm-6"></dt>
+                        <dd class="col-sm-6" style="margin-bottom: 0;">
+                          <button class="btn btn-sm btn-copy w-100" id="copy-coords">
+                            <i class="bi bi-clipboard"></i> Copy x,y,zoom
+                          </button>
+                        </dd>
+                      </dl>
                     </div>
                   </div>
                 </div>

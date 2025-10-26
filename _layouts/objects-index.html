@@ -31,9 +31,33 @@ layout: default
         <strong>⚠️ Configuration Issues Detected</strong>
         <p class="mb-2 mt-2"><small>The following objects have configuration issues:</small></p>
         <ul class="mb-2" style="font-size: 0.9rem;">
+        {% assign shown_warnings = "" | split: "" %}
         {% for object in objects_with_warnings %}
+          {% assign warning_short = object.object_warning_short | default: "" %}
+          {% assign use_long = true %}
+
+          {% comment %}Check if we've already shown this warning type{% endcomment %}
+          {% if warning_short != "" %}
+            {% for shown in shown_warnings %}
+              {% if shown == warning_short %}
+                {% assign use_long = false %}
+                {% break %}
+              {% endif %}
+            {% endfor %}
+
+            {% comment %}Add to shown warnings if using long version{% endcomment %}
+            {% if use_long %}
+              {% assign shown_warnings = shown_warnings | push: warning_short %}
+            {% endif %}
+          {% endif %}
+
           <li>
-            <strong><a href="{{ object.url | relative_url }}" class="alert-link">{{ object.title }}</a>:</strong> {{ object.object_warning | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+            <strong><a href="{{ object.url | relative_url }}" class="alert-link">{{ object.title }}</a>:</strong>
+            {% if use_long %}
+              {{ object.object_warning | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+            {% else %}
+              {{ warning_short }}
+            {% endif %}
           </li>
         {% endfor %}
         </ul>
