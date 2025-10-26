@@ -6,7 +6,7 @@ title: Home
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-11 mx-auto">
-      {% assign logo_path = site.telar.logo | strip %}
+      {% assign logo_path = site.logo | strip %}
       {% if logo_path != "" %}
       <img src="{{ logo_path | relative_url }}" alt="{{ site.title }}" class="mb-4" style="max-width: 200px;">
       {% endif %}
@@ -25,6 +25,36 @@ title: Home
       <p class="lead mb-5">{{ site.description }}</p>
     </div>
   </div>
+  {% endif %}
+
+  <!-- Theme Validation -->
+  {% assign has_theme_issue = false %}
+  {% assign theme_error_type = "" %}
+  {% assign configured_theme = site.data.themes[site.telar_theme] %}
+
+  {% if configured_theme == nil or configured_theme == empty %}
+    {% assign has_theme_issue = true %}
+
+    {%- comment -%}Check if theme exists in _data/themes folder but failed to load{%- endcomment -%}
+    {% assign all_theme_files = site.static_files | where_exp: "file", "file.path contains '_data/themes'" | where_exp: "file", "file.extname == '.yml'" %}
+    {% assign theme_file_exists = false %}
+    {% for file in all_theme_files %}
+      {% if file.path contains site.telar_theme %}
+        {% assign theme_file_exists = true %}
+      {% endif %}
+    {% endfor %}
+
+    {% if theme_file_exists %}
+      {% assign theme_error_type = "malformed" %}
+    {% elsif site.data.themes['paisajes'] %}
+      {% assign theme_error_type = "not_found" %}
+    {% else %}
+      {% assign theme_error_type = "critical" %}
+    {% endif %}
+  {% elsif configured_theme.colors == nil or configured_theme.fonts == nil %}
+    {%- comment -%}Theme exists but missing required sections{%- endcomment -%}
+    {% assign has_theme_issue = true %}
+    {% assign theme_error_type = "malformed" %}
   {% endif %}
 
   <!-- Configuration Issues Warning -->
@@ -50,12 +80,22 @@ title: Home
     {% endif %}
   {% endfor %}
 
-  {% if has_object_issues or stories_with_issues.size > 0 %}
+  {% if has_theme_issue or has_object_issues or stories_with_issues.size > 0 %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <div class="alert alert-warning" role="alert" style="max-width: 800px;">
         <strong>⚠️ Configuration Issues Detected</strong>
         <p class="mb-0 mt-2"><small>
+          {% if has_theme_issue %}
+            {% if theme_error_type == "not_found" %}
+              The theme '{{ site.telar_theme }}' doesn't exist. We've applied the 'paisajes' (default) theme instead. To choose a different theme, update telar_theme in _config.yml to one of: paisajes, neogranadina, santa-barbara, or austin. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the `_data/themes` folder.
+            {% elsif theme_error_type == "malformed" %}
+              The theme '{{ site.telar_theme }}' file appears to be broken or incomplete. We've applied the 'paisajes' (default) theme instead. Check _data/themes/{{ site.telar_theme }}.yml for syntax errors or compare it to a working theme file.
+            {% elsif theme_error_type == "critical" %}
+              We encountered a problem loading themes. The _data/themes folder may be missing or damaged. The site is currently using basic default styling. Please check that your _data/themes folder contains valid theme files, or restore it from your repository.
+            {% endif %}
+            <br><br>
+          {% endif %}
           {% if has_object_issues and stories_with_issues.size > 0 %}
             Some objects and stories have configuration issues. Navigate to the <a href="{{ '/objects/' | relative_url }}" class="alert-link">objects page</a> or
             {% for story in stories_with_issues %}
