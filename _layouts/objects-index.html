@@ -70,8 +70,8 @@ layout: default
   <div class="collection-grid">
     {% for object in site.objects %}
     <a href="{{ object.url | relative_url }}" class="collection-item">
-      <div class="collection-item-image" {% if object.iiif_manifest %}data-iiif-manifest="{{ object.iiif_manifest }}"{% endif %}>
-        {% if object.thumbnail %}
+      <div class="collection-item-image" {% if object.iiif_manifest and object.iiif_manifest != "" %}data-iiif-manifest="{{ object.iiif_manifest }}"{% endif %}>
+        {% if object.thumbnail and object.thumbnail != "" %}
         {%- comment -%}Use explicit thumbnail if provided{%- endcomment -%}
         <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}">
         {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
