@@ -5,13 +5,55 @@
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
 > **⚠️ Beta Release - v0.3.0-beta**
-> This release introduces comprehensive error messaging, Google Sheets integration for easier content management, and improved copy functionality for IIIF coordinates. Choose between CSV-based or Google Sheets workflows.
+> This release introduces breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
 
 ## Overview
 
 Telar (Spanish for "loom") is a static site generator built on Jekyll that weaves together IIIF images, narrative text, and layered contextual information into interactive visual narrative exhibitions. It follows minimal computing principles: plain text authoring, static generation, and sustainable hosting.
 
 Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), the UT Archives, Mapping, and Preservation Lab, and [Neogranadina](https://neogranadina.org).
+
+## Migrating from v0.2.0
+
+**⚠️ Important: Breaking Changes**
+
+This release includes breaking changes that require updates to existing projects. See migration instructions below.
+
+### Migration Guide
+
+**1. Update project.csv structure**
+
+Old format (key-value pairs):
+```csv
+key,value
+project_title,Your Exhibition Title
+tagline,A brief description
+...
+STORIES,
+1,Story One
+2,Story Two
+```
+
+New format (columns):
+```csv
+order,title,subtitle
+1,Story One,Optional subtitle
+2,Story Two,
+```
+
+The `project_title`, `tagline`, `author`, `email`, and `logo` fields are now configured in `_config.yml` instead of project.csv.
+
+**2. Migrate theme customization**
+
+If you had `primary_color`, `secondary_color`, `font_headings`, or `font_body` in project.csv, remove them and configure theming via `_config.yml`:
+
+```yaml
+telar_theme: "paisajes"  # or neogranadina, santa-barbara, austin
+```
+
+For custom colors/fonts, create `_data/themes/custom.yml` and set `telar_theme: "custom"` in `_config.yml`.
+
+---
 
 ## Key Features
 
