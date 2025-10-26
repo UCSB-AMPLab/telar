@@ -4,8 +4,8 @@
 
 A minimal computing framework for creating digital storytelling exhibitions with IIIF images and scrollytelling narratives.
 
-> **⚠️ Beta Release - v0.2.0-beta**
-> This release introduces multi-object story support with improved scrolling. The current workflow uses CSV files and markdown for content editing. Google Sheets integration is planned for a future release.
+> **⚠️ Beta Release - v0.3.0-beta**
+> This release introduces comprehensive error messaging, Google Sheets integration for easier content management, and improved copy functionality for IIIF coordinates. Choose between CSV-based or Google Sheets workflows.
 
 ## Overview
 
@@ -29,7 +29,7 @@ Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, an
 
 Telar exhibitions are built around a layered storytelling structure. Understanding this model will help you plan your content effectively.
 
-Each page in your Telar site contains one or more stories, which can be independent narratives or chapters of a longer one. Stories unfold through successive steps that show an image (or a detail of an image) alongside brief text. Each step follows a question/answer/invitation pattern: a question draws viewers in, a brief answer (1-2 sentences) responds, and an invitation to "learn more" opens a layer panel with extended information. You can provide up to two of these layer panels in each step, allowing viewers who want to go deeper to obtain even more detail.
+Each page in your Telar site contains one or more stories, which can be independent narratives or chapters of a longer piece. Stories unfold through successive steps that show an image (or a detail of an image) alongside brief text. Each step follows a question/answer/invitation pattern: a question draws viewers in, a brief answer (1-2 sentences) responds, and an invitation to "learn more" opens a layer panel with extended information. You can provide up to two of these layer panels in each step, allowing viewers who want to go deeper to obtain even more detail.
 
 Layer panels are where you can really expand on your narrative. They are written in [markdown format](https://www.markdownguide.org/getting-started/), allowing you to include headings, bold and italic text, links, lists, and other formatting. You can also insert additional images, and embed videos, 3D renderings, or other resources.
 
@@ -37,7 +37,19 @@ Before you start gathering materials or building your site, take time to sketch 
 
 For inspiration, browse the [example site](https://ampl.clair.ucsb.edu/telar) to see this structure in action. More sites built with Telar will be available soon in our directory.
 
-Once you're ready, choose one of the two workflows below based on your needs and technical knowledge.
+Once you're ready, choose one of the workflows below based on your needs and technical knowledge.
+
+### Content Management Options
+
+Telar offers two ways to manage your exhibition content:
+
+#### CSV Files (Default)
+Edit CSV files directly in your repository using GitHub's web interface or a local text editor. This approach provides full control and works entirely through GitHub.
+
+#### Google Sheets (Optional)
+Manage content through a familiar spreadsheet interface with helper scripts for validation and formatting. Ideal for teams or those who prefer spreadsheet editing. See [`docs/google_sheets_integration/README.md`](docs/google_sheets_integration/README.md) for setup instructions.
+
+---
 
 ### Track 1: GitHub Web Interface Only (Recommended for Storytellers)
 

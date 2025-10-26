@@ -1,11 +1,3 @@
-# PROJECT CONFIGURATION
-# This section defines site-wide settings. These values are converted to _data/project.json
-#
-# NOTE: Currently, these values are generated but not yet used by templates.
-# Templates use the 'telar' section from _config.yml instead.
-# Future versions will implement dynamic theming using these values.
-#
-# Configuration includes: project metadata, theme colors, typography, and branding
 key,value
 project_title,Your Exhibition Title
 tagline,A brief description of your exhibition
@@ -17,11 +9,8 @@ font_headings,"Playfair Display, serif"
 font_body,"Source Sans Pro, sans-serif"
 logo,/assets/images/site/logo.png
 ,
-# STORY INDEX
-# This section lists all stories in your exhibition. Used to generate story navigation.
-# Format: story_number,story_title
 STORIES,
 1,Example Telar Story
 2,Showcase of Telar features
-3,Chapter 3
-4,Conclusion
+3,
+4,

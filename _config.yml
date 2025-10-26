@@ -9,21 +9,33 @@ url: "https://ampl.clair.ucsb.edu"
 author: ""
 email: ""
 
-# Build Settings
-markdown: kramdown
-permalink: pretty
-exclude:
-  - Gemfile
-  - Gemfile.lock
-  - node_modules
-  - vendor
-  - .github
-  - README.md
-  - docs/
-  - scripts/
+# Google Sheets Integration (optional)
+# Manage content via Google Sheets instead of editing CSV files directly.
+# See docs/google_sheets_integration/README.md for detailed setup instructions.
+#
+# Setup:
+# 1. Get the template:
+#    - Option A: Duplicate our template at https://bit.ly/telar-template
+#    - Option B: Import docs/google_sheets_integration/telar-template.xlsx to Google Sheets yourself
+# 2. Share your sheet: Anyone with the link (Viewer access)
+# 3. Publish your sheet: File > Share > Publish to web
+# 4. Paste both URLs below
+# 5. Set enabled: true
+# 6. Commit changes
+#    - If using GitHub Pages: GitHub Actions will automatically discover tab GIDs and fetch CSVs
+#    - If running locally: Run `python3 scripts/fetch_google_sheets.py` before building
+google_sheets:
+  enabled: true
+  shared_url: "https://docs.google.com/spreadsheets/d/18dJWy9wkLD7Muokigg4wp85c3Vsjuphdrn0g51pwkGY/edit"
+  published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9eeRoyQCr1j-1uDaWBm-rgZNXtn9A-mepL0I4dqDTx2-E_6gbVD-8x0DYDVhppiAzrFpd20_9cr3z/pubhtml"
 
-# Collections Directory (all auto-generated collections in one place)
-collections_dir: _jekyll-files
+#
+#
+#
+# PLEASE DO NOT EDIT BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING
+#
+#
+#
 
 # Collections
 collections:
@@ -37,9 +49,33 @@ collections:
     output: true
     permalink: /glossary/:name/
 
-# Tell Jekyll not to expect dates for these collections
-future: true
-show_drafts: false
+# Collections Directory (a folder where Jekyll and the Telar scripts will put all auto-generated object and story working files)
+collections_dir: _jekyll-files
+
+# Build Settings
+markdown: kramdown
+permalink: pretty
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .github
+  - README.md
+  - docs/
+  - scripts/
+
+# Telar Settings
+telar:
+  version: "0.2.0-beta"
+  release_date: "2025-10-20"
+  project_title: "" # Overridden by _data/project.json
+  tagline: ""
+  primary_color: "#2c3e50" # Paisajes Colonial default
+  secondary_color: "#8b4513"
+  font_headings: "Playfair Display"
+  font_body: "Source Sans Pro"
+  logo: "" # Path to logo image
 
 # Defaults
 defaults:
@@ -59,17 +95,9 @@ defaults:
     values:
       layout: "glossary"
 
-# Telar Settings
-telar:
-  version: "0.2.0-beta"
-  release_date: "2025-10-20"
-  project_title: "" # Overridden by _data/project.json
-  tagline: ""
-  primary_color: "#2c3e50" # Paisajes Colonial default
-  secondary_color: "#8b4513"
-  font_headings: "Playfair Display"
-  font_body: "Source Sans Pro"
-  logo: "" # Path to logo image
+# Tell Jekyll not to expect dates for these collections
+future: true
+show_drafts: false
 
 # OpenSeadragon Settings
 openseadragon:
