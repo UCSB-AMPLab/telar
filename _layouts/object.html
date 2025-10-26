@@ -188,7 +188,7 @@ layout: default
         <dd class="col-sm-8">
           <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
             <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ page.iiif_manifest }}</code>
-            <button class="btn btn-sm btn-copy" id="copy-manifest" data-manifest="{{ page.iiif_manifest }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: #f8f9fa;" title="Copy manifest URL">
+            <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ page.iiif_manifest }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
               <i class="bi bi-clipboard"></i>
             </button>
           </div>
@@ -199,7 +199,7 @@ layout: default
           {% assign manifest_url = site.url | append: site.baseurl | append: '/iiif/objects/' | append: page.object_id | append: '/manifest.json' %}
           <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
             <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ manifest_url }}</code>
-            <button class="btn btn-sm btn-copy" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: #f8f9fa;" title="Copy manifest URL">
+            <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
               <i class="bi bi-clipboard"></i>
             </button>
           </div>
