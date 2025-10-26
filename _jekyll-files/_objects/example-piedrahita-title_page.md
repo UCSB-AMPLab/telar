@@ -9,8 +9,8 @@ location: "John Carter Brown Library"
 credit: "John Carter Brown Library, Brown University, Providence, R.I."
 thumbnail: ""
 iiif_manifest: "https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest"
-object_warning: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
-object_warning_short: "Validation error: could not be validated"
+object_warning: ""
+object_warning_short: ""
 layout: object
 ---
 
