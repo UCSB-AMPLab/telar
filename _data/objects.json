@@ -11,8 +11,7 @@
     "location": "Huntington Library",
     "credit": "Huntington Digital Library",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-bogota-1614",
@@ -26,8 +25,7 @@
     "location": "Archivo General de Indias",
     "credit": "Archivo General de Indias, Seville",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-muisca-goldwork",
@@ -41,8 +39,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá. Registration Number: O08319",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-ceramic-figure",
@@ -56,8 +53,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-piedrahita-title_page",
@@ -71,7 +67,6 @@
     "location": "John Carter Brown Library",
     "credit": "John Carter Brown Library, Brown University, Providence, R.I.",
     "thumbnail": "",
-    "object_warning": "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means \"Too Many Requests\": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away.",
-    "object_warning_short": "Error 429: rate limiting (try again in 15-30 minutes)"
+    "object_warning": ""
   }
 ]
