@@ -7,8 +7,8 @@ medium: "Copper engraving"
 dimensions: ""
 location: "Huntington Library"
 credit: "Huntington Digital Library"
-thumbnail: 
-iiif_manifest: https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json
+thumbnail: ""
+iiif_manifest: "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json"
 object_warning: ""
 object_warning_short: ""
 layout: object

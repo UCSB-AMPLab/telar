@@ -38,8 +38,8 @@ medium: "{obj.get('medium', '')}"
 dimensions: "{obj.get('dimensions', '')}"
 location: "{obj.get('location', '')}"
 credit: "{obj.get('credit', '')}"
-thumbnail: {obj.get('thumbnail', '')}
-iiif_manifest: {obj.get('iiif_manifest', '')}
+thumbnail: "{obj.get('thumbnail', '')}"
+iiif_manifest: "{obj.get('iiif_manifest', '')}"
 object_warning: "{obj.get('object_warning', '')}"
 object_warning_short: "{obj.get('object_warning_short', '')}"
 layout: object

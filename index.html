@@ -97,16 +97,18 @@ title: Home
             <br><br>
           {% endif %}
           {% if has_object_issues and stories_with_issues.size > 0 %}
+            {% assign second_to_last = stories_with_issues.size | minus: 1 %}
             Some objects and stories have configuration issues. Navigate to the <a href="{{ '/objects/' | relative_url }}" class="alert-link">objects page</a> or
             {% for story in stories_with_issues %}
-              <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == stories_with_issues.size | minus: 1 %} or {% else %}, {% endif %}{% endunless %}
+              <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == second_to_last %} or {% else %}, {% endif %}{% endunless %}
             {% endfor %} to see more details.
           {% elsif has_object_issues %}
             Some objects have configuration issues. Navigate to the <a href="{{ '/objects/' | relative_url }}" class="alert-link">objects page</a> to see more details.
           {% elsif stories_with_issues.size > 0 %}
+            {% assign second_to_last = stories_with_issues.size | minus: 1 %}
             Some stories have configuration issues. Navigate to
             {% for story in stories_with_issues %}
-              <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == stories_with_issues.size | minus: 1 %} or {% else %}, {% endif %}{% endunless %}
+              <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == second_to_last %} or {% else %}, {% endif %}{% endunless %}
             {% endfor %} to see more details.
           {% endif %}
         </small></p>

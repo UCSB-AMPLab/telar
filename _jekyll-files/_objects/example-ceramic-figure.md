@@ -7,8 +7,8 @@ medium: "Ceramic"
 dimensions: ""
 location: "Museo del Oro"
 credit: "Museo del Oro, Bogotá"
-thumbnail: 
-iiif_manifest: 
+thumbnail: ""
+iiif_manifest: ""
 object_warning: ""
 object_warning_short: ""
 layout: object

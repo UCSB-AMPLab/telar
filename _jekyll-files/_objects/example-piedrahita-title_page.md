@@ -7,8 +7,8 @@ medium: "Engraving, ink on paper"
 dimensions: "28.6 x 19.7 cm"
 location: "John Carter Brown Library"
 credit: "John Carter Brown Library, Brown University, Providence, R.I."
-thumbnail: 
-iiif_manifest: https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest
+thumbnail: ""
+iiif_manifest: "https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest"
 object_warning: ""
 object_warning_short: ""
 layout: object
