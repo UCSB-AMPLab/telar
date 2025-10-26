@@ -8,6 +8,8 @@ baseurl: "/telar"
 url: "https://ampl.clair.ucsb.edu"
 author: ""
 email: ""
+telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
+logo: "" # Path to logo image (optional)
 
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.
@@ -65,18 +67,6 @@ exclude:
   - docs/
   - scripts/
 
-# Telar Settings
-telar:
-  version: "0.2.0-beta"
-  release_date: "2025-10-20"
-  project_title: "" # Overridden by _data/project.json
-  tagline: ""
-  primary_color: "#2c3e50" # Paisajes Colonial default
-  secondary_color: "#8b4513"
-  font_headings: "Playfair Display"
-  font_body: "Source Sans Pro"
-  logo: "" # Path to logo image
-
 # Defaults
 defaults:
   - scope:
@@ -98,6 +88,11 @@ defaults:
 # Tell Jekyll not to expect dates for these collections
 future: true
 show_drafts: false
+
+# Telar Settings (version information)
+telar:
+  version: "0.3.0-beta"
+  release_date: "2025-10-25"
 
 # OpenSeadragon Settings
 openseadragon:

@@ -1,0 +1,24 @@
+name: "Paisajes Coloniales"
+description: "Classic academic exhibition style with earthy tones"
+
+colors:
+  # Text/Font colors
+  text:
+    heading: "#2c3e50"        # Heading font color
+    body: "#333333"           # Body text color
+    link: "#8b4513"           # Hyperlink color (saddle brown)
+    button: "#FFFFFF"         # Button text color
+    panel_layer1: "#2c3e50"   # Layer 1 panel text color
+    panel_layer2: "#FFFFFF"   # Layer 2 panel text color
+    panel_glossary: "#333333" # Glossary panel text color
+
+  # Background colors
+  background:
+    button: "#2c3e50"         # Button background
+    panel_layer1: "#A8C5D4"   # Layer 1 panel background
+    panel_layer2: "#3d2645"   # Layer 2 panel background
+    panel_glossary: "#F5EDE1" # Glossary panel background
+
+fonts:
+  headings: "'Playfair Display', serif"
+  body: "'Source Sans Pro', sans-serif"

@@ -1,17 +1,42 @@
+---
+---
+{%- comment -%}Three-tier theme loading with fallback protection{%- endcomment -%}
+{% assign theme = site.data.themes[site.telar_theme] %}
+{% unless theme %}
+  {% assign theme = site.data.themes['paisajes'] %}
+{% endunless %}
+{% unless theme %}
+  {% assign theme = site.data.defaults.themes.paisajes %}
+{% endunless %}
+
 /* Telar - Digital Storytelling Framework CSS */
 
-/* CSS Variables */
+/* CSS Variables with hardcoded paisajes defaults as ultimate fallback */
 :root {
-  --color-primary: #2c3e50;
-  --color-secondary: #8b4513;
-  --font-headings: 'Playfair Display', serif;
-  --font-body: 'Source Sans Pro', sans-serif;
+  /* Text colors */
+  --color-heading: {{ theme.colors.text.heading | default: "#2c3e50" }};
+  --color-body: {{ theme.colors.text.body | default: "#333333" }};
+  --color-link: {{ theme.colors.text.link | default: "#8b4513" }};
+  --color-button-text: {{ theme.colors.text.button | default: "#FFFFFF" }};
+  --color-panel-layer1-text: {{ theme.colors.text.panel_layer1 | default: "#2c3e50" }};
+  --color-panel-layer2-text: {{ theme.colors.text.panel_layer2 | default: "#FFFFFF" }};
+  --color-panel-glossary-text: {{ theme.colors.text.panel_glossary | default: "#333333" }};
+
+  /* Background colors */
+  --color-button-bg: {{ theme.colors.background.button | default: "#2c3e50" }};
+  --color-panel-layer1-bg: {{ theme.colors.background.panel_layer1 | default: "#A8C5D4" }};
+  --color-panel-layer2-bg: {{ theme.colors.background.panel_layer2 | default: "#3d2645" }};
+  --color-panel-glossary-bg: {{ theme.colors.background.panel_glossary | default: "#F5EDE1" }};
+
+  /* Fonts */
+  --font-headings: {{ theme.fonts.headings | default: "'Playfair Display', serif" }};
+  --font-body: {{ theme.fonts.body | default: "'Source Sans Pro', sans-serif" }};
 }
 
 /* Typography */
 body {
-  font-family: 'Source Sans Pro', sans-serif;
-  color: #333;
+  font-family: var(--font-body);
+  color: var(--color-body);
   line-height: 1.6;
   display: flex;
   flex-direction: column;
@@ -23,15 +48,15 @@ main {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Playfair Display', serif;
-  color: #2c3e50;
+  font-family: var(--font-headings);
+  color: var(--color-heading);
 }
 
 /* Navigation */
 .site-header .navbar-brand {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-headings);
   font-size: 1.5rem;
-  color: #2c3e50;
+  color: var(--color-heading);
 }
 
 /* Footer */
@@ -45,7 +70,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .footer-link:hover {
-  color: #2c3e50;
+  color: var(--color-link);
   text-decoration: underline;
 }
 
@@ -71,12 +96,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .page-content a {
-  color: #2c3e50;
+  color: var(--color-link);
   text-decoration: underline;
 }
 
 .page-content a:hover {
-  color: #8b4513;
+  opacity: 0.8;
 }
 
 /* Story Layout - Split Screen with Card Stacking */
@@ -172,7 +197,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Active state - slides up to visible position */
 .story-step.is-active {
-  border-left-color: #2c3e50;
+  border-left-color: var(--color-primary);
   opacity: 1;
   transform: translateY(0);
 }
@@ -209,7 +234,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 3rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
-  color: #2c3e50;
+  color: var(--color-primary);
   line-height: 1.2;
 }
 
@@ -226,22 +251,23 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-home {
-  position: absolute;
-  top: 2rem;
-  left: 2rem;
+  position: fixed !important;
+  top: 2rem !important;
+  left: 2rem !important;
   text-decoration: none;
   color: #5a6c7d;
   padding: 0.5rem 1rem;
   border: 1px solid #cbd5e0;
-  border-radius: 4px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.8);
   transition: all 0.3s ease;
+  z-index: 9999 !important;
 }
 
 .btn-home:hover {
   background: white;
-  color: #2c3e50;
-  border-color: #2c3e50;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 /* Outro Step - End card in narrative column only */
@@ -264,7 +290,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
-  color: #2c3e50;
+  color: var(--color-primary);
 }
 
 .outro-text {
@@ -283,12 +309,12 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1.5rem;
 }
 
-/* Panels - Colonial Landscapes Style */
+/* Panels - Theme-aware trigger buttons */
 .panel-trigger {
   display: inline-block;
   padding: 0.5rem 1.25rem;
-  background: #E8DCC4;
-  color: #2c3e50;
+  background: var(--color-button-bg);
+  color: var(--color-button-text);
   text-decoration: none;
   cursor: pointer;
   font-weight: 600;
@@ -301,36 +327,37 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .panel-trigger:hover {
-  background: #D4C5A8;
-  color: #1a252f;
+  background: var(--color-button-bg);
+  color: var(--color-button-text);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  opacity: 0.9;
 }
 
 /* Layer 1 Panel - Light blue background, wide coverage */
 #panel-layer1 {
   width: 65% !important;
   max-width: 900px;
-  background: #A8C5D4;
+  background: var(--color-panel-layer1-bg);
 }
 
 #panel-layer1 .offcanvas-header {
-  background: #A8C5D4;
+  background: var(--color-panel-layer1-bg);
   border-bottom: none;
   padding: 1.5rem 2rem;
 }
 
 #panel-layer1 .offcanvas-body {
-  background: #A8C5D4;
-  color: #2c3e50;
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
   padding: 2rem;
   font-size: 1.05rem;
   line-height: 1.8;
 }
 
 #panel-layer1 .offcanvas-title {
-  color: #ffffff;
-  font-family: 'Playfair Display', serif;
+  color: var(--color-panel-layer1-text);
+  font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 400;
 }
@@ -339,26 +366,26 @@ h1, h2, h3, h4, h5, h6 {
 #panel-layer2 {
   width: 55% !important;
   max-width: 800px;
-  background: #3d2645;
+  background: var(--color-panel-layer2-bg);
 }
 
 #panel-layer2 .offcanvas-header {
-  background: #3d2645;
+  background: var(--color-panel-layer2-bg);
   border-bottom: none;
   padding: 1.5rem 2rem;
 }
 
 #panel-layer2 .offcanvas-body {
-  background: #3d2645;
-  color: #ffffff;
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
   padding: 2rem;
   font-size: 1.05rem;
   line-height: 1.8;
 }
 
 #panel-layer2 .offcanvas-title {
-  color: #ffffff;
-  font-family: 'Playfair Display', serif;
+  color: var(--color-panel-layer2-text);
+  font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 400;
 }
@@ -392,28 +419,28 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Glossary Panel - Cream/beige background */
 #panel-glossary {
-  width: 65% !important;
-  max-width: 900px;
-  background: #F5EDE1;
+  width: 45% !important;
+  max-width: 600px;
+  background: var(--color-panel-glossary-bg);
 }
 
 #panel-glossary .offcanvas-header {
-  background: #F5EDE1;
+  background: var(--color-panel-glossary-bg);
   border-bottom: none;
   padding: 1.5rem 2rem;
 }
 
 #panel-glossary .offcanvas-body {
-  background: #F5EDE1;
-  color: #5d4037;
+  background: var(--color-panel-glossary-bg);
+  color: var(--color-panel-glossary-text);
   padding: 2rem;
   font-size: 1.05rem;
   line-height: 1.8;
 }
 
 #panel-glossary .offcanvas-title {
-  color: #8b4513;
-  font-family: 'Playfair Display', serif;
+  color: var(--color-panel-glossary-text);
+  font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 400;
 }
@@ -427,18 +454,7 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 1;
 }
 
-#panel-glossary-back {
-  background: rgba(139,69,19,0.1);
-  color: #8b4513;
-  border: 1px solid rgba(139,69,19,0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-}
-
-#panel-glossary-back:hover {
-  background: rgba(139,69,19,0.15);
-  color: #8b4513;
-}
+/* Glossary back button uses default Bootstrap outline-secondary styling */
 
 /* Viewer Containers */
 #viewer-container {
@@ -572,8 +588,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .story-card h3 {
-  font-family: 'Playfair Display', serif;
-  color: #2c3e50;
+  font-family: var(--font-headings);
+  color: var(--color-primary);
   font-size: 1.2rem;
   margin-top: 1rem;
   font-weight: 400;
@@ -585,7 +601,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .story-thumbnail-placeholder {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-headings);
   font-size: 3rem;
   font-weight: 700;
   border-radius: 0.25rem 0.25rem 0 0;
@@ -630,21 +646,37 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 3rem;
   margin-bottom: 1.5rem;
   font-size: 2rem;
-  color: #2c3e50;
-  border-bottom: 2px solid #2c3e50;
+  color: var(--color-primary);
+  border-bottom: 2px solid var(--color-primary);
   padding-bottom: 0.5rem;
 }
 
 .glossary-term {
   margin-bottom: 1rem;
   padding: 1rem;
-  border-left: 3px solid #8b4513;
+  border-left: 3px solid var(--color-secondary);
   background: #f8f9fa;
 }
 
 .glossary-term h3 {
   font-size: 1.3rem;
   margin-bottom: 0.5rem;
+}
+
+.glossary-term-link {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-link);
+  text-decoration: none;
+  display: block;
+  transition: color 0.2s ease;
+}
+
+.glossary-term-link:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+  opacity: 0.8;
 }
 
 /* Global Button Styling - Rounded like panel-trigger buttons */
@@ -661,6 +693,22 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+/* Theme-aware button colors */
+.btn-primary {
+  background-color: var(--color-button-bg) !important;
+  border-color: var(--color-button-bg) !important;
+  color: var(--color-button-text) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background-color: var(--color-button-bg) !important;
+  border-color: var(--color-button-bg) !important;
+  opacity: 0.9;
+  color: var(--color-button-text) !important;
+}
+
 /* Footnotes Styling */
 /* Footnote reference links in text (superscript numbers) */
 .offcanvas-body a[href^="#_ftn"] {
@@ -674,7 +722,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 1 (light blue) footnote references */
 #panel-layer1 .offcanvas-body a[href^="#_ftn"] {
-  color: #2c3e50;
+  color: var(--color-primary);
 }
 
 #panel-layer1 .offcanvas-body a[href^="#_ftn"]:hover {
@@ -684,7 +732,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 2 (dark purple) footnote references */
 #panel-layer2 .offcanvas-body a[href^="#_ftn"] {
-  color: #A8C5D4;
+  color: var(--color-panel-layer1-bg);
 }
 
 #panel-layer2 .offcanvas-body a[href^="#_ftn"]:hover {
@@ -726,7 +774,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 #panel-layer1 .offcanvas-body a[href^="#_ftnref"]:hover {
-  color: #2c3e50;
+  color: var(--color-primary);
   text-decoration: underline;
 }
 
@@ -751,14 +799,14 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 1 (light blue) blockquotes */
 #panel-layer1 .offcanvas-body blockquote {
-  border-left-color: #2c3e50;
+  border-left-color: var(--color-primary);
   background: rgba(44, 62, 80, 0.05);
-  color: #2c3e50;
+  color: var(--color-primary);
 }
 
 /* Layer 2 (dark purple) blockquotes */
 #panel-layer2 .offcanvas-body blockquote {
-  border-left-color: #A8C5D4;
+  border-left-color: var(--color-panel-layer1-bg);
   background: rgba(168, 197, 212, 0.1);
   color: #C5DBE8;
 }

@@ -1,0 +1,24 @@
+name: "Santa Barbara"
+description: "Californian colors with navy and gold accents"
+
+colors:
+  # Text/Font colors
+  text:
+    heading: "#003660"        # Heading font color
+    body: "#333333"           # Body text color
+    link: "#047C91"           # Hyperlink color (teal)
+    button: "#FFFFFF"         # Button text color
+    panel_layer1: "#FFFFFF"   # Layer 1 panel text color
+    panel_layer2: "#FFFFFF"   # Layer 2 panel text color
+    panel_glossary: "#333333" # Glossary panel text color
+
+  # Background colors
+  background:
+    button: "#FEBC11"         # Button background
+    panel_layer1: "#047C91"   # Layer 1 panel background
+    panel_layer2: "#003660"   # Layer 2 panel background
+    panel_glossary: "#F1EEEA" # Glossary panel background
+
+fonts:
+  headings: "'Roboto Serif', serif"
+  body: "'Nunito Sans', sans-serif"

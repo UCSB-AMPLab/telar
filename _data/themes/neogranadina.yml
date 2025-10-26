@@ -1,0 +1,24 @@
+name: "Neogranadina"
+description: "Vibrant coral and green palette with colonial-era typography"
+
+colors:
+  # Text/Font colors
+  text:
+    heading: "#000000"        # Heading font color
+    body: "#6C7A89"           # Body text color
+    link: "#D35F3A"           # Hyperlink color (deeper coral)
+    button: "#FFFFFF"         # Button text color
+    panel_layer1: "#FFFFFF"   # Layer 1 panel text color
+    panel_layer2: "#FFFFFF"   # Layer 2 panel text color
+    panel_glossary: "#2A2F36" # Glossary panel text color
+
+  # Background colors
+  background:
+    button: "#2A2F36"         # Button background
+    panel_layer1: "#00b35c"   # Layer 1 panel background
+    panel_layer2: "#b31235"   # Layer 2 panel background
+    panel_glossary: "#F5F7FA" # Glossary panel background
+
+fonts:
+  headings: "'IM Fell DW Pica', serif"
+  body: "'Mulish', sans-serif"
