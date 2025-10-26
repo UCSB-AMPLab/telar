@@ -10,7 +10,7 @@ credit: "Archivo General de Indias, Seville"
 thumbnail: ""
 iiif_manifest: ""
 object_warning: ""
-object_warning_short: "nan"
+object_warning_short: ""
 layout: object
 ---
 
