@@ -274,7 +274,7 @@ def process_objects(df):
 
             try:
                 req = urllib.request.Request(manifest_url, method='HEAD')
-                req.add_header('User-Agent', 'Telar/0.3.0 (IIIF validator)')
+                req.add_header('User-Agent', 'Telar/0.3.1-beta (IIIF validator)')
 
                 with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
                     content_type = response.headers.get('Content-Type', '')
@@ -290,7 +290,7 @@ def process_objects(df):
 
                     # Fetch full content to validate structure
                     req_get = urllib.request.Request(manifest_url)
-                    req_get.add_header('User-Agent', 'Telar/0.3.0 (IIIF validator)')
+                    req_get.add_header('User-Agent', 'Telar/0.3.1-beta (IIIF validator)')
 
                     with urllib.request.urlopen(req_get, timeout=10, context=ssl_context) as resp:
                         try:
