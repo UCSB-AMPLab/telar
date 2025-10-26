@@ -10,7 +10,7 @@ credit: "Huntington Digital Library"
 thumbnail: 
 iiif_manifest: https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json
 object_warning: ""
-object_warning_short: ""
+object_warning_short: "nan"
 layout: object
 ---
 

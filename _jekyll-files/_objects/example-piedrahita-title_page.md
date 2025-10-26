@@ -9,8 +9,8 @@ location: "John Carter Brown Library"
 credit: "John Carter Brown Library, Brown University, Providence, R.I."
 thumbnail: 
 iiif_manifest: https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest
-object_warning: ""
-object_warning_short: ""
+object_warning: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means "Too Many Requests": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away."
+object_warning_short: "Error 429: rate limiting (try again in 15-30 minutes)"
 layout: object
 ---
 
