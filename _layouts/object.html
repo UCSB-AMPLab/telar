@@ -183,7 +183,7 @@ layout: default
         <dd class="col-sm-8">{{ page.credit }}</dd>
         {% endif %}
 
-        {% if page.iiif_manifest %}
+        {% if page.iiif_manifest and page.iiif_manifest != "" %}
         <dt class="col-sm-4">IIIF Manifest</dt>
         <dd class="col-sm-8">
           <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
@@ -237,7 +237,7 @@ layout: default
 <script src="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/umd/UV.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    {% if page.iiif_manifest %}
+    {% if page.iiif_manifest and page.iiif_manifest != "" %}
     const manifestUrl = '{{ page.iiif_manifest }}';
     {% elsif page.object_id %}
     const manifestUrl = '{{ site.baseurl }}/iiif/objects/{{ page.object_id }}/manifest.json';
