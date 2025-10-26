@@ -77,7 +77,7 @@ layout: default
         {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
         {%- comment -%}For IIIF Image API, use standard thumbnail pattern{%- endcomment -%}
         <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.title }}" class="iiif-thumbnail">
-        {% elsif object.iiif_manifest %}
+        {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
         {%- comment -%}For IIIF manifests, JavaScript will load thumbnail{%- endcomment -%}
         <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
           <span class="text-muted">Loading...</span>
