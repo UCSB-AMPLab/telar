@@ -372,37 +372,6 @@ def process_objects(df):
 
     return df
 
-def process_glossary(df):
-    """
-    Process glossary CSV with file references
-    Expected columns: term_id, title, short_definition, definition_file, etc.
-    """
-    # Drop example column if it exists
-    if 'example' in df.columns:
-        df = df.drop(columns=['example'])
-
-    # Clean up NaN values
-    df = df.fillna('')
-
-    # Remove rows where term_id is empty
-    df = df[df['term_id'].astype(str).str.strip() != '']
-
-    # Process definition_file column
-    if 'definition_file' in df.columns:
-        for idx, row in df.iterrows():
-            file_ref = row['definition_file']
-            if file_ref and file_ref.strip():
-                # For glossary, files are directly in glossary/ folder
-                file_path = f"glossary/{file_ref.strip()}"
-                markdown_data = read_markdown_file(file_path)
-                if markdown_data:
-                    # Store the full definition text
-                    df.at[idx, 'definition'] = markdown_data['content']
-                else:
-                    df.at[idx, 'definition'] = ''
-
-    return df
-
 def process_story(df):
     """
     Process story CSV with file references
