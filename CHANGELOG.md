@@ -2,6 +2,22 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.3.2-beta] - 2025-10-28
+
+### Added
+
+- **Image sizing in panel markdown**: New syntax `![alt](path){size}` for controlling image sizes in panel content
+  - Supports both short (`sm`, `md`, `lg`, `full`) and long (`small`, `medium`, `large`) size names
+  - Default path for relative images: `/components/images/additional/`
+  - Sizes: small (250px), medium (450px, default), large (700px), full-width (100%)
+  - Absolute paths and URLs work as expected
+  - Example: `![Description](image.jpg){large}` or `![Photo](/assets/photo.jpg){sm}`
+
+### Changed
+
+- **Default panel image size**: Increased from 300px to 450px max-width for better visibility
+- **Scheduled builds removed**: Removed daily midnight cron job from build workflow. Builds now only trigger on push to main or manual workflow dispatch.
+
 ## [0.3.1-beta] - 2025-10-26
 
 ### Fixed
