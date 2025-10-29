@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:  # Allow manual trigger
-  schedule:
-    - cron: '0 0 * * *'  # Daily at midnight (optional, for auto-updates from Google Sheets)
 
 permissions:
   contents: write
