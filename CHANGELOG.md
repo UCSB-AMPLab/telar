@@ -2,6 +2,12 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.3.3-beta] - 2025-10-28
+
+### Fixed
+
+- **GitHub Actions workflow**: Removed git push step that conflicted with branch protection rules. The workflow was attempting to commit generated files back to the protected main branch, causing deployment failures. Generated files are build artifacts that don't need to be committed to the repository.
+
 ## [0.3.2-beta] - 2025-10-28
 
 ### Added
