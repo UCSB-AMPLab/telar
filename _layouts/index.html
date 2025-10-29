@@ -22,7 +22,7 @@ title: Home
   {% if site.description %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
-      <p class="lead mb-5">{{ site.description }}</p>
+      <p class="lead mb-4">{{ site.description }}</p>
     </div>
   </div>
   {% endif %}
@@ -117,10 +117,24 @@ title: Home
   </div>
   {% endif %}
 
+  <!-- Page Content -->
+  {% if content and content != "" %}
+  <div class="row mb-5">
+    <div class="col-lg-11 mx-auto">
+      <article class="page-content">
+        {{ content }}
+      </article>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Stories List -->
   <div class="row">
     <div class="col-lg-11 mx-auto">
-      <h2 class="mb-4">Explore the stories</h2>
+      <h2 class="mb-4">{{ page.stories_heading | default: "Explore the stories" }}</h2>
+      {% if page.stories_intro and page.stories_intro != "" %}
+      <p class="lead mb-4">{{ page.stories_intro }}</p>
+      {% endif %}
 
       {% if site.stories.size > 0 %}
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-5">
@@ -172,8 +186,10 @@ title: Home
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
-      <h3 class="mb-4">See the objects behind the stories</h3>
-      <p class="lead">Browse {{ site.objects.size }} objects featured in the stories.</p>
+      <h3 class="mb-4">{{ page.objects_heading | default: "See the objects behind the stories" }}</h3>
+      {% assign objects_text = page.objects_intro | default: "Browse {count} objects featured in the stories." %}
+      {% assign objects_text = objects_text | replace: "{count}", site.objects.size %}
+      <p class="lead">{{ objects_text }}</p>
       <a href="{{ '/objects/' | relative_url }}" class="btn btn-primary">View Objects</a>
     </div>
   </div>

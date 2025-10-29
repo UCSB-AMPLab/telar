@@ -18,6 +18,11 @@ All notable changes to Telar will be documented in this file.
 
 - **Default panel image size**: Increased from 300px to 450px max-width for better visibility
 - **Scheduled builds removed**: Removed daily midnight cron job from build workflow. Builds now only trigger on push to main or manual workflow dispatch.
+- **Index page refactored for easier customization**: Moved `index.html` to `_layouts/index.html` and created editable `index.md` in root directory
+  - Users can now customize welcome message, stories heading, and objects section text in simple markdown
+  - Demo site notice is now in markdown and easily removable
+  - Support for `{count}` placeholder in objects intro text
+  - Customizable via frontmatter: `stories_heading`, `stories_intro`, `objects_heading`, `objects_intro`
 
 ## [0.3.1-beta] - 2025-10-26
 
