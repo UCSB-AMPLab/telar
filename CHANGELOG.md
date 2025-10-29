@@ -12,6 +12,7 @@ All notable changes to Telar will be documented in this file.
   - Sizes: small (250px), medium (450px, default), large (700px), full-width (100%)
   - Absolute paths and URLs work as expected
   - Example: `![Description](image.jpg){large}` or `![Photo](/assets/photo.jpg){sm}`
+- **Markdown syntax documentation**: Comprehensive reference guide added to documentation site covering all markdown features, image sizing, rich media embeds, code blocks, footnotes, and best practices
 
 ### Changed
 
