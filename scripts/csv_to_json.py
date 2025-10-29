@@ -14,6 +14,47 @@ import urllib.error
 from urllib.parse import urlparse
 import ssl
 
+def process_image_sizes(text):
+    """
+    Replace ![alt](path){size} with HTML img tags with size classes
+
+    Syntax: ![Description](image.jpg){md} or ![Description](image.jpg){medium}
+    Sizes: sm/small, md/medium, lg/large, full
+
+    Default path: /components/images/additional/
+    - Relative paths (no leading /) get prepended with default path
+    - Absolute paths (starting with /) used as-is
+    - URLs (http/https) used as-is
+    """
+    # Map long form to short form for CSS classes
+    size_map = {
+        'small': 'sm',
+        'medium': 'md',
+        'large': 'lg',
+        'full': 'full',
+        'sm': 'sm',
+        'md': 'md',
+        'lg': 'lg'
+    }
+
+    def replace_image(match):
+        alt = match.group(1)
+        src = match.group(2)
+        size_input = match.group(3).lower()
+
+        # Map to CSS class
+        size_class = size_map.get(size_input, 'md')
+
+        # Prepend default path if relative
+        if not src.startswith('/') and not src.startswith('http'):
+            src = f'/components/images/additional/{src}'
+
+        return f'<img src="{src}" alt="{alt}" class="img-{size_class}">'
+
+    pattern = r'!\[([^\]]*)\]\(([^)]+)\)\{(sm|small|md|medium|lg|large|full)\}'
+    return re.sub(pattern, replace_image, text, flags=re.IGNORECASE)
+
+
 def read_markdown_file(file_path):
     """
     Read a markdown file and parse frontmatter
@@ -46,6 +87,9 @@ def read_markdown_file(file_path):
             title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
             title = title_match.group(1) if title_match else ''
 
+            # Process image size syntax before markdown conversion
+            body = process_image_sizes(body)
+
             # Convert markdown to HTML
             html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
 
@@ -55,7 +99,8 @@ def read_markdown_file(file_path):
             }
         else:
             # No frontmatter, just content
-            html_content = markdown.markdown(content.strip(), extensions=['extra', 'nl2br'])
+            content = process_image_sizes(content.strip())
+            html_content = markdown.markdown(content, extensions=['extra', 'nl2br'])
             return {
                 'title': '',
                 'content': html_content

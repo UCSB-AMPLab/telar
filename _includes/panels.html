@@ -73,10 +73,27 @@
 
   /* Panel content styling */
   .offcanvas-body img {
-    max-width: 300px;
+    max-width: 450px;  /* md - default */
     height: auto;
     border-radius: 4px;
     margin: 1rem 0;
+  }
+
+  /* Image size modifiers */
+  .offcanvas-body img.img-sm {
+    max-width: 250px;
+  }
+
+  .offcanvas-body img.img-md {
+    max-width: 450px;
+  }
+
+  .offcanvas-body img.img-lg {
+    max-width: 700px;
+  }
+
+  .offcanvas-body img.img-full {
+    max-width: 100%;
   }
 
   .offcanvas-body p {
