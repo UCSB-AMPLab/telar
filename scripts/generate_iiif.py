@@ -26,6 +26,28 @@ def check_dependencies():
         print("  pip install -r scripts/requirements.txt")
         return False
 
+def get_base_url_from_config():
+    """
+    Read url and baseurl from _config.yml and combine them.
+
+    Returns:
+        Combined URL (e.g., "https://example.com/baseurl") or None if config can't be read
+    """
+    try:
+        import yaml
+        with open('_config.yml', 'r') as f:
+            config = yaml.safe_load(f)
+
+        url = config.get('url', '')
+        baseurl = config.get('baseurl', '')
+
+        if url:
+            return url + baseurl
+        return None
+    except Exception as e:
+        # Silently fail - caller will use fallback
+        return None
+
 def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
     """
     Generate IIIF tiles for a single image
@@ -259,8 +281,11 @@ def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif
         return False
 
     # Get base URL from config or environment
+    # Priority: --base-url flag > _config.yml > SITE_URL env var > localhost default
     if not base_url:
-        base_url = os.environ.get('SITE_URL', 'http://localhost:4000/telar')
+        base_url = (get_base_url_from_config() or
+                    os.environ.get('SITE_URL') or
+                    'http://localhost:4000')
 
     # Create output directory
     output_path.mkdir(parents=True, exist_ok=True)
@@ -271,6 +296,16 @@ def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif
     print(f"Source: {source_dir}")
     print(f"Output: {output_dir}")
     print(f"Base URL: {base_url}")
+
+    # Show helpful message for local development
+    if base_url and ('github.io' in base_url or base_url.startswith('https://')):
+        # Extract baseurl from full URL for the hint
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        path = parsed.path if parsed.path != '/' else ''
+        print(f"\nℹ️  Generating tiles for production URL")
+        print(f"   For local development, use: --base-url http://localhost:4000{path}")
+
     print("=" * 60)
     print()
 
