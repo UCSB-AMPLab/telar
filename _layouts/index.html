@@ -16,9 +16,6 @@ title: Home
       {% if site.telar.tagline %}
       <p class="lead mb-5">{{ site.telar.tagline }}</p>
       {% endif %}
-
-      {%- comment -%}Validation warnings - all in one place{%- endcomment -%}
-      {% include iiif-url-warning.html %}
     </div>
   </div>
 
@@ -29,6 +26,13 @@ title: Home
     </div>
   </div>
   {% endif %}
+
+  {%- comment -%}Validation warnings - all in one place{%- endcomment -%}
+  <div class="row">
+    <div class="col-lg-11 mx-auto">
+      {% include iiif-url-warning.html %}
+    </div>
+  </div>
 
   <!-- Theme Validation -->
   {% assign has_theme_issue = false %}
@@ -179,21 +183,21 @@ title: Home
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>⚠️ Your selected theme doesn't exist</strong>
         <p class="mb-0 mt-2">
-          The theme '{{ site.telar_theme }}' doesn't exist. We've applied the 'paisajes' (default) theme instead. To choose a different theme, update telar_theme in _config.yml to one of: paisajes, neogranadina, santa-barbara, or austin. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the `_data/themes` folder.
+          The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>paisajes</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to one of: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, or <code>austin</code>. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the <code>_data/themes</code> folder.
         </p>
       </div>
       {% elsif theme_error_type == "malformed" %}
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>⚠️ Your theme file is broken</strong>
         <p class="mb-0 mt-2">
-          The theme '{{ site.telar_theme }}' file appears to be broken or incomplete. We've applied the 'paisajes' (default) theme instead. Check _data/themes/{{ site.telar_theme }}.yml for syntax errors or compare it to a working theme file.
+          The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file.
         </p>
       </div>
       {% elsif theme_error_type == "critical" %}
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>⚠️ Theme system error detected</strong>
         <p class="mb-0 mt-2">
-          We encountered a problem loading themes. The _data/themes folder may be missing or damaged. The site is currently using basic default styling. Please check that your _data/themes folder contains valid theme files, or restore it from your repository.
+          We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository.
         </p>
       </div>
       {% endif %}
