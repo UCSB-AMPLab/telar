@@ -173,12 +173,13 @@ Detects when viewing site URL doesn't match IIIF manifest URLs and provides help
         // Smart prioritization: hide generic config warning if it exists and only contains object issues
         const genericWarning = document.getElementById('generic-config-warning');
         if (genericWarning) {
-          // Check if the generic warning mentions theme issues
+          // Check if the generic warning mentions theme or Google Sheets issues
           const warningText = genericWarning.textContent;
           const hasThemeIssue = warningText.includes('theme');
+          const hasGoogleSheetsIssue = warningText.includes('Google Sheets');
 
-          // Only hide if there's no theme issue (object issues only)
-          if (!hasThemeIssue) {
+          // Only hide if there's no theme issue AND no Google Sheets issue (object issues only)
+          if (!hasThemeIssue && !hasGoogleSheetsIssue) {
             genericWarning.style.display = 'none';
           }
         }
