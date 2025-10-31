@@ -2,9 +2,18 @@
 
 All notable changes to Telar will be documented in this file.
 
-## [0.3.4-beta] - 2025-10-29
+## [0.3.4-beta] - 2025-10-31
 
 ### Added
+
+- **Automated upgrade system**: New automated upgrade system to migrate sites from older Telar versions
+  - GitHub Actions workflow (`.github/workflows/upgrade.yml`) for one-click upgrades
+  - Python-based migration framework (`scripts/upgrade.py`) with modular version-specific migrations
+  - Automatic version detection from `_config.yml`
+  - Incremental migration support (v0.2.0 → v0.3.0 → v0.3.1 → v0.3.2 → v0.3.3 → v0.3.4)
+  - Automatic pull request creation with upgrade summary
+  - **v020_to_v030 migration**: Fetches Python scripts from GitHub to ensure sites receive validation logic for IIIF manifests, thumbnails, and object references
+  - **v033_to_v034 migration**: Adds missing framework files (`_layouts/index.html`, `_includes/iiif-url-warning.html`) to ensure all sites receive updated layouts and compact warning format
 
 - **Language configuration (WIP)**: New `telar_language` setting in `_config.yml` for future internationalization support
   - Currently supports: `en` (English), `es` (Spanish)
@@ -14,11 +23,6 @@ All notable changes to Telar will be documented in this file.
 
 ### Fixed
 
-- **Migration system improvements**: Fixed critical bugs in the upgrade system:
-  - **v020_to_v030 migration**: Now fetches Python scripts (csv_to_json.py, generate_collections.py, etc.) from GitHub to ensure sites upgrading from v0.2.0 receive validation logic for IIIF manifests, thumbnails, and object references
-  - **v033_to_v034 migration**:
-    - Added missing `_layouts/index.html` to framework files list, ensuring sites upgrading to v0.3.4 receive updated index layout with configuration warning/alert system and customizable content rendering
-    - Fixed `_includes/iiif-url-warning.html` not being updated during migration - moved from conditional check to framework files list to ensure all sites receive the updated compact warning format with emoji and consistent styling
 - **Validation alert styling**: Fixed inconsistent styling between IIIF URL warning and upgrade success alert
   - Added `font-weight: 400 !important` to `.telar-alert` CSS class to prevent lighter font weight inheritance from `.page-content` wrapper
   - Ensures all validation warnings (theme, Google Sheets, objects, stories, IIIF URL, upgrade) display with consistent typography regardless of HTML placement

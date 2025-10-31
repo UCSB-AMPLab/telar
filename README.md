@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.3.3--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
+![Version](https://img.shields.io/badge/version-0.3.4--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
@@ -10,7 +10,7 @@ A minimal computing framework for creating visual narrative exhibitions with III
 
 ---
 
-> **⚠️ Beta Release - v0.3.3-beta**
+> **⚠️ Beta Release - v0.3.4-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
 
 > **Warning:** Version 0.3.0 introduced breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
@@ -159,6 +159,27 @@ For all configuration options, see the [Configuration Guide](https://ampl.clair.
 The build process is fully automated via GitHub Actions. Push changes to the main branch and GitHub Pages automatically rebuilds and deploys your site. To manually trigger a rebuild (e.g., after editing Google Sheets), go to the Actions tab and run the "Build and Deploy" workflow.
 
 For details on the automated workflow, see the [GitHub Actions Reference](https://ampl.clair.ucsb.edu/telar-docs/docs/7-reference/1-github-actions).
+
+## Automated Upgrades
+
+Telar v0.3.4+ includes an automated upgrade workflow that migrates your site to the latest version.
+
+> **Note:** The automated upgrade workflow is available for sites running **v0.3.4 or later**. If you're upgrading from an earlier version (v0.2.0-v0.3.3), you'll need to manually copy the upgrade workflow files to your repository first. See the [Upgrade Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/upgrading) for detailed instructions.
+
+**To upgrade your site (v0.3.4+):**
+1. Go to your repository's **Actions** tab on GitHub
+2. Select the **"Upgrade Telar"** workflow
+3. Click **"Run workflow"**
+4. Review the automatically created pull request
+5. Merge the PR to complete the upgrade
+
+The upgrade system automatically:
+- Detects your current version
+- Applies necessary migrations
+- Updates framework files and configurations
+- Generates an upgrade summary with any manual steps
+
+For detailed instructions, see the [Upgrade Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/upgrading).
 
 ## Customization
 
