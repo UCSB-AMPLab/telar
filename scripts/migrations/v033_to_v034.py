@@ -95,13 +95,6 @@ class Migration033to034(BaseMigration):
                 self._write_file('_includes/upgrade-alert.html', alert_include)
                 changes.append("Added _includes/upgrade-alert.html")
 
-        # Fetch IIIF URL warning include from GitHub
-        if not self._file_exists('_includes/iiif-url-warning.html'):
-            iiif_warning = self._fetch_from_github('_includes/iiif-url-warning.html')
-            if iiif_warning:
-                self._write_file('_includes/iiif-url-warning.html', iiif_warning)
-                changes.append("Added _includes/iiif-url-warning.html")
-
         # Ensure upgrade notice exists in index.md
         if self._ensure_index_upgrade_notice():
             changes.append("Added upgrade notice to index.md")
@@ -121,6 +114,7 @@ class Migration033to034(BaseMigration):
             '_includes/viewer.html': 'Updated viewer include',
             '_includes/header.html': 'Updated header include',
             '_includes/footer.html': 'Updated footer include',
+            '_includes/iiif-url-warning.html': 'Updated IIIF URL warning',
             'objects.json': 'Added objects.json endpoint',
             'scripts/generate_iiif.py': 'Updated IIIF tile generator',
             'assets/js/story.js': 'Updated story JavaScript',
