@@ -3,9 +3,8 @@ IIIF URL Mismatch Warning
 Detects when viewing site URL doesn't match IIIF manifest URLs and provides helpful guidance
 {%- endcomment -%}
 
-<div id="iiif-url-warning" class="alert alert-warning alert-dismissible fade show" role="alert" style="display: none;">
-  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-  <h5 class="alert-heading">Error: your images aren't loading correctly</h5>
+<div id="iiif-url-warning" class="alert alert-warning telar-alert" role="alert" style="display: none;">
+  <strong>⚠️ Your images aren't loading correctly</strong>
   <p>Your images can't display because there's a mismatch between where you're viewing the site and where the image tiles are configured to load from.</p>
 
   <p class="mb-2"><strong>What's happening:</strong></p>
@@ -169,20 +168,6 @@ Detects when viewing site URL doesn't match IIIF manifest URLs and provides help
 
         // Show the warning
         document.getElementById('iiif-url-warning').style.display = 'block';
-
-        // Smart prioritization: hide generic config warning if it exists and only contains object issues
-        const genericWarning = document.getElementById('generic-config-warning');
-        if (genericWarning) {
-          // Check if the generic warning mentions theme or Google Sheets issues
-          const warningText = genericWarning.textContent;
-          const hasThemeIssue = warningText.includes('theme');
-          const hasGoogleSheetsIssue = warningText.includes('Google Sheets');
-
-          // Only hide if there's no theme issue AND no Google Sheets issue (object issues only)
-          if (!hasThemeIssue && !hasGoogleSheetsIssue) {
-            genericWarning.style.display = 'none';
-          }
-        }
       }
     } catch (error) {
       // Silently fail - don't show warning if we can't determine mismatch

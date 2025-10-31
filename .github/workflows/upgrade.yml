@@ -1,0 +1,103 @@
+name: Upgrade Telar
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_pr:
+        description: 'Create pull request with changes'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper git operations
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Fetch latest upgrade scripts
+        run: |
+          echo "Fetching latest upgrade scripts from telar repository..."
+          # Remove old scripts if they exist
+          rm -rf scripts/
+          # Fetch latest scripts from telar repo
+          curl -L https://github.com/UCSB-AMPLab/telar/archive/refs/heads/main.tar.gz | tar xz --strip=2 telar-main/scripts
+          echo "✓ Latest upgrade scripts fetched"
+
+      - name: Check current version
+        id: check_version
+        run: |
+          CURRENT_VERSION=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('telar', {}).get('version', '0.2.0-beta'))")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Run upgrade script
+        id: upgrade
+        run: |
+          python scripts/upgrade.py
+
+          if [ -f UPGRADE_VERSION.txt ]; then
+            VERSION=$(cat UPGRADE_VERSION.txt)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Upgraded to version: $VERSION"
+          else
+            echo "No upgrade needed or upgrade failed"
+            exit 1
+          fi
+
+      - name: Update version in _config.yml
+        if: steps.upgrade.outputs.version != ''
+        run: |
+          python3 << 'EOF'
+          import yaml
+
+          with open('_config.yml', 'r') as f:
+              config = yaml.safe_load(f)
+
+          if 'telar' not in config:
+              config['telar'] = {}
+
+          config['telar']['version'] = "${{ steps.upgrade.outputs.version }}"
+          config['telar']['release_date'] = "$(date +%Y-%m-%d)"
+
+          with open('_config.yml', 'w') as f:
+              yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+          EOF
+
+      - name: Create Pull Request
+        if: inputs.create_pr && steps.upgrade.outputs.version != ''
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: "Upgrade Telar from ${{ steps.check_version.outputs.current_version }} to ${{ steps.upgrade.outputs.version }}"
+          title: "Upgrade Telar to ${{ steps.upgrade.outputs.version }}"
+          body-path: UPGRADE_SUMMARY.md
+          branch: upgrade-telar-${{ steps.upgrade.outputs.version }}
+          delete-branch: true
+          labels: upgrade, automated
+          author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+      - name: Output summary
+        if: steps.upgrade.outputs.version != ''
+        run: |
+          echo "## ✅ Upgrade Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **From:** ${{ steps.check_version.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **To:** ${{ steps.upgrade.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A pull request has been created with all changes." >> $GITHUB_STEP_SUMMARY
+          echo "Please review \`UPGRADE_SUMMARY.md\` in the PR for any manual steps." >> $GITHUB_STEP_SUMMARY

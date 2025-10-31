@@ -4,8 +4,6 @@ title: Home
 ---
 
 <div class="container my-5">
-  {% include iiif-url-warning.html %}
-
   <div class="row">
     <div class="col-lg-11 mx-auto">
       {% assign logo_path = site.logo | strip %}
@@ -18,6 +16,9 @@ title: Home
       {% if site.telar.tagline %}
       <p class="lead mb-5">{{ site.telar.tagline }}</p>
       {% endif %}
+
+      {%- comment -%}Validation warnings - all in one place{%- endcomment -%}
+      {% include iiif-url-warning.html %}
     </div>
   </div>
 

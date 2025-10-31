@@ -91,16 +91,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "0.3.3-beta"
-  release_date: "2025-10-28"
-
-# OpenSeadragon Settings
-openseadragon:
-  prefixUrl: "/assets/images/openseadragon/"
-  minZoomLevel: 0
-  maxZoomLevel: 5
-  animationTime: 1.5
-  visibilityRatio: 1.0
+  version: "0.3.4-beta"
+  release_date: "2025-10-29"
 
 # Plugins
 plugins:
