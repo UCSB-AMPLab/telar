@@ -882,7 +882,8 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Telar Alert Standardization */
 .telar-alert {
-  max-width: 900px;
-  margin-bottom: 1.5rem;
-  font-size: 1rem;
+  max-width: 900px !important;
+  margin-bottom: 1.5rem !important;
+  font-size: 1rem !important;
+  font-weight: 400 !important;
 }
