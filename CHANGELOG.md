@@ -6,9 +6,14 @@ All notable changes to Telar will be documented in this file.
 
 ### Fixed
 
-- **Migration system improvements**: Fixed two critical bugs in the upgrade system:
+- **Migration system improvements**: Fixed critical bugs in the upgrade system:
   - **v020_to_v030 migration**: Now fetches Python scripts (csv_to_json.py, generate_collections.py, etc.) from GitHub to ensure sites upgrading from v0.2.0 receive validation logic for IIIF manifests, thumbnails, and object references
-  - **v033_to_v034 migration**: Added missing `_layouts/index.html` to framework files list, ensuring sites upgrading to v0.3.4 receive updated index layout with configuration warning/alert system and customizable content rendering
+  - **v033_to_v034 migration**:
+    - Added missing `_layouts/index.html` to framework files list, ensuring sites upgrading to v0.3.4 receive updated index layout with configuration warning/alert system and customizable content rendering
+    - Fixed `_includes/iiif-url-warning.html` not being updated during migration - moved from conditional check to framework files list to ensure all sites receive the updated compact warning format with emoji and consistent styling
+- **Validation alert styling**: Fixed inconsistent styling between IIIF URL warning and upgrade success alert
+  - Added `font-weight: 400 !important` to `.telar-alert` CSS class to prevent lighter font weight inheritance from `.page-content` wrapper
+  - Ensures all validation warnings (theme, Google Sheets, objects, stories, IIIF URL, upgrade) display with consistent typography regardless of HTML placement
 
 ## [0.3.3-beta] - 2025-10-28
 
