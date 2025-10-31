@@ -36,7 +36,7 @@ jobs:
           # Remove old scripts if they exist
           rm -rf scripts/
           # Fetch latest scripts from telar repo
-          curl -L https://github.com/UCSB-AMPLab/telar/archive/refs/heads/main.tar.gz | tar xz --strip=2 telar-main/scripts
+          curl -L https://github.com/UCSB-AMPLab/telar/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 telar-main/scripts
           echo "✓ Latest upgrade scripts fetched"
 
       - name: Check current version
