@@ -10,6 +10,7 @@ author: ""
 email: ""
 telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
 logo: "" # Path to logo image (optional)
+telar_language: "en" # Options: "en" (English), "es" (Español)
 
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.

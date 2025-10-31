@@ -3,9 +3,11 @@ Migration from v0.3.3-beta to v0.3.4-beta.
 
 Changes:
 - Remove unused OpenSeadragon configuration section from _config.yml
+- Add telar_language configuration field
 """
 
 from typing import List, Dict
+import yaml
 from .base import BaseMigration
 
 
@@ -81,6 +83,10 @@ class Migration033to034(BaseMigration):
         if self._ensure_gitignore_entries(python_entries, '# Python'):
             changes.append("Added Python entries to .gitignore")
 
+        # Add telar_language configuration field if not present
+        if self._add_language_config():
+            changes.append("Added telar_language configuration field to _config.yml")
+
         # Fetch upgrade-summary layout from GitHub
         if not self._file_exists('_layouts/upgrade-summary.html'):
             summary_layout = self._fetch_from_github('_layouts/upgrade-summary.html')
@@ -129,6 +135,36 @@ class Migration033to034(BaseMigration):
                 changes.append(success_msg)
 
         return changes
+
+    def _add_language_config(self) -> bool:
+        """
+        Add telar_language configuration field if not present.
+        Inserts after logo field to maintain logical grouping.
+        """
+        config_path = '_config.yml'
+        content = self._read_file(config_path)
+
+        if not content:
+            return False
+
+        # Check if field already exists
+        try:
+            config = yaml.safe_load(content)
+            if 'telar_language' in config:
+                return False  # Already present
+        except yaml.YAMLError:
+            return False
+
+        # Insert after logo line
+        lines = content.split('\n')
+        for i, line in enumerate(lines):
+            if line.startswith('logo:'):
+                # Insert after logo line
+                lines.insert(i + 1, 'telar_language: "en" # Options: "en" (English), "es" (Español)')
+                self._write_file(config_path, '\n'.join(lines))
+                return True
+
+        return False
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
         """No manual steps required for this migration."""

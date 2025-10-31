@@ -4,6 +4,14 @@ All notable changes to Telar will be documented in this file.
 
 ## [0.3.4-beta] - 2025-10-29
 
+### Added
+
+- **Language configuration (WIP)**: New `telar_language` setting in `_config.yml` for future internationalization support
+  - Currently supports: `en` (English), `es` (Spanish)
+  - Default value: `en`
+  - Migration script automatically adds this field when upgrading from earlier versions
+  - **Note**: Internationalization features are work in progress; this configuration prepares sites for future multi-language support
+
 ### Fixed
 
 - **Migration system improvements**: Fixed critical bugs in the upgrade system:
