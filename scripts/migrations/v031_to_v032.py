@@ -4,7 +4,7 @@ Migration from v0.3.1-beta to v0.3.2-beta.
 Changes:
 - Move index.html to _layouts/index.html
 - Create editable index.md in root
-- Remove cron schedule from build workflow
+- Manual step: Update build.yml workflow file
 """
 
 from typing import List, Dict
@@ -34,12 +34,11 @@ The homepage can now be customized by editing the `index.md` file in the root fo
 """
 
     def check_applicable(self) -> bool:
-        """Check if index.html exists or if workflow needs updating."""
-        return (self._file_exists('index.html') or
-                self._file_exists('.github/workflows/build.yml'))
+        """Check if index.html exists."""
+        return self._file_exists('index.html')
 
     def apply(self) -> List[str]:
-        """Apply index refactoring and workflow updates."""
+        """Apply index refactoring."""
         changes = []
 
         # 1. Replace index.html with new layout version
@@ -62,43 +61,24 @@ The homepage can now be customized by editing the `index.md` file in the root fo
             self._write_file('index.md', self.INDEX_MD_TEMPLATE)
             changes.append("Created index.md in root directory")
 
-        # 3. Remove cron schedule from workflow
-        workflow_path = '.github/workflows/build.yml'
-        content = self._read_file(workflow_path)
-
-        if content and 'schedule:' in content:
-            lines = content.split('\n')
-            new_lines = []
-            skip_schedule = False
-
-            for line in lines:
-                # Start skipping at 'schedule:'
-                if line.strip().startswith('schedule:'):
-                    skip_schedule = True
-                    continue
-
-                # Stop skipping when we hit the next top-level key (same indentation as 'schedule:')
-                if skip_schedule:
-                    # If line is not empty and starts at column 0 or 2 (same as 'schedule:'), stop skipping
-                    if line and not line.startswith('  ') and line.strip():
-                        skip_schedule = False
-                        new_lines.append(line)
-                    # Skip cron lines (indented under schedule)
-                    continue
-
-                new_lines.append(line)
-
-            new_content = '\n'.join(new_lines)
-            self._write_file(workflow_path, new_content)
-            changes.append("Removed cron schedule from .github/workflows/build.yml")
-
         return changes
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
-        """Return optional customization step."""
-        return [
-            {
-                'description': '(Optional) Customize index.md content to personalize your site',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/docs/6-customization/3-home-page/'
-            }
-        ]
+        """Return workflow update and optional customization steps (conditional)."""
+        manual_steps = []
+
+        # Check if build.yml still has old cron schedule
+        workflow_content = self._read_file('.github/workflows/build.yml')
+        if workflow_content and 'schedule:' in workflow_content:
+            manual_steps.append({
+                'description': 'Update GitHub Actions workflow file (.github/workflows/build.yml) - Replace with latest version from https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml to remove deprecated cron schedule',
+                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/upgrading/'
+            })
+
+        # Always include optional customization step
+        manual_steps.append({
+            'description': '(Optional) Customize index.md content to personalize your site',
+            'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/docs/6-customization/3-home-page/'
+        })
+
+        return manual_steps
