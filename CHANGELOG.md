@@ -6,14 +6,17 @@ All notable changes to Telar will be documented in this file.
 
 ### Added
 
-- **Automated upgrade system**: New automated upgrade system to migrate sites from older Telar versions
+- **Automated upgrade system**: Issue-based automated upgrade workflow to migrate sites from older Telar versions
   - GitHub Actions workflow (`.github/workflows/upgrade.yml`) for one-click upgrades
   - Python-based migration framework (`scripts/upgrade.py`) with modular version-specific migrations
   - Automatic version detection from `_config.yml`
   - Incremental migration support (v0.2.0 → v0.3.0 → v0.3.1 → v0.3.2 → v0.3.3 → v0.3.4)
-  - Automatic pull request creation with upgrade summary
+  - Automatic upgrade branch and issue creation with categorized summary
+  - User creates pull request manually from issue link when ready to merge
+  - Conditional manual steps section (only shown if steps required)
+  - Verification checklist for post-upgrade testing
   - **v020_to_v030 migration**: Fetches Python scripts from GitHub to ensure sites receive validation logic for IIIF manifests, thumbnails, and object references
-  - **v033_to_v034 migration**: Adds missing framework files (`_layouts/index.html`, `_includes/iiif-url-warning.html`) to ensure all sites receive updated layouts and compact warning format
+  - **v033_to_v034 migration**: Adds missing framework files (`README.md`, `docs/README.md`, layouts, includes, scripts) to ensure all sites receive updated files
 
 - **Language configuration (WIP)**: New `telar_language` setting in `_config.yml` for future internationalization support
   - Currently supports: `en` (English), `es` (Spanish)

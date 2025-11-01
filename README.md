@@ -13,7 +13,7 @@ A minimal computing framework for creating visual narrative exhibitions with III
 > **⚠️ Beta Release - v0.3.4-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
 
-> **Warning:** Version 0.3.0 introduced breaking changes. If upgrading from v0.2.0, see [Migration Guide](#migrating-from-v020) below.
+> **Warning:** Version 0.3.0 introduced breaking changes. If upgrading from v0.2.0, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
 
 ## Overview
 
@@ -75,45 +75,32 @@ Plan your narrative structure before building. Sketch out your stories, identify
 
 ---
 
-## Migrating from v0.2.0
+## Upgrading Telar
 
-**⚠️ Important: Breaking Changes**
+**Telar v0.3.4+ includes an automated upgrade system** for easy, safe updates to the latest version.
 
-This release includes breaking changes that require updates to existing projects. See migration instructions below.
+### For Sites Running v0.3.4 or Later
 
-### Migration Guide
+Upgrading is fully automated:
 
-**1. Update project.csv structure**
+1. Go to your repository on GitHub → **Actions** tab
+2. Select **"Upgrade Telar"** workflow
+3. Click **Run workflow**
+4. Review the automatically created upgrade issue
+5. Click the link in the issue to create a pull request
+6. Review changes and merge
 
-Old format (key-value pairs):
-```csv
-key,value
-project_title,Your Exhibition Title
-tagline,A brief description
-...
-STORIES,
-1,Story One
-2,Story Two
-```
+The upgrade system detects your current version, applies all necessary migrations, and creates a detailed summary with any manual steps you need to complete.
 
-New format (columns):
-```csv
-order,title,subtitle
-1,Story One,Optional subtitle
-2,Story Two,
-```
+### For Sites Running v0.2.0 through v0.3.3
 
-The `project_title`, `tagline`, `author`, `email`, and `logo` fields are now configured in `_config.yml` instead of project.csv.
+First-time setup required (one-time only):
 
-**2. Migrate theme customization**
+1. Add the upgrade workflow file and updated build workflow from the Telar repository
+2. Run your first automated upgrade
+3. All future upgrades will be automated
 
-If you had `primary_color`, `secondary_color`, `font_headings`, or `font_body` in project.csv, remove them and configure theming via `_config.yml`:
-
-```yaml
-telar_theme: "paisajes"  # or neogranadina, santa-barbara, austin
-```
-
-For custom colors/fonts, create `_data/themes/custom.yml` and set `telar_theme: "custom"` in `_config.yml`.
+**For complete upgrade instructions**, including detailed setup steps, troubleshooting, and version history, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/upgrading/) in the documentation.
 
 ---
 
