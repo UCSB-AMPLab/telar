@@ -8,6 +8,13 @@
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
+  <!-- Load language data with fallback to English -->
+  {% if site.telar_language and site.data.languages[site.telar_language] %}
+    {% assign lang = site.data.languages[site.telar_language] %}
+  {% else %}
+    {% assign lang = site.data.languages['en'] %}
+  {% endif %}
+
   <!-- Google Fonts - Dynamic based on theme -->
   {% assign theme = site.data.themes[site.telar_theme] %}
   {% assign heading_font = theme.fonts.headings | remove: "'" | split: ',' | first | strip %}
@@ -24,7 +31,7 @@
 <body class="story-page">
   <!-- Fixed Back to Home Button -->
   <a href="{{ '/' | relative_url }}" class="btn-home">
-    ← Back to Home
+    {{ lang.buttons.back_to_home }}
   </a>
 
   <div class="story-container">
@@ -51,21 +58,22 @@
                 {% assign metadata = steps[0] %}
                 {% if metadata.viewer_warnings.size > 0 %}
                   <div class="alert alert-warning telar-alert mt-4" role="alert" style="text-align: left;">
-                    <strong>⚠️ This story has configuration issues</strong>
-                    <p class="mb-2 mt-2">The following steps have content or configuration issues:</p>
+                    <strong>⚠️ {{ lang.story.config_issues_heading }}</strong>
+                    <p class="mb-2 mt-2">{{ lang.story.config_issues_heading }}</p>
                     <ul class="mb-2">
                     {% for warning in metadata.viewer_warnings %}
                       <li>
-                        <strong>Step {{ warning.step }}</strong>
+                        {% assign step_text = lang.story.step_number | replace: "{{ number }}", warning.step %}
+                        <strong>{{ step_text }}</strong>
                         {% if warning.type == 'viewer' %}
-                          image viewer: {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+                          {{ lang.story.viewer_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
                         {% elsif warning.type == 'panel' %}
                           {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
                         {% endif %}
                       </li>
                     {% endfor %}
                     </ul>
-                    <p class="mb-0">You can still scroll to preview your story, but elements will not work as expected.</p>
+                    <p class="mb-0">{{ lang.story.preview_warning }}</p>
                   </div>
                 {% endif %}
               {% endif %}

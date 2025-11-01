@@ -1,4 +1,10 @@
+---
+note: This is a working copy for the example project. The canonical guide lives in telar-docs.
+---
+
 # Google Sheets Setup Guide (Local Development)
+
+> Canonical guide: <https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/google-sheets/>
 
 This guide is for users running Telar locally on their computer.
 

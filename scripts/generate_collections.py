@@ -29,6 +29,10 @@ def generate_objects():
         # Generate main object page
         filepath = objects_dir / f"{object_id}.md"
 
+        # Escape quotes in warning fields for YAML
+        object_warning = str(obj.get('object_warning', '')).replace('"', '\\"')
+        object_warning_short = str(obj.get('object_warning_short', '')).replace('"', '\\"')
+
         content = f"""---
 object_id: {obj.get('object_id', '')}
 title: "{obj.get('title', '')}"
@@ -40,8 +44,8 @@ location: "{obj.get('location', '')}"
 credit: "{obj.get('credit', '')}"
 thumbnail: "{obj.get('thumbnail', '')}"
 iiif_manifest: "{obj.get('iiif_manifest', '')}"
-object_warning: "{obj.get('object_warning', '')}"
-object_warning_short: "{obj.get('object_warning_short', '')}"
+object_warning: "{object_warning}"
+object_warning_short: "{object_warning_short}"
 layout: object
 ---
 

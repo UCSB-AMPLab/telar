@@ -87,6 +87,13 @@ errors:
   objects_config_issues: "The following objects have configuration issues:"
   objects_will_fail: "These objects will fail to load in the viewer."
 
+  # Configuration warning headings
+  config_issues_heading: "⚠️ Configuration Issues Detected"
+  object_config_heading: "⚠️ Object configuration issues detected"
+  story_config_heading: "⚠️ Story configuration issues detected"
+  story_navigate_to: "Navigate to"
+  story_see_details: "to see more details."
+
   # IIIF URL mismatch warning
   iiif_mismatch:
     heading: "⚠️ Your images aren't loading correctly"
@@ -113,13 +120,25 @@ errors:
 
   # Google Sheets configuration errors
   google_sheets:
+    incomplete_heading: "⚠️ Your Google Sheets integration is incomplete"
+    incomplete_description: "Google Sheets integration is enabled but incomplete. You need to provide both a <code>shared_url</code> and a <code>published_url</code> in <code>_config.yml</code>. The shared URL comes from clicking the \"Share\" button in your Google Sheet. The published URL comes from File → Share → Publish to web (select \"Entire document\" and \"Comma-separated values\"). See the <a href=\"https://github.com/UCSB-AMPLab/telar/blob/main/docs/GOOGLE_SHEETS_TEMPLATE.md\" class=\"alert-link\" target=\"_blank\">Google Sheets setup guide</a> for detailed instructions."
+    identical_heading: "⚠️ Your Google Sheets URLs are identical"
     same_url: "You've used the same URL for both <code>shared_url</code> and <code>published_url</code> in <code>_config.yml</code>. These must be different URLs from the same Google Sheet. The shared URL comes from the \"Share\" button (ends with <code>/edit</code>). The published URL comes from File → Share → Publish to web (contains <code>/d/e/</code> and ends with <code>/pubhtml</code>)."
+    swapped_heading: "⚠️ Your Google Sheets URLs appear to be swapped"
+    swapped_description: "Your Google Sheets URLs appear to be swapped in <code>_config.yml</code>. The <code>shared_url</code> should contain <code>/spreadsheets/d/{id}/edit</code> (from the Share button), but yours appears to be in published format. The <code>published_url</code> should contain <code>/d/e/{id}/pubhtml</code> (from Publish to web), but yours appears to be in shared format. Please swap these two URLs."
+    malformed_shared_heading: "⚠️ Your Google Sheets shared URL is incorrect"
     invalid_shared: "Your Google Sheets <code>shared_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Get this URL by clicking the \"Share\" button in your Google Sheet and copying the link."
+    malformed_published_heading: "⚠️ Your Google Sheets published URL is incorrect"
     invalid_published: "Your Google Sheets <code>published_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Get this URL from File → Share → Publish to web. Make sure to select \"Entire document\" and \"Comma-separated values (.csv)\", then enable \"Automatically republish when changes are made\" before clicking Publish."
 
   # Theme errors
   theme:
-    broken: "The theme <code>{{ theme_name }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ theme_name }}.yml</code> for syntax errors or compare it to a working theme file."
+    not_found_heading: "⚠️ Your selected theme doesn't exist"
+    not_found_description: "The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>paisajes</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to one of: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, or <code>austin</code>. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the <code>_data/themes</code> folder."
+    broken_heading: "⚠️ Your theme file is broken"
+    broken: "The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file."
+    system_error_heading: "⚠️ Theme system error detected"
+    system_error_description: "We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository."
 
   # Object and IIIF warning messages (from build validation, displayed in browser)
   object_warnings:

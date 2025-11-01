@@ -87,6 +87,13 @@ errors:
   objects_config_issues: "Los siguientes objetos tienen problemas de configuración:"
   objects_will_fail: "Estos objetos no se cargarán en el visor."
 
+  # Encabezados de advertencias de configuración
+  config_issues_heading: ""
+  object_config_heading: ""
+  story_config_heading: ""
+  story_navigate_to: ""
+  story_see_details: ""
+
   # Advertencia de discrepancia de URL IIIF
   iiif_mismatch:
     heading: "⚠️ Tus imágenes no se están cargando correctamente"
@@ -113,13 +120,25 @@ errors:
 
   # Errores de configuración de Google Sheets
   google_sheets:
+    incomplete_heading: ""
+    incomplete_description: ""
+    identical_heading: ""
     same_url: "Usaste la misma URL para <code>shared_url</code> y <code>published_url</code> en <code>_config.yml</code>. Deben ser URLs diferentes de la misma hoja de Google. La URL compartida sale del botón \"Share\" (termina con <code>/edit</code>). La URL publicada se obtiene en File → Share → Publish to web (contiene <code>/d/e/</code> y termina con <code>/pubhtml</code>)."
+    swapped_heading: ""
+    swapped_description: ""
+    malformed_shared_heading: ""
     invalid_shared: "Tu <code>shared_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Consigue esta URL haciendo clic en el botón \"Share\" en tu hoja y copiando el enlace."
+    malformed_published_heading: ""
     invalid_published: "Tu <code>published_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Obtenla en File → Share → Publish to web. Selecciona \"Entire document\" y \"Comma-separated values (.csv)\", habilita \"Automatically republish when changes are made\" y luego haz clic en Publish."
 
   # Errores de tema
   theme:
+    not_found_heading: ""
+    not_found_description: ""
+    broken_heading: ""
     broken: "El archivo del tema <code>{{ theme_name }}</code> parece estar dañado o incompleto. Aplicamos un tema de respaldo incluido. Revisa <code>_data/themes/{{ theme_name }}.yml</code> por errores de sintaxis o compáralo con un tema que funcione."
+    system_error_heading: ""
+    system_error_description: ""
 
   # Mensajes de advertencia de objetos e IIIF (mostrados en el navegador desde validación de construcción)
   object_warnings:

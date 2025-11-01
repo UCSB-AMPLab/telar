@@ -3,6 +3,13 @@ layout: default
 title: Home
 ---
 
+<!-- Load language data with fallback to English -->
+{% if site.telar_language and site.data.languages[site.telar_language] %}
+  {% assign lang = site.data.languages[site.telar_language] %}
+{% else %}
+  {% assign lang = site.data.languages['en'] %}
+{% endif %}
+
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-11 mx-auto">
@@ -257,7 +264,7 @@ title: Home
   <!-- Stories List -->
   <div class="row">
     <div class="col-lg-11 mx-auto">
-      <h2 class="mb-4">{{ page.stories_heading | default: "Explore the stories" }}</h2>
+      <h2 class="mb-4">{{ page.stories_heading | default: lang.pages.stories_heading }}</h2>
       {% if page.stories_intro and page.stories_intro != "" %}
       <p class="lead mb-4">{{ page.stories_intro }}</p>
       {% endif %}
@@ -302,7 +309,7 @@ title: Home
       </div>
       {% else %}
       <div class="alert alert-info">
-        <p class="mb-0">No stories available yet. Create story files in the <code>_stories/</code> directory to get started.</p>
+        <p class="mb-0">{{ lang.empty_states.no_stories }}</p>
       </div>
       {% endif %}
     </div>
@@ -312,11 +319,11 @@ title: Home
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
-      <h3 class="mb-4">{{ page.objects_heading | default: "See the objects behind the stories" }}</h3>
-      {% assign objects_text = page.objects_intro | default: "Browse {count} objects featured in the stories." %}
+      <h3 class="mb-4">{{ page.objects_heading | default: lang.pages.objects_heading }}</h3>
+      {% assign objects_text = page.objects_intro | default: lang.pages.objects_count %}
       {% assign objects_text = objects_text | replace: "{count}", site.objects.size %}
       <p class="lead">{{ objects_text }}</p>
-      <a href="{{ '/objects/' | relative_url }}" class="btn btn-primary">View Objects</a>
+      <a href="{{ '/objects/' | relative_url }}" class="btn btn-primary">{{ lang.buttons.view_objects }}</a>
     </div>
   </div>
   {% endif %}

@@ -9,8 +9,8 @@ location: "Huntington Library"
 credit: "Huntington Digital Library"
 thumbnail: ""
 iiif_manifest: "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json"
-object_warning: ""
-object_warning_short: "nan"
+object_warning: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 503). Error 503 means \"Service Unavailable\": the IIIF server is temporarily unavailable, possibly due to maintenance or being overloaded. This is not a problem with your configuration. Try rebuilding your site later - the server should come back online."
+object_warning_short: "Error 503: server temporarily unavailable (try again later)"
 layout: object
 ---
 

@@ -4,59 +4,59 @@ Detects when viewing site URL doesn't match IIIF manifest URLs and provides help
 {%- endcomment -%}
 
 <div id="iiif-url-warning" class="alert alert-warning telar-alert" role="alert" style="display: none;">
-  <strong>⚠️ Your images aren't loading correctly</strong>
-  <p>Your images can't display because there's a mismatch between where you're viewing the site and where the image tiles are configured to load from.</p>
+  <strong>{{ lang.errors.iiif_mismatch.heading }}</strong>
+  <p>{{ lang.errors.iiif_mismatch.description }}</p>
 
-  <p class="mb-2"><strong>What's happening:</strong></p>
+  <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.whats_happening }}</strong></p>
   <ul class="mb-3">
-    <li>You're viewing the site at: <strong id="current-url"></strong></li>
-    <li>But image tiles are configured for: <strong id="manifest-url"></strong></li>
+    <li>{{ lang.errors.iiif_mismatch.viewing_at }} <strong id="current-url"></strong></li>
+    <li>{{ lang.errors.iiif_mismatch.configured_for }} <strong id="manifest-url"></strong></li>
   </ul>
 
-  <p class="mb-2"><strong id="affected-images-heading">Affected images:</strong></p>
+  <p class="mb-2"><strong id="affected-images-heading">{{ lang.errors.iiif_mismatch.affected_images }}</strong></p>
   <ul class="mb-3" id="affected-images">
     <!-- JavaScript will populate this list -->
   </ul>
 
   <!-- Production scenario (90% of users) -->
   <div id="production-fix-instructions" style="display: none;">
-    <p class="mb-2"><strong>Here are some common causes for errors like this:</strong></p>
+    <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.common_causes }}</strong></p>
     <ul class="mb-3">
-      <li>Your site settings are incorrect. The <code>url</code> or <code>baseurl</code> in <code>_config.yml</code> doesn't match where your site is actually published</li>
-      <li>You recently moved your site to a new URL but haven't updated the configuration</li>
-      <li>You're viewing a preview or staging environment that uses a different URL than what's configured</li>
+      <li>{{ lang.errors.iiif_mismatch.cause_incorrect_settings }}</li>
+      <li>{{ lang.errors.iiif_mismatch.cause_moved_url }}</li>
+      <li>{{ lang.errors.iiif_mismatch.cause_preview_env }}</li>
     </ul>
 
-    <p class="mb-2"><strong>To fix this, update your site configuration:</strong></p>
+    <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.fix_heading }}</strong></p>
     <ol class="mb-3">
-      <li>Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> match your actual site URL
+      <li>{{ lang.errors.iiif_mismatch.fix_check_config }}
         <ul>
-          <li>Your site is at: <strong id="production-current-url"></strong></li>
-          <li>Your config should be: <code id="production-config-suggestion"></code></li>
+          <li>{{ lang.errors.iiif_mismatch.fix_your_site_at }} <strong id="production-current-url"></strong></li>
+          <li>{{ lang.errors.iiif_mismatch.fix_config_should_be }} <code id="production-config-suggestion"></code></li>
         </ul>
       </li>
-      <li>Commit and push your changes to GitHub</li>
-      <li>GitHub Actions will automatically regenerate the image tiles with the correct URL</li>
+      <li>{{ lang.errors.iiif_mismatch.fix_commit_push }}</li>
+      <li>{{ lang.errors.iiif_mismatch.fix_auto_regenerate }}</li>
     </ol>
 
-    <p class="mb-2"><small>If you're running this site locally for development, you can also regenerate tiles with:</small></p>
+    <p class="mb-2"><small>{{ lang.errors.iiif_mismatch.fix_local_option }}</small></p>
     <pre class="bg-light p-2 rounded"><code id="production-local-command"></code></pre>
   </div>
 
   <!-- Local development scenario (10% of users) -->
   <div id="local-fix-instructions" style="display: none;">
-    <p class="mb-2"><strong>Here are some common causes for errors like this:</strong></p>
+    <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.common_causes }}</strong></p>
     <ul class="mb-3">
-      <li>You're running the site on your own computer, but the image tiles were generated for your production URL</li>
-      <li>You're testing locally after a GitHub Actions build</li>
+      <li>{{ lang.errors.iiif_mismatch.local_cause_1 }}</li>
+      <li>{{ lang.errors.iiif_mismatch.local_cause_2 }}</li>
     </ul>
 
-    <p class="mb-2"><strong>To fix this for local development, regenerate your image tiles for localhost:</strong></p>
+    <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.local_fix_heading }}</strong></p>
     <pre class="bg-light p-2 rounded mb-3"><code id="local-command"></code></pre>
 
-    <p class="mb-2"><strong>Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:</strong></p>
+    <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.local_alternative }}</strong></p>
     <ol class="mb-0">
-      <li>Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> are correct for production</li>
+      <li>{{ lang.errors.iiif_mismatch.fix_check_config }}</li>
       <li>Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)</li>
     </ol>
   </div>

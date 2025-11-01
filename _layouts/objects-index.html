@@ -2,6 +2,13 @@
 layout: default
 ---
 
+<!-- Load language data with fallback to English -->
+{% if site.telar_language and site.data.languages[site.telar_language] %}
+  {% assign lang = site.data.languages[site.telar_language] %}
+{% else %}
+  {% assign lang = site.data.languages['en'] %}
+{% endif %}
+
 <div class="container my-5">
   <div class="row">
     <div class="col-12">
@@ -29,7 +36,7 @@ layout: default
     <div class="col-12">
       <div class="alert alert-warning" role="alert" style="max-width: 800px;">
         <strong>⚠️ Configuration Issues Detected</strong>
-        <p class="mb-2 mt-2"><small>The following objects have configuration issues:</small></p>
+        <p class="mb-2 mt-2"><small>{{ lang.errors.objects_config_issues }}</small></p>
         <ul class="mb-2" style="font-size: 0.9rem;">
         {% assign shown_warnings = "" | split: "" %}
         {% for object in objects_with_warnings %}
@@ -61,7 +68,7 @@ layout: default
           </li>
         {% endfor %}
         </ul>
-        <p class="mb-0"><small>These objects will fail to load in the viewer.</small></p>
+        <p class="mb-0"><small>{{ lang.errors.objects_will_fail }}</small></p>
       </div>
     </div>
   </div>
@@ -109,7 +116,7 @@ layout: default
   <div class="row">
     <div class="col-12">
       <div class="alert alert-info">
-        <p class="mb-0">No objects in the collection yet. Add object files to the <code>_objects/</code> directory to populate the collection.</p>
+        <p class="mb-0">{{ lang.empty_states.no_objects }}</p>
       </div>
     </div>
   </div>
