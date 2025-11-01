@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from migrations.base import BaseMigration
 from migrations.v020_to_v030 import Migration020to030
+from migrations.v030_to_v031 import Migration030to031
 from migrations.v031_to_v032 import Migration031to032
 from migrations.v032_to_v033 import Migration032to033
 from migrations.v033_to_v034 import Migration033to034
@@ -32,6 +33,7 @@ LATEST_VERSION = "0.3.4-beta"
 # All available migrations in order
 MIGRATIONS = [
     Migration020to030,
+    Migration030to031,
     Migration031to032,
     Migration032to033,
     Migration033to034,
