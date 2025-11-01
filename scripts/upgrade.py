@@ -131,9 +131,53 @@ def run_migrations(migrations: List[BaseMigration], dry_run: bool = False) -> Li
     return all_changes
 
 
+def _categorize_changes(changes: List[str]) -> dict:
+    """
+    Categorize changes by file type for better organization.
+
+    Args:
+        changes: List of change descriptions
+
+    Returns:
+        Dictionary with categories as keys and lists of changes as values
+    """
+    categories = {
+        'Configuration': [],
+        'Layouts': [],
+        'Includes': [],
+        'Styles': [],
+        'Scripts': [],
+        'Documentation': [],
+        'Other': []
+    }
+
+    for change in changes:
+        change_lower = change.lower()
+
+        # Categorize based on keywords in the change description
+        # Check for specific patterns first, then broader patterns
+        if '_config.yml' in change_lower or 'configuration' in change_lower or 'config' in change_lower:
+            categories['Configuration'].append(change)
+        elif 'layout' in change_lower:
+            categories['Layouts'].append(change)
+        elif 'include' in change_lower:
+            categories['Includes'].append(change)
+        elif 'style' in change_lower or 'scss' in change_lower or 'css' in change_lower or '.css' in change_lower:
+            categories['Styles'].append(change)
+        elif 'javascript' in change_lower or 'script' in change_lower or '.js' in change_lower:
+            categories['Scripts'].append(change)
+        elif 'readme' in change_lower or 'docs' in change_lower or 'documentation' in change_lower:
+            categories['Documentation'].append(change)
+        else:
+            categories['Other'].append(change)
+
+    # Remove empty categories
+    return {k: v for k, v in categories.items() if v}
+
+
 def generate_checklist(migrations: List[BaseMigration], all_changes: List[str], from_version: str, to_version: str) -> str:
     """
-    Generate UPGRADE_SUMMARY.md content.
+    Generate UPGRADE_SUMMARY.md content (without YAML frontmatter).
 
     Args:
         migrations: List of migrations that were run
@@ -148,51 +192,54 @@ def generate_checklist(migrations: List[BaseMigration], all_changes: List[str], 
     for migration in migrations:
         manual_steps.extend(migration.get_manual_steps())
 
+    # Categorize changes
+    categorized = _categorize_changes(all_changes)
+
     checklist = f"""---
-layout: upgrade-summary
+layout: default
 title: Upgrade Summary
-permalink: /upgrade-summary/
 ---
 
 ## Upgrade Summary
 - **From:** {from_version}
 - **To:** {to_version}
 - **Date:** {_get_date()}
+- **Automated changes:** {len(all_changes)}
+- **Manual steps:** {len(manual_steps)}
 
 ## Automated Changes Applied
 
-The following changes have been made automatically:
-
 """
 
-    for change in all_changes:
-        checklist += f"- [x] {change}\n"
+    # Output changes by category
+    for category, changes in categorized.items():
+        checklist += f"### {category} ({len(changes)} file{'s' if len(changes) != 1 else ''})\n\n"
+        for change in changes:
+            checklist += f"- [x] {change}\n"
+        checklist += "\n"
 
     if manual_steps:
-        checklist += f"""
+        checklist += f"""## Manual Steps Required
 
-## ⚠️ Manual Steps Required
-
-Please complete these steps manually:
+Please complete these after merging:
 
 """
         for i, step in enumerate(manual_steps, 1):
-            checklist += f"### {i}. {step['description']}\n"
+            checklist += f"{i}. **{step['description'].split(' - ')[0] if ' - ' in step['description'] else 'Complete this step'}**"
+            if ' - ' in step['description']:
+                checklist += f" - {step['description'].split(' - ', 1)[1]}"
             if 'doc_url' in step:
-                checklist += f"\nSee the [documentation]({step['doc_url']}) for details.\n"
+                checklist += f" ([guide]({step['doc_url']}))"
             checklist += "\n"
     else:
-        checklist += "\n## ✅ No Manual Steps Required\n\nAll changes have been automated!\n"
+        checklist += "## No Manual Steps Required\n\nAll changes have been automated!\n"
 
     checklist += """
 ## Resources
 
 - [Full Documentation](https://ampl.clair.ucsb.edu/telar-docs)
 - [CHANGELOG](https://github.com/UCSB-AMPLab/telar/blob/main/CHANGELOG.md)
-
-## Need Help?
-
-- [Open an Issue](https://github.com/UCSB-AMPLab/telar/issues)
+- [Report Issues](https://github.com/UCSB-AMPLab/telar/issues)
 """
 
     return checklist

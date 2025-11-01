@@ -126,6 +126,8 @@ class Migration033to034(BaseMigration):
             'assets/js/story.js': 'Updated story JavaScript',
             'assets/js/telar.js': 'Updated telar JavaScript',
             'assets/css/telar.scss': 'Updated telar styles',
+            'README.md': 'Updated README',
+            'docs/README.md': 'Updated docs README',
         }
 
         for file_path, success_msg in framework_files.items():
