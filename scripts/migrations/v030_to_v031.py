@@ -1,6 +1,6 @@
 """Migration from v0.3.0-beta to v0.3.1-beta"""
 
-import os
+from typing import List, Dict
 from .base import BaseMigration
 
 
@@ -18,8 +18,13 @@ class Migration030to031(BaseMigration):
 
     from_version = "0.3.0-beta"
     to_version = "0.3.1-beta"
+    description = "Bug fixes in framework templates"
 
-    def upgrade(self) -> bool:
+    def check_applicable(self) -> bool:
+        """This migration is always applicable - it's just a version bump."""
+        return True
+
+    def apply(self) -> List[str]:
         """
         Apply migration from v0.3.0 to v0.3.1.
 
@@ -30,12 +35,8 @@ class Migration030to031(BaseMigration):
         print("   This version contains only template bug fixes.")
         print("   No file updates required for your site.")
 
-        return True
-
-    def get_automated_changes(self) -> list:
-        """No automated changes needed for this migration."""
         return []
 
-    def get_manual_steps(self) -> list:
+    def get_manual_steps(self) -> List[Dict[str, str]]:
         """No manual steps needed for this migration."""
         return []
