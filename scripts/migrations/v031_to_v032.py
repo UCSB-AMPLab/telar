@@ -12,9 +12,9 @@ from .base import BaseMigration
 
 
 class Migration031to032(BaseMigration):
-    """Migration from v0.3.0 to v0.3.2 - index page refactor."""
+    """Migration from v0.3.1 to v0.3.2 - index page refactor."""
 
-    from_version = "0.3.0-beta"
+    from_version = "0.3.1-beta"
     to_version = "0.3.2-beta"
     description = "Refactor index page for easier customization"
 
