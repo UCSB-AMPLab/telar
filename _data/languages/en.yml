@@ -51,6 +51,9 @@ object:
     copy_zoom_tooltip: "Copy Zoom level"
     copy_manifest_tooltip: "Copy manifest URL"
 
+  # Object thumbnails
+  no_image: "No image"
+
 # Story interface
 story:
   step_number: "Step {{ number }}"
@@ -75,6 +78,7 @@ empty_states:
   no_stories: "No stories available yet. Create story files in the <code>_stories/</code> directory to get started."
   no_objects: "No objects in the collection yet. Add object files to the <code>_objects/</code> directory to populate the collection."
   no_glossary: "No glossary terms available yet. Add glossary files to the <code>_glossary/</code> directory to populate the glossary."
+  thumbnail_load_error: "Failed to load"
 
 # Error messages and warnings (user-facing)
 errors:
@@ -103,7 +107,7 @@ errors:
     configured_for: "But image tiles are configured for:"
     affected_images: "Affected images:"
     affected_images_count_singular: "The following image is affected:"
-    affected_images_count_plural: "The following {{ count }} images are affected:"
+    affected_images_count_plural: "The following __COUNT__ images are affected:"
     common_causes: "Here are some common causes for errors like this:"
     cause_incorrect_settings: "Your site settings are incorrect. The <code>url</code> or <code>baseurl</code> in <code>_config.yml</code> doesn't match where your site is actually published"
     cause_moved_url: "You recently moved your site to a new URL but haven't updated the configuration"
@@ -173,9 +177,9 @@ errors:
     short_validation_error: "Validation error: could not be validated"
 
     # Image source errors
-    image_similar_single: "No image file found for object_id '{{ object_id }}', but found similar file '{{ similar_file }}'. If this is the image you meant to use, either: (1) rename the file to {{ object_id }}{{ file_ext }}, or (2) update the object_id in the CSV to match the filename (without extension)."
-    image_similar_multiple: "No image file found for object_id '{{ object_id }}', but found multiple similar files: '{{ file_list }}'. If one of these is the image you meant to use, either rename it to {{ object_id }}.* or update the object_id in the CSV to match."
-    image_missing: "No image source found for object '{{ object_id }}'. Add either: (1) an IIIF manifest URL in the iiif_manifest column, or (2) an image file to components/images/objects/{{ object_id }}.jpg"
+    image_similar_single: "No image file found for `object_id` '{{ object_id }}', but found similar file '{{ similar_file }}'. If this is the image you meant to use, either: (1) rename the file to `{{ object_id }}{{ file_ext }}`, or (2) update the `object_id` in the CSV to match the filename (without extension)."
+    image_similar_multiple: "No image file found for `object_id` '{{ object_id }}', but found multiple similar files: '{{ file_list }}'. If one of these is the image you meant to use, either rename it to `{{ object_id }}.*` or update the `object_id` in the CSV to match."
+    image_missing: "No image source found for object '{{ object_id }}'. Add either: (1) an IIIF manifest URL in the `iiif_manifest` column, or (2) an image file to `components/images/objects/{{ object_id }}.jpg`"
     short_filename_mismatch: "Image filename mismatch"
     short_ambiguous_match: "Ambiguous image match"
     short_missing_source: "Missing image source"

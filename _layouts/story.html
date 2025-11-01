@@ -15,6 +15,28 @@
     {% assign lang = site.data.languages['en'] %}
   {% endif %}
 
+  <!-- Check if Christmas Tree Mode is enabled in config -->
+  {% assign is_christmas_tree_mode = false %}
+  {% if site.testing-features.christmas_tree_mode %}
+    {% assign is_christmas_tree_mode = true %}
+  {% endif %}
+
+  <script>
+  // Expose Christmas Tree Mode to JavaScript
+  window.christmasTreeMode = {{ is_christmas_tree_mode }};
+
+  // If Christmas Tree Mode is active, add 🎄 to all warning headings
+  if (window.christmasTreeMode) {
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.alert strong').forEach(function(heading) {
+        if (!heading.textContent.includes('🎄')) {
+          heading.textContent = '🎄 ' + heading.textContent;
+        }
+      });
+    });
+  }
+  </script>
+
   <!-- Google Fonts - Dynamic based on theme -->
   {% assign theme = site.data.themes[site.telar_theme] %}
   {% assign heading_font = theme.fonts.headings | remove: "'" | split: ',' | first | strip %}

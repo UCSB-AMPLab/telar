@@ -9,6 +9,28 @@ layout: default
   {% assign lang = site.data.languages['en'] %}
 {% endif %}
 
+<!-- Check if Christmas Tree Mode is enabled in config -->
+{% assign is_christmas_tree_mode = false %}
+{% if site.testing-features.christmas_tree_mode %}
+  {% assign is_christmas_tree_mode = true %}
+{% endif %}
+
+<script>
+// Expose Christmas Tree Mode to JavaScript
+window.christmasTreeMode = {{ is_christmas_tree_mode }};
+
+// If Christmas Tree Mode is active, add 🎄 to all warning headings
+if (window.christmasTreeMode) {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.alert strong').forEach(function(heading) {
+      if (!heading.textContent.includes('🎄')) {
+        heading.textContent = '🎄 ' + heading.textContent;
+      }
+    });
+  });
+}
+</script>
+
 <!-- Bootstrap Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 

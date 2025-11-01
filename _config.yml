@@ -10,7 +10,7 @@ author: ""
 email: ""
 telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
 logo: "" # Path to logo image (optional)
-telar_language: "es" # Options: "en" (English), "es" (Español)
+telar_language: "en" # Options: "en" (English), "es" (Español)
 
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.
@@ -105,3 +105,10 @@ webrick:
     Access-Control-Allow-Origin: "*"
     Access-Control-Allow-Methods: "GET, POST, OPTIONS"
     Access-Control-Allow-Headers: "Content-Type"
+
+# Development & Testing
+# Set to false or remove for production use
+testing-features:
+  # Christmas Tree Mode - Displays all warning messages for testing multilingual support
+  # Set to true to light up the site with test warnings (test objects, fake errors, etc.)
+  christmas_tree_mode: false

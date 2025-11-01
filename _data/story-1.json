@@ -1,5 +1,20 @@
 [
   {
+    "_metadata": true,
+    "viewer_warnings": [
+      {
+        "step": 1,
+        "type": "viewer",
+        "message": "errors.object_warnings.missing_object_id"
+      },
+      {
+        "step": 2,
+        "type": "panel",
+        "message": "Falta el archivo de contenido: <code>missing-file.md</code><br>Agrega este archivo en <code>components/texts/stories/</code> o elimina la referencia del CSV."
+      }
+    ]
+  },
+  {
     "step": 1,
     "object": "example-bogota-1614",
     "x": "0.5",

@@ -10,6 +10,28 @@ title: Home
   {% assign lang = site.data.languages['en'] %}
 {% endif %}
 
+<!-- Check if Christmas Tree Mode is enabled in config -->
+{% assign is_christmas_tree_mode = false %}
+{% if site.testing-features.christmas_tree_mode %}
+  {% assign is_christmas_tree_mode = true %}
+{% endif %}
+
+<script>
+// Expose Christmas Tree Mode to JavaScript
+window.christmasTreeMode = {{ is_christmas_tree_mode }};
+
+// If Christmas Tree Mode is active, add 🎄 to all warning headings
+if (window.christmasTreeMode) {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.telar-alert strong').forEach(function(heading) {
+      if (!heading.textContent.includes('🎄')) {
+        heading.textContent = '🎄 ' + heading.textContent;
+      }
+    });
+  });
+}
+</script>
+
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-11 mx-auto">
@@ -41,10 +63,23 @@ title: Home
     </div>
   </div>
 
+  {%- comment -%}Christmas Tree Mode: Inject fake values to trigger all warnings{%- endcomment -%}
+  {% if is_christmas_tree_mode %}
+    {% assign fake_telar_theme = "nonexistent-theme-🎄" %}
+    {% assign fake_gs_enabled = true %}
+    {% assign fake_gs_shared_url = "https://docs.google.com/spreadsheets/d/e/FAKE-PUBLISHED-URL/pubhtml" %}
+    {% assign fake_gs_published_url = "https://docs.google.com/spreadsheets/d/FAKE-SHARED-URL/edit" %}
+  {% else %}
+    {% assign fake_telar_theme = site.telar_theme %}
+    {% assign fake_gs_enabled = site.google_sheets.enabled %}
+    {% assign fake_gs_shared_url = site.google_sheets.shared_url %}
+    {% assign fake_gs_published_url = site.google_sheets.published_url %}
+  {% endif %}
+
   <!-- Theme Validation -->
   {% assign has_theme_issue = false %}
   {% assign theme_error_type = "" %}
-  {% assign configured_theme = site.data.themes[site.telar_theme] %}
+  {% assign configured_theme = site.data.themes[fake_telar_theme] %}
 
   {% if configured_theme == nil or configured_theme == empty %}
     {% assign has_theme_issue = true %}
@@ -53,7 +88,7 @@ title: Home
     {% assign all_theme_files = site.static_files | where_exp: "file", "file.path contains '_data/themes'" | where_exp: "file", "file.extname == '.yml'" %}
     {% assign theme_file_exists = false %}
     {% for file in all_theme_files %}
-      {% if file.path contains site.telar_theme %}
+      {% if file.path contains fake_telar_theme %}
         {% assign theme_file_exists = true %}
       {% endif %}
     {% endfor %}
@@ -76,9 +111,9 @@ title: Home
   {% assign gs_error_type = "" %}
   {% assign gs_error_details = "" %}
 
-  {% if site.google_sheets.enabled %}
-    {% assign shared_url = site.google_sheets.shared_url | strip %}
-    {% assign published_url = site.google_sheets.published_url | strip %}
+  {% if fake_gs_enabled %}
+    {% assign shared_url = fake_gs_shared_url | strip %}
+    {% assign published_url = fake_gs_published_url | strip %}
 
     {%- comment -%}Check if URLs are missing{%- endcomment -%}
     {% if shared_url == "" or published_url == "" %}
@@ -144,37 +179,37 @@ title: Home
     <div class="col-lg-11 mx-auto">
       {% if gs_error_type == "missing_urls" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets integration is incomplete</strong>
+        <strong>{{ lang.errors.google_sheets.incomplete_heading }}</strong>
         <p class="mb-0 mt-2">
-          Google Sheets integration is enabled but incomplete. You need to provide both a <code>shared_url</code> and a <code>published_url</code> in <code>_config.yml</code>. The shared URL comes from clicking the "Share" button in your Google Sheet. The published URL comes from File → Share → Publish to web (select "Entire document" and "Comma-separated values"). See the <a href="https://github.com/UCSB-AMPLab/telar/blob/main/docs/GOOGLE_SHEETS_TEMPLATE.md" class="alert-link" target="_blank">Google Sheets setup guide</a> for detailed instructions.
+          {{ lang.errors.google_sheets.incomplete_description }}
         </p>
       </div>
       {% elsif gs_error_type == "same_url" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets URLs are identical</strong>
+        <strong>{{ lang.errors.google_sheets.identical_heading }}</strong>
         <p class="mb-0 mt-2">
-          You've used the same URL for both <code>shared_url</code> and <code>published_url</code> in <code>_config.yml</code>. These must be different URLs from the same Google Sheet. The shared URL comes from the "Share" button (ends with <code>/edit</code>). The published URL comes from File → Share → Publish to web (contains <code>/d/e/</code> and ends with <code>/pubhtml</code>).
+          {{ lang.errors.google_sheets.same_url }}
         </p>
       </div>
       {% elsif gs_error_type == "swapped_urls" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets URLs appear to be swapped</strong>
+        <strong>{{ lang.errors.google_sheets.swapped_heading }}</strong>
         <p class="mb-0 mt-2">
-          Your Google Sheets URLs appear to be swapped in <code>_config.yml</code>. The <code>shared_url</code> should contain <code>/spreadsheets/d/{id}/edit</code> (from the Share button), but yours appears to be in published format. The <code>published_url</code> should contain <code>/d/e/{id}/pubhtml</code> (from Publish to web), but yours appears to be in shared format. Please swap these two URLs.
+          {{ lang.errors.google_sheets.swapped_description }}
         </p>
       </div>
       {% elsif gs_error_type == "malformed_shared" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets shared URL is incorrect</strong>
+        <strong>{{ lang.errors.google_sheets.malformed_shared_heading }}</strong>
         <p class="mb-0 mt-2">
-          Your Google Sheets <code>shared_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Get this URL by clicking the "Share" button in your Google Sheet and copying the link.
+          {{ lang.errors.google_sheets.invalid_shared }}
         </p>
       </div>
       {% elsif gs_error_type == "malformed_published" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets published URL is incorrect</strong>
+        <strong>{{ lang.errors.google_sheets.malformed_published_heading }}</strong>
         <p class="mb-0 mt-2">
-          Your Google Sheets <code>published_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Get this URL from File → Share → Publish to web. Make sure to select "Entire document" and "Comma-separated values (.csv)", then enable "Automatically republish when changes are made" before clicking Publish.
+          {{ lang.errors.google_sheets.invalid_published }}
         </p>
       </div>
       {% endif %}
@@ -188,23 +223,23 @@ title: Home
     <div class="col-lg-11 mx-auto">
       {% if theme_error_type == "not_found" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your selected theme doesn't exist</strong>
+        <strong>{{ lang.errors.theme.not_found_heading }}</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>paisajes</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to one of: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, or <code>austin</code>. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the <code>_data/themes</code> folder.
+          {{ lang.errors.theme.not_found_description }}
         </p>
       </div>
       {% elsif theme_error_type == "malformed" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your theme file is broken</strong>
+        <strong>{{ lang.errors.theme.broken_heading }}</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file.
+          {{ lang.errors.theme.broken }}
         </p>
       </div>
       {% elsif theme_error_type == "critical" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Theme system error detected</strong>
+        <strong>{{ lang.errors.theme.system_error_heading }}</strong>
         <p class="mb-0 mt-2">
-          We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository.
+          {{ lang.errors.theme.system_error_description }}
         </p>
       </div>
       {% endif %}
@@ -217,7 +252,7 @@ title: Home
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Object configuration issues detected</strong>
+        <strong>{{ lang.errors.object_config_heading }}</strong>
         <ul class="mt-2 mb-0">
           {% for object in site.objects %}
             {% if object.object_warning and object.object_warning != "" %}
@@ -237,13 +272,13 @@ title: Home
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Story configuration issues detected</strong>
+        <strong>{{ lang.errors.story_config_heading }}</strong>
         <p class="mb-0 mt-2">
           {% assign second_to_last = stories_with_issues.size | minus: 1 %}
-          Navigate to
+          {{ lang.errors.story_navigate_to }}
           {% for story in stories_with_issues %}
             <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == second_to_last %} or {% else %}, {% endif %}{% endunless %}
-          {% endfor %} to see more details.
+          {% endfor %} {{ lang.errors.story_see_details }}
         </p>
       </div>
     </div>
@@ -272,6 +307,14 @@ title: Home
       {% if site.stories.size > 0 %}
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-5">
         {% for story in site.stories %}
+        {%- comment -%}Check if this story has warnings{%- endcomment -%}
+        {% assign story_has_warnings = false %}
+        {% for story_with_issue in stories_with_issues %}
+          {% if story_with_issue.url == story.url %}
+            {% assign story_has_warnings = true %}
+            {% break %}
+          {% endif %}
+        {% endfor %}
         <div class="col">
           <a href="{{ story.url | relative_url }}" class="story-card text-decoration-none">
             <div class="card h-100 border-0 shadow-sm">
@@ -289,13 +332,13 @@ title: Home
                 {% else %}
                   {%- comment -%}Fallback placeholder if no object{%- endcomment -%}
                   <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center" style="aspect-ratio: 1;">
-                    <span class="text-white">{{ story.story_number }}</span>
+                    <span class="text-white">{% if story_has_warnings %}⚠️ {% endif %}{{ story.story_number }}</span>
                   </div>
                 {% endif %}
               {% else %}
                 {%- comment -%}Fallback placeholder if no data file{%- endcomment -%}
                 <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center" style="aspect-ratio: 1;">
-                  <span class="text-white">{{ story.story_number }}</span>
+                  <span class="text-white">{% if story_has_warnings %}⚠️ {% endif %}{{ story.story_number }}</span>
                 </div>
               {% endif %}
 

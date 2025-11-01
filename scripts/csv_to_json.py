@@ -13,6 +13,107 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse
 import ssl
+import yaml
+
+# Global language data cache
+_lang_data = None
+
+def load_language_data():
+    """
+    Load language strings from _config.yml and corresponding language file.
+
+    Returns:
+        dict: Language strings, or None if loading fails
+    """
+    global _lang_data
+
+    # Return cached data if already loaded
+    if _lang_data is not None:
+        return _lang_data
+
+    try:
+        # Read _config.yml to get telar_language setting
+        config_path = Path('_config.yml')
+        if not config_path.exists():
+            return None
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # Get language setting, default to English
+        language = config.get('telar_language', 'en')
+
+        # Load language file
+        lang_file = Path(f'_data/languages/{language}.yml')
+
+        # Fall back to English if language file doesn't exist
+        if not lang_file.exists():
+            lang_file = Path('_data/languages/en.yml')
+
+        if not lang_file.exists():
+            return None
+
+        with open(lang_file, 'r', encoding='utf-8') as f:
+            _lang_data = yaml.safe_load(f)
+
+        return _lang_data
+
+    except Exception as e:
+        print(f"  [WARN] Could not load language data: {e}")
+        return None
+
+def get_lang_string(key_path, **kwargs):
+    """
+    Get a language string by key path and optionally interpolate variables.
+
+    Args:
+        key_path: Dot-separated path to string (e.g., 'errors.object_warnings.iiif_503')
+        **kwargs: Variables to interpolate into the string
+
+    Returns:
+        str: Localized string with variables interpolated, or key_path if not found
+    """
+    lang = load_language_data()
+
+    if lang is None:
+        return key_path
+
+    # Navigate through nested dict using key path
+    keys = key_path.split('.')
+    value = lang
+
+    try:
+        for key in keys:
+            value = value[key]
+
+        # Interpolate variables if provided
+        if kwargs:
+            # Replace {{ var }} syntax with Python format strings
+            for var_name, var_value in kwargs.items():
+                value = value.replace(f'{{{{ {var_name} }}}}', str(var_value))
+
+        return value
+
+    except (KeyError, TypeError):
+        # Key not found - return the key path itself as fallback
+        return key_path
+
+def sanitize_dataframe(df):
+    """
+    Remove Christmas tree emoji (🎄) from all string fields in dataframe.
+    This prevents accidental Christmas Tree Mode triggering from user data.
+
+    Args:
+        df: pandas DataFrame to sanitize
+
+    Returns:
+        DataFrame: Sanitized dataframe
+    """
+    for col in df.columns:
+        if df[col].dtype == 'object':  # String columns
+            df[col] = df[col].apply(lambda x: str(x).replace('🎄', '') if pd.notna(x) else x)
+
+    return df
 
 def process_image_sizes(text):
     """
@@ -138,6 +239,9 @@ def csv_to_json(csv_path, json_path, process_func=None):
         # Filter out columns starting with # (instruction columns)
         df = df[[col for col in df.columns if not col.startswith('#')]]
 
+        # Sanitize user data - remove 🎄 emoji to prevent accidental Christmas Tree Mode triggering
+        df = sanitize_dataframe(df)
+
         # Apply processing function if provided
         if process_func:
             df = process_func(df)
@@ -248,7 +352,103 @@ def _find_similar_image_filenames(object_id, images_dir):
 
     return similar_files
 
-def process_objects(df):
+def inject_christmas_tree_errors(df):
+    """
+    Inject test objects with various error conditions for testing multilingual warnings.
+    All test objects have 🎄 emoji in their titles for easy identification.
+
+    This "Christmas Tree Mode" lights up all possible warning messages.
+    """
+    test_objects = [
+        {
+            'object_id': 'test-iiif-404',
+            'title': '🎄 Test - IIIF 404 Error',
+            'description': 'Test object to trigger IIIF 404 error warning',
+            'iiif_manifest': 'https://example.com/nonexistent/manifest.json',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-503',
+            'title': '🎄 Test - IIIF 503 Service Unavailable',
+            'description': 'Test object to trigger IIIF 503 error warning',
+            'iiif_manifest': 'https://httpstat.us/503',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-invalid',
+            'title': '🎄 Test - Invalid IIIF URL',
+            'description': 'Test object to trigger invalid URL warning',
+            'iiif_manifest': 'not-a-valid-url',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-image-missing',
+            'title': '🎄 Test - Missing Image Source',
+            'description': 'Test object with no IIIF manifest and no local image file',
+            'iiif_manifest': '',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-500',
+            'title': '🎄 Test - IIIF 500 Internal Server Error',
+            'description': 'Test object to trigger IIIF 500 error warning',
+            'iiif_manifest': 'https://httpstat.us/500',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-429',
+            'title': '🎄 Test - IIIF 429 Rate Limiting',
+            'description': 'Test object to trigger IIIF 429 rate limiting warning',
+            'iiif_manifest': 'https://httpstat.us/429',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        }
+    ]
+
+    # Create dataframe from test objects and concatenate with existing data
+    test_df = pd.DataFrame(test_objects)
+    df = pd.concat([df, test_df], ignore_index=True)
+
+    print("🎄 Christmas Tree Mode activated - injected test objects with various errors")
+
+    return df
+
+def process_objects(df, christmas_tree=False):
     """
     Process objects CSV
     Expected columns: object_id, title, creator, date, description, etc.
@@ -265,6 +465,10 @@ def process_objects(df):
 
     # Remove rows where object_id is empty
     df = df[df['object_id'].astype(str).str.strip() != '']
+
+    # Inject Christmas Tree test errors if flag is enabled
+    if christmas_tree:
+        df = inject_christmas_tree_errors(df)
 
     # Validate and clean object_id values
     valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg']
@@ -358,7 +562,7 @@ def process_objects(df):
             parsed = urlparse(manifest_url)
             if not parsed.scheme in ['http', 'https']:
                 df.at[idx, 'iiif_manifest'] = ''
-                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet is not valid"
+                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_invalid_url')
                 msg = f"Cleared invalid IIIF manifest for object {object_id}: not a valid URL"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
@@ -379,7 +583,7 @@ def process_objects(df):
 
                     # Check if response is JSON
                     if 'json' not in content_type.lower():
-                        df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
                         msg = f"IIIF manifest for object {object_id} does not return JSON (Content-Type: {content_type})"
                         print(f"  [WARN] {msg}")
                         warnings.append(msg)
@@ -399,7 +603,7 @@ def process_objects(df):
                             has_type = 'type' in data or '@type' in data
 
                             if not (has_context or has_type):
-                                df.at[idx, 'object_warning'] = f"the IIIF manifest you specified in your configuration CSV or Google Sheet is not properly formatted"
+                                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_malformed')
                                 msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
                                 print(f"  [WARN] {msg}")
                                 warnings.append(msg)
@@ -407,48 +611,48 @@ def process_objects(df):
                                 print(f"  [INFO] Validated IIIF manifest for object {object_id}")
 
                         except json.JSONDecodeError:
-                            df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
+                            df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
                             msg = f"IIIF manifest for object {object_id} is not valid JSON"
                             print(f"  [WARN] {msg}")
                             warnings.append(msg)
 
             except urllib.error.HTTPError as e:
                 if e.code == 404:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not exist (error 404)"
-                    df.at[idx, 'object_warning_short'] = "Error 404: manifest not found"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_404')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_404')
                 elif e.code == 429:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means \"Too Many Requests\": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away."
-                    df.at[idx, 'object_warning_short'] = "Error 429: rate limiting (try again in 15-30 minutes)"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_429')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_429')
                 elif e.code == 403:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 403). Error 403 means \"Forbidden\": the IIIF server is blocking access to this manifest. This usually means the manifest requires authentication, has IP restrictions, or is not publicly available. Contact the institution to confirm the manifest can be accessed publicly, or use a different IIIF resource."
-                    df.at[idx, 'object_warning_short'] = "Error 403: access forbidden (likely requires authentication or has IP restrictions)"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_403')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_403')
                 elif e.code == 401:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 401). Error 401 means \"Unauthorized\": this manifest requires authentication to access. Telar does not support authenticated IIIF manifests. You'll need to use a publicly accessible IIIF manifest instead."
-                    df.at[idx, 'object_warning_short'] = "Error 401: authentication required (not supported by Telar)"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_401')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_401')
                 elif e.code == 500:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 500). Error 500 means \"Internal Server Error\": the IIIF server is experiencing technical problems. This is not a problem with your configuration - the institution's server is having issues. Try rebuilding your site later to see if the issue has been resolved."
-                    df.at[idx, 'object_warning_short'] = "Error 500: server error (try again later)"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_500')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_500')
                 elif e.code == 503:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 503). Error 503 means \"Service Unavailable\": the IIIF server is temporarily unavailable, possibly due to maintenance or being overloaded. This is not a problem with your configuration. Try rebuilding your site later - the server should come back online."
-                    df.at[idx, 'object_warning_short'] = "Error 503: server temporarily unavailable (try again later)"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_503')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_503')
                 elif e.code == 502:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 502). Error 502 means \"Bad Gateway\": there's a problem with the IIIF server's infrastructure. This is not a problem with your configuration - the institution's server is having connectivity issues. Try rebuilding your site later to see if the issue has been resolved."
-                    df.at[idx, 'object_warning_short'] = "Error 502: server connectivity issue (try again later)"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_502')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_502')
                 else:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {e.code})"
-                    df.at[idx, 'object_warning_short'] = f"Error {e.code}: could not be accessed"
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_error_generic', code=e.code)
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_error_generic', code=e.code)
                 msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except urllib.error.URLError as e:
-                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
-                df.at[idx, 'object_warning_short'] = "Network error: could not be reached"
+                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_unreachable')
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_network_error')
                 msg = f"IIIF manifest for object {object_id} could not be reached: {e.reason}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except Exception as e:
-                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
-                df.at[idx, 'object_warning_short'] = "Validation error: could not be validated"
+                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_validation_failed')
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_validation_error')
                 msg = f"Error validating IIIF manifest for object {object_id}: {str(e)}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
@@ -483,16 +687,21 @@ def process_objects(df):
                 if len(similar_files) == 1:
                     similar_file = similar_files[0]
                     file_ext = Path(similar_file).suffix
-                    error_msg = f"No image file found for object_id '{object_id}', but found similar file '{similar_file}'. If this is the image you meant to use, either: (1) rename the file to {object_id}{file_ext}, or (2) update the object_id in the CSV to match the filename (without extension)."
-                    df.at[idx, 'object_warning_short'] = "Image filename mismatch"
+                    error_msg = get_lang_string('errors.object_warnings.image_similar_single',
+                                                 object_id=object_id,
+                                                 similar_file=similar_file,
+                                                 file_ext=file_ext)
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_filename_mismatch')
                 else:
                     file_list = "', '".join(similar_files)
-                    error_msg = f"No image file found for object_id '{object_id}', but found multiple similar files: '{file_list}'. If one of these is the image you meant to use, either rename it to {object_id}.* or update the object_id in the CSV to match."
-                    df.at[idx, 'object_warning_short'] = "Ambiguous image match"
+                    error_msg = get_lang_string('errors.object_warnings.image_similar_multiple',
+                                                 object_id=object_id,
+                                                 file_list=file_list)
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_ambiguous_match')
             else:
                 # No similar files found - provide basic error message
-                error_msg = f"No image source found for object '{object_id}'. Add either: (1) an IIIF manifest URL in the iiif_manifest column, or (2) an image file to components/images/objects/{object_id}.jpg"
-                df.at[idx, 'object_warning_short'] = "Missing image source"
+                error_msg = get_lang_string('errors.object_warnings.image_missing', object_id=object_id)
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_missing_source')
 
             df.at[idx, 'object_warning'] = error_msg
             msg = f"Object {object_id} has no IIIF manifest or local image file"
@@ -505,7 +714,7 @@ def process_objects(df):
 
     return df
 
-def process_story(df):
+def process_story(df, christmas_tree=False):
     """
     Process story CSV with file references
     Expected columns: step, question, answer, object, x, y, zoom, layer1_file, layer2_file, etc.
@@ -551,7 +760,7 @@ def process_story(df):
 
             # Check if object exists
             if object_id not in objects_data:
-                error_msg = f"the object <code>{object_id}</code> was not found in <code>objects.csv</code>"
+                error_msg = get_lang_string('errors.object_warnings.object_not_found', object_id=object_id)
                 df.at[idx, 'viewer_warning'] = error_msg
                 msg = f"Story step {step_num} references missing object: {object_id}"
                 print(f"  [WARN] {msg}")
@@ -577,7 +786,7 @@ def process_story(df):
 
                 # Only warn if object has neither external manifest nor local image
                 if not has_local_image:
-                    error_msg = f"the object <code>{object_id}</code> has no IIIF manifest or local image file"
+                    error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=object_id)
                     df.at[idx, 'viewer_warning'] = error_msg
                     msg = f"Story step {step_num} references object without IIIF source: {object_id}"
                     print(f"  [WARN] {msg}")
@@ -612,10 +821,9 @@ def process_story(df):
                     else:
                         # Insert error message for missing file
                         step_num = row.get('step', 'unknown')
-                        df.at[idx, title_col] = 'Content Missing'
+                        df.at[idx, title_col] = get_lang_string('errors.object_warnings.content_missing_label')
                         error_html = f'''<div class="alert alert-warning" role="alert">
-    <strong>Content file missing:</strong> <code>{file_ref.strip()}</code><br>
-    Please add this file to <code>components/texts/stories/</code> or remove the reference from the CSV.
+    <strong>{get_lang_string('errors.object_warnings.content_file_missing', file_ref=file_ref.strip())}</strong>
 </div>'''
                         df.at[idx, text_col] = error_html
                         msg = f"Missing markdown file for story step {step_num}, {base_name}: {file_ref.strip()}"
@@ -655,34 +863,55 @@ def process_story(df):
 
         # Check for panel content warnings (missing markdown files)
         # Look for "Content Missing" title which indicates missing files
+        content_missing_label = get_lang_string('errors.object_warnings.content_missing_label')
         for layer in ['layer1', 'layer2']:
             title_col = f'{layer}_title'
-            if title_col in row and row[title_col] == 'Content Missing':
+            if title_col in row and row[title_col] == content_missing_label:
                 # Extract the filename from the error HTML in the text column
                 text_col = f'{layer}_text'
                 text = row.get(text_col, '')
-                # Extract filename from the HTML (it's between <code> tags)
+                # Extract filename from the HTML (it's between <strong> tags)
                 import re
-                filename_match = re.search(r'<code>(.*?)</code>', text)
+                filename_match = re.search(r'<strong>(.*?)</strong>', text)
                 # Get layer number for display (1 or 2)
                 layer_num = layer[-1]  # Get '1' or '2' from 'layer1' or 'layer2'
                 if filename_match:
-                    filename = filename_match.group(1)
+                    # Extract content_file_missing message from HTML
+                    message = filename_match.group(1)
                     all_warnings.append({
                         'step': step_num,
                         'type': 'panel',
-                        'message': f'the file for the layer {layer_num} panel, <code>{filename}</code>, was not found'
+                        'message': message
                     })
                 else:
                     # Fallback if regex fails
                     all_warnings.append({
                         'step': step_num,
                         'type': 'panel',
-                        'message': f'the file for the layer {layer_num} panel was not found'
+                        'message': get_lang_string('errors.object_warnings.layer_file_missing', layer_num=layer_num)
                     })
 
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings
+
+    # Christmas Tree Mode: Inject fake warnings for testing
+    if christmas_tree:
+        # Inject test warnings for various error types
+        fake_warnings = [
+            {
+                'step': 1,
+                'type': 'viewer',
+                'message': get_lang_string('errors.object_warnings.missing_object_id')
+            },
+            {
+                'step': 2,
+                'type': 'panel',
+                'message': get_lang_string('errors.object_warnings.content_file_missing', file_ref='missing-file.md')
+            }
+        ]
+        # Add fake warnings to existing warnings
+        df.attrs['viewer_warnings'] = all_warnings + fake_warnings
+        print("🎄 Christmas Tree Mode: Injected test warnings into story")
 
     # Print summary if there were issues
     if warnings:
@@ -692,6 +921,21 @@ def process_story(df):
 
 def main():
     """Main conversion process"""
+    # Check if Christmas Tree Mode is enabled in _config.yml
+    christmas_tree_mode = False
+    try:
+        config_path = Path('_config.yml')
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                testing_features = config.get('testing-features', {})
+                christmas_tree_mode = testing_features.get('christmas_tree_mode', False)
+
+                if christmas_tree_mode:
+                    print("🎄 Christmas Tree Mode enabled - injecting test objects with errors")
+    except Exception as e:
+        print(f"  [WARN] Could not read Christmas Tree Mode setting: {e}")
+
     data_dir = Path('_data')
     data_dir.mkdir(exist_ok=True)
 
@@ -707,35 +951,61 @@ def main():
         process_project_setup
     )
 
-    # Convert objects
-    csv_to_json(
-        'components/structures/objects.csv',
-        '_data/objects.json',
-        process_objects
-    )
+    # Convert objects (with optional Christmas Tree mode)
+    if christmas_tree_mode:
+        csv_to_json(
+            'components/structures/objects.csv',
+            '_data/objects.json',
+            lambda df: process_objects(df, christmas_tree=True)
+        )
+    else:
+        csv_to_json(
+            'components/structures/objects.csv',
+            '_data/objects.json',
+            process_objects
+        )
 
     # Note: Glossary is now sourced directly from components/texts/glossary/
     # and processed by generate_collections.py
 
-    # Convert story files
+    # Convert story files (with optional Christmas Tree mode)
     # Look for any CSV files that start with "story-" or "chapter-"
-    for csv_file in structures_dir.glob('story-*.csv'):
-        json_filename = csv_file.stem + '.json'
-        json_file = data_dir / json_filename
-        csv_to_json(
-            str(csv_file),
-            str(json_file),
-            process_story
-        )
+    if christmas_tree_mode:
+        for csv_file in structures_dir.glob('story-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                lambda df: process_story(df, christmas_tree=True)
+            )
 
-    for csv_file in structures_dir.glob('chapter-*.csv'):
-        json_filename = csv_file.stem + '.json'
-        json_file = data_dir / json_filename
-        csv_to_json(
-            str(csv_file),
-            str(json_file),
-            process_story
-        )
+        for csv_file in structures_dir.glob('chapter-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                lambda df: process_story(df, christmas_tree=True)
+            )
+    else:
+        for csv_file in structures_dir.glob('story-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                process_story
+            )
+
+        for csv_file in structures_dir.glob('chapter-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                process_story
+            )
 
     print("-" * 50)
     print("Conversion complete!")

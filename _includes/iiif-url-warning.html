@@ -57,10 +57,18 @@ Detects when viewing site URL doesn't match IIIF manifest URLs and provides help
     <p class="mb-2"><strong>{{ lang.errors.iiif_mismatch.local_alternative }}</strong></p>
     <ol class="mb-0">
       <li>{{ lang.errors.iiif_mismatch.fix_check_config }}</li>
-      <li>Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)</li>
+      <li>Run: <code>python3 scripts/generate_iiif.py</code> {{ lang.errors.iiif_mismatch.local_regenerate_note }}</li>
     </ol>
   </div>
 </div>
+
+<script>
+// Expose language strings to JavaScript
+window.telarLang = {
+  affectedImagesCountSingular: "{{ lang.errors.iiif_mismatch.affected_images_count_singular }}",
+  affectedImagesCountPlural: "{{ lang.errors.iiif_mismatch.affected_images_count_plural }}"
+};
+</script>
 
 <script>
 (function() {
@@ -136,7 +144,11 @@ Detects when viewing site URL doesn't match IIIF manifest URLs and provides help
 
         // Update affected images heading with count
         const heading = document.getElementById('affected-images-heading');
-        heading.textContent = `The following ${affectedObjects.length} image${affectedObjects.length > 1 ? 's are' : ' is'} affected:`;
+        if (affectedObjects.length === 1) {
+          heading.textContent = window.telarLang.affectedImagesCountSingular;
+        } else {
+          heading.textContent = window.telarLang.affectedImagesCountPlural.replace('__COUNT__', affectedObjects.length);
+        }
 
         // Populate affected images list
         const affectedList = document.getElementById('affected-images');
