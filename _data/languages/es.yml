@@ -90,10 +90,10 @@ errors:
   # Advertencia de discrepancia de URL IIIF
   iiif_mismatch:
     heading: "⚠️ Tus imágenes no se están cargando correctamente"
-  description: "Tus imágenes no se pueden mostrar porque hay una discrepancia entre el lugar donde estás viendo el sitio y la dirección desde donde están configuradas para cargarse las teselas (*tiles*)."
+    description: "Tus imágenes no se pueden mostrar porque hay una discrepancia entre el lugar donde estás viendo el sitio y la dirección desde donde están configuradas para cargarse las teselas (*tiles*)."
     whats_happening: "Lo que está pasando:"
     viewing_at: "Estás viendo el sitio en:"
-  configured_for: "Pero las teselas (*tiles*) están configuradas para:"
+    configured_for: "Pero las teselas (*tiles*) están configuradas para:"
     affected_images: "Imágenes afectadas:"
     common_causes: "Algunas causas comunes de este error:"
     cause_incorrect_settings: "La configuración de tu sitio está equivocada. El valor de <code>url</code> o <code>baseurl</code> en <code>_config.yml</code> no coincide con la URL real donde publicas."
@@ -104,11 +104,11 @@ errors:
     fix_your_site_at: "Tu sitio está en:"
     fix_config_should_be: "Tu configuración debería ser:"
     fix_commit_push: "Haz commit y push de tus cambios a GitHub."
-  fix_auto_regenerate: "GitHub Actions regenerará automáticamente las teselas (*tiles*) con la URL correcta."
-  fix_local_option: "Si estás ejecutando el sitio localmente para desarrollo, también puedes regenerar las teselas (*tiles*) con:"
-  local_cause_1: "Estás ejecutando el sitio en tu computador, pero las teselas (*tiles*) se generaron con la URL de producción."
-  local_cause_2: "Estás probando localmente después de un *build* de GitHub Actions."
-  local_fix_heading: "Para desarrollo local, regenera las teselas (*tiles*) con la URL de localhost:"
+    fix_auto_regenerate: "GitHub Actions regenerará automáticamente las teselas (*tiles*) con la URL correcta."
+    fix_local_option: "Si estás ejecutando el sitio localmente para desarrollo, también puedes regenerar las teselas (*tiles*) con:"
+    local_cause_1: "Estás ejecutando el sitio en tu computador, pero las teselas (*tiles*) se generaron con la URL de producción."
+    local_cause_2: "Estás probando localmente después de un *build* de GitHub Actions."
+    local_fix_heading: "Para desarrollo local, regenera las teselas (*tiles*) con la URL de localhost:"
     local_alternative: "Si la configuración del sitio está mal, primero actualiza <code>_config.yml</code> y luego regenera."
 
   # Errores de configuración de Google Sheets
