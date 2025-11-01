@@ -2,6 +2,34 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.3.4-beta] - 2025-10-31
+
+### Added
+
+- **Automated upgrade system**: Issue-based automated upgrade workflow to migrate sites from older Telar versions
+  - GitHub Actions workflow (`.github/workflows/upgrade.yml`) for one-click upgrades
+  - Python-based migration framework (`scripts/upgrade.py`) with modular version-specific migrations
+  - Automatic version detection from `_config.yml`
+  - Incremental migration support (v0.2.0 → v0.3.0 → v0.3.1 → v0.3.2 → v0.3.3 → v0.3.4)
+  - Automatic upgrade branch and issue creation with categorized summary
+  - User creates pull request manually from issue link when ready to merge
+  - Conditional manual steps section (only shown if steps required)
+  - Verification checklist for post-upgrade testing
+  - **v020_to_v030 migration**: Fetches Python scripts from GitHub to ensure sites receive validation logic for IIIF manifests, thumbnails, and object references
+  - **v033_to_v034 migration**: Adds missing framework files (`README.md`, `docs/README.md`, layouts, includes, scripts) to ensure all sites receive updated files
+
+- **Language configuration (WIP)**: New `telar_language` setting in `_config.yml` for future internationalization support
+  - Currently supports: `en` (English), `es` (Spanish)
+  - Default value: `en`
+  - Migration script automatically adds this field when upgrading from earlier versions
+  - **Note**: Internationalization features are work in progress; this configuration prepares sites for future multi-language support
+
+### Fixed
+
+- **Validation alert styling**: Fixed inconsistent styling between IIIF URL warning and upgrade success alert
+  - Added `font-weight: 400 !important` to `.telar-alert` CSS class to prevent lighter font weight inheritance from `.page-content` wrapper
+  - Ensures all validation warnings (theme, Google Sheets, objects, stories, IIIF URL, upgrade) display with consistent typography regardless of HTML placement
+
 ## [0.3.3-beta] - 2025-10-28
 
 ### Fixed

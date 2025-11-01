@@ -195,6 +195,59 @@ def process_project_setup(df):
     result = {'stories': stories_list}
     return pd.DataFrame([result])
 
+def _find_similar_image_filenames(object_id, images_dir):
+    """
+    Find image files that are similar to object_id but not exact matches.
+
+    Checks for common variations:
+    - Case differences: "MyObject" vs "myobject"
+    - Hyphen/underscore variations: "my-object" vs "my_object" vs "myobject"
+    - Extra characters or minor typos
+
+    Args:
+        object_id: The object ID to match against
+        images_dir: Path object to the images directory
+
+    Returns:
+        List of similar filenames (just the filename, not full path)
+    """
+    import re
+    from difflib import SequenceMatcher
+
+    if not images_dir.exists():
+        return []
+
+    # Normalize object_id for comparison (remove hyphens, underscores, lowercase)
+    normalized_id = re.sub(r'[-_\s]', '', object_id.lower())
+
+    similar_files = []
+    valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff'}
+
+    for file_path in images_dir.iterdir():
+        if not file_path.is_file():
+            continue
+
+        # Only check image files
+        if file_path.suffix.lower() not in valid_extensions:
+            continue
+
+        # Get filename without extension
+        basename = file_path.stem
+        normalized_file = re.sub(r'[-_\s]', '', basename.lower())
+
+        # Skip if this is the exact object_id (exact matches are checked elsewhere)
+        if basename.lower() == object_id.lower():
+            continue
+
+        # Calculate similarity ratio
+        similarity = SequenceMatcher(None, normalized_id, normalized_file).ratio()
+
+        # Consider similar if > 85% match
+        if similarity > 0.85:
+            similar_files.append(file_path.name)
+
+    return similar_files
+
 def process_objects(df):
     """
     Process objects CSV
@@ -422,7 +475,25 @@ def process_objects(df):
 
         # Warn if object has neither external manifest nor local image
         if not has_local_image:
-            error_msg = f"the image file for the object ID you specified ({object_id}) in your configuration CSV or Google Sheet was not found in components/images/objects/"
+            # Check for similar filenames (near-matches)
+            similar_files = _find_similar_image_filenames(object_id, Path('components/images/objects'))
+
+            if similar_files:
+                # Found near-matches - provide helpful suggestion
+                if len(similar_files) == 1:
+                    similar_file = similar_files[0]
+                    file_ext = Path(similar_file).suffix
+                    error_msg = f"No image file found for object_id '{object_id}', but found similar file '{similar_file}'. If this is the image you meant to use, either: (1) rename the file to {object_id}{file_ext}, or (2) update the object_id in the CSV to match the filename (without extension)."
+                    df.at[idx, 'object_warning_short'] = "Image filename mismatch"
+                else:
+                    file_list = "', '".join(similar_files)
+                    error_msg = f"No image file found for object_id '{object_id}', but found multiple similar files: '{file_list}'. If one of these is the image you meant to use, either rename it to {object_id}.* or update the object_id in the CSV to match."
+                    df.at[idx, 'object_warning_short'] = "Ambiguous image match"
+            else:
+                # No similar files found - provide basic error message
+                error_msg = f"No image source found for object '{object_id}'. Add either: (1) an IIIF manifest URL in the iiif_manifest column, or (2) an image file to components/images/objects/{object_id}.jpg"
+                df.at[idx, 'object_warning_short'] = "Missing image source"
+
             df.at[idx, 'object_warning'] = error_msg
             msg = f"Object {object_id} has no IIIF manifest or local image file"
             print(f"  [WARN] {msg}")

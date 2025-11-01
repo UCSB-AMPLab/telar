@@ -1,0 +1,9 @@
+<div class="alert alert-success telar-alert" role="alert">
+  <strong>✅ Your site upgrade was successful!</strong>
+  <p class="mt-2 mb-2">
+    Successfully upgraded to Telar <a href="https://github.com/UCSB-AMPLab/telar/releases" class="alert-link">v.{{ site.telar.version }}</a>! Your site has been upgraded and is ready to use. For details, see the <a href="{{ '/upgrade-summary/' | relative_url }}" class="alert-link">upgrade summary</a>.
+  </p>
+  <p class="mb-0">
+    To remove this alert, edit <code>index.md</code> in your repository and delete the line <code>{% raw %}{% include upgrade-alert.html %}{% endraw %}</code>.
+  </p>
+</div>

@@ -1,0 +1,185 @@
+{%- comment -%}
+IIIF URL Mismatch Warning
+Detects when viewing site URL doesn't match IIIF manifest URLs and provides helpful guidance
+{%- endcomment -%}
+
+<div id="iiif-url-warning" class="alert alert-warning telar-alert" role="alert" style="display: none;">
+  <strong>⚠️ Your images aren't loading correctly</strong>
+  <p>Your images can't display because there's a mismatch between where you're viewing the site and where the image tiles are configured to load from.</p>
+
+  <p class="mb-2"><strong>What's happening:</strong></p>
+  <ul class="mb-3">
+    <li>You're viewing the site at: <strong id="current-url"></strong></li>
+    <li>But image tiles are configured for: <strong id="manifest-url"></strong></li>
+  </ul>
+
+  <p class="mb-2"><strong id="affected-images-heading">Affected images:</strong></p>
+  <ul class="mb-3" id="affected-images">
+    <!-- JavaScript will populate this list -->
+  </ul>
+
+  <!-- Production scenario (90% of users) -->
+  <div id="production-fix-instructions" style="display: none;">
+    <p class="mb-2"><strong>Here are some common causes for errors like this:</strong></p>
+    <ul class="mb-3">
+      <li>Your site settings are incorrect. The <code>url</code> or <code>baseurl</code> in <code>_config.yml</code> doesn't match where your site is actually published</li>
+      <li>You recently moved your site to a new URL but haven't updated the configuration</li>
+      <li>You're viewing a preview or staging environment that uses a different URL than what's configured</li>
+    </ul>
+
+    <p class="mb-2"><strong>To fix this, update your site configuration:</strong></p>
+    <ol class="mb-3">
+      <li>Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> match your actual site URL
+        <ul>
+          <li>Your site is at: <strong id="production-current-url"></strong></li>
+          <li>Your config should be: <code id="production-config-suggestion"></code></li>
+        </ul>
+      </li>
+      <li>Commit and push your changes to GitHub</li>
+      <li>GitHub Actions will automatically regenerate the image tiles with the correct URL</li>
+    </ol>
+
+    <p class="mb-2"><small>If you're running this site locally for development, you can also regenerate tiles with:</small></p>
+    <pre class="bg-light p-2 rounded"><code id="production-local-command"></code></pre>
+  </div>
+
+  <!-- Local development scenario (10% of users) -->
+  <div id="local-fix-instructions" style="display: none;">
+    <p class="mb-2"><strong>Here are some common causes for errors like this:</strong></p>
+    <ul class="mb-3">
+      <li>You're running the site on your own computer, but the image tiles were generated for your production URL</li>
+      <li>You're testing locally after a GitHub Actions build</li>
+    </ul>
+
+    <p class="mb-2"><strong>To fix this for local development, regenerate your image tiles for localhost:</strong></p>
+    <pre class="bg-light p-2 rounded mb-3"><code id="local-command"></code></pre>
+
+    <p class="mb-2"><strong>Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:</strong></p>
+    <ol class="mb-0">
+      <li>Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> are correct for production</li>
+      <li>Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Check for IIIF URL mismatch
+  async function checkIIIFUrlMismatch() {
+    // Get current site URL
+    const currentOrigin = window.location.origin;
+    const currentPath = window.location.pathname;
+
+    // Extract baseurl (everything up to the last path segment)
+    const pathParts = currentPath.split('/').filter(p => p);
+    const baseurl = pathParts.length > 0 ? '/' + pathParts[0] : '';
+    const currentSiteUrl = currentOrigin + baseurl;
+
+    // Detect if this is local development or production
+    const isLocalDev = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
+
+    try {
+      // Fetch all objects to check for mismatches
+      const objectsResponse = await fetch('{{ "/objects.json" | relative_url }}');
+      if (!objectsResponse.ok) return;
+
+      const objects = await objectsResponse.json();
+
+      // Find all objects with local IIIF tiles (no external iiif_manifest)
+      const localObjects = objects.filter(obj => {
+        return (!obj.iiif_manifest || obj.iiif_manifest === '');
+      });
+
+      if (localObjects.length === 0) return; // No local objects to check
+
+      // Check all local objects for URL mismatch
+      const affectedObjects = [];
+      let manifestBaseUrl = null;
+
+      for (const obj of localObjects) {
+        try {
+          const manifestPath = `{{ "/iiif/objects" | relative_url }}/${obj.object_id}/manifest.json`;
+          const manifestResponse = await fetch(manifestPath);
+          if (!manifestResponse.ok) continue; // Skip if manifest doesn't exist
+
+          const manifest = await manifestResponse.json();
+
+          // Extract base URL from manifest ID
+          const manifestId = manifest.id;
+          const extractedBaseUrl = manifestId.split('/iiif/')[0];
+
+          // Store the manifest base URL (should be same for all)
+          if (!manifestBaseUrl) {
+            manifestBaseUrl = extractedBaseUrl;
+          }
+
+          // Compare URLs (normalize trailing slashes)
+          const normalizedCurrent = currentSiteUrl.replace(/\/$/, '');
+          const normalizedManifest = extractedBaseUrl.replace(/\/$/, '');
+
+          if (normalizedCurrent !== normalizedManifest) {
+            affectedObjects.push({
+              id: obj.object_id,
+              title: obj.title || obj.object_id
+            });
+          }
+        } catch (error) {
+          console.log(`Could not check manifest for ${obj.object_id}:`, error);
+        }
+      }
+
+      // If there are affected objects, show the warning
+      if (affectedObjects.length > 0 && manifestBaseUrl) {
+        // Populate common elements
+        document.getElementById('current-url').textContent = currentSiteUrl;
+        document.getElementById('manifest-url').textContent = manifestBaseUrl;
+
+        // Update affected images heading with count
+        const heading = document.getElementById('affected-images-heading');
+        heading.textContent = `The following ${affectedObjects.length} image${affectedObjects.length > 1 ? 's are' : ' is'} affected:`;
+
+        // Populate affected images list
+        const affectedList = document.getElementById('affected-images');
+        affectedList.innerHTML = affectedObjects.map(obj =>
+          `<li><strong>${obj.title}</strong> (${obj.id})</li>`
+        ).join('');
+
+        // Show context-appropriate fix instructions
+        if (isLocalDev) {
+          // Local development scenario
+          document.getElementById('local-fix-instructions').style.display = 'block';
+          document.getElementById('local-command').textContent =
+            `python3 scripts/generate_iiif.py --base-url ${currentSiteUrl}`;
+        } else {
+          // Production scenario
+          document.getElementById('production-fix-instructions').style.display = 'block';
+
+          // Parse current URL into url and baseurl components
+          const urlObj = new URL(currentSiteUrl);
+          const urlPart = `${urlObj.protocol}//${urlObj.host}`;
+          const baseurlPart = urlObj.pathname || '';
+
+          document.getElementById('production-current-url').textContent = currentSiteUrl;
+          document.getElementById('production-config-suggestion').textContent =
+            `url: "${urlPart}" and baseurl: "${baseurlPart}"`;
+          document.getElementById('production-local-command').textContent =
+            `python3 scripts/generate_iiif.py --base-url ${currentSiteUrl}`;
+        }
+
+        // Show the warning
+        document.getElementById('iiif-url-warning').style.display = 'block';
+      }
+    } catch (error) {
+      // Silently fail - don't show warning if we can't determine mismatch
+      console.log('Could not check IIIF URL mismatch:', error);
+    }
+  }
+
+  // Run check when page loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkIIIFUrlMismatch);
+  } else {
+    checkIIIFUrlMismatch();
+  }
+})();
+</script>

@@ -24,9 +24,12 @@
 
     <!-- Viewer Warning (if object or IIIF manifest is missing) -->
     {% if include.viewer_warning and include.viewer_warning != "" %}
-    <div class="alert alert-warning mt-3" role="alert">
-      <strong>Image viewer unavailable:</strong> {{ include.viewer_warning }}<br>
-      Please check <code>components/structures/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
+    <div class="alert alert-warning telar-alert mt-3" role="alert">
+      <strong>⚠️ Image viewer unavailable</strong>
+      <p class="mb-0 mt-2">
+        {{ include.viewer_warning }}<br>
+        Please check <code>components/structures/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
+      </p>
     </div>
     {% endif %}
 
