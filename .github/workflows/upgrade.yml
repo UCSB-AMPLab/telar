@@ -182,6 +182,7 @@ jobs:
           2. Check for any warning messages or alerts about configuration issues
           3. If you see any warnings, follow the links or documentation provided to resolve them
           4. Test key features like story navigation, image viewing, and glossary terms
+          5. **Close this issue** once everything is working - this marks the upgrade as complete
 
           ---
 
