@@ -5,7 +5,7 @@
 title: Telar
 description: "Telar (Spanish for 'loom') is a static site generator built on Jekyll that weaves together IIIF images, text, and layered contextual information into interactive digital narrative exhibitions. Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the UCSB and UT Archives, Memory, and Preservation Labs."
 baseurl: "/telar"
-url: "https://juancobo.com"
+url: "https://juancobo.github.io"
 author: ""
 email: ""
 telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
