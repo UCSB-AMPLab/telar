@@ -88,11 +88,11 @@ errors:
   objects_will_fail: "Estos objetos no se cargarán en el visor."
 
   # Encabezados de advertencias de configuración
-  config_issues_heading: ""
-  object_config_heading: ""
-  story_config_heading: ""
-  story_navigate_to: ""
-  story_see_details: ""
+  config_issues_heading: "⚠️ Problemas de configuración detectados"
+  object_config_heading: "⚠️ Problemas de configuración de objetos detectados"
+  story_config_heading: "⚠️ Problemas de configuración de historias detectados"
+  story_navigate_to: "Ir a"
+  story_see_details: "para ver más detalles."
 
   # Advertencia de discrepancia de URL IIIF
   iiif_mismatch:
@@ -102,6 +102,8 @@ errors:
     viewing_at: "Estás viendo el sitio en:"
     configured_for: "Pero las teselas (*tiles*) están configuradas para:"
     affected_images: "Imágenes afectadas:"
+    affected_images_count_singular: "La siguiente imagen está afectada:"
+    affected_images_count_plural: "Las siguientes {{ count }} imágenes están afectadas:"
     common_causes: "Algunas causas comunes de este error:"
     cause_incorrect_settings: "La configuración de tu sitio está equivocada. El valor de <code>url</code> o <code>baseurl</code> en <code>_config.yml</code> no coincide con la URL real donde publicas."
     cause_moved_url: "Moviste tu sitio a una URL nueva pero todavía no actualizas la configuración."
@@ -117,28 +119,29 @@ errors:
     local_cause_2: "Estás probando localmente después de un *build* de GitHub Actions."
     local_fix_heading: "Para desarrollo local, regenera las teselas (*tiles*) con la URL de localhost:"
     local_alternative: "Si la configuración del sitio está mal, primero actualiza <code>_config.yml</code> y luego regenera."
+    local_regenerate_note: "(usará tu configuración actualizada)"
 
   # Errores de configuración de Google Sheets
   google_sheets:
-    incomplete_heading: ""
-    incomplete_description: ""
-    identical_heading: ""
-    same_url: "Usaste la misma URL para <code>shared_url</code> y <code>published_url</code> en <code>_config.yml</code>. Deben ser URLs diferentes de la misma hoja de Google. La URL compartida sale del botón \"Share\" (termina con <code>/edit</code>). La URL publicada se obtiene en File → Share → Publish to web (contiene <code>/d/e/</code> y termina con <code>/pubhtml</code>)."
-    swapped_heading: ""
-    swapped_description: ""
-    malformed_shared_heading: ""
+    incomplete_heading: "⚠️ Tu integración con Google Sheets está incompleta"
+    incomplete_description: "La integración con Google Sheets está habilitada pero incompleta. Debes proporcionar tanto una <code>shared_url</code> como una <code>published_url</code> en <code>_config.yml</code>. La URL compartida se obtiene haciendo clic en el botón \"Compartir\" (Share) en tu hoja de cálculo de Google. La URL publicada se obtiene en Archivo (File) → Compartir (Share) → Publicar en la Web (Publish to the web). Selecciona \"Documento entero\" (Entire document) y \"Valores separados por comas\" (Comma-separated values). Consulta la <a href=\"https://github.com/UCSB-AMPLab/telar/blob/main/docs/GOOGLE_SHEETS_TEMPLATE.md\" class=\"alert-link\" target=\"_blank\">guía de configuración de Google Sheets</a> para instrucciones detalladas."
+    identical_heading: "⚠️ Tus URLs de Google Sheets son idénticas"
+    same_url: "Usaste la misma URL para <code>shared_url</code> y <code>published_url</code> en <code>_config.yml</code>. Deben ser URLs diferentes de la misma hoja de Google. La URL compartida sale del botón \"Compartir\" (Share) y suele terminar con <code>/edit</code>. La URL publicada se obtiene en Archivo (File) → Compartir (Share) → Publicar en la Web (Publish to the web), contiene <code>/d/e/</code> y termina con <code>/pubhtml</code>."
+    swapped_heading: "⚠️ Parece que tus URLs de Google Sheets están invertidas"
+    swapped_description: "Parece que tus URLs de Google Sheets están invertidas en <code>_config.yml</code>. La <code>shared_url</code> debe contener <code>/spreadsheets/d/{id}/edit</code> (del botón Share), pero la tuya parece estar en formato de publicación. La <code>published_url</code> debe contener <code>/d/e/{id}/pubhtml</code> (de Publicar en la Web), pero la tuya parece estar en formato de compartida. Intercámbialas."
+    malformed_shared_heading: "⚠️ Tu URL compartida de Google Sheets es incorrecta"
     invalid_shared: "Tu <code>shared_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Consigue esta URL haciendo clic en el botón \"Share\" en tu hoja y copiando el enlace."
-    malformed_published_heading: ""
-    invalid_published: "Tu <code>published_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Obtenla en File → Share → Publish to web. Selecciona \"Entire document\" y \"Comma-separated values (.csv)\", habilita \"Automatically republish when changes are made\" y luego haz clic en Publish."
+    malformed_published_heading: "⚠️ Tu URL publicada de Google Sheets es incorrecta"
+    invalid_published: "Tu <code>published_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Obtenla en Archivo (File) → Compartir (Share) → Publicar en la Web (Publish to the web). Selecciona \"Documento entero\" (Entire document) y \"Valores separados por comas (.csv)\" (Comma-separated values), habilita \"Volver a publicar automáticamente cuando se hagan cambios\" (Automatically republish when changes are made) y luego haz clic en \"Publicar\" (Publish)."
 
   # Errores de tema
   theme:
-    not_found_heading: ""
-    not_found_description: ""
-    broken_heading: ""
+    not_found_heading: "⚠️ El tema seleccionado no existe"
+    not_found_description: "El tema <code>{{ site.telar_theme }}</code> no existe. Aplicamos el tema <code>paisajes</code> (predeterminado). Para elegir un tema diferente, actualiza <code>telar_theme</code> en <code>_config.yml</code> a uno de: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code> o <code>austin</code>. Si estás intentando agregar un tema personalizado y no aparece en este mensaje, verifica que esté en la carpeta <code>_data/themes</code>."
+    broken_heading: "⚠️ Tu archivo de tema está dañado"
     broken: "El archivo del tema <code>{{ theme_name }}</code> parece estar dañado o incompleto. Aplicamos un tema de respaldo incluido. Revisa <code>_data/themes/{{ theme_name }}.yml</code> por errores de sintaxis o compáralo con un tema que funcione."
-    system_error_heading: ""
-    system_error_description: ""
+    system_error_heading: "⚠️ Se detectó un error en el sistema de temas"
+    system_error_description: "Encontramos un problema al cargar los temas. La carpeta <code>_data/themes</code> puede estar ausente o dañada. El sitio está usando estilos básicos por ahora. Verifica que tu carpeta <code>_data/themes</code> contenga archivos de tema válidos, o restáurala desde tu repositorio."
 
   # Mensajes de advertencia de objetos e IIIF (mostrados en el navegador desde validación de construcción)
   object_warnings:

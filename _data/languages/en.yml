@@ -102,6 +102,8 @@ errors:
     viewing_at: "You're viewing the site at:"
     configured_for: "But image tiles are configured for:"
     affected_images: "Affected images:"
+    affected_images_count_singular: "The following image is affected:"
+    affected_images_count_plural: "The following {{ count }} images are affected:"
     common_causes: "Here are some common causes for errors like this:"
     cause_incorrect_settings: "Your site settings are incorrect. The <code>url</code> or <code>baseurl</code> in <code>_config.yml</code> doesn't match where your site is actually published"
     cause_moved_url: "You recently moved your site to a new URL but haven't updated the configuration"
@@ -117,6 +119,7 @@ errors:
     local_cause_2: "You're testing locally after a GitHub Actions build"
     local_fix_heading: "To fix this for local development, regenerate your image tiles for localhost:"
     local_alternative: "Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:"
+    local_regenerate_note: "(it will use your updated settings)"
 
   # Google Sheets configuration errors
   google_sheets:
