@@ -933,6 +933,16 @@ def main():
 
                 if christmas_tree_mode:
                     print("🎄 Christmas Tree Mode enabled - injecting test objects with errors")
+                else:
+                    # Clean up test object files when Christmas Tree Mode is disabled
+                    objects_dir = Path('_jekyll-files/_objects')
+                    if objects_dir.exists():
+                        test_files = list(objects_dir.glob('test-*.md'))
+                        if test_files:
+                            print("  [INFO] Cleaning up test object files from previous Christmas Tree Mode session")
+                            for test_file in test_files:
+                                test_file.unlink()
+                                print(f"  [INFO] Removed {test_file.name}")
     except Exception as e:
         print(f"  [WARN] Could not read Christmas Tree Mode setting: {e}")
 

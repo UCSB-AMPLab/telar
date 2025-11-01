@@ -11,8 +11,7 @@
     "location": "Huntington Library",
     "credit": "Huntington Digital Library",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-bogota-1614",
@@ -26,8 +25,7 @@
     "location": "Archivo General de Indias",
     "credit": "Archivo General de Indias, Seville",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-muisca-goldwork",
@@ -41,8 +39,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá. Registration Number: O08319",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-ceramic-figure",
@@ -56,8 +53,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-piedrahita-title_page",
@@ -71,97 +67,6 @@
     "location": "John Carter Brown Library",
     "credit": "John Carter Brown Library, Brown University, Providence, R.I.",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
-  },
-  {
-    "object_id": "test-iiif-404",
-    "title": "🎄 Test - IIIF 404 Error",
-    "description": "Test object to trigger IIIF 404 error warning",
-    "iiif_manifest": "https://example.com/nonexistent/manifest.json",
-    "creator": "Test",
-    "period": "Test",
-    "medium": "",
-    "dimensions": "",
-    "location": "",
-    "credit": "",
-    "thumbnail": "",
-    "object_warning": "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no existe (error 404)",
-    "object_warning_short": "Error 404: manifiesto no encontrado"
-  },
-  {
-    "object_id": "test-iiif-503",
-    "title": "🎄 Test - IIIF 503 Service Unavailable",
-    "description": "Test object to trigger IIIF 503 error warning",
-    "iiif_manifest": "https://httpstat.us/503",
-    "creator": "Test",
-    "period": "Test",
-    "medium": "",
-    "dimensions": "",
-    "location": "",
-    "credit": "",
-    "thumbnail": "",
-    "object_warning": "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación",
-    "object_warning_short": "Error de validación: no se pudo validar"
-  },
-  {
-    "object_id": "test-iiif-invalid",
-    "title": "🎄 Test - Invalid IIIF URL",
-    "description": "Test object to trigger invalid URL warning",
-    "iiif_manifest": "",
-    "creator": "Test",
-    "period": "Test",
-    "medium": "",
-    "dimensions": "",
-    "location": "",
-    "credit": "",
-    "thumbnail": "",
-    "object_warning": "No se encontró ninguna imagen para el objeto 'test-iiif-invalid'. Agrega una URL de manifiesto IIIF en la columna `iiif_manifest` o sube un archivo de imagen a `components/images/objects/test-iiif-invalid.jpg`",
-    "object_warning_short": "Sin fuente de imagen"
-  },
-  {
-    "object_id": "test-image-missing",
-    "title": "🎄 Test - Missing Image Source",
-    "description": "Test object with no IIIF manifest and no local image file",
-    "iiif_manifest": "",
-    "creator": "Test",
-    "period": "Test",
-    "medium": "",
-    "dimensions": "",
-    "location": "",
-    "credit": "",
-    "thumbnail": "",
-    "object_warning": "No se encontró ninguna imagen para el objeto 'test-image-missing'. Agrega una URL de manifiesto IIIF en la columna `iiif_manifest` o sube un archivo de imagen a `components/images/objects/test-image-missing.jpg`",
-    "object_warning_short": "Sin fuente de imagen"
-  },
-  {
-    "object_id": "test-iiif-500",
-    "title": "🎄 Test - IIIF 500 Internal Server Error",
-    "description": "Test object to trigger IIIF 500 error warning",
-    "iiif_manifest": "https://httpstat.us/500",
-    "creator": "Test",
-    "period": "Test",
-    "medium": "",
-    "dimensions": "",
-    "location": "",
-    "credit": "",
-    "thumbnail": "",
-    "object_warning": "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación",
-    "object_warning_short": "Error de validación: no se pudo validar"
-  },
-  {
-    "object_id": "test-iiif-429",
-    "title": "🎄 Test - IIIF 429 Rate Limiting",
-    "description": "Test object to trigger IIIF 429 rate limiting warning",
-    "iiif_manifest": "https://httpstat.us/429",
-    "creator": "Test",
-    "period": "Test",
-    "medium": "",
-    "dimensions": "",
-    "location": "",
-    "credit": "",
-    "thumbnail": "",
-    "object_warning": "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación",
-    "object_warning_short": "Error de validación: no se pudo validar"
+    "object_warning": ""
   }
 ]
