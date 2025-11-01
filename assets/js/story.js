@@ -919,7 +919,7 @@ function getPanelContent(panelType, contentId) {
 
     // Add layer2 button if layer2 has content
     if ((step.layer2_title && step.layer2_title.trim() !== '') || (step.layer2_text && step.layer2_text.trim() !== '')) {
-      const buttonLabel = (step.layer2_button && step.layer2_button.trim() !== '') ? step.layer2_button : 'Go deeper';
+      const buttonLabel = (step.layer2_button && step.layer2_button.trim() !== '') ? step.layer2_button : window.telarLang.goDeeper;
       html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${buttonLabel} →</button></p>`;
     }
 

@@ -24,6 +24,7 @@ buttons:
   close: "Close"
   identify_coordinates: "Identify coordinates"
   copy_coordinates: "Copy x,y,zoom"
+  go_deeper: "Go deeper"
 
 # Object page
 object:

@@ -25,6 +25,11 @@
   // Expose Christmas Tree Mode to JavaScript
   window.christmasTreeMode = {{ is_christmas_tree_mode }};
 
+  // Expose language strings to JavaScript
+  window.telarLang = {
+    goDeeper: "{{ lang.buttons.go_deeper }}"
+  };
+
   // If Christmas Tree Mode is active, add 🎄 to all warning headings
   if (window.christmasTreeMode) {
     document.addEventListener('DOMContentLoaded', function() {

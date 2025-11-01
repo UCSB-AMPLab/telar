@@ -24,6 +24,7 @@ buttons:
   close: "Cerrar"
   identify_coordinates: "Identificar coordenadas"
   copy_coordinates: "Copiar x,y,zoom"
+  go_deeper: "Profundizar más"
 
 # Página de objeto
 object:
