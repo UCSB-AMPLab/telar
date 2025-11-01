@@ -225,9 +225,7 @@ Please complete these after merging:
 
 """
         for i, step in enumerate(manual_steps, 1):
-            checklist += f"{i}. **{step['description'].split(' - ')[0] if ' - ' in step['description'] else 'Complete this step'}**"
-            if ' - ' in step['description']:
-                checklist += f" - {step['description'].split(' - ', 1)[1]}"
+            checklist += f"{i}. {step['description']}"
             if 'doc_url' in step:
                 checklist += f" ([guide]({step['doc_url']}))"
             checklist += "\n"
