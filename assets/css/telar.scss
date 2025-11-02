@@ -1068,26 +1068,20 @@ h1, h2, h3, h4, h5, h6 {
     position: fixed !important;
   }
 
-  /* Layer 1 - full height, leave 2% on left for stacked effect */
+  /* Layer 1 - leave 2% on left for stacked effect */
   #panel-layer1.offcanvas-end {
-    height: 100vh !important;
-    max-height: 100vh !important;
     width: 98vw !important;
     max-width: 98vw !important;
   }
 
-  /* Layer 2 - full height, leave 4% on left for stacked effect */
+  /* Layer 2 - leave 4% on left for stacked effect */
   #panel-layer2.offcanvas-end {
-    height: 100vh !important;
-    max-height: 100vh !important;
     width: 96vw !important;
     max-width: 96vw !important;
   }
 
-  /* Glossary - full height, same as layer 1 */
+  /* Glossary - same as layer 1 */
   #panel-glossary.offcanvas-end {
-    height: 100vh !important;
-    max-height: 100vh !important;
     width: 98vw !important;
     max-width: 98vw !important;
   }
