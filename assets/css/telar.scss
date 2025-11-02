@@ -873,21 +873,16 @@ h1, h2, h3, h4, h5, h6 {
     height: auto;
   }
 
-  .narrative-column {
-    flex: 1;
-    order: 2;
-  }
-
   .viewer-column {
-    flex: 0 0 50vh;
+    flex: 0 0 60vh;
     order: 1;
     position: relative;
-    height: 50vh;
+    height: 60vh;
     margin-bottom: 0;
   }
 
   .narrative-column {
-    flex: 0 0 50vh;
+    flex: 0 0 40vh;
     order: 2;
     overflow-y: auto !important;
   }
@@ -1070,18 +1065,21 @@ h1, h2, h3, h4, h5, h6 {
 
   /* Layer 1 - leave 2% on left for stacked effect */
   #panel-layer1.offcanvas-end {
+    height: 100% !important;
     width: 98vw !important;
     max-width: 98vw !important;
   }
 
   /* Layer 2 - leave 4% on left for stacked effect */
   #panel-layer2.offcanvas-end {
+    height: 100% !important;
     width: 96vw !important;
     max-width: 96vw !important;
   }
 
   /* Glossary - same as layer 1 */
   #panel-glossary.offcanvas-end {
+    height: 100% !important;
     width: 98vw !important;
     max-width: 98vw !important;
   }
