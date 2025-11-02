@@ -58,6 +58,7 @@ object:
 # Story interface
 story:
   step_number: "Step {{ number }}"
+  scroll_hint: "Press ↓ or scroll to begin"
   config_issues_heading: "The following steps have content or configuration issues:"
   viewer_error_prefix: "image viewer:"
   preview_warning: "You can still scroll to preview your story, but elements will not work as expected."
