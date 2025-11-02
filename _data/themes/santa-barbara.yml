@@ -1,5 +1,7 @@
 name: "Santa Barbara"
 description: "Californian colors with navy and gold accents"
+creator: "AMPL"
+creator_url: "https://ampl.clair.ucsb.edu"
 
 colors:
   # Text/Font colors

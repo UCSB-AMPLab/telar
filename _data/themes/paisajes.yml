@@ -1,5 +1,7 @@
 name: "Paisajes Coloniales"
 description: "Classic academic exhibition style with earthy tones"
+creator: "AMPL"
+creator_url: "https://ampl.clair.ucsb.edu"
 
 colors:
   # Text/Font colors

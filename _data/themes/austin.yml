@@ -1,5 +1,7 @@
 name: "Austin"
 description: "Burnt orange and charcoal with modern serif headings"
+creator: "AMPL"
+creator_url: "https://ampl.clair.ucsb.edu"
 
 colors:
   # Text/Font colors

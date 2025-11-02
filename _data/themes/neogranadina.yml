@@ -1,5 +1,7 @@
 name: "Neogranadina"
 description: "Vibrant coral and green palette with colonial-era typography"
+creator: "Neogranadina"
+creator_url: "https://neogranadina.org"
 
 colors:
   # Text/Font colors

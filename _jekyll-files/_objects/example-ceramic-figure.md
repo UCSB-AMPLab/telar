@@ -1,5 +1,5 @@
 ---
-object_id: example-ceramic-figure
+object_id: "example-ceramic-figure"
 title: "Anthropomorphic Ceramic Figure"
 creator: "Unknown Muisca Artist"
 period: "Pre-colonial era"

@@ -1,5 +1,5 @@
 ---
-object_id: example-piedrahita-title_page
+object_id: "example-piedrahita-title_page"
 title: "Historia general de la conqvistas del nvevo reyno de Granada"
 creator: "Fernández de Piedrahita, Lucas (1624-1688); Engraved by Joseph Mulder"
 period: "1688"

@@ -1,5 +1,5 @@
 ---
-object_id: example-terrafirma-map
+object_id: "example-terrafirma-map"
 title: "Terra firma et novum regnum Granatense et Popayan"
 creator: "Jan Jansson (1588-1664) and Hendrik Hondius (1597-1651)"
 period: "1630-1631"
