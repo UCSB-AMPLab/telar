@@ -34,7 +34,7 @@ def generate_objects():
         object_warning_short = str(obj.get('object_warning_short', '')).replace('"', '\\"')
 
         content = f"""---
-object_id: {obj.get('object_id', '')}
+object_id: "{obj.get('object_id', '')}"
 title: "{obj.get('title', '')}"
 creator: "{obj.get('creator', '')}"
 period: "{obj.get('period', '')}"
