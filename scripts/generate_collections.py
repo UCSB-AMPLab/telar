@@ -29,27 +29,42 @@ def generate_objects():
         # Generate main object page
         filepath = objects_dir / f"{object_id}.md"
 
-        # Escape quotes in warning fields for YAML
-        object_warning = str(obj.get('object_warning', '')).replace('"', '\\"')
-        object_warning_short = str(obj.get('object_warning_short', '')).replace('"', '\\"')
+        # Escape quotes in all fields for YAML
+        def escape_yaml(value):
+            """Escape quotes in string values for YAML front matter"""
+            return str(value).replace('"', '\\"') if value else ''
+
+        object_id_escaped = escape_yaml(obj.get('object_id', ''))
+        title = escape_yaml(obj.get('title', ''))
+        creator = escape_yaml(obj.get('creator', ''))
+        period = escape_yaml(obj.get('period', ''))
+        medium = escape_yaml(obj.get('medium', ''))
+        dimensions = escape_yaml(obj.get('dimensions', ''))
+        location = escape_yaml(obj.get('location', ''))
+        credit = escape_yaml(obj.get('credit', ''))
+        thumbnail = escape_yaml(obj.get('thumbnail', ''))
+        iiif_manifest = escape_yaml(obj.get('iiif_manifest', ''))
+        description = escape_yaml(obj.get('description', ''))
+        object_warning = escape_yaml(obj.get('object_warning', ''))
+        object_warning_short = escape_yaml(obj.get('object_warning_short', ''))
 
         content = f"""---
-object_id: "{obj.get('object_id', '')}"
-title: "{obj.get('title', '')}"
-creator: "{obj.get('creator', '')}"
-period: "{obj.get('period', '')}"
-medium: "{obj.get('medium', '')}"
-dimensions: "{obj.get('dimensions', '')}"
-location: "{obj.get('location', '')}"
-credit: "{obj.get('credit', '')}"
-thumbnail: "{obj.get('thumbnail', '')}"
-iiif_manifest: "{obj.get('iiif_manifest', '')}"
+object_id: "{object_id_escaped}"
+title: "{title}"
+creator: "{creator}"
+period: "{period}"
+medium: "{medium}"
+dimensions: "{dimensions}"
+location: "{location}"
+credit: "{credit}"
+thumbnail: "{thumbnail}"
+iiif_manifest: "{iiif_manifest}"
 object_warning: "{object_warning}"
 object_warning_short: "{object_warning_short}"
 layout: object
 ---
 
-{obj.get('description', '')}
+{description}
 """
 
         with open(filepath, 'w') as f:
