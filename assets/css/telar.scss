@@ -41,6 +41,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  background: #000;
 }
 
 main {
@@ -123,6 +124,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  background: #000;
 }
 
 .narrative-column {
@@ -878,17 +880,17 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .viewer-column {
-    flex: 0 0 60vh;
+    flex: 0 0 50vh;
     order: 1;
     position: relative;
-    height: 60vh;
+    height: 50vh;
     margin-bottom: 0;
   }
 
   .narrative-column {
-    flex: 0 0 40vh;
+    flex: 0 0 50vh;
     order: 2;
-    overflow: hidden !important;
+    overflow-y: auto !important;
   }
 
   /* Mobile Button Navigation System */
@@ -1060,13 +1062,14 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.5rem;
   }
 
-  /* Mobile Offcanvas Panel Positioning - cover narrative only, not viewer */
+  /* Mobile Offcanvas Panel Positioning - full height from top to bottom */
   .offcanvas-end {
-    top: auto !important;
+    top: 0 !important;
     bottom: 0 !important;
+    position: fixed !important;
   }
 
-  /* Layer 1 - 100vh height (full screen, covers arrow buttons), leave 2% on left */
+  /* Layer 1 - full height, leave 2% on left for stacked effect */
   #panel-layer1.offcanvas-end {
     height: 100vh !important;
     max-height: 100vh !important;
@@ -1074,7 +1077,7 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 98vw !important;
   }
 
-  /* Layer 2 - 100vh height (full screen), leave 4% on left for stacked effect */
+  /* Layer 2 - full height, leave 4% on left for stacked effect */
   #panel-layer2.offcanvas-end {
     height: 100vh !important;
     max-height: 100vh !important;
@@ -1082,7 +1085,7 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 96vw !important;
   }
 
-  /* Glossary - same as layer 1 */
+  /* Glossary - full height, same as layer 1 */
   #panel-glossary.offcanvas-end {
     height: 100vh !important;
     max-height: 100vh !important;
@@ -1121,6 +1124,7 @@ h1, h2, h3, h4, h5, h6 {
     background: transparent !important;
     border: none !important;
     padding: 0.75rem 1rem !important;
+    padding-top: max(0.75rem, env(safe-area-inset-top)) !important;
     min-height: auto !important;
   }
 
@@ -1130,11 +1134,12 @@ h1, h2, h3, h4, h5, h6 {
     position: static !important;
     padding: 1.5rem !important;
     padding-top: 1.5rem !important;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom)) !important;
   }
 
   /* Title is now inside body - add top margin to clear floating close button */
   .offcanvas-body .offcanvas-title {
-    margin-top: 3rem;
+    margin-top: max(3rem, calc(env(safe-area-inset-top) + 2.5rem));
     margin-bottom: 1.5rem;
   }
 
