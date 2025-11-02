@@ -26,11 +26,25 @@ let viewerCards = []; // Array of { objectId, element, uvInstance, osdViewer, is
 let viewerCardCounter = 0;
 const MAX_VIEWER_CARDS = 5;
 
+// Mobile navigation state
+let isMobileViewport = false;
+let currentMobileStep = 0;
+let mobileNavButtons = null;
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
   buildObjectsIndex();
   initializeFirstViewer();
-  initializeStepController();
+
+  // Check if mobile and initialize appropriate navigation
+  isMobileViewport = window.innerWidth < 768;
+
+  if (isMobileViewport) {
+    initializeMobileNavigation();
+  } else {
+    initializeStepController();
+  }
+
   initializePanels();
   initializeScrollLock();
 });
@@ -287,6 +301,214 @@ function buildLocalInfoJsonUrl(objectId) {
   console.log('Building local IIIF manifest URL:', manifestUrl);
 
   return manifestUrl;
+}
+
+/**
+ * Initialize Mobile Button Navigation
+ * For mobile viewports, uses button-based navigation instead of scroll
+ */
+function initializeMobileNavigation() {
+  console.log('Initializing mobile button navigation');
+
+  // Get all story steps
+  allSteps = Array.from(document.querySelectorAll('.story-step'));
+
+  // Hide all steps initially
+  allSteps.forEach(step => {
+    step.classList.remove('mobile-active');
+  });
+
+  // Show first step (intro)
+  if (allSteps.length > 0) {
+    allSteps[0].classList.add('mobile-active');
+    currentMobileStep = 0;
+  }
+
+  // Create navigation buttons
+  const navContainer = document.createElement('div');
+  navContainer.className = 'mobile-nav';
+
+  const prevButton = document.createElement('button');
+  prevButton.className = 'mobile-prev';
+  prevButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
+  prevButton.setAttribute('aria-label', 'Previous step');
+
+  const nextButton = document.createElement('button');
+  nextButton.className = 'mobile-next';
+  nextButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z"/></svg>';
+  nextButton.setAttribute('aria-label', 'Next step');
+
+  navContainer.appendChild(prevButton);
+  navContainer.appendChild(nextButton);
+  document.body.appendChild(navContainer);
+
+  // Store button references
+  mobileNavButtons = { prev: prevButton, next: nextButton };
+
+  // Add click handlers
+  prevButton.addEventListener('click', goToPreviousMobileStep);
+  nextButton.addEventListener('click', goToNextMobileStep);
+
+  // Initialize button states
+  updateMobileButtonStates();
+
+  // Initialize viewer for first object
+  const firstObjectId = window.storyData?.firstObject;
+  if (firstObjectId) {
+    const firstRealStep = (window.storyData?.steps || []).find(step => step.object === firstObjectId);
+    if (firstRealStep) {
+      const x = parseFloat(firstRealStep.x);
+      const y = parseFloat(firstRealStep.y);
+      const zoom = parseFloat(firstRealStep.zoom);
+
+      // Position the first viewer
+      const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom);
+      if (viewerCard) {
+        currentViewerCard = viewerCard;
+        viewerCard.element.classList.remove('card-below');
+        viewerCard.element.classList.add('card-active');
+      }
+    }
+  }
+
+  console.log(`Mobile navigation initialized with ${allSteps.length} steps`);
+}
+
+/**
+ * Go to next step (mobile)
+ */
+function goToNextMobileStep() {
+  if (currentMobileStep >= allSteps.length - 1) {
+    console.log('Already at last step');
+    return;
+  }
+
+  const nextIndex = currentMobileStep + 1;
+  goToMobileStep(nextIndex);
+}
+
+/**
+ * Go to previous step (mobile)
+ */
+function goToPreviousMobileStep() {
+  if (currentMobileStep <= 0) {
+    console.log('Already at first step');
+    return;
+  }
+
+  const prevIndex = currentMobileStep - 1;
+  goToMobileStep(prevIndex);
+}
+
+/**
+ * Navigate to a specific step (mobile)
+ */
+function goToMobileStep(newIndex) {
+  if (newIndex < 0 || newIndex >= allSteps.length) {
+    return;
+  }
+
+  console.log(`Mobile navigation: ${currentMobileStep} → ${newIndex}`);
+
+  // Hide current step
+  allSteps[currentMobileStep].classList.remove('mobile-active');
+
+  // Show new step
+  allSteps[newIndex].classList.add('mobile-active');
+
+  // Update current index
+  currentMobileStep = newIndex;
+
+  // Update button states
+  updateMobileButtonStates();
+
+  // Handle viewer updates (same as desktop)
+  const newStep = allSteps[newIndex];
+  const objectId = newStep.dataset.object;
+  const x = parseFloat(newStep.dataset.x);
+  const y = parseFloat(newStep.dataset.y);
+  const zoom = parseFloat(newStep.dataset.zoom);
+
+  // Switch to object if different from current
+  if (objectId && (!currentViewerCard || currentViewerCard.objectId !== objectId)) {
+    console.log(`Switching to object: ${objectId}`);
+    switchToObjectMobile(objectId, newIndex, x, y, zoom);
+    currentObject = objectId;
+  } else if (currentViewerCard && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
+    // Same object, just pan/zoom
+    if (currentViewerCard.isReady) {
+      animateViewerToPosition(currentViewerCard, x, y, zoom);
+    } else {
+      currentViewerCard.pendingZoom = { x, y, zoom, snap: false };
+    }
+  }
+
+  updateViewerInfo(newIndex);
+}
+
+/**
+ * Update mobile button states (enable/disable at boundaries)
+ */
+function updateMobileButtonStates() {
+  if (!mobileNavButtons) return;
+
+  // Disable prev at first step
+  mobileNavButtons.prev.disabled = (currentMobileStep === 0);
+
+  // Disable next at last step
+  mobileNavButtons.next.disabled = (currentMobileStep === allSteps.length - 1);
+}
+
+/**
+ * Switch to different object (mobile version)
+ * Simplified without forward/backward animations
+ */
+function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
+  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}`);
+
+  // Get or create viewer card
+  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
+
+  // Wait for viewer to be ready
+  const startTime = Date.now();
+  const MAX_WAIT_TIME = 5000;
+
+  const activateWhenReady = () => {
+    const elapsed = Date.now() - startTime;
+
+    if (newViewerCard.isReady) {
+      console.log(`Mobile: Viewer ready for ${objectId}`);
+
+      // Hide old viewer if exists
+      if (currentViewerCard && currentViewerCard !== newViewerCard) {
+        currentViewerCard.element.classList.remove('card-active');
+        currentViewerCard.element.classList.add('card-below');
+      }
+
+      // Show new viewer
+      newViewerCard.element.classList.remove('card-below');
+      newViewerCard.element.classList.add('card-active');
+
+      // Update reference
+      currentViewerCard = newViewerCard;
+    } else if (elapsed < MAX_WAIT_TIME) {
+      setTimeout(activateWhenReady, 100);
+    } else {
+      console.warn(`Mobile: Viewer timeout for ${objectId}, showing anyway`);
+
+      // Show anyway to prevent black screen
+      if (currentViewerCard && currentViewerCard !== newViewerCard) {
+        currentViewerCard.element.classList.remove('card-active');
+        currentViewerCard.element.classList.add('card-below');
+      }
+
+      newViewerCard.element.classList.remove('card-below');
+      newViewerCard.element.classList.add('card-active');
+      currentViewerCard = newViewerCard;
+    }
+  };
+
+  activateWhenReady();
 }
 
 /**

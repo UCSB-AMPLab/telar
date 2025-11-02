@@ -57,6 +57,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family={{ heading_font | replace: ' ', '+' }}:wght@400;700&family={{ body_font | replace: ' ', '+' }}:wght@300;400;600;700&display=swap" rel="stylesheet">
 
+  <!-- Material Symbols for home icon -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
+
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
 
@@ -65,7 +68,8 @@
 <body class="story-page">
   <!-- Fixed Back to Home Button -->
   <a href="{{ '/' | relative_url }}" class="btn-home">
-    {{ lang.buttons.back_to_home }}
+    <span class="material-symbols-outlined btn-home-icon">home</span>
+    <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>
   </a>
 
   <div class="story-container">
@@ -115,7 +119,8 @@
 
             <div class="intro-hint">
               <p class="text-muted">
-                <small>{{ lang.story.scroll_hint }}</small>
+                <small class="hint-desktop">{{ lang.story.scroll_hint }}</small>
+                <small class="hint-mobile">{{ lang.story.scroll_hint_mobile }}</small>
               </p>
             </div>
           </div>

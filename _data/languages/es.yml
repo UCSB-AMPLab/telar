@@ -59,6 +59,7 @@ object:
 story:
   step_number: "Paso {{ number }}"
   scroll_hint: "Presiona ↓ o desplázate para empezar"
+  scroll_hint_mobile: "Utiliza los botones de las flechas para desplazarte"
   config_issues_heading: "Los siguientes pasos tienen problemas de contenido o configuración:"
   viewer_error_prefix: "visor de imágenes:"
   preview_warning: "Aún puedes desplazarte para previsualizar tu historia, pero algunos elementos no funcionarán como esperas."

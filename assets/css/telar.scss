@@ -264,6 +264,21 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.6;
 }
 
+/* Responsive hint text - show appropriate hint for device */
+.hint-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .hint-desktop {
+    display: none;
+  }
+
+  .hint-mobile {
+    display: inline;
+  }
+}
+
 .btn-home {
   position: fixed !important;
   top: 2rem !important;
@@ -275,13 +290,21 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.8);
   transition: all 0.3s ease;
-  z-index: 9999 !important;
+  z-index: 1040 !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .btn-home:hover {
   background: white;
   color: var(--color-primary);
   border-color: var(--color-primary);
+}
+
+/* Home button icon */
+.btn-home-icon {
+  font-size: 1.25rem;
 }
 
 /* Outro Step - End card in narrative column only */
@@ -855,17 +878,284 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .viewer-column {
-    flex: 1;
+    flex: 0 0 60vh;
     order: 1;
     position: relative;
     height: 60vh;
-    margin-bottom: 2rem;
+    margin-bottom: 0;
   }
 
+  .narrative-column {
+    flex: 0 0 40vh;
+    order: 2;
+    overflow: hidden !important;
+  }
+
+  /* Mobile Button Navigation System */
+  /* Fix story steps container height */
+  .story-steps {
+    height: auto;
+    min-height: 40vh;
+    position: relative;
+  }
+
+  /* Hide all story steps by default on mobile */
   .story-step {
-    min-height: 50vh;
+    display: none;
+    position: static !important;
+    height: auto !important;
+    min-height: 40vh;
+    max-height: 40vh;
+    padding: 1.5rem;
+    overflow: hidden;
+    transform: none !important;
+    opacity: 1 !important;
   }
 
+  /* Show only the active step */
+  .story-step.mobile-active {
+    display: flex;
+  }
+
+  /* Mobile intro styling - smaller text, left-aligned */
+  .story-intro .intro-content {
+    text-align: left;
+    max-width: 100%;
+    padding: 1rem;
+  }
+
+  .story-intro .intro-title {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .story-intro .intro-description {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .story-intro .intro-hint {
+    font-size: 0.9rem;
+    margin-top: 1.5rem;
+  }
+
+  /* Move panel trigger buttons to bottom on mobile */
+  .story-step .step-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .story-step .panel-trigger {
+    margin-top: auto;
+    align-self: flex-start;
+  }
+
+  /* Mobile Navigation Buttons - positioned on right side */
+  .mobile-nav {
+    position: fixed;
+    right: 1rem;
+    bottom: 50%;
+    transform: translateY(50%);
+    z-index: 1040;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .mobile-nav button {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    color: #333;
+    font-size: 1.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-nav button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 1);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .mobile-nav button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Panel System - full width bottom sheets */
+  /* Layer 1 Panel - most content, tallest panel */
+  #panel-layer1 {
+    width: 100% !important;
+    height: 65vh !important;
+    max-width: 100% !important;
+    max-height: 65vh !important;
+  }
+
+  /* Layer 2 Panel - medium content */
+  #panel-layer2 {
+    width: 100% !important;
+    height: 60vh !important;
+    max-width: 100% !important;
+    max-height: 60vh !important;
+  }
+
+  /* Glossary Panel - brief definitions, shortest panel */
+  #panel-glossary {
+    width: 100% !important;
+    height: 55vh !important;
+    max-width: 100% !important;
+    max-height: 55vh !important;
+  }
+
+  /* Touch Target Optimization - 44x44px minimum for accessibility */
+  .panel-trigger {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Mobile home button - match navigation button style */
+  .btn-home {
+    min-height: 44px;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    top: 1rem !important;
+    left: 1rem !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Hide text on mobile, show only icon */
+  .btn-home-text {
+    display: none;
+  }
+
+  .btn-home-icon {
+    font-size: 1.5rem;
+  }
+
+  .offcanvas-header .btn-close {
+    width: 36px;
+    height: 36px;
+    padding: 0.5rem;
+  }
+
+  /* Mobile Offcanvas Panel Positioning - cover narrative only, not viewer */
+  .offcanvas-end {
+    top: auto !important;
+    bottom: 0 !important;
+  }
+
+  /* Layer 1 - 100vh height (full screen, covers arrow buttons), leave 2% on left */
+  #panel-layer1.offcanvas-end {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
+  }
+
+  /* Layer 2 - 100vh height (full screen), leave 4% on left for stacked effect */
+  #panel-layer2.offcanvas-end {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    width: 96vw !important;
+    max-width: 96vw !important;
+  }
+
+  /* Glossary - same as layer 1 */
+  #panel-glossary.offcanvas-end {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
+  }
+
+  .offcanvas-body {
+    overflow-y: auto;
+  }
+
+  /* Hide Back buttons on mobile - X button is sufficient */
+  #panel-layer1-back,
+  #panel-layer2-back,
+  #panel-glossary-back {
+    display: none !important;
+  }
+
+  /* Center close button when Back button is hidden */
+  .offcanvas-header {
+    justify-content: flex-end;
+  }
+
+  /* Unified panel scrolling - header transparent, buttons float over content */
+  .offcanvas {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .offcanvas-header {
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 10;
+    background: transparent !important;
+    border: none !important;
+    padding: 0.75rem 1rem !important;
+    min-height: auto !important;
+  }
+
+  .offcanvas-body {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    position: static !important;
+    padding: 1.5rem !important;
+    padding-top: 1.5rem !important;
+  }
+
+  /* Title is now inside body - add top margin to clear floating close button */
+  .offcanvas-body .offcanvas-title {
+    margin-top: 3rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Float close button over content - match navigation button style */
+  .offcanvas-header .btn-close {
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    /* Remove white filter on mobile - show dark X like arrows/home */
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  /* Back button gets same treatment on desktop */
+  .offcanvas-header .btn-outline-secondary {
+    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Collection Grid - adjust for mobile screens */
   .collection-grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 1rem;
@@ -873,6 +1163,18 @@ h1, h2, h3, h4, h5, h6 {
 
   .collection-item img {
     height: 150px;
+  }
+}
+
+/* Small Phones: 576px and below - adjust collection grid */
+@media (max-width: 576px) {
+  .collection-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .collection-item img {
+    height: 120px;
   }
 }
 
