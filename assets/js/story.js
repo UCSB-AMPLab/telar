@@ -784,7 +784,9 @@ function animateViewerToRegion(viewerCard, region) {
 function updateViewerInfo(stepNumber) {
   const infoElement = document.getElementById('current-object-title');
   if (infoElement) {
-    infoElement.textContent = `Step ${stepNumber}`;
+    // Use language string from Jekyll with fallback to English
+    const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
+    infoElement.textContent = stepTemplate.replace("{{ number }}", stepNumber);
   }
 }
 

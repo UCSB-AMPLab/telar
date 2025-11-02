@@ -21,13 +21,20 @@
     {% assign is_christmas_tree_mode = true %}
   {% endif %}
 
+  <!-- Check if step indicators should be shown -->
+  {% assign show_story_steps = true %}
+  {% if site.story_interface.show_story_steps == false %}
+    {% assign show_story_steps = false %}
+  {% endif %}
+
   <script>
   // Expose Christmas Tree Mode to JavaScript
   window.christmasTreeMode = {{ is_christmas_tree_mode }};
 
   // Expose language strings to JavaScript
   window.telarLang = {
-    goDeeper: "{{ lang.buttons.go_deeper }}"
+    goDeeper: "{{ lang.buttons.go_deeper }}",
+    stepNumber: "{{ lang.story.step_number }}"
   };
 
   // If Christmas Tree Mode is active, add 🎄 to all warning headings
@@ -148,7 +155,7 @@
     </div>
 
     <!-- Right Column: Fixed IIIF Viewer -->
-    <div class="viewer-column">
+    <div class="viewer-column {% unless show_story_steps %}hide-step-indicators{% endunless %}">
       {% include viewer.html %}
     </div>
   </div>

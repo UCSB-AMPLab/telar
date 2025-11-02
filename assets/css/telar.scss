@@ -104,6 +104,20 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.8;
 }
 
+/* Site Description - Links appear darker than body text, show theme color and underline on hover */
+.site-description a {
+  color: var(--color-body);
+  text-decoration: none;
+  transition: all 0.3s ease;
+  filter: brightness(0.7);
+}
+
+.site-description a:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+  filter: brightness(1);
+}
+
 /* Story Layout - Split Screen with Card Stacking */
 .story-container {
   display: flex;
@@ -886,4 +900,9 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1.5rem !important;
   font-size: 1rem !important;
   font-weight: 400 !important;
+}
+
+/* Step Indicator Toggle */
+.hide-step-indicators .step-indicator {
+  display: none !important;
 }
