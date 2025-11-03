@@ -548,6 +548,24 @@ def process_objects(df, christmas_tree=False):
                 warnings.append(msg)
                 # Don't clear - file might be added later or exist in different environment
 
+    # Load previous objects.json to skip 429 errors for unchanged manifests
+    previous_objects = {}
+    previous_objects_path = Path('_data/objects.json')
+    if previous_objects_path.exists():
+        try:
+            with open(previous_objects_path, 'r', encoding='utf-8') as f:
+                previous_data = json.load(f)
+                # Create lookup: object_id -> {manifest_url, had_warning}
+                for obj in previous_data:
+                    previous_objects[obj.get('object_id')] = {
+                        'manifest_url': obj.get('iiif_manifest', ''),
+                        'had_warning': bool(obj.get('object_warning'))
+                    }
+                print(f"[INFO] Loaded {len(previous_objects)} objects from previous build for 429 checking")
+        except Exception as e:
+            print(f"[INFO] Could not load previous objects.json: {e}")
+            previous_objects = {}
+
     # Validate IIIF manifest field
     if 'iiif_manifest' in df.columns:
         for idx, row in df.iterrows():
@@ -617,33 +635,44 @@ def process_objects(df, christmas_tree=False):
                             warnings.append(msg)
 
             except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_404')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_404')
-                elif e.code == 429:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_429')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_429')
-                elif e.code == 403:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_403')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_403')
-                elif e.code == 401:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_401')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_401')
-                elif e.code == 500:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_500')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_500')
-                elif e.code == 503:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_503')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_503')
-                elif e.code == 502:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_502')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_502')
-                else:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_error_generic', code=e.code)
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_error_generic', code=e.code)
-                msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
-                print(f"  [WARN] {msg}")
-                warnings.append(msg)
+                # Check if we should skip this 429 error (unchanged manifest from previous build)
+                skip_429 = False
+                if e.code == 429 and object_id in previous_objects:
+                    prev = previous_objects[object_id]
+                    # Skip if: same URL as before AND no warning in previous build
+                    if prev['manifest_url'] == manifest_url and not prev['had_warning']:
+                        skip_429 = True
+                        print(f"  [INFO] Skipping 429 error for unchanged manifest: {object_id} ({manifest_url})")
+
+                # Only process error if not skipping
+                if not skip_429:
+                    if e.code == 404:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_404')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_404')
+                    elif e.code == 429:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_429')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_429')
+                    elif e.code == 403:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_403')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_403')
+                    elif e.code == 401:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_401')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_401')
+                    elif e.code == 500:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_500')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_500')
+                    elif e.code == 503:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_503')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_503')
+                    elif e.code == 502:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_502')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_502')
+                    else:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_error_generic', code=e.code)
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_error_generic', code=e.code)
+                    msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
             except urllib.error.URLError as e:
                 df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_unreachable')
                 df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_network_error')
