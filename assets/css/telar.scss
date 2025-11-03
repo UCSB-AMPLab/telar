@@ -171,6 +171,60 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 1;
 }
 
+/* ============================================================================
+   GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
+
+   Mobile viewer transitions: Remove slide animation, use fade only for faster
+   perceived performance. Desktop retains slide-up animation.
+   ============================================================================ */
+@media (max-width: 767px) {
+  .viewer-card {
+    /* Override desktop slide animation - fade only on mobile */
+    transition: opacity 300ms ease-out !important;
+    /* Always at 0 position, no slide */
+    transform: translateY(0) !important;
+  }
+
+  .viewer-card.card-active {
+    opacity: 1;
+  }
+
+  .viewer-card.card-below {
+    opacity: 0;
+    /* Still moved down for z-index purposes, but instantly (no animation) */
+    transform: translateY(100%) !important;
+  }
+}
+
+/* Skeleton loading shimmer - subtle loading indicator during viewer initialization */
+#viewer-cards-container.skeleton-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Subtle gradient that sweeps across */
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: skeleton-shimmer 2s infinite;
+  z-index: 999;
+  pointer-events: none; /* Don't block viewer interactions */
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Story Steps Container - Fixed height for absolute positioning */
 .story-steps {
   position: relative;

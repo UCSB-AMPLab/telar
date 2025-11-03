@@ -30,6 +30,9 @@ const MAX_VIEWER_CARDS = 5;
 let isMobileViewport = false;
 let currentMobileStep = 0;
 let mobileNavButtons = null;
+// Graceful panel transitions on mobile (v0.4.0)
+let mobileNavigationCooldown = false;
+const MOBILE_NAV_COOLDOWN = 400; // ms - prevent rapid clicking
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
@@ -408,6 +411,29 @@ function goToMobileStep(newIndex) {
     return;
   }
 
+  // ====== Graceful panel transitions on mobile (v0.4.0) ======
+  // Prevent rapid clicking
+  if (mobileNavigationCooldown) {
+    console.log('Mobile navigation on cooldown, ignoring tap');
+    return;
+  }
+
+  // Check if viewer needs loading - show skeleton if not ready
+  const newStep = allSteps[newIndex];
+  const objectId = newStep.dataset.object;
+  const viewerCard = viewerCards.find(vc => vc.objectId === objectId);
+
+  if (!viewerCard || !viewerCard.isReady) {
+    showViewerSkeletonState();
+  }
+
+  // Activate cooldown to prevent rapid clicking
+  mobileNavigationCooldown = true;
+  setTimeout(() => {
+    mobileNavigationCooldown = false;
+  }, MOBILE_NAV_COOLDOWN);
+  // ====== End graceful transitions ======
+
   console.log(`Mobile navigation: ${currentMobileStep} → ${newIndex}`);
 
   // Hide current step
@@ -423,8 +449,7 @@ function goToMobileStep(newIndex) {
   updateMobileButtonStates();
 
   // Handle viewer updates (same as desktop)
-  const newStep = allSteps[newIndex];
-  const objectId = newStep.dataset.object;
+  // Note: newStep and objectId already declared above for skeleton check
   const x = parseFloat(newStep.dataset.x);
   const y = parseFloat(newStep.dataset.y);
   const zoom = parseFloat(newStep.dataset.zoom);
@@ -444,6 +469,9 @@ function goToMobileStep(newIndex) {
   }
 
   updateViewerInfo(newIndex);
+
+  // Graceful transitions: Preload upcoming viewers aggressively
+  preloadMobileViewers(newIndex);
 }
 
 /**
@@ -479,6 +507,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
     if (newViewerCard.isReady) {
       console.log(`Mobile: Viewer ready for ${objectId}`);
 
+      // Graceful transitions: Hide skeleton loading state
+      hideViewerSkeletonState();
+
       // Hide old viewer if exists
       if (currentViewerCard && currentViewerCard !== newViewerCard) {
         currentViewerCard.element.classList.remove('card-active');
@@ -495,6 +526,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
       setTimeout(activateWhenReady, 100);
     } else {
       console.warn(`Mobile: Viewer timeout for ${objectId}, showing anyway`);
+
+      // Graceful transitions: Hide skeleton even on timeout
+      hideViewerSkeletonState();
 
       // Show anyway to prevent black screen
       if (currentViewerCard && currentViewerCard !== newViewerCard) {
@@ -712,10 +746,11 @@ function handleScroll(e) {
 
 /**
  * Preload viewers for upcoming steps
+ * Enhanced preloading (v0.4.0) - more aggressive on desktop due to better resources
  */
 function preloadUpcomingViewers(currentIndex) {
-  const PRELOAD_AHEAD = 2; // Preload 2 steps forward
-  const PRELOAD_BEHIND = 1; // Preload 1 step backward
+  const PRELOAD_AHEAD = 3; // Preload 3 steps forward (increased from 2)
+  const PRELOAD_BEHIND = 2; // Preload 2 steps backward (increased from 1)
 
   // Preload forward
   for (let i = 1; i <= PRELOAD_AHEAD; i++) {
@@ -1283,6 +1318,67 @@ function closeAllPanels() {
 
   isPanelOpen = false;
   deactivateScrollLock();
+}
+
+// ============================================================================
+// GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
+//
+// Helper functions for mobile story navigation coordination
+// See: telar-dev-notes/releases/0.4.0/mobile-story-transitions-research.md
+// ============================================================================
+
+/**
+ * Show skeleton loading state on viewer (MOBILE ONLY)
+ * Displays subtle shimmer animation to indicate viewer initialization
+ */
+function showViewerSkeletonState() {
+  const container = document.getElementById('viewer-cards-container');
+  if (container) {
+    container.classList.add('skeleton-loading');
+  }
+}
+
+/**
+ * Hide skeleton loading state on viewer (MOBILE ONLY)
+ * Removes shimmer animation when viewer is ready
+ */
+function hideViewerSkeletonState() {
+  const container = document.getElementById('viewer-cards-container');
+  if (container) {
+    container.classList.remove('skeleton-loading');
+  }
+}
+
+/**
+ * Preload viewers for mobile navigation (MOBILE ONLY)
+ * More aggressive than desktop: ±2 steps instead of ±1
+ * Reduces loading delays during rapid navigation
+ */
+function preloadMobileViewers(currentIndex) {
+  const MOBILE_PRELOAD_RANGE = 2;
+
+  for (let offset = -MOBILE_PRELOAD_RANGE; offset <= MOBILE_PRELOAD_RANGE; offset++) {
+    if (offset === 0) continue; // Skip current step
+
+    const idx = currentIndex + offset;
+    if (idx < 0 || idx >= allSteps.length) continue;
+
+    const step = allSteps[idx];
+    const objectId = step.dataset.object;
+    if (!objectId) continue;
+
+    // Skip if already loaded
+    const exists = viewerCards.find(vc => vc.objectId === objectId);
+    if (exists) continue;
+
+    // Preload this viewer
+    const x = parseFloat(step.dataset.x);
+    const y = parseFloat(step.dataset.y);
+    const zoom = parseFloat(step.dataset.zoom);
+
+    console.log(`⏳ Mobile preloading step ${idx}: ${objectId}`);
+    getOrCreateViewerCard(objectId, idx, x, y, zoom);
+  }
 }
 
 // Export for debugging
