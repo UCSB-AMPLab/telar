@@ -814,7 +814,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 1 (light blue) footnote references */
 #panel-layer1 .offcanvas-body a[href^="#_ftn"] {
-  color: var(--color-primary);
+  color: var(--color-link);
 }
 
 #panel-layer1 .offcanvas-body a[href^="#_ftn"]:hover {
@@ -824,7 +824,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 2 (dark purple) footnote references */
 #panel-layer2 .offcanvas-body a[href^="#_ftn"] {
-  color: var(--color-panel-layer1-bg);
+  color: var(--color-link);
 }
 
 #panel-layer2 .offcanvas-body a[href^="#_ftn"]:hover {
@@ -862,7 +862,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 1 footnote numbers */
 #panel-layer1 .offcanvas-body a[href^="#_ftnref"] {
-  color: #5d4037;
+  color: var(--color-link);
 }
 
 #panel-layer1 .offcanvas-body a[href^="#_ftnref"]:hover {
@@ -872,7 +872,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layer 2 footnote numbers */
 #panel-layer2 .offcanvas-body a[href^="#_ftnref"] {
-  color: #D4C5A8;
+  color: var(--color-link);
 }
 
 #panel-layer2 .offcanvas-body a[href^="#_ftnref"]:hover {
@@ -910,6 +910,16 @@ h1, h2, h3, h4, h5, h6 {
 
 .offcanvas-body blockquote p:last-child {
   margin-bottom: 0;
+}
+
+/* General Hyperlinks in Panels (non-footnote links) */
+.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]) {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):hover {
+  opacity: 0.8;
 }
 
 /* Panel Images */
@@ -1231,6 +1241,26 @@ h1, h2, h3, h4, h5, h6 {
 
   .collection-item img {
     height: 150px;
+  }
+
+  /* Glossary Index - reduce spacing on mobile */
+  .glossary-letter {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+  }
+
+  .glossary-term {
+    margin-bottom: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .glossary-term h3 {
+    font-size: 1.1rem;
+  }
+
+  .glossary-term-link {
+    font-size: 1rem;
   }
 }
 
