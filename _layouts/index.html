@@ -346,6 +346,9 @@ if (window.christmasTreeMode) {
 
               <div class="card-body">
                 <h3>{{ story.title }}</h3>
+                {% if story.byline %}
+                <p class="story-byline">{{ story.byline }}</p>
+                {% endif %}
               </div>
             </div>
           </a>

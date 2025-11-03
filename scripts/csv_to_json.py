@@ -271,7 +271,7 @@ def csv_to_json(csv_path, json_path, process_func=None):
 def process_project_setup(df):
     """
     Process project setup CSV
-    Expected columns: order, title, subtitle (optional)
+    Expected columns: order, title, subtitle (optional), byline (optional)
     """
     stories_list = []
 
@@ -279,6 +279,7 @@ def process_project_setup(df):
         order = str(row.get('order', '')).strip()
         title = row.get('title', '')
         subtitle = row.get('subtitle', '')
+        byline = row.get('byline', '')
 
         # Skip rows with empty order (placeholder rows)
         if not order or not pd.notna(title):
@@ -292,6 +293,10 @@ def process_project_setup(df):
         # Add subtitle if present
         if pd.notna(subtitle) and str(subtitle).strip():
             story_entry['subtitle'] = str(subtitle).strip()
+
+        # Add byline if present
+        if pd.notna(byline) and str(byline).strip():
+            story_entry['byline'] = str(byline).strip()
 
         stories_list.append(story_entry)
 

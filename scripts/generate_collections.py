@@ -134,7 +134,7 @@ def generate_stories():
 
     import csv
 
-    # Parse project.csv to get stories (now with order, title, subtitle columns)
+    # Parse project.csv to get stories (now with order, title, subtitle, byline columns)
     stories = []
     with open('components/structures/project.csv', 'r') as f:
         reader = csv.DictReader(f)
@@ -142,6 +142,7 @@ def generate_stories():
             order = row.get('order', '').strip() if row.get('order') else ''
             title = row.get('title', '').strip() if row.get('title') else ''
             subtitle = row.get('subtitle', '').strip() if row.get('subtitle') else ''
+            byline = row.get('byline', '').strip() if row.get('byline') else ''
 
             # Skip rows with empty order or title
             if not order or not title:
@@ -155,6 +156,10 @@ def generate_stories():
             # Add subtitle if present
             if subtitle:
                 story_entry['subtitle'] = subtitle
+
+            # Add byline if present
+            if byline:
+                story_entry['byline'] = byline
 
             stories.append(story_entry)
 
@@ -171,6 +176,7 @@ def generate_stories():
         story_num = story['number']
         story_title = story['title']
         story_subtitle = story.get('subtitle', '')
+        story_byline = story.get('byline', '')
 
         # Check if story data file exists
         data_file = Path(f'_data/story-{story_num}.json')
@@ -187,6 +193,9 @@ title: "{story_title}"
 """
         if story_subtitle:
             frontmatter += f'subtitle: "{story_subtitle}"\n'
+
+        if story_byline:
+            frontmatter += f'byline: "{story_byline}"\n'
 
         frontmatter += f"""layout: story
 data_file: story-{story_num}

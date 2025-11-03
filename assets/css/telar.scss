@@ -307,6 +307,14 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.2;
 }
 
+.intro-byline {
+  font-size: 1.1rem;
+  color: #5a6c7d;
+  margin-top: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-weight: 400;
+}
+
 .intro-description {
   font-size: 1.25rem;
   color: #5a6c7d;
@@ -699,6 +707,14 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 0.25rem 0.25rem 0 0;
 }
 
+/* Story Byline */
+.story-byline {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+}
+
 /* Collection Gallery */
 .collection-grid {
   display: grid;
@@ -987,6 +1003,11 @@ h1, h2, h3, h4, h5, h6 {
 
   .story-intro .intro-title {
     font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .story-intro .intro-byline {
+    font-size: 0.95rem;
     margin-bottom: 1rem;
   }
 
