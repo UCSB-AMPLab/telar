@@ -883,6 +883,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .narrative-column {
     flex: 0 0 40vh;
+    height: 40vh !important;
     order: 2;
     overflow-y: auto !important;
   }
@@ -1051,35 +1052,52 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .offcanvas-header .btn-close {
-    width: 36px;
-    height: 36px;
+    width: 33px;
+    height: 33px;
     padding: 0.5rem;
   }
 
-  /* Mobile Offcanvas Panel Positioning - full height from top to bottom */
+  /* Mobile Offcanvas Panel Positioning - Option 2B (Right-Slide with Fixed Size & Top/Bottom Gaps) */
   .offcanvas-end {
-    top: 0 !important;
-    bottom: 0 !important;
     position: fixed !important;
+    right: 0 !important;
+    left: auto !important;
+    box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 300ms ease-out;
+    border-radius: 0 !important; // No rounded corners
+
+    // Slide in from right
+    transform: translateX(100%);
+    &.show {
+      transform: translateX(0);
+    }
   }
 
-  /* Layer 1 - leave 2% on left for stacked effect */
+  /* Layer 1 - "Go Deeper" panels */
   #panel-layer1.offcanvas-end {
-    height: 100% !important;
+    top: 12vh !important;
+    height: 76vh !important;
+    max-height: 76vh !important;
     width: 98vw !important;
     max-width: 98vw !important;
+    z-index: 1050;
   }
 
-  /* Layer 2 - leave 4% on left for stacked effect */
+  /* Layer 2 - "Learn More" panels */
   #panel-layer2.offcanvas-end {
-    height: 100% !important;
+    top: 10vh !important;
+    height: 76vh !important;
+    max-height: 76vh !important;
     width: 96vw !important;
     max-width: 96vw !important;
+    z-index: 1051;
   }
 
-  /* Glossary - same as layer 1 */
+  /* Glossary */
   #panel-glossary.offcanvas-end {
-    height: 100% !important;
+    top: 12vh !important;
+    height: 72vh !important;
+    max-height: 72vh !important;
     width: 98vw !important;
     max-width: 98vw !important;
   }
@@ -1114,8 +1132,8 @@ h1, h2, h3, h4, h5, h6 {
     z-index: 10;
     background: transparent !important;
     border: none !important;
-    padding: 0.75rem 1rem !important;
-    padding-top: max(0.75rem, env(safe-area-inset-top)) !important;
+    padding: 1rem !important;
+    padding-top: max(1rem, env(safe-area-inset-top)) !important;
     min-height: auto !important;
   }
 
