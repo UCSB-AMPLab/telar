@@ -121,9 +121,9 @@ window.telarLang = {
             manifestBaseUrl = extractedBaseUrl;
           }
 
-          // Compare URLs (normalize trailing slashes)
-          const normalizedCurrent = currentSiteUrl.replace(/\/$/, '');
-          const normalizedManifest = extractedBaseUrl.replace(/\/$/, '');
+          // Compare URLs (normalize trailing slashes and localhost/127.0.0.1)
+          const normalizedCurrent = currentSiteUrl.replace(/\/$/, '').replace('localhost', '127.0.0.1');
+          const normalizedManifest = extractedBaseUrl.replace(/\/$/, '').replace('localhost', '127.0.0.1');
 
           if (normalizedCurrent !== normalizedManifest) {
             affectedObjects.push({
