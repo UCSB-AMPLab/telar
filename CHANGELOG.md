@@ -2,6 +2,36 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.4.0-beta] - TBD
+
+### Added
+
+- **Glossary auto-linking**: Automatic detection and linking of glossary terms within story narrative text using wiki-style syntax
+  - New wiki-style link syntax: `[[term_id]]` or `[[term_id|display_text]]` in markdown content
+  - Glossary link parser in `scripts/csv_to_json.py` with `load_glossary_terms()` and `process_glossary_links()` functions
+  - Automatic transformation applied to all story layer text fields during build
+  - JavaScript handler for opening glossary panel when links are clicked
+  - Support for both static and dynamically-loaded panel content
+  - Build-time validation with warning messages for invalid term references
+  - CSS styling with theme-aware colors for glossary inline links (`.glossary-inline-link`)
+  - Error indicators for nonexistent terms (`.glossary-link-error`)
+  - Integration with "Christmas Tree Mode" configuration warnings
+  - Bilingual error messages (English/Spanish) for glossary loading failures
+
+- **Enhanced glossary panel functionality**: Improved support for dynamic content
+  - Modified `initializeGlossaryLinks()` to accept optional container parameter for re-initialization
+  - Exported function via `window.Telar.initializeGlossaryLinks` for use in dynamic content
+  - Automatic re-initialization of glossary links after panel content loads via AJAX
+  - Dynamic URL construction with basePath logic to properly handle `baseurl` configuration
+  - Smooth panel transitions when switching between glossary terms from dynamically-loaded content
+
+### Changed
+
+- **Glossary link styling**: Refined visual appearance for inline glossary links
+  - Reduced vertical padding from 0.15em to 0.02em for tighter fit around text
+  - Increased border-radius from 3px to 6px for more rounded corners
+  - Links now blend more naturally within narrative flow
+
 ## [0.3.4-beta] - 2025-10-31
 
 ### Added

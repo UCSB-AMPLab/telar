@@ -156,6 +156,99 @@ def process_image_sizes(text):
     return re.sub(pattern, replace_image, text, flags=re.IGNORECASE)
 
 
+def load_glossary_terms():
+    """
+    Load glossary terms from components/texts/glossary/*.md files.
+
+    Returns:
+        dict: Dictionary mapping term_id to term title, or empty dict if loading fails
+    """
+    glossary_terms = {}
+    glossary_dir = Path('components/texts/glossary')
+
+    if not glossary_dir.exists():
+        return glossary_terms
+
+    try:
+        for glossary_file in glossary_dir.glob('*.md'):
+            with open(glossary_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Parse frontmatter
+            frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+            match = re.match(frontmatter_pattern, content, re.DOTALL)
+
+            if match:
+                frontmatter_text = match.group(1)
+
+                # Extract term_id and title
+                term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
+                title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
+
+                if term_id_match and title_match:
+                    term_id = term_id_match.group(1)
+                    title = title_match.group(1)
+                    glossary_terms[term_id] = title
+
+    except Exception as e:
+        print(f"  [WARN] Could not load glossary terms: {e}")
+
+    return glossary_terms
+
+
+def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
+    """
+    Transform [[term]] or [[display|term]] syntax into glossary link HTML.
+
+    Args:
+        text: HTML text to process (already converted from markdown)
+        glossary_terms: Dictionary mapping term_id to term title
+        warnings_list: Optional list to append warning messages
+        step_num: Optional step number for warning messages
+        layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
+
+    Returns:
+        str: Text with glossary links transformed to HTML
+    """
+    if not text or not glossary_terms:
+        return text
+
+    # Pattern: [[display|term]] or [[term]] with flexible spacing
+    # Captures: (optional_display) | (term_id)
+    pattern = r'\[\[\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?\s*\]\]'
+
+    def replace_glossary_link(match):
+        # If pipe is present: [[term|display]], else [[term]]
+        if match.group(2):  # Has pipe
+            term_id = match.group(1).strip()
+            display_text = match.group(2).strip()
+        else:  # No pipe
+            term_id = match.group(1).strip()
+            # Use glossary title as display text
+            display_text = glossary_terms.get(term_id, term_id)
+
+        # Check if term exists in glossary
+        if term_id in glossary_terms:
+            # Valid term - create link (JavaScript will construct full URL with basePath)
+            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}">{display_text}</a>'
+        else:
+            # Invalid term - create error indicator
+            if warnings_list is not None:
+                # Determine layer number for display
+                layer_num = layer_name[-1] if layer_name and layer_name.startswith('layer') else ''
+                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num)
+                warnings_list.append({
+                    'step': step_num,
+                    'type': 'glossary',
+                    'term_id': term_id,
+                    'layer': layer_name,
+                    'message': warning_msg
+                })
+            return f'<span class="glossary-link-error" data-term-id="{term_id}">⚠️ [[{match.group(1)}]]</span>'
+
+    return re.sub(pattern, replace_glossary_link, text)
+
+
 def read_markdown_file(file_path):
     """
     Read a markdown file and parse frontmatter
@@ -756,6 +849,10 @@ def process_story(df, christmas_tree=False):
     # Tracking for summary
     warnings = []
 
+    # Load glossary terms for auto-linking
+    glossary_terms = load_glossary_terms()
+    glossary_warnings = []
+
     # Drop example column if it exists
     if 'example' in df.columns:
         df = df.drop(columns=['example'])
@@ -850,8 +947,17 @@ def process_story(df, christmas_tree=False):
                     file_path = f"stories/{file_ref.strip()}"
                     markdown_data = read_markdown_file(file_path)
                     if markdown_data:
+                        step_num = row.get('step', 'unknown')
                         df.at[idx, title_col] = markdown_data['title']
-                        df.at[idx, text_col] = markdown_data['content']
+                        # Apply glossary link transformation to content
+                        content_with_glossary = process_glossary_links(
+                            markdown_data['content'],
+                            glossary_terms,
+                            glossary_warnings,
+                            step_num,
+                            base_name
+                        )
+                        df.at[idx, text_col] = content_with_glossary
                     else:
                         # Insert error message for missing file
                         step_num = row.get('step', 'unknown')
@@ -925,6 +1031,9 @@ def process_story(df, christmas_tree=False):
                         'message': get_lang_string('errors.object_warnings.layer_file_missing', layer_num=layer_num)
                     })
 
+    # Add glossary link warnings
+    all_warnings.extend(glossary_warnings)
+
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings
 
@@ -941,6 +1050,12 @@ def process_story(df, christmas_tree=False):
                 'step': 2,
                 'type': 'panel',
                 'message': get_lang_string('errors.object_warnings.content_file_missing', file_ref='missing-file.md')
+            },
+            {
+                'step': 3,
+                'type': 'glossary',
+                'term_id': 'nonexistent-term',
+                'message': get_lang_string('errors.object_warnings.glossary_term_not_found', term_id='nonexistent-term')
             }
         ]
         # Add fake warnings to existing warnings

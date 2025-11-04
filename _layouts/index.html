@@ -275,13 +275,28 @@ if (window.christmasTreeMode) {
     <div class="col-lg-11 mx-auto">
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>{{ lang.errors.story_config_heading }}</strong>
-        <p class="mb-0 mt-2">
-          {% assign second_to_last = stories_with_issues.size | minus: 1 %}
-          {{ lang.errors.story_navigate_to }}
+        <ul class="mt-2 mb-0">
           {% for story in stories_with_issues %}
-            <a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a>{% unless forloop.last %}{% if forloop.index == second_to_last %} or {% else %}, {% endif %}{% endunless %}
-          {% endfor %} {{ lang.errors.story_see_details }}
-        </p>
+            {% assign story_data = site.data[story.data_file] %}
+            {% if story_data.size > 0 and story_data[0]._metadata %}
+              {% assign metadata = story_data[0] %}
+              {% for warning in metadata.viewer_warnings %}
+                <li>
+                  <strong><a href="{{ story.url | relative_url }}" class="alert-link">{{ story.title }}</a></strong>
+                  {% assign step_text = lang.story.step_number | replace: "{{ number }}", warning.step %}
+                  ({{ step_text }}):
+                  {% if warning.type == 'viewer' %}
+                    {{ lang.story.viewer_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+                  {% elsif warning.type == 'panel' %}
+                    {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+                  {% elsif warning.type == 'glossary' %}
+                    {{ lang.story.glossary_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+                  {% endif %}
+                </li>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </ul>
       </div>
     </div>
   </div>

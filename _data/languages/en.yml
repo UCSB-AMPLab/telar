@@ -62,6 +62,7 @@ story:
   scroll_hint_mobile: "Use the arrow buttons to navigate"
   config_issues_heading: "The following steps have content or configuration issues:"
   viewer_error_prefix: "image viewer:"
+  glossary_error_prefix: "glossary link:"
   preview_warning: "You can still scroll to preview your story, but elements will not work as expected."
 
 # Page headings and intro text
@@ -196,6 +197,11 @@ errors:
     content_file_missing: "Content file missing: <code>{{ file_ref }}</code><br>Please add this file to <code>components/texts/stories/</code> or remove the reference from the CSV."
     layer_file_missing_named: "the file for the layer {{ layer_num }} panel, <code>{{ filename }}</code>, was not found"
     layer_file_missing: "the file for the layer {{ layer_num }} panel was not found"
+
+    # Glossary link errors
+    glossary_term_not_found: "the glossary term `{{ term_id }}` referenced in Layer {{ layer_num }} does not exist in <code>components/texts/glossary/</code>"
+    short_glossary_not_found: "Missing glossary term: {{ term_id }}"
+    glossary_load_error: "Failed to load glossary term. Please try again."
 
 # Upgrade messages
 upgrade:

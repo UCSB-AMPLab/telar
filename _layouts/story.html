@@ -110,6 +110,8 @@
                           {{ lang.story.viewer_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
                         {% elsif warning.type == 'panel' %}
                           {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+                        {% elsif warning.type == 'glossary' %}
+                          {{ lang.story.glossary_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
                         {% endif %}
                       </li>
                     {% endfor %}

@@ -787,6 +787,35 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.8;
 }
 
+/* Glossary Inline Links (in story panel content) */
+.glossary-inline-link {
+  background-color: var(--color-panel-glossary-bg);
+  color: var(--color-panel-glossary-text);
+  padding: 0.02em 0.4em; /* Minimal vertical padding for very snug fit */
+  border-radius: 6px; /* Increased for more rounded corners */
+  text-decoration: none;
+  font-size: 0.95em;
+  display: inline-block;
+  transition: opacity 0.2s ease;
+}
+
+.glossary-inline-link:hover {
+  opacity: 0.85;
+  text-decoration: none;
+  color: var(--color-panel-glossary-text);
+}
+
+/* Glossary Link Error Indicator (nonexistent terms) */
+.glossary-link-error {
+  background-color: #fff3cd;
+  color: #856404;
+  padding: 0.02em 0.4em; /* Minimal vertical padding for very snug fit */
+  border-radius: 6px; /* Increased for more rounded corners */
+  border: 1px solid #ffc107;
+  font-size: 0.95em;
+  display: inline-block;
+}
+
 /* Global Button Styling - Rounded like panel-trigger buttons */
 .btn {
   border-radius: 20px !important;
@@ -1180,11 +1209,12 @@ h1, h2, h3, h4, h5, h6 {
 
   /* Glossary */
   #panel-glossary.offcanvas-end {
-    top: 12vh !important;
-    height: 72vh !important;
-    max-height: 72vh !important;
-    width: 98vw !important;
-    max-width: 98vw !important;
+    top: 8vh !important;
+    height: 76vh !important;
+    max-height: 76vh !important;
+    left: 6vw !important;
+    width: 94vw !important;
+    max-width: 94vw !important;
   }
 
   .offcanvas-body {
@@ -1282,6 +1312,13 @@ h1, h2, h3, h4, h5, h6 {
 
   .glossary-term-link {
     font-size: 1rem;
+  }
+
+  /* Glossary inline links - slightly smaller on mobile */
+  .glossary-inline-link,
+  .glossary-link-error {
+    padding: 0.1em 0.35em;
+    font-size: 0.9em;
   }
 }
 
@@ -1476,6 +1513,12 @@ h1, h2, h3, h4, h5, h6 {
   .navbar-brand {
     font-size: 1.25rem;
   }
+
+  /* Navigation buttons - smaller for tiny screens */
+  .mobile-nav button {
+    width: 45px !important;
+    height: 45px !important;
+  }
 }
 
 /* Tier 3: Micro Mobile - very small Android phones with 600px or less height */
@@ -1565,6 +1608,12 @@ h1, h2, h3, h4, h5, h6 {
 
   .navbar-brand {
     font-size: 1.125rem;
+  }
+
+  /* Navigation buttons - smaller for micro screens */
+  .mobile-nav button {
+    width: 45px !important;
+    height: 45px !important;
   }
 }
 

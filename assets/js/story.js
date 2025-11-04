@@ -1116,7 +1116,14 @@ function openPanel(panelType, contentId) {
   if (content) {
     // Update panel content
     document.getElementById(`${panelId}-title`).textContent = content.title;
-    document.getElementById(`${panelId}-content`).innerHTML = content.html;
+    const contentElement = document.getElementById(`${panelId}-content`);
+    contentElement.innerHTML = content.html;
+
+    // v0.4.0: Re-initialize glossary links in the dynamically loaded content
+    // This enables the [[term_id]] inline glossary links to work in panel content
+    if (window.Telar && window.Telar.initializeGlossaryLinks) {
+      window.Telar.initializeGlossaryLinks(contentElement);
+    }
 
     // Track current panel
     if (panelType === 'layer1') {

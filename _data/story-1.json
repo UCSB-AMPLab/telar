@@ -1,5 +1,17 @@
 [
   {
+    "_metadata": true,
+    "viewer_warnings": [
+      {
+        "step": 3,
+        "type": "glossary",
+        "term_id": "nonexistent-term",
+        "layer": "layer1",
+        "message": "the glossary term `nonexistent-term` referenced in Layer 1 does not exist in <code>components/texts/glossary/</code>"
+      }
+    ]
+  },
+  {
     "step": 1,
     "object": "example-bogota-1614",
     "x": "0.5",
@@ -11,9 +23,9 @@
     "layer2_button": "",
     "viewer_warning": "",
     "layer1_title": "Legal Evidence in Colonial Courts",
-    "layer1_text": "<p>Imperial officers were ordered to explore and document the territory to determine ownership. This legal painting served as evidence in colonial courts.</p>",
+    "layer1_text": "<p>Imperial officers were ordered to explore and document the territory to determine ownership. This legal painting served as evidence in <a href=\"#\" class=\"glossary-inline-link\" data-term-id=\"colonial-period\">colonial</a> courts.</p>",
     "layer2_title": "Francisco Maldonado y Mendoza",
-    "layer2_text": "<p>Born in Spain in 1551, Francisco Maldonado y Mendoza moved to Santa Fe de Bogotá in 1583. After marrying Jerónima de Orrego in 1586, he began purchasing estates in the Bogotá savannah. By the mid-1590s, he became encomendero of the Bogotá Indigenous community and owned one of the most prosperous cattle ranches in the New Kingdom of Granada.</p>"
+    "layer2_text": "<p>Born in Spain in 1551, Francisco Maldonado y Mendoza moved to Santa Fe de Bogotá in 1583. After marrying Jerónima de Orrego in 1586, he began purchasing estates in the Bogotá savannah. By the mid-1590s, he became encomendero of the Bogotá Indigenous community and owned one of the most prosperous cattle ranches in the New Kingdom of Granada. His purchases of estates were made possble by resettlement of local communities into <a href=\"#\" class=\"glossary-inline-link\" data-term-id=\"reducción\">reducciones</a> with a <a href=\"#\" class=\"glossary-inline-link\" data-term-id=\"resguardo\">resguardos</a>.</p>"
   },
   {
     "step": 2,
@@ -43,7 +55,7 @@
     "layer2_button": "",
     "viewer_warning": "",
     "layer1_title": "Variable Scaling for Legal Purposes",
-    "layer1_text": "<p>Unlike contemporary precise maps, this painting uses flexible, variable scaling to emphasize certain territorial features for legal purposes.</p>",
+    "layer1_text": "<p>Unlike contemporary precise maps, this painting uses flexible, variable scaling to emphasize certain territorial features for legal purposes during the <span class=\"glossary-link-error\" data-term-id=\"nonexistent-term\">⚠️ [[nonexistent-term]]</span> era.</p>",
     "layer2_title": "Maps Across Cultures",
     "layer2_text": "<p>Different societies create maps through various mediums. For example, the Kogi people use looms as geographical representations. Maps can be visual, oral, mental, or embodied in cultural artifacts—challenging European assumptions about cartographic representation.</p>"
   },
@@ -59,7 +71,7 @@
     "layer2_button": "",
     "viewer_warning": "",
     "layer1_title": "The Marquisate of San Jorge",
-    "layer1_text": "<p>The territory was transformed into a 'mayorazgo' (entailed estate) that would be passed down to the eldest child, consolidating Spanish landownership.</p>",
+    "layer1_text": "<p>The territory was transformed into a 'mayorazgo' (entailed estate) that would be passed down to the eldest child, consolidating Spanish landownership during the <a href=\"#\" class=\"glossary-inline-link\" data-term-id=\"colonial-period\">Colonial Period</a>.</p>",
     "layer2_title": "",
     "layer2_text": ""
   }
