@@ -1,17 +1,5 @@
 [
   {
-    "_metadata": true,
-    "viewer_warnings": [
-      {
-        "step": 3,
-        "type": "glossary",
-        "term_id": "nonexistent-term",
-        "layer": "layer1",
-        "message": "the glossary term `nonexistent-term` referenced in Layer 1 does not exist in <code>components/texts/glossary/</code>"
-      }
-    ]
-  },
-  {
     "step": 1,
     "object": "example-bogota-1614",
     "x": "0.5",
@@ -55,7 +43,7 @@
     "layer2_button": "",
     "viewer_warning": "",
     "layer1_title": "Variable Scaling for Legal Purposes",
-    "layer1_text": "<p>Unlike contemporary precise maps, this painting uses flexible, variable scaling to emphasize certain territorial features for legal purposes during the <span class=\"glossary-link-error\" data-term-id=\"nonexistent-term\">⚠️ [[nonexistent-term]]</span> era.</p>",
+    "layer1_text": "<p>Unlike contemporary precise maps, this painting uses flexible, variable scaling to emphasize certain territorial features for legal purposes during the <a href=\"#\" class=\"glossary-inline-link\" data-term-id=\"colonial-period\">colonial</a> era.</p>",
     "layer2_title": "Maps Across Cultures",
     "layer2_text": "<p>Different societies create maps through various mediums. For example, the Kogi people use looms as geographical representations. Maps can be visual, oral, mental, or embodied in cultural artifacts—challenging European assumptions about cartographic representation.</p>"
   },
