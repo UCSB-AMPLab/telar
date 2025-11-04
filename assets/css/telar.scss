@@ -365,9 +365,9 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--color-primary);
 }
 
-/* Home button icon */
+/* Home button icon - hidden on desktop */
 .btn-home-icon {
-  font-size: 1.25rem;
+  display: none;
 }
 
 /* Outro Step - End card in narrative column only */
@@ -1162,6 +1162,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .btn-home-icon {
+    display: block !important; /* Override desktop hide */
     font-size: 1.5rem;
   }
 
