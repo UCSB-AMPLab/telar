@@ -9,8 +9,8 @@
       </div>
       <div class="col-md-6 text-md-end">
         <p class="mb-0 text-muted">
-          Built with <a href="https://github.com/UCSB-AMPLab/telar" target="_blank" class="footer-link" style="font-weight: bold;">Telar</a> <a href="https://github.com/UCSB-AMPLab/telar/releases" target="_blank" class="footer-link text-muted" style=""><code>v{{ site.telar.version }}</code></a>, by <a href="https://neogranadina.org" class="footer-link">Neogranadina</a> and <a href="https://ampl.clair.ucsb.edu" class="footer-link">AMPL</a>.{% if theme.creator %}
-          <br>Theme by {% if theme.creator_url %}<a href="{{ theme.creator_url }}" target="_blank" class="footer-link">{{ theme.creator }}</a>{% else %}{{ theme.creator }}{% endif %}.{% endif %}
+          Built with <a href="https://github.com/UCSB-AMPLab/telar" target="_blank" class="footer-link" style="font-weight: bold;">Telar</a> <a href="https://github.com/UCSB-AMPLab/telar/releases" target="_blank" class="footer-link text-muted" style=""><code>v{{ site.telar.version }}</code></a>, by <a href="https://neogranadina.org" class="footer-link">Neogranadina</a> and <a href="https://ampl.clair.ucsb.edu" class="footer-link">AMPL</a>.{% if theme.name or theme.creator %}
+          <br>{% if theme.name %}{{ theme.name }} theme{% endif %}{% if theme.name and theme.creator %} by {% elsif theme.creator %}Theme by {% endif %}{% if theme.creator %}{% if theme.creator_url %}<a href="{{ theme.creator_url }}" target="_blank" class="footer-link">{{ theme.creator }}</a>{% else %}{{ theme.creator }}{% endif %}{% endif %}.{% endif %}
         </p>
       </div>
     </div>
