@@ -14,6 +14,7 @@ import urllib.error
 from urllib.parse import urlparse
 import ssl
 import yaml
+from jinja2 import Template, Environment, FileSystemLoader
 
 # Global language data cache
 _lang_data = None
@@ -249,12 +250,417 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     return re.sub(pattern, replace_glossary_link, text)
 
 
-def read_markdown_file(file_path):
+# Widget processing functions
+_widget_counter = 0
+
+def get_widget_id():
+    """Generate unique widget ID for this build"""
+    global _widget_counter
+    _widget_counter += 1
+    return f"widget-{_widget_counter}"
+
+
+def validate_image_path(image_path, file_context):
+    """
+    Validate that an image exists at the expected path.
+
+    Args:
+        image_path: Path relative to assets/images/
+        file_context: Context string for error messages (e.g., markdown file name)
+
+    Returns:
+        tuple: (exists: bool, full_path: str)
+    """
+    full_path = Path('assets/images') / image_path
+    return (full_path.exists(), str(full_path))
+
+
+def parse_key_value_block(content):
+    """
+    Parse key: value pairs from a text block.
+
+    Args:
+        content: Text containing key: value pairs
+
+    Returns:
+        dict: Parsed key-value pairs
+    """
+    data = {}
+    for line in content.strip().split('\n'):
+        line = line.strip()
+        if ':' in line and not line.startswith('#'):
+            key, value = line.split(':', 1)
+            data[key.strip()] = value.strip()
+    return data
+
+
+def parse_carousel_widget(content, file_path, warnings_list):
+    """
+    Parse carousel widget content.
+
+    Expected format:
+    :::carousel
+    image: path.jpg
+    alt: Description
+    caption: Caption text
+    credit: Attribution
+
+    ---
+
+    image: path2.jpg
+    :::
+
+    Returns:
+        dict: Parsed carousel data with 'items' list
+    """
+    items = []
+    blocks = content.split('---')
+
+    for block_num, block in enumerate(blocks, 1):
+        block = block.strip()
+        if not block:
+            continue
+
+        data = parse_key_value_block(block)
+
+        # Validate required fields
+        if 'image' not in data:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'carousel',
+                'message': f'Carousel item {block_num} missing required field: image'
+            })
+            continue
+
+        # Validate image exists
+        image_exists, full_path = validate_image_path(data['image'], file_path)
+        if not image_exists:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'carousel',
+                'message': f'Carousel image not found: {data["image"]} (expected at {full_path})'
+            })
+
+        # Warn if alt text missing
+        if 'alt' not in data:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'carousel',
+                'message': f'Carousel item {block_num} missing alt text (accessibility concern)'
+            })
+            data['alt'] = ''
+
+        items.append(data)
+
+    return {'items': items}
+
+
+def parse_comparison_widget(content, file_path, warnings_list):
+    """
+    Parse comparison widget content.
+
+    Expected format:
+    :::comparison
+    image_before: path1.jpg
+    alt_before: Description
+    caption_before: Before caption
+    credit_before: Source
+
+    image_after: path2.jpg
+    alt_after: Description
+    caption_after: After caption
+    credit_after: Source
+    :::
+
+    Returns:
+        dict: Parsed comparison data with 'before' and 'after' dicts
+    """
+    data = parse_key_value_block(content)
+
+    # Validate exactly 2 images
+    before_image = data.get('image_before')
+    after_image = data.get('image_after')
+
+    if not before_image:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'comparison',
+            'message': 'Comparison widget missing required field: image_before'
+        })
+
+    if not after_image:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'comparison',
+            'message': 'Comparison widget missing required field: image_after'
+        })
+
+    # Validate images exist
+    if before_image:
+        exists, full_path = validate_image_path(before_image, file_path)
+        if not exists:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'comparison',
+                'message': f'Comparison before image not found: {before_image} (expected at {full_path})'
+            })
+
+    if after_image:
+        exists, full_path = validate_image_path(after_image, file_path)
+        if not exists:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'comparison',
+                'message': f'Comparison after image not found: {after_image} (expected at {full_path})'
+            })
+
+    # Warn if alt text missing
+    if before_image and 'alt_before' not in data:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'comparison',
+            'message': 'Comparison before image missing alt text (accessibility concern)'
+        })
+
+    if after_image and 'alt_after' not in data:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'comparison',
+            'message': 'Comparison after image missing alt text (accessibility concern)'
+        })
+
+    # Structure data
+    before_data = {
+        'image': before_image or '',
+        'alt': data.get('alt_before', ''),
+        'caption': data.get('caption_before', ''),
+        'credit': data.get('credit_before', '')
+    }
+
+    after_data = {
+        'image': after_image or '',
+        'alt': data.get('alt_after', ''),
+        'caption': data.get('caption_after', ''),
+        'credit': data.get('credit_after', '')
+    }
+
+    return {'before': before_data, 'after': after_data}
+
+
+def parse_markdown_sections(content):
+    """
+    Parse content into sections based on ## headers.
+
+    Args:
+        content: Markdown text with ## headers
+
+    Returns:
+        list: List of dicts with 'title' and 'content' keys
+    """
+    sections = []
+    current_section = None
+
+    for line in content.split('\n'):
+        if line.startswith('## '):
+            # Start new section
+            if current_section:
+                sections.append(current_section)
+            current_section = {
+                'title': line[3:].strip(),
+                'content': []
+            }
+        elif current_section:
+            current_section['content'].append(line)
+
+    # Add last section
+    if current_section:
+        sections.append(current_section)
+
+    # Convert content lists to strings and process markdown
+    for section in sections:
+        content_text = '\n'.join(section['content']).strip()
+        # Convert markdown to HTML
+        section['content_html'] = markdown.markdown(content_text, extensions=['extra', 'nl2br'])
+
+    return sections
+
+
+def parse_tabs_widget(content, file_path, warnings_list):
+    """
+    Parse tabs widget content.
+
+    Expected format:
+    :::tabs
+    ## Tab 1 Title
+    Content here...
+
+    ## Tab 2 Title
+    More content...
+    :::
+
+    Returns:
+        dict: Parsed tabs data with 'tabs' list
+    """
+    sections = parse_markdown_sections(content)
+
+    # Validate tab count
+    if len(sections) < 2:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'tabs',
+            'message': f'Tabs widget must have at least 2 tabs (found {len(sections)})'
+        })
+    elif len(sections) > 4:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'tabs',
+            'message': f'Tabs widget should have maximum 4 tabs (found {len(sections)})'
+        })
+
+    # Validate each tab has content
+    for i, section in enumerate(sections, 1):
+        if not section.get('content_html', '').strip():
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'tabs',
+                'message': f'Tab {i} "{section["title"]}" has no content'
+            })
+
+    return {'tabs': sections}
+
+
+def parse_accordion_widget(content, file_path, warnings_list):
+    """
+    Parse accordion widget content.
+
+    Expected format:
+    :::accordion
+    ## Panel 1 Title
+    Content here...
+
+    ## Panel 2 Title
+    More content...
+    :::
+
+    Returns:
+        dict: Parsed accordion data with 'panels' list
+    """
+    sections = parse_markdown_sections(content)
+
+    # Validate panel count
+    if len(sections) < 2:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'accordion',
+            'message': f'Accordion widget must have at least 2 panels (found {len(sections)})'
+        })
+    elif len(sections) > 6:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'accordion',
+            'message': f'Accordion widget should have maximum 6 panels (found {len(sections)})'
+        })
+
+    # Validate each panel has content
+    for i, section in enumerate(sections, 1):
+        if not section.get('content_html', '').strip():
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'accordion',
+                'message': f'Accordion panel {i} "{section["title"]}" has no content'
+            })
+
+    return {'panels': sections}
+
+
+def render_widget_html(widget_type, widget_data, widget_id):
+    """
+    Render widget HTML using Jinja2 template.
+
+    Args:
+        widget_type: Type of widget (carousel, comparison, tabs, accordion)
+        widget_data: Parsed widget data
+        widget_id: Unique widget ID
+
+    Returns:
+        str: Rendered HTML
+    """
+    try:
+        # Load template from _includes/widgets/
+        template_path = Path('_includes/widgets')
+        env = Environment(loader=FileSystemLoader(str(template_path)))
+        template = env.get_template(f'{widget_type}.html')
+
+        # Render with data
+        html = template.render(
+            widget_id=widget_id,
+            base_url='{{ site.baseurl }}',  # Will be processed by Jekyll
+            **widget_data
+        )
+
+        return html
+
+    except Exception as e:
+        # Return error HTML if template rendering fails
+        return f'<div class="telar-widget-error">Widget rendering error ({widget_type}): {str(e)}</div>'
+
+
+def process_widgets(text, file_path, warnings_list):
+    """
+    Find and process :::widget::: blocks in markdown text.
+    Must be called BEFORE markdown.markdown() conversion.
+
+    Args:
+        text: Raw markdown text
+        file_path: Path to markdown file (for error context)
+        warnings_list: List to append widget warnings
+
+    Returns:
+        str: Text with widgets replaced by rendered HTML
+    """
+    # Pattern to match :::type ... :::
+    pattern = r':::(\w+)\s*\n(.*?)\n:::'
+
+    def replace_widget(match):
+        widget_type = match.group(1).lower()
+        content = match.group(2)
+        widget_id = get_widget_id()
+
+        # Parse based on widget type
+        widget_parsers = {
+            'carousel': parse_carousel_widget,
+            'comparison': parse_comparison_widget,
+            'tabs': parse_tabs_widget,
+            'accordion': parse_accordion_widget
+        }
+
+        if widget_type not in widget_parsers:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': widget_type,
+                'message': f'Unknown widget type: {widget_type}'
+            })
+            return f'<div class="telar-widget-error">Unknown widget type: {widget_type}</div>'
+
+        # Parse widget content
+        parser = widget_parsers[widget_type]
+        widget_data = parser(content, file_path, warnings_list)
+
+        # Render HTML
+        html = render_widget_html(widget_type, widget_data, widget_id)
+
+        return html
+
+    return re.sub(pattern, replace_widget, text, flags=re.DOTALL)
+
+
+def read_markdown_file(file_path, widget_warnings=None):
     """
     Read a markdown file and parse frontmatter
 
     Args:
         file_path: Path to markdown file relative to components/texts/
+        widget_warnings: Optional list to collect widget warnings
 
     Returns:
         dict with 'title' and 'content' keys, or None if file doesn't exist
@@ -264,6 +670,10 @@ def read_markdown_file(file_path):
     if not full_path.exists():
         print(f"Warning: Markdown file not found: {full_path}")
         return None
+
+    # Initialize widget warnings list if not provided
+    if widget_warnings is None:
+        widget_warnings = []
 
     try:
         with open(full_path, 'r', encoding='utf-8') as f:
@@ -281,6 +691,9 @@ def read_markdown_file(file_path):
             title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
             title = title_match.group(1) if title_match else ''
 
+            # Process widgets BEFORE markdown conversion
+            body = process_widgets(body, file_path, widget_warnings)
+
             # Process image size syntax before markdown conversion
             body = process_image_sizes(body)
 
@@ -293,8 +706,16 @@ def read_markdown_file(file_path):
             }
         else:
             # No frontmatter, just content
-            content = process_image_sizes(content.strip())
-            html_content = markdown.markdown(content, extensions=['extra', 'nl2br'])
+            content_body = content.strip()
+
+            # Process widgets BEFORE markdown conversion
+            content_body = process_widgets(content_body, file_path, widget_warnings)
+
+            # Process image sizes
+            content_body = process_image_sizes(content_body)
+
+            # Convert markdown to HTML
+            html_content = markdown.markdown(content_body, extensions=['extra', 'nl2br'])
             return {
                 'title': '',
                 'content': html_content
@@ -853,6 +1274,9 @@ def process_story(df, christmas_tree=False):
     glossary_terms = load_glossary_terms()
     glossary_warnings = []
 
+    # Initialize widget warnings list
+    widget_warnings = []
+
     # Drop example column if it exists
     if 'example' in df.columns:
         df = df.drop(columns=['example'])
@@ -945,7 +1369,7 @@ def process_story(df, christmas_tree=False):
                 if file_ref and file_ref.strip():
                     # Prepend 'stories/' to the path for story files
                     file_path = f"stories/{file_ref.strip()}"
-                    markdown_data = read_markdown_file(file_path)
+                    markdown_data = read_markdown_file(file_path, widget_warnings)
                     if markdown_data:
                         step_num = row.get('step', 'unknown')
                         df.at[idx, title_col] = markdown_data['title']
@@ -1033,6 +1457,9 @@ def process_story(df, christmas_tree=False):
 
     # Add glossary link warnings
     all_warnings.extend(glossary_warnings)
+
+    # Add widget warnings
+    all_warnings.extend(widget_warnings)
 
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings

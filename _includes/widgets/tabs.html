@@ -1,0 +1,33 @@
+<div class="telar-widget telar-widget-tabs">
+  <!-- Tab navigation -->
+  <ul class="nav nav-tabs" role="tablist">
+    {% for tab in tabs %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if loop.first %}active{% endif %}"
+              id="tab-{{ widget_id }}-{{ loop.index }}-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#tab-{{ widget_id }}-{{ loop.index }}"
+              type="button"
+              role="tab"
+              aria-controls="tab-{{ widget_id }}-{{ loop.index }}"
+              {% if loop.first %}aria-selected="true"{% else %}aria-selected="false"{% endif %}>
+        {{ tab.title }}
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <!-- Tab content -->
+  <div class="tab-content">
+    {% for tab in tabs %}
+    <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+         id="tab-{{ widget_id }}-{{ loop.index }}"
+         role="tabpanel"
+         aria-labelledby="tab-{{ widget_id }}-{{ loop.index }}-tab">
+      <div class="tab-pane-content">
+        {{ tab.content_html }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>

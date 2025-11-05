@@ -1,0 +1,46 @@
+<div class="telar-widget telar-widget-carousel">
+  <div id="carousel-{{ widget_id }}" class="carousel slide" data-bs-ride="false">
+    <!-- Indicators -->
+    <div class="carousel-indicators">
+      {% for item in items %}
+      <button type="button" data-bs-target="#carousel-{{ widget_id }}"
+              data-bs-slide-to="{{ loop.index0 }}"
+              {% if loop.first %}class="active" aria-current="true"{% endif %}
+              aria-label="Slide {{ loop.index }}"></button>
+      {% endfor %}
+    </div>
+
+    <!-- Slides -->
+    <div class="carousel-inner">
+      {% for item in items %}
+      <div class="carousel-item {% if loop.first %}active{% endif %}">
+        <img src="{{ base_url }}/assets/images/{{ item.image }}"
+             alt="{{ item.alt }}"
+             class="d-block w-100">
+        {% if item.caption or item.credit %}
+        <div class="carousel-caption">
+          {% if item.caption %}
+          <p class="caption-text">{{ item.caption }}</p>
+          {% endif %}
+          {% if item.credit %}
+          <p class="caption-credit"><small>{{ item.credit }}</small></p>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Controls -->
+    <button class="carousel-control-prev" type="button"
+            data-bs-target="#carousel-{{ widget_id }}" data-bs-slide="prev">
+      <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+      <span class="visually-hidden">Previous</span>
+    </button>
+    <button class="carousel-control-next" type="button"
+            data-bs-target="#carousel-{{ widget_id }}" data-bs-slide="next">
+      <span class="carousel-control-next-icon" aria-hidden="true"></span>
+      <span class="visually-hidden">Next</span>
+    </button>
+  </div>
+</div>

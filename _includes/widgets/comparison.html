@@ -1,0 +1,54 @@
+<div class="telar-widget telar-widget-comparison">
+  <div class="comparison-container">
+    <div class="comparison-slider">
+      <!-- Before image (full width) -->
+      <div class="comparison-before">
+        <img src="{{ base_url }}/assets/images/{{ before.image }}"
+             alt="{{ before.alt }}"
+             class="comparison-image">
+        <div class="comparison-label comparison-label-before">
+          {{ before.caption or 'Before' }}
+        </div>
+      </div>
+
+      <!-- After image (overlayed, width controlled by slider) -->
+      <div class="comparison-after">
+        <img src="{{ base_url }}/assets/images/{{ after.image }}"
+             alt="{{ after.alt }}"
+             class="comparison-image">
+        <div class="comparison-label comparison-label-after">
+          {{ after.caption or 'After' }}
+        </div>
+      </div>
+
+      <!-- Slider control -->
+      <input type="range" min="0" max="100" value="50"
+             class="comparison-slider-input"
+             id="slider-{{ widget_id }}"
+             aria-label="Comparison slider">
+
+      <!-- Divider line -->
+      <div class="comparison-divider" id="divider-{{ widget_id }}">
+        <div class="comparison-handle">
+          <span class="comparison-arrow">◀▶</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Captions below -->
+    {% if before.credit or after.credit %}
+    <div class="comparison-credits">
+      {% if before.credit %}
+      <div class="comparison-credit comparison-credit-before">
+        <small>Before: {{ before.credit }}</small>
+      </div>
+      {% endif %}
+      {% if after.credit %}
+      <div class="comparison-credit comparison-credit-after">
+        <small>After: {{ after.credit }}</small>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
