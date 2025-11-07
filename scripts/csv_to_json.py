@@ -360,97 +360,6 @@ def parse_carousel_widget(content, file_path, warnings_list):
     return {'items': items}
 
 
-def parse_comparison_widget(content, file_path, warnings_list):
-    """
-    Parse comparison widget content.
-
-    Expected format (supports both field name formats):
-    :::comparison
-    image_before: path1.jpg  (or before_image:)
-    alt_before: Description  (or before_alt:)
-    caption_before: Before caption  (or before_caption:)
-    credit_before: Source  (or before_credit:)
-
-    image_after: path2.jpg  (or after_image:)
-    alt_after: Description  (or after_alt:)
-    caption_after: After caption  (or after_caption:)
-    credit_after: Source  (or after_credit:)
-    :::
-
-    Returns:
-        dict: Parsed comparison data with 'before' and 'after' dicts
-    """
-    data = parse_key_value_block(content)
-
-    # Support both field name formats for backward compatibility
-    # Prefer image_before/image_after, but accept before_image/after_image
-    before_image = data.get('image_before') or data.get('before_image')
-    after_image = data.get('image_after') or data.get('after_image')
-
-    if not before_image:
-        warnings_list.append({
-            'type': 'widget',
-            'widget_type': 'comparison',
-            'message': 'Comparison widget missing required field: image_before'
-        })
-
-    if not after_image:
-        warnings_list.append({
-            'type': 'widget',
-            'widget_type': 'comparison',
-            'message': 'Comparison widget missing required field: image_after'
-        })
-
-    # Validate images exist
-    if before_image:
-        exists, full_path = validate_image_path(before_image, file_path)
-        if not exists:
-            warnings_list.append({
-                'type': 'widget',
-                'widget_type': 'comparison',
-                'message': f'Comparison before image not found: {before_image} (expected at {full_path})'
-            })
-
-    if after_image:
-        exists, full_path = validate_image_path(after_image, file_path)
-        if not exists:
-            warnings_list.append({
-                'type': 'widget',
-                'widget_type': 'comparison',
-                'message': f'Comparison after image not found: {after_image} (expected at {full_path})'
-            })
-
-    # Warn if alt text missing (check both field name formats)
-    if before_image and not (data.get('alt_before') or data.get('before_alt')):
-        warnings_list.append({
-            'type': 'widget',
-            'widget_type': 'comparison',
-            'message': 'Comparison before image missing alt text (accessibility concern)'
-        })
-
-    if after_image and not (data.get('alt_after') or data.get('after_alt')):
-        warnings_list.append({
-            'type': 'widget',
-            'widget_type': 'comparison',
-            'message': 'Comparison after image missing alt text (accessibility concern)'
-        })
-
-    # Structure data - support both field name formats
-    before_data = {
-        'image': before_image or '',
-        'alt': data.get('alt_before') or data.get('before_alt', ''),
-        'caption': data.get('caption_before') or data.get('before_caption') or data.get('before_label', ''),
-        'credit': data.get('credit_before') or data.get('before_credit', '')
-    }
-
-    after_data = {
-        'image': after_image or '',
-        'alt': data.get('alt_after') or data.get('after_alt', ''),
-        'caption': data.get('caption_after') or data.get('after_caption') or data.get('after_label', ''),
-        'credit': data.get('credit_after') or data.get('after_credit', '')
-    }
-
-    return {'before': before_data, 'after': after_data}
 
 
 def parse_markdown_sections(content):
@@ -635,7 +544,6 @@ def process_widgets(text, file_path, warnings_list):
         # Parse based on widget type
         widget_parsers = {
             'carousel': parse_carousel_widget,
-            'comparison': parse_comparison_widget,
             'tabs': parse_tabs_widget,
             'accordion': parse_accordion_widget
         }
