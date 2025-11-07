@@ -15,12 +15,3 @@ Moreover, the signatures of the painter and guarantor ensured the validity of th
 Although we do not know the origin of the paints used on the map, the production of inks and colors was a complex process involving vegetable and animal pigments that were then transformed into paint using methods rich with cultural significance. We have evidence that the Muisca and other Indigenous groups used a wide palette of blue, red, and brown pigments which they applied to designs on textiles, rocks, and other surfaces. For this reason, it is possible that some of the colors used in the *Painting* were produced using Indigenous methods.
 
 Another important aspect of the *Painting's* visualization of the landscape is its scale. Unlike contemporary maps, which guarantee precision by maintaining a single scale throughout the image, the Painting uses a multiple, flexible, and variable scale. The center of the map—which represents the territory disputed by Maldonado y Mendoza and the crown prosecutor—uses a more homogeneous scale, whereas the borders are variable, allowing the observer to see relatively remote landmarks like the city of Santafé and the towns of Fontibón and Madrid as points of reference.
-
-:::comparison
-before_image: https://paisajescoloniales.com/assets/img/entrada-cap1.png
-before_label: Full painting
-before_alt: Complete 1614 painting of Bogotá lands
-after_image: https://paisajescoloniales.com/assets/img/entrada-cap1.png
-after_label: Detail view
-after_alt: Detailed view showing signatures and center
-:::

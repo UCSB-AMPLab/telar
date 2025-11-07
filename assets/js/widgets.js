@@ -19,9 +19,13 @@
    * Initialize Bootstrap carousels with manual navigation
    */
   function initCarousels() {
-    const carousels = document.querySelectorAll('.telar-widget-carousel .carousel');
+    const carouselWidgets = document.querySelectorAll('.telar-widget-carousel');
 
-    carousels.forEach(function(carouselElement) {
+    carouselWidgets.forEach(function(widget) {
+      const carouselElement = widget.querySelector('.carousel');
+
+      if (!carouselElement) return;
+
       // Initialize Bootstrap carousel with manual navigation only
       const carousel = new bootstrap.Carousel(carouselElement, {
         interval: false,  // No auto-advance
