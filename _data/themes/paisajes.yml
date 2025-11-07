@@ -1,7 +1,7 @@
-name: "Paisajes Coloniales"
-description: "Classic academic exhibition style with earthy tones"
-creator: "AMPL"
-creator_url: "https://ampl.clair.ucsb.edu"
+name: "Paisajes"
+description: "Inspired by the original Paisajes Coloniales project by Adelaida Ávila, Santiago Muñoz Arbeláez, Alejandra Orduz, and collaborators."
+creator: "Neogranadina"
+creator_url: "https://paisajescoloniales.org"
 
 colors:
   # Text/Font colors
