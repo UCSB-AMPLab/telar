@@ -13,7 +13,7 @@ caption: Drawing of Santa Fe de Bogotá. "Capítulo primero de las ciudades y vi
 
 ---
 
-image: https://paisajescoloniales.com/assets/img/location-map.jpg
+image: https://paisajescoloniales.com/assets/img/mapa-ublicacion.jpg
 alt: Location map showing Bogotá savanna in modern Colombia
 caption: Geographic location of the Bogotá savanna in modern-day Colombia
 

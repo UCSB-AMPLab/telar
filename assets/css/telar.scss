@@ -462,6 +462,15 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
 }
 
+#panel-layer1 .offcanvas-body h1,
+#panel-layer1 .offcanvas-body h2,
+#panel-layer1 .offcanvas-body h3,
+#panel-layer1 .offcanvas-body h4,
+#panel-layer1 .offcanvas-body h5,
+#panel-layer1 .offcanvas-body h6 {
+  color: var(--color-panel-layer1-text);
+}
+
 /* Layer 2 Panel - Dark purple background, narrower than layer1 */
 #panel-layer2 {
   width: 55% !important;
@@ -488,6 +497,15 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 400;
+}
+
+#panel-layer2 .offcanvas-body h1,
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4,
+#panel-layer2 .offcanvas-body h5,
+#panel-layer2 .offcanvas-body h6 {
+  color: var(--color-panel-layer2-text);
 }
 
 /* Panel buttons styling */
@@ -543,6 +561,15 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 400;
+}
+
+#panel-glossary .offcanvas-body h1,
+#panel-glossary .offcanvas-body h2,
+#panel-glossary .offcanvas-body h3,
+#panel-glossary .offcanvas-body h4,
+#panel-glossary .offcanvas-body h5,
+#panel-glossary .offcanvas-body h6 {
+  color: var(--color-panel-glossary-text);
 }
 
 #panel-glossary .btn-close {
