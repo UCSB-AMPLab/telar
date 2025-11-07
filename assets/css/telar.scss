@@ -772,6 +772,14 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 1rem;
 }
 
+/* Mobile: One column layout for object gallery */
+@media (max-width: 767px) {
+  .collection-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
 /* Glossary Index */
 .glossary-list {
   padding: 2rem 0;
