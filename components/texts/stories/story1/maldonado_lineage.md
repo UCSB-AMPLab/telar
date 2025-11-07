@@ -22,9 +22,9 @@ The trial ratified Maldonado y Mendoza's rights to his estate. In his will, Mald
 
 This was the beginning of a powerful lineage that grew around the estate.
 
-This property was known as the "Meadow of Bogotá," the *mayorazgo* of Bogotá, or the Steer Yard, because the estate temporarily held cattle driven up from the lowlands for consumption in the city of Santafé de Bogotá. Maldonado y Mendoza's heirs continued to marry into some of the most distinguished families in the New Kingdom of Granada, and eventually received titles of nobility and established the Marquisate of San Jorge.
+This property was known as the "Meadow of Bogotá," the *mayorazgo* of Bogotá, or the Steer Yard, because the estate temporarily held [[livestock|cattle]] driven up from the lowlands for consumption in the city of Santafé de Bogotá. Maldonado y Mendoza's heirs continued to marry into some of the most distinguished families in the New Kingdom of Granada, and eventually received titles of nobility and established the Marquisate of San Jorge.
 
-The lineage maintained its power for two centuries, producing viceroys and bishops. As a matter of fact, Jorge Tadeo Lozano, who became the first president of the republic in 1811, was a descendant of the Maldonados.
+The lineage maintained its power for two centuries, producing viceroys and bishops. As a matter of fact, [[jorge-tadeo-lozano|Jorge Tadeo Lozano]], who became the first president of the republic in 1811, was a descendant of the Maldonados.
 
 ![Maldonado family tree page 1](https://paisajescoloniales.com/assets/img/1.5.1.jpg)
 ![Maldonado family tree page 2](https://paisajescoloniales.com/assets/img/1.5.2.jpg)
