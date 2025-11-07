@@ -1709,6 +1709,19 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* Panel-specific widget colors: widgets use opposite panel colors */
+#panel-layer1 .telar-widget {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer2 .telar-widget {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
 /* Widget Error Display */
 .telar-widget-error {
   padding: 1rem;
@@ -1793,6 +1806,25 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.8rem;
   color: #666;
   font-style: italic;
+}
+
+/* Panel-specific carousel caption colors */
+#panel-layer1 .telar-widget-carousel .carousel-caption {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-carousel .carousel-caption small {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#panel-layer2 .telar-widget-carousel .carousel-caption {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-carousel .carousel-caption small {
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .telar-widget-carousel .carousel-control-prev,
@@ -2050,6 +2082,45 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1rem;
 }
 
+/* Panel-specific tabs widget colors */
+#panel-layer1 .telar-widget-tabs {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-tabs {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-link {
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer2 .telar-widget-tabs {
+  background: var(--color-panel-layer1-bg);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-tabs {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-link {
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-link.active {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+}
+
 /* ========================================
    ACCORDION WIDGET
    ======================================== */
@@ -2132,6 +2203,45 @@ h1, h2, h3, h4, h5, h6 {
 .telar-widget-accordion .accordion-body h4 {
   margin-top: 1.5rem;
   margin-bottom: 1rem;
+}
+
+/* Panel-specific accordion widget colors */
+#panel-layer1 .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer1-bg);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-button {
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer1-text);
 }
 
 /* ========================================
