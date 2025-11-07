@@ -3,7 +3,7 @@
     <div class="comparison-slider">
       <!-- Before image (full width) -->
       <div class="comparison-before">
-        <img src="{{ base_url }}/assets/images/{{ before.image }}"
+        <img src="{% if before.image.startswith('http://') or before.image.startswith('https://') %}{{ before.image }}{% else %}{{ base_url }}/assets/images/{{ before.image }}{% endif %}"
              alt="{{ before.alt }}"
              class="comparison-image">
         <div class="comparison-label comparison-label-before">
@@ -13,7 +13,7 @@
 
       <!-- After image (overlayed, width controlled by slider) -->
       <div class="comparison-after">
-        <img src="{{ base_url }}/assets/images/{{ after.image }}"
+        <img src="{% if after.image.startswith('http://') or after.image.startswith('https://') %}{{ after.image }}{% else %}{{ base_url }}/assets/images/{{ after.image }}{% endif %}"
              alt="{{ after.alt }}"
              class="comparison-image">
         <div class="comparison-label comparison-label-after">

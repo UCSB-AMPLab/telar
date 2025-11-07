@@ -263,14 +263,19 @@ def get_widget_id():
 def validate_image_path(image_path, file_context):
     """
     Validate that an image exists at the expected path.
+    Skips validation for external URLs (http:// or https://).
 
     Args:
-        image_path: Path relative to assets/images/
+        image_path: Path relative to assets/images/, or external URL
         file_context: Context string for error messages (e.g., markdown file name)
 
     Returns:
         tuple: (exists: bool, full_path: str)
     """
+    # Skip validation for external URLs
+    if image_path.startswith('http://') or image_path.startswith('https://'):
+        return (True, image_path)
+
     full_path = Path('assets/images') / image_path
     return (full_path.exists(), str(full_path))
 
@@ -359,17 +364,17 @@ def parse_comparison_widget(content, file_path, warnings_list):
     """
     Parse comparison widget content.
 
-    Expected format:
+    Expected format (supports both field name formats):
     :::comparison
-    image_before: path1.jpg
-    alt_before: Description
-    caption_before: Before caption
-    credit_before: Source
+    image_before: path1.jpg  (or before_image:)
+    alt_before: Description  (or before_alt:)
+    caption_before: Before caption  (or before_caption:)
+    credit_before: Source  (or before_credit:)
 
-    image_after: path2.jpg
-    alt_after: Description
-    caption_after: After caption
-    credit_after: Source
+    image_after: path2.jpg  (or after_image:)
+    alt_after: Description  (or after_alt:)
+    caption_after: After caption  (or after_caption:)
+    credit_after: Source  (or after_credit:)
     :::
 
     Returns:
@@ -377,9 +382,10 @@ def parse_comparison_widget(content, file_path, warnings_list):
     """
     data = parse_key_value_block(content)
 
-    # Validate exactly 2 images
-    before_image = data.get('image_before')
-    after_image = data.get('image_after')
+    # Support both field name formats for backward compatibility
+    # Prefer image_before/image_after, but accept before_image/after_image
+    before_image = data.get('image_before') or data.get('before_image')
+    after_image = data.get('image_after') or data.get('after_image')
 
     if not before_image:
         warnings_list.append({
@@ -414,34 +420,34 @@ def parse_comparison_widget(content, file_path, warnings_list):
                 'message': f'Comparison after image not found: {after_image} (expected at {full_path})'
             })
 
-    # Warn if alt text missing
-    if before_image and 'alt_before' not in data:
+    # Warn if alt text missing (check both field name formats)
+    if before_image and not (data.get('alt_before') or data.get('before_alt')):
         warnings_list.append({
             'type': 'widget',
             'widget_type': 'comparison',
             'message': 'Comparison before image missing alt text (accessibility concern)'
         })
 
-    if after_image and 'alt_after' not in data:
+    if after_image and not (data.get('alt_after') or data.get('after_alt')):
         warnings_list.append({
             'type': 'widget',
             'widget_type': 'comparison',
             'message': 'Comparison after image missing alt text (accessibility concern)'
         })
 
-    # Structure data
+    # Structure data - support both field name formats
     before_data = {
         'image': before_image or '',
-        'alt': data.get('alt_before', ''),
-        'caption': data.get('caption_before', ''),
-        'credit': data.get('credit_before', '')
+        'alt': data.get('alt_before') or data.get('before_alt', ''),
+        'caption': data.get('caption_before') or data.get('before_caption') or data.get('before_label', ''),
+        'credit': data.get('credit_before') or data.get('before_credit', '')
     }
 
     after_data = {
         'image': after_image or '',
-        'alt': data.get('alt_after', ''),
-        'caption': data.get('caption_after', ''),
-        'credit': data.get('credit_after', '')
+        'alt': data.get('alt_after') or data.get('after_alt', ''),
+        'caption': data.get('caption_after') or data.get('after_caption') or data.get('after_label', ''),
+        'credit': data.get('credit_after') or data.get('after_credit', '')
     }
 
     return {'before': before_data, 'after': after_data}
@@ -1112,10 +1118,11 @@ def process_objects(df, christmas_tree=False):
             ssl_context.verify_mode = ssl.CERT_NONE
 
             try:
-                req = urllib.request.Request(manifest_url, method='HEAD')
-                req.add_header('User-Agent', 'Telar/0.3.3-beta (IIIF validator)')
+                # Fetch manifest directly with GET (follows redirects automatically)
+                req = urllib.request.Request(manifest_url)
+                req.add_header('User-Agent', 'Telar/0.4.0-beta (IIIF validator)')
 
-                with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+                with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
                     content_type = response.headers.get('Content-Type', '')
 
                     # Check if response is JSON
@@ -1127,31 +1134,26 @@ def process_objects(df, christmas_tree=False):
                         # Don't clear manifest URL - might still work despite wrong content type
                         continue
 
-                    # Fetch full content to validate structure
-                    req_get = urllib.request.Request(manifest_url)
-                    req_get.add_header('User-Agent', 'Telar/0.3.3-beta (IIIF validator)')
+                    try:
+                        data = json.loads(response.read().decode('utf-8'))
 
-                    with urllib.request.urlopen(req_get, timeout=10, context=ssl_context) as resp:
-                        try:
-                            data = json.loads(resp.read().decode('utf-8'))
+                        # Check for basic IIIF structure
+                        has_context = '@context' in data
+                        has_type = 'type' in data or '@type' in data
 
-                            # Check for basic IIIF structure
-                            has_context = '@context' in data
-                            has_type = 'type' in data or '@type' in data
-
-                            if not (has_context or has_type):
-                                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_malformed')
-                                msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
-                                print(f"  [WARN] {msg}")
-                                warnings.append(msg)
-                            else:
-                                print(f"  [INFO] Validated IIIF manifest for object {object_id}")
-
-                        except json.JSONDecodeError:
-                            df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
-                            msg = f"IIIF manifest for object {object_id} is not valid JSON"
+                        if not (has_context or has_type):
+                            df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_malformed')
+                            msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
                             print(f"  [WARN] {msg}")
                             warnings.append(msg)
+                        else:
+                            print(f"  [INFO] Validated IIIF manifest for object {object_id}")
+
+                    except json.JSONDecodeError:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
+                        msg = f"IIIF manifest for object {object_id} is not valid JSON"
+                        print(f"  [WARN] {msg}")
+                        warnings.append(msg)
 
             except urllib.error.HTTPError as e:
                 # Check if we should skip this 429 error (unchanged manifest from previous build)

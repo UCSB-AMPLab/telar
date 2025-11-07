@@ -14,7 +14,7 @@
     <div class="carousel-inner">
       {% for item in items %}
       <div class="carousel-item {% if loop.first %}active{% endif %}">
-        <img src="{{ base_url }}/assets/images/{{ item.image }}"
+        <img src="{% if item.image.startswith('http://') or item.image.startswith('https://') %}{{ item.image }}{% else %}{{ base_url }}/assets/images/{{ item.image }}{% endif %}"
              alt="{{ item.alt }}"
              class="d-block w-100">
         {% if item.caption or item.credit %}
