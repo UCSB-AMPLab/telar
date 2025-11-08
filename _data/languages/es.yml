@@ -75,6 +75,7 @@ pages:
 # Sistema de paneles
 panels:
   default_title: "Título del panel"
+  glossary_term_prefix: "Palabra clave"
   glossary_term_title: "Término del glosario"
 
 # Mensajes de estado vacío

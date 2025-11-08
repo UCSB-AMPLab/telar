@@ -152,7 +152,7 @@ function openGlossaryPanel(termUrl, termTitle) {
  * Load glossary term content and show panel
  */
 function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas) {
-  // Set title
+  // Set temporary title from link text (will be replaced with actual title from page)
   titleElement.textContent = termTitle;
 
   // Show loading state
@@ -171,6 +171,13 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
       // Parse HTML and extract content
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
+
+      // Extract the actual title from the page's h1 tag
+      const pageTitle = doc.querySelector('h1');
+      if (pageTitle) {
+        titleElement.textContent = pageTitle.textContent.trim();
+      }
+
       const glossaryContent = doc.querySelector('.glossary-content');
 
       if (glossaryContent) {

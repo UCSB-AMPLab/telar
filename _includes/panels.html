@@ -44,6 +44,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
   <div class="offcanvas-body">
+    <div class="glossary-term-prefix">{{ lang.panels.glossary_term_prefix }}:</div>
     <h5 class="offcanvas-title" id="panel-glossary-title">{{ lang.panels.glossary_term_title }}</h5>
     <div id="panel-glossary-content">
       <!-- Content populated by JavaScript -->
@@ -63,6 +64,19 @@
 
   #panel-glossary {
     z-index: 1070;
+  }
+
+  /* Glossary term prefix styling */
+  .glossary-term-prefix {
+    font-family: inherit;
+    font-size: 1em;
+    font-weight: 400;
+    opacity: 0.5;
+    margin-bottom: 0.25rem;
+  }
+
+  #panel-glossary-title {
+    margin-top: 0;
   }
 
   /* Panel content styling */

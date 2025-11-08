@@ -75,6 +75,7 @@ pages:
 # Panels system
 panels:
   default_title: "Panel Title"
+  glossary_term_prefix: "Key term"
   glossary_term_title: "Glossary Term"
 
 # Empty state messages
