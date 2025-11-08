@@ -4,15 +4,14 @@
     "title": "Terra firma et novum regnum Granatense et Popayan",
     "description": "Historical map of New Granada (present-day Colombia) and Popayan region, created by Jan Jansson and Hendrik Hondius. This copper-engraved map appeared in only two Jansson/Hondius atlases with a blank verso.",
     "iiif_manifest": "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json",
-    "creator": "Jan Jansson (1588-1664) and Hendrik Hondius (1597-1651)",
-    "period": "1630-1631",
-    "medium": "Copper engraving",
+    "creator": "",
+    "period": "",
+    "medium": "",
     "dimensions": "",
-    "location": "Huntington Library",
-    "credit": "Huntington Digital Library",
+    "location": "",
+    "credit": "",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-bogota-1614",
@@ -26,8 +25,7 @@
     "location": "Archivo General de Indias",
     "credit": "Archivo General de Indias, Seville",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-muisca-goldwork",
@@ -41,8 +39,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá. Registration Number: O08319",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-ceramic-figure",
@@ -56,8 +53,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-piedrahita-title_page",
@@ -65,13 +61,12 @@
     "description": "Title page with portrait medallions of seven indigenous rulers or caciques (Sacuan, Sugamuxi, Nemeguene, Vbaqui, Saquesazippa, Thysquesuca, and Guatabita), four battle scenes (battles of Choconta, las Bueltas, Portachuelo, and Voqueron), and two coats of arms.",
     "iiif_manifest": "https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest",
     "creator": "Fernández de Piedrahita, Lucas (1624-1688); Engraved by Joseph Mulder",
-    "period": "1688",
-    "medium": "Engraving, ink on paper",
-    "dimensions": "28.6 x 19.7 cm",
-    "location": "John Carter Brown Library",
-    "credit": "John Carter Brown Library, Brown University, Providence, R.I.",
+    "period": "",
+    "medium": "",
+    "dimensions": "",
+    "location": "",
+    "credit": "",
     "thumbnail": "",
-    "object_warning": "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means \"Too Many Requests\": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away.",
-    "object_warning_short": "Error 429: rate limiting (try again in 15-30 minutes)"
+    "object_warning": ""
   }
 ]

@@ -1,0 +1,209 @@
+# English Language Strings for Telar
+# Language code: en
+# This file contains ONLY user-facing strings visible in the web browser
+
+# Navigation
+navigation:
+  home: "Home"
+  objects: "Objects"
+  stories: "Stories"
+  glossary: "Glossary"
+  about: "About"
+
+# Buttons and actions
+buttons:
+  back: "← Back"
+  back_to_home: "← Back to Home"
+  back_to_collection: "← Back to Collection"
+  back_to_glossary: "← Back to Glossary"
+  learn_more: "Learn more"
+  read_more: "Read More"
+  view_objects: "View Objects"
+  copy: "Copy"
+  copied: "Copied!"
+  close: "Close"
+  identify_coordinates: "Identify coordinates"
+  copy_coordinates: "Copy x,y,zoom"
+  go_deeper: "Go deeper"
+
+# Object page
+object:
+  # Metadata field labels
+  metadata:
+    creator: "Creator"
+    period: "Period"
+    medium: "Medium"
+    dimensions: "Dimensions"
+    location: "Location"
+    credit: "Credit"
+    iiif_manifest: "IIIF Manifest"
+    appears_in_stories: "Appears in Stories"
+
+  # Coordinate identification tool
+  coordinates:
+    heading: "Instructions"
+    x_label: "X"
+    y_label: "Y"
+    zoom_label: "Zoom"
+    instructions_p1: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling."
+    instructions_p2: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once."
+    copy_x_tooltip: "Copy X coordinate"
+    copy_y_tooltip: "Copy Y coordinate"
+    copy_zoom_tooltip: "Copy Zoom level"
+    copy_manifest_tooltip: "Copy manifest URL"
+
+  # Object thumbnails
+  no_image: "No image"
+
+# Story interface
+story:
+  step_number: "Step {{ number }}"
+  scroll_hint: "Press ↓ or scroll to begin"
+  scroll_hint_mobile: "Use the arrow buttons to navigate"
+  config_issues_heading: "The following steps have content or configuration issues:"
+  viewer_error_prefix: "image viewer:"
+  glossary_error_prefix: "glossary link:"
+  preview_warning: "You can still scroll to preview your story, but elements will not work as expected."
+
+# Page headings and intro text
+pages:
+  home_title: "Home"
+  stories_heading: "Explore the stories"
+  objects_heading: "See the objects behind the stories"
+  objects_count: "Browse {count} objects featured in the stories."
+
+# Panels system
+panels:
+  default_title: "Panel Title"
+  glossary_term_prefix: "Key term"
+  glossary_term_title: "Glossary Term"
+
+# Empty state messages
+empty_states:
+  no_stories: "No stories available yet. Create story files in the <code>_stories/</code> directory to get started."
+  no_objects: "No objects in the collection yet. Add object files to the <code>_objects/</code> directory to populate the collection."
+  no_glossary: "No glossary terms available yet. Add glossary files to the <code>_glossary/</code> directory to populate the glossary."
+  thumbnail_load_error: "Failed to load"
+
+# Error messages and warnings (user-facing)
+errors:
+  # Image viewer errors
+  image_viewer_unavailable: "⚠️ Image Viewer Unavailable"
+  image_viewer_unavailable_alt: "⚠️ Image viewer unavailable"
+  check_objects_csv: "Please check <code>components/structures/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL."
+  failed_to_load: "Failed to load"
+  no_image: "No image"
+  objects_config_issues: "The following objects have configuration issues:"
+  objects_will_fail: "These objects will fail to load in the viewer."
+
+  # Configuration warning headings
+  config_issues_heading: "⚠️ Configuration Issues Detected"
+  object_config_heading: "⚠️ Object configuration issues detected"
+  story_config_heading: "⚠️ Story configuration issues detected"
+  story_navigate_to: "Navigate to"
+  story_see_details: "to see more details."
+
+  # IIIF URL mismatch warning
+  iiif_mismatch:
+    heading: "⚠️ Your images aren't loading correctly"
+    description: "Your images can't display because there's a mismatch between where you're viewing the site and where the image tiles are configured to load from."
+    whats_happening: "What's happening:"
+    viewing_at: "You're viewing the site at:"
+    configured_for: "But image tiles are configured for:"
+    affected_images: "Affected images:"
+    affected_images_count_singular: "The following image is affected:"
+    affected_images_count_plural: "The following __COUNT__ images are affected:"
+    common_causes: "Here are some common causes for errors like this:"
+    cause_incorrect_settings: "Your site settings are incorrect. The <code>url</code> or <code>baseurl</code> in <code>_config.yml</code> doesn't match where your site is actually published"
+    cause_moved_url: "You recently moved your site to a new URL but haven't updated the configuration"
+    cause_preview_env: "You're viewing a preview or staging environment that uses a different URL than what's configured"
+    fix_heading: "To fix this, update your site configuration:"
+    fix_check_config: "Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> match your actual site URL"
+    fix_your_site_at: "Your site is at:"
+    fix_config_should_be: "Your config should be:"
+    fix_commit_push: "Commit and push your changes to GitHub"
+    fix_auto_regenerate: "GitHub Actions will automatically regenerate the image tiles with the correct URL"
+    fix_local_option: "If you're running this site locally for development, you can also regenerate tiles with:"
+    local_cause_1: "You're running the site on your own computer, but the image tiles were generated for your production URL"
+    local_cause_2: "You're testing locally after a GitHub Actions build"
+    local_fix_heading: "To fix this for local development, regenerate your image tiles for localhost:"
+    local_alternative: "Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:"
+    local_regenerate_note: "(it will use your updated settings)"
+
+  # Google Sheets configuration errors
+  google_sheets:
+    incomplete_heading: "⚠️ Your Google Sheets integration is incomplete"
+    incomplete_description: "Google Sheets integration is enabled but incomplete. You need to provide both a <code>shared_url</code> and a <code>published_url</code> in <code>_config.yml</code>. The shared URL comes from clicking the \"Share\" button in your Google Sheet. The published URL comes from File → Share → Publish to web (select \"Entire document\" and \"Comma-separated values\"). See the <a href=\"https://github.com/UCSB-AMPLab/telar/blob/main/docs/GOOGLE_SHEETS_TEMPLATE.md\" class=\"alert-link\" target=\"_blank\">Google Sheets setup guide</a> for detailed instructions."
+    identical_heading: "⚠️ Your Google Sheets URLs are identical"
+    same_url: "You've used the same URL for both <code>shared_url</code> and <code>published_url</code> in <code>_config.yml</code>. These must be different URLs from the same Google Sheet. The shared URL comes from the \"Share\" button (ends with <code>/edit</code>). The published URL comes from File → Share → Publish to web (contains <code>/d/e/</code> and ends with <code>/pubhtml</code>)."
+    swapped_heading: "⚠️ Your Google Sheets URLs appear to be swapped"
+    swapped_description: "Your Google Sheets URLs appear to be swapped in <code>_config.yml</code>. The <code>shared_url</code> should contain <code>/spreadsheets/d/{id}/edit</code> (from the Share button), but yours appears to be in published format. The <code>published_url</code> should contain <code>/d/e/{id}/pubhtml</code> (from Publish to web), but yours appears to be in shared format. Please swap these two URLs."
+    malformed_shared_heading: "⚠️ Your Google Sheets shared URL is incorrect"
+    invalid_shared: "Your Google Sheets <code>shared_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Get this URL by clicking the \"Share\" button in your Google Sheet and copying the link."
+    malformed_published_heading: "⚠️ Your Google Sheets published URL is incorrect"
+    invalid_published: "Your Google Sheets <code>published_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Get this URL from File → Share → Publish to web. Make sure to select \"Entire document\" and \"Comma-separated values (.csv)\", then enable \"Automatically republish when changes are made\" before clicking Publish."
+
+  # Theme errors
+  theme:
+    not_found_heading: "⚠️ Your selected theme doesn't exist"
+    not_found_description: "The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>paisajes</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to one of: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, or <code>austin</code>. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the <code>_data/themes</code> folder."
+    broken_heading: "⚠️ Your theme file is broken"
+    broken: "The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file."
+    system_error_heading: "⚠️ Theme system error detected"
+    system_error_description: "We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository."
+
+  # Object and IIIF warning messages (from build validation, displayed in browser)
+  object_warnings:
+    # IIIF validation errors (full messages)
+    iiif_invalid_url: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet is not valid"
+    iiif_not_manifest: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
+    iiif_malformed: "the IIIF manifest you specified in your configuration CSV or Google Sheet is not properly formatted"
+    iiif_404: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not exist (error 404)"
+    iiif_429: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means \"Too Many Requests\": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away."
+    iiif_403: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 403). Error 403 means \"Forbidden\": the IIIF server is blocking access to this manifest. This usually means the manifest requires authentication, has IP restrictions, or is not publicly available. Contact the institution to confirm the manifest can be accessed publicly, or use a different IIIF resource."
+    iiif_401: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 401). Error 401 means \"Unauthorized\": this manifest requires authentication to access. Telar does not support authenticated IIIF manifests. You'll need to use a publicly accessible IIIF manifest instead."
+    iiif_500: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 500). Error 500 means \"Internal Server Error\": the IIIF server is experiencing technical problems. This is not a problem with your configuration - the institution's server is having issues. Try rebuilding your site later to see if the issue has been resolved."
+    iiif_503: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 503). Error 503 means \"Service Unavailable\": the IIIF server is temporarily unavailable, possibly due to maintenance or being overloaded. This is not a problem with your configuration. Try rebuilding your site later - the server should come back online."
+    iiif_502: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 502). Error 502 means \"Bad Gateway\": there's a problem with the IIIF server's infrastructure. This is not a problem with your configuration - the institution's server is having connectivity issues. Try rebuilding your site later to see if the issue has been resolved."
+    iiif_error_generic: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {{ code }})"
+    iiif_unreachable: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
+    iiif_validation_failed: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
+
+    # Short error labels (for warning lists)
+    short_404: "Error 404: manifest not found"
+    short_429: "Error 429: rate limiting (try again in 15-30 minutes)"
+    short_403: "Error 403: access forbidden (likely requires authentication or has IP restrictions)"
+    short_401: "Error 401: authentication required (not supported by Telar)"
+    short_500: "Error 500: server error (try again later)"
+    short_503: "Error 503: server temporarily unavailable (try again later)"
+    short_502: "Error 502: server connectivity issue (try again later)"
+    short_error_generic: "Error {{ code }}: could not be accessed"
+    short_network_error: "Network error: could not be reached"
+    short_validation_error: "Validation error: could not be validated"
+
+    # Image source errors
+    image_similar_single: "No image file found for `object_id` '{{ object_id }}', but found similar file '{{ similar_file }}'. If this is the image you meant to use, either: (1) rename the file to `{{ object_id }}{{ file_ext }}`, or (2) update the `object_id` in the CSV to match the filename (without extension)."
+    image_similar_multiple: "No image file found for `object_id` '{{ object_id }}', but found multiple similar files: '{{ file_list }}'. If one of these is the image you meant to use, either rename it to `{{ object_id }}.*` or update the `object_id` in the CSV to match."
+    image_missing: "No image source found for object '{{ object_id }}'. Add either: (1) an IIIF manifest URL in the `iiif_manifest` column, or (2) an image file to `components/images/objects/{{ object_id }}.jpg`"
+    short_filename_mismatch: "Image filename mismatch"
+    short_ambiguous_match: "Ambiguous image match"
+    short_missing_source: "Missing image source"
+
+    # Story/object reference errors
+    object_not_found: "the object <code>{{ object_id }}</code> was not found in <code>objects.csv</code>"
+    object_no_source: "the object <code>{{ object_id }}</code> has no IIIF manifest or local image file"
+
+    # Content file errors
+    content_missing_label: "Content Missing"
+    content_file_missing: "Content file missing: <code>{{ file_ref }}</code><br>Please add this file to <code>components/texts/stories/</code> or remove the reference from the CSV."
+    layer_file_missing_named: "the file for the layer {{ layer_num }} panel, <code>{{ filename }}</code>, was not found"
+    layer_file_missing: "the file for the layer {{ layer_num }} panel was not found"
+
+    # Glossary link errors
+    glossary_term_not_found: "the glossary term `{{ term_id }}` referenced in Layer {{ layer_num }} does not exist in <code>components/texts/glossary/</code>"
+    short_glossary_not_found: "Missing glossary term: {{ term_id }}"
+    glossary_load_error: "Failed to load glossary term. Please try again."
+
+# Upgrade messages
+upgrade:
+  summary_message: "Your Telar site has been upgraded. Review the summary below."

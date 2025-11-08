@@ -1,5 +1,7 @@
 name: "Santa Barbara"
 description: "Californian colors with navy and gold accents"
+creator: "AMPL"
+creator_url: "https://ampl.clair.ucsb.edu"
 
 colors:
   # Text/Font colors
@@ -19,6 +21,10 @@ colors:
     panel_layer2: "#003660"   # Layer 2 panel background
     panel_glossary: "#F1EEEA" # Glossary panel background
 
+# Fonts - You can use any Google Fonts
+# Visit https://fonts.google.com to browse available fonts
+# Format: "'Font Name', fallback" (keep the quotes and fallback)
+# Example: "'Roboto', sans-serif" or "'Merriweather', serif"
 fonts:
   headings: "'Roboto Serif', serif"
   body: "'Nunito Sans', sans-serif"

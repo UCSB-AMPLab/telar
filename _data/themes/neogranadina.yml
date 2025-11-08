@@ -1,5 +1,7 @@
 name: "Neogranadina"
 description: "Vibrant coral and green palette with colonial-era typography"
+creator: "Neogranadina"
+creator_url: "https://neogranadina.org"
 
 colors:
   # Text/Font colors
@@ -19,6 +21,10 @@ colors:
     panel_layer2: "#b31235"   # Layer 2 panel background
     panel_glossary: "#F5F7FA" # Glossary panel background
 
+# Fonts - You can use any Google Fonts
+# Visit https://fonts.google.com to browse available fonts
+# Format: "'Font Name', fallback" (keep the quotes and fallback)
+# Example: "'Roboto', sans-serif" or "'Merriweather', serif"
 fonts:
   headings: "'IM Fell DW Pica', serif"
   body: "'Mulish', sans-serif"

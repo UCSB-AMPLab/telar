@@ -50,20 +50,46 @@ Story markdown files are referenced in story CSV files via `layer1_file` and `la
 
 Glossary markdown files are processed by `scripts/generate_collections.py` which creates Jekyll collection files in `_jekyll-files/_glossary/` (this happens automatically on GitHub).
 
-### Glossary Functionality in v0.1.0-beta
+### Glossary Functionality
 
-**What works:**
+**Basic features:**
 - Glossary term pages at `/glossary/{term_id}/`
 - Each term page displays the full definition
 - Related terms are linked automatically
 - Browsable glossary index page
+- Clicking terms opens a slide-over panel instead of navigating to new pages
 
-**What's planned for v0.2:**
-- Automatic detection and linking of glossary terms within story narrative text
-- Terms mentioned in layer content would automatically become clickable
-- Hovering or clicking would open glossary panel overlay
+**Auto-linking in story content (v0.4.0+):**
 
-For now, glossary terms function as standalone reference pages that readers can navigate to from the glossary index.
+You can link to glossary terms from within your story markdown content using wiki-style syntax:
+
+```markdown
+The [[colonial-period|colonial era]] saw significant changes...
+The territory was governed by the [[viceroyalty]].
+```
+
+**Syntax:**
+- `[[term_id]]` - Links to term and displays the term_id as link text
+- `[[term_id|display_text]]` - Links to term but shows custom display text
+
+**What happens:**
+- Valid terms become clickable links that open the glossary panel
+- Invalid term IDs display as highlighted warnings in the browser
+- Build-time validation checks all glossary links and reports issues
+
+**Example:**
+
+In your story markdown file (`components/texts/stories/step1-layer1.md`):
+
+```markdown
+---
+title: "The Founding of Santafé"
+---
+
+The city of Santafé de Bogotá was founded in 1537, during the Spanish [[colonial-period|colonial period]]. In the 18th century it became the capital of a new [[viceroyalty]] of New Granada.
+```
+
+The glossary link parser automatically converts these wiki-style links to clickable glossary terms during the build process.
 
 ## Why Texts?
 

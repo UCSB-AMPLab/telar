@@ -1,0 +1,209 @@
+# Spanish Language Strings for Telar
+# Language code: es
+# Este archivo contiene SOLO las cadenas de texto visibles en el navegador
+
+# Navegación
+navigation:
+  home: "Inicio"
+  objects: "Objetos"
+  stories: "Historias"
+  glossary: "Glosario"
+  about: "Acerca de"
+
+# Botones y acciones
+buttons:
+  back: "← Atrás"
+  back_to_home: "← Volver al inicio"
+  back_to_collection: "← Volver a la colección"
+  back_to_glossary: "← Volver al glosario"
+  learn_more: "Saber más"
+  read_more: "Leer más"
+  view_objects: "Ver objetos"
+  copy: "Copiar"
+  copied: "¡Copiado!"
+  close: "Cerrar"
+  identify_coordinates: "Identificar coordenadas"
+  copy_coordinates: "Copiar x,y,zoom"
+  go_deeper: "Profundizar más"
+
+# Página de objeto
+object:
+  # Etiquetas de metadatos
+  metadata:
+    creator: "Creador"
+    period: "Período"
+    medium: "Medio"
+    dimensions: "Dimensiones"
+    location: "Ubicación"
+    credit: "Crédito"
+    iiif_manifest: "Manifiesto IIIF"
+    appears_in_stories: "Aparece en historias"
+
+  # Herramienta de identificación de coordenadas
+  coordinates:
+    heading: "Instrucciones"
+    x_label: "X"
+    y_label: "Y"
+    zoom_label: "Zoom"
+    instructions_p1: "Usa este panel para identificar las coordenadas de las ubicaciones en una imagen para tu historia. Las coordenadas se actualizan mientras haces paneo o zoom sobre la imagen con el mouse haciendo clic, arrastrando y usando la rueda."
+    instructions_p2: "Cuando encuentres una ubicación, anota los valores de X, Y y Zoom para incluirlos en tu hoja de cálculo de estructura. También puedes usar los botones de la derecha para copiar las tres coordenadas de una sola vez."
+    copy_x_tooltip: "Copiar coordenada X"
+    copy_y_tooltip: "Copiar coordenada Y"
+    copy_zoom_tooltip: "Copiar nivel de zoom"
+    copy_manifest_tooltip: "Copiar URL del manifiesto"
+
+  # Miniaturas de objetos
+  no_image: "Sin imagen"
+
+# Interfaz de historia
+story:
+  step_number: "Paso {{ number }}"
+  scroll_hint: "Presiona ↓ o desplázate para empezar"
+  scroll_hint_mobile: "Utiliza los botones de las flechas para desplazarte"
+  config_issues_heading: "Los siguientes pasos tienen problemas de contenido o configuración:"
+  viewer_error_prefix: "visor de imágenes:"
+  glossary_error_prefix: "enlace al glosario:"
+  preview_warning: "Aún puedes desplazarte para previsualizar tu historia, pero algunos elementos no funcionarán como esperas."
+
+# Encabezados de página y texto introductorio
+pages:
+  home_title: "Inicio"
+  stories_heading: "Explora las historias"
+  objects_heading: "Explora los objetos detrás de las historias"
+  objects_count: "Explora {count} objetos presentes en las historias."
+
+# Sistema de paneles
+panels:
+  default_title: "Título del panel"
+  glossary_term_prefix: "Palabra clave"
+  glossary_term_title: "Término del glosario"
+
+# Mensajes de estado vacío
+empty_states:
+  no_stories: "Aún no hay historias disponibles. Crea archivos de historias en el directorio <code>_stories/</code> para empezar."
+  no_objects: "Aún no hay objetos en la colección. Agrega archivos de objetos al directorio <code>_objects/</code> para poblarla."
+  no_glossary: "Aún no hay términos en el glosario. Agrega archivos de glosario al directorio <code>_glossary/</code> para poblarlo."
+  thumbnail_load_error: "Error al cargar"
+
+# Mensajes de error y advertencias (visibles para el usuario)
+errors:
+  # Errores del visor de imágenes
+  image_viewer_unavailable: "⚠️ Visor de imágenes no disponible"
+  image_viewer_unavailable_alt: "⚠️ Visor de imágenes no disponible"
+  check_objects_csv: "Revisa <code>components/structures/objects.csv</code> para asegurarte de que el objeto existe y tiene una URL válida de manifiesto IIIF."
+  failed_to_load: "Error al cargar"
+  no_image: "Sin imagen"
+  objects_config_issues: "Los siguientes objetos tienen problemas de configuración:"
+  objects_will_fail: "Estos objetos no se cargarán en el visor."
+
+  # Encabezados de advertencias de configuración
+  config_issues_heading: "⚠️ Problemas de configuración detectados"
+  object_config_heading: "⚠️ Problemas de configuración de objetos detectados"
+  story_config_heading: "⚠️ Problemas de configuración de historias detectados"
+  story_navigate_to: "Ir a"
+  story_see_details: "para ver más detalles."
+
+  # Advertencia de discrepancia de URL IIIF
+  iiif_mismatch:
+    heading: "⚠️ Tus imágenes no se están cargando correctamente"
+    description: "Tus imágenes no se pueden mostrar porque hay una discrepancia entre el lugar donde estás viendo el sitio y la dirección desde donde están configuradas para cargarse las teselas (<em>tiles</em>)."
+    whats_happening: "Lo que está pasando:"
+    viewing_at: "Estás viendo el sitio en:"
+    configured_for: "Pero las teselas (<em>tiles</em>) están configuradas para:"
+    affected_images: "Imágenes afectadas:"
+    affected_images_count_singular: "La siguiente imagen está afectada:"
+    affected_images_count_plural: "Las siguientes __COUNT__ imágenes están afectadas:"
+    common_causes: "Algunas causas comunes de este error:"
+    cause_incorrect_settings: "La configuración de tu sitio está equivocada. El valor de <code>url</code> o <code>baseurl</code> en <code>_config.yml</code> no coincide con la URL real donde publicas."
+    cause_moved_url: "Moviste tu sitio a una URL nueva pero todavía no actualizas la configuración."
+    cause_preview_env: "Estás viendo una vista previa o un entorno de pruebas que usa una URL distinta a la configurada."
+    fix_heading: "Para solucionarlo, actualiza la configuración del sitio:"
+    fix_check_config: "Verifica que <code>url</code> y <code>baseurl</code> en <code>_config.yml</code> coincidan con la URL real del sitio."
+    fix_your_site_at: "Tu sitio está en:"
+    fix_config_should_be: "Tu configuración debería ser:"
+    fix_commit_push: "Haz commit y push de tus cambios a GitHub."
+    fix_auto_regenerate: "GitHub Actions regenerará automáticamente las teselas (<em>tiles</em>) con la URL correcta."
+    fix_local_option: "Si estás ejecutando el sitio localmente para desarrollo, también puedes regenerar las teselas (<em>tiles</em>) con:"
+    local_cause_1: "Estás ejecutando el sitio en tu computador, pero las teselas (<em>tiles</em>) se generaron con la URL de producción."
+    local_cause_2: "Estás probando localmente después de un <em>build</em> de GitHub Actions."
+    local_fix_heading: "Para desarrollo local, regenera las teselas (<em>tiles</em>) con la URL de localhost:"
+    local_alternative: "Si la configuración del sitio está mal, primero actualiza <code>_config.yml</code> y luego regenera."
+    local_regenerate_note: "(usará tu configuración actualizada)"
+
+  # Errores de configuración de Google Sheets
+  google_sheets:
+    incomplete_heading: "⚠️ Tu integración con Google Sheets está incompleta"
+    incomplete_description: "La integración con Google Sheets está habilitada pero incompleta. Debes proporcionar tanto una <code>shared_url</code> como una <code>published_url</code> en <code>_config.yml</code>. La URL compartida se obtiene haciendo clic en el botón \"Compartir\" (Share) en tu hoja de cálculo de Google. La URL publicada se obtiene en Archivo (File) → Compartir (Share) → Publicar en la Web (Publish to the web). Selecciona \"Documento entero\" (Entire document) y \"Valores separados por comas\" (Comma-separated values). Consulta la <a href=\"https://github.com/UCSB-AMPLab/telar/blob/main/docs/GOOGLE_SHEETS_TEMPLATE.md\" class=\"alert-link\" target=\"_blank\">guía de configuración de Google Sheets</a> para instrucciones detalladas."
+    identical_heading: "⚠️ Tus URLs de Google Sheets son idénticas"
+    same_url: "Usaste la misma URL para <code>shared_url</code> y <code>published_url</code> en <code>_config.yml</code>. Deben ser URLs diferentes de la misma hoja de Google. La URL compartida sale del botón \"Compartir\" (Share) y suele terminar con <code>/edit</code>. La URL publicada se obtiene en Archivo (File) → Compartir (Share) → Publicar en la Web (Publish to the web), contiene <code>/d/e/</code> y termina con <code>/pubhtml</code>."
+    swapped_heading: "⚠️ Parece que tus URLs de Google Sheets están invertidas"
+    swapped_description: "Parece que tus URLs de Google Sheets están invertidas en <code>_config.yml</code>. La <code>shared_url</code> debe contener <code>/spreadsheets/d/{id}/edit</code> (del botón Compartir o Share), pero la tuya parece estar en formato de publicación. La <code>published_url</code> debe contener <code>/d/e/{id}/pubhtml</code> (de Publicar en la Web o Publish), pero la tuya parece estar en formato de compartida. Intercámbialas."
+    malformed_shared_heading: "⚠️ Tu URL compartida de Google Sheets es incorrecta"
+    invalid_shared: "Tu <code>shared_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Consigue esta URL haciendo clic en el botón \"Share\" en tu hoja y copiando el enlace."
+    malformed_published_heading: "⚠️ Tu URL publicada de Google Sheets es incorrecta"
+    invalid_published: "Tu <code>published_url</code> de Google Sheets en <code>_config.yml</code> no coincide con el formato esperado. Se debería ver así: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Obtenla en Archivo (File) → Compartir (Share) → Publicar en la Web (Publish to the web). Selecciona \"Documento entero\" (Entire document) y \"Valores separados por comas (.csv)\" (Comma-separated values), habilita \"Volver a publicar automáticamente cuando se hagan cambios\" (Automatically republish when changes are made) y luego haz clic en \"Publicar\" (Publish)."
+
+  # Errores de tema
+  theme:
+    not_found_heading: "⚠️ El tema seleccionado no existe"
+    not_found_description: "El tema <code>{{ site.telar_theme }}</code> no existe. Aplicamos el tema <code>paisajes</code> (predeterminado). Para elegir un tema diferente, actualiza <code>telar_theme</code> en <code>_config.yml</code> a uno de: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code> o <code>austin</code>. Si estás intentando agregar un tema personalizado y no aparece en este mensaje, verifica que esté en la carpeta <code>_data/themes</code>."
+    broken_heading: "⚠️ Tu archivo de tema está dañado"
+    broken: "El archivo del tema <code>{{ theme_name }}</code> parece estar dañado o incompleto. Aplicamos un tema de respaldo incluido. Revisa <code>_data/themes/{{ theme_name }}.yml</code> por errores de sintaxis o compáralo con un tema que funcione."
+    system_error_heading: "⚠️ Se detectó un error en el sistema de temas"
+    system_error_description: "Encontramos un problema al cargar los temas. La carpeta <code>_data/themes</code> puede estar ausente o dañada. El sitio está usando estilos básicos por ahora. Verifica que tu carpeta <code>_data/themes</code> contenga archivos de tema válidos, o restáurala desde tu repositorio."
+
+  # Mensajes de advertencia de objetos e IIIF (mostrados en el navegador desde validación de construcción)
+  object_warnings:
+    # Errores de validación IIIF (mensajes completos)
+    iiif_invalid_url: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no es válida"
+    iiif_not_manifest: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no apunta a un manifiesto IIIF válido"
+    iiif_malformed: "el manifiesto IIIF que especificaste en tu CSV o en Google Sheets no está bien formado"
+    iiif_404: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no existe (error 404)"
+    iiif_429: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 429). Error 429 significa \"Too Many Requests\": el servidor IIIF está limitando tus solicitudes porque pediste este manifiesto muchas veces durante el desarrollo o las pruebas, así que bloqueó temporalmente tus peticiones. Seguramente se resolverá en 15-30 minutos. Intenta reconstruir tu sitio después."
+    iiif_403: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 403). Error 403 significa \"Forbidden\": el servidor IIIF está bloqueando el acceso al manifiesto. Usualmente requiere autenticación, tiene restricciones de IP o no es público. Contacta a la institución para confirmar que el manifiesto sea público, o usa otro recurso IIIF."
+    iiif_401: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 401). Error 401 significa \"Unauthorized\": este manifiesto requiere autenticación. Telar no soporta manifiestos IIIF que exigen autenticación, así que necesitas usar un manifiesto público."
+    iiif_500: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 500). Error 500 significa \"Internal Server Error\": el servidor IIIF tiene problemas técnicos. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
+    iiif_503: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 503). Error 503 significa \"Service Unavailable\": el servidor IIIF está temporalmente fuera de servicio, quizá por mantenimiento o sobrecarga. Intenta reconstruir tu sitio más tarde."
+    iiif_502: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 502). Error 502 significa \"Bad Gateway\": hay un problema en la infraestructura del servidor IIIF. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
+    iiif_error_generic: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error {{ code }})"
+    iiif_unreachable: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no respondió"
+    iiif_validation_failed: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación"
+
+    # Etiquetas de error cortas (para listas de advertencia)
+    short_404: "Error 404: manifiesto no encontrado"
+    short_429: "Error 429: límite de solicitudes (intenta otra vez en 15-30 min)"
+    short_403: "Error 403: acceso prohibido (requiere autenticación o IP específica)"
+    short_401: "Error 401: autenticación requerida (Telar no la soporta)"
+    short_500: "Error 500: fallo del servidor (intenta más tarde)"
+    short_503: "Error 503: servicio no disponible (intenta más tarde)"
+    short_502: "Error 502: problema de conectividad (intenta más tarde)"
+    short_error_generic: "Error {{ code }}: no se pudo acceder"
+    short_network_error: "Error de red: no se pudo alcanzar"
+    short_validation_error: "Error de validación: no se pudo validar"
+
+    # Errores de fuente de imagen
+    image_similar_single: "No se encontró un archivo de imagen para `object_id` '{{ object_id }}', pero sí un archivo similar '{{ similar_file }}'. Si esa es la imagen que quieres usar, (1) renombra el archivo a `{{ object_id }}{{ file_ext }}`, o (2) actualiza el `object_id` en el CSV para que coincida con el nombre del archivo (sin extensión)."
+    image_similar_multiple: "No se encontró un archivo de imagen para `object_id` '{{ object_id }}', pero sí varios similares: '{{ file_list }}'. Si alguno es la imagen correcta, renómbralo a `{{ object_id }}.*` o actualiza el `object_id` en el CSV para que coincida."
+    image_missing: "No se encontró ninguna imagen para el objeto '{{ object_id }}'. Agrega una URL de manifiesto IIIF en la columna `iiif_manifest` o sube un archivo de imagen a `components/images/objects/{{ object_id }}.jpg`"
+    short_filename_mismatch: "Nombre de imagen no coincide"
+    short_ambiguous_match: "Coincidencia de imagen ambigua"
+    short_missing_source: "Sin fuente de imagen"
+
+    # Errores de referencia de historia/objeto
+    object_not_found: "el objeto <code>{{ object_id }}</code> no se encontró en <code>objects.csv</code>"
+    object_no_source: "el objeto <code>{{ object_id }}</code> no tiene manifiesto IIIF ni archivo de imagen local"
+
+    # Errores de archivo de contenido
+    content_missing_label: "Contenido faltante"
+    content_file_missing: "Falta el archivo de contenido: <code>{{ file_ref }}</code><br>Agrega este archivo en <code>components/texts/stories/</code> o elimina la referencia del CSV."
+    layer_file_missing_named: "el archivo del panel {{ layer_num }}, <code>{{ filename }}</code>, no se encontró"
+    layer_file_missing: "el archivo del panel {{ layer_num }} no se encontró"
+
+    # Errores de enlaces al glosario
+    glossary_term_not_found: "el término del glosario `{{ term_id }}` referenciado en la Capa {{ layer_num }} no existe en <code>components/texts/glossary/</code>"
+    short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
+    glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
+
+# Mensajes de actualización
+upgrade:
+  summary_message: "Tu sitio Telar se actualizó. Revisa el resumen a continuación."

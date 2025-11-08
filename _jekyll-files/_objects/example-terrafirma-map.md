@@ -1,16 +1,16 @@
 ---
 object_id: example-terrafirma-map
 title: "Terra firma et novum regnum Granatense et Popayan"
-creator: "Jan Jansson (1588-1664) and Hendrik Hondius (1597-1651)"
-period: "1630-1631"
-medium: "Copper engraving"
+creator: ""
+period: ""
+medium: ""
 dimensions: ""
-location: "Huntington Library"
-credit: "Huntington Digital Library"
+location: ""
+credit: ""
 thumbnail: ""
 iiif_manifest: "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json"
 object_warning: ""
-object_warning_short: "nan"
+object_warning_short: ""
 layout: object
 ---
 
