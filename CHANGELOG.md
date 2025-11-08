@@ -2,6 +2,148 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.4.0-beta] - 2025-11-07
+
+### Added
+
+#### Multilingual UI Support
+- **Complete interface internationalization** for English and Spanish
+  - Language files: `_data/lang/en.yml` and `_data/lang/es.yml` with 300+ UI strings
+  - Language-aware templates: All layouts and includes updated with multilingual string lookups
+  - Configuration: `telar_language` setting in `_config.yml` (supports `en` and `es`)
+  - Automatic language detection and fallback logic
+  - All navigation, buttons, labels, error messages, and instructions translated
+  - Warning messages and IIIF error explanations (~40 detailed error messages) fully multilingual
+
+#### Interactive Widgets System
+- **Three widget types** for rich content presentation in story panels:
+  - **Carousel widget**: Image carousel with navigation controls, captions, and credit attribution
+  - **Tabs widget**: Tabbed content panels for organizing multi-perspective information (2-4 tabs)
+  - **Accordion widget**: Collapsible content sections for hierarchical information (2-6 panels)
+- **CommonMark-style syntax**: `:::widget_type ... :::` for clear block boundaries
+- **Python widget parser**: Build-time processing with Jinja2 templates (~350 lines)
+- **Bootstrap 5 integration**: Responsive widgets that match site theme
+- **External URL support**: Images can be referenced from http:// and https:// URLs
+- **Build-time validation**: Comprehensive error checking with accessibility warnings
+- **Opposite panel colors**: Widgets use contrasting colors for visual hierarchy (Layer 1 widgets use Layer 2 colors and vice versa)
+
+#### Glossary Auto-Linking
+- **Wiki-style inline syntax**: `[[term_id]]` for automatic term references in narrative text
+- **Custom display text**: `[[term_id|display text]]` for flexible grammar
+- **Automatic link generation**: Links open glossary slide-over panels
+- **Build-time validation**: Warns about broken term references
+- **CSS styling**: Theme-colored links with visual distinction
+- **Full multilingual support**: Works seamlessly in both English and Spanish
+
+#### IIIF Metadata Auto-Population
+- **Automatic extraction** of object metadata from IIIF manifests
+- **Supports both API versions**: IIIF Presentation API v2.0 and v3.0
+- **Six auto-populated fields**: title, description, creator, period, location, credit
+- **Language-aware extraction**: Uses site's `telar_language` setting with fallback to English
+- **Smart credit detection**: Filters legal boilerplate, prefers actual attribution
+- **Fallback hierarchy**: CSV values → IIIF manifest → empty (user control maintained)
+- **HTML stripping**: Ensures YAML safety
+- **Refined field matching**: Prioritizes specific field names to avoid false matches
+- **9 extraction helper functions**: ~400 lines of comprehensive IIIF metadata handling
+
+#### Mobile Responsiveness Enhancements
+- **Mobile story navigation**: Graceful panel transitions with skeleton shimmer loading indicator
+  - 400ms navigation cooldown to prevent rapid clicking
+  - Subtle animated gradient during viewer initialization
+  - Faster transitions (fade only, no slide animations)
+  - Aggressive preloading (±2 steps on mobile)
+- **Height-based responsive design**: 4-tier progressive system for small screens
+  - Tier 1 (≤700px): 10-15% typography reduction
+  - Tier 2 (≤667px - iPhone SE): 20-25% reduction, 55vh:45vh viewer:panel ratio
+  - Tier 3 (≤600px): 30-35% reduction for very small Android devices
+  - Dual-axis media queries prevent triggering on short desktop windows
+- **Site-wide mobile optimizations**:
+  - Offcanvas panels: Reduced padding, font sizes, and spacing
+  - Object gallery: Single column layout on mobile (≤767px)
+  - Glossary index: Optimized spacing (33-50% reduction in margins)
+  - Collection grid: Reduced gaps and image heights
+  - Navbar brand: Smaller font size on small screens
+- **Mobile panel refinements**:
+  - Glossary panel: 6vw left offset, 8vh top position, 76vh height, 94vw width
+  - Navigation buttons: Reduced to 45px on small screens
+  - Enhanced touch interactions and viewport handling
+
+#### Story Interface Controls
+- **Configurable step indicators**: New `story_interface` section in `_config.yml`
+  - `show_story_steps`: Toggle "Step X" overlay visibility (CSS-based)
+  - `include_demo_content`: Preparation for v0.5.0 demo content feature
+
+#### Theme System Enhancements
+- **Theme creator attribution**: Optional `creator` and `creator_url` fields in theme YAML files
+  - Displayed in site footer when present
+  - Recognizes theme contributions while maintaining clean footer design
+  - All 5 preset themes updated with attribution
+- **Google Fonts documentation**: Inline comments in theme files explaining how to use custom fonts
+  - Direct link to Google Fonts
+  - Format examples and syntax guidance
+  - Fallback font requirements
+
+#### Story Byline Feature
+- **Optional author/creator attribution** for stories
+  - New `byline` column in `project.csv`
+  - Displays on homepage story cards (beneath title, smaller font, muted color)
+  - Displays on story intro slide (as h3 between subtitle and description)
+  - Fully optional and responsive
+
+#### Development & Testing Tools
+- **Christmas Tree Mode**: Comprehensive testing tool for multilingual warnings (displays all warnings at once, lighting site up like a Christmas tree)
+  - `--christmas-tree` flag in `csv_to_json.py` or config-based in `_config.yml`
+  - Injects test objects with various intentional error conditions
+  - All test objects marked with 🎄 emoji for easy identification
+  - Triggers all warning message types for verification
+  - Automated cleanup system removes test files when disabled
+
+### Changed
+
+- **Enhanced preloading**: Desktop preloads 3 steps ahead and 2 behind (vs 2/1 previously) for smoother navigation
+- **Footer enhancements**: Multilingual footer with theme attribution support, language-aware copyright and navigation strings
+- **Story back button**: Desktop shows text only (icon hidden), mobile shows icon only (text hidden) for cleaner design
+- **Carousel captions**: Moved below images instead of overlaid for better readability
+- **Carousel image display**: Centered with equal widths using flexbox
+- **Widget visual contrast**: Widgets use opposite panel colors (Layer 1 widgets use Layer 2 colors, Layer 2 widgets use Layer 1 colors)
+
+### Fixed
+
+#### Critical Data Handling
+- **Numeric object_id YAML parsing**: Added quotes around object_id values to prevent YAML parsers from treating numeric filenames as integers. Gracias, Adelaida!
+- **Google Sheets quotation marks**: Created `escape_yaml()` helper function to handle quotation marks in all user-editable fields (dimensions, titles, etc.). Thanks, Jeff!
+
+#### IIIF Issues
+- **IIIF manifest 429 rate-limit false positives**: Skip 429 errors for unchanged manifests between builds
+- **IIIF mismatch localhost/127.0.0.1**: Normalize both URLs to prevent false positive warnings
+- **IIIF manifest validation with redirects**: Changed from HEAD to GET request to properly follow 301/302 redirects
+- **IIIF field matching precision**: Improved metadata extraction to avoid false matches (e.g., "Repository" vs "Location Depicted")
+
+#### UI and Styling
+- **Panel heading colors**: Fixed h1-h6 elements in panel bodies to use correct theme text colors instead of wrong CSS variables
+- **Hyperlink colors in panels**: All links (footnotes and general hyperlinks) now use theme link color via `var(--color-link)`
+- **Glossary popup title**: Fixed bug where popup displayed link text instead of actual glossary term title; now correctly extracts title from h1 tag
+- **Carousel display bug**: Fixed all slides showing simultaneously by adding explicit display:none/flex rules
+
+#### Mobile Layout
+- **Mobile panel heights**: Fixed viewer/narrative split and panel positioning on mobile devices
+- **Mobile layout issues**: Resolved various mobile-specific layout problems with panel stacking and viewport calculations
+
+#### Multilingual
+- **Step number localization**: Fixed Spanish sites showing "Step X" instead of "Paso X" by using language file lookups in JavaScript
+
+### Migration
+
+- **v034_to_v040 migration script**: Automated upgrade from v0.3.4 to v0.4.0
+  - Adds `story_interface` configuration section with full comments to `_config.yml`
+  - Ensures Google Sheets integration comments are present for users upgrading from earlier versions
+  - Creates `_data/lang/` directory and fetches English/Spanish language files from GitHub
+  - Updates all framework files (layouts, includes, scripts, styles, JavaScript)
+  - Adds upgrade notification system (`_layouts/upgrade-summary.html`, `_includes/upgrade-alert.html`)
+  - Fetches framework documentation files (README.md, docs/README.md)
+  - Non-breaking migration: all new features are additive, existing sites continue to work
+  - 6 optional manual steps for users to explore new features
+
 ## [0.3.4-beta] - 2025-10-31
 
 ### Added

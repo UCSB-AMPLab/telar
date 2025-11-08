@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.3.4--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
+![Version](https://img.shields.io/badge/version-0.4.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
@@ -10,10 +10,10 @@ A minimal computing framework for creating visual narrative exhibitions with III
 
 ---
 
-> **⚠️ Beta Release - v0.3.4-beta**
+> **⚠️ Beta Release - v0.4.0-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
 
-> **Warning:** Version 0.3.0 introduced breaking changes. If upgrading from v0.2.0, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
+> **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
 
 ## Overview
 
@@ -23,9 +23,11 @@ Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, an
 
 ## Key Features
 
-- **IIIF integration**: Support for both local images (auto-generated tiles) and external IIIF resources
+- **IIIF integration**: Support for both local images (auto-generated tiles) and external IIIF resources with automatic metadata extraction
 - **Scrollytelling**: Discrete step-based scrolling with support for multiple IIIF objects in a single story - each object preloaded in its own viewer card
-- **Layered panels**: Progressive disclosure with three content layers plus glossary
+- **Interactive widgets**: Carousel, tabs, and accordion components for rich content presentation
+- **Layered panels**: Progressive disclosure with three content layers plus glossary auto-linking
+- **Multilingual UI**: Complete interface support for English and Spanish
 - **Objects gallery**: Browsable object grid with detail pages
 - **Minimal computing**: Plain text, static generation, GitHub Pages hosting
 
@@ -204,7 +206,16 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 
 ## Roadmap
 
-### Recently Completed (v0.3.0-beta)
+### Recently Completed (v0.4.0-beta)
+
+- [x] **Multilingual UI**: Complete interface support for English and Spanish with language-aware templates
+- [x] **Interactive widgets**: Carousel, tabs, and accordion components for rich content presentation in stories
+- [x] **Glossary auto-linking**: Automatic detection and linking of glossary terms within narrative text using `[[term]]` syntax
+- [x] **IIIF metadata auto-population**: Automatic extraction of object metadata from IIIF manifests (title, description, creator, period, location, credit)
+- [x] **Mobile-responsive improvements**: Enhanced mobile and tablet experience with responsive design updates
+- [x] **Theme creator attribution**: Optional creator attribution in theme YAML files displayed in footer
+
+### v0.3.0-beta Features
 
 - [x] **Google Sheets integration**: Edit content via spreadsheet interface with automatic CSV fetching
 - [x] **Comprehensive error messaging**: User-friendly warnings for configuration issues
@@ -217,10 +228,8 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 - [ ] **Improved documentation**: Video tutorials and examples
 - [ ] **Visual story editor**: Point-and-click coordinate selection with live preview
 - [ ] **Annotation support**: Clickable markers on IIIF images that open panels with additional information (IIIF annotations)
-- [ ] **Glossary auto-linking**: Automatic detection and linking of terms within narrative text
-- [ ] **Mobile-optimized responsive design**: Improved mobile and tablet experience
 - [ ] **Accessibility improvements**: Comprehensive ARIA labels, keyboard navigation, and color contrast verification
 - [ ] **Image lazy loading**: Improved performance for object galleries
-- [ ] **Multi-language support**: Internationalization and localization
+- [ ] **Additional language support**: Expanding beyond English and Spanish
 - [ ] **3D object support**: Integration with 3D viewers
 - [ ] **Timeline visualizations**: Temporal navigation for chronological narratives
