@@ -887,3 +887,16 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 1rem !important;
   font-weight: 400 !important;
 }
+
+/* Site Description Link Styling */
+.lead a {
+  color: inherit;
+  filter: brightness(0.7);
+  text-decoration: none;
+}
+
+.lead a:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+  filter: none;
+}
