@@ -2,7 +2,7 @@
 title: IIIF Compatibility
 ---
 
-Telar is built on **IIIF** (International Image Interoperability Framework), an open standard that makes it easy to deliver, view, and annotate high-resolution images on the web.
+Telar is built on [[iiif|IIIF]] (International Image Interoperability Framework), an open standard that makes it easy to deliver, view, and annotate high-resolution images on the web.
 
 **Why IIIF matters:**
 - Access images from thousands of cultural heritage institutions worldwide
@@ -17,4 +17,4 @@ Telar is built on **IIIF** (International Image Interoperability Framework), an 
 - [IIIF Community](https://iiif.io/community/) - Connect with institutions
 - [IIIF Cookbook](https://iiif.io/api/cookbook/) - Technical recipes
 
-Telar works with any IIIF-compliant repository - simply paste the manifest URL.
+Telar works with any IIIF-compliant repository - simply paste the [[iiif-manifest|manifest URL]].

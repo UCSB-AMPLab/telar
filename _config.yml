@@ -3,9 +3,9 @@
 
 # Site Settings
 title: Telar
-description: "Telar (Spanish for 'loom') is a static site generator built on Jekyll that weaves together IIIF images, text, and layered contextual information into interactive digital narrative exhibitions. Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the UCSB and UT Archives, Memory, and Preservation Labs."
+description: "Telar (Spanish for 'loom') is a static site generator built on Jekyll that weaves together IIIF images, text, and layered contextual information into interactive digital narrative exhibitions. <a href='https://github.com/UCSB-AMPLab/telar'>Telar</a> is a project of <a href='https://neogranadina.org'>Neogranadina</a> and the Archives, Memory, and Preservation Labs at <a href='https://ampl.clair.ucsb.edu/'>UC Santa Barbara</a> and <a href='https://liberalarts.utexas.edu/history/'>UT Austin</a>."
 baseurl: "/telar"
-url: "https://ampl.clair.ucsb.edu"
+url: "https://juancobo.com"
 author: ""
 email: ""
 telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
@@ -31,6 +31,12 @@ google_sheets:
   enabled: true
   shared_url: "https://docs.google.com/spreadsheets/d/18dJWy9wkLD7Muokigg4wp85c3Vsjuphdrn0g51pwkGY/edit"
   published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9eeRoyQCr1j-1uDaWBm-rgZNXtn9A-mepL0I4dqDTx2-E_6gbVD-8x0DYDVhppiAzrFpd20_9cr3z/pubhtml"
+
+# Story Interface Settings
+story_interface:
+  show_story_steps: true # Set to false to hide "Step X" overlay in stories
+  include_demo_content: false # v0.5.0 feature - demo stories from external repository
+
 
 #
 #
@@ -93,7 +99,7 @@ show_drafts: false
 # Telar Settings (version information)
 telar:
   version: "0.4.0-beta"
-  release_date: "2025-11-07"
+  release_date: "2025-11-08"
 
 # Plugins
 plugins:
@@ -105,3 +111,10 @@ webrick:
     Access-Control-Allow-Origin: "*"
     Access-Control-Allow-Methods: "GET, POST, OPTIONS"
     Access-Control-Allow-Headers: "Content-Type"
+
+# Development & Testing
+# Set to false or remove for production use
+testing-features:
+  # Christmas Tree Mode - Displays all warning messages for testing multilingual support
+  # Set to true to light up the site with test warnings (test objects, fake errors, etc.)
+  christmas_tree_mode: false

@@ -1,0 +1,26 @@
+<div class="telar-widget telar-widget-accordion">
+  <div class="accordion" id="accordion-{{ widget_id }}">
+    {% for panel in panels %}
+    <div class="accordion-item">
+      <h3 class="accordion-header" id="heading-{{ widget_id }}-{{ loop.index }}">
+        <button class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapse-{{ widget_id }}-{{ loop.index }}"
+                aria-expanded="false"
+                aria-controls="collapse-{{ widget_id }}-{{ loop.index }}">
+          {{ panel.title }}
+        </button>
+      </h3>
+      <div id="collapse-{{ widget_id }}-{{ loop.index }}"
+           class="accordion-collapse collapse"
+           aria-labelledby="heading-{{ widget_id }}-{{ loop.index }}"
+           data-bs-parent="#accordion-{{ widget_id }}">
+        <div class="accordion-body">
+          {{ panel.content_html }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>

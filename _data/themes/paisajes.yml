@@ -1,5 +1,7 @@
 name: "Paisajes Coloniales"
 description: "Classic academic exhibition style with earthy tones"
+creator: "Neogranadina"
+creator_url: "https://neogranadina.org"
 
 colors:
   # Text/Font colors
@@ -19,6 +21,10 @@ colors:
     panel_layer2: "#3d2645"   # Layer 2 panel background
     panel_glossary: "#F5EDE1" # Glossary panel background
 
+# Fonts - You can use any Google Fonts
+# Visit https://fonts.google.com to browse available fonts
+# Format: "'Font Name', fallback" (keep the quotes and fallback)
+# Example: "'Roboto', sans-serif" or "'Merriweather', serif"
 fonts:
   headings: "'Playfair Display', serif"
   body: "'Source Sans Pro', sans-serif"

@@ -1,5 +1,7 @@
 name: "Austin"
 description: "Burnt orange and charcoal with modern serif headings"
+creator: "AMPL"
+creator_url: "https://ampl.clair.ucsb.edu"
 
 colors:
   # Text/Font colors
@@ -19,6 +21,10 @@ colors:
     panel_layer2: "#577565"   # Layer 2 panel background
     panel_glossary: "#D6D2C4" # Glossary panel background
 
+# Fonts - You can use any Google Fonts
+# Visit https://fonts.google.com to browse available fonts
+# Format: "'Font Name', fallback" (keep the quotes and fallback)
+# Example: "'Roboto', sans-serif" or "'Merriweather', serif"
 fonts:
   headings: "'Crimson Pro', serif"
   body: "'Inter', sans-serif"
