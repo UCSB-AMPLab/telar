@@ -785,6 +785,419 @@ def _find_similar_image_filenames(object_id, images_dir):
 
     return similar_files
 
+# ==============================================================================
+# IIIF Metadata Extraction Functions (Phase 8 - v0.4.0)
+# ==============================================================================
+
+def detect_iiif_version(manifest):
+    """
+    Detect IIIF Presentation API version from @context field.
+
+    Args:
+        manifest: Parsed JSON manifest dict
+
+    Returns:
+        str: '2.0' or '3.0' (defaults to '2.0' if unclear)
+    """
+    context = manifest.get('@context', '')
+    if isinstance(context, str):
+        if 'presentation/3' in context:
+            return '3.0'
+        elif 'presentation/2' in context:
+            return '2.0'
+    elif isinstance(context, list):
+        # Context can be an array in v3
+        for ctx in context:
+            if isinstance(ctx, str) and 'presentation/3' in ctx:
+                return '3.0'
+
+    return '2.0'  # Default to 2.0 (most common)
+
+def extract_language_map_value(language_map, site_language='en'):
+    """
+    Extract value from IIIF v3.0 language map with fallback logic.
+
+    Fallback order:
+    1. Site's telar_language (e.g., 'es' for Spanish sites)
+    2. English ('en')
+    3. Unlabeled content ('none')
+    4. First available language
+
+    Args:
+        language_map: Dict with language codes as keys, arrays as values
+        site_language: Preferred language code
+
+    Returns:
+        str: Extracted value or empty string
+    """
+    if not isinstance(language_map, dict):
+        return ''
+
+    # Try site language
+    if site_language in language_map:
+        values = language_map[site_language]
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    # Try English
+    if 'en' in language_map:
+        values = language_map['en']
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    # Try unlabeled content
+    if 'none' in language_map:
+        values = language_map['none']
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    # Use first available language
+    for lang, values in language_map.items():
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    return ''
+
+def strip_html_tags(text):
+    """
+    Remove all HTML tags from text, preserve plain text only.
+    Also decodes HTML entities and removes extra whitespace.
+
+    Args:
+        text: String that may contain HTML
+
+    Returns:
+        str: Plain text with HTML removed
+    """
+    import re
+    import html
+
+    if not text:
+        return ''
+
+    text = str(text)
+
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+
+    # Decode HTML entities
+    text = html.unescape(text)
+
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
+def clean_metadata_value(value):
+    """
+    Clean and normalize metadata value.
+    Handles lists, strips HTML, and normalizes whitespace.
+
+    Args:
+        value: Metadata value (string, list, or dict)
+
+    Returns:
+        str: Cleaned value
+    """
+    if not value:
+        return ''
+
+    # Handle lists (multiple values)
+    if isinstance(value, list):
+        # Join multiple values with semicolon
+        cleaned_values = []
+        for v in value:
+            cleaned = str(v).strip()
+            if cleaned:
+                cleaned_values.append(cleaned)
+        value = '; '.join(cleaned_values)
+
+    value = str(value).strip()
+    value = strip_html_tags(value)
+
+    return value
+
+def find_metadata_field(metadata_array, search_terms, version='2.0', site_language='en'):
+    """
+    Search metadata array for matching field using fuzzy label matching.
+
+    Args:
+        metadata_array: List of {label, value} entries
+        search_terms: List of possible label names (case-insensitive)
+        version: '2.0' or '3.0'
+        site_language: Preferred language for v3.0 extraction
+
+    Returns:
+        str: Extracted value or empty string
+    """
+    if not metadata_array or not isinstance(metadata_array, list):
+        return ''
+
+    for entry in metadata_array:
+        if not isinstance(entry, dict):
+            continue
+
+        label = entry.get('label', '')
+
+        # Handle v3.0 language maps
+        if version == '3.0' and isinstance(label, dict):
+            label = extract_language_map_value(label, site_language)
+
+        # Case-insensitive search
+        label_lower = str(label).lower().strip()
+
+        for term in search_terms:
+            if term.lower() in label_lower:
+                value = entry.get('value', '')
+
+                # Handle v3.0 language maps
+                if version == '3.0' and isinstance(value, dict):
+                    value = extract_language_map_value(value, site_language)
+
+                return clean_metadata_value(value)
+
+    return ''
+
+def is_legal_boilerplate(text):
+    """
+    Detect if attribution text is generic legal boilerplate rather than actual credit.
+
+    Args:
+        text: Attribution text to check
+
+    Returns:
+        bool: True if text appears to be legal boilerplate
+    """
+    if not text:
+        return False
+
+    boilerplate_indicators = [
+        'for information on use',
+        'rights and permissions',
+        'http://',
+        'https://',
+        'licensed under',
+        'license',
+        'see library',
+        'please see',
+        'for more information'
+    ]
+
+    text_lower = str(text).lower()
+
+    # Check if text is mostly URL or starts with URL
+    if text_lower.startswith('http'):
+        return True
+
+    # Check for multiple boilerplate indicators
+    indicator_count = sum(1 for indicator in boilerplate_indicators if indicator in text_lower)
+
+    # If text has 2+ indicators or is very long (>200 chars), likely boilerplate
+    if indicator_count >= 2 or len(text) > 200:
+        return True
+
+    return False
+
+def extract_credit(manifest, version='2.0', site_language='en'):
+    """
+    Extract credit/attribution with smart fallback logic.
+
+    v2.0: Use 'attribution' field
+    v3.0: Use 'requiredStatement.value' or 'provider.label'
+
+    If attribution is legal boilerplate, fall back to repository/institution name.
+
+    Args:
+        manifest: Parsed JSON manifest dict
+        version: '2.0' or '3.0'
+        site_language: Preferred language
+
+    Returns:
+        str: Credit line
+    """
+    credit = ''
+
+    if version == '2.0':
+        credit = manifest.get('attribution', '')
+    elif version == '3.0':
+        # Try requiredStatement first
+        req_stmt = manifest.get('requiredStatement', {})
+        if req_stmt and isinstance(req_stmt, dict):
+            value = req_stmt.get('value', {})
+            if isinstance(value, dict):
+                credit = extract_language_map_value(value, site_language)
+            else:
+                credit = str(value)
+
+        # Try provider as fallback
+        if not credit:
+            providers = manifest.get('provider', [])
+            if providers and isinstance(providers, list) and len(providers) > 0:
+                provider = providers[0]
+                if isinstance(provider, dict):
+                    label = provider.get('label', {})
+                    if isinstance(label, dict):
+                        credit = extract_language_map_value(label, site_language)
+                    else:
+                        credit = str(label)
+
+    credit = clean_metadata_value(credit)
+
+    # Check if attribution is just legal boilerplate
+    if credit and is_legal_boilerplate(credit):
+        # Fall back to repository/institution from metadata
+        fallback = find_metadata_field(
+            manifest.get('metadata', []),
+            ['Repository', 'Holding Institution', 'Institution'],
+            version,
+            site_language
+        )
+        if fallback:
+            credit = fallback
+
+    return credit
+
+def extract_manifest_metadata(manifest_url, site_language='en'):
+    """
+    Extract all metadata fields from IIIF manifest.
+
+    Extracts: title, description, creator, period, location, credit
+
+    Args:
+        manifest_url: URL of IIIF manifest
+        site_language: Preferred language for extraction
+
+    Returns:
+        dict: Extracted metadata with keys: title, description, creator, period, location, credit
+              Returns empty dict on error
+    """
+    try:
+        # Fetch manifest (reuse existing request pattern)
+        import urllib.request
+        import json
+
+        response = urllib.request.urlopen(manifest_url, timeout=10)
+        manifest = json.loads(response.read())
+
+        version = detect_iiif_version(manifest)
+        metadata_array = manifest.get('metadata', [])
+
+        extracted = {}
+
+        # Title
+        if version == '2.0':
+            extracted['title'] = clean_metadata_value(manifest.get('label', ''))
+        else:  # v3.0
+            label = manifest.get('label', {})
+            if isinstance(label, dict):
+                extracted['title'] = clean_metadata_value(
+                    extract_language_map_value(label, site_language)
+                )
+            else:
+                extracted['title'] = clean_metadata_value(label)
+
+        # Description
+        if version == '2.0':
+            desc = manifest.get('description', '')
+            extracted['description'] = strip_html_tags(desc)
+        else:  # v3.0
+            summary = manifest.get('summary', {})
+            if isinstance(summary, dict):
+                extracted['description'] = strip_html_tags(
+                    extract_language_map_value(summary, site_language)
+                )
+            else:
+                extracted['description'] = strip_html_tags(summary)
+
+        # Creator
+        extracted['creator'] = find_metadata_field(
+            metadata_array,
+            ['Creator', 'Artist', 'Author', 'Maker', 'Cartographer', 'Contributor', 'Painter', 'Sculptor'],
+            version,
+            site_language
+        )
+
+        # Period
+        extracted['period'] = find_metadata_field(
+            metadata_array,
+            ['Date', 'Period', 'Creation Date', 'Created', 'Date Created', 'Date Note', 'Temporal'],
+            version,
+            site_language
+        )
+
+        # Location (Repository/Institution name, not geographic location)
+        extracted['location'] = find_metadata_field(
+            metadata_array,
+            ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
+            version,
+            site_language
+        )
+
+        # If location not found in metadata, try provider (v3.0)
+        if not extracted['location'] and version == '3.0':
+            providers = manifest.get('provider', [])
+            if providers and isinstance(providers, list) and len(providers) > 0:
+                provider = providers[0]
+                if isinstance(provider, dict):
+                    label = provider.get('label', {})
+                    if isinstance(label, dict):
+                        extracted['location'] = extract_language_map_value(label, site_language)
+                    else:
+                        extracted['location'] = str(label).strip()
+
+        # Credit
+        extracted['credit'] = extract_credit(manifest, version, site_language)
+
+        return extracted
+
+    except Exception as e:
+        # Silently fail - return empty dict
+        # Errors will be caught and logged by calling function
+        return {}
+
+def apply_metadata_fallback(row_dict, iiif_metadata):
+    """
+    Apply fallback hierarchy: CSV > IIIF > empty.
+
+    Modifies row_dict in place, adding IIIF values only for empty CSV fields.
+
+    Args:
+        row_dict: Dictionary of object data from CSV
+        iiif_metadata: Dictionary of extracted IIIF metadata
+    """
+    fields = ['title', 'description', 'creator', 'period', 'location', 'credit']
+
+    for field in fields:
+        csv_value = str(row_dict.get(field, '')).strip()
+        iiif_value = str(iiif_metadata.get(field, '')).strip()
+
+        # CSV override: if user entered value, keep it
+        if csv_value:
+            continue
+
+        # Auto-populate: if CSV empty but IIIF has value, use IIIF
+        if iiif_value:
+            row_dict[field] = iiif_value
+
+def load_site_language():
+    """
+    Load telar_language setting from _config.yml.
+
+    Returns:
+        str: Language code (default: 'en')
+    """
+    try:
+        config_path = Path('_config.yml')
+        if not config_path.exists():
+            return 'en'
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        return config.get('telar_language', 'en')
+    except Exception:
+        return 'en'
+
 def inject_christmas_tree_errors(df):
     """
     Inject test objects with various error conditions for testing multilingual warnings.
@@ -1056,6 +1469,101 @@ def process_objects(df, christmas_tree=False):
                             warnings.append(msg)
                         else:
                             print(f"  [INFO] Validated IIIF manifest for object {object_id}")
+
+                            # PHASE 8: Extract metadata from validated manifest
+                            try:
+                                site_language = load_site_language()
+                                version = detect_iiif_version(data)
+                                metadata_array = data.get('metadata', [])
+
+                                extracted = {}
+
+                                # Title
+                                if version == '2.0':
+                                    extracted['title'] = clean_metadata_value(data.get('label', ''))
+                                else:  # v3.0
+                                    label = data.get('label', {})
+                                    if isinstance(label, dict):
+                                        extracted['title'] = clean_metadata_value(
+                                            extract_language_map_value(label, site_language)
+                                        )
+                                    else:
+                                        extracted['title'] = clean_metadata_value(label)
+
+                                # Description
+                                if version == '2.0':
+                                    desc = data.get('description', '')
+                                    extracted['description'] = strip_html_tags(desc)
+                                else:  # v3.0
+                                    summary = data.get('summary', {})
+                                    if isinstance(summary, dict):
+                                        extracted['description'] = strip_html_tags(
+                                            extract_language_map_value(summary, site_language)
+                                        )
+                                    else:
+                                        extracted['description'] = strip_html_tags(summary)
+
+                                # Creator
+                                extracted['creator'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Creator', 'Artist', 'Author', 'Maker', 'Cartographer', 'Contributor', 'Painter', 'Sculptor'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Period
+                                extracted['period'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Date', 'Period', 'Creation Date', 'Created', 'Date Created', 'Date Note', 'Temporal'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Location (Repository/Institution name, not geographic location)
+                                extracted['location'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
+                                    version,
+                                    site_language
+                                )
+
+                                # If location not found in metadata, try provider (v3.0)
+                                if not extracted['location'] and version == '3.0':
+                                    providers = data.get('provider', [])
+                                    if providers and isinstance(providers, list) and len(providers) > 0:
+                                        provider = providers[0]
+                                        if isinstance(provider, dict):
+                                            provider_label = provider.get('label', {})
+                                            if isinstance(provider_label, dict):
+                                                extracted['location'] = extract_language_map_value(provider_label, site_language)
+                                            else:
+                                                extracted['location'] = str(provider_label).strip()
+
+                                # Credit
+                                extracted['credit'] = extract_credit(data, version, site_language)
+
+                                # Apply fallback hierarchy (CSV > IIIF > empty)
+                                row_dict = row.to_dict()
+                                apply_metadata_fallback(row_dict, extracted)
+
+                                # Update dataframe with extracted values
+                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
+                                    df.at[idx, field] = row_dict[field]
+
+                                # Log if any fields were auto-populated
+                                populated_fields = []
+                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
+                                    csv_val = str(row.get(field, '')).strip()
+                                    final_val = str(row_dict.get(field, '')).strip()
+                                    if not csv_val and final_val:
+                                        populated_fields.append(field)
+
+                                if populated_fields:
+                                    print(f"  [INFO] Auto-populated from IIIF: {', '.join(populated_fields)}")
+
+                            except Exception as e:
+                                # Metadata extraction failed - log but don't block validation
+                                print(f"  [WARN] Could not extract metadata from IIIF manifest for {object_id}: {e}")
 
                     except json.JSONDecodeError:
                         df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
