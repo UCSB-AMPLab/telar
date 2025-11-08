@@ -197,26 +197,26 @@ class Migration034to040(BaseMigration):
         """
         changes = []
 
-        # Ensure _data/lang directory exists
+        # Ensure _data/languages directory exists
         import os
-        lang_dir = os.path.join(self.repo_root, '_data', 'lang')
+        lang_dir = os.path.join(self.repo_root, '_data', 'languages')
         if not os.path.exists(lang_dir):
             os.makedirs(lang_dir, exist_ok=True)
-            changes.append("Created _data/lang directory")
+            changes.append("Created _data/languages directory")
 
         # Check for en.yml
-        if not self._file_exists('_data/lang/en.yml'):
-            en_content = self._fetch_from_github('_data/lang/en.yml')
+        if not self._file_exists('_data/languages/en.yml'):
+            en_content = self._fetch_from_github('_data/languages/en.yml')
             if en_content:
-                self._write_file('_data/lang/en.yml', en_content)
-                changes.append("Added English language file (_data/lang/en.yml)")
+                self._write_file('_data/languages/en.yml', en_content)
+                changes.append("Added English language file (_data/languages/en.yml)")
 
         # Check for es.yml
-        if not self._file_exists('_data/lang/es.yml'):
-            es_content = self._fetch_from_github('_data/lang/es.yml')
+        if not self._file_exists('_data/languages/es.yml'):
+            es_content = self._fetch_from_github('_data/languages/es.yml')
             if es_content:
-                self._write_file('_data/lang/es.yml', es_content)
-                changes.append("Added Spanish language file (_data/lang/es.yml)")
+                self._write_file('_data/languages/es.yml', es_content)
+                changes.append("Added Spanish language file (_data/languages/es.yml)")
 
         return changes
 
@@ -251,6 +251,9 @@ class Migration034to040(BaseMigration):
             '_includes/header.html': 'Updated header include (multilingual)',
             '_includes/footer.html': 'Updated footer include (multilingual, theme attribution)',
             '_includes/iiif-url-warning.html': 'Updated IIIF URL warning (multilingual)',
+            '_includes/widgets/accordion.html': 'Added accordion widget template',
+            '_includes/widgets/carousel.html': 'Added carousel widget template',
+            '_includes/widgets/tabs.html': 'Added tabs widget template',
 
             # Scripts
             'scripts/csv_to_json.py': 'Updated CSV processor (IIIF metadata extraction)',
@@ -258,15 +261,23 @@ class Migration034to040(BaseMigration):
             'scripts/generate_iiif.py': 'Updated IIIF tile generator',
 
             # JavaScript
-            'assets/js/story.js': 'Updated story JavaScript (widgets)',
+            'assets/js/story.js': 'Updated story JavaScript',
             'assets/js/telar.js': 'Updated telar JavaScript (glossary auto-linking)',
+            'assets/js/widgets.js': 'Added widgets JavaScript (carousel, tabs, accordion)',
 
             # Styles
-            'assets/css/telar.scss': 'Updated telar styles (widgets, mobile responsive)',
+            'assets/css/telar.scss': 'Updated telar styles (widgets, mobile responsive, site description links)',
 
             # Documentation
             'README.md': 'Updated README',
-            'docs/README.md': 'Updated docs README',
+            'docs/google_sheets_integration/README.md': 'Updated Google Sheets integration docs',
+            'requirements.txt': 'Updated Python requirements',
+
+            # Theme files
+            '_data/themes/austin.yml': 'Updated Austin theme (creator attribution)',
+            '_data/themes/neogranadina.yml': 'Updated Neogranadina theme (creator attribution)',
+            '_data/themes/paisajes.yml': 'Updated Paisajes theme (creator attribution)',
+            '_data/themes/santa-barbara.yml': 'Updated Santa Barbara theme (creator attribution)',
 
             # Endpoints
             'objects.json': 'Updated objects.json endpoint',
