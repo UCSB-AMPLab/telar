@@ -29,8 +29,8 @@ telar_language: "en" # Options: "en" (English), "es" (Español)
 #    - If running locally: Run `python3 scripts/fetch_google_sheets.py` before building
 google_sheets:
   enabled: true
-  shared_url: "https://docs.google.com/spreadsheets/d/18dJWy9wkLD7Muokigg4wp85c3Vsjuphdrn0g51pwkGY/edit"
-  published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9eeRoyQCr1j-1uDaWBm-rgZNXtn9A-mepL0I4dqDTx2-E_6gbVD-8x0DYDVhppiAzrFpd20_9cr3z/pubhtml"
+  shared_url: "https://docs.google.com/spreadsheets/d/1jxH4Fb4LkLE_015_YFE39kcnGw_o2JN8HW2q2XkLOaY/edit"
+  published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQNkHBDyx7uqL0pdfv9zpcnWLohyVCN7RpKdnFT2eCyAQrXUGFukPr0Dy6ph2acG8e_GBxpG1NqRiVG/pubhtml"
 
 # Story Interface Settings
 story_interface:
