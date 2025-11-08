@@ -8,47 +8,6 @@
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-  <!-- Load language data with fallback to English -->
-  {% if site.telar_language and site.data.languages[site.telar_language] %}
-    {% assign lang = site.data.languages[site.telar_language] %}
-  {% else %}
-    {% assign lang = site.data.languages['en'] %}
-  {% endif %}
-
-  <!-- Check if Christmas Tree Mode is enabled in config -->
-  {% assign is_christmas_tree_mode = false %}
-  {% if site.testing-features.christmas_tree_mode %}
-    {% assign is_christmas_tree_mode = true %}
-  {% endif %}
-
-  <!-- Check if step indicators should be shown -->
-  {% assign show_story_steps = true %}
-  {% if site.story_interface.show_story_steps == false %}
-    {% assign show_story_steps = false %}
-  {% endif %}
-
-  <script>
-  // Expose Christmas Tree Mode to JavaScript
-  window.christmasTreeMode = {{ is_christmas_tree_mode }};
-
-  // Expose language strings to JavaScript
-  window.telarLang = {
-    goDeeper: "{{ lang.buttons.go_deeper }}",
-    stepNumber: "{{ lang.story.step_number }}"
-  };
-
-  // If Christmas Tree Mode is active, add 🎄 to all warning headings
-  if (window.christmasTreeMode) {
-    document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('.alert strong').forEach(function(heading) {
-        if (!heading.textContent.includes('🎄')) {
-          heading.textContent = '🎄 ' + heading.textContent;
-        }
-      });
-    });
-  }
-  </script>
-
   <!-- Google Fonts - Dynamic based on theme -->
   {% assign theme = site.data.themes[site.telar_theme] %}
   {% assign heading_font = theme.fonts.headings | remove: "'" | split: ',' | first | strip %}
@@ -56,9 +15,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family={{ heading_font | replace: ' ', '+' }}:wght@400;700&family={{ body_font | replace: ' ', '+' }}:wght@300;400;600;700&display=swap" rel="stylesheet">
-
-  <!-- Material Symbols for home icon -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
@@ -68,8 +24,7 @@
 <body class="story-page">
   <!-- Fixed Back to Home Button -->
   <a href="{{ '/' | relative_url }}" class="btn-home">
-    <span class="material-symbols-outlined btn-home-icon">home</span>
-    <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>
+    ← Back to Home
   </a>
 
   <div class="story-container">
@@ -85,9 +40,6 @@
             {% if page.subtitle %}
             <h2 class="intro-subtitle">{{ page.subtitle }}</h2>
             {% endif %}
-            {% if page.byline %}
-            <h3 class="intro-byline">{{ page.byline }}</h3>
-            {% endif %}
             {% if page.description %}
             <p class="intro-description">{{ page.description }}</p>
             {% endif %}
@@ -99,24 +51,21 @@
                 {% assign metadata = steps[0] %}
                 {% if metadata.viewer_warnings.size > 0 %}
                   <div class="alert alert-warning telar-alert mt-4" role="alert" style="text-align: left;">
-                    <strong>⚠️ {{ lang.story.config_issues_heading }}</strong>
-                    <p class="mb-2 mt-2">{{ lang.story.config_issues_heading }}</p>
+                    <strong>⚠️ This story has configuration issues</strong>
+                    <p class="mb-2 mt-2">The following steps have content or configuration issues:</p>
                     <ul class="mb-2">
                     {% for warning in metadata.viewer_warnings %}
                       <li>
-                        {% assign step_text = lang.story.step_number | replace: "{{ number }}", warning.step %}
-                        <strong>{{ step_text }}</strong>
+                        <strong>Step {{ warning.step }}</strong>
                         {% if warning.type == 'viewer' %}
-                          {{ lang.story.viewer_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
+                          image viewer: {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
                         {% elsif warning.type == 'panel' %}
                           {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
-                        {% elsif warning.type == 'glossary' %}
-                          {{ lang.story.glossary_error_prefix }} {{ warning.message | markdownify | remove: '<p>' | remove: '</p>' | strip }}
                         {% endif %}
                       </li>
                     {% endfor %}
                     </ul>
-                    <p class="mb-0">{{ lang.story.preview_warning }}</p>
+                    <p class="mb-0">You can still scroll to preview your story, but elements will not work as expected.</p>
                   </div>
                 {% endif %}
               {% endif %}
@@ -124,8 +73,7 @@
 
             <div class="intro-hint">
               <p class="text-muted">
-                <small class="hint-desktop">{{ lang.story.scroll_hint }}</small>
-                <small class="hint-mobile">{{ lang.story.scroll_hint_mobile }}</small>
+                <small>Press ↓ or scroll to begin</small>
               </p>
             </div>
           </div>
@@ -165,7 +113,7 @@
     </div>
 
     <!-- Right Column: Fixed IIIF Viewer -->
-    <div class="viewer-column {% unless show_story_steps %}hide-step-indicators{% endunless %}">
+    <div class="viewer-column">
       {% include viewer.html %}
     </div>
   </div>

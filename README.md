@@ -217,6 +217,7 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 - [ ] **Improved documentation**: Video tutorials and examples
 - [ ] **Visual story editor**: Point-and-click coordinate selection with live preview
 - [ ] **Annotation support**: Clickable markers on IIIF images that open panels with additional information (IIIF annotations)
+- [ ] **Glossary auto-linking**: Automatic detection and linking of terms within narrative text
 - [ ] **Mobile-optimized responsive design**: Improved mobile and tablet experience
 - [ ] **Accessibility improvements**: Comprehensive ARIA labels, keyboard navigation, and color contrast verification
 - [ ] **Image lazy loading**: Improved performance for object galleries

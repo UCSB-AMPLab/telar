@@ -2,18 +2,11 @@
 layout: default
 ---
 
-<!-- Load language data with fallback to English -->
-{% if site.telar_language and site.data.languages[site.telar_language] %}
-  {% assign lang = site.data.languages[site.telar_language] %}
-{% else %}
-  {% assign lang = site.data.languages['en'] %}
-{% endif %}
-
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-8 mx-auto">
       <a href="{{ '/glossary/' | relative_url }}" class="btn btn-sm btn-outline-secondary mb-3">
-        {{ lang.buttons.back_to_glossary }}
+        ← Back to Glossary
       </a>
 
       <h1>{{ page.title }}</h1>

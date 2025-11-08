@@ -4,12 +4,12 @@
     "title": "Terra firma et novum regnum Granatense et Popayan",
     "description": "Historical map of New Granada (present-day Colombia) and Popayan region, created by Jan Jansson and Hendrik Hondius. This copper-engraved map appeared in only two Jansson/Hondius atlases with a blank verso.",
     "iiif_manifest": "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json",
-    "creator": "Jansson, Jan, 1588-1664, publisher. ; Hondius, Hendrik, 1597-1651. ; Kashnor, Leon, 1880-1955, seller. ; Museum Book Store.",
-    "period": "1630; 1631",
+    "creator": "",
+    "period": "",
     "medium": "",
     "dimensions": "",
-    "location": "Huntington Digital Library",
-    "credit": "Huntington Digital Library",
+    "location": "",
+    "credit": "",
     "thumbnail": "",
     "object_warning": ""
   },
@@ -65,7 +65,7 @@
     "medium": "",
     "dimensions": "",
     "location": "",
-    "credit": "JCB Archive of Early American Images",
+    "credit": "",
     "thumbnail": "",
     "object_warning": ""
   }

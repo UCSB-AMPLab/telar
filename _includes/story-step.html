@@ -25,10 +25,10 @@
     <!-- Viewer Warning (if object or IIIF manifest is missing) -->
     {% if include.viewer_warning and include.viewer_warning != "" %}
     <div class="alert alert-warning telar-alert mt-3" role="alert">
-      <strong>{{ lang.errors.image_viewer_unavailable_alt }}</strong>
+      <strong>⚠️ Image viewer unavailable</strong>
       <p class="mb-0 mt-2">
         {{ include.viewer_warning }}<br>
-        {{ lang.errors.check_objects_csv }}
+        Please check <code>components/structures/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
       </p>
     </div>
     {% endif %}
@@ -40,7 +40,7 @@
         {% if include.layer1button and include.layer1button != "" %}
           {{ include.layer1button }}
         {% else %}
-          {{ lang.buttons.learn_more }}
+          Learn more
         {% endif %} →
       </button>
     </p>

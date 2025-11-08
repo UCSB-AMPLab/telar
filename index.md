@@ -7,6 +7,9 @@ objects_heading: "See the objects behind the stories"
 objects_intro: "Browse {count} objects featured in the stories."
 ---
 
+{% include upgrade-alert.html %}
+
+
 ## Welcome to the Telar Demo Site
 This site showcases the features and capabilities of Telar (v.[{{ site.telar.version }}](https://github.com/UCSB-AMPLab/telar/releases/tag/v{{ site.telar.version }})). Build your own visual narrative exhibition by visiting:
 

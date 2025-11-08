@@ -1,5 +1,5 @@
 ---
-object_id: "example-bogota-1614"
+object_id: example-bogota-1614
 title: "Painting of the lands marshes and swamps of the town of Bogotá"
 creator: "Juan de Aguilar Rendón (painter) and Alonso Ruiz Gadálmez (guarantor)"
 period: "April 1614"

@@ -2,41 +2,6 @@
 layout: default
 ---
 
-<!-- Load language data with fallback to English -->
-{% if site.telar_language and site.data.languages[site.telar_language] %}
-  {% assign lang = site.data.languages[site.telar_language] %}
-{% else %}
-  {% assign lang = site.data.languages['en'] %}
-{% endif %}
-
-<!-- Check if Christmas Tree Mode is enabled in config -->
-{% assign is_christmas_tree_mode = false %}
-{% if site.testing-features.christmas_tree_mode %}
-  {% assign is_christmas_tree_mode = true %}
-{% endif %}
-
-<script>
-// Expose Christmas Tree Mode to JavaScript
-window.christmasTreeMode = {{ is_christmas_tree_mode }};
-
-// Expose language strings to JavaScript
-window.telarObjectsLang = {
-  noImage: "{{ lang.object.no_image }}",
-  thumbnailLoadError: "{{ lang.empty_states.thumbnail_load_error }}"
-};
-
-// If Christmas Tree Mode is active, add 🎄 to all warning headings
-if (window.christmasTreeMode) {
-  document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.alert strong').forEach(function(heading) {
-      if (!heading.textContent.includes('🎄')) {
-        heading.textContent = '🎄 ' + heading.textContent;
-      }
-    });
-  });
-}
-</script>
-
 <div class="container my-5">
   <div class="row">
     <div class="col-12">
@@ -63,8 +28,8 @@ if (window.christmasTreeMode) {
   <div class="row mb-4">
     <div class="col-12">
       <div class="alert alert-warning" role="alert" style="max-width: 800px;">
-        <strong>{{ lang.errors.config_issues_heading }}</strong>
-        <p class="mb-2 mt-2"><small>{{ lang.errors.objects_config_issues }}</small></p>
+        <strong>⚠️ Configuration Issues Detected</strong>
+        <p class="mb-2 mt-2"><small>The following objects have configuration issues:</small></p>
         <ul class="mb-2" style="font-size: 0.9rem;">
         {% assign shown_warnings = "" | split: "" %}
         {% for object in objects_with_warnings %}
@@ -96,7 +61,7 @@ if (window.christmasTreeMode) {
           </li>
         {% endfor %}
         </ul>
-        <p class="mb-0"><small>{{ lang.errors.objects_will_fail }}</small></p>
+        <p class="mb-0"><small>These objects will fail to load in the viewer.</small></p>
       </div>
     </div>
   </div>
@@ -126,7 +91,7 @@ if (window.christmasTreeMode) {
         </div>
         {% else %}
         <div class="placeholder-image bg-secondary d-flex align-items-center justify-content-center" style="height: 250px;">
-          <span class="text-white">⚠️ {{ lang.object.no_image }}</span>
+          <span class="text-white">No image</span>
         </div>
         {% endif %}
       </div>
@@ -144,7 +109,7 @@ if (window.christmasTreeMode) {
   <div class="row">
     <div class="col-12">
       <div class="alert alert-info">
-        <p class="mb-0">{{ lang.empty_states.no_objects }}</p>
+        <p class="mb-0">No objects in the collection yet. Add object files to the <code>_objects/</code> directory to populate the collection.</p>
       </div>
     </div>
   </div>
@@ -187,9 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error loading IIIF info.json:', infoUrl, error);
         const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
         if (placeholder) {
-          placeholder.className = 'placeholder-image bg-secondary d-flex align-items-center justify-content-center';
-          placeholder.style.height = '250px';
-          placeholder.innerHTML = '<span class="text-white">⚠️ ' + window.telarObjectsLang.thumbnailLoadError + '</span>';
+          placeholder.innerHTML = '<span class="text-danger">Failed to load</span>';
         }
       });
   });
@@ -278,9 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // Show "no image" placeholder
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
           if (placeholder) {
-            placeholder.className = 'placeholder-image bg-secondary d-flex align-items-center justify-content-center';
-            placeholder.style.height = '250px';
-            placeholder.innerHTML = '<span class="text-white">⚠️ ' + window.telarObjectsLang.noImage + '</span>';
+            placeholder.innerHTML = '<span class="text-muted">No image</span>';
           }
         }
       })
@@ -289,9 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show error placeholder
         const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
         if (placeholder) {
-          placeholder.className = 'placeholder-image bg-secondary d-flex align-items-center justify-content-center';
-          placeholder.style.height = '250px';
-          placeholder.innerHTML = '<span class="text-white">⚠️ ' + window.telarObjectsLang.thumbnailLoadError + '</span>';
+          placeholder.innerHTML = '<span class="text-danger">Failed to load</span>';
         }
       });
   });

@@ -7,12 +7,14 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="panel-layer1" data-bs-backdrop="false">
   <div class="offcanvas-header">
     <button type="button" class="btn btn-sm btn-outline-secondary" id="panel-layer1-back">
-      {{ lang.buttons.back }}
+      ← Back
     </button>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
+  <div class="px-3">
+    <h5 class="offcanvas-title" id="panel-layer1-title">Panel Title</h5>
+  </div>
   <div class="offcanvas-body">
-    <h5 class="offcanvas-title" id="panel-layer1-title">{{ lang.panels.default_title }}</h5>
     <div id="panel-layer1-content">
       <!-- Content populated by JavaScript -->
     </div>
@@ -23,12 +25,14 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="panel-layer2" data-bs-backdrop="false">
   <div class="offcanvas-header">
     <button type="button" class="btn btn-sm btn-outline-secondary" id="panel-layer2-back">
-      {{ lang.buttons.back }}
+      ← Back
     </button>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
+  <div class="px-3">
+    <h5 class="offcanvas-title" id="panel-layer2-title">Panel Title</h5>
+  </div>
   <div class="offcanvas-body">
-    <h5 class="offcanvas-title" id="panel-layer2-title">{{ lang.panels.default_title }}</h5>
     <div id="panel-layer2-content">
       <!-- Content populated by JavaScript -->
     </div>
@@ -39,13 +43,14 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="panel-glossary" data-bs-backdrop="false">
   <div class="offcanvas-header">
     <button type="button" class="btn btn-sm btn-outline-secondary" id="panel-glossary-back">
-      {{ lang.buttons.back }}
+      ← Back
     </button>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
+  <div class="px-3">
+    <h5 class="offcanvas-title" id="panel-glossary-title">Glossary Term</h5>
+  </div>
   <div class="offcanvas-body">
-    <div class="glossary-term-prefix">{{ lang.panels.glossary_term_prefix }}:</div>
-    <h5 class="offcanvas-title" id="panel-glossary-title">{{ lang.panels.glossary_term_title }}</h5>
     <div id="panel-glossary-content">
       <!-- Content populated by JavaScript -->
     </div>
@@ -64,19 +69,6 @@
 
   #panel-glossary {
     z-index: 1070;
-  }
-
-  /* Glossary term prefix styling */
-  .glossary-term-prefix {
-    font-family: inherit;
-    font-size: 1em;
-    font-weight: 400;
-    opacity: 0.5;
-    margin-bottom: 0.25rem;
-  }
-
-  #panel-glossary-title {
-    margin-top: 0;
   }
 
   /* Panel content styling */
