@@ -79,6 +79,9 @@ class Migration034to040(BaseMigration):
 
         Users upgrading from earlier versions may be missing the detailed
         setup instructions that were added in later releases.
+
+        IMPORTANT: This method NEVER removes existing comments - it only adds
+        missing Google Sheets documentation if not already present.
         """
         config_path = '_config.yml'
         content = self._read_file(config_path)
@@ -97,21 +100,13 @@ class Migration034to040(BaseMigration):
 
         lines = content.split('\n')
         new_lines = []
-        in_google_sheets = False
         comment_added = False
 
         for i, line in enumerate(lines):
             # If we find google_sheets: without the full comment block above it
             if 'google_sheets:' in line and not comment_added:
-                # Remove any old minimal comments
-                # Look back and remove simple comment lines
-                while new_lines and (new_lines[-1].strip().startswith('#') or new_lines[-1].strip() == ''):
-                    if '# Google Sheets Integration' in new_lines[-1]:
-                        new_lines.pop()
-                        break
-                    new_lines.pop()
-
-                # Add full comment block
+                # NEVER remove existing content - only add comments above
+                # Insert full comment block before google_sheets: line
                 new_lines.append('')
                 new_lines.append('# Google Sheets Integration (optional)')
                 new_lines.append('# Manage content via Google Sheets instead of editing CSV files directly.')
