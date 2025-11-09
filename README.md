@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.4.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue) [![Trigger Build](https://img.shields.io/badge/▶_Trigger-Build-blue)](https://github.com/UCSB-AMPLab/telar/actions/workflows/build.yml)
+![Version](https://img.shields.io/badge/version-0.4.1--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
@@ -10,7 +10,7 @@ A minimal computing framework for creating visual narrative exhibitions with III
 
 ---
 
-> **⚠️ Beta Release - v0.4.0-beta**
+> **⚠️ Beta Release - v0.4.1-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
@@ -20,6 +20,8 @@ A minimal computing framework for creating visual narrative exhibitions with III
 Telar (Spanish for "loom") is a static site generator built on Jekyll that weaves together IIIF images, narrative text, and layered contextual information into interactive visual narrative exhibitions. It follows minimal computing principles: plain text authoring, static generation, and sustainable hosting.
 
 Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), the UT Archives, Mapping, and Preservation Lab, and [Neogranadina](https://neogranadina.org).
+
+We gratefully acknowledge the support of the [Caribbean Digital Scholarship Collective](https://cdscollective.org), the [Center for Innovative Teaching, Research, and Learning (CITRAL)](https://citral.ucsb.edu/home) at the University of California, Santa Barbara, the [UCSB Library](https://library.ucsb.edu), the [Routes of Enslavement in the Americas University of California MRPI](https://www.humanities.uci.edu/routes-enslavement-americas), and the [Department of History of The University of Texas at Austin](https://liberalarts.utexas.edu/history/).
 
 ## Key Features
 
@@ -187,8 +189,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Credits
 
 Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), the UT Archives, Mapping, and Preservation Lab, and [Neogranadina](https://neogranadina.org).
-
-We gratefully acknowledge the support of the [Caribbean Digital Scholarship Collective](https://cdscollective.org), the [Center for Innovative Teaching, Research, and Learning (CITRAL)](https://citral.ucsb.edu/home) at the University of California, Santa Barbara, the [UCSB Library](https://library.ucsb.edu), the [Routes of Enslavement in the Americas University of California MRPI](https://www.humanities.uci.edu/routes-enslavement-americas), and the [Department of History of The University of Texas at Austin](https://liberalarts.utexas.edu/history/).
 
 Telar is built with:
 - [Jekyll](https://jekyllrb.com/) - Static site generator
