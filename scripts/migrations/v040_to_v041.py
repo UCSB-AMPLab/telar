@@ -89,6 +89,7 @@ class Migration040to041(BaseMigration):
 
         framework_files = {
             # Layouts - mobile code restoration and coordinate picker
+            '_layouts/index.html': 'Updated index layout (site description link styling)',
             '_layouts/object.html': 'Updated object layout (coordinate picker buttons)',
             '_layouts/story.html': 'Updated story layout (mobile responsive features restored)',
 
