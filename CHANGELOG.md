@@ -2,7 +2,7 @@
 
 All notable changes to Telar will be documented in this file.
 
-## [0.4.1-beta] - Unreleased
+## [0.4.1-beta] - 2025-11-08
 
 ### Fixed
 
