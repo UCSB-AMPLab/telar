@@ -2,6 +2,23 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.4.1-beta] - Unreleased
+
+### Added
+
+#### Coordinate Picker Improvements
+- **Sheets copy button**: New button in coordinate picker that copies tab-separated values (x\ty\tzoom) for direct pasting into Google Sheets
+- **CSV copy button**: Renamed existing button to "x, y, zoom (CSV)" for clarity
+- **Button order**: Sheets button first (primary workflow), CSV button second
+- **Multilingual support**: Button labels and "Copied!" feedback respect `telar_language` setting
+- Both buttons provide visual feedback ("Copied!" / "¡Copiado!")
+
+### Changed
+- Coordinate picker now has two copy buttons instead of one, with clear labels indicating format
+- Coordinate picker buttons are now fully multilingual (English/Spanish)
+
+---
+
 ## [0.4.0-beta] - 2025-11-07
 
 ### Added
