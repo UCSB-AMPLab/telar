@@ -2,6 +2,42 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.4.1-beta] - 2025-11-08
+
+### Fixed
+
+#### CRITICAL: Mobile Responsive Features Restored
+- **Complete mobile code recovery**: Restored ~1,300 lines of mobile responsive code accidentally lost in v0.4.0 release
+- **Height-based responsive design**: 4-tier progressive system for small screens (Tiers 1-3: 700px, 667px, 600px height breakpoints)
+- **Mobile panel UI**: Fixed-size panels with stacking visibility and proper viewport positioning
+- **Graceful panel transitions**: Navigation cooldown, skeleton shimmer loading, fade-only transitions on mobile
+- **Mobile preloading**: Aggressive ±2 step preloading on mobile, enhanced 3/2 forward/backward on desktop
+- **Offcanvas adjustments**: Progressive typography and spacing reductions for small screens
+- **Site-wide scaling**: Consistent mobile experience across all pages
+- Root cause: Upstream merge in commit f62acee overwrote local mobile development
+- Impact: Major regression fix - restores complete mobile UX from v0.4.0
+
+### Added
+
+#### Object Gallery Mobile Layout
+- **Responsive breakpoints**: Single column layout up to 441px width, two columns from 442px-768px
+- **Explicit column control**: Replaced auto-fill grid behavior with explicit column counts for predictable mobile layout
+- **iPhone Pro Max optimization**: 440px width devices display single column for optimal readability
+- **Removed conflicting rules**: Fixed 576px media query that was overriding mobile breakpoints
+
+#### Coordinate Picker Improvements
+- **Sheets copy button**: New button in coordinate picker that copies tab-separated values (x\ty\tzoom) for direct pasting into Google Sheets
+- **CSV copy button**: Renamed existing button to "x, y, zoom (CSV)" for clarity
+- **Button order**: Sheets button first (primary workflow), CSV button second
+- **Multilingual support**: Button labels and "Copied!" feedback respect `telar_language` setting
+- Both buttons provide visual feedback ("Copied!" / "¡Copiado!")
+
+### Changed
+- Coordinate picker now has two copy buttons instead of one, with clear labels indicating format
+- Coordinate picker buttons are now fully multilingual (English/Spanish)
+
+---
+
 ## [0.4.0-beta] - 2025-11-07
 
 ### Added
