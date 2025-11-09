@@ -3,7 +3,12 @@ name: Build and Deploy Telar Site
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      force_iiif:
+        description: 'Force IIIF tile regeneration'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -58,7 +63,41 @@ jobs:
         run: |
           bundle exec jekyll build
 
+      - name: Detect if IIIF regeneration is needed
+        id: detect-changes
+        run: |
+          # Failsafe: Default to regenerating IIIF (safe default)
+          NEEDS_IIIF="true"
+
+          # Only attempt detection for push events (not manual triggers)
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Check if this is the first commit (no previous commit to compare)
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              # Get list of changed files
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+
+              # Check if any images or objects.csv changed
+              if echo "$CHANGED_FILES" | grep -qE '^components/images/objects/|^components/structures/objects\.csv$'; then
+                echo "✓ Images or objects.csv changed - IIIF regeneration needed"
+                NEEDS_IIIF="true"
+              else
+                echo "✓ Only content files changed - skipping IIIF regeneration"
+                NEEDS_IIIF="false"
+              fi
+            else
+              echo "✓ First commit - running full build with IIIF"
+              NEEDS_IIIF="true"
+            fi
+          else
+            echo "✓ Manual trigger - using input parameter (force_iiif=${{ inputs.force_iiif }})"
+            NEEDS_IIIF="${{ inputs.force_iiif }}"
+          fi
+
+          echo "needs_iiif=$NEEDS_IIIF" >> $GITHUB_OUTPUT
+          echo "IIIF regeneration: $NEEDS_IIIF"
+
       - name: Generate IIIF tiles into _site
+        if: steps.detect-changes.outputs.needs_iiif == 'true'
         run: |
           # Check if source images directory exists
           if [ -d "components/images/objects" ]; then
