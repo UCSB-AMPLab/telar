@@ -19,6 +19,12 @@ All notable changes to Telar will be documented in this file.
 
 ### Added
 
+#### Object Gallery Mobile Layout
+- **Responsive breakpoints**: Single column layout up to 441px width, two columns from 442px-768px
+- **Explicit column control**: Replaced auto-fill grid behavior with explicit column counts for predictable mobile layout
+- **iPhone Pro Max optimization**: 440px width devices display single column for optimal readability
+- **Removed conflicting rules**: Fixed 576px media query that was overriding mobile breakpoints
+
 #### Coordinate Picker Improvements
 - **Sheets copy button**: New button in coordinate picker that copies tab-separated values (x\ty\tzoom) for direct pasting into Google Sheets
 - **CSV copy button**: Renamed existing button to "x, y, zoom (CSV)" for clarity
