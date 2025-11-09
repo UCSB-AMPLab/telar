@@ -100,6 +100,7 @@ class Migration040to041(BaseMigration):
 
             # Documentation
             'CHANGELOG.md': 'Updated CHANGELOG',
+            'README.md': 'Updated README (supporter acknowledgments)',
         }
 
         for file_path, success_msg in framework_files.items():
