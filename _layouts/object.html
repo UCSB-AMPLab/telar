@@ -2,6 +2,8 @@
 layout: default
 ---
 
+{% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
+
 <!-- Bootstrap Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
@@ -129,14 +131,14 @@ layout: default
                         <dt class="col-sm-6"></dt>
                         <dd class="col-sm-6" style="margin-bottom: 0.5rem;">
                           <button class="btn btn-sm btn-copy w-100" id="copy-coords-sheets">
-                            <i class="bi bi-clipboard"></i> x, y, zoom (Sheets)
+                            <i class="bi bi-clipboard"></i> {{ lang.object.coordinates.copy_sheets }}
                           </button>
                         </dd>
 
                         <dt class="col-sm-6"></dt>
                         <dd class="col-sm-6" style="margin-bottom: 0;">
                           <button class="btn btn-sm btn-copy w-100" id="copy-coords-csv">
-                            <i class="bi bi-clipboard"></i> x, y, zoom (CSV)
+                            <i class="bi bi-clipboard"></i> {{ lang.object.coordinates.copy_csv }}
                           </button>
                         </dd>
                       </dl>
@@ -243,6 +245,11 @@ layout: default
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/uv.css">
 <script src="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/umd/UV.js"></script>
 <script>
+  // Expose language strings to JavaScript
+  window.telarCoordLang = {
+    copied: "{{ lang.object.coordinates.copied }}"
+  };
+
   document.addEventListener('DOMContentLoaded', function() {
     {% if page.iiif_manifest and page.iiif_manifest != "" %}
     const manifestUrl = '{{ page.iiif_manifest }}';
@@ -438,7 +445,7 @@ layout: default
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-csv');
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> ' + window.telarCoordLang.copied;
         setTimeout(function() {
           btn.innerHTML = originalHTML;
         }, 2000);
@@ -455,7 +462,7 @@ layout: default
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-sheets');
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> ' + window.telarCoordLang.copied;
         setTimeout(function() {
           btn.innerHTML = originalHTML;
         }, 2000);
