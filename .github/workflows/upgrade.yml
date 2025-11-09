@@ -60,24 +60,9 @@ jobs:
             exit 1
           fi
 
-      - name: Update version in _config.yml
-        if: steps.upgrade.outputs.version != ''
-        run: |
-          python3 << 'EOF'
-          import yaml
-
-          with open('_config.yml', 'r') as f:
-              config = yaml.safe_load(f)
-
-          if 'telar' not in config:
-              config['telar'] = {}
-
-          config['telar']['version'] = "${{ steps.upgrade.outputs.version }}"
-          config['telar']['release_date'] = "$(date +%Y-%m-%d)"
-
-          with open('_config.yml', 'w') as f:
-              yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-          EOF
+      # NOTE: Version update is handled by upgrade.py using text-based editing
+      # to preserve comments in _config.yml. Do NOT use yaml.dump() here as
+      # it strips all comments!
 
       - name: Create upgrade branch
         if: steps.upgrade.outputs.version != ''
