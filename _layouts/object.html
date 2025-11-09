@@ -125,11 +125,18 @@ layout: default
                           </button>
                         </dd>
 
-                        <!-- Copy Button Row -->
+                        <!-- Copy Button Rows -->
+                        <dt class="col-sm-6"></dt>
+                        <dd class="col-sm-6" style="margin-bottom: 0.5rem;">
+                          <button class="btn btn-sm btn-copy w-100" id="copy-coords-sheets">
+                            <i class="bi bi-clipboard"></i> x, y, zoom (Sheets)
+                          </button>
+                        </dd>
+
                         <dt class="col-sm-6"></dt>
                         <dd class="col-sm-6" style="margin-bottom: 0;">
-                          <button class="btn btn-sm btn-copy w-100" id="copy-coords">
-                            <i class="bi bi-clipboard"></i> Copy x,y,zoom
+                          <button class="btn btn-sm btn-copy w-100" id="copy-coords-csv">
+                            <i class="bi bi-clipboard"></i> x, y, zoom (CSV)
                           </button>
                         </dd>
                       </dl>
@@ -421,14 +428,32 @@ layout: default
       });
     }
 
-    document.getElementById('copy-coords').addEventListener('click', function() {
+    // CSV format copy button (comma-separated)
+    document.getElementById('copy-coords-csv').addEventListener('click', function() {
       const x = document.getElementById('coord-x').textContent;
       const y = document.getElementById('coord-y').textContent;
       const zoom = document.getElementById('coord-zoom').textContent;
       const text = `${x},${y},${zoom}`;
 
       navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('copy-coords');
+        const btn = document.getElementById('copy-coords-csv');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+        setTimeout(function() {
+          btn.innerHTML = originalHTML;
+        }, 2000);
+      });
+    });
+
+    // Sheets format copy button (tab-separated)
+    document.getElementById('copy-coords-sheets').addEventListener('click', function() {
+      const x = document.getElementById('coord-x').textContent;
+      const y = document.getElementById('coord-y').textContent;
+      const zoom = document.getElementById('coord-zoom').textContent;
+      const text = `${x}\t${y}\t${zoom}`;
+
+      navigator.clipboard.writeText(text).then(function() {
+        const btn = document.getElementById('copy-coords-sheets');
         const originalHTML = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
         setTimeout(function() {
