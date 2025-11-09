@@ -188,6 +188,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, and students and scholars at the [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), the UT Archives, Mapping, and Preservation Lab, and [Neogranadina](https://neogranadina.org).
 
+We gratefully acknowledge the support of the [Caribbean Digital Scholarship Collective](https://cdscollective.org), the [Center for Innovative Teaching, Research, and Learning (CITRAL)](https://citral.ucsb.edu/home) at the University of California, Santa Barbara, the [UCSB Library](https://library.ucsb.edu), the [Routes of Enslavement in the Americas University of California MRPI](https://www.humanities.uci.edu/routes-enslavement-americas), and the [Department of History of The University of Texas at Austin](https://liberalarts.utexas.edu/history/).
+
 Telar is built with:
 - [Jekyll](https://jekyllrb.com/) - Static site generator
 - [UniversalViewer](https://universalviewer.io/) - IIIF viewer
@@ -203,33 +205,3 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 - **Documentation:** [ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
 - **Report Issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
 - **Example Site:** [ampl.clair.ucsb.edu/telar](https://ampl.clair.ucsb.edu/telar)
-
-## Roadmap
-
-### Recently Completed (v0.4.0-beta)
-
-- [x] **Multilingual UI**: Complete interface support for English and Spanish with language-aware templates
-- [x] **Interactive widgets**: Carousel, tabs, and accordion components for rich content presentation in stories
-- [x] **Glossary auto-linking**: Automatic detection and linking of glossary terms within narrative text using `[[term]]` syntax
-- [x] **IIIF metadata auto-population**: Automatic extraction of object metadata from IIIF manifests (title, description, creator, period, location, credit)
-- [x] **Mobile-responsive improvements**: Enhanced mobile and tablet experience with responsive design updates
-- [x] **Theme creator attribution**: Optional creator attribution in theme YAML files displayed in footer
-
-### v0.3.0-beta Features
-
-- [x] **Google Sheets integration**: Edit content via spreadsheet interface with automatic CSV fetching
-- [x] **Comprehensive error messaging**: User-friendly warnings for configuration issues
-- [x] **IIIF manifest copy functionality**: One-click copying of manifest URLs and coordinates
-- [x] **Theme system**: 4 preset themes (Paisajes, Neogranadina, Santa Barbara, Austin) with customizable colors and fonts, plus support for custom themes
-- [x] **Theme fallback protection**: Multi-tier error detection and automatic fallback to prevent broken styling
-
-### Future Features
-
-- [ ] **Improved documentation**: Video tutorials and examples
-- [ ] **Visual story editor**: Point-and-click coordinate selection with live preview
-- [ ] **Annotation support**: Clickable markers on IIIF images that open panels with additional information (IIIF annotations)
-- [ ] **Accessibility improvements**: Comprehensive ARIA labels, keyboard navigation, and color contrast verification
-- [ ] **Image lazy loading**: Improved performance for object galleries
-- [ ] **Additional language support**: Expanding beyond English and Spanish
-- [ ] **3D object support**: Integration with 3D viewers
-- [ ] **Timeline visualizations**: Temporal navigation for chronological narratives
