@@ -6,6 +6,16 @@ All notable changes to Telar will be documented in this file.
 
 ### Fixed
 
+#### CRITICAL: Upgrade Script Comment Deletion
+- **Migration script bug fixed**: v0.3.4→v0.4.0 migration was deleting ALL comments from `_config.yml`
+- **GitHub Actions workflow bug fixed**: Workflow was using `yaml.dump()` which stripped all comments after migration
+- **Comment restoration added**: v0.4.0→v0.4.1 migration now detects and restores 13 types of missing comments
+- **Comments restored**: Site Settings, Story Interface, PLEASE DO NOT EDIT warning, Collections, Build Settings, Defaults, Telar Settings, Plugins, WEBrick, Development & Testing, Christmas Tree Mode, and all setup instructions
+- Root cause: `_ensure_google_sheets_comments()` in v034_to_v040.py used destructive `while loop + pop()` pattern
+- Secondary cause: Workflow step "Update version in _config.yml" used `yaml.safe_load()` + `yaml.dump()` after migrations
+- Impact: Users upgrading from v0.3.4 to v0.4.0 lost all documentation in their config files
+- **Note for users**: After upgrading to v0.4.1, you need to update your `.github/workflows/upgrade.yml` file ONCE (see upgrade instructions)
+
 #### CRITICAL: Mobile Responsive Features Restored
 - **Complete mobile code recovery**: Restored ~1,300 lines of mobile responsive code accidentally lost in v0.4.0 release
 - **Height-based responsive design**: 4-tier progressive system for small screens (Tiers 1-3: 700px, 667px, 600px height breakpoints)

@@ -315,10 +315,14 @@ class Migration040to041(BaseMigration):
         """
         Manual steps for users to complete after migration.
 
-        v0.4.1 is non-breaking with no manual steps required.
-        All changes are automatic bug fixes and improvements.
+        v0.4.1 requires one manual step to update the GitHub Actions workflow
+        to prevent future comment deletion in _config.yml.
         """
         return [
+            {
+                'description': 'Update your upgrade workflow file (one-time fix to prevent config comment deletion): (1) Go to https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml (2) Select all (Ctrl/Cmd+A) and copy (3) In your repository, navigate to .github/workflows/upgrade.yml (4) Click the pencil icon to edit (5) Select all existing content and delete it (6) Paste the new content (7) Scroll to bottom and click "Commit changes". This fixes a bug that was stripping documentation comments from your _config.yml file during upgrades.',
+                'doc_url': 'https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml'
+            },
             {
                 'description': 'Run "bundle exec jekyll build" to test your upgraded site',
             },
