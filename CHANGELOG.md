@@ -4,6 +4,19 @@ All notable changes to Telar will be documented in this file.
 
 ## [0.4.1-beta] - Unreleased
 
+### Fixed
+
+#### CRITICAL: Mobile Responsive Features Restored
+- **Complete mobile code recovery**: Restored ~1,300 lines of mobile responsive code accidentally lost in v0.4.0 release
+- **Height-based responsive design**: 4-tier progressive system for small screens (Tiers 1-3: 700px, 667px, 600px height breakpoints)
+- **Mobile panel UI**: Fixed-size panels with stacking visibility and proper viewport positioning
+- **Graceful panel transitions**: Navigation cooldown, skeleton shimmer loading, fade-only transitions on mobile
+- **Mobile preloading**: Aggressive ±2 step preloading on mobile, enhanced 3/2 forward/backward on desktop
+- **Offcanvas adjustments**: Progressive typography and spacing reductions for small screens
+- **Site-wide scaling**: Consistent mobile experience across all pages
+- Root cause: Upstream merge in commit f62acee overwrote local mobile development
+- Impact: Major regression fix - restores complete mobile UX from v0.4.0
+
 ### Added
 
 #### Coordinate Picker Improvements
