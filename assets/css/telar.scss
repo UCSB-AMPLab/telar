@@ -1285,14 +1285,14 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
 
-  /* Collection Grid - adjust for mobile screens */
+  /* Collection Grid - single column on mobile */
   .collection-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1rem;
   }
 
   .collection-item img {
-    height: 150px;
+    height: 200px;
   }
 
   /* Glossary Index - reduce spacing on mobile */
