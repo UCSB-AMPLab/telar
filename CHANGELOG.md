@@ -2,6 +2,72 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.4.2-beta] - 2025-11-09
+
+### Added
+
+#### Smart IIIF Change Detection
+- **Automatic optimization**: Build workflow now intelligently detects when IIIF tile regeneration is needed
+- **Git diff-based detection**: Compares changed files between commits to determine if images or objects.csv changed
+- **Manual override**: Workflow dispatch includes "Force IIIF tile regeneration" checkbox (default: checked for safety)
+- **Multiple failsafes**: Defaults to full build on first commit, detection errors, or uncertain cases
+- **GitHub Actions caching**: IIIF tiles cached between builds to prevent deletion when skipping regeneration
+- **Cache key strategy**: Automatically invalidates cache when image files change using hash-based keys
+- **Time savings**: Faster deployments for content-only changes (stories, text, metadata)
+- **User experience**: Silent optimization for automatic builds, explicit control for manual triggers
+
+**How it works**:
+- Automatic builds (push to main): Detects file changes, skips IIIF if only content changed
+- Manual builds: User checkbox to skip IIIF regeneration (safe default always regenerates)
+- Cache system: Tiles saved after generation, restored when skipping, automatically invalidated on image changes
+
+**Technical details**:
+- Detection step runs before IIIF generation
+- Checks `git diff --name-only HEAD~1 HEAD` for changed files
+- Triggers IIIF when: images in `components/images/objects/` or `objects.csv` changed
+- Skips IIIF when: Only content files changed (stories, glossary, configs, layouts, etc.)
+- Cache operations: restore → generate (if needed) → save → restore to _site (if skipped)
+
+### Fixed
+
+#### CRITICAL: IIIF Tile Deletion When Skipping Regeneration
+- **Root cause identified**: GitHub Actions workflows are ephemeral - each run starts fresh with no IIIF tiles
+- **Problem**: Skipping IIIF generation left `_site/iiif/objects/` empty, deployment replaced entire site, deleting live tiles
+- **Solution**: GitHub Actions cache system preserves tiles between workflow runs
+- **Cache strategy**:
+  - Restore cache after Jekyll build
+  - Generate and cache tiles (if needed)
+  - Restore cached tiles to `_site/` when skipping regeneration
+  - Cache key based on image directory hash for automatic invalidation
+- **Safety features**: Warns if cache unavailable, logs all cache operations, fails gracefully
+- **Testing**: Confirmed working on demo site (ampl.clair.ucsb.edu/telar)
+- **Impact**: Critical fix prevents tile deletion, enables safe optimization
+
+#### Mobile Navbar Title Wrapping
+- Long site titles now wrap naturally on mobile devices instead of overflowing or being cut off
+- Hamburger menu right-aligned for better mobile UX
+- Flexbox properties adjusted for proper text flow on small screens
+
+#### Mobile Font Size Adjustments
+- Added `white-space: normal` to allow proper text wrapping
+- Reduced display-4 font size on mobile for better readability
+- Works in conjunction with existing height-based responsive design
+
+#### Site Title Wrapping on Mobile
+- CSS rules added to enable proper text wrapping for site titles
+- Ensures titles display cleanly across all mobile screen sizes
+- Tested with various title lengths on different devices
+
+#### Site Description Link Styling
+- Fixed link styling on home page for consistent appearance
+- Proper theme color application to site description links
+
+### Changed
+- Build workflow now includes smart IIIF detection and caching (4 new steps, ~76 lines added)
+- Migration framework updated with `README.md` and `index.html` for complete v0.4.1 upgrades
+
+---
+
 ## [0.4.1-beta] - 2025-11-08
 
 ### Fixed
