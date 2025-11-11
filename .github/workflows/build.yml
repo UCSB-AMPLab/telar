@@ -63,6 +63,13 @@ jobs:
         run: |
           bundle exec jekyll build
 
+      - name: Restore IIIF tiles from cache
+        id: cache-iiif
+        uses: actions/cache/restore@v4
+        with:
+          path: cached-iiif/
+          key: iiif-tiles-${{ hashFiles('components/images/objects/**') }}
+
       - name: Detect if IIIF regeneration is needed
         id: detect-changes
         run: |
@@ -114,6 +121,35 @@ jobs:
               --base-url "$FULL_URL"
           else
             echo "No components/images/objects directory found. Skipping IIIF generation."
+          fi
+
+      - name: Copy generated IIIF tiles to cache directory
+        if: steps.detect-changes.outputs.needs_iiif == 'true'
+        run: |
+          if [ -d "_site/iiif/objects" ]; then
+            echo "✓ Copying IIIF tiles to cache directory for future builds"
+            mkdir -p cached-iiif
+            cp -r _site/iiif/objects/* cached-iiif/
+          fi
+
+      - name: Save IIIF tiles to cache
+        if: steps.detect-changes.outputs.needs_iiif == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: cached-iiif/
+          key: iiif-tiles-${{ hashFiles('components/images/objects/**') }}
+
+      - name: Restore IIIF tiles from cache to _site (when skipping regeneration)
+        if: steps.detect-changes.outputs.needs_iiif == 'false'
+        run: |
+          if [ -d "cached-iiif" ] && [ "$(ls -A cached-iiif)" ]; then
+            echo "✓ Restoring IIIF tiles from cache"
+            mkdir -p _site/iiif/objects
+            cp -r cached-iiif/* _site/iiif/objects/
+            echo "✓ IIIF tiles restored successfully"
+          else
+            echo "⚠️  Warning: No cached IIIF tiles found. Site may have missing images."
+            echo "⚠️  Run a full build with IIIF regeneration to create tiles."
           fi
 
       - name: Upload artifact
