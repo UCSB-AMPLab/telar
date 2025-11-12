@@ -78,9 +78,17 @@ class Migration041to042(BaseMigration):
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
         """
-        No manual steps required for v0.4.2.
+        Manual steps for users to complete after migration.
 
-        The build workflow update is handled automatically, and the new
-        smart IIIF detection works transparently for users.
+        v0.4.2 updates the build.yml workflow file, which requires explicit
+        action since GitHub Actions workflows only take effect when committed
+        to the repository.
         """
-        return []
+        return [
+            {
+                'description': 'CRITICAL: The updated build.yml workflow must be merged/committed for IIIF caching to work. If using automated upgrade workflow: Review and MERGE the upgrade pull request - the new build workflow will not take effect until merged. If upgrading locally: COMMIT and PUSH .github/workflows/build.yml - the new workflow is not active until pushed to GitHub. Until the new workflow is active, the IIIF caching protection is not in effect.',
+            },
+            {
+                'description': 'Test the smart IIIF detection: Make a content-only change (edit a story markdown file), push to GitHub, and verify the build workflow completes faster by skipping IIIF regeneration (optional)',
+            },
+        ]
