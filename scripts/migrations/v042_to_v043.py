@@ -9,6 +9,7 @@ Changes:
 """
 
 from pathlib import Path
+from typing import List, Dict
 try:
     import requests
 except ImportError:
@@ -93,18 +94,19 @@ class Migration042to043:
             except Exception as e:
                 results['warnings'].append(f"Could not update {file_path}: {str(e)}")
 
-    def get_manual_steps(self) -> list:
+    def get_manual_steps(self) -> List[Dict[str, str]]:
         """
-        Return list of manual steps user needs to complete
+        Manual steps for users to complete after migration.
+
+        v0.4.3 updates build.yml workflow which requires manual update since
+        GitHub Actions workflows only take effect when committed to the repository.
 
         Returns:
-            list: Manual steps (empty for this migration)
+            list: Manual steps as dicts with 'description' key
         """
         return [
-            "After upgrade completes:",
-            "1. Regenerate IIIF tiles to apply EXIF orientation fix:",
-            "   - If using GitHub Pages: Push this commit to trigger rebuild",
-            "   - If testing locally: Run `python3 scripts/generate_iiif.py`",
-            "2. Portrait photos from phones/cameras will now display correctly",
-            "3. iPad users can now navigate stories with swipe gestures"
+            {
+                'description': 'Update your GitHub Actions build workflow file: This update adds smart detection so IIIF tiles automatically regenerate when you change _config.yml settings. Without this update, you would need to manually regenerate tiles after config changes. (1) Open this link in a new tab: https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml (2) Select all the text (Ctrl+A on Windows/Linux, Cmd+A on Mac) and copy it (Ctrl+C or Cmd+C) (3) Go to your GitHub repository and click on the .github/workflows/build.yml file (4) Click the pencil (Edit) icon in the top-right corner (5) Select all the existing content in the editor and delete it (6) Paste the new content you copied in step 2 (7) Scroll to the bottom and click the green "Commit changes" button to save. Note: GitHub Actions workflow files only take effect once they are committed to your repository, which is why this manual step is necessary.',
+                'doc_url': 'https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml'
+            },
         ]
