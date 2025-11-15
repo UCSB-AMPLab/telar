@@ -6,6 +6,27 @@ All notable changes to Telar will be documented in this file.
 
 ### Fixed
 
+#### v0.4.1 Migration Script Comment Restoration
+- **Complete framework comments restored**: Migration now restores all missing comments in _config.yml
+- **Top header comments**: Framework title and GitHub URL now restored at file beginning
+- **Complete testing-features section**: Entire section created if missing (not just comments)
+- **Impact**: Sites upgrading from v0.3.4 through multiple versions now have complete config structure
+- Files modified: `scripts/migrations/v040_to_v041.py`
+
+#### iPad Touch Scrolling for Story Navigation
+- **Touch navigation support**: iPad and touch devices can now navigate stories using swipe gestures
+- **Desktop viewport mode**: Fixes issue where touch scrolling didn't trigger story step changes
+- **Swipe to navigate**: Swipe up for next step, swipe down for previous step
+- **Respects cooldowns**: Same 600ms cooldown as mouse/trackpad scrolling
+- Files modified: `assets/js/story.js` (added touch event handlers)
+
+#### IIIF Regeneration on Config Changes
+- **Automatic regeneration**: IIIF tiles now regenerate when _config.yml changes
+- **Prevents broken images**: Fixes issue where baseurl changes caused image serving failures
+- **Smart detection**: Added _config.yml to change detection pattern in build workflow
+- Thanks to Tara for reporting this issue
+- Files modified: `.github/workflows/build.yml` (updated change detection pattern)
+
 #### EXIF Orientation Handling in IIIF Generation
 - **Portrait photos now display correctly**: Images from phones/cameras no longer appear rotated 90 degrees
 - **EXIF metadata respected**: Script now applies EXIF orientation data before generating IIIF tiles
