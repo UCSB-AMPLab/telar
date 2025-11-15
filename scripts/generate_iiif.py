@@ -77,18 +77,23 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
         if img is None:
             # No EXIF orientation data, use original
             img = img_before_exif
-        elif img != img_before_exif:
+
+        exif_applied = (img != img_before_exif)
+        if exif_applied:
             print(f"  ↻ Applied EXIF orientation correction")
 
+        # Handle RGBA conversion
         if img.mode == 'RGBA':
             print(f"  ⚠️  Converting RGBA to RGB (removing transparency)")
             # Create RGB image with white background
             rgb_img = Image.new('RGB', img.size, (255, 255, 255))
             rgb_img.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+            img = rgb_img
 
-            # Save to temporary file
+        # Save to temp file if we modified the image (EXIF correction or RGBA conversion)
+        if exif_applied or img_before_exif.mode == 'RGBA':
             temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-            rgb_img.save(temp_file.name, 'JPEG', quality=95)
+            img.save(temp_file.name, 'JPEG', quality=95)
             processed_image_path = Path(temp_file.name)
             temp_file.close()
     except Exception as e:
