@@ -2,6 +2,20 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.4.3-beta] - 2025-11-15
+
+### Fixed
+
+#### EXIF Orientation Handling in IIIF Generation
+- **Portrait photos now display correctly**: Images from phones/cameras no longer appear rotated 90 degrees
+- **EXIF metadata respected**: Script now applies EXIF orientation data before generating IIIF tiles
+- **User experience**: Students can upload phone photos directly without manual rotation
+- **Visual feedback**: Console displays "↻ Applied EXIF orientation correction" when rotation is applied
+- Thanks to Tara for helping spot this issue
+- Files modified: `scripts/generate_iiif.py` (both `generate_iiif_for_image()` and `copy_base_image()`)
+
+---
+
 ## [0.4.2-beta] - 2025-11-09
 
 ### Added
