@@ -1,16 +1,16 @@
 ---
-object_id: "example-piedrahita-title_page"
+object_id: example-piedrahita-title_page
 title: "Historia general de la conqvistas del nvevo reyno de Granada"
 creator: "Fernández de Piedrahita, Lucas (1624-1688); Engraved by Joseph Mulder"
-period: "1688"
-medium: "Engraving, ink on paper"
-dimensions: "28.6 x 19.7 cm"
-location: "John Carter Brown Library"
-credit: "John Carter Brown Library, Brown University, Providence, R.I."
+period: ""
+medium: ""
+dimensions: ""
+location: ""
+credit: ""
 thumbnail: ""
 iiif_manifest: "https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest"
 object_warning: ""
-object_warning_short: ""
+object_warning_short: "nan"
 layout: object
 ---
 

@@ -51,6 +51,9 @@ object:
     copy_y_tooltip: "Copy Y coordinate"
     copy_zoom_tooltip: "Copy Zoom level"
     copy_manifest_tooltip: "Copy manifest URL"
+    copy_sheets: "x, y, zoom (Sheets)"
+    copy_csv: "x, y, zoom (CSV)"
+    copied: "Copied!"
 
   # Object thumbnails
   no_image: "No image"
@@ -75,6 +78,7 @@ pages:
 # Panels system
 panels:
   default_title: "Panel Title"
+  glossary_term_prefix: "Key term"
   glossary_term_title: "Glossary Term"
 
 # Empty state messages

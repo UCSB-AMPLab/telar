@@ -52,11 +52,26 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-heading);
 }
 
+/* Display headings - ensure proper word wrapping on mobile */
+.navbar-brand {
+  white-space: normal !important;
+}
+
+@media (max-width: 767px) {
+  .display-4 {
+    font-size: 2.5rem;
+  }
+}
+
 /* Navigation */
 .site-header .navbar-brand {
   font-family: var(--font-headings);
   font-size: 1.5rem;
   color: var(--color-heading);
+}
+
+.navbar-toggler {
+  margin-left: auto;
 }
 
 /* Footer */
@@ -1285,16 +1300,6 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
 
-  /* Collection Grid - adjust for mobile screens */
-  .collection-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 1rem;
-  }
-
-  .collection-item img {
-    height: 150px;
-  }
-
   /* Glossary Index - reduce spacing on mobile */
   .glossary-letter {
     margin-top: 2rem;
@@ -1320,6 +1325,29 @@ h1, h2, h3, h4, h5, h6 {
   .glossary-link-error {
     padding: 0.1em 0.35em;
     font-size: 0.9em;
+  }
+}
+
+/* Mobile responsive grid - override auto-fill behavior */
+@media (max-width: 768px) {
+  .collection-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .collection-item img {
+    height: 180px;
+  }
+}
+
+/* Single column for screens up to 441px (iPhone Pro Max at 440px stays 1 column) */
+@media (max-width: 441px) {
+  .collection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-item img {
+    height: 200px;
   }
 }
 
@@ -1618,15 +1646,14 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-/* Small Phones: 576px and below - adjust collection grid */
+/* Small Phones: 576px and below - adjust collection grid spacing */
 @media (max-width: 576px) {
   .collection-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 0.75rem;
   }
 
   .collection-item img {
-    height: 120px;
+    height: 150px;
   }
 }
 

@@ -1,5 +1,5 @@
 ---
-object_id: "example-ceramic-figure"
+object_id: example-ceramic-figure
 title: "Anthropomorphic Ceramic Figure"
 creator: "Unknown Muisca Artist"
 period: "Pre-colonial era"
@@ -10,7 +10,7 @@ credit: "Museo del Oro, Bogotá"
 thumbnail: ""
 iiif_manifest: ""
 object_warning: ""
-object_warning_short: ""
+object_warning_short: "nan"
 layout: object
 ---
 

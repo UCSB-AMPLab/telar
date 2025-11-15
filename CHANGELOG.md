@@ -2,35 +2,259 @@
 
 All notable changes to Telar will be documented in this file.
 
-## [0.4.0-beta] - TBD
+## [0.4.2-beta] - 2025-11-09
 
 ### Added
 
-- **Glossary auto-linking**: Automatic detection and linking of glossary terms within story narrative text using wiki-style syntax
-  - New wiki-style link syntax: `[[term_id]]` or `[[term_id|display_text]]` in markdown content
-  - Glossary link parser in `scripts/csv_to_json.py` with `load_glossary_terms()` and `process_glossary_links()` functions
-  - Automatic transformation applied to all story layer text fields during build
-  - JavaScript handler for opening glossary panel when links are clicked
-  - Support for both static and dynamically-loaded panel content
-  - Build-time validation with warning messages for invalid term references
-  - CSS styling with theme-aware colors for glossary inline links (`.glossary-inline-link`)
-  - Error indicators for nonexistent terms (`.glossary-link-error`)
-  - Integration with "Christmas Tree Mode" configuration warnings
-  - Bilingual error messages (English/Spanish) for glossary loading failures
+#### Smart IIIF Change Detection
+- **Automatic optimization**: Build workflow now intelligently detects when IIIF tile regeneration is needed
+- **Git diff-based detection**: Compares changed files between commits to determine if images or objects.csv changed
+- **Manual override**: Workflow dispatch includes "Force IIIF tile regeneration" checkbox (default: checked for safety)
+- **Multiple failsafes**: Defaults to full build on first commit, detection errors, or uncertain cases
+- **GitHub Actions caching**: IIIF tiles cached between builds to prevent deletion when skipping regeneration
+- **Cache key strategy**: Automatically invalidates cache when image files change using hash-based keys
+- **Time savings**: Faster deployments for content-only changes (stories, text, metadata)
+- **User experience**: Silent optimization for automatic builds, explicit control for manual triggers
 
-- **Enhanced glossary panel functionality**: Improved support for dynamic content
-  - Modified `initializeGlossaryLinks()` to accept optional container parameter for re-initialization
-  - Exported function via `window.Telar.initializeGlossaryLinks` for use in dynamic content
-  - Automatic re-initialization of glossary links after panel content loads via AJAX
-  - Dynamic URL construction with basePath logic to properly handle `baseurl` configuration
-  - Smooth panel transitions when switching between glossary terms from dynamically-loaded content
+**How it works**:
+- Automatic builds (push to main): Detects file changes, skips IIIF if only content changed
+- Manual builds: User checkbox to skip IIIF regeneration (safe default always regenerates)
+- Cache system: Tiles saved after generation, restored when skipping, automatically invalidated on image changes
+
+**Technical details**:
+- Detection step runs before IIIF generation
+- Checks `git diff --name-only HEAD~1 HEAD` for changed files
+- Triggers IIIF when: images in `components/images/objects/` or `objects.csv` changed
+- Skips IIIF when: Only content files changed (stories, glossary, configs, layouts, etc.)
+- Cache operations: restore → generate (if needed) → save → restore to _site (if skipped)
+
+### Fixed
+
+#### CRITICAL: IIIF Tile Deletion When Skipping Regeneration
+- **Root cause identified**: GitHub Actions workflows are ephemeral - each run starts fresh with no IIIF tiles
+- **Problem**: Skipping IIIF generation left `_site/iiif/objects/` empty, deployment replaced entire site, deleting live tiles
+- **Solution**: GitHub Actions cache system preserves tiles between workflow runs
+- **Cache strategy**:
+  - Restore cache after Jekyll build
+  - Generate and cache tiles (if needed)
+  - Restore cached tiles to `_site/` when skipping regeneration
+  - Cache key based on image directory hash for automatic invalidation
+- **Safety features**: Warns if cache unavailable, logs all cache operations, fails gracefully
+- **Testing**: Confirmed working on demo site (ampl.clair.ucsb.edu/telar)
+- **Impact**: Critical fix prevents tile deletion, enables safe optimization
+
+#### Mobile Navbar Title Wrapping
+- Long site titles now wrap naturally on mobile devices instead of overflowing or being cut off
+- Hamburger menu right-aligned for better mobile UX
+- Flexbox properties adjusted for proper text flow on small screens
+
+#### Mobile Font Size Adjustments
+- Added `white-space: normal` to allow proper text wrapping
+- Reduced display-4 font size on mobile for better readability
+- Works in conjunction with existing height-based responsive design
+
+#### Site Title Wrapping on Mobile
+- CSS rules added to enable proper text wrapping for site titles
+- Ensures titles display cleanly across all mobile screen sizes
+- Tested with various title lengths on different devices
+
+#### Site Description Link Styling
+- Fixed link styling on home page for consistent appearance
+- Proper theme color application to site description links
+
+### Changed
+- Build workflow now includes smart IIIF detection and caching (4 new steps, ~76 lines added)
+- Migration framework updated with `README.md` and `index.html` for complete v0.4.1 upgrades
+
+---
+
+## [0.4.1-beta] - 2025-11-08
+
+### Fixed
+
+#### CRITICAL: Upgrade Script Comment Deletion
+- **Migration script bug fixed**: v0.3.4→v0.4.0 migration was deleting ALL comments from `_config.yml`
+- **GitHub Actions workflow bug fixed**: Workflow was using `yaml.dump()` which stripped all comments after migration
+- **Comment restoration added**: v0.4.0→v0.4.1 migration now detects and restores 13 types of missing comments
+- **Comments restored**: Site Settings, Story Interface, PLEASE DO NOT EDIT warning, Collections, Build Settings, Defaults, Telar Settings, Plugins, WEBrick, Development & Testing, Christmas Tree Mode, and all setup instructions
+- Root cause: `_ensure_google_sheets_comments()` in v034_to_v040.py used destructive `while loop + pop()` pattern
+- Secondary cause: Workflow step "Update version in _config.yml" used `yaml.safe_load()` + `yaml.dump()` after migrations
+- Impact: Users upgrading from v0.3.4 to v0.4.0 lost all documentation in their config files
+- **Note for users**: After upgrading to v0.4.1, you need to update your `.github/workflows/upgrade.yml` file ONCE (see upgrade instructions)
+
+#### CRITICAL: Mobile Responsive Features Restored
+- **Complete mobile code recovery**: Restored ~1,300 lines of mobile responsive code accidentally lost in v0.4.0 release
+- **Height-based responsive design**: 4-tier progressive system for small screens (Tiers 1-3: 700px, 667px, 600px height breakpoints)
+- **Mobile panel UI**: Fixed-size panels with stacking visibility and proper viewport positioning
+- **Graceful panel transitions**: Navigation cooldown, skeleton shimmer loading, fade-only transitions on mobile
+- **Mobile preloading**: Aggressive ±2 step preloading on mobile, enhanced 3/2 forward/backward on desktop
+- **Offcanvas adjustments**: Progressive typography and spacing reductions for small screens
+- **Site-wide scaling**: Consistent mobile experience across all pages
+- Root cause: Upstream merge in commit f62acee overwrote local mobile development
+- Impact: Major regression fix - restores complete mobile UX from v0.4.0
+
+### Added
+
+#### Object Gallery Mobile Layout
+- **Responsive breakpoints**: Single column layout up to 441px width, two columns from 442px-768px
+- **Explicit column control**: Replaced auto-fill grid behavior with explicit column counts for predictable mobile layout
+- **iPhone Pro Max optimization**: 440px width devices display single column for optimal readability
+- **Removed conflicting rules**: Fixed 576px media query that was overriding mobile breakpoints
+
+#### Coordinate Picker Improvements
+- **Sheets copy button**: New button in coordinate picker that copies tab-separated values (x\ty\tzoom) for direct pasting into Google Sheets
+- **CSV copy button**: Renamed existing button to "x, y, zoom (CSV)" for clarity
+- **Button order**: Sheets button first (primary workflow), CSV button second
+- **Multilingual support**: Button labels and "Copied!" feedback respect `telar_language` setting
+- Both buttons provide visual feedback ("Copied!" / "¡Copiado!")
+
+### Changed
+- Coordinate picker now has two copy buttons instead of one, with clear labels indicating format
+- Coordinate picker buttons are now fully multilingual (English/Spanish)
+
+---
+
+## [0.4.0-beta] - 2025-11-07
+
+### Added
+
+#### Multilingual UI Support
+- **Complete interface internationalization** for English and Spanish
+  - Language files: `_data/lang/en.yml` and `_data/lang/es.yml` with 300+ UI strings
+  - Language-aware templates: All layouts and includes updated with multilingual string lookups
+  - Configuration: `telar_language` setting in `_config.yml` (supports `en` and `es`)
+  - Automatic language detection and fallback logic
+  - All navigation, buttons, labels, error messages, and instructions translated
+  - Warning messages and IIIF error explanations (~40 detailed error messages) fully multilingual
+
+#### Interactive Widgets System
+- **Three widget types** for rich content presentation in story panels:
+  - **Carousel widget**: Image carousel with navigation controls, captions, and credit attribution
+  - **Tabs widget**: Tabbed content panels for organizing multi-perspective information (2-4 tabs)
+  - **Accordion widget**: Collapsible content sections for hierarchical information (2-6 panels)
+- **CommonMark-style syntax**: `:::widget_type ... :::` for clear block boundaries
+- **Python widget parser**: Build-time processing with Jinja2 templates (~350 lines)
+- **Bootstrap 5 integration**: Responsive widgets that match site theme
+- **External URL support**: Images can be referenced from http:// and https:// URLs
+- **Build-time validation**: Comprehensive error checking with accessibility warnings
+- **Opposite panel colors**: Widgets use contrasting colors for visual hierarchy (Layer 1 widgets use Layer 2 colors and vice versa)
+
+#### Glossary Auto-Linking
+- **Wiki-style inline syntax**: `[[term_id]]` for automatic term references in narrative text
+- **Custom display text**: `[[term_id|display text]]` for flexible grammar
+- **Automatic link generation**: Links open glossary slide-over panels
+- **Build-time validation**: Warns about broken term references
+- **CSS styling**: Theme-colored links with visual distinction
+- **Full multilingual support**: Works seamlessly in both English and Spanish
+
+#### IIIF Metadata Auto-Population
+- **Automatic extraction** of object metadata from IIIF manifests
+- **Supports both API versions**: IIIF Presentation API v2.0 and v3.0
+- **Six auto-populated fields**: title, description, creator, period, location, credit
+- **Language-aware extraction**: Uses site's `telar_language` setting with fallback to English
+- **Smart credit detection**: Filters legal boilerplate, prefers actual attribution
+- **Fallback hierarchy**: CSV values → IIIF manifest → empty (user control maintained)
+- **HTML stripping**: Ensures YAML safety
+- **Refined field matching**: Prioritizes specific field names to avoid false matches
+- **9 extraction helper functions**: ~400 lines of comprehensive IIIF metadata handling
+
+#### Mobile Responsiveness Enhancements
+- **Mobile story navigation**: Graceful panel transitions with skeleton shimmer loading indicator
+  - 400ms navigation cooldown to prevent rapid clicking
+  - Subtle animated gradient during viewer initialization
+  - Faster transitions (fade only, no slide animations)
+  - Aggressive preloading (±2 steps on mobile)
+- **Height-based responsive design**: 4-tier progressive system for small screens
+  - Tier 1 (≤700px): 10-15% typography reduction
+  - Tier 2 (≤667px - iPhone SE): 20-25% reduction, 55vh:45vh viewer:panel ratio
+  - Tier 3 (≤600px): 30-35% reduction for very small Android devices
+  - Dual-axis media queries prevent triggering on short desktop windows
+- **Site-wide mobile optimizations**:
+  - Offcanvas panels: Reduced padding, font sizes, and spacing
+  - Object gallery: Single column layout on mobile (≤767px)
+  - Glossary index: Optimized spacing (33-50% reduction in margins)
+  - Collection grid: Reduced gaps and image heights
+  - Navbar brand: Smaller font size on small screens
+- **Mobile panel refinements**:
+  - Glossary panel: 6vw left offset, 8vh top position, 76vh height, 94vw width
+  - Navigation buttons: Reduced to 45px on small screens
+  - Enhanced touch interactions and viewport handling
+
+#### Story Interface Controls
+- **Configurable step indicators**: New `story_interface` section in `_config.yml`
+  - `show_story_steps`: Toggle "Step X" overlay visibility (CSS-based)
+  - `include_demo_content`: Preparation for v0.5.0 demo content feature
+
+#### Theme System Enhancements
+- **Theme creator attribution**: Optional `creator` and `creator_url` fields in theme YAML files
+  - Displayed in site footer when present
+  - Recognizes theme contributions while maintaining clean footer design
+  - All 5 preset themes updated with attribution
+- **Google Fonts documentation**: Inline comments in theme files explaining how to use custom fonts
+  - Direct link to Google Fonts
+  - Format examples and syntax guidance
+  - Fallback font requirements
+
+#### Story Byline Feature
+- **Optional author/creator attribution** for stories
+  - New `byline` column in `project.csv`
+  - Displays on homepage story cards (beneath title, smaller font, muted color)
+  - Displays on story intro slide (as h3 between subtitle and description)
+  - Fully optional and responsive
+
+#### Development & Testing Tools
+- **Christmas Tree Mode**: Comprehensive testing tool for multilingual warnings (displays all warnings at once, lighting site up like a Christmas tree)
+  - `--christmas-tree` flag in `csv_to_json.py` or config-based in `_config.yml`
+  - Injects test objects with various intentional error conditions
+  - All test objects marked with 🎄 emoji for easy identification
+  - Triggers all warning message types for verification
+  - Automated cleanup system removes test files when disabled
 
 ### Changed
 
-- **Glossary link styling**: Refined visual appearance for inline glossary links
-  - Reduced vertical padding from 0.15em to 0.02em for tighter fit around text
-  - Increased border-radius from 3px to 6px for more rounded corners
-  - Links now blend more naturally within narrative flow
+- **Enhanced preloading**: Desktop preloads 3 steps ahead and 2 behind (vs 2/1 previously) for smoother navigation
+- **Footer enhancements**: Multilingual footer with theme attribution support, language-aware copyright and navigation strings
+- **Story back button**: Desktop shows text only (icon hidden), mobile shows icon only (text hidden) for cleaner design
+- **Carousel captions**: Moved below images instead of overlaid for better readability
+- **Carousel image display**: Centered with equal widths using flexbox
+- **Widget visual contrast**: Widgets use opposite panel colors (Layer 1 widgets use Layer 2 colors, Layer 2 widgets use Layer 1 colors)
+
+### Fixed
+
+#### Critical Data Handling
+- **Numeric object_id YAML parsing**: Added quotes around object_id values to prevent YAML parsers from treating numeric filenames as integers. Gracias, Adelaida!
+- **Google Sheets quotation marks**: Created `escape_yaml()` helper function to handle quotation marks in all user-editable fields (dimensions, titles, etc.). Thanks, Jeff!
+
+#### IIIF Issues
+- **IIIF manifest 429 rate-limit false positives**: Skip 429 errors for unchanged manifests between builds
+- **IIIF mismatch localhost/127.0.0.1**: Normalize both URLs to prevent false positive warnings
+- **IIIF manifest validation with redirects**: Changed from HEAD to GET request to properly follow 301/302 redirects
+- **IIIF field matching precision**: Improved metadata extraction to avoid false matches (e.g., "Repository" vs "Location Depicted")
+
+#### UI and Styling
+- **Panel heading colors**: Fixed h1-h6 elements in panel bodies to use correct theme text colors instead of wrong CSS variables
+- **Hyperlink colors in panels**: All links (footnotes and general hyperlinks) now use theme link color via `var(--color-link)`
+- **Glossary popup title**: Fixed bug where popup displayed link text instead of actual glossary term title; now correctly extracts title from h1 tag
+- **Carousel display bug**: Fixed all slides showing simultaneously by adding explicit display:none/flex rules
+
+#### Mobile Layout
+- **Mobile panel heights**: Fixed viewer/narrative split and panel positioning on mobile devices
+- **Mobile layout issues**: Resolved various mobile-specific layout problems with panel stacking and viewport calculations
+
+#### Multilingual
+- **Step number localization**: Fixed Spanish sites showing "Step X" instead of "Paso X" by using language file lookups in JavaScript
+
+### Migration
+
+- **v034_to_v040 migration script**: Automated upgrade from v0.3.4 to v0.4.0
+  - Adds `story_interface` configuration section with full comments to `_config.yml`
+  - Ensures Google Sheets integration comments are present for users upgrading from earlier versions
+  - Creates `_data/lang/` directory and fetches English/Spanish language files from GitHub
+  - Updates all framework files (layouts, includes, scripts, styles, JavaScript)
+  - Adds upgrade notification system (`_layouts/upgrade-summary.html`, `_includes/upgrade-alert.html`)
+  - Fetches framework documentation files (README.md, docs/README.md)
+  - Non-breaking migration: all new features are additive, existing sites continue to work
+  - 6 optional manual steps for users to explore new features
 
 ## [0.3.4-beta] - 2025-10-31
 

@@ -51,6 +51,9 @@ object:
     copy_y_tooltip: "Copiar coordenada Y"
     copy_zoom_tooltip: "Copiar nivel de zoom"
     copy_manifest_tooltip: "Copiar URL del manifiesto"
+    copy_sheets: "x, y, zoom (Sheets)"
+    copy_csv: "x, y, zoom (CSV)"
+    copied: "¡Copiado!"
 
   # Miniaturas de objetos
   no_image: "Sin imagen"
@@ -75,6 +78,7 @@ pages:
 # Sistema de paneles
 panels:
   default_title: "Título del panel"
+  glossary_term_prefix: "Palabra clave"
   glossary_term_title: "Término del glosario"
 
 # Mensajes de estado vacío
