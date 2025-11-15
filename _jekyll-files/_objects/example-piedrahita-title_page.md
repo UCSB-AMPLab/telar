@@ -10,7 +10,7 @@ credit: ""
 thumbnail: ""
 iiif_manifest: "https://jcb.lunaimaging.com/luna/servlet/iiif/m/JCB~1~1~278~100020/manifest"
 object_warning: ""
-object_warning_short: ""
+object_warning_short: "nan"
 layout: object
 ---
 

@@ -21,16 +21,40 @@ let objectsIndex = {}; // Quick lookup for object data
 let isPanelOpen = false; // Track if any panel is open
 let scrollLockActive = false; // Track if scroll-lock is active
 
+// Touch navigation for iPad/tablets in desktop mode (v0.4.3)
+// Handles swipe gestures to navigate between story steps
+// Note: Mobile viewports (<768px) use button navigation instead
+let touchStartY = 0;  // Y coordinate where touch started
+let touchEndY = 0;    // Y coordinate where touch ended
+const TOUCH_THRESHOLD = window.innerHeight * 0.2; // 20vh swipe distance required to trigger step change
+
 // Viewer card management
 let viewerCards = []; // Array of { objectId, element, uvInstance, osdViewer, isReady, pendingZoom }
 let viewerCardCounter = 0;
 const MAX_VIEWER_CARDS = 5;
 
+// Mobile navigation state
+let isMobileViewport = false;
+let currentMobileStep = 0;
+let mobileNavButtons = null;
+// Graceful panel transitions on mobile (v0.4.0)
+let mobileNavigationCooldown = false;
+const MOBILE_NAV_COOLDOWN = 400; // ms - prevent rapid clicking
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
   buildObjectsIndex();
   initializeFirstViewer();
-  initializeStepController();
+
+  // Check if mobile and initialize appropriate navigation
+  isMobileViewport = window.innerWidth < 768;
+
+  if (isMobileViewport) {
+    initializeMobileNavigation();
+  } else {
+    initializeStepController();
+  }
+
   initializePanels();
   initializeScrollLock();
 });
@@ -290,6 +314,245 @@ function buildLocalInfoJsonUrl(objectId) {
 }
 
 /**
+ * Initialize Mobile Button Navigation
+ * For mobile viewports, uses button-based navigation instead of scroll
+ */
+function initializeMobileNavigation() {
+  console.log('Initializing mobile button navigation');
+
+  // Get all story steps
+  allSteps = Array.from(document.querySelectorAll('.story-step'));
+
+  // Hide all steps initially
+  allSteps.forEach(step => {
+    step.classList.remove('mobile-active');
+  });
+
+  // Show first step (intro)
+  if (allSteps.length > 0) {
+    allSteps[0].classList.add('mobile-active');
+    currentMobileStep = 0;
+  }
+
+  // Create navigation buttons
+  const navContainer = document.createElement('div');
+  navContainer.className = 'mobile-nav';
+
+  const prevButton = document.createElement('button');
+  prevButton.className = 'mobile-prev';
+  prevButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
+  prevButton.setAttribute('aria-label', 'Previous step');
+
+  const nextButton = document.createElement('button');
+  nextButton.className = 'mobile-next';
+  nextButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z"/></svg>';
+  nextButton.setAttribute('aria-label', 'Next step');
+
+  navContainer.appendChild(prevButton);
+  navContainer.appendChild(nextButton);
+  document.body.appendChild(navContainer);
+
+  // Store button references
+  mobileNavButtons = { prev: prevButton, next: nextButton };
+
+  // Add click handlers
+  prevButton.addEventListener('click', goToPreviousMobileStep);
+  nextButton.addEventListener('click', goToNextMobileStep);
+
+  // Initialize button states
+  updateMobileButtonStates();
+
+  // Initialize viewer for first object
+  const firstObjectId = window.storyData?.firstObject;
+  if (firstObjectId) {
+    const firstRealStep = (window.storyData?.steps || []).find(step => step.object === firstObjectId);
+    if (firstRealStep) {
+      const x = parseFloat(firstRealStep.x);
+      const y = parseFloat(firstRealStep.y);
+      const zoom = parseFloat(firstRealStep.zoom);
+
+      // Position the first viewer
+      const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom);
+      if (viewerCard) {
+        currentViewerCard = viewerCard;
+        viewerCard.element.classList.remove('card-below');
+        viewerCard.element.classList.add('card-active');
+      }
+    }
+  }
+
+  console.log(`Mobile navigation initialized with ${allSteps.length} steps`);
+}
+
+/**
+ * Go to next step (mobile)
+ */
+function goToNextMobileStep() {
+  if (currentMobileStep >= allSteps.length - 1) {
+    console.log('Already at last step');
+    return;
+  }
+
+  const nextIndex = currentMobileStep + 1;
+  goToMobileStep(nextIndex);
+}
+
+/**
+ * Go to previous step (mobile)
+ */
+function goToPreviousMobileStep() {
+  if (currentMobileStep <= 0) {
+    console.log('Already at first step');
+    return;
+  }
+
+  const prevIndex = currentMobileStep - 1;
+  goToMobileStep(prevIndex);
+}
+
+/**
+ * Navigate to a specific step (mobile)
+ */
+function goToMobileStep(newIndex) {
+  if (newIndex < 0 || newIndex >= allSteps.length) {
+    return;
+  }
+
+  // ====== Graceful panel transitions on mobile (v0.4.0) ======
+  // Prevent rapid clicking
+  if (mobileNavigationCooldown) {
+    console.log('Mobile navigation on cooldown, ignoring tap');
+    return;
+  }
+
+  // Check if viewer needs loading - show skeleton if not ready
+  const newStep = allSteps[newIndex];
+  const objectId = newStep.dataset.object;
+  const viewerCard = viewerCards.find(vc => vc.objectId === objectId);
+
+  if (!viewerCard || !viewerCard.isReady) {
+    showViewerSkeletonState();
+  }
+
+  // Activate cooldown to prevent rapid clicking
+  mobileNavigationCooldown = true;
+  setTimeout(() => {
+    mobileNavigationCooldown = false;
+  }, MOBILE_NAV_COOLDOWN);
+  // ====== End graceful transitions ======
+
+  console.log(`Mobile navigation: ${currentMobileStep} → ${newIndex}`);
+
+  // Hide current step
+  allSteps[currentMobileStep].classList.remove('mobile-active');
+
+  // Show new step
+  allSteps[newIndex].classList.add('mobile-active');
+
+  // Update current index
+  currentMobileStep = newIndex;
+
+  // Update button states
+  updateMobileButtonStates();
+
+  // Handle viewer updates (same as desktop)
+  // Note: newStep and objectId already declared above for skeleton check
+  const x = parseFloat(newStep.dataset.x);
+  const y = parseFloat(newStep.dataset.y);
+  const zoom = parseFloat(newStep.dataset.zoom);
+
+  // Switch to object if different from current
+  if (objectId && (!currentViewerCard || currentViewerCard.objectId !== objectId)) {
+    console.log(`Switching to object: ${objectId}`);
+    switchToObjectMobile(objectId, newIndex, x, y, zoom);
+    currentObject = objectId;
+  } else if (currentViewerCard && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
+    // Same object, just pan/zoom
+    if (currentViewerCard.isReady) {
+      animateViewerToPosition(currentViewerCard, x, y, zoom);
+    } else {
+      currentViewerCard.pendingZoom = { x, y, zoom, snap: false };
+    }
+  }
+
+  updateViewerInfo(newIndex);
+
+  // Graceful transitions: Preload upcoming viewers aggressively
+  preloadMobileViewers(newIndex);
+}
+
+/**
+ * Update mobile button states (enable/disable at boundaries)
+ */
+function updateMobileButtonStates() {
+  if (!mobileNavButtons) return;
+
+  // Disable prev at first step
+  mobileNavButtons.prev.disabled = (currentMobileStep === 0);
+
+  // Disable next at last step
+  mobileNavButtons.next.disabled = (currentMobileStep === allSteps.length - 1);
+}
+
+/**
+ * Switch to different object (mobile version)
+ * Simplified without forward/backward animations
+ */
+function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
+  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}`);
+
+  // Get or create viewer card
+  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
+
+  // Wait for viewer to be ready
+  const startTime = Date.now();
+  const MAX_WAIT_TIME = 5000;
+
+  const activateWhenReady = () => {
+    const elapsed = Date.now() - startTime;
+
+    if (newViewerCard.isReady) {
+      console.log(`Mobile: Viewer ready for ${objectId}`);
+
+      // Graceful transitions: Hide skeleton loading state
+      hideViewerSkeletonState();
+
+      // Hide old viewer if exists
+      if (currentViewerCard && currentViewerCard !== newViewerCard) {
+        currentViewerCard.element.classList.remove('card-active');
+        currentViewerCard.element.classList.add('card-below');
+      }
+
+      // Show new viewer
+      newViewerCard.element.classList.remove('card-below');
+      newViewerCard.element.classList.add('card-active');
+
+      // Update reference
+      currentViewerCard = newViewerCard;
+    } else if (elapsed < MAX_WAIT_TIME) {
+      setTimeout(activateWhenReady, 100);
+    } else {
+      console.warn(`Mobile: Viewer timeout for ${objectId}, showing anyway`);
+
+      // Graceful transitions: Hide skeleton even on timeout
+      hideViewerSkeletonState();
+
+      // Show anyway to prevent black screen
+      if (currentViewerCard && currentViewerCard !== newViewerCard) {
+        currentViewerCard.element.classList.remove('card-active');
+        currentViewerCard.element.classList.add('card-below');
+      }
+
+      newViewerCard.element.classList.remove('card-below');
+      newViewerCard.element.classList.add('card-active');
+      currentViewerCard = newViewerCard;
+    }
+  };
+
+  activateWhenReady();
+}
+
+/**
  * Initialize Step-Based Navigation Controller
  */
 function initializeStepController() {
@@ -309,8 +572,14 @@ function initializeStepController() {
   // Keyboard navigation
   document.addEventListener('keydown', handleKeyboard);
 
-  // Scroll accumulator
+  // Scroll accumulator for mouse/trackpad
   window.addEventListener('wheel', handleScroll, { passive: false });
+
+  // Touch navigation for iPad/tablets in desktop mode (v0.4.3)
+  // Enables swipe-to-navigate on touch devices that don't trigger 'wheel' events
+  // Uses passive listeners for better scroll performance
+  window.addEventListener('touchstart', handleTouchStart, { passive: true });
+  window.addEventListener('touchend', handleTouchEnd, { passive: true });
 
   console.log(`Step controller initialized with ${allSteps.length} steps`);
 }
@@ -489,11 +758,70 @@ function handleScroll(e) {
 }
 
 /**
+ * Handle touch start for iPad/tablet swipe navigation (v0.4.3)
+ *
+ * Records the Y coordinate where the touch began. This coordinate is later
+ * compared with the touch end position to determine swipe direction and distance.
+ *
+ * Context: The 'wheel' event works for mouse/trackpad but doesn't fire on iPad
+ * when users scroll with touch. This touch handler enables natural swipe navigation
+ * on touch devices in desktop viewport mode.
+ *
+ * @param {TouchEvent} e - Touch start event
+ */
+function handleTouchStart(e) {
+  touchStartY = e.touches[0].clientY;
+}
+
+/**
+ * Handle touch end for iPad/tablet swipe navigation (v0.4.3)
+ *
+ * Calculates swipe distance and direction to trigger step navigation:
+ * - Swipe UP (like scrolling down) → advances to next step
+ * - Swipe DOWN (like scrolling up) → returns to previous step
+ *
+ * Respects the same cooldown period as wheel scrolling to prevent rapid
+ * step changes during animations. Requires minimum 20vh swipe distance
+ * to distinguish intentional navigation from small touch movements.
+ *
+ * Note: Touch events are only active in desktop viewport mode. Mobile
+ * viewports (<768px) use button-based navigation instead.
+ *
+ * Thanks to Makoto for revealing this issue on iPad.
+ *
+ * @param {TouchEvent} e - Touch end event
+ */
+function handleTouchEnd(e) {
+  touchEndY = e.changedTouches[0].clientY;
+
+  const now = Date.now();
+  const timeSinceLastChange = now - lastStepChangeTime;
+
+  // Respect cooldown period to prevent rapid step changes during animations
+  if (timeSinceLastChange < STEP_COOLDOWN) {
+    return;
+  }
+
+  // Calculate swipe distance (positive = swipe down, negative = swipe up)
+  const swipeDistance = touchEndY - touchStartY;
+
+  // Swipe up (negative distance) = next step (mimics scroll down behavior)
+  if (swipeDistance < -TOUCH_THRESHOLD) {
+    nextStep();
+  }
+  // Swipe down (positive distance) = previous step (mimics scroll up behavior)
+  else if (swipeDistance > TOUCH_THRESHOLD) {
+    prevStep();
+  }
+}
+
+/**
  * Preload viewers for upcoming steps
+ * Enhanced preloading (v0.4.0) - more aggressive on desktop due to better resources
  */
 function preloadUpcomingViewers(currentIndex) {
-  const PRELOAD_AHEAD = 2; // Preload 2 steps forward
-  const PRELOAD_BEHIND = 1; // Preload 1 step backward
+  const PRELOAD_AHEAD = 3; // Preload 3 steps forward (increased from 2)
+  const PRELOAD_BEHIND = 2; // Preload 2 steps backward (increased from 1)
 
   // Preload forward
   for (let i = 1; i <= PRELOAD_AHEAD; i++) {
@@ -784,7 +1112,9 @@ function animateViewerToRegion(viewerCard, region) {
 function updateViewerInfo(stepNumber) {
   const infoElement = document.getElementById('current-object-title');
   if (infoElement) {
-    infoElement.textContent = `Step ${stepNumber}`;
+    // Use language string from Jekyll with fallback to English
+    const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
+    infoElement.textContent = stepTemplate.replace("{{ number }}", stepNumber);
   }
 }
 
@@ -857,7 +1187,14 @@ function openPanel(panelType, contentId) {
   if (content) {
     // Update panel content
     document.getElementById(`${panelId}-title`).textContent = content.title;
-    document.getElementById(`${panelId}-content`).innerHTML = content.html;
+    const contentElement = document.getElementById(`${panelId}-content`);
+    contentElement.innerHTML = content.html;
+
+    // v0.4.0: Re-initialize glossary links in the dynamically loaded content
+    // This enables the [[term_id]] inline glossary links to work in panel content
+    if (window.Telar && window.Telar.initializeGlossaryLinks) {
+      window.Telar.initializeGlossaryLinks(contentElement);
+    }
 
     // Track current panel
     if (panelType === 'layer1') {
@@ -919,7 +1256,7 @@ function getPanelContent(panelType, contentId) {
 
     // Add layer2 button if layer2 has content
     if ((step.layer2_title && step.layer2_title.trim() !== '') || (step.layer2_text && step.layer2_text.trim() !== '')) {
-      const buttonLabel = (step.layer2_button && step.layer2_button.trim() !== '') ? step.layer2_button : 'Go deeper';
+      const buttonLabel = (step.layer2_button && step.layer2_button.trim() !== '') ? step.layer2_button : window.telarLang.goDeeper;
       html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${buttonLabel} →</button></p>`;
     }
 
@@ -1059,6 +1396,67 @@ function closeAllPanels() {
 
   isPanelOpen = false;
   deactivateScrollLock();
+}
+
+// ============================================================================
+// GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
+//
+// Helper functions for mobile story navigation coordination
+// See: telar-dev-notes/releases/0.4.0/mobile-story-transitions-research.md
+// ============================================================================
+
+/**
+ * Show skeleton loading state on viewer (MOBILE ONLY)
+ * Displays subtle shimmer animation to indicate viewer initialization
+ */
+function showViewerSkeletonState() {
+  const container = document.getElementById('viewer-cards-container');
+  if (container) {
+    container.classList.add('skeleton-loading');
+  }
+}
+
+/**
+ * Hide skeleton loading state on viewer (MOBILE ONLY)
+ * Removes shimmer animation when viewer is ready
+ */
+function hideViewerSkeletonState() {
+  const container = document.getElementById('viewer-cards-container');
+  if (container) {
+    container.classList.remove('skeleton-loading');
+  }
+}
+
+/**
+ * Preload viewers for mobile navigation (MOBILE ONLY)
+ * More aggressive than desktop: ±2 steps instead of ±1
+ * Reduces loading delays during rapid navigation
+ */
+function preloadMobileViewers(currentIndex) {
+  const MOBILE_PRELOAD_RANGE = 2;
+
+  for (let offset = -MOBILE_PRELOAD_RANGE; offset <= MOBILE_PRELOAD_RANGE; offset++) {
+    if (offset === 0) continue; // Skip current step
+
+    const idx = currentIndex + offset;
+    if (idx < 0 || idx >= allSteps.length) continue;
+
+    const step = allSteps[idx];
+    const objectId = step.dataset.object;
+    if (!objectId) continue;
+
+    // Skip if already loaded
+    const exists = viewerCards.find(vc => vc.objectId === objectId);
+    if (exists) continue;
+
+    // Preload this viewer
+    const x = parseFloat(step.dataset.x);
+    const y = parseFloat(step.dataset.y);
+    const zoom = parseFloat(step.dataset.zoom);
+
+    console.log(`⏳ Mobile preloading step ${idx}: ${objectId}`);
+    getOrCreateViewerCard(objectId, idx, x, y, zoom);
+  }
 }
 
 // Export for debugging
