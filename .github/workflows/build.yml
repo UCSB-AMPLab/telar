@@ -83,9 +83,10 @@ jobs:
               # Get list of changed files
               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
-              # Check if any images or objects.csv changed
-              if echo "$CHANGED_FILES" | grep -qE '^components/images/objects/|^components/structures/objects\.csv$'; then
-                echo "✓ Images or objects.csv changed - IIIF regeneration needed"
+              # Check if any images, objects.csv, or _config.yml changed
+              # Note: _config.yml added in v0.4.3 - IIIF tiles embed base URL from config (thanks Tara)
+              if echo "$CHANGED_FILES" | grep -qE '^components/images/objects/|^components/structures/objects\.csv$|^_config\.yml$'; then
+                echo "✓ Images, objects.csv, or _config.yml changed - IIIF regeneration needed"
                 NEEDS_IIIF="true"
               else
                 echo "✓ Only content files changed - skipping IIIF regeneration"

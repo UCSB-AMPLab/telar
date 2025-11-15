@@ -21,6 +21,13 @@ let objectsIndex = {}; // Quick lookup for object data
 let isPanelOpen = false; // Track if any panel is open
 let scrollLockActive = false; // Track if scroll-lock is active
 
+// Touch navigation for iPad/tablets in desktop mode (v0.4.3)
+// Handles swipe gestures to navigate between story steps
+// Note: Mobile viewports (<768px) use button navigation instead
+let touchStartY = 0;  // Y coordinate where touch started
+let touchEndY = 0;    // Y coordinate where touch ended
+const TOUCH_THRESHOLD = window.innerHeight * 0.2; // 20vh swipe distance required to trigger step change
+
 // Viewer card management
 let viewerCards = []; // Array of { objectId, element, uvInstance, osdViewer, isReady, pendingZoom }
 let viewerCardCounter = 0;
@@ -565,8 +572,14 @@ function initializeStepController() {
   // Keyboard navigation
   document.addEventListener('keydown', handleKeyboard);
 
-  // Scroll accumulator
+  // Scroll accumulator for mouse/trackpad
   window.addEventListener('wheel', handleScroll, { passive: false });
+
+  // Touch navigation for iPad/tablets in desktop mode (v0.4.3)
+  // Enables swipe-to-navigate on touch devices that don't trigger 'wheel' events
+  // Uses passive listeners for better scroll performance
+  window.addEventListener('touchstart', handleTouchStart, { passive: true });
+  window.addEventListener('touchend', handleTouchEnd, { passive: true });
 
   console.log(`Step controller initialized with ${allSteps.length} steps`);
 }
@@ -741,6 +754,64 @@ function handleScroll(e) {
   } else if (scrollAccumulator <= -SCROLL_THRESHOLD) {
     prevStep();
     scrollAccumulator = 0;
+  }
+}
+
+/**
+ * Handle touch start for iPad/tablet swipe navigation (v0.4.3)
+ *
+ * Records the Y coordinate where the touch began. This coordinate is later
+ * compared with the touch end position to determine swipe direction and distance.
+ *
+ * Context: The 'wheel' event works for mouse/trackpad but doesn't fire on iPad
+ * when users scroll with touch. This touch handler enables natural swipe navigation
+ * on touch devices in desktop viewport mode.
+ *
+ * @param {TouchEvent} e - Touch start event
+ */
+function handleTouchStart(e) {
+  touchStartY = e.touches[0].clientY;
+}
+
+/**
+ * Handle touch end for iPad/tablet swipe navigation (v0.4.3)
+ *
+ * Calculates swipe distance and direction to trigger step navigation:
+ * - Swipe UP (like scrolling down) → advances to next step
+ * - Swipe DOWN (like scrolling up) → returns to previous step
+ *
+ * Respects the same cooldown period as wheel scrolling to prevent rapid
+ * step changes during animations. Requires minimum 20vh swipe distance
+ * to distinguish intentional navigation from small touch movements.
+ *
+ * Note: Touch events are only active in desktop viewport mode. Mobile
+ * viewports (<768px) use button-based navigation instead.
+ *
+ * Thanks to Makoto for revealing this issue on iPad.
+ *
+ * @param {TouchEvent} e - Touch end event
+ */
+function handleTouchEnd(e) {
+  touchEndY = e.changedTouches[0].clientY;
+
+  const now = Date.now();
+  const timeSinceLastChange = now - lastStepChangeTime;
+
+  // Respect cooldown period to prevent rapid step changes during animations
+  if (timeSinceLastChange < STEP_COOLDOWN) {
+    return;
+  }
+
+  // Calculate swipe distance (positive = swipe down, negative = swipe up)
+  const swipeDistance = touchEndY - touchStartY;
+
+  // Swipe up (negative distance) = next step (mimics scroll down behavior)
+  if (swipeDistance < -TOUCH_THRESHOLD) {
+    nextStep();
+  }
+  // Swipe down (positive distance) = previous step (mimics scroll up behavior)
+  else if (swipeDistance > TOUCH_THRESHOLD) {
+    prevStep();
   }
 }
 
