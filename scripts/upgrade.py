@@ -235,9 +235,13 @@ Please complete these after merging:
 
 """
         for i, step in enumerate(manual_steps, 1):
-            checklist += f"{i}. {step['description']}"
-            if 'doc_url' in step:
-                checklist += f" ([guide]({step['doc_url']}))"
+            # Handle both string and dict formats for backward compatibility
+            if isinstance(step, dict):
+                checklist += f"{i}. {step['description']}"
+                if 'doc_url' in step:
+                    checklist += f" ([guide]({step['doc_url']}))"
+            else:
+                checklist += f"{i}. {step}"
             checklist += "\n"
     else:
         checklist += "## No Manual Steps Required\n\nAll changes have been automated!\n"
