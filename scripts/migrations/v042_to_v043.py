@@ -9,7 +9,10 @@ Changes:
 """
 
 from pathlib import Path
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None
 
 class Migration042to043:
     """Migrate from v0.4.2-beta to v0.4.3-beta"""
@@ -61,6 +64,10 @@ class Migration042to043:
 
     def _update_framework_files(self, results: dict):
         """Download and update framework files from GitHub"""
+        if requests is None:
+            results['errors'].append("requests library not installed. Run: pip install requests")
+            raise ImportError("requests library required for migration")
+
         base_url = "https://raw.githubusercontent.com/UCSB-AMPLab/telar/v0.4.3-beta"
 
         files_to_update = [
