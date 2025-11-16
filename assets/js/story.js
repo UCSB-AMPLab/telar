@@ -48,10 +48,14 @@ document.addEventListener('DOMContentLoaded', function() {
   buildObjectsIndex();
   initializeFirstViewer();
 
-  // Check if mobile and initialize appropriate navigation
+  // Check if mobile, embed mode, or desktop and initialize appropriate navigation
+  // v0.5.0: Always use button navigation in embed mode for Canvas LMS compatibility
   isMobileViewport = window.innerWidth < 768;
+  const isEmbedMode = window.telarEmbed?.enabled || false;
 
-  if (isMobileViewport) {
+  console.log(`[Story Init] isMobileViewport: ${isMobileViewport}, isEmbedMode: ${isEmbedMode}, viewport width: ${window.innerWidth}`);
+
+  if (isMobileViewport || isEmbedMode) {
     initializeMobileNavigation();
   } else {
     initializeStepController();
@@ -447,9 +451,12 @@ function goToMobileStep(newIndex) {
 
   // Hide current step
   allSteps[currentMobileStep].classList.remove('mobile-active');
+  console.log(`Removed mobile-active from step ${currentMobileStep}:`, allSteps[currentMobileStep]);
 
   // Show new step
   allSteps[newIndex].classList.add('mobile-active');
+  console.log(`Added mobile-active to step ${newIndex}:`, allSteps[newIndex]);
+  console.log(`Step ${newIndex} classes:`, allSteps[newIndex].className);
 
   // Update current index
   currentMobileStep = newIndex;

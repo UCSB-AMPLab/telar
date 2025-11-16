@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telar Embed Mode Testing - All Dimension Presets</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+    .instructions {
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border-left: 4px solid #007bff;
+    }
+    .instructions p {
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .instructions code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto 30px;
+    }
+    .test-item {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 40px;
+    }
+    .test-item h3 {
+      margin-bottom: 8px;
+      color: #007bff;
+      font-size: 1.1em;
+    }
+    .test-item .dimensions {
+      color: #666;
+      font-size: 0.9em;
+      margin-bottom: 12px;
+      font-family: monospace;
+    }
+    iframe {
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      display: block;
+      background: white;
+      margin: 0 auto;
+      max-width: 100%;
+    }
+    .checklist {
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      border-left: 4px solid #28a745;
+    }
+    .checklist h2 {
+      margin-bottom: 10px;
+      color: #333;
+      font-size: 1.2em;
+    }
+    .checklist ul {
+      list-style-position: inside;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>Telar Embed Mode Testing</h1>
+
+  <div class="instructions">
+    <p><strong>Instructions:</strong></p>
+    <p>1. Start Jekyll server: <code>python3 scripts/generate_iiif.py --base-url http://127.0.0.1:4001/telar && bundle exec jekyll serve --port 4001</code></p>
+    <p>2. Open this file in browser: <code>open test-embed.html</code></p>
+    <p>3. Test all 8 dimension presets below</p>
+    <p>4. Verify: "View full site" banner, navigation buttons visible, home button hidden, IIIF viewer works</p>
+  </div>
+
+  <div class="test-container">
+    <!-- 1. Canvas LMS -->
+    <div class="test-item">
+      <h3>1. Canvas LMS</h3>
+      <div class="dimensions">100% width × 800px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="100%"
+        height="800"
+        title="Telar Story - Canvas LMS Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 2. Moodle/Blackboard -->
+    <div class="test-item">
+      <h3>2. Moodle / Blackboard</h3>
+      <div class="dimensions">100% width × 700px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="100%"
+        height="700"
+        title="Telar Story - Moodle/Blackboard Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 3. WordPress -->
+    <div class="test-item">
+      <h3>3. WordPress</h3>
+      <div class="dimensions">100% width × 600px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="100%"
+        height="600"
+        title="Telar Story - WordPress Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 4. Squarespace -->
+    <div class="test-item">
+      <h3>4. Squarespace</h3>
+      <div class="dimensions">100% width × 600px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="100%"
+        height="600"
+        title="Telar Story - Squarespace Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 5. Wix -->
+    <div class="test-item">
+      <h3>5. Wix</h3>
+      <div class="dimensions">100% width × 550px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="100%"
+        height="550"
+        title="Telar Story - Wix Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 6. Mobile -->
+    <div class="test-item">
+      <h3>6. Mobile</h3>
+      <div class="dimensions">375px width × 500px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="375"
+        height="500"
+        title="Telar Story - Mobile Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 7. Fixed -->
+    <div class="test-item">
+      <h3>7. Fixed Size</h3>
+      <div class="dimensions">800px width × 600px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="800"
+        height="600"
+        title="Telar Story - Fixed Size Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+
+    <!-- 8. Custom -->
+    <div class="test-item">
+      <h3>8. Custom</h3>
+      <div class="dimensions">90% width × 650px height</div>
+      <iframe
+        src="http://127.0.0.1:4001/telar/stories/story-1/?embed=true"
+        width="90%"
+        height="650"
+        title="Telar Story - Custom Preset"
+        allow="fullscreen">
+      </iframe>
+    </div>
+  </div>
+
+  <div class="checklist">
+    <h2>Testing Checklist</h2>
+    <ul>
+      <li>"View full site" banner appears at top of each iframe</li>
+      <li>Banner is dismissible (X button works)</li>
+      <li>Banner dismissal persists within session</li>
+      <li>Navigation buttons (↑/↓) are visible on all sizes</li>
+      <li>Home button is hidden in embed mode</li>
+      <li>IIIF viewer loads correctly in nested iframe</li>
+      <li>Image zoom/pan works in UniversalViewer</li>
+      <li>Story navigation works via buttons</li>
+      <li>Panels open/close correctly</li>
+      <li>Responsive layout works on all dimension presets</li>
+    </ul>
+  </div>
+</body>
+</html>

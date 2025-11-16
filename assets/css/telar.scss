@@ -2236,45 +2236,111 @@ body.embed-mode {
     display: none !important;
   }
 
+  /* Hide share button */
+  .share-button {
+    display: none !important;
+  }
+
+  /* Hide viewer overlay (contains "Loading..." text) */
+  .viewer-overlay {
+    display: none !important;
+  }
+
+  /* Show embed banner */
+  .telar-embed-banner {
+    display: flex !important;
+  }
+
   /* Maximize content area */
   .story-container {
     padding-top: 0;
-  }
-
-  /* Optional: Adjust story intro for embedded context */
-  .story-intro {
-    min-height: 80vh; /* Slightly smaller intro in embed mode */
   }
 
   /* Always show navigation buttons in embed mode (like mobile) */
   .story-navigation {
     display: block !important;
   }
+
+  /* Show mobile hint in embed mode (hide desktop hint) */
+  .hint-desktop {
+    display: none;
+  }
+
+  .hint-mobile {
+    display: inline;
+  }
+
+  /* Mobile-style step navigation in embed mode (even on desktop viewports) */
+  /* Hide all story steps by default */
+  .story-step {
+    display: none !important;
+    position: static !important;
+    height: 100vh !important;
+    transform: none !important;
+    opacity: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* Show only the active step */
+  .story-step.mobile-active {
+    display: flex !important;
+  }
+
+  /* Show mobile navigation buttons in embed mode (even on desktop viewports) */
+  .mobile-nav {
+    position: fixed !important;
+    right: 1rem !important;
+    bottom: 50% !important;
+    transform: translateY(50%) !important;
+    z-index: 1040 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+
+  .mobile-nav button {
+    width: 66px !important;
+    height: 66px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 2px solid rgba(0, 0, 0, 0.1) !important;
+    color: #333 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
 }
 
-/* "View full site" banner (only visible in embed mode) */
+/* "View full site" floating modal (only visible in embed mode) */
 .telar-embed-banner {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  padding: 8px 16px;
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1050;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 14px 18px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  font-size: 0.9rem;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.875rem;
   font-family: var(--font-body);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: min(380px, calc(100% - 40px));
+  line-height: 1.5;
 
   &-text {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    color: #6c757d;
 
     .material-symbols-outlined {
-      font-size: 1.1rem;
-      vertical-align: middle;
+      display: none;
     }
 
     a {
@@ -2287,24 +2353,38 @@ body.embed-mode {
     }
   }
 
+  &-link {
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    &::after {
+      content: '→';
+      font-size: 1.1em;
+    }
+  }
+
   &-close {
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px;
-    color: #6c757d;
+    padding: 2px;
+    color: #adb5bd;
     line-height: 1;
     transition: color 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    margin-top: -2px;
 
     .material-symbols-outlined {
-      font-size: 1.2rem;
+      font-size: 1.25rem;
     }
 
     &:hover {
-      color: #000;
+      color: #6c757d;
     }
   }
 }
