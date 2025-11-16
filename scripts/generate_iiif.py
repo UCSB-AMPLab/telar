@@ -281,13 +281,70 @@ def load_object_metadata(object_id):
         print(f"  ⚠️  Could not load metadata: {e}")
     return {}
 
-def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif/objects', base_url=None):
+def load_objects_needing_tiles():
     """
-    Generate IIIF tiles for all images in source directory
+    Load list of object_ids that need IIIF tiles generated from objects.json
+
+    Returns:
+        list: Object IDs that need self-hosted IIIF tiles (have no external iiif_manifest)
+    """
+    try:
+        objects_json = Path('_data/objects.json')
+        if not objects_json.exists():
+            print("⚠️  objects.json not found - run csv_to_json.py first")
+            return None
+
+        with open(objects_json, 'r') as f:
+            objects = json.load(f)
+
+        # Find objects that need IIIF tiles (no external IIIF manifest)
+        objects_needing_tiles = []
+        for obj in objects:
+            object_id = obj.get('object_id')
+            iiif_manifest = obj.get('iiif_manifest', '').strip()
+
+            # Skip if no object_id
+            if not object_id:
+                continue
+
+            # Need tiles if iiif_manifest is empty or not a URL
+            if not iiif_manifest or not iiif_manifest.startswith('http'):
+                objects_needing_tiles.append(object_id)
+
+        return objects_needing_tiles
+
+    except Exception as e:
+        print(f"❌ Error loading objects.json: {e}")
+        return None
+
+def find_image_for_object(object_id, source_dir):
+    """
+    Find image file for a given object_id, checking multiple extensions
 
     Args:
-        source_dir: Directory containing source images
-        output_dir: Directory to output IIIF tiles and manifests
+        object_id: Object identifier
+        source_dir: Directory to search for images
+
+    Returns:
+        Path object if found, None otherwise
+    """
+    source_path = Path(source_dir)
+    image_extensions = ['.jpg', '.jpeg', '.png', '.tif', '.tiff']
+
+    for ext in image_extensions:
+        image_path = source_path / f"{object_id}{ext}"
+        if image_path.exists():
+            return image_path
+
+    return None
+
+def generate_iiif_tiles(source_dir='components/images', output_dir='iiif/objects', base_url=None):
+    """
+    Generate IIIF tiles for objects listed in objects.json
+
+    Args:
+        source_dir: Directory containing source images (default: components/images)
+        output_dir: Directory to output IIIF tiles and manifests (default: iiif/objects)
         base_url: Base URL for the site
     """
     if not check_dependencies():
@@ -330,30 +387,41 @@ def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif
     print("=" * 60)
     print()
 
-    # Supported image extensions
-    image_extensions = ['.jpg', '.jpeg', '.png', '.tif', '.tiff']
+    # Load objects from objects.json (CSV-driven approach)
+    print("📋 Loading objects from objects.json...")
+    objects_needing_tiles = load_objects_needing_tiles()
 
-    # Find all images
-    images = [f for f in source_path.iterdir()
-              if f.is_file() and f.suffix.lower() in image_extensions]
-
-    if not images:
-        print(f"⚠️  No images found in {source_dir}")
-        print(f"   Supported formats: {', '.join(image_extensions)}")
+    if objects_needing_tiles is None:
+        print("❌ Could not load objects.json")
         return False
 
-    print(f"Found {len(images)} images to process\n")
+    if not objects_needing_tiles:
+        print("ℹ️  No objects need IIIF tiles (all use external manifests)")
+        return True
 
-    # Process each image file
-    for i, image_file in enumerate(images, 1):
-        # Get object ID from filename (without extension)
-        object_id = image_file.stem
+    print(f"✓ Found {len(objects_needing_tiles)} objects needing tiles\n")
+
+    # Process each object
+    processed_count = 0
+    skipped_count = 0
+
+    for i, object_id in enumerate(objects_needing_tiles, 1):
+        print(f"[{i}/{len(objects_needing_tiles)}] Processing {object_id}...")
+
+        # Find image file for this object
+        image_file = find_image_for_object(object_id, source_dir)
+
+        if not image_file:
+            print(f"  ⚠️  No image file found for {object_id}")
+            print(f"      Checked: {object_id}.jpg, .jpeg, .png, .tif, .tiff")
+            skipped_count += 1
+            print()
+            continue
+
+        print(f"  Found: {image_file.name}")
 
         # Output directory for this object
         object_output = output_path / object_id
-
-        print(f"[{i}/{len(images)}] Processing {image_file.name}...")
-        print(f"  Object ID: {object_id}")
 
         try:
             # Remove existing output if present
@@ -366,18 +434,22 @@ def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif
             generate_iiif_for_image(image_file, object_output, object_id, base_url)
 
             print(f"  ✓ Generated tiles for {object_id}")
+            processed_count += 1
             print()
 
         except Exception as e:
             print(f"  ❌ Error processing {image_file.name}: {e}")
             import traceback
             traceback.print_exc()
+            skipped_count += 1
             print()
             continue
 
     print("=" * 60)
     print("✓ IIIF generation complete!")
-    print(f"  Generated tiles for {len(images)} objects")
+    print(f"  Processed: {processed_count} objects")
+    if skipped_count > 0:
+        print(f"  Skipped: {skipped_count} objects (missing images or errors)")
     print(f"  Output directory: {output_dir}")
     print("=" * 60)
     return True
@@ -387,12 +459,12 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Generate IIIF tiles and manifests for Telar objects'
+        description='Generate IIIF tiles and manifests for Telar objects (CSV-driven)'
     )
     parser.add_argument(
         '--source-dir',
-        default='components/images/objects',
-        help='Source directory containing images (default: components/images/objects)'
+        default='components/images',
+        help='Source directory containing images (default: components/images)'
     )
     parser.add_argument(
         '--output-dir',
@@ -401,7 +473,7 @@ def main():
     )
     parser.add_argument(
         '--base-url',
-        help='Base URL for the site (default: from SITE_URL env or http://localhost:4000/telar)'
+        help='Base URL for the site (default: from _config.yml or http://localhost:4000)'
     )
 
     args = parser.parse_args()

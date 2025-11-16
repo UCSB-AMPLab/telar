@@ -23,7 +23,7 @@ def process_image_sizes(text):
     Syntax: ![Description](image.jpg){md} or ![Description](image.jpg){medium}
     Sizes: sm/small, md/medium, lg/large, full
 
-    Default path: /components/images/additional/
+    Default path: /components/images/
     - Relative paths (no leading /) get prepended with default path
     - Absolute paths (starting with /) used as-is
     - URLs (http/https) used as-is
@@ -49,7 +49,7 @@ def process_image_sizes(text):
 
         # Prepend default path if relative
         if not src.startswith('/') and not src.startswith('http'):
-            src = f'/components/images/additional/{src}'
+            src = f'/components/images/{src}'
 
         return f'<img src="{src}" alt="{alt}" class="img-{size_class}">'
 
@@ -469,7 +469,7 @@ def process_objects(df):
         has_local_image = False
 
         for ext in valid_extensions:
-            local_image_path = Path(f'components/images/objects/{object_id}{ext}')
+            local_image_path = Path(f'components/images/{object_id}{ext}')
             if local_image_path.exists():
                 has_local_image = True
                 print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")
@@ -478,7 +478,7 @@ def process_objects(df):
         # Warn if object has neither external manifest nor local image
         if not has_local_image:
             # Check for similar filenames (near-matches)
-            similar_files = _find_similar_image_filenames(object_id, Path('components/images/objects'))
+            similar_files = _find_similar_image_filenames(object_id, Path('components/images'))
 
             if similar_files:
                 # Found near-matches - provide helpful suggestion
@@ -493,7 +493,7 @@ def process_objects(df):
                     df.at[idx, 'object_warning_short'] = "Ambiguous image match"
             else:
                 # No similar files found - provide basic error message
-                error_msg = f"No image source found for object '{object_id}'. Add either: (1) an IIIF manifest URL in the iiif_manifest column, or (2) an image file to components/images/objects/{object_id}.jpg"
+                error_msg = f"No image source found for object '{object_id}'. Add either: (1) an IIIF manifest URL in the iiif_manifest column, or (2) an image file to components/images/{object_id}.jpg"
                 df.at[idx, 'object_warning_short'] = "Missing image source"
 
             df.at[idx, 'object_warning'] = error_msg
@@ -566,12 +566,12 @@ def process_story(df):
 
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
-                # Check for local image in components/images/objects/
+                # Check for local image in components/images/
                 valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff']
                 has_local_image = False
 
                 for ext in valid_extensions:
-                    local_image_path = Path(f'components/images/objects/{object_id}{ext}')
+                    local_image_path = Path(f'components/images/{object_id}{ext}')
                     if local_image_path.exists():
                         has_local_image = True
                         print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")

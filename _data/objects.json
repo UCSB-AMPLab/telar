@@ -11,8 +11,7 @@
     "location": "",
     "credit": "",
     "thumbnail": "",
-    "object_warning": "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated",
-    "object_warning_short": "Validation error: could not be validated"
+    "object_warning": ""
   },
   {
     "object_id": "example-bogota-1614",
@@ -26,8 +25,7 @@
     "location": "Archivo General de Indias",
     "credit": "Archivo General de Indias, Seville",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-muisca-goldwork",
@@ -41,8 +39,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá. Registration Number: O08319",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-ceramic-figure",
@@ -56,8 +53,7 @@
     "location": "Museo del Oro",
     "credit": "Museo del Oro, Bogotá",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   },
   {
     "object_id": "example-piedrahita-title_page",
@@ -71,7 +67,6 @@
     "location": "",
     "credit": "",
     "thumbnail": "",
-    "object_warning": "",
-    "object_warning_short": NaN
+    "object_warning": ""
   }
 ]
