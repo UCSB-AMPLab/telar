@@ -11,33 +11,24 @@
   // Parse URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const embedMode = urlParams.get('embed') === 'true';
-  const embedSection = urlParams.get('section');
-  const embedLang = urlParams.get('lang');
 
-  // Store embed parameters globally for other scripts to access
+  // Store embed state globally for other scripts to access
   window.telarEmbed = {
-    enabled: embedMode,
-    section: embedSection ? parseInt(embedSection, 10) : null,
-    lang: embedLang
+    enabled: embedMode
   };
 
   // Apply embed mode if enabled
   if (embedMode) {
-    // Add embed class to body for CSS styling
-    document.body.classList.add('embed-mode');
-
     console.log('[Telar Embed] Embed mode enabled');
-    if (embedSection) {
-      console.log('[Telar Embed] Target section:', embedSection);
-    }
-    if (embedLang) {
-      console.log('[Telar Embed] Language override:', embedLang);
-    }
 
-    // Create "View full site" banner when DOM is ready
+    // Add embed class to body when DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', createEmbedBanner);
+      document.addEventListener('DOMContentLoaded', function() {
+        document.body.classList.add('embed-mode');
+        createEmbedBanner();
+      });
     } else {
+      document.body.classList.add('embed-mode');
       createEmbedBanner();
     }
   }
@@ -46,17 +37,17 @@
    * Create dismissible "View full site" banner
    */
   function createEmbedBanner() {
-    // Check if already dismissed this session
-    if (sessionStorage.getItem('telarEmbedBannerDismissed') === 'true') {
-      console.log('[Telar Embed] Banner previously dismissed');
-      return;
-    }
-
     // Get site name from meta tag or default
     const siteName = document.querySelector('meta[property="og:site_name"]')?.content || 'the full site';
 
     // Get full site URL (remove embed parameter)
     const fullSiteUrl = getFullSiteUrl();
+
+    // Get language strings from window.telarLang (set by Jekyll in layout)
+    const embedStrings = window.telarLang.embedBanner;
+
+    // Replace {site_name} placeholder in banner text
+    const bannerText = embedStrings.text.replace('{site_name}', siteName);
 
     // Create banner element
     const banner = document.createElement('div');
@@ -64,7 +55,8 @@
     banner.innerHTML = `
       <span class="telar-embed-banner-text">
         <span class="material-symbols-outlined">open_in_new</span>
-        <a href="${fullSiteUrl}" target="_blank" rel="noopener noreferrer">View this story on ${siteName}</a>
+        <span>${bannerText}</span>
+        <a href="${fullSiteUrl}" class="telar-embed-banner-link" target="_blank" rel="noopener noreferrer">${embedStrings.link}</a>
       </span>
       <button class="telar-embed-banner-close" aria-label="Close" title="Close">
         <span class="material-symbols-outlined">close</span>
@@ -76,21 +68,32 @@
 
     // Handle dismiss
     const closeButton = banner.querySelector('.telar-embed-banner-close');
-    closeButton.addEventListener('click', function() {
-      sessionStorage.setItem('telarEmbedBannerDismissed', 'true');
-      banner.style.display = 'none';
-      console.log('[Telar Embed] Banner dismissed');
-    });
-
-    console.log('[Telar Embed] Banner created');
+    if (closeButton) {
+      closeButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        banner.remove();
+        console.log('[Telar Embed] Banner dismissed');
+      });
+      console.log('[Telar Embed] Banner created with close button');
+    } else {
+      console.error('[Telar Embed] Close button not found');
+    }
   }
 
   /**
-   * Get full site URL without embed parameter
+   * Get site homepage URL
    */
   function getFullSiteUrl() {
     const url = new URL(window.location.href);
-    url.searchParams.delete('embed');
-    return url.toString();
+    // Get the base path by removing the story path (everything after /stories/)
+    const pathname = url.pathname;
+    const basePathMatch = pathname.match(/^(.*?\/?)stories\//);
+    if (basePathMatch) {
+      // Return base URL (origin + path before /stories/)
+      return url.origin + basePathMatch[1];
+    }
+    // Fallback: return origin
+    return url.origin + '/';
   }
 })();
