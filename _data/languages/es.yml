@@ -207,6 +207,43 @@ errors:
     short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
     glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
 
+# Funcionalidad de compartir e incrustar
+share:
+  button: "Compartir"
+  title: "Compartir"
+  title_site: "Compartir este sitio"
+  tab_link: "Compartir enlaces"
+  tab_embed: "Insertar (*embed*)"
+  copy_link: "Copiar enlace"
+  copy_embed: "Copiar código para insertar (*embed*)"
+  copied: "¡Copiado!"
+
+  # Generador de código de incrustación
+  embed_presets: "Tamaños predefinidos"
+  canvas_lms: "Canvas LMS (100% × 800px)"
+  moodle_blackboard: "Moodle/Blackboard (100% × 700px)"
+  wordpress: "WordPress (100% × 600px)"
+  squarespace: "Squarespace (100% × 600px)"
+  wix: "Wix (100% × 550px)"
+  mobile: "Móvil (375px × 500px)"
+  fixed: "Fijo (800px × 600px)"
+  custom: "Dimensiones personalizadas"
+  width: "Ancho"
+  height: "Alto"
+  select_story: "Selecciona una historia"
+  embed_preview: "Vista previa del código"
+
+  # Encabezados de sección
+  share_story_heading: "Compartir esta historia"
+  share_site_heading: "Compartir este sitio"
+
+  # Texto de ayuda
+  help_story_link: "Copia un enlace directo a esta historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
+  help_site_link: "Copia un enlace a la página inicial del sitio, donde las personas pueden explorar todas las historias."
+  help_embed_intro: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
+  help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."
+  help_embed: "Copia este código y pégalo en tu sitio web, LMS o blog para insertar (*embed*) esta historia."
+
 # Mensajes de actualización
 upgrade:
   summary_message: "Tu sitio Telar se actualizó. Revisa el resumen a continuación."

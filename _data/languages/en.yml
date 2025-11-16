@@ -207,6 +207,43 @@ errors:
     short_glossary_not_found: "Missing glossary term: {{ term_id }}"
     glossary_load_error: "Failed to load glossary term. Please try again."
 
+# Share and embed functionality
+share:
+  button: "Share"
+  title: "Share"
+  title_site: "Share This Site"
+  tab_link: "Share Links"
+  tab_embed: "Embed Code"
+  copy_link: "Copy Link"
+  copy_embed: "Copy Embed Code"
+  copied: "Copied!"
+
+  # Embed code generator
+  embed_presets: "Dimension Presets"
+  canvas_lms: "Canvas LMS (100% × 800px)"
+  moodle_blackboard: "Moodle/Blackboard (100% × 700px)"
+  wordpress: "WordPress (100% × 600px)"
+  squarespace: "Squarespace (100% × 600px)"
+  wix: "Wix (100% × 550px)"
+  mobile: "Mobile (375px × 500px)"
+  fixed: "Fixed (800px × 600px)"
+  custom: "Custom Dimensions"
+  width: "Width"
+  height: "Height"
+  select_story: "Select a story"
+  embed_preview: "Embed Code Preview"
+
+  # Section headings
+  share_story_heading: "Share This Story"
+  share_site_heading: "Share This Site"
+
+  # Help text
+  help_story_link: "Copy a direct link to this story to share by email, social media, or messaging apps."
+  help_site_link: "Copy a link to the site homepage, where visitors can browse all stories."
+  help_embed_intro: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a size preset below or enter custom dimensions, then copy the code and paste it into your site."
+  help_dimensions: "Enter dimensions as pixels (e.g. 800) or percentages (e.g. 100%)."
+  help_embed: "Copy this code and paste it into your website, LMS, or blog post to embed this story."
+
 # Upgrade messages
 upgrade:
   summary_message: "Your Telar site has been upgraded. Review the summary below."
