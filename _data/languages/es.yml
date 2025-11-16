@@ -68,6 +68,11 @@ story:
   glossary_error_prefix: "enlace al glosario:"
   preview_warning: "Aún puedes desplazarte para previsualizar tu historia, pero algunos elementos no funcionarán como esperas."
 
+# Banner del modo incrustado
+embed_banner:
+  text: "Esta historia forma parte de {site_name}, un sitio web creado con <a href='https://github.com/UCSB-AMPLab/telar' target='_blank'>Telar</a> para contar historias."
+  link: "Ver el sitio completo"
+
 # Encabezados de página y texto introductorio
 pages:
   home_title: "Inicio"

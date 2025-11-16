@@ -68,6 +68,11 @@ story:
   glossary_error_prefix: "glossary link:"
   preview_warning: "You can still scroll to preview your story, but elements will not work as expected."
 
+# Embed mode banner
+embed_banner:
+  text: "This story is part of {site_name}, a digital storytelling site built with <a href='https://github.com/UCSB-AMPLab/telar' target='_blank'>Telar</a>."
+  link: "View the full site"
+
 # Page headings and intro text
 pages:
   home_title: "Home"

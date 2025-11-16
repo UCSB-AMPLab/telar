@@ -34,7 +34,11 @@
   // Expose language strings to JavaScript
   window.telarLang = {
     goDeeper: "{{ lang.buttons.go_deeper }}",
-    stepNumber: "{{ lang.story.step_number }}"
+    stepNumber: "{{ lang.story.step_number }}",
+    embedBanner: {
+      text: {{ lang.embed_banner.text | jsonify }},
+      link: "{{ lang.embed_banner.link }}"
+    }
   };
 
   // If Christmas Tree Mode is active, add 🎄 to all warning headings
