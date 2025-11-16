@@ -1,6 +1,8 @@
 /**
  * Telar Story - UniversalViewer + Step-Based Navigation
  * Handles card-stacking interactions for story pages
+ *
+ * @version v0.5.0-beta
  */
 
 // Step navigation

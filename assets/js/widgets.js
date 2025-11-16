@@ -1,6 +1,8 @@
 /**
  * Telar Widget System JavaScript
  * Handles initialization and interactivity for widgets
+ *
+ * @version v0.5.0-beta
  */
 
 (function() {

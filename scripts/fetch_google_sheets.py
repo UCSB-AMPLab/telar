@@ -5,6 +5,8 @@ Fetch Google Sheets data and save as CSVs
 Reads Google Sheets URLs from _config.yml, discovers tab GIDs,
 and fetches all data as CSV files to components/structures/
 
+Version: v0.5.0-beta
+
 Usage:
     python3 scripts/fetch_google_sheets.py
 """

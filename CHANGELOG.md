@@ -2,6 +2,38 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.5.0-beta] - Unreleased
+
+### Added
+
+#### Version Headers in All Code Files
+- All Python scripts now include version headers (`Version: v0.5.0-beta`) in docstrings
+- All JavaScript files now include version headers (`@version v0.5.0-beta`) in JSDoc comments
+- CSS/SCSS files now include version headers (`@version v0.5.0-beta`) in header comments
+- GitHub Actions workflows now include version headers (`Version: v0.5.0-beta`) in YAML comments
+- **Files updated**: `generate_iiif.py`, `csv_to_json.py`, `fetch_google_sheets.py`, `generate_collections.py`, `upgrade.py`, `story.js`, `telar.js`, `widgets.js`, `embed.js`, `telar.scss`, and all workflow files
+- **Benefit**: Easier tracking of which release a file was last modified in, better version control visibility, improved maintainability
+
+#### Embed Mode Support
+- New `embed.js` script for iframe embedding detection via URL parameters
+- Support for `?embed=true` URL parameter to enable embed mode
+- "View full site" banner in embed mode (dismissible, persists via sessionStorage)
+- Material Icons used for banner icons (open_in_new, close)
+- Embed mode CSS to hide navigation chrome (home button)
+- Navigation buttons always visible in embed mode (same as mobile)
+
+### Changed
+
+#### Removed Unused JavaScript Dependencies
+- Removed `assets/js/scrollama.min.js` - Telar uses custom scroll accumulator system, not Scrollama
+- Removed `assets/js/openseadragon.min.js` - UniversalViewer bundles OpenSeadragon internally
+- Removed `assets/images/openseadragon/` directory - empty placeholder
+- Removed Scrollama script tag from `_layouts/story.html`
+- **Impact**: Smaller bundle size, cleaner codebase, no functionality change
+- **Note**: Telar's custom scroll system handles wheel events, touch swipes, button navigation, and keyboard navigation
+
+---
+
 ## [0.4.2-beta] - 2025-11-09
 
 ### Added

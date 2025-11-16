@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Generate Jekyll collection markdown files from JSON data
+
+Version: v0.5.0-beta
 """
 
 import json

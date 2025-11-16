@@ -4,6 +4,8 @@ Generate IIIF tiles and manifests from source images
 
 Uses iiif library (Python) to generate static IIIF Level 0 tiles.
 Alternative to Bodleian tool, simpler for basic use cases.
+
+Version: v0.5.0-beta
 """
 
 import os

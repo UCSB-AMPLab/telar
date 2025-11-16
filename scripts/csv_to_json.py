@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Convert CSV files from Google Sheets to JSON for Jekyll
+
+Version: v0.5.0-beta
 """
 
 import pandas as pd

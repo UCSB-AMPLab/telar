@@ -5,6 +5,8 @@ Telar Upgrade Script
 Automatically migrates Telar installations from older versions to the latest version.
 Detects current version, applies necessary migrations, and generates checklist for manual steps.
 
+Version: v0.5.0-beta
+
 Usage:
     python scripts/upgrade.py              # Normal upgrade
     python scripts/upgrade.py --dry-run    # Preview changes without applying

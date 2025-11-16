@@ -1,6 +1,8 @@
 /**
  * Telar Embed Mode
  * Handles iframe embedding for Canvas LMS and other platforms
+ *
+ * @version v0.5.0-beta
  */
 
 (function() {

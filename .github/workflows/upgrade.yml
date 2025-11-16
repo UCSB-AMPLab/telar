@@ -1,4 +1,6 @@
 name: Upgrade Telar
+# Automated Telar upgrade workflow
+# Version: v0.5.0-beta
 
 on:
   workflow_dispatch:
