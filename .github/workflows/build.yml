@@ -70,7 +70,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: cached-iiif/
-          key: iiif-tiles-${{ hashFiles('components/images/objects/**') }}
+          # v0.5.0: Flattened image directory structure - now all images in components/images/
+          key: iiif-tiles-${{ hashFiles('components/images/**') }}
 
       - name: Detect if IIIF regeneration is needed
         id: detect-changes
@@ -87,9 +88,38 @@ jobs:
 
               # Check if any images, objects.csv, or _config.yml changed
               # Note: _config.yml added in v0.4.3 - IIIF tiles embed base URL from config (thanks Tara)
-              if echo "$CHANGED_FILES" | grep -qE '^components/images/objects/|^components/structures/objects\.csv$|^_config\.yml$'; then
-                echo "✓ Images, objects.csv, or _config.yml changed - IIIF regeneration needed"
+              # v0.5.0: CSV-aware image monitoring - only triggers for images matching object_ids
+
+              # Always regenerate if objects.csv or _config.yml changed
+              if echo "$CHANGED_FILES" | grep -qE '^components/structures/objects\.csv$|^_config\.yml$'; then
+                echo "✓ objects.csv or _config.yml changed - IIIF regeneration needed"
                 NEEDS_IIIF="true"
+              # Check if any images changed
+              elif echo "$CHANGED_FILES" | grep -q '^components/images/'; then
+                echo "✓ Image files changed - checking if they match objects in CSV..."
+
+                # Get list of object IDs from objects.csv (skip header row)
+                OBJECT_IDS=$(tail -n +2 components/structures/objects.csv | cut -d',' -f1)
+
+                # Get list of changed images (extract filenames, remove path and extension)
+                CHANGED_IMAGES=$(echo "$CHANGED_FILES" | grep '^components/images/' | sed 's|.*/||' | sed 's/\.[^.]*$//')
+
+                # Check if any changed image matches an object ID
+                MATCH_FOUND="false"
+                for img in $CHANGED_IMAGES; do
+                  if echo "$OBJECT_IDS" | grep -qx "$img"; then
+                    echo "  - Image '$img' matches object ID in objects.csv"
+                    MATCH_FOUND="true"
+                  fi
+                done
+
+                if [ "$MATCH_FOUND" = "true" ]; then
+                  echo "✓ Changed images match objects in CSV - IIIF regeneration needed"
+                  NEEDS_IIIF="true"
+                else
+                  echo "✓ Changed images don't match any objects in CSV - skipping IIIF regeneration"
+                  NEEDS_IIIF="false"
+                fi
               else
                 echo "✓ Only content files changed - skipping IIIF regeneration"
                 NEEDS_IIIF="false"
@@ -109,8 +139,8 @@ jobs:
       - name: Generate IIIF tiles into _site
         if: steps.detect-changes.outputs.needs_iiif == 'true'
         run: |
-          # Check if source images directory exists
-          if [ -d "components/images/objects" ]; then
+          # v0.5.0: Check if source images directory exists (flattened structure)
+          if [ -d "components/images" ]; then
             # Extract URL and baseurl from _config.yml
             SITE_URL=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('url', ''))")
             BASE_URL=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('baseurl', ''))")
@@ -118,12 +148,13 @@ jobs:
 
             echo "Generating IIIF tiles with base URL: $FULL_URL"
 
+            # v0.5.0: Removed --source-dir parameter (script now defaults to components/images/)
+            # v0.5.0: Script is now CSV-driven - only processes objects listed in objects.json
             python scripts/generate_iiif.py \
-              --source-dir components/images/objects \
               --output-dir _site/iiif/objects \
               --base-url "$FULL_URL"
           else
-            echo "No components/images/objects directory found. Skipping IIIF generation."
+            echo "No components/images directory found. Skipping IIIF generation."
           fi
 
       - name: Copy generated IIIF tiles to cache directory
@@ -140,7 +171,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: cached-iiif/
-          key: iiif-tiles-${{ hashFiles('components/images/objects/**') }}
+          # v0.5.0: Flattened image directory structure
+          key: iiif-tiles-${{ hashFiles('components/images/**') }}
 
       - name: Restore IIIF tiles from cache to _site (when skipping regeneration)
         if: steps.detect-changes.outputs.needs_iiif == 'false'

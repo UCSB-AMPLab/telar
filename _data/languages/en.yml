@@ -187,7 +187,7 @@ errors:
     # Image source errors
     image_similar_single: "No image file found for `object_id` '{{ object_id }}', but found similar file '{{ similar_file }}'. If this is the image you meant to use, either: (1) rename the file to `{{ object_id }}{{ file_ext }}`, or (2) update the `object_id` in the CSV to match the filename (without extension)."
     image_similar_multiple: "No image file found for `object_id` '{{ object_id }}', but found multiple similar files: '{{ file_list }}'. If one of these is the image you meant to use, either rename it to `{{ object_id }}.*` or update the `object_id` in the CSV to match."
-    image_missing: "No image source found for object '{{ object_id }}'. Add either: (1) an IIIF manifest URL in the `iiif_manifest` column, or (2) an image file to `components/images/objects/{{ object_id }}.jpg`"
+    image_missing: "No image source found for object '{{ object_id }}'. Add either: (1) an IIIF manifest URL in the `iiif_manifest` column, or (2) an image file to `components/images/{{ object_id }}.jpg`"
     short_filename_mismatch: "Image filename mismatch"
     short_ambiguous_match: "Ambiguous image match"
     short_missing_source: "Missing image source"
