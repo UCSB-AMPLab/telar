@@ -24,6 +24,24 @@ All notable changes to Telar will be documented in this file.
 
 ### Changed
 
+#### Flattened Image Directory Structure
+- Simplified `components/images/` directory structure by removing subdirectories
+- **Old structure**: `components/images/objects/` and `components/images/additional/`
+- **New structure**: All images in `components/images/` (with optional project-specific subfolders like `paisajes/`)
+- Updated `csv_to_json.py` default path from `/components/images/additional/` to `/components/images/`
+- Updated `generate_iiif.py` to use `components/images/` as default source directory
+- Updated CSV validation to check for images in flattened structure
+- **Benefit**: Simpler structure, easier to manage, fewer nested directories
+- **Migration**: Automatic - `generate_iiif.py` now reads `objects.json` to determine which images need tiles
+
+#### CSV-Driven IIIF Tile Generation
+- `generate_iiif.py` now processes only objects listed in `objects.csv` (via `objects.json`)
+- Skips objects with external IIIF manifests (only generates tiles for self-hosted images)
+- Automatically finds image files by `object_id` (supports multiple extensions: jpg, jpeg, png, tif, tiff)
+- **Before**: Processed all images in `components/images/objects/` directory
+- **After**: Processes only objects referenced in CSV without external manifests
+- **Benefit**: Faster generation, no orphaned tiles, explicit control over which images get processed
+
 #### Removed Unused JavaScript Dependencies
 - Removed `assets/js/scrollama.min.js` - Telar uses custom scroll accumulator system, not Scrollama
 - Removed `assets/js/openseadragon.min.js` - UniversalViewer bundles OpenSeadragon internally
