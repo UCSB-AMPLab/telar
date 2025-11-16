@@ -2241,4 +2241,71 @@ body.embed-mode {
   .story-intro {
     min-height: 80vh; /* Slightly smaller intro in embed mode */
   }
+
+  /* Always show navigation buttons in embed mode (like mobile) */
+  .story-navigation {
+    display: block !important;
+  }
+}
+
+/* "View full site" banner (only visible in embed mode) */
+.telar-embed-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+
+  &-text {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .material-symbols-outlined {
+      font-size: 1.1rem;
+      vertical-align: middle;
+    }
+
+    a {
+      color: var(--color-link);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  &-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #6c757d;
+    line-height: 1;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .material-symbols-outlined {
+      font-size: 1.2rem;
+    }
+
+    &:hover {
+      color: #000;
+    }
+  }
+}
+
+/* Hide banner in normal (non-embed) mode */
+body:not(.embed-mode) .telar-embed-banner {
+  display: none;
 }
