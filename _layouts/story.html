@@ -60,13 +60,16 @@
   <!-- Material Symbols for home icon -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
 
+  <!-- Embed Mode Detection (must load early) -->
+  <script src="{{ '/assets/js/embed.js' | relative_url }}"></script>
+
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
 
   {% seo %}
 </head>
 <body class="story-page">
-  <!-- Fixed Back to Home Button -->
+  <!-- Fixed Back to Home Button (hidden in embed mode) -->
   <a href="{{ '/' | relative_url }}" class="btn-home">
     <span class="material-symbols-outlined btn-home-icon">home</span>
     <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>

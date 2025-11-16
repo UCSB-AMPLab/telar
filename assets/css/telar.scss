@@ -2220,3 +2220,25 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.5rem 0.75rem;
   }
 }
+
+/* =========================================
+   EMBED MODE
+   ========================================= */
+
+/* Embed mode: Hide navigation chrome for Canvas LMS / iframe embedding */
+body.embed-mode {
+  /* Hide home button */
+  .btn-home {
+    display: none !important;
+  }
+
+  /* Maximize content area */
+  .story-container {
+    padding-top: 0;
+  }
+
+  /* Optional: Adjust story intro for embedded context */
+  .story-intro {
+    min-height: 80vh; /* Slightly smaller intro in embed mode */
+  }
+}

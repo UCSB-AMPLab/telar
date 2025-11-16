@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telar Embed Mode Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    iframe {
+      width: 100%;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+    }
+    .controls {
+      margin: 10px 0;
+    }
+    button {
+      padding: 8px 16px;
+      margin-right: 10px;
+      border: none;
+      background: #2c3e50;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #34495e;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>Telar Embed Mode Test</h1>
+  <p>This page tests Telar's iframe embedding functionality for Canvas LMS and other platforms.</p>
+
+  <div class="test-section">
+    <h2>Test 1: Normal Mode (No Parameters)</h2>
+    <p>Story without <code>?embed=true</code> parameter - should show home button</p>
+    <iframe id="normal-iframe" src="http://127.0.0.1:4000/telar/stories/story-1/" height="800"></iframe>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 2: Embed Mode</h2>
+    <p>Story with <code>?embed=true</code> parameter - should hide home button and navigation chrome</p>
+    <iframe id="embed-iframe" src="http://127.0.0.1:4000/telar/stories/story-1/?embed=true" height="800"></iframe>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 3: Embed Mode with Section Parameter</h2>
+    <p>Story with <code>?embed=true&section=2</code> - should jump to step 2</p>
+    <iframe id="section-iframe" src="http://127.0.0.1:4000/telar/stories/story-1/?embed=true&section=2" height="800"></iframe>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 4: Canvas LMS Simulation</h2>
+    <p>Simulates Canvas iframe with postMessage support (Phase 3.2)</p>
+    <div class="controls">
+      <button onclick="resizeIframe(600)">Set Height: 600px</button>
+      <button onclick="resizeIframe(800)">Set Height: 800px</button>
+      <button onclick="resizeIframe(1200)">Set Height: 1200px</button>
+    </div>
+    <iframe id="canvas-iframe" src="http://127.0.0.1:4000/telar/stories/story-1/?embed=true" height="800"></iframe>
+    <p><small>Height messages will be logged to console (check DevTools)</small></p>
+  </div>
+
+  <script>
+    // Canvas LMS postMessage listener simulation
+    window.addEventListener('message', function(event) {
+      console.log('[Parent] Received message:', event.data);
+
+      if (event.data.subject === 'lti.frameResize') {
+        const height = event.data.height;
+        console.log('[Parent] Resizing iframe to:', height + 'px');
+        document.getElementById('canvas-iframe').style.height = height + 'px';
+      }
+    });
+
+    function resizeIframe(height) {
+      document.getElementById('canvas-iframe').style.height = height + 'px';
+    }
+
+    // Log when iframes load
+    document.querySelectorAll('iframe').forEach(function(iframe) {
+      iframe.addEventListener('load', function() {
+        console.log('[Parent] Iframe loaded:', iframe.id);
+      });
+    });
+  </script>
+</body>
+</html>
