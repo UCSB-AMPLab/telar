@@ -42,6 +42,15 @@ All notable changes to Telar will be documented in this file.
 - **After**: Processes only objects referenced in CSV without external manifests
 - **Benefit**: Faster generation, no orphaned tiles, explicit control over which images get processed
 
+#### CSV-Aware GitHub Actions Monitoring
+- GitHub Actions workflow now intelligently detects if changed images need IIIF processing
+- **Smart change detection**: Only triggers IIIF regeneration when changed images match `object_id` entries in `objects.csv`
+- **Logic**: Compares changed image filenames (without extension) against object IDs from CSV
+- **Always regenerates** when `objects.csv` or `_config.yml` changes
+- **Skips regeneration** when only non-image files change or images don't match any object IDs
+- **Cache optimization**: Updated cache keys to monitor all of `components/images/**` instead of subdirectory
+- **Benefit**: More efficient CI/CD pipeline, avoids unnecessary IIIF generation for unrelated image changes
+
 #### Removed Unused JavaScript Dependencies
 - Removed `assets/js/scrollama.min.js` - Telar uses custom scroll accumulator system, not Scrollama
 - Removed `assets/js/openseadragon.min.js` - UniversalViewer bundles OpenSeadragon internally
