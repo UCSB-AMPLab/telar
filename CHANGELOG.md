@@ -82,6 +82,24 @@ All notable changes to Telar will be documented in this file.
 
 ### Changed
 
+#### Unified source_url Column Name
+- Renamed `iiif_manifest` column to `source_url` for semantic clarity
+- **Rationale**: "source_url" is semantically neutral and works for all future media types (PDFs, videos, 3D models, audio), not just IIIF images
+- **Backward compatibility**: Full support for old `iiif_manifest` column name
+  - CSV with `iiif_manifest` column automatically creates `source_url` alias
+  - CSV with `source_url` column automatically creates `iiif_manifest` alias for templates
+  - Both columns included in objects.json during transition period
+  - Old sites (v0.4.x) work without any changes required
+- **Implementation**:
+  - Added `get_source_url()` helper function in csv_to_json.py
+  - Updated all Python scripts to check both columns (source_url first, then iiif_manifest)
+  - Updated templates to use Liquid fallback: `page.source_url | default: page.iiif_manifest`
+  - Updated story.js to check both fields
+  - Updated CSV template files to use `source_url` header
+- **Documentation**: All docs updated to reference `source_url` instead of `iiif_manifest`
+- **Benefit**: Future-proof column naming, seamless migration path, foundation for multi-media support
+- **Files modified**: `csv_to_json.py`, `generate_iiif.py`, `_layouts/object.html`, `assets/js/story.js`, CSV templates, all documentation
+
 #### Flattened Image Directory Structure
 - Simplified `components/images/` directory structure by removing subdirectories
 - **Old structure**: `components/images/objects/` and `components/images/additional/`
@@ -116,6 +134,17 @@ All notable changes to Telar will be documented in this file.
 - Removed Scrollama script tag from `_layouts/story.html`
 - **Impact**: Smaller bundle size, cleaner codebase, no functionality change
 - **Note**: Telar's custom scroll system handles wheel events, touch swipes, button navigation, and keyboard navigation
+
+#### Removed Local Google Sheets Integration Documentation
+- Removed `docs/google_sheets_integration/` folder and its contents
+- **Removed files**: `README.md`, `telar-template.xlsx`
+- **Reason**: Google Sheets integration is fully documented in the official documentation site
+- **Updated references**:
+  - `docs/README.md` - removed broken link to deleted folder
+  - `components/structures/README.md` - removed broken link, kept reference to Google Sheets feature
+  - `_config.yml` - updated comments to point to official docs instead of local folder
+- **Impact**: Cleaner repository, single source of truth for documentation
+- **Note**: Migration scripts retain historical references (not updated as they are legacy)
 
 ### Fixed
 

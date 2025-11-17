@@ -14,12 +14,10 @@ telar_language: "en" # Options: "en" (English), "es" (Español)
 
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.
-# See docs/google_sheets_integration/README.md for detailed setup instructions.
+# See https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/google-sheets/ for detailed setup instructions.
 #
 # Setup:
-# 1. Get the template:
-#    - Option A: Duplicate our template at https://bit.ly/telar-template
-#    - Option B: Import docs/google_sheets_integration/telar-template.xlsx to Google Sheets yourself
+# 1. Get the template: Duplicate our template at https://bit.ly/telar-template
 # 2. Share your sheet: Anyone with the link (Viewer access)
 # 3. Publish your sheet: File > Share > Publish to web
 # 4. Paste both URLs below

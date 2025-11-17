@@ -293,9 +293,10 @@ function getManifestUrl(objectId) {
     return buildLocalInfoJsonUrl(objectId);
   }
 
-  // If object has iiif_manifest field and it's not empty, use it
-  if (object.iiif_manifest && object.iiif_manifest.trim() !== '') {
-    return object.iiif_manifest;
+  // Check for external source URL (source_url or iiif_manifest for backward compatibility)
+  const sourceUrl = object.source_url || object.iiif_manifest;
+  if (sourceUrl && sourceUrl.trim() !== '') {
+    return sourceUrl;
   }
 
   // Otherwise use local IIIF

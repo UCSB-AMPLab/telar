@@ -333,7 +333,7 @@ def load_objects_needing_tiles():
     Load list of object_ids that need IIIF tiles generated from objects.json
 
     Returns:
-        list: Object IDs that need self-hosted IIIF tiles (have no external iiif_manifest)
+        list: Object IDs that need self-hosted IIIF tiles (have no external source URL)
     """
     try:
         objects_json = Path('_data/objects.json')
@@ -344,18 +344,22 @@ def load_objects_needing_tiles():
         with open(objects_json, 'r') as f:
             objects = json.load(f)
 
-        # Find objects that need IIIF tiles (no external IIIF manifest)
+        # Find objects that need IIIF tiles (no external source URL/IIIF manifest)
         objects_needing_tiles = []
         for obj in objects:
             object_id = obj.get('object_id')
-            iiif_manifest = obj.get('iiif_manifest', '').strip()
+
+            # Check source_url first (v0.5.0+), fall back to iiif_manifest (v0.4.x)
+            source_url = obj.get('source_url', '').strip()
+            if not source_url:
+                source_url = obj.get('iiif_manifest', '').strip()
 
             # Skip if no object_id
             if not object_id:
                 continue
 
-            # Need tiles if iiif_manifest is empty or not a URL
-            if not iiif_manifest or not iiif_manifest.startswith('http'):
+            # Need tiles if source URL is empty or not a URL
+            if not source_url or not source_url.startswith('http'):
                 objects_needing_tiles.append(object_id)
 
         return objects_needing_tiles

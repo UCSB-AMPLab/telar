@@ -120,6 +120,33 @@ def sanitize_dataframe(df):
 
     return df
 
+def get_source_url(row):
+    """
+    Get source URL for an object, checking both source_url and iiif_manifest columns.
+
+    Implements backward compatibility:
+    - Checks source_url first (new standard, v0.5.0+)
+    - Falls back to iiif_manifest (legacy column, v0.4.x)
+    - Returns empty string if neither exists or both are empty
+
+    Args:
+        row: pandas Series or dict representing a CSV row
+
+    Returns:
+        str: Source URL (or empty string)
+    """
+    # Check source_url first (new standard)
+    source_url = str(row.get('source_url', '')).strip()
+    if source_url:
+        return source_url
+
+    # Fall back to iiif_manifest (legacy)
+    iiif_manifest = str(row.get('iiif_manifest', '')).strip()
+    if iiif_manifest:
+        return iiif_manifest
+
+    return ''
+
 def process_image_sizes(text):
     """
     Replace ![alt](path){size} with HTML img tags with size classes
@@ -1390,6 +1417,20 @@ def process_objects(df, christmas_tree=False):
     # Remove rows where object_id is empty
     df = df[df['object_id'].astype(str).str.strip() != '']
 
+    # Normalize source_url and iiif_manifest columns for backward compatibility
+    # Ensure both columns exist in the DataFrame so templates can use either during transition
+    if 'source_url' not in df.columns and 'iiif_manifest' in df.columns:
+        # Old format: only iiif_manifest exists - create source_url as alias
+        df['source_url'] = df['iiif_manifest']
+    elif 'iiif_manifest' not in df.columns and 'source_url' in df.columns:
+        # New format: only source_url exists - create iiif_manifest as alias for backward compat
+        df['iiif_manifest'] = df['source_url']
+    elif 'source_url' not in df.columns and 'iiif_manifest' not in df.columns:
+        # Neither exists - create both as empty columns
+        df['source_url'] = ''
+        df['iiif_manifest'] = ''
+    # If both exist, keep both (user is mid-transition)
+
     # Inject Christmas Tree test errors if flag is enabled
     if christmas_tree:
         df = inject_christmas_tree_errors(df)
@@ -1490,10 +1531,10 @@ def process_objects(df, christmas_tree=False):
             print(f"[INFO] Could not load previous objects.json: {e}")
             previous_objects = {}
 
-    # Validate IIIF manifest field
-    if 'iiif_manifest' in df.columns:
+    # Validate source URL field (checks both source_url and iiif_manifest for backward compatibility)
+    if 'source_url' in df.columns or 'iiif_manifest' in df.columns:
         for idx, row in df.iterrows():
-            manifest_url = str(row.get('iiif_manifest', '')).strip()
+            manifest_url = get_source_url(row)
             object_id = row.get('object_id', 'unknown')
 
             # Skip if empty
@@ -1503,9 +1544,13 @@ def process_objects(df, christmas_tree=False):
             # Check if it's a valid URL
             parsed = urlparse(manifest_url)
             if not parsed.scheme in ['http', 'https']:
-                df.at[idx, 'iiif_manifest'] = ''
+                # Clear both columns (whichever exists)
+                if 'source_url' in df.columns:
+                    df.at[idx, 'source_url'] = ''
+                if 'iiif_manifest' in df.columns:
+                    df.at[idx, 'iiif_manifest'] = ''
                 df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_invalid_url')
-                msg = f"Cleared invalid IIIF manifest for object {object_id}: not a valid URL"
+                msg = f"Cleared invalid source URL for object {object_id}: not a valid URL"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
                 continue
@@ -1701,13 +1746,13 @@ def process_objects(df, christmas_tree=False):
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
 
-    # Validate that objects have either IIIF manifest OR local image file
+    # Validate that objects have either source URL (IIIF manifest) OR local image file
     for idx, row in df.iterrows():
         object_id = row.get('object_id', 'unknown')
-        iiif_manifest = str(row.get('iiif_manifest', '')).strip()
+        source_url = get_source_url(row)
 
-        # Skip if already has a valid IIIF manifest
-        if iiif_manifest:
+        # Skip if already has a valid source URL
+        if source_url:
             continue
 
         # No external IIIF manifest - check for local image file
