@@ -40,6 +40,29 @@ All notable changes to Telar will be documented in this file.
   - **Solution**: Added mobile media query to force all panel images to `max-width: 100%` on screens ≤768px
   - **Benefit**: Images now respect panel width constraints on mobile while preserving desktop sizing behavior
 
+#### Automatic Carousel Height Detection
+- Carousels now automatically adapt height based on image aspect ratios at build time
+- **Feature**: Image dimension analysis during widget processing
+  - Added `get_image_dimensions()` function to `csv_to_json.py` using PIL/Pillow
+  - Fetches dimensions from both local images and remote URLs
+  - Analyzes aspect ratios (height/width) for all images in each carousel
+- **Size Classes**: Four automatic height variants based on maximum aspect ratio:
+  - **Compact** (400px): Wide panoramas (aspect ratio < 0.6)
+  - **Default** (550px): Landscape images (aspect ratio 0.6-1.0)
+  - **Tall** (700px): Square to mild portrait (aspect ratio 1.0-1.5)
+  - **Portrait** (850px): Strong portrait orientation (aspect ratio > 1.5)
+- **Implementation**: Modified `parse_carousel_widget()` to calculate aspect ratios and assign size class, updated carousel template to apply dynamic classes, added CSS variants in `telar.scss`
+- **Benefit**: Portrait and tall images display at appropriate heights without manual configuration, eliminating the need for users to specify carousel heights
+- **Performance**: Zero runtime cost - all analysis happens at build time
+
+#### Carousel Widget Styling Improvements
+- Moved captions strictly below images (removed overlay)
+- Added black background to carousel container for better image contrast
+- Reduced caption typography for cleaner appearance (0.9rem text, 0.8rem credit, minimal line-height)
+- Positioned carousel indicators above caption area (bottom: 90px) to prevent text overlap
+- Disabled keyboard arrow navigation on carousels to prevent interference with story navigation
+- **Benefit**: Cleaner visual presentation, better accessibility with non-overlaid captions, improved usability
+
 ### Changed
 
 #### Flattened Image Directory Structure

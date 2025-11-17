@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 import ssl
 import yaml
 from jinja2 import Template, Environment, FileSystemLoader
+from PIL import Image
+from io import BytesIO
 
 # Global language data cache
 _lang_data = None
@@ -282,6 +284,39 @@ def validate_image_path(image_path, file_context):
     return (full_path.exists(), str(full_path))
 
 
+def get_image_dimensions(image_path):
+    """
+    Get dimensions of an image (local or remote).
+
+    Args:
+        image_path: Path relative to assets/images/, or external URL
+
+    Returns:
+        tuple: (width, height) or None if unable to determine
+    """
+    try:
+        if image_path.startswith('http://') or image_path.startswith('https://'):
+            # Fetch remote image
+            request = urllib.request.Request(
+                image_path,
+                headers={'User-Agent': 'Telar/1.0'}
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                image_data = response.read()
+                img = Image.open(BytesIO(image_data))
+                return img.size  # Returns (width, height)
+        else:
+            # Load local image
+            full_path = Path('assets/images') / image_path
+            if full_path.exists():
+                with Image.open(full_path) as img:
+                    return img.size  # Returns (width, height)
+            return None
+    except Exception as e:
+        # Silently fail - dimension detection is not critical
+        return None
+
+
 def parse_key_value_block(content):
     """
     Parse key: value pairs from a text block.
@@ -318,7 +353,7 @@ def parse_carousel_widget(content, file_path, warnings_list):
     :::
 
     Returns:
-        dict: Parsed carousel data with 'items' list
+        dict: Parsed carousel data with 'items' list and 'size_class'
     """
     items = []
     blocks = content.split('---')
@@ -359,7 +394,30 @@ def parse_carousel_widget(content, file_path, warnings_list):
 
         items.append(data)
 
-    return {'items': items}
+    # Analyze aspect ratios to determine optimal carousel height
+    aspect_ratios = []
+    for item in items:
+        dimensions = get_image_dimensions(item['image'])
+        if dimensions:
+            width, height = dimensions
+            if width > 0:  # Avoid division by zero
+                aspect_ratio = height / width
+                aspect_ratios.append(aspect_ratio)
+
+    # Determine size class based on maximum aspect ratio
+    size_class = 'default'  # Default fallback
+    if aspect_ratios:
+        max_aspect_ratio = max(aspect_ratios)
+        if max_aspect_ratio < 0.6:
+            size_class = 'compact'  # Wide panoramas
+        elif max_aspect_ratio < 1.0:
+            size_class = 'default'  # Landscape
+        elif max_aspect_ratio < 1.5:
+            size_class = 'tall'  # Square to mild portrait
+        else:
+            size_class = 'portrait'  # Strong portrait
+
+    return {'items': items, 'size_class': size_class}
 
 
 

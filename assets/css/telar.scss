@@ -1892,6 +1892,19 @@ h1, h2, h3, h4, h5, h6 {
   transform: scale(1.2);
 }
 
+/* Carousel size variants (auto-detected based on image aspect ratios) */
+.carousel-size-compact .carousel-inner {
+  height: 400px;
+}
+
+.carousel-size-tall .carousel-inner {
+  height: 700px;
+}
+
+.carousel-size-portrait .carousel-inner {
+  height: 850px;
+}
+
 /* ========================================
    COMPARISON WIDGET (Before/After Slider)
    ======================================== */

@@ -1,5 +1,5 @@
 <div class="telar-widget telar-widget-carousel">
-  <div id="carousel-{{ widget_id }}" class="carousel slide" data-bs-ride="false">
+  <div id="carousel-{{ widget_id }}" class="carousel slide{% if size_class and size_class != 'default' %} carousel-size-{{ size_class }}{% endif %}" data-bs-ride="false">
     <!-- Indicators -->
     <div class="carousel-indicators">
       {% for item in items %}
