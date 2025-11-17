@@ -236,6 +236,8 @@ share:
   width: "Ancho"
   height: "Alto"
   select_story: "Selecciona una historia"
+  share_a_story: "Compartir una historia"
+  select_option: "Seleccionar historia"
   embed_preview: "Vista previa del código"
 
   # Encabezados de sección
@@ -243,9 +245,11 @@ share:
   share_site_heading: "Compartir este sitio"
 
   # Texto de ayuda
-  help_story_link: "Copia un enlace directo a esta historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
+  help_story_link_story: "Copia un enlace directo a esta historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
+  help_story_link_homepage: "Copia un enlace directo a una historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
   help_site_link: "Copia un enlace a la página inicial del sitio, donde las personas pueden explorar todas las historias."
-  help_embed_intro: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
+  help_embed_intro_stories: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
+  help_embed_intro_homepage: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona una historia e indica un tamaño (usando un tamaño predefinido o indicando dimensiones específicas), luego copia el código y pégalo en tu sitio."
   help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."
   help_embed: "Copia este código y pégalo en tu sitio web, LMS o blog para insertar (*embed*) esta historia."
 

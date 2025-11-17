@@ -236,6 +236,8 @@ share:
   width: "Width"
   height: "Height"
   select_story: "Select a story"
+  share_a_story: "Share a story"
+  select_option: "Select Story"
   embed_preview: "Embed Code Preview"
 
   # Section headings
@@ -243,9 +245,11 @@ share:
   share_site_heading: "Share This Site"
 
   # Help text
-  help_story_link: "Copy a direct link to this story to share by email, social media, or messaging apps."
+  help_story_link_story: "Copy a direct link to this story to share by email, social media, or messaging apps."
+  help_story_link_homepage: "Copy a direct link to a story to share by email, social media, or messaging apps."
   help_site_link: "Copy a link to the site homepage, where visitors can browse all stories."
-  help_embed_intro: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a size preset below or enter custom dimensions, then copy the code and paste it into your site."
+  help_embed_intro_stories: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
+  help_embed_intro_homepage: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a story and specify a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
   help_dimensions: "Enter dimensions as pixels (e.g. 800) or percentages (e.g. 100%)."
   help_embed: "Copy this code and paste it into your website, LMS, or blog post to embed this story."
 
