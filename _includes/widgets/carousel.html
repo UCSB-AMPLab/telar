@@ -14,18 +14,18 @@
     <div class="carousel-inner">
       {% for item in items %}
       <div class="carousel-item {% if loop.first %}active{% endif %}">
-        <div class="carousel-image-wrapper">
+        <div class="carousel-image-container">
           <img src="{% if item.image.startswith('http://') or item.image.startswith('https://') %}{{ item.image }}{% else %}{{ base_url }}/assets/images/{{ item.image }}{% endif %}"
                alt="{{ item.alt }}"
                class="d-block carousel-image">
         </div>
         {% if item.caption or item.credit %}
-        <div class="carousel-caption">
+        <div class="carousel-caption-below">
           {% if item.caption %}
-          <p>{{ item.caption }}</p>
+          <p class="caption-text">{{ item.caption }}</p>
           {% endif %}
           {% if item.credit %}
-          <p><small>{{ item.credit }}</small></p>
+          <p class="caption-credit"><small>{{ item.credit }}</small></p>
           {% endif %}
         </div>
         {% endif %}

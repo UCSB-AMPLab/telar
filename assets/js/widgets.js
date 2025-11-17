@@ -31,7 +31,7 @@
       const carousel = new bootstrap.Carousel(carouselElement, {
         interval: false,  // No auto-advance
         wrap: true,       // Allow wrapping from last to first
-        keyboard: true,   // Enable keyboard navigation
+        keyboard: false,  // Disable keyboard navigation (interferes with story navigation)
         touch: true       // Enable touch/swipe
       });
     });
