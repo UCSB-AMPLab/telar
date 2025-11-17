@@ -59,6 +59,61 @@ All notable changes to Telar will be documented in this file.
 - **Impact**: Smaller bundle size, cleaner codebase, no functionality change
 - **Note**: Telar's custom scroll system handles wheel events, touch swipes, button navigation, and keyboard navigation
 
+### Fixed
+
+#### Layer 2 Panel Heading Colors
+- Fixed h2, h3, and h4 elements in layer 2 panels not inheriting panel text color
+- **Problem**: Headings appeared in default blue color instead of white on dark purple background
+- **Solution**: Added explicit color inheritance for all heading levels in `#panel-layer2 .offcanvas-body`
+- **Impact**: Improved readability and visual consistency in layer 2 panels
+
+#### CRITICAL: v0.4.0 Feature Restoration - Widget Processing and Data Pipeline
+- **MAJOR BUG FIX**: Restored all v0.4.0 features accidentally deleted in commit f62acee (Nov 8, 2025)
+- **Root cause**: Commit f62acee ("Complete v0.4.0-beta development") accidentally deleted 1,382 lines from `scripts/csv_to_json.py`, removing core v0.4.0 functionality
+- **Discovery**: Widgets (accordion, carousel, tabs) not displaying; `:::widget` syntax converting to plain `<p>:::widget</p>` HTML instead of Bootstrap components
+
+**What Was Deleted:**
+- Widget system processing (~350 lines): `process_widgets()`, `parse_accordion_widget()`, `parse_carousel_widget()`, `parse_tabs_widget()`, `render_widget_html()`, `validate_image_path()`
+- IIIF metadata auto-population (~400 lines): `extract_manifest_metadata()`, `detect_iiif_version()`, `extract_language_map_value()`, `find_metadata_field()`, `extract_credit()`, plus 9 helper functions
+- Glossary auto-linking (~150 lines): `load_glossary_terms()`, `process_glossary_links()` for `[[term_id]]` syntax
+- Multilingual support (~100 lines): `load_language_data()`, `get_lang_string()`, `load_site_language()`
+- Testing features: `sanitize_dataframe()`, `inject_christmas_tree_errors()`
+- Required imports: `import yaml`, `from jinja2 import Template, Environment, FileSystemLoader`
+
+**Restoration Process:**
+1. Extracted complete `csv_to_json.py` from commit 8620a96 (last working version before deletion)
+2. Applied v0.5.0 updates to restored file:
+   - Added version header: `Version: v0.5.0-beta`
+   - Updated image paths: `/components/images/additional/` → `/components/images/` (Phase 4.1 flatten structure)
+   - Updated validation paths to use flattened directory structure
+3. Preserved backup of broken version: `scripts/csv_to_json.py.backup-broken`
+
+**Impact - Features Restored:**
+- **Widget processing**: Accordion, carousel, and tabs widgets now generate correct Bootstrap HTML
+  - `:::accordion` → `<div class="telar-widget telar-widget-accordion">` with Bootstrap accordion structure
+  - `:::carousel` → `<div class="telar-widget telar-widget-carousel">` with Bootstrap carousel structure
+  - `:::tabs` → `<div class="telar-widget telar-widget-tabs">` with Bootstrap tabs structure
+- **IIIF metadata extraction**: Auto-population of object metadata (title, creator, period, location, credit) from IIIF manifests
+- **Glossary auto-linking**: `[[term_id]]` and `[[term_id|display text]]` syntax processing in markdown
+- **Multilingual support**: Language string loading and interpolation for build-time processing
+- **Build-time validation**: Widget error checking, image path validation, accessibility warnings
+
+**Testing:**
+- `python3 scripts/csv_to_json.py` runs successfully
+- Widget HTML generation confirmed in `_data/story-1.json`:
+  - Accordion widget found in step 4 (Mayorazgo content)
+  - Carousel widget found in step 2 (Bogotá Savanna content)
+- All v0.4.0 data processing features functional
+
+**Note**: Additional restoration work needed for:
+- Widget styling (panel-specific CSS in `telar.scss`) - to be addressed in follow-up commit
+- Glossary link functionality (enhanced JS in `telar.js`) - to be addressed in follow-up commit
+- Widget initialization (loading `widgets.js` in `story.html`) - to be addressed in follow-up commit
+
+**Files Modified:**
+- `scripts/csv_to_json.py` - 1,382 lines restored (746 lines total)
+- `scripts/csv_to_json.py.backup-broken` - Preserved for reference
+
 ---
 
 ## [0.4.2-beta] - 2025-11-09

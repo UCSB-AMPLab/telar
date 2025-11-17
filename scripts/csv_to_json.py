@@ -15,6 +15,108 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse
 import ssl
+import yaml
+from jinja2 import Template, Environment, FileSystemLoader
+
+# Global language data cache
+_lang_data = None
+
+def load_language_data():
+    """
+    Load language strings from _config.yml and corresponding language file.
+
+    Returns:
+        dict: Language strings, or None if loading fails
+    """
+    global _lang_data
+
+    # Return cached data if already loaded
+    if _lang_data is not None:
+        return _lang_data
+
+    try:
+        # Read _config.yml to get telar_language setting
+        config_path = Path('_config.yml')
+        if not config_path.exists():
+            return None
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # Get language setting, default to English
+        language = config.get('telar_language', 'en')
+
+        # Load language file
+        lang_file = Path(f'_data/languages/{language}.yml')
+
+        # Fall back to English if language file doesn't exist
+        if not lang_file.exists():
+            lang_file = Path('_data/languages/en.yml')
+
+        if not lang_file.exists():
+            return None
+
+        with open(lang_file, 'r', encoding='utf-8') as f:
+            _lang_data = yaml.safe_load(f)
+
+        return _lang_data
+
+    except Exception as e:
+        print(f"  [WARN] Could not load language data: {e}")
+        return None
+
+def get_lang_string(key_path, **kwargs):
+    """
+    Get a language string by key path and optionally interpolate variables.
+
+    Args:
+        key_path: Dot-separated path to string (e.g., 'errors.object_warnings.iiif_503')
+        **kwargs: Variables to interpolate into the string
+
+    Returns:
+        str: Localized string with variables interpolated, or key_path if not found
+    """
+    lang = load_language_data()
+
+    if lang is None:
+        return key_path
+
+    # Navigate through nested dict using key path
+    keys = key_path.split('.')
+    value = lang
+
+    try:
+        for key in keys:
+            value = value[key]
+
+        # Interpolate variables if provided
+        if kwargs:
+            # Replace {{ var }} syntax with Python format strings
+            for var_name, var_value in kwargs.items():
+                value = value.replace(f'{{{{ {var_name} }}}}', str(var_value))
+
+        return value
+
+    except (KeyError, TypeError):
+        # Key not found - return the key path itself as fallback
+        return key_path
+
+def sanitize_dataframe(df):
+    """
+    Remove Christmas tree emoji (🎄) from all string fields in dataframe.
+    This prevents accidental Christmas Tree Mode triggering from user data.
+
+    Args:
+        df: pandas DataFrame to sanitize
+
+    Returns:
+        DataFrame: Sanitized dataframe
+    """
+    for col in df.columns:
+        if df[col].dtype == 'object':  # String columns
+            df[col] = df[col].apply(lambda x: str(x).replace('🎄', '') if pd.notna(x) else x)
+
+    return df
 
 def process_image_sizes(text):
     """
@@ -57,12 +159,424 @@ def process_image_sizes(text):
     return re.sub(pattern, replace_image, text, flags=re.IGNORECASE)
 
 
-def read_markdown_file(file_path):
+def load_glossary_terms():
+    """
+    Load glossary terms from components/texts/glossary/*.md files.
+
+    Returns:
+        dict: Dictionary mapping term_id to term title, or empty dict if loading fails
+    """
+    glossary_terms = {}
+    glossary_dir = Path('components/texts/glossary')
+
+    if not glossary_dir.exists():
+        return glossary_terms
+
+    try:
+        for glossary_file in glossary_dir.glob('*.md'):
+            with open(glossary_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Parse frontmatter
+            frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+            match = re.match(frontmatter_pattern, content, re.DOTALL)
+
+            if match:
+                frontmatter_text = match.group(1)
+
+                # Extract term_id and title
+                term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
+                title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
+
+                if term_id_match and title_match:
+                    term_id = term_id_match.group(1)
+                    title = title_match.group(1)
+                    glossary_terms[term_id] = title
+
+    except Exception as e:
+        print(f"  [WARN] Could not load glossary terms: {e}")
+
+    return glossary_terms
+
+
+def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
+    """
+    Transform [[term]] or [[display|term]] syntax into glossary link HTML.
+
+    Args:
+        text: HTML text to process (already converted from markdown)
+        glossary_terms: Dictionary mapping term_id to term title
+        warnings_list: Optional list to append warning messages
+        step_num: Optional step number for warning messages
+        layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
+
+    Returns:
+        str: Text with glossary links transformed to HTML
+    """
+    if not text or not glossary_terms:
+        return text
+
+    # Pattern: [[display|term]] or [[term]] with flexible spacing
+    # Captures: (optional_display) | (term_id)
+    pattern = r'\[\[\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?\s*\]\]'
+
+    def replace_glossary_link(match):
+        # If pipe is present: [[term|display]], else [[term]]
+        if match.group(2):  # Has pipe
+            term_id = match.group(1).strip()
+            display_text = match.group(2).strip()
+        else:  # No pipe
+            term_id = match.group(1).strip()
+            # Use glossary title as display text
+            display_text = glossary_terms.get(term_id, term_id)
+
+        # Check if term exists in glossary
+        if term_id in glossary_terms:
+            # Valid term - create link (JavaScript will construct full URL with basePath)
+            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}">{display_text}</a>'
+        else:
+            # Invalid term - create error indicator
+            if warnings_list is not None:
+                # Determine layer number for display
+                layer_num = layer_name[-1] if layer_name and layer_name.startswith('layer') else ''
+                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num)
+                warnings_list.append({
+                    'step': step_num,
+                    'type': 'glossary',
+                    'term_id': term_id,
+                    'layer': layer_name,
+                    'message': warning_msg
+                })
+            return f'<span class="glossary-link-error" data-term-id="{term_id}">⚠️ [[{match.group(1)}]]</span>'
+
+    return re.sub(pattern, replace_glossary_link, text)
+
+
+# Widget processing functions
+_widget_counter = 0
+
+def get_widget_id():
+    """Generate unique widget ID for this build"""
+    global _widget_counter
+    _widget_counter += 1
+    return f"widget-{_widget_counter}"
+
+
+def validate_image_path(image_path, file_context):
+    """
+    Validate that an image exists at the expected path.
+    Skips validation for external URLs (http:// or https://).
+
+    Args:
+        image_path: Path relative to assets/images/, or external URL
+        file_context: Context string for error messages (e.g., markdown file name)
+
+    Returns:
+        tuple: (exists: bool, full_path: str)
+    """
+    # Skip validation for external URLs
+    if image_path.startswith('http://') or image_path.startswith('https://'):
+        return (True, image_path)
+
+    full_path = Path('assets/images') / image_path
+    return (full_path.exists(), str(full_path))
+
+
+def parse_key_value_block(content):
+    """
+    Parse key: value pairs from a text block.
+
+    Args:
+        content: Text containing key: value pairs
+
+    Returns:
+        dict: Parsed key-value pairs
+    """
+    data = {}
+    for line in content.strip().split('\n'):
+        line = line.strip()
+        if ':' in line and not line.startswith('#'):
+            key, value = line.split(':', 1)
+            data[key.strip()] = value.strip()
+    return data
+
+
+def parse_carousel_widget(content, file_path, warnings_list):
+    """
+    Parse carousel widget content.
+
+    Expected format:
+    :::carousel
+    image: path.jpg
+    alt: Description
+    caption: Caption text
+    credit: Attribution
+
+    ---
+
+    image: path2.jpg
+    :::
+
+    Returns:
+        dict: Parsed carousel data with 'items' list
+    """
+    items = []
+    blocks = content.split('---')
+
+    for block_num, block in enumerate(blocks, 1):
+        block = block.strip()
+        if not block:
+            continue
+
+        data = parse_key_value_block(block)
+
+        # Validate required fields
+        if 'image' not in data:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'carousel',
+                'message': f'Carousel item {block_num} missing required field: image'
+            })
+            continue
+
+        # Validate image exists
+        image_exists, full_path = validate_image_path(data['image'], file_path)
+        if not image_exists:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'carousel',
+                'message': f'Carousel image not found: {data["image"]} (expected at {full_path})'
+            })
+
+        # Warn if alt text missing
+        if 'alt' not in data:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'carousel',
+                'message': f'Carousel item {block_num} missing alt text (accessibility concern)'
+            })
+            data['alt'] = ''
+
+        items.append(data)
+
+    return {'items': items}
+
+
+
+
+def parse_markdown_sections(content):
+    """
+    Parse content into sections based on ## headers.
+
+    Args:
+        content: Markdown text with ## headers
+
+    Returns:
+        list: List of dicts with 'title' and 'content' keys
+    """
+    sections = []
+    current_section = None
+
+    for line in content.split('\n'):
+        if line.startswith('## '):
+            # Start new section
+            if current_section:
+                sections.append(current_section)
+            current_section = {
+                'title': line[3:].strip(),
+                'content': []
+            }
+        elif current_section:
+            current_section['content'].append(line)
+
+    # Add last section
+    if current_section:
+        sections.append(current_section)
+
+    # Convert content lists to strings and process markdown
+    for section in sections:
+        content_text = '\n'.join(section['content']).strip()
+        # Convert markdown to HTML
+        section['content_html'] = markdown.markdown(content_text, extensions=['extra', 'nl2br'])
+
+    return sections
+
+
+def parse_tabs_widget(content, file_path, warnings_list):
+    """
+    Parse tabs widget content.
+
+    Expected format:
+    :::tabs
+    ## Tab 1 Title
+    Content here...
+
+    ## Tab 2 Title
+    More content...
+    :::
+
+    Returns:
+        dict: Parsed tabs data with 'tabs' list
+    """
+    sections = parse_markdown_sections(content)
+
+    # Validate tab count
+    if len(sections) < 2:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'tabs',
+            'message': f'Tabs widget must have at least 2 tabs (found {len(sections)})'
+        })
+    elif len(sections) > 4:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'tabs',
+            'message': f'Tabs widget should have maximum 4 tabs (found {len(sections)})'
+        })
+
+    # Validate each tab has content
+    for i, section in enumerate(sections, 1):
+        if not section.get('content_html', '').strip():
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'tabs',
+                'message': f'Tab {i} "{section["title"]}" has no content'
+            })
+
+    return {'tabs': sections}
+
+
+def parse_accordion_widget(content, file_path, warnings_list):
+    """
+    Parse accordion widget content.
+
+    Expected format:
+    :::accordion
+    ## Panel 1 Title
+    Content here...
+
+    ## Panel 2 Title
+    More content...
+    :::
+
+    Returns:
+        dict: Parsed accordion data with 'panels' list
+    """
+    sections = parse_markdown_sections(content)
+
+    # Validate panel count
+    if len(sections) < 2:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'accordion',
+            'message': f'Accordion widget must have at least 2 panels (found {len(sections)})'
+        })
+    elif len(sections) > 6:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'accordion',
+            'message': f'Accordion widget should have maximum 6 panels (found {len(sections)})'
+        })
+
+    # Validate each panel has content
+    for i, section in enumerate(sections, 1):
+        if not section.get('content_html', '').strip():
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'accordion',
+                'message': f'Accordion panel {i} "{section["title"]}" has no content'
+            })
+
+    return {'panels': sections}
+
+
+def render_widget_html(widget_type, widget_data, widget_id):
+    """
+    Render widget HTML using Jinja2 template.
+
+    Args:
+        widget_type: Type of widget (carousel, comparison, tabs, accordion)
+        widget_data: Parsed widget data
+        widget_id: Unique widget ID
+
+    Returns:
+        str: Rendered HTML
+    """
+    try:
+        # Load template from _includes/widgets/
+        template_path = Path('_includes/widgets')
+        env = Environment(loader=FileSystemLoader(str(template_path)))
+        template = env.get_template(f'{widget_type}.html')
+
+        # Render with data
+        html = template.render(
+            widget_id=widget_id,
+            base_url='{{ site.baseurl }}',  # Will be processed by Jekyll
+            **widget_data
+        )
+
+        return html
+
+    except Exception as e:
+        # Return error HTML if template rendering fails
+        return f'<div class="telar-widget-error">Widget rendering error ({widget_type}): {str(e)}</div>'
+
+
+def process_widgets(text, file_path, warnings_list):
+    """
+    Find and process :::widget::: blocks in markdown text.
+    Must be called BEFORE markdown.markdown() conversion.
+
+    Args:
+        text: Raw markdown text
+        file_path: Path to markdown file (for error context)
+        warnings_list: List to append widget warnings
+
+    Returns:
+        str: Text with widgets replaced by rendered HTML
+    """
+    # Pattern to match :::type ... :::
+    pattern = r':::(\w+)\s*\n(.*?)\n:::'
+
+    def replace_widget(match):
+        widget_type = match.group(1).lower()
+        content = match.group(2)
+        widget_id = get_widget_id()
+
+        # Parse based on widget type
+        widget_parsers = {
+            'carousel': parse_carousel_widget,
+            'tabs': parse_tabs_widget,
+            'accordion': parse_accordion_widget
+        }
+
+        if widget_type not in widget_parsers:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': widget_type,
+                'message': f'Unknown widget type: {widget_type}'
+            })
+            return f'<div class="telar-widget-error">Unknown widget type: {widget_type}</div>'
+
+        # Parse widget content
+        parser = widget_parsers[widget_type]
+        widget_data = parser(content, file_path, warnings_list)
+
+        # Render HTML
+        html = render_widget_html(widget_type, widget_data, widget_id)
+
+        return html
+
+    return re.sub(pattern, replace_widget, text, flags=re.DOTALL)
+
+
+def read_markdown_file(file_path, widget_warnings=None):
     """
     Read a markdown file and parse frontmatter
 
     Args:
         file_path: Path to markdown file relative to components/texts/
+        widget_warnings: Optional list to collect widget warnings
 
     Returns:
         dict with 'title' and 'content' keys, or None if file doesn't exist
@@ -72,6 +586,10 @@ def read_markdown_file(file_path):
     if not full_path.exists():
         print(f"Warning: Markdown file not found: {full_path}")
         return None
+
+    # Initialize widget warnings list if not provided
+    if widget_warnings is None:
+        widget_warnings = []
 
     try:
         with open(full_path, 'r', encoding='utf-8') as f:
@@ -89,6 +607,9 @@ def read_markdown_file(file_path):
             title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
             title = title_match.group(1) if title_match else ''
 
+            # Process widgets BEFORE markdown conversion
+            body = process_widgets(body, file_path, widget_warnings)
+
             # Process image size syntax before markdown conversion
             body = process_image_sizes(body)
 
@@ -101,8 +622,16 @@ def read_markdown_file(file_path):
             }
         else:
             # No frontmatter, just content
-            content = process_image_sizes(content.strip())
-            html_content = markdown.markdown(content, extensions=['extra', 'nl2br'])
+            content_body = content.strip()
+
+            # Process widgets BEFORE markdown conversion
+            content_body = process_widgets(content_body, file_path, widget_warnings)
+
+            # Process image sizes
+            content_body = process_image_sizes(content_body)
+
+            # Convert markdown to HTML
+            html_content = markdown.markdown(content_body, extensions=['extra', 'nl2br'])
             return {
                 'title': '',
                 'content': html_content
@@ -140,6 +669,9 @@ def csv_to_json(csv_path, json_path, process_func=None):
         # Filter out columns starting with # (instruction columns)
         df = df[[col for col in df.columns if not col.startswith('#')]]
 
+        # Sanitize user data - remove 🎄 emoji to prevent accidental Christmas Tree Mode triggering
+        df = sanitize_dataframe(df)
+
         # Apply processing function if provided
         if process_func:
             df = process_func(df)
@@ -169,7 +701,7 @@ def csv_to_json(csv_path, json_path, process_func=None):
 def process_project_setup(df):
     """
     Process project setup CSV
-    Expected columns: order, title, subtitle (optional)
+    Expected columns: order, title, subtitle (optional), byline (optional)
     """
     stories_list = []
 
@@ -177,6 +709,7 @@ def process_project_setup(df):
         order = str(row.get('order', '')).strip()
         title = row.get('title', '')
         subtitle = row.get('subtitle', '')
+        byline = row.get('byline', '')
 
         # Skip rows with empty order (placeholder rows)
         if not order or not pd.notna(title):
@@ -190,6 +723,10 @@ def process_project_setup(df):
         # Add subtitle if present
         if pd.notna(subtitle) and str(subtitle).strip():
             story_entry['subtitle'] = str(subtitle).strip()
+
+        # Add byline if present
+        if pd.notna(byline) and str(byline).strip():
+            story_entry['byline'] = str(byline).strip()
 
         stories_list.append(story_entry)
 
@@ -250,7 +787,516 @@ def _find_similar_image_filenames(object_id, images_dir):
 
     return similar_files
 
-def process_objects(df):
+# ==============================================================================
+# IIIF Metadata Extraction Functions (Phase 8 - v0.4.0)
+# ==============================================================================
+
+def detect_iiif_version(manifest):
+    """
+    Detect IIIF Presentation API version from @context field.
+
+    Args:
+        manifest: Parsed JSON manifest dict
+
+    Returns:
+        str: '2.0' or '3.0' (defaults to '2.0' if unclear)
+    """
+    context = manifest.get('@context', '')
+    if isinstance(context, str):
+        if 'presentation/3' in context:
+            return '3.0'
+        elif 'presentation/2' in context:
+            return '2.0'
+    elif isinstance(context, list):
+        # Context can be an array in v3
+        for ctx in context:
+            if isinstance(ctx, str) and 'presentation/3' in ctx:
+                return '3.0'
+
+    return '2.0'  # Default to 2.0 (most common)
+
+def extract_language_map_value(language_map, site_language='en'):
+    """
+    Extract value from IIIF v3.0 language map with fallback logic.
+
+    Fallback order:
+    1. Site's telar_language (e.g., 'es' for Spanish sites)
+    2. English ('en')
+    3. Unlabeled content ('none')
+    4. First available language
+
+    Args:
+        language_map: Dict with language codes as keys, arrays as values
+        site_language: Preferred language code
+
+    Returns:
+        str: Extracted value or empty string
+    """
+    if not isinstance(language_map, dict):
+        return ''
+
+    # Try site language
+    if site_language in language_map:
+        values = language_map[site_language]
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    # Try English
+    if 'en' in language_map:
+        values = language_map['en']
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    # Try unlabeled content
+    if 'none' in language_map:
+        values = language_map['none']
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    # Use first available language
+    for lang, values in language_map.items():
+        if isinstance(values, list) and len(values) > 0:
+            return str(values[0])
+
+    return ''
+
+def strip_html_tags(text):
+    """
+    Remove all HTML tags from text, preserve plain text only.
+    Also decodes HTML entities and removes extra whitespace.
+
+    Args:
+        text: String that may contain HTML
+
+    Returns:
+        str: Plain text with HTML removed
+    """
+    import re
+    import html
+
+    if not text:
+        return ''
+
+    text = str(text)
+
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+
+    # Decode HTML entities
+    text = html.unescape(text)
+
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
+def clean_metadata_value(value):
+    """
+    Clean and normalize metadata value.
+    Handles lists, strips HTML, and normalizes whitespace.
+
+    Args:
+        value: Metadata value (string, list, or dict)
+
+    Returns:
+        str: Cleaned value
+    """
+    if not value:
+        return ''
+
+    # Handle lists (multiple values)
+    if isinstance(value, list):
+        # Join multiple values with semicolon
+        cleaned_values = []
+        for v in value:
+            cleaned = str(v).strip()
+            if cleaned:
+                cleaned_values.append(cleaned)
+        value = '; '.join(cleaned_values)
+
+    value = str(value).strip()
+    value = strip_html_tags(value)
+
+    return value
+
+def find_metadata_field(metadata_array, search_terms, version='2.0', site_language='en'):
+    """
+    Search metadata array for matching field using fuzzy label matching.
+
+    Args:
+        metadata_array: List of {label, value} entries
+        search_terms: List of possible label names (case-insensitive)
+        version: '2.0' or '3.0'
+        site_language: Preferred language for v3.0 extraction
+
+    Returns:
+        str: Extracted value or empty string
+    """
+    if not metadata_array or not isinstance(metadata_array, list):
+        return ''
+
+    for entry in metadata_array:
+        if not isinstance(entry, dict):
+            continue
+
+        label = entry.get('label', '')
+
+        # Handle v3.0 language maps
+        if version == '3.0' and isinstance(label, dict):
+            label = extract_language_map_value(label, site_language)
+
+        # Case-insensitive search
+        label_lower = str(label).lower().strip()
+
+        for term in search_terms:
+            if term.lower() in label_lower:
+                value = entry.get('value', '')
+
+                # Handle v3.0 language maps
+                if version == '3.0' and isinstance(value, dict):
+                    value = extract_language_map_value(value, site_language)
+
+                return clean_metadata_value(value)
+
+    return ''
+
+def is_legal_boilerplate(text):
+    """
+    Detect if attribution text is generic legal boilerplate rather than actual credit.
+
+    Args:
+        text: Attribution text to check
+
+    Returns:
+        bool: True if text appears to be legal boilerplate
+    """
+    if not text:
+        return False
+
+    boilerplate_indicators = [
+        'for information on use',
+        'rights and permissions',
+        'http://',
+        'https://',
+        'licensed under',
+        'license',
+        'see library',
+        'please see',
+        'for more information'
+    ]
+
+    text_lower = str(text).lower()
+
+    # Check if text is mostly URL or starts with URL
+    if text_lower.startswith('http'):
+        return True
+
+    # Check for multiple boilerplate indicators
+    indicator_count = sum(1 for indicator in boilerplate_indicators if indicator in text_lower)
+
+    # If text has 2+ indicators or is very long (>200 chars), likely boilerplate
+    if indicator_count >= 2 or len(text) > 200:
+        return True
+
+    return False
+
+def extract_credit(manifest, version='2.0', site_language='en'):
+    """
+    Extract credit/attribution with smart fallback logic.
+
+    v2.0: Use 'attribution' field
+    v3.0: Use 'requiredStatement.value' or 'provider.label'
+
+    If attribution is legal boilerplate, fall back to repository/institution name.
+
+    Args:
+        manifest: Parsed JSON manifest dict
+        version: '2.0' or '3.0'
+        site_language: Preferred language
+
+    Returns:
+        str: Credit line
+    """
+    credit = ''
+
+    if version == '2.0':
+        credit = manifest.get('attribution', '')
+    elif version == '3.0':
+        # Try requiredStatement first
+        req_stmt = manifest.get('requiredStatement', {})
+        if req_stmt and isinstance(req_stmt, dict):
+            value = req_stmt.get('value', {})
+            if isinstance(value, dict):
+                credit = extract_language_map_value(value, site_language)
+            else:
+                credit = str(value)
+
+        # Try provider as fallback
+        if not credit:
+            providers = manifest.get('provider', [])
+            if providers and isinstance(providers, list) and len(providers) > 0:
+                provider = providers[0]
+                if isinstance(provider, dict):
+                    label = provider.get('label', {})
+                    if isinstance(label, dict):
+                        credit = extract_language_map_value(label, site_language)
+                    else:
+                        credit = str(label)
+
+    credit = clean_metadata_value(credit)
+
+    # Check if attribution is just legal boilerplate
+    if credit and is_legal_boilerplate(credit):
+        # Fall back to repository/institution from metadata
+        fallback = find_metadata_field(
+            manifest.get('metadata', []),
+            ['Repository', 'Holding Institution', 'Institution'],
+            version,
+            site_language
+        )
+        if fallback:
+            credit = fallback
+
+    return credit
+
+def extract_manifest_metadata(manifest_url, site_language='en'):
+    """
+    Extract all metadata fields from IIIF manifest.
+
+    Extracts: title, description, creator, period, location, credit
+
+    Args:
+        manifest_url: URL of IIIF manifest
+        site_language: Preferred language for extraction
+
+    Returns:
+        dict: Extracted metadata with keys: title, description, creator, period, location, credit
+              Returns empty dict on error
+    """
+    try:
+        # Fetch manifest (reuse existing request pattern)
+        import urllib.request
+        import json
+
+        response = urllib.request.urlopen(manifest_url, timeout=10)
+        manifest = json.loads(response.read())
+
+        version = detect_iiif_version(manifest)
+        metadata_array = manifest.get('metadata', [])
+
+        extracted = {}
+
+        # Title
+        if version == '2.0':
+            extracted['title'] = clean_metadata_value(manifest.get('label', ''))
+        else:  # v3.0
+            label = manifest.get('label', {})
+            if isinstance(label, dict):
+                extracted['title'] = clean_metadata_value(
+                    extract_language_map_value(label, site_language)
+                )
+            else:
+                extracted['title'] = clean_metadata_value(label)
+
+        # Description
+        if version == '2.0':
+            desc = manifest.get('description', '')
+            extracted['description'] = strip_html_tags(desc)
+        else:  # v3.0
+            summary = manifest.get('summary', {})
+            if isinstance(summary, dict):
+                extracted['description'] = strip_html_tags(
+                    extract_language_map_value(summary, site_language)
+                )
+            else:
+                extracted['description'] = strip_html_tags(summary)
+
+        # Creator
+        extracted['creator'] = find_metadata_field(
+            metadata_array,
+            ['Creator', 'Artist', 'Author', 'Maker', 'Cartographer', 'Contributor', 'Painter', 'Sculptor'],
+            version,
+            site_language
+        )
+
+        # Period
+        extracted['period'] = find_metadata_field(
+            metadata_array,
+            ['Date', 'Period', 'Creation Date', 'Created', 'Date Created', 'Date Note', 'Temporal'],
+            version,
+            site_language
+        )
+
+        # Location (Repository/Institution name, not geographic location)
+        extracted['location'] = find_metadata_field(
+            metadata_array,
+            ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
+            version,
+            site_language
+        )
+
+        # If location not found in metadata, try provider (v3.0)
+        if not extracted['location'] and version == '3.0':
+            providers = manifest.get('provider', [])
+            if providers and isinstance(providers, list) and len(providers) > 0:
+                provider = providers[0]
+                if isinstance(provider, dict):
+                    label = provider.get('label', {})
+                    if isinstance(label, dict):
+                        extracted['location'] = extract_language_map_value(label, site_language)
+                    else:
+                        extracted['location'] = str(label).strip()
+
+        # Credit
+        extracted['credit'] = extract_credit(manifest, version, site_language)
+
+        return extracted
+
+    except Exception as e:
+        # Silently fail - return empty dict
+        # Errors will be caught and logged by calling function
+        return {}
+
+def apply_metadata_fallback(row_dict, iiif_metadata):
+    """
+    Apply fallback hierarchy: CSV > IIIF > empty.
+
+    Modifies row_dict in place, adding IIIF values only for empty CSV fields.
+
+    Args:
+        row_dict: Dictionary of object data from CSV
+        iiif_metadata: Dictionary of extracted IIIF metadata
+    """
+    fields = ['title', 'description', 'creator', 'period', 'location', 'credit']
+
+    for field in fields:
+        csv_value = str(row_dict.get(field, '')).strip()
+        iiif_value = str(iiif_metadata.get(field, '')).strip()
+
+        # CSV override: if user entered value, keep it
+        if csv_value:
+            continue
+
+        # Auto-populate: if CSV empty but IIIF has value, use IIIF
+        if iiif_value:
+            row_dict[field] = iiif_value
+
+def load_site_language():
+    """
+    Load telar_language setting from _config.yml.
+
+    Returns:
+        str: Language code (default: 'en')
+    """
+    try:
+        config_path = Path('_config.yml')
+        if not config_path.exists():
+            return 'en'
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        return config.get('telar_language', 'en')
+    except Exception:
+        return 'en'
+
+def inject_christmas_tree_errors(df):
+    """
+    Inject test objects with various error conditions for testing multilingual warnings.
+    All test objects have 🎄 emoji in their titles for easy identification.
+
+    This "Christmas Tree Mode" lights up all possible warning messages.
+    """
+    test_objects = [
+        {
+            'object_id': 'test-iiif-404',
+            'title': '🎄 Test - IIIF 404 Error',
+            'description': 'Test object to trigger IIIF 404 error warning',
+            'iiif_manifest': 'https://example.com/nonexistent/manifest.json',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-503',
+            'title': '🎄 Test - IIIF 503 Service Unavailable',
+            'description': 'Test object to trigger IIIF 503 error warning',
+            'iiif_manifest': 'https://httpstat.us/503',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-invalid',
+            'title': '🎄 Test - Invalid IIIF URL',
+            'description': 'Test object to trigger invalid URL warning',
+            'iiif_manifest': 'not-a-valid-url',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-image-missing',
+            'title': '🎄 Test - Missing Image Source',
+            'description': 'Test object with no IIIF manifest and no local image file',
+            'iiif_manifest': '',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-500',
+            'title': '🎄 Test - IIIF 500 Internal Server Error',
+            'description': 'Test object to trigger IIIF 500 error warning',
+            'iiif_manifest': 'https://httpstat.us/500',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        },
+        {
+            'object_id': 'test-iiif-429',
+            'title': '🎄 Test - IIIF 429 Rate Limiting',
+            'description': 'Test object to trigger IIIF 429 rate limiting warning',
+            'iiif_manifest': 'https://httpstat.us/429',
+            'creator': 'Test',
+            'period': 'Test',
+            'medium': '',
+            'dimensions': '',
+            'location': '',
+            'credit': '',
+            'thumbnail': ''
+        }
+    ]
+
+    # Create dataframe from test objects and concatenate with existing data
+    test_df = pd.DataFrame(test_objects)
+    df = pd.concat([df, test_df], ignore_index=True)
+
+    print("🎄 Christmas Tree Mode activated - injected test objects with various errors")
+
+    return df
+
+def process_objects(df, christmas_tree=False):
     """
     Process objects CSV
     Expected columns: object_id, title, creator, date, description, etc.
@@ -267,6 +1313,10 @@ def process_objects(df):
 
     # Remove rows where object_id is empty
     df = df[df['object_id'].astype(str).str.strip() != '']
+
+    # Inject Christmas Tree test errors if flag is enabled
+    if christmas_tree:
+        df = inject_christmas_tree_errors(df)
 
     # Validate and clean object_id values
     valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg']
@@ -346,6 +1396,24 @@ def process_objects(df):
                 warnings.append(msg)
                 # Don't clear - file might be added later or exist in different environment
 
+    # Load previous objects.json to skip 429 errors for unchanged manifests
+    previous_objects = {}
+    previous_objects_path = Path('_data/objects.json')
+    if previous_objects_path.exists():
+        try:
+            with open(previous_objects_path, 'r', encoding='utf-8') as f:
+                previous_data = json.load(f)
+                # Create lookup: object_id -> {manifest_url, had_warning}
+                for obj in previous_data:
+                    previous_objects[obj.get('object_id')] = {
+                        'manifest_url': obj.get('iiif_manifest', ''),
+                        'had_warning': bool(obj.get('object_warning'))
+                    }
+                print(f"[INFO] Loaded {len(previous_objects)} objects from previous build for 429 checking")
+        except Exception as e:
+            print(f"[INFO] Could not load previous objects.json: {e}")
+            previous_objects = {}
+
     # Validate IIIF manifest field
     if 'iiif_manifest' in df.columns:
         for idx, row in df.iterrows():
@@ -360,7 +1428,7 @@ def process_objects(df):
             parsed = urlparse(manifest_url)
             if not parsed.scheme in ['http', 'https']:
                 df.at[idx, 'iiif_manifest'] = ''
-                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet is not valid"
+                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_invalid_url')
                 msg = f"Cleared invalid IIIF manifest for object {object_id}: not a valid URL"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
@@ -373,84 +1441,186 @@ def process_objects(df):
             ssl_context.verify_mode = ssl.CERT_NONE
 
             try:
-                req = urllib.request.Request(manifest_url, method='HEAD')
-                req.add_header('User-Agent', 'Telar/0.3.3-beta (IIIF validator)')
+                # Fetch manifest directly with GET (follows redirects automatically)
+                req = urllib.request.Request(manifest_url)
+                req.add_header('User-Agent', 'Telar/0.4.0-beta (IIIF validator)')
 
-                with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+                with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
                     content_type = response.headers.get('Content-Type', '')
 
                     # Check if response is JSON
                     if 'json' not in content_type.lower():
-                        df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
                         msg = f"IIIF manifest for object {object_id} does not return JSON (Content-Type: {content_type})"
                         print(f"  [WARN] {msg}")
                         warnings.append(msg)
                         # Don't clear manifest URL - might still work despite wrong content type
                         continue
 
-                    # Fetch full content to validate structure
-                    req_get = urllib.request.Request(manifest_url)
-                    req_get.add_header('User-Agent', 'Telar/0.3.3-beta (IIIF validator)')
+                    try:
+                        data = json.loads(response.read().decode('utf-8'))
 
-                    with urllib.request.urlopen(req_get, timeout=10, context=ssl_context) as resp:
-                        try:
-                            data = json.loads(resp.read().decode('utf-8'))
+                        # Check for basic IIIF structure
+                        has_context = '@context' in data
+                        has_type = 'type' in data or '@type' in data
 
-                            # Check for basic IIIF structure
-                            has_context = '@context' in data
-                            has_type = 'type' in data or '@type' in data
-
-                            if not (has_context or has_type):
-                                df.at[idx, 'object_warning'] = f"the IIIF manifest you specified in your configuration CSV or Google Sheet is not properly formatted"
-                                msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
-                                print(f"  [WARN] {msg}")
-                                warnings.append(msg)
-                            else:
-                                print(f"  [INFO] Validated IIIF manifest for object {object_id}")
-
-                        except json.JSONDecodeError:
-                            df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not point to a valid IIIF manifest"
-                            msg = f"IIIF manifest for object {object_id} is not valid JSON"
+                        if not (has_context or has_type):
+                            df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_malformed')
+                            msg = f"IIIF manifest for object {object_id} missing required fields (@context or type)"
                             print(f"  [WARN] {msg}")
                             warnings.append(msg)
+                        else:
+                            print(f"  [INFO] Validated IIIF manifest for object {object_id}")
+
+                            # PHASE 8: Extract metadata from validated manifest
+                            try:
+                                site_language = load_site_language()
+                                version = detect_iiif_version(data)
+                                metadata_array = data.get('metadata', [])
+
+                                extracted = {}
+
+                                # Title
+                                if version == '2.0':
+                                    extracted['title'] = clean_metadata_value(data.get('label', ''))
+                                else:  # v3.0
+                                    label = data.get('label', {})
+                                    if isinstance(label, dict):
+                                        extracted['title'] = clean_metadata_value(
+                                            extract_language_map_value(label, site_language)
+                                        )
+                                    else:
+                                        extracted['title'] = clean_metadata_value(label)
+
+                                # Description
+                                if version == '2.0':
+                                    desc = data.get('description', '')
+                                    extracted['description'] = strip_html_tags(desc)
+                                else:  # v3.0
+                                    summary = data.get('summary', {})
+                                    if isinstance(summary, dict):
+                                        extracted['description'] = strip_html_tags(
+                                            extract_language_map_value(summary, site_language)
+                                        )
+                                    else:
+                                        extracted['description'] = strip_html_tags(summary)
+
+                                # Creator
+                                extracted['creator'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Creator', 'Artist', 'Author', 'Maker', 'Cartographer', 'Contributor', 'Painter', 'Sculptor'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Period
+                                extracted['period'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Date', 'Period', 'Creation Date', 'Created', 'Date Created', 'Date Note', 'Temporal'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Location (Repository/Institution name, not geographic location)
+                                extracted['location'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
+                                    version,
+                                    site_language
+                                )
+
+                                # If location not found in metadata, try provider (v3.0)
+                                if not extracted['location'] and version == '3.0':
+                                    providers = data.get('provider', [])
+                                    if providers and isinstance(providers, list) and len(providers) > 0:
+                                        provider = providers[0]
+                                        if isinstance(provider, dict):
+                                            provider_label = provider.get('label', {})
+                                            if isinstance(provider_label, dict):
+                                                extracted['location'] = extract_language_map_value(provider_label, site_language)
+                                            else:
+                                                extracted['location'] = str(provider_label).strip()
+
+                                # Credit
+                                extracted['credit'] = extract_credit(data, version, site_language)
+
+                                # Apply fallback hierarchy (CSV > IIIF > empty)
+                                row_dict = row.to_dict()
+                                apply_metadata_fallback(row_dict, extracted)
+
+                                # Update dataframe with extracted values
+                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
+                                    df.at[idx, field] = row_dict[field]
+
+                                # Log if any fields were auto-populated
+                                populated_fields = []
+                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
+                                    csv_val = str(row.get(field, '')).strip()
+                                    final_val = str(row_dict.get(field, '')).strip()
+                                    if not csv_val and final_val:
+                                        populated_fields.append(field)
+
+                                if populated_fields:
+                                    print(f"  [INFO] Auto-populated from IIIF: {', '.join(populated_fields)}")
+
+                            except Exception as e:
+                                # Metadata extraction failed - log but don't block validation
+                                print(f"  [WARN] Could not extract metadata from IIIF manifest for {object_id}: {e}")
+
+                    except json.JSONDecodeError:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
+                        msg = f"IIIF manifest for object {object_id} is not valid JSON"
+                        print(f"  [WARN] {msg}")
+                        warnings.append(msg)
 
             except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet does not exist (error 404)"
-                    df.at[idx, 'object_warning_short'] = "Error 404: manifest not found"
-                elif e.code == 429:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 429). Error 429 means \"Too Many Requests\": the IIIF server is rate-limiting your site because you've been requesting this manifest too many times during development/testing, so their server is temporarily blocking your requests. This will likely resolve itself in 15-30 minutes. Try rebuilding your site later – the issue will likely go away."
-                    df.at[idx, 'object_warning_short'] = "Error 429: rate limiting (try again in 15-30 minutes)"
-                elif e.code == 403:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 403). Error 403 means \"Forbidden\": the IIIF server is blocking access to this manifest. This usually means the manifest requires authentication, has IP restrictions, or is not publicly available. Contact the institution to confirm the manifest can be accessed publicly, or use a different IIIF resource."
-                    df.at[idx, 'object_warning_short'] = "Error 403: access forbidden (likely requires authentication or has IP restrictions)"
-                elif e.code == 401:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 401). Error 401 means \"Unauthorized\": this manifest requires authentication to access. Telar does not support authenticated IIIF manifests. You'll need to use a publicly accessible IIIF manifest instead."
-                    df.at[idx, 'object_warning_short'] = "Error 401: authentication required (not supported by Telar)"
-                elif e.code == 500:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 500). Error 500 means \"Internal Server Error\": the IIIF server is experiencing technical problems. This is not a problem with your configuration - the institution's server is having issues. Try rebuilding your site later to see if the issue has been resolved."
-                    df.at[idx, 'object_warning_short'] = "Error 500: server error (try again later)"
-                elif e.code == 503:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 503). Error 503 means \"Service Unavailable\": the IIIF server is temporarily unavailable, possibly due to maintenance or being overloaded. This is not a problem with your configuration. Try rebuilding your site later - the server should come back online."
-                    df.at[idx, 'object_warning_short'] = "Error 503: server temporarily unavailable (try again later)"
-                elif e.code == 502:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 502). Error 502 means \"Bad Gateway\": there's a problem with the IIIF server's infrastructure. This is not a problem with your configuration - the institution's server is having connectivity issues. Try rebuilding your site later to see if the issue has been resolved."
-                    df.at[idx, 'object_warning_short'] = "Error 502: server connectivity issue (try again later)"
-                else:
-                    df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {e.code})"
-                    df.at[idx, 'object_warning_short'] = f"Error {e.code}: could not be accessed"
-                msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
-                print(f"  [WARN] {msg}")
-                warnings.append(msg)
+                # Check if we should skip this 429 error (unchanged manifest from previous build)
+                skip_429 = False
+                if e.code == 429 and object_id in previous_objects:
+                    prev = previous_objects[object_id]
+                    # Skip if: same URL as before AND no warning in previous build
+                    if prev['manifest_url'] == manifest_url and not prev['had_warning']:
+                        skip_429 = True
+                        print(f"  [INFO] Skipping 429 error for unchanged manifest: {object_id} ({manifest_url})")
+
+                # Only process error if not skipping
+                if not skip_429:
+                    if e.code == 404:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_404')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_404')
+                    elif e.code == 429:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_429')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_429')
+                    elif e.code == 403:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_403')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_403')
+                    elif e.code == 401:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_401')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_401')
+                    elif e.code == 500:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_500')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_500')
+                    elif e.code == 503:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_503')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_503')
+                    elif e.code == 502:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_502')
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_502')
+                    else:
+                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_error_generic', code=e.code)
+                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_error_generic', code=e.code)
+                    msg = f"IIIF manifest for object {object_id} returned HTTP {e.code}: {manifest_url}"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
             except urllib.error.URLError as e:
-                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
-                df.at[idx, 'object_warning_short'] = "Network error: could not be reached"
+                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_unreachable')
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_network_error')
                 msg = f"IIIF manifest for object {object_id} could not be reached: {e.reason}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             except Exception as e:
-                df.at[idx, 'object_warning'] = f"the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
-                df.at[idx, 'object_warning_short'] = "Validation error: could not be validated"
+                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_validation_failed')
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_validation_error')
                 msg = f"Error validating IIIF manifest for object {object_id}: {str(e)}"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
@@ -485,16 +1655,21 @@ def process_objects(df):
                 if len(similar_files) == 1:
                     similar_file = similar_files[0]
                     file_ext = Path(similar_file).suffix
-                    error_msg = f"No image file found for object_id '{object_id}', but found similar file '{similar_file}'. If this is the image you meant to use, either: (1) rename the file to {object_id}{file_ext}, or (2) update the object_id in the CSV to match the filename (without extension)."
-                    df.at[idx, 'object_warning_short'] = "Image filename mismatch"
+                    error_msg = get_lang_string('errors.object_warnings.image_similar_single',
+                                                 object_id=object_id,
+                                                 similar_file=similar_file,
+                                                 file_ext=file_ext)
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_filename_mismatch')
                 else:
                     file_list = "', '".join(similar_files)
-                    error_msg = f"No image file found for object_id '{object_id}', but found multiple similar files: '{file_list}'. If one of these is the image you meant to use, either rename it to {object_id}.* or update the object_id in the CSV to match."
-                    df.at[idx, 'object_warning_short'] = "Ambiguous image match"
+                    error_msg = get_lang_string('errors.object_warnings.image_similar_multiple',
+                                                 object_id=object_id,
+                                                 file_list=file_list)
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_ambiguous_match')
             else:
                 # No similar files found - provide basic error message
-                error_msg = f"No image source found for object '{object_id}'. Add either: (1) an IIIF manifest URL in the iiif_manifest column, or (2) an image file to components/images/{object_id}.jpg"
-                df.at[idx, 'object_warning_short'] = "Missing image source"
+                error_msg = get_lang_string('errors.object_warnings.image_missing', object_id=object_id)
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_missing_source')
 
             df.at[idx, 'object_warning'] = error_msg
             msg = f"Object {object_id} has no IIIF manifest or local image file"
@@ -507,13 +1682,20 @@ def process_objects(df):
 
     return df
 
-def process_story(df):
+def process_story(df, christmas_tree=False):
     """
     Process story CSV with file references
     Expected columns: step, question, answer, object, x, y, zoom, layer1_file, layer2_file, etc.
     """
     # Tracking for summary
     warnings = []
+
+    # Load glossary terms for auto-linking
+    glossary_terms = load_glossary_terms()
+    glossary_warnings = []
+
+    # Initialize widget warnings list
+    widget_warnings = []
 
     # Drop example column if it exists
     if 'example' in df.columns:
@@ -553,7 +1735,7 @@ def process_story(df):
 
             # Check if object exists
             if object_id not in objects_data:
-                error_msg = f"the object <code>{object_id}</code> was not found in <code>objects.csv</code>"
+                error_msg = get_lang_string('errors.object_warnings.object_not_found', object_id=object_id)
                 df.at[idx, 'viewer_warning'] = error_msg
                 msg = f"Story step {step_num} references missing object: {object_id}"
                 print(f"  [WARN] {msg}")
@@ -579,7 +1761,7 @@ def process_story(df):
 
                 # Only warn if object has neither external manifest nor local image
                 if not has_local_image:
-                    error_msg = f"the object <code>{object_id}</code> has no IIIF manifest or local image file"
+                    error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=object_id)
                     df.at[idx, 'viewer_warning'] = error_msg
                     msg = f"Story step {step_num} references object without IIIF source: {object_id}"
                     print(f"  [WARN] {msg}")
@@ -607,17 +1789,25 @@ def process_story(df):
                 if file_ref and file_ref.strip():
                     # Prepend 'stories/' to the path for story files
                     file_path = f"stories/{file_ref.strip()}"
-                    markdown_data = read_markdown_file(file_path)
+                    markdown_data = read_markdown_file(file_path, widget_warnings)
                     if markdown_data:
+                        step_num = row.get('step', 'unknown')
                         df.at[idx, title_col] = markdown_data['title']
-                        df.at[idx, text_col] = markdown_data['content']
+                        # Apply glossary link transformation to content
+                        content_with_glossary = process_glossary_links(
+                            markdown_data['content'],
+                            glossary_terms,
+                            glossary_warnings,
+                            step_num,
+                            base_name
+                        )
+                        df.at[idx, text_col] = content_with_glossary
                     else:
                         # Insert error message for missing file
                         step_num = row.get('step', 'unknown')
-                        df.at[idx, title_col] = 'Content Missing'
+                        df.at[idx, title_col] = get_lang_string('errors.object_warnings.content_missing_label')
                         error_html = f'''<div class="alert alert-warning" role="alert">
-    <strong>Content file missing:</strong> <code>{file_ref.strip()}</code><br>
-    Please add this file to <code>components/texts/stories/</code> or remove the reference from the CSV.
+    <strong>{get_lang_string('errors.object_warnings.content_file_missing', file_ref=file_ref.strip())}</strong>
 </div>'''
                         df.at[idx, text_col] = error_html
                         msg = f"Missing markdown file for story step {step_num}, {base_name}: {file_ref.strip()}"
@@ -657,34 +1847,67 @@ def process_story(df):
 
         # Check for panel content warnings (missing markdown files)
         # Look for "Content Missing" title which indicates missing files
+        content_missing_label = get_lang_string('errors.object_warnings.content_missing_label')
         for layer in ['layer1', 'layer2']:
             title_col = f'{layer}_title'
-            if title_col in row and row[title_col] == 'Content Missing':
+            if title_col in row and row[title_col] == content_missing_label:
                 # Extract the filename from the error HTML in the text column
                 text_col = f'{layer}_text'
                 text = row.get(text_col, '')
-                # Extract filename from the HTML (it's between <code> tags)
+                # Extract filename from the HTML (it's between <strong> tags)
                 import re
-                filename_match = re.search(r'<code>(.*?)</code>', text)
+                filename_match = re.search(r'<strong>(.*?)</strong>', text)
                 # Get layer number for display (1 or 2)
                 layer_num = layer[-1]  # Get '1' or '2' from 'layer1' or 'layer2'
                 if filename_match:
-                    filename = filename_match.group(1)
+                    # Extract content_file_missing message from HTML
+                    message = filename_match.group(1)
                     all_warnings.append({
                         'step': step_num,
                         'type': 'panel',
-                        'message': f'the file for the layer {layer_num} panel, <code>{filename}</code>, was not found'
+                        'message': message
                     })
                 else:
                     # Fallback if regex fails
                     all_warnings.append({
                         'step': step_num,
                         'type': 'panel',
-                        'message': f'the file for the layer {layer_num} panel was not found'
+                        'message': get_lang_string('errors.object_warnings.layer_file_missing', layer_num=layer_num)
                     })
+
+    # Add glossary link warnings
+    all_warnings.extend(glossary_warnings)
+
+    # Add widget warnings
+    all_warnings.extend(widget_warnings)
 
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings
+
+    # Christmas Tree Mode: Inject fake warnings for testing
+    if christmas_tree:
+        # Inject test warnings for various error types
+        fake_warnings = [
+            {
+                'step': 1,
+                'type': 'viewer',
+                'message': get_lang_string('errors.object_warnings.missing_object_id')
+            },
+            {
+                'step': 2,
+                'type': 'panel',
+                'message': get_lang_string('errors.object_warnings.content_file_missing', file_ref='missing-file.md')
+            },
+            {
+                'step': 3,
+                'type': 'glossary',
+                'term_id': 'nonexistent-term',
+                'message': get_lang_string('errors.object_warnings.glossary_term_not_found', term_id='nonexistent-term')
+            }
+        ]
+        # Add fake warnings to existing warnings
+        df.attrs['viewer_warnings'] = all_warnings + fake_warnings
+        print("🎄 Christmas Tree Mode: Injected test warnings into story")
 
     # Print summary if there were issues
     if warnings:
@@ -694,6 +1917,31 @@ def process_story(df):
 
 def main():
     """Main conversion process"""
+    # Check if Christmas Tree Mode is enabled in _config.yml
+    christmas_tree_mode = False
+    try:
+        config_path = Path('_config.yml')
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                testing_features = config.get('testing-features', {})
+                christmas_tree_mode = testing_features.get('christmas_tree_mode', False)
+
+                if christmas_tree_mode:
+                    print("🎄 Christmas Tree Mode enabled - injecting test objects with errors")
+                else:
+                    # Clean up test object files when Christmas Tree Mode is disabled
+                    objects_dir = Path('_jekyll-files/_objects')
+                    if objects_dir.exists():
+                        test_files = list(objects_dir.glob('test-*.md'))
+                        if test_files:
+                            print("  [INFO] Cleaning up test object files from previous Christmas Tree Mode session")
+                            for test_file in test_files:
+                                test_file.unlink()
+                                print(f"  [INFO] Removed {test_file.name}")
+    except Exception as e:
+        print(f"  [WARN] Could not read Christmas Tree Mode setting: {e}")
+
     data_dir = Path('_data')
     data_dir.mkdir(exist_ok=True)
 
@@ -709,35 +1957,61 @@ def main():
         process_project_setup
     )
 
-    # Convert objects
-    csv_to_json(
-        'components/structures/objects.csv',
-        '_data/objects.json',
-        process_objects
-    )
+    # Convert objects (with optional Christmas Tree mode)
+    if christmas_tree_mode:
+        csv_to_json(
+            'components/structures/objects.csv',
+            '_data/objects.json',
+            lambda df: process_objects(df, christmas_tree=True)
+        )
+    else:
+        csv_to_json(
+            'components/structures/objects.csv',
+            '_data/objects.json',
+            process_objects
+        )
 
     # Note: Glossary is now sourced directly from components/texts/glossary/
     # and processed by generate_collections.py
 
-    # Convert story files
+    # Convert story files (with optional Christmas Tree mode)
     # Look for any CSV files that start with "story-" or "chapter-"
-    for csv_file in structures_dir.glob('story-*.csv'):
-        json_filename = csv_file.stem + '.json'
-        json_file = data_dir / json_filename
-        csv_to_json(
-            str(csv_file),
-            str(json_file),
-            process_story
-        )
+    if christmas_tree_mode:
+        for csv_file in structures_dir.glob('story-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                lambda df: process_story(df, christmas_tree=True)
+            )
 
-    for csv_file in structures_dir.glob('chapter-*.csv'):
-        json_filename = csv_file.stem + '.json'
-        json_file = data_dir / json_filename
-        csv_to_json(
-            str(csv_file),
-            str(json_file),
-            process_story
-        )
+        for csv_file in structures_dir.glob('chapter-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                lambda df: process_story(df, christmas_tree=True)
+            )
+    else:
+        for csv_file in structures_dir.glob('story-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                process_story
+            )
+
+        for csv_file in structures_dir.glob('chapter-*.csv'):
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                process_story
+            )
 
     print("-" * 50)
     print("Conversion complete!")
