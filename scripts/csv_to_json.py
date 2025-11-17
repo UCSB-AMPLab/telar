@@ -266,7 +266,7 @@ def get_widget_id():
 
 def validate_image_path(image_path, file_context):
     """
-    Validate that an image exists at the expected path.
+    Validate that an image exists at the expected path (case-insensitive for extensions).
     Skips validation for external URLs (http:// or https://).
 
     Args:
@@ -281,7 +281,25 @@ def validate_image_path(image_path, file_context):
         return (True, image_path)
 
     full_path = Path('assets/images') / image_path
-    return (full_path.exists(), str(full_path))
+
+    # Check exact path first
+    if full_path.exists():
+        return (True, str(full_path))
+
+    # If not found, try case-insensitive extension match
+    # e.g., if looking for image.jpg, also try image.JPG
+    if full_path.suffix:
+        # Try with uppercase extension
+        path_with_upper = full_path.with_suffix(full_path.suffix.upper())
+        if path_with_upper.exists():
+            return (True, str(path_with_upper))
+
+        # Try with lowercase extension
+        path_with_lower = full_path.with_suffix(full_path.suffix.lower())
+        if path_with_lower.exists():
+            return (True, str(path_with_lower))
+
+    return (False, str(full_path))
 
 
 def get_image_dimensions(image_path):

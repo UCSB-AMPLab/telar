@@ -63,6 +63,23 @@ All notable changes to Telar will be documented in this file.
 - Disabled keyboard arrow navigation on carousels to prevent interference with story navigation
 - **Benefit**: Cleaner visual presentation, better accessibility with non-overlaid captions, improved usability
 
+#### Extended Image Format Support
+- Added native support for HEIC (iPhone photos), WebP, and TIFF image formats
+- **Supported formats**: JPG, PNG, HEIC, HEIF, WebP, TIFF
+- **Case-insensitive matching**: File extensions work regardless of case (`.JPG`, `.png`, `.HEIC`, etc.)
+- **Implementation**:
+  - Added `pillow-heif>=0.13.0` dependency for HEIC/HEIF support
+  - Enhanced `find_image_for_object()` to check both lowercase and uppercase extension variants
+  - Updated format conversion logic to handle RGBA, LA (transparency), and P (palette) modes
+  - All non-JPEG formats automatically converted to JPEG during IIIF tile generation
+  - Original files preserved in repository (conversion is temporary for tile generation only)
+- **User experience**:
+  - iPhone photos work directly without manual conversion
+  - Format-specific console messages during processing (e.g., "Converting HEIC to JPEG for IIIF processing")
+  - Fixed false negative warnings when images have uppercase extensions
+- **Benefit**: Users can upload images from any modern device without format conversion, simpler workflow, better iPhone integration
+- **Files modified**: `requirements.txt`, `generate_iiif.py`, `csv_to_json.py`, documentation
+
 ### Changed
 
 #### Flattened Image Directory Structure
@@ -78,7 +95,7 @@ All notable changes to Telar will be documented in this file.
 #### CSV-Driven IIIF Tile Generation
 - `generate_iiif.py` now processes only objects listed in `objects.csv` (via `objects.json`)
 - Skips objects with external IIIF manifests (only generates tiles for self-hosted images)
-- Automatically finds image files by `object_id` (supports multiple extensions: jpg, jpeg, png, tif, tiff)
+- Automatically finds image files by `object_id` (supports multiple extensions: jpg, jpeg, png, heic, heif, webp, tif, tiff; case-insensitive)
 - **Before**: Processed all images in `components/images/objects/` directory
 - **After**: Processes only objects referenced in CSV without external manifests
 - **Benefit**: Faster generation, no orphaned tiles, explicit control over which images get processed

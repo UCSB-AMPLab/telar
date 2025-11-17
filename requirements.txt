@@ -12,3 +12,6 @@ iiif>=1.0.0
 
 # Image processing (required by iiif-static)
 Pillow>=10.0.0
+
+# HEIC/HEIF support (iPhone photos)
+pillow-heif>=0.13.0

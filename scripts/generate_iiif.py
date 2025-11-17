@@ -19,14 +19,23 @@ def check_dependencies():
     try:
         from iiif.static import IIIFStatic
         from PIL import Image, ImageOps
-        return True
     except ImportError as e:
         print("❌ Missing required dependencies!")
         print("\nPlease install:")
         print("  pip install iiif Pillow")
         print("\nOr use the provided requirements file:")
-        print("  pip install -r scripts/requirements.txt")
+        print("  pip install -r requirements.txt")
         return False
+
+    # Check for optional HEIC support
+    try:
+        from pillow_heif import register_heif_opener
+    except ImportError:
+        print("⚠️  pillow-heif not installed - HEIC/HEIF files will not be supported")
+        print("   To enable HEIC support: pip install pillow-heif")
+        print()
+
+    return True
 
 def get_base_url_from_config():
     """
@@ -64,6 +73,13 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
     from PIL import Image, ImageOps
     import tempfile
 
+    # Register HEIF plugin for HEIC/HEIF support if available
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+    except ImportError:
+        pass  # HEIC support unavailable
+
     # Preprocess PNG images with transparency (RGBA) to RGB
     # because IIIF library saves as JPEG which doesn't support alpha
     processed_image_path = image_path
@@ -82,15 +98,46 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
         elif img != img_before_exif:
             print(f"  ↻ Applied EXIF orientation correction")
 
-        if img.mode == 'RGBA':
-            print(f"  ⚠️  Converting RGBA to RGB (removing transparency)")
-            # Create RGB image with white background
-            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
-            rgb_img.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+        # Convert image to RGB if needed and create JPEG for IIIF processing
+        needs_conversion = False
+        converted_img = img
 
-            # Save to temporary file
+        # Handle transparency/alpha channel modes
+        if img.mode in ['RGBA', 'LA']:
+            print(f"  ⚠️  Converting {img.mode} to RGB (removing transparency)")
+            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+            rgb_img.paste(img, mask=img.split()[-1])  # Use alpha channel as mask
+            converted_img = rgb_img
+            needs_conversion = True
+
+        # Handle palette mode (GIF, some PNGs)
+        elif img.mode == 'P':
+            print(f"  ⚠️  Converting palette mode to RGB")
+            converted_img = img.convert('RGB')
+            needs_conversion = True
+
+        # Handle other uncommon modes
+        elif img.mode not in ['RGB', 'L']:
+            print(f"  ⚠️  Converting {img.mode} mode to RGB")
+            converted_img = img.convert('RGB')
+            needs_conversion = True
+
+        # Check if we need to convert to JPEG (for non-JPEG formats)
+        file_ext = image_path.suffix.lower()
+        if needs_conversion or file_ext not in ['.jpg', '.jpeg']:
+            # Show format-specific message
+            if file_ext in ['.heic', '.heif']:
+                print(f"  ⚠️  Converting HEIC to JPEG for IIIF processing")
+            elif file_ext == '.webp':
+                print(f"  ⚠️  Converting WebP to JPEG for IIIF processing")
+            elif file_ext in ['.tif', '.tiff']:
+                print(f"  ⚠️  Converting TIFF to JPEG for IIIF processing")
+            elif file_ext == '.png' and not needs_conversion:
+                print(f"  ⚠️  Converting PNG to JPEG for IIIF processing")
+
+            # Save to temporary JPEG file
             temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-            rgb_img.save(temp_file.name, 'JPEG', quality=95)
+            converted_img.save(temp_file.name, 'JPEG', quality=95)
             processed_image_path = Path(temp_file.name)
             temp_file.close()
     except Exception as e:
@@ -319,7 +366,7 @@ def load_objects_needing_tiles():
 
 def find_image_for_object(object_id, source_dir):
     """
-    Find image file for a given object_id, checking multiple extensions
+    Find image file for a given object_id, checking multiple extensions (case-insensitive)
 
     Args:
         object_id: Object identifier
@@ -329,12 +376,15 @@ def find_image_for_object(object_id, source_dir):
         Path object if found, None otherwise
     """
     source_path = Path(source_dir)
-    image_extensions = ['.jpg', '.jpeg', '.png', '.tif', '.tiff']
+    # Priority order: Common formats first, then newer/specialized formats
+    image_extensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.tif', '.tiff']
 
     for ext in image_extensions:
-        image_path = source_path / f"{object_id}{ext}"
-        if image_path.exists():
-            return image_path
+        # Check both lowercase and uppercase extensions
+        for case_ext in [ext, ext.upper()]:
+            image_path = source_path / f"{object_id}{case_ext}"
+            if image_path.exists():
+                return image_path
 
     return None
 
@@ -413,7 +463,7 @@ def generate_iiif_tiles(source_dir='components/images', output_dir='iiif/objects
 
         if not image_file:
             print(f"  ⚠️  No image file found for {object_id}")
-            print(f"      Checked: {object_id}.jpg, .jpeg, .png, .tif, .tiff")
+            print(f"      Checked: {object_id}.jpg, .jpeg, .png, .heic, .heif, .webp, .tif, .tiff (case-insensitive)")
             skipped_count += 1
             print()
             continue
