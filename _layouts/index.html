@@ -323,6 +323,17 @@ title: Home
   {% endif %}
 </div>
 
+<script id="telar-stories-data" type="application/json">
+[
+  {% for story in site.stories %}
+  {
+    "title": {{ story.title | jsonify }},
+    "url": "{{ story.url | absolute_url }}"
+  }{% unless forloop.last %},{% endunless %}
+  {% endfor %}
+]
+</script>
+
 <script>
 // Pass objects data for manifest lookup
 window.objectsData = {{ site.data.objects | jsonify }};

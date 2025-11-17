@@ -10,20 +10,17 @@
   'use strict';
 
   // State
-  let currentContext = 'story'; // 'story' or 'site'
   let currentStoryUrl = window.location.href;
   let availableStories = [];
 
   // DOM elements
   const sharePanel = document.getElementById('panel-share');
-  const sharePanelTitle = document.getElementById('panel-share-title');
 
   // Share Link tab elements
   const shareUrlInput = document.getElementById('share-url-input');
   const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
   const shareSiteUrlInput = document.getElementById('share-site-url-input');
   const shareCopySiteBtn = document.getElementById('share-copy-site-btn');
-  const shareStorySelectors = document.querySelectorAll('.share-story-selector');
   const shareStorySelect = document.getElementById('share-story-select');
 
   // Embed Code tab elements
@@ -34,16 +31,13 @@
   const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
   const embedStorySelect = document.getElementById('embed-story-select');
 
-  // Success messages
-  const successMessages = document.querySelectorAll('.share-success-message');
-
   /**
    * Initialize share panel
    */
   function init() {
     if (!sharePanel) return;
 
-    // Detect context from share button click
+    // Initialize URLs on panel open
     sharePanel.addEventListener('show.bs.modal', handlePanelOpen);
 
     // Event listeners
@@ -79,36 +73,45 @@
       embedStorySelect.addEventListener('change', handleStoryChange);
     }
 
-    // Load available stories for homepage context
+    // Load available stories for homepage context (if selectors exist)
     loadAvailableStories();
 
     console.log('[Telar Share] Share panel initialized');
   }
 
   /**
-   * Handle panel opening - detect context and update UI
+   * Handle panel opening - initialize URLs
    */
   function handlePanelOpen(event) {
-    // Get context from triggering button
-    const trigger = event.relatedTarget;
-    if (trigger) {
-      currentContext = trigger.dataset.shareContext || 'story';
-    }
+    // Check if we're on a story page or homepage by checking if story selectors exist
+    const isHomepage = shareStorySelect !== null;
 
-    // Update panel based on context
-    if (currentContext === 'site') {
-      showStorySelectors();
-      updatePanelTitle('title_site');
+    if (isHomepage) {
+      // Homepage: Clear story URL and disable copy buttons until story selected
+      currentStoryUrl = '';
 
-      // Set to first story if available
-      if (availableStories.length > 0) {
-        currentStoryUrl = availableStories[0].url;
-      } else {
-        currentStoryUrl = window.location.origin + window.location.pathname;
+      // Reset story selectors to default option
+      if (shareStorySelect) {
+        shareStorySelect.value = '';
+      }
+      if (embedStorySelect) {
+        embedStorySelect.value = '';
+      }
+
+      if (shareUrlInput) {
+        shareUrlInput.value = '';
+      }
+      if (shareCopyLinkBtn) {
+        shareCopyLinkBtn.disabled = true;
+      }
+      if (embedCodeTextarea) {
+        embedCodeTextarea.value = '';
+      }
+      if (embedCopyCodeBtn) {
+        embedCopyCodeBtn.disabled = true;
       }
     } else {
-      hideStorySelectors();
-      updatePanelTitle('title');
+      // Story page: Set current story URL
       currentStoryUrl = window.location.href;
     }
 
@@ -117,42 +120,6 @@
 
     // Update embed code
     updateEmbedCode();
-  }
-
-  /**
-   * Update panel title based on context
-   */
-  function updatePanelTitle(key) {
-    if (!sharePanelTitle) return;
-
-    // Get language strings from data attribute or fallback
-    const langData = document.documentElement.dataset.lang;
-    if (langData) {
-      try {
-        const lang = JSON.parse(langData);
-        sharePanelTitle.textContent = lang.share[key] || lang.share.title;
-      } catch (e) {
-        console.warn('[Telar Share] Could not parse language data');
-      }
-    }
-  }
-
-  /**
-   * Show story selectors for site context
-   */
-  function showStorySelectors() {
-    shareStorySelectors.forEach(selector => {
-      selector.style.display = 'block';
-    });
-  }
-
-  /**
-   * Hide story selectors for story context
-   */
-  function hideStorySelectors() {
-    shareStorySelectors.forEach(selector => {
-      selector.style.display = 'none';
-    });
   }
 
   /**
@@ -180,8 +147,27 @@
     [shareStorySelect, embedStorySelect].forEach(select => {
       if (!select) return;
 
+      // Clear existing options but preserve the default "Select" option
       select.innerHTML = '';
 
+      // Add default "Select" option
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      // Get the select option text from the first option if it exists, or use a fallback
+      const langData = document.documentElement.dataset.lang;
+      if (langData) {
+        try {
+          const lang = JSON.parse(langData);
+          defaultOption.textContent = lang.share.select_option || 'Select';
+        } catch (e) {
+          defaultOption.textContent = 'Select';
+        }
+      } else {
+        defaultOption.textContent = 'Select';
+      }
+      select.appendChild(defaultOption);
+
+      // Add story options
       availableStories.forEach(story => {
         const option = document.createElement('option');
         option.value = story.url;
@@ -195,7 +181,29 @@
    * Handle story selection change
    */
   function handleStoryChange(event) {
-    currentStoryUrl = event.target.value;
+    const selectedValue = event.target.value;
+
+    // Update currentStoryUrl based on selection
+    currentStoryUrl = selectedValue;
+
+    // Sync both dropdowns if they exist
+    if (event.target.id === 'share-story-select' && embedStorySelect) {
+      embedStorySelect.value = selectedValue;
+    } else if (event.target.id === 'embed-story-select' && shareStorySelect) {
+      shareStorySelect.value = selectedValue;
+    }
+
+    // Enable/disable copy buttons based on whether a story is selected
+    const hasSelection = currentStoryUrl !== '';
+
+    if (shareCopyLinkBtn) {
+      shareCopyLinkBtn.disabled = !hasSelection;
+    }
+    if (embedCopyCodeBtn) {
+      embedCopyCodeBtn.disabled = !hasSelection;
+    }
+
+    // Update URLs and embed code
     updateShareUrl();
     updateEmbedCode();
   }
@@ -204,17 +212,27 @@
    * Update share URL input
    */
   function updateShareUrl() {
-    if (!shareUrlInput) return;
-
-    // Clean the story URL - remove hash and query parameters (viewer state)
-    const cleanUrl = window.location.origin + window.location.pathname;
-    shareUrlInput.value = cleanUrl;
-
-    // Also populate site URL (base URL - just the first path segment)
+    // Always populate site URL
     if (shareSiteUrlInput) {
       const pathParts = window.location.pathname.split('/').filter(p => p);
       const baseUrl = window.location.origin + (pathParts.length > 0 ? '/' + pathParts[0] + '/' : '/');
       shareSiteUrlInput.value = baseUrl;
+    }
+
+    // For story URL: only populate if we have a current story URL
+    if (shareUrlInput) {
+      if (currentStoryUrl) {
+        // Clean the story URL - remove hash and query parameters (viewer state)
+        try {
+          const url = new URL(currentStoryUrl);
+          const cleanUrl = url.origin + url.pathname;
+          shareUrlInput.value = cleanUrl;
+        } catch (e) {
+          shareUrlInput.value = currentStoryUrl;
+        }
+      } else {
+        shareUrlInput.value = '';
+      }
     }
   }
 
@@ -263,6 +281,11 @@
    * Generate embed code
    */
   function generateEmbedCode() {
+    // Don't generate code if no story selected
+    if (!currentStoryUrl) {
+      return '';
+    }
+
     const width = embedWidthInput.value.trim() || '100%';
     const height = embedHeightInput.value.trim() || '800';
 
@@ -321,11 +344,27 @@
    * Get story title for iframe title attribute
    */
   function getStoryTitle() {
-    // Try to get from selected story
-    if (currentContext === 'site' && shareStorySelect) {
+    // Try to get from selected story in dropdown
+    // Check both dropdowns (they should be synced, but check both to be safe)
+    if (shareStorySelect && shareStorySelect.value) {
       const selectedOption = shareStorySelect.options[shareStorySelect.selectedIndex];
-      if (selectedOption) {
+      if (selectedOption && selectedOption.value) {
         return selectedOption.textContent;
+      }
+    }
+
+    if (embedStorySelect && embedStorySelect.value) {
+      const selectedOption = embedStorySelect.options[embedStorySelect.selectedIndex];
+      if (selectedOption && selectedOption.value) {
+        return selectedOption.textContent;
+      }
+    }
+
+    // Fallback: search availableStories array for matching URL
+    if (currentStoryUrl && availableStories.length > 0) {
+      const matchingStory = availableStories.find(story => story.url === currentStoryUrl);
+      if (matchingStory) {
+        return matchingStory.title;
       }
     }
 
