@@ -50,9 +50,9 @@ alt: Inuit map of Greenland from 1926
 caption: Map of the Crown Prince Islands, Disko Bay, Greenland. Place and date of creation: Disko Bay, 1926. Taken from the Library of Congress, Washington, D. C.
 :::
 
-## [[kogi-loom|The Kogi Loom]]
+## The Kogi Loom
 
-Among the Kogi people of the Sierra Nevada of Santa Marta, for example, the loom is made as a map that depicts the geography of their home region.
+Among the Kogi people of the Sierra Nevada of Santa Marta, for example, the [[kogi-loom|loom]] is made as a map that depicts the geography of their home region.
 
 Among the Kogi of the Sierra Nevada of Santa Marta, a loom—in addition to being a tool for weaving—is a map that represents the human body and the geography of the Sierra.
 
