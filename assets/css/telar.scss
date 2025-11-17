@@ -509,6 +509,12 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
 }
 
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4 {
+  color: var(--color-panel-layer2-text);
+}
+
 /* Panel buttons styling */
 #panel-layer1 .btn-close,
 #panel-layer2 .btn-close {
@@ -1705,6 +1711,19 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* Panel-specific widget colors: widgets use opposite panel colors */
+#panel-layer1 .telar-widget {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer2 .telar-widget {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
 /* Widget Error Display */
 .telar-widget-error {
   padding: 1rem;
@@ -1764,6 +1783,27 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.85rem;
   opacity: 0.9;
   color: #fff;
+}
+
+/* Panel-specific carousel caption colors */
+#panel-layer1 .telar-widget-carousel .carousel-caption {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-carousel .carousel-caption small,
+#panel-layer1 .telar-widget-carousel .carousel-caption .caption-credit {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#panel-layer2 .telar-widget-carousel .carousel-caption {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-carousel .carousel-caption small,
+#panel-layer2 .telar-widget-carousel .carousel-caption .caption-credit {
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .telar-widget-carousel .carousel-control-prev,
@@ -2021,6 +2061,45 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1rem;
 }
 
+/* Panel-specific tabs styling */
+#panel-layer1 .telar-widget-tabs {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-tabs {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-link {
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer2 .telar-widget-tabs {
+  background: var(--color-panel-layer1-bg);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-tabs {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-link {
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-link.active {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+}
+
 /* ========================================
    ACCORDION WIDGET
    ======================================== */
@@ -2103,6 +2182,45 @@ h1, h2, h3, h4, h5, h6 {
 .telar-widget-accordion .accordion-body h4 {
   margin-top: 1.5rem;
   margin-bottom: 1rem;
+}
+
+/* Panel-specific accordion styling */
+#panel-layer1 .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer1-bg);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-button {
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer1-text);
 }
 
 /* ========================================
@@ -2270,33 +2388,54 @@ body.embed-mode {
     display: inline;
   }
 
-  /* Mobile-style step navigation in embed mode (even on desktop viewports) */
+  /**
+   * Embed mode navigation pattern (v0.5.0):
+   * - Button navigation (like mobile) for iframe/Canvas LMS compatibility
+   * - Desktop-style layout and vertical centering
+   * - Static positioning instead of absolute (simpler show/hide logic)
+   */
+
   /* Hide all story steps by default */
   .story-step {
-    display: none !important;
-    position: static !important;
-    height: 100vh !important;
-    transform: none !important;
-    opacity: 1 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    display: none;
+    position: static;
+    height: 100vh;
+    width: 100%;
+    padding: 2rem;
+    background: #fff;
+    border-left: 3px solid transparent;
+    /* Remove desktop transforms and transitions */
+    transform: none;
+    opacity: 1;
+    transition: none;
   }
 
-  /* Show only the active step */
+  /* Show only the active step with desktop flex layout */
   .story-step.mobile-active {
-    display: flex !important;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Preserve desktop-style vertical centering via .step-content */
+  .story-step .step-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100%;
   }
 
   /* Show mobile navigation buttons in embed mode (even on desktop viewports) */
+  /* Positioned over narrative panel, horizontally centered, with dynamic bottom spacing */
   .mobile-nav {
     position: fixed !important;
-    right: 1rem !important;
-    bottom: 50% !important;
-    transform: translateY(50%) !important;
+    left: 20% !important;
+    bottom: max(8%, 1.5rem) !important;
+    transform: translateX(-50%) !important;
     z-index: 1040 !important;
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: row !important;
     gap: 0.75rem !important;
   }
 
@@ -2314,6 +2453,154 @@ body.embed-mode {
     align-items: center !important;
     justify-content: center !important;
   }
+
+  .mobile-nav button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 1) !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .mobile-nav .mobile-prev:hover:not(:disabled) {
+    transform: scale(1.1) translateY(-4px) !important;
+  }
+
+  .mobile-nav .mobile-next:hover:not(:disabled) {
+    transform: scale(1.1) translateY(4px) !important;
+  }
+
+  .mobile-nav button:disabled {
+    opacity: 0.3 !important;
+    cursor: not-allowed !important;
+  }
+
+  /**
+   * Width and height-responsive typography for embed mode
+   * Ensures content remains readable in narrow or short iframes
+   */
+
+  /* Narrow viewports (< 900px width) */
+  @media (max-width: 900px) {
+    .story-step {
+      padding: 1.5rem !important;
+    }
+
+    .story-intro .intro-title {
+      font-size: 2.75rem !important;
+      line-height: 1.2 !important;
+    }
+
+    .story-intro .intro-byline {
+      font-size: 0.95rem !important;
+    }
+
+    .story-intro .intro-description {
+      font-size: 1rem !important;
+      line-height: 1.6 !important;
+    }
+
+    .story-step .step-content {
+      font-size: 1rem !important;
+      line-height: 1.7 !important;
+    }
+
+    .story-step h2 {
+      font-size: 1.65rem !important;
+    }
+  }
+
+  /* Medium-short viewports (< 650px height) */
+  @media (max-height: 650px) {
+    .story-step {
+      padding: 1.5rem !important;
+    }
+
+    .story-intro .intro-title {
+      font-size: 2.5rem !important;
+      line-height: 1.2 !important;
+      margin-bottom: 0.75rem !important;
+    }
+
+    .story-intro .intro-byline {
+      font-size: 0.95rem !important;
+      margin-bottom: 0.75rem !important;
+    }
+
+    .story-intro .intro-description {
+      font-size: 1rem !important;
+      line-height: 1.5 !important;
+      margin-bottom: 0.75rem !important;
+    }
+
+    .story-step .step-content {
+      font-size: 1rem !important;
+      line-height: 1.6 !important;
+    }
+
+    .story-step h2 {
+      font-size: 1.5rem !important;
+      margin-bottom: 0.75rem !important;
+    }
+  }
+
+  /* Very short viewports (< 500px height) */
+  @media (max-height: 500px) {
+    .story-step {
+      padding: 1rem !important;
+    }
+
+    .story-intro .intro-title {
+      font-size: 2rem !important;
+      line-height: 1.1 !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-intro .intro-byline {
+      font-size: 0.875rem !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-intro .intro-description {
+      font-size: 0.95rem !important;
+      line-height: 1.4 !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-step .step-content {
+      font-size: 0.95rem !important;
+      line-height: 1.5 !important;
+    }
+
+    .story-step h2 {
+      font-size: 1.25rem !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-step p {
+      margin-bottom: 0.75rem !important;
+    }
+  }
+}
+
+/* Mobile-sized embeds: revert to mobile positioning (right side, vertically stacked) */
+/* This media query is at root level to ensure proper source order over desktop embed rules */
+@media (max-width: 768px) {
+  body.embed-mode .mobile-nav {
+    right: 1rem !important;
+    left: auto !important;
+    bottom: 50% !important;
+    transform: translateY(50%) !important;
+    flex-direction: column !important;
+  }
+
+  body.embed-mode .mobile-nav button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 1) !important;
+    transform: scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  body.embed-mode .mobile-nav .mobile-prev:hover:not(:disabled),
+  body.embed-mode .mobile-nav .mobile-next:hover:not(:disabled) {
+    transform: scale(1.05) !important;
+  }
 }
 
 /* "View full site" floating modal (only visible in embed mode) */
@@ -2322,7 +2609,7 @@ body.embed-mode {
   top: 20px;
   left: 20px;
   z-index: 1050;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.8);
   border: 1px solid #dee2e6;
   border-radius: 0.5rem;
   padding: 14px 18px;
@@ -2335,6 +2622,7 @@ body.embed-mode {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   max-width: min(380px, calc(100% - 40px));
   line-height: 1.5;
+  backdrop-filter: blur(2px);
 
   &-text {
     color: #6c757d;

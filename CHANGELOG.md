@@ -22,6 +22,14 @@ All notable changes to Telar will be documented in this file.
 - Embed mode CSS to hide navigation chrome (home button)
 - Navigation buttons always visible in embed mode (same as mobile)
 
+#### Responsive Typography for Slide-Over Panels
+- Extended robust width- and height-based responsive typography to panel contents
+- **Problem**: Panel text used fixed font sizes, didn't scale with viewport dimensions
+- **Solution**: Apply same clamp()-based fluid typography used in story steps
+- Added max-width constraints for images in panels to prevent overflow on narrow screens
+- **Benefit**: Improved readability across all device sizes, especially mobile and tablets
+- **Technical**: Uses CSS `clamp()` for fluid font scaling based on viewport width and height
+
 ### Changed
 
 #### Flattened Image Directory Structure
@@ -113,6 +121,68 @@ All notable changes to Telar will be documented in this file.
 **Files Modified:**
 - `scripts/csv_to_json.py` - 1,382 lines restored (746 lines total)
 - `scripts/csv_to_json.py.backup-broken` - Preserved for reference
+
+#### CRITICAL: v0.4.0 Feature Restoration - Widget Display and Glossary Links (Phase 2)
+- **Continuation of Phase 1**: Restored remaining v0.4.0 features deleted in commit f62acee
+- **Focus**: Frontend display components (CSS, JavaScript, HTML) for widgets and glossary functionality
+
+**What Was Restored:**
+
+1. **Widget Panel-Specific Styling** (assets/css/telar.scss) - ~60 lines
+   - Panel-specific widget backgrounds: Layer 1 widgets use Layer 2 panel colors for visual contrast
+   - Carousel caption panel colors: Layer 1 captions use Layer 2 bg/text, Layer 2 captions use Layer 1 bg/text
+   - Tabs panel-specific styling: Tab navigation and content colored according to parent panel
+   - Accordion panel-specific styling: Accordion items, buttons, and bodies inherit panel colors
+
+2. **Enhanced Glossary Link Functionality** (assets/js/telar.js) - ~40 lines
+   - Support for both `.glossary-term-link` (glossary index) and `.glossary-inline-link` (story content) selectors
+   - Container parameter for `initializeGlossaryLinks()` to support dynamic content re-initialization
+   - Extracted `handleGlossaryLinkClick()` function for proper event listener cleanup
+   - Export to `window.Telar.initializeGlossaryLinks` for use in dynamically loaded panels
+   - **Title extraction fix**: Glossary panels now show proper term title from metadata instead of link text
+     - JavaScript extracts `<h1>` content from fetched glossary page
+     - Replaces temporary link text with actual term title
+
+3. **Widget Initialization** (_layouts/story.html)
+   - Added `<script src="{{ '/assets/js/widgets.js' | relative_url }}"></script>` after story.js
+   - Enables Bootstrap carousel initialization for carousel widgets
+
+4. **Glossary Panel Language Integration** (_includes/panels.html) - ~15 lines
+   - Restored "Key term:" prefix with language support (`{{ lang.panels.glossary_term_prefix }}`)
+   - Replaced all hardcoded English strings with Liquid variables:
+     - Back buttons: `← Back` → `{{ lang.buttons.back }}`
+     - Panel titles: `Panel Title` → `{{ lang.panels.default_title }}`
+     - Glossary title: `Glossary Term` → `{{ lang.panels.glossary_term_title }}`
+   - Restored CSS for `.glossary-term-prefix` (opacity: 0.5, margin-bottom: 0.25rem)
+   - **Multilingual support**: Works with existing English/Spanish language files
+
+**Impact - Features Restored:**
+- **Widget visual integration**: Widgets now properly themed with opposite panel colors
+  - Example: Dark purple widget backgrounds on white Layer 1 panels
+  - Example: White widget backgrounds on dark purple Layer 2 panels
+- **Carousel functionality**: Carousel navigation (prev/next/indicators) now works correctly
+- **Glossary link clicking**: Both glossary index links and inline `[[term]]` links open glossary panel
+- **Proper glossary titles**: Panels show "Livestock" instead of link text "cattle"
+- **Multilingual UI**: Panel labels display in configured language (English or Spanish)
+
+**Testing:**
+- Build successful: `bundle exec jekyll build` completes without errors
+- Language strings verified in built HTML:
+  - English (en): "Key term:", "← Back"
+  - Spanish (es): "Palabra clave:", "← Atrás"
+- Widget HTML structure validated in `_data/story-1.json`
+- Glossary inline links found with correct `data-term-id` attributes
+
+**Files Modified:**
+- `assets/css/telar.scss` - ~60 lines added (panel-specific widget styling)
+- `assets/js/telar.js` - ~40 lines added/modified (enhanced glossary links, title extraction)
+- `_layouts/story.html` - 1 line added (widgets.js script tag)
+- `_includes/panels.html` - ~15 lines modified (language strings, glossary prefix)
+- `_data/*.json` - Regenerated with restored widget HTML
+
+**Backups Created:**
+- `assets/css/telar.scss.backup-pre-widget-restore`
+- `assets/js/telar.js.backup-pre-widget-restore`
 
 ---
 
