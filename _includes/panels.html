@@ -125,6 +125,16 @@
     border-radius: 3px;
     font-size: 0.875em;
   }
+
+  /* Mobile: override all image sizes to prevent overflow */
+  @media (max-width: 768px) {
+    .offcanvas-body img,
+    .offcanvas-body img.img-sm,
+    .offcanvas-body img.img-md,
+    .offcanvas-body img.img-lg {
+      max-width: 100% !important;
+    }
+  }
 </style>
 
 <script>

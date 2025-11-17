@@ -30,6 +30,16 @@ All notable changes to Telar will be documented in this file.
 - **Benefit**: Improved readability across all device sizes, especially mobile and tablets
 - **Technical**: Uses CSS `clamp()` for fluid font scaling based on viewport width and height
 
+#### Mobile Panel Quality-of-Life Improvements
+- Fixed navigation button cutoff in mobile/embed mode
+  - **Problem**: Panel-trigger buttons were cut off when story-step content exceeded 40vh height
+  - **Solution**: Changed story steps from `overflow: hidden` to `overflow-y: auto` on mobile
+  - **Benefit**: Users can now scroll within step panels to see all content and buttons
+- Fixed panel image overflow on mobile devices
+  - **Problem**: Images with fixed pixel widths (450px default, sm/md/lg classes) overflowed on narrow screens
+  - **Solution**: Added mobile media query to force all panel images to `max-width: 100%` on screens ≤768px
+  - **Benefit**: Images now respect panel width constraints on mobile while preserving desktop sizing behavior
+
 ### Changed
 
 #### Flattened Image Directory Structure

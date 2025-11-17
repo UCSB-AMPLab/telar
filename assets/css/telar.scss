@@ -994,7 +994,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Panel Images */
 .offcanvas-body img {
-  max-width: 300px;
+  max-width: 100%;
   height: auto;
   display: block;
   margin: 1rem 0;
@@ -1038,7 +1038,7 @@ h1, h2, h3, h4, h5, h6 {
     min-height: 40vh;
     max-height: 40vh;
     padding: 1.5rem;
-    overflow: hidden;
+    overflow-y: auto;
     transform: none !important;
     opacity: 1 !important;
   }
@@ -1390,27 +1390,37 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Offcanvas panels - 10-15% reduction */
-  .offcanvas-body {
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
     padding: 1.75rem !important;
-    font-size: 0.95rem;
-    line-height: 1.7;
+    font-size: 1rem;
+    line-height: 1.5;
   }
 
-  .offcanvas-body .offcanvas-title {
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
     font-size: 1.75rem;
     margin-bottom: 1.3rem;
   }
 
-  .offcanvas-body blockquote {
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
     margin: 1.3rem 0;
     padding: 0.9rem 1.3rem;
   }
 
-  .offcanvas-body hr {
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
     margin: 2.2rem 0 1.3rem 0;
   }
 
-  .offcanvas-body p:has(a[href^="#_ftnref"]) {
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
     font-size: 0.85rem;
     margin-bottom: 0.65rem;
   }
@@ -1487,33 +1497,45 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Offcanvas panels - 20-25% reduction */
-  .offcanvas-body {
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
     padding: 1.5rem !important;
-    font-size: 0.875rem;
-    line-height: 1.6;
+    font-size: 0.95rem;
+    line-height: 1.4;
   }
 
-  .offcanvas-body .offcanvas-title {
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
     font-size: 1.6rem;
     margin-bottom: 1.2rem;
   }
 
-  .offcanvas-body blockquote {
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
     margin: 1.2rem 0;
     padding: 0.8rem 1.2rem;
   }
 
-  .offcanvas-body hr {
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
     margin: 2rem 0 1.2rem 0;
   }
 
-  .offcanvas-body p:has(a[href^="#_ftnref"]) {
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
     font-size: 0.75rem;
     margin-bottom: 0.6rem;
   }
 
-  .offcanvas-body img {
-    max-width: 250px;
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
     margin: 0.8rem 0;
   }
 
@@ -1583,33 +1605,45 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Offcanvas panels - 30-35% reduction */
-  .offcanvas-body {
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
     padding: 1.3rem !important;
-    font-size: 0.75rem;
-    line-height: 1.5;
+    font-size: 0.9rem;
+    line-height: 1.35;
   }
 
-  .offcanvas-body .offcanvas-title {
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
     font-size: 1.4rem;
     margin-bottom: 1rem;
   }
 
-  .offcanvas-body blockquote {
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
     margin: 1rem 0;
     padding: 0.7rem 1rem;
   }
 
-  .offcanvas-body hr {
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
     margin: 1.75rem 0 1rem 0;
   }
 
-  .offcanvas-body p:has(a[href^="#_ftnref"]) {
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
     font-size: 0.7rem;
     margin-bottom: 0.5rem;
   }
 
-  .offcanvas-body img {
-    max-width: 200px;
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
     margin: 0.7rem 0;
   }
 
