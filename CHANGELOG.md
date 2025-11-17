@@ -190,9 +190,8 @@ All notable changes to Telar will be documented in this file.
 - `_includes/panels.html` - ~15 lines modified (language strings, glossary prefix)
 - `_data/*.json` - Regenerated with restored widget HTML
 
-**Backups Created:**
-- `assets/css/telar.scss.backup-pre-widget-restore`
-- `assets/js/telar.js.backup-pre-widget-restore`
+**Historical Reference:**
+The pre-restoration broken state is preserved in git commit f62acee (2025-11-08)
 
 ---
 
