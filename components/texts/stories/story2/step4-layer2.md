@@ -18,5 +18,5 @@ Use [[markdown|Markdown]] for formatting text, adding links, images, and structu
 Telar includes widgets like **carousels**, **tabs** (like this one), and **accordions** to organize complex information in interactive ways.
 
 ## Glossary
-Define key terms in your glossary and link to them using `[[term]]` syntax throughout your story.
+Define key terms in your glossary and link to them using `\[\[term\]\]` syntax throughout your story.
 :::
