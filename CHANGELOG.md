@@ -80,6 +80,25 @@ All notable changes to Telar will be documented in this file.
 - **Benefit**: Users can upload images from any modern device without format conversion, simpler workflow, better iPhone integration
 - **Files modified**: `requirements.txt`, `generate_iiif.py`, `csv_to_json.py`, documentation
 
+#### Future Media Type Directory Structure
+- Created placeholder directories for upcoming multi-media support: `components/pdfs/`, `components/audio/`, `components/3d-models/`
+- Each directory includes README.md explaining planned features
+- Created main `components/README.md` overview listing all component directories
+- **components/pdfs/** (Planned: v0.6.0)
+  - Multi-page IIIF Presentation API 3.0 support for PDF documents
+  - Page-level navigation and page-specific coordinates
+  - Automatic IIIF manifest generation from PDFs
+- **components/audio/** (Planned: v0.7.0)
+  - HTML5 audio player with waveform visualization
+  - Time-coded navigation and transcript synchronization
+  - Multiple format support (MP3, WAV, OGG, M4A)
+- **components/3d-models/** (Planned: v0.8.0)
+  - Interactive 3D viewer with rotation, zoom, annotation support
+  - Multiple format support (glTF, OBJ, PLY, STL, FBX)
+  - WebXR/AR/VR compatibility
+- **Benefit**: Clear roadmap for users, prevents incompatible custom implementations
+- **Files added**: `components/pdfs/README.md`, `components/audio/README.md`, `components/3d-models/README.md`, `components/README.md`
+
 ### Changed
 
 #### Unified source_url Column Name
