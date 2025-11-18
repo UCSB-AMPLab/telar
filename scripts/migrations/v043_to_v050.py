@@ -548,9 +548,6 @@ class Migration043to050(BaseMigration):
             'scripts/csv_to_json.py': 'CSV-driven processing, flattened paths',
             'scripts/generate_iiif.py': 'Extended format support, case-insensitive',
 
-            # Workflows
-            '.github/workflows/build.yml': 'CSV-aware IIIF monitoring',
-
             # Layouts - embed mode support
             '_layouts/story.html': 'Embed mode support, share button',
             '_layouts/index.html': 'Share button in navbar',
@@ -606,6 +603,10 @@ class Migration043to050(BaseMigration):
         return [
             {
                 'description': 'Optional: Install pillow-heif for HEIC/HEIF support (iPhone photos). Run: pip install pillow-heif. The framework gracefully degrades if not installed, converting HEIC to standard formats.',
+            },
+            {
+                'description': 'Update GitHub Actions workflows: Copy .github/workflows/build.yml and .github/workflows/upgrade.yml from the Telar repository',
+                'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows'
             },
             {
                 'description': 'Test your site build: bundle exec jekyll build',
