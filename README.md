@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.4.2--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-0.5.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
@@ -10,7 +10,7 @@ A minimal computing framework for creating visual narrative exhibitions with III
 
 ---
 
-> **⚠️ Beta Release - v0.4.2-beta**
+> **⚠️ Beta Release - v0.5.0-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
