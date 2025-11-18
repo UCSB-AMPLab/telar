@@ -208,7 +208,7 @@ errors:
     layer_file_missing: "the file for the layer {{ layer_num }} panel was not found"
 
     # Glossary link errors
-    glossary_term_not_found: "the glossary term `{{ term_id }}` referenced in Layer {{ layer_num }} does not exist in <code>components/texts/glossary/</code>"
+    glossary_term_not_found: "In the file <code>{{ file_path }}</code>, you reference the glossary term '<strong>{{ term_id }}</strong>', but this term does not exist in <code>components/texts/glossary/</code>"
     short_glossary_not_found: "Missing glossary term: {{ term_id }}"
     glossary_load_error: "Failed to load glossary term. Please try again."
 

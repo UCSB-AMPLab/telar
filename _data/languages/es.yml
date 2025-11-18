@@ -208,7 +208,7 @@ errors:
     layer_file_missing: "el archivo del panel {{ layer_num }} no se encontró"
 
     # Errores de enlaces al glosario
-    glossary_term_not_found: "el término del glosario `{{ term_id }}` referenciado en la Capa {{ layer_num }} no existe en <code>components/texts/glossary/</code>"
+    glossary_term_not_found: "En el archivo <code>{{ file_path }}</code>, se referencia el término del glosario '<strong>{{ term_id }}</strong>', pero este término no existe en <code>components/texts/glossary/</code>"
     short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
     glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
 

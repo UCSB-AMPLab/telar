@@ -228,7 +228,7 @@ def load_glossary_terms():
     return glossary_terms
 
 
-def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
+def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None, file_path=None):
     """
     Transform [[term]] or [[display|term]] syntax into glossary link HTML.
 
@@ -238,6 +238,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         warnings_list: Optional list to append warning messages
         step_num: Optional step number for warning messages
         layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
+        file_path: Optional file path for warning context
 
     Returns:
         str: Text with glossary links transformed to HTML
@@ -268,12 +269,13 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
             if warnings_list is not None:
                 # Determine layer number for display
                 layer_num = layer_name[-1] if layer_name and layer_name.startswith('layer') else ''
-                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num)
+                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num, file_path=file_path)
                 warnings_list.append({
                     'step': step_num,
                     'type': 'glossary',
                     'term_id': term_id,
                     'layer': layer_name,
+                    'file_path': file_path,
                     'message': warning_msg
                 })
             return f'<span class="glossary-link-error" data-term-id="{term_id}">⚠️ [[{match.group(1)}]]</span>'
@@ -1920,7 +1922,8 @@ def process_story(df, christmas_tree=False):
                             glossary_terms,
                             glossary_warnings,
                             step_num,
-                            base_name
+                            base_name,
+                            file_path
                         )
                         df.at[idx, text_col] = content_with_glossary
                     else:
