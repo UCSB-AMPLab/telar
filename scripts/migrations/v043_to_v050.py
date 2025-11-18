@@ -126,9 +126,10 @@ class Migration043to050(BaseMigration):
 
         # Pattern to match image paths in markdown and HTML
         # Matches: ![alt](path), <img src="path">, background-image: url(path)
+        # Supports relative paths, absolute paths, and full URLs
         img_pattern = re.compile(
             r'(?:!\[.*?\]\(|<img[^>]+src=["\']|url\(["\']?)'
-            r'((?:\.\./)?components/images/(?:objects|additional)/[^)\s"\']+)',
+            r'((?:https?://[^/\s]+(?:/[^\s]*?)?)?(?:\.\./|/)?components/images/(?:objects|additional)/[^)\s"\']+)',
             re.IGNORECASE
         )
 
@@ -369,7 +370,13 @@ class Migration043to050(BaseMigration):
                     new_filename = filename
 
                 # Build new path (flattened)
-                if old_path.startswith('../'):
+                # Check if it's a full URL (preserve protocol and domain)
+                url_match = re.match(r'(https?://[^/]+(?:/[^/]*?)?)/components/images/(?:objects|additional)/', old_path)
+                if url_match:
+                    # Full URL - preserve everything before /components/images/
+                    url_prefix = url_match.group(1)
+                    new_path = f"{url_prefix}/components/images/{new_filename}"
+                elif old_path.startswith('../'):
                     new_path = f"../components/images/{new_filename}"
                 elif old_path.startswith('/'):
                     new_path = f"/components/images/{new_filename}"
@@ -393,9 +400,10 @@ class Migration043to050(BaseMigration):
                 return new_match
 
             # Apply replacements
+            # Supports relative paths, absolute paths, and full URLs
             pattern = re.compile(
                 r'(!\[.*?\]\(|<img[^>]+src=["\']|url\(["\']?)'
-                r'((?:\.\./)?components/images/(?:objects|additional)/[^)\s"\']+)',
+                r'((?:https?://[^/\s]+(?:/[^\s]*?)?)?(?:\.\./|/)?components/images/(?:objects|additional)/[^)\s"\']+)',
                 re.IGNORECASE
             )
 
@@ -602,22 +610,57 @@ class Migration043to050(BaseMigration):
         """
         return [
             {
-                'description': 'Optional: Install pillow-heif for HEIC/HEIF support (iPhone photos). Run: pip install pillow-heif. The framework gracefully degrades if not installed, converting HEIC to standard formats.',
-            },
-            {
-                'description': 'Update GitHub Actions workflows: Copy .github/workflows/build.yml and .github/workflows/upgrade.yml from the Telar repository',
-                'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows'
-            },
-            {
-                'description': 'Test your site build: bundle exec jekyll build',
+                'description': '''⚠️ **CRITICAL: Update Your GitHub Actions Workflows** ⚠️
+
+**Without this step, images will NOT display on your published site.**
+
+The upgrade changed where images are stored, but your GitHub Actions workflows still point to the old location. You must update two files: `build.yml` and `upgrade.yml`.
+
+---
+
+**Option 1: Using the GitHub Website**
+
+1. Go to the Telar repository workflows: https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows
+2. Click on `build.yml`, then click the "Raw" button, and copy all the text
+3. In **your** repository on GitHub, go to `.github/workflows/build.yml`
+4. Click the pencil icon (✏️) to edit, delete everything, and paste the new content
+5. Click "Commit changes" at the bottom
+6. Repeat steps 2-5 for `upgrade.yml`
+
+---
+
+**Option 2: Using the Command Line** (if you've been syncing your repository to your machine and are comfortable with git)
+
+Run these commands in your repository:
+
+```bash
+# Download the updated workflows
+curl -o .github/workflows/build.yml https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml
+curl -o .github/workflows/upgrade.yml https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml
+
+# Commit the changes
+git add .github/workflows/
+git commit -m "Update workflows for v0.5.0 image structure"
+git push
+```
+
+**That's it!** Your next build will use the correct image locations.''',
+                'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows',
+                'critical': True
             },
             {
                 'description': 'Regenerate IIIF tiles to ensure images work with new structure: python3 scripts/generate_iiif.py',
+            },
+            {
+                'description': 'Test your site build: bundle exec jekyll build',
             },
             {
                 'description': 'Test embed mode: Add ?embed=true to any story URL to see the embed mode UI with navigation banner',
             },
             {
                 'description': 'Explore new share/embed UI: Click the share button (icon with arrow) on stories or homepage to access share links and embed code',
+            },
+            {
+                'description': 'Optional: Install pillow-heif for HEIC/HEIF support (iPhone photos). Run: pip install pillow-heif. The framework gracefully degrades if not installed, converting HEIC to standard formats.',
             },
         ]
