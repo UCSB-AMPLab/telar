@@ -352,7 +352,7 @@ class Migration043to050(BaseMigration):
             def replace_path(match):
                 nonlocal paths_changed
                 full_match = match.group(0)
-                old_path = match.group(1)
+                old_path = match.group(2)  # Group 2 is the path, group 1 is the prefix
 
                 # Extract the filename and subdirectory
                 path_match = re.search(r'components/images/(objects|additional)/(.+)$', old_path, re.IGNORECASE)
