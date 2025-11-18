@@ -2,284 +2,115 @@
 
 All notable changes to Telar will be documented in this file.
 
-## [0.5.0-beta] - Unreleased
+## [0.5.0-beta] - 2025-11-17
 
 ### Added
 
-#### Version Headers in All Code Files
-- All Python scripts now include version headers (`Version: v0.5.0-beta`) in docstrings
-- All JavaScript files now include version headers (`@version v0.5.0-beta`) in JSDoc comments
-- CSS/SCSS files now include version headers (`@version v0.5.0-beta`) in header comments
-- GitHub Actions workflows now include version headers (`Version: v0.5.0-beta`) in YAML comments
-- **Files updated**: `generate_iiif.py`, `csv_to_json.py`, `fetch_google_sheets.py`, `generate_collections.py`, `upgrade.py`, `story.js`, `telar.js`, `widgets.js`, `embed.js`, `telar.scss`, and all workflow files
-- **Benefit**: Easier tracking of which release a file was last modified in, better version control visibility, improved maintainability
+#### Canvas LMS Embedding Support
+- **Complete iframe embedding system** for educational and blog platforms (Canvas, Moodle, Blackboard, WordPress, Squarespace, Wix)
+- **Embed mode detection** via `?embed=true` URL parameter with automatic UI adjustments
+- **Forced navigation buttons** on all viewports including desktop with custom positioning and responsive typography
+- **"View full site" dismissible banner** with multilingual support and frosted glass effect
+- **Successfully tested** in production Canvas LMS with cross-browser and mobile testing complete
+- **Comprehensive documentation** with educator guide and troubleshooting section
 
-#### Embed Mode Support
-- New `embed.js` script for iframe embedding detection via URL parameters
-- Support for `?embed=true` URL parameter to enable embed mode
-- "View full site" banner in embed mode (dismissible, persists via sessionStorage)
-- Material Icons used for banner icons (open_in_new, close)
-- Embed mode CSS to hide navigation chrome (home button)
-- Navigation buttons always visible in embed mode (same as mobile)
-
-#### Responsive Typography for Slide-Over Panels
-- Extended robust width- and height-based responsive typography to panel contents
-- **Problem**: Panel text used fixed font sizes, didn't scale with viewport dimensions
-- **Solution**: Apply same clamp()-based fluid typography used in story steps
-- Added max-width constraints for images in panels to prevent overflow on narrow screens
-- **Benefit**: Improved readability across all device sizes, especially mobile and tablets
-- **Technical**: Uses CSS `clamp()` for fluid font scaling based on viewport width and height
-
-#### Mobile Panel Quality-of-Life Improvements
-- Fixed navigation button cutoff in mobile/embed mode
-  - **Problem**: Panel-trigger buttons were cut off when story-step content exceeded 40vh height
-  - **Solution**: Changed story steps from `overflow: hidden` to `overflow-y: auto` on mobile
-  - **Benefit**: Users can now scroll within step panels to see all content and buttons
-- Fixed panel image overflow on mobile devices
-  - **Problem**: Images with fixed pixel widths (450px default, sm/md/lg classes) overflowed on narrow screens
-  - **Solution**: Added mobile media query to force all panel images to `max-width: 100%` on screens ≤768px
-  - **Benefit**: Images now respect panel width constraints on mobile while preserving desktop sizing behavior
-
-#### Automatic Carousel Height Detection
-- Carousels now automatically adapt height based on image aspect ratios at build time
-- **Feature**: Image dimension analysis during widget processing
-  - Added `get_image_dimensions()` function to `csv_to_json.py` using PIL/Pillow
-  - Fetches dimensions from both local images and remote URLs
-  - Analyzes aspect ratios (height/width) for all images in each carousel
-- **Size Classes**: Four automatic height variants based on maximum aspect ratio:
-  - **Compact** (400px): Wide panoramas (aspect ratio < 0.6)
-  - **Default** (550px): Landscape images (aspect ratio 0.6-1.0)
-  - **Tall** (700px): Square to mild portrait (aspect ratio 1.0-1.5)
-  - **Portrait** (850px): Strong portrait orientation (aspect ratio > 1.5)
-- **Implementation**: Modified `parse_carousel_widget()` to calculate aspect ratios and assign size class, updated carousel template to apply dynamic classes, added CSS variants in `telar.scss`
-- **Benefit**: Portrait and tall images display at appropriate heights without manual configuration, eliminating the need for users to specify carousel heights
-- **Performance**: Zero runtime cost - all analysis happens at build time
-
-#### Carousel Widget Styling Improvements
-- Moved captions strictly below images (removed overlay)
-- Added black background to carousel container for better image contrast
-- Reduced caption typography for cleaner appearance (0.9rem text, 0.8rem credit, minimal line-height)
-- Positioned carousel indicators above caption area (bottom: 90px) to prevent text overlap
-- Disabled keyboard arrow navigation on carousels to prevent interference with story navigation
-- **Benefit**: Cleaner visual presentation, better accessibility with non-overlaid captions, improved usability
+#### Share & Embed UI
+- **Share button component** with OS-specific icons and three variants (story page, navbar, icon-only)
+- **Share panel modal** with two tabs: Share Links (clean URLs) and Embed Code (8 dimension presets)
+- **Platform presets**: Canvas (100% × 800px), Moodle/Blackboard (100% × 700px), WordPress (100% × 600px), Squarespace (100% × 600px), Wix (100% × 550px), Mobile (375px × 500px), Fixed (800 × 600), Custom
+- **Copy to clipboard** with visual feedback for both share URLs and embed codes
+- **Full multilingual support** (English + Spanish) with platform documentation links
 
 #### Extended Image Format Support
-- Added native support for HEIC (iPhone photos), WebP, and TIFF image formats
-- **Supported formats**: JPG, PNG, HEIC, HEIF, WebP, TIFF
-- **Case-insensitive matching**: File extensions work regardless of case (`.JPG`, `.png`, `.HEIC`, etc.)
-- **Implementation**:
-  - Added `pillow-heif>=0.13.0` dependency for HEIC/HEIF support
-  - Enhanced `find_image_for_object()` to check both lowercase and uppercase extension variants
-  - Updated format conversion logic to handle RGBA, LA (transparency), and P (palette) modes
-  - All non-JPEG formats automatically converted to JPEG during IIIF tile generation
-  - Original files preserved in repository (conversion is temporary for tile generation only)
-- **User experience**:
-  - iPhone photos work directly without manual conversion
-  - Format-specific console messages during processing (e.g., "Converting HEIC to JPEG for IIIF processing")
-  - Fixed false negative warnings when images have uppercase extensions
-- **Benefit**: Users can upload images from any modern device without format conversion, simpler workflow, better iPhone integration
-- **Files modified**: `requirements.txt`, `generate_iiif.py`, `csv_to_json.py`, documentation
+- **Native support** for HEIC (iPhone photos), WebP, and TIFF formats
+- **Case-insensitive extension matching** (`.JPG`, `.png`, `.HEIC` all work)
+- **Automatic JPEG conversion** during IIIF tile generation with original file preservation
+- **Handles transparency** (RGBA, LA modes) and palette modes with proper conversion
+- **Eliminates false warnings** for uppercase file extensions
+
+#### Automatic Carousel Height Detection
+- **Build-time dimension analysis** using PIL/Pillow with zero runtime cost
+- **Four size classes**: Compact (400px), Default (550px), Tall (700px), Portrait (850px)
+- **Automatic assignment** based on maximum aspect ratio in carousel
+- **Eliminates manual configuration** for carousel heights
+
+#### Responsive Typography for Slide-Over Panels
+- **Extended fluid typography** from story steps to all panel contents using CSS `clamp()`
+- **Max-width constraints** for panel images on narrow screens
+- **Improved readability** across all device sizes
+
+#### Mobile Panel Quality-of-Life Improvements
+- **Scrollable story steps** prevent navigation button cutoff (changed `overflow: hidden` to `overflow-y: auto`)
+- **Panel image width constraints** force `max-width: 100%` on mobile (≤768px) while preserving desktop sizing
+
+#### Carousel Widget Styling Improvements
+- **Captions moved below images** for better accessibility
+- **Black container background** for better image contrast
+- **Reduced typography** (0.9rem text, 0.8rem credit) with indicators positioned above captions
+- **Disabled keyboard navigation** to prevent story navigation interference
 
 #### Future Media Type Directory Structure
-- Created placeholder directories for upcoming multi-media support: `components/pdfs/`, `components/audio/`, `components/3d-models/`
-- Each directory includes README.md explaining planned features
-- Created main `components/README.md` overview listing all component directories
-- **components/pdfs/** (Planned: v0.6.0)
-  - Multi-page IIIF Presentation API 3.0 support for PDF documents
-  - Page-level navigation and page-specific coordinates
-  - Automatic IIIF manifest generation from PDFs
-- **components/audio/** (Planned: v0.7.0)
-  - HTML5 audio player with waveform visualization
-  - Time-coded navigation and transcript synchronization
-  - Multiple format support (MP3, WAV, OGG, M4A)
-- **components/3d-models/** (Planned: v0.8.0)
-  - Interactive 3D viewer with rotation, zoom, annotation support
-  - Multiple format support (glTF, OBJ, PLY, STL, FBX)
-  - WebXR/AR/VR compatibility
-- **Benefit**: Clear roadmap for users, prevents incompatible custom implementations
-- **Files added**: `components/pdfs/README.md`, `components/audio/README.md`, `components/3d-models/README.md`, `components/README.md`
+- **Placeholder directories** with READMEs: `components/pdfs/` (v0.6.0), `components/audio/` (v0.7.0), `components/3d-models/` (v0.8.0)
+- **Prevents incompatible implementations** before official support
+
+#### Version Headers in All Code Files
+- **All scripts, styles, and workflows** now include version headers for better tracking
+- **Format**: `Version: v0.5.0-beta` (Python/YAML) or `@version v0.5.0-beta` (JS/CSS)
 
 ### Changed
 
-#### Unified source_url Column Name
-- Renamed `iiif_manifest` column to `source_url` for semantic clarity
-- **Rationale**: "source_url" is semantically neutral and works for all future media types (PDFs, videos, 3D models, audio), not just IIIF images
-- **Backward compatibility**: Full support for old `iiif_manifest` column name
-  - CSV with `iiif_manifest` column automatically creates `source_url` alias
-  - CSV with `source_url` column automatically creates `iiif_manifest` alias for templates
-  - Both columns included in objects.json during transition period
-  - Old sites (v0.4.x) work without any changes required
-- **Implementation**:
-  - Added `get_source_url()` helper function in csv_to_json.py
-  - Updated all Python scripts to check both columns (source_url first, then iiif_manifest)
-  - Updated templates to use Liquid fallback: `page.source_url | default: page.iiif_manifest`
-  - Updated story.js to check both fields
-  - Updated CSV template files to use `source_url` header
-- **Documentation**: All docs updated to reference `source_url` instead of `iiif_manifest`
-- **Benefit**: Future-proof column naming, seamless migration path, foundation for multi-media support
-- **Files modified**: `csv_to_json.py`, `generate_iiif.py`, `_layouts/object.html`, `assets/js/story.js`, CSV templates, all documentation
-
 #### Flattened Image Directory Structure
-- Simplified `components/images/` directory structure by removing subdirectories
-- **Old structure**: `components/images/objects/` and `components/images/additional/`
-- **New structure**: All images in `components/images/` (with optional project-specific subfolders like `paisajes/`)
-- Updated `csv_to_json.py` default path from `/components/images/additional/` to `/components/images/`
-- Updated `generate_iiif.py` to use `components/images/` as default source directory
-- Updated CSV validation to check for images in flattened structure
-- **Benefit**: Simpler structure, easier to manage, fewer nested directories
-- **Migration**: Automatic - `generate_iiif.py` now reads `objects.json` to determine which images need tiles
+- **Removed subdirectories**: `components/images/objects/` and `components/images/additional/` → `components/images/`
+- **Updated default paths** in csv_to_json.py, generate_iiif.py, and validation
+- **Automated migration** via upgrade script
 
 #### CSV-Driven IIIF Tile Generation
-- `generate_iiif.py` now processes only objects listed in `objects.csv` (via `objects.json`)
-- Skips objects with external IIIF manifests (only generates tiles for self-hosted images)
-- Automatically finds image files by `object_id` (supports multiple extensions: jpg, jpeg, png, heic, heif, webp, tif, tiff; case-insensitive)
-- **Before**: Processed all images in `components/images/objects/` directory
-- **After**: Processes only objects referenced in CSV without external manifests
-- **Benefit**: Faster generation, no orphaned tiles, explicit control over which images get processed
+- **Changed from directory-based to CSV-driven**: Only processes objects in `objects.csv` without external manifests
+- **Automatic file detection** by `object_id` supporting multiple extensions (case-insensitive)
+- **Faster generation** with no orphaned tiles
+
+#### Unified source_url Column Name
+- **Renamed `iiif_manifest` → `source_url`** for future media type compatibility (PDFs, videos, 3D, audio)
+- **Full backward compatibility**: Both column names work, automatic aliasing in both directions
+- **Updated templates** with Liquid fallback pattern
 
 #### CSV-Aware GitHub Actions Monitoring
-- GitHub Actions workflow now intelligently detects if changed images need IIIF processing
-- **Smart change detection**: Only triggers IIIF regeneration when changed images match `object_id` entries in `objects.csv`
-- **Logic**: Compares changed image filenames (without extension) against object IDs from CSV
-- **Always regenerates** when `objects.csv` or `_config.yml` changes
-- **Skips regeneration** when only non-image files change or images don't match any object IDs
-- **Cache optimization**: Updated cache keys to monitor all of `components/images/**` instead of subdirectory
-- **Benefit**: More efficient CI/CD pipeline, avoids unnecessary IIIF generation for unrelated image changes
+- **Smart change detection** only triggers IIIF when changed images match object IDs in objects.csv
+- **Cache optimization** for more efficient CI/CD pipeline
 
-#### Removed Unused JavaScript Dependencies
-- Removed `assets/js/scrollama.min.js` - Telar uses custom scroll accumulator system, not Scrollama
-- Removed `assets/js/openseadragon.min.js` - UniversalViewer bundles OpenSeadragon internally
-- Removed `assets/images/openseadragon/` directory - empty placeholder
-- Removed Scrollama script tag from `_layouts/story.html`
-- **Impact**: Smaller bundle size, cleaner codebase, no functionality change
-- **Note**: Telar's custom scroll system handles wheel events, touch swipes, button navigation, and keyboard navigation
-
-#### Removed Local Google Sheets Integration Documentation
-- Removed `docs/google_sheets_integration/` folder and its contents
-- **Removed files**: `README.md`, `telar-template.xlsx`
-- **Reason**: Google Sheets integration is fully documented in the official documentation site
-- **Updated references**:
-  - `docs/README.md` - removed broken link to deleted folder
-  - `components/structures/README.md` - removed broken link, kept reference to Google Sheets feature
-  - `_config.yml` - updated comments to point to official docs instead of local folder
-- **Impact**: Cleaner repository, single source of truth for documentation
-- **Note**: Migration scripts retain historical references (not updated as they are legacy)
+#### Removed Unused Dependencies
+- **Deleted scrollama.min.js and openseadragon.min.js** (~47KB savings) - Telar uses custom scroll system and UniversalViewer's bundled OpenSeadragon
+- **Deleted docs/google_sheets_integration/** folder - fully documented in official docs site
 
 ### Fixed
 
+#### CRITICAL: v0.4.0 Feature Restoration (Phase 1 - Data Pipeline)
+- **Restored 1,382 lines** accidentally deleted from `csv_to_json.py` in commit f62acee (Nov 8, 2025)
+- **Root cause**: Commit overwrote file, removing core v0.4.0 functionality
+- **Features restored**:
+  - Widget processing (~350 lines): accordion, carousel, tabs with Bootstrap HTML generation
+  - IIIF metadata auto-population (~400 lines): extracts title, creator, period, location, credit
+  - Glossary auto-linking (~150 lines): `[[term_id]]` syntax processing
+  - Multilingual support (~100 lines): language string loading and interpolation
+- **Applied v0.5.0 updates** to restored code (version header, flattened image paths)
+
+#### CRITICAL: v0.4.0 Feature Restoration (Phase 2 - Display Components)
+- **Restored frontend components** for widgets and glossary (~115 lines total)
+- **Widget panel-specific styling**: Layer 1 widgets use Layer 2 colors and vice versa
+- **Enhanced glossary functionality**: Proper title extraction, both inline and index links work
+- **Widget initialization**: Added widgets.js script tag
+- **Glossary multilingual support**: Language-aware panel labels and "Key term:" prefix
+
 #### Layer 2 Panel Heading Colors
-- Fixed h2, h3, and h4 elements in layer 2 panels not inheriting panel text color
-- **Problem**: Headings appeared in default blue color instead of white on dark purple background
-- **Solution**: Added explicit color inheritance for all heading levels in `#panel-layer2 .offcanvas-body`
-- **Impact**: Improved readability and visual consistency in layer 2 panels
+- **Fixed h2, h3, h4 color inheritance** in layer 2 panels (white on dark purple background)
 
-#### CRITICAL: v0.4.0 Feature Restoration - Widget Processing and Data Pipeline
-- **MAJOR BUG FIX**: Restored all v0.4.0 features accidentally deleted in commit f62acee (Nov 8, 2025)
-- **Root cause**: Commit f62acee ("Complete v0.4.0-beta development") accidentally deleted 1,382 lines from `scripts/csv_to_json.py`, removing core v0.4.0 functionality
-- **Discovery**: Widgets (accordion, carousel, tabs) not displaying; `:::widget` syntax converting to plain `<p>:::widget</p>` HTML instead of Bootstrap components
+### Migration
 
-**What Was Deleted:**
-- Widget system processing (~350 lines): `process_widgets()`, `parse_accordion_widget()`, `parse_carousel_widget()`, `parse_tabs_widget()`, `render_widget_html()`, `validate_image_path()`
-- IIIF metadata auto-population (~400 lines): `extract_manifest_metadata()`, `detect_iiif_version()`, `extract_language_map_value()`, `find_metadata_field()`, `extract_credit()`, plus 9 helper functions
-- Glossary auto-linking (~150 lines): `load_glossary_terms()`, `process_glossary_links()` for `[[term_id]]` syntax
-- Multilingual support (~100 lines): `load_language_data()`, `get_lang_string()`, `load_site_language()`
-- Testing features: `sanitize_dataframe()`, `inject_christmas_tree_errors()`
-- Required imports: `import yaml`, `from jinja2 import Template, Environment, FileSystemLoader`
-
-**Restoration Process:**
-1. Extracted complete `csv_to_json.py` from commit 8620a96 (last working version before deletion)
-2. Applied v0.5.0 updates to restored file:
-   - Added version header: `Version: v0.5.0-beta`
-   - Updated image paths: `/components/images/additional/` → `/components/images/` (Phase 4.1 flatten structure)
-   - Updated validation paths to use flattened directory structure
-3. Preserved backup of broken version: `scripts/csv_to_json.py.backup-broken`
-
-**Impact - Features Restored:**
-- **Widget processing**: Accordion, carousel, and tabs widgets now generate correct Bootstrap HTML
-  - `:::accordion` → `<div class="telar-widget telar-widget-accordion">` with Bootstrap accordion structure
-  - `:::carousel` → `<div class="telar-widget telar-widget-carousel">` with Bootstrap carousel structure
-  - `:::tabs` → `<div class="telar-widget telar-widget-tabs">` with Bootstrap tabs structure
-- **IIIF metadata extraction**: Auto-population of object metadata (title, creator, period, location, credit) from IIIF manifests
-- **Glossary auto-linking**: `[[term_id]]` and `[[term_id|display text]]` syntax processing in markdown
-- **Multilingual support**: Language string loading and interpolation for build-time processing
-- **Build-time validation**: Widget error checking, image path validation, accessibility warnings
-
-**Testing:**
-- `python3 scripts/csv_to_json.py` runs successfully
-- Widget HTML generation confirmed in `_data/story-1.json`:
-  - Accordion widget found in step 4 (Mayorazgo content)
-  - Carousel widget found in step 2 (Bogotá Savanna content)
-- All v0.4.0 data processing features functional
-
-**Note**: Additional restoration work needed for:
-- Widget styling (panel-specific CSS in `telar.scss`) - to be addressed in follow-up commit
-- Glossary link functionality (enhanced JS in `telar.js`) - to be addressed in follow-up commit
-- Widget initialization (loading `widgets.js` in `story.html`) - to be addressed in follow-up commit
-
-**Files Modified:**
-- `scripts/csv_to_json.py` - 1,382 lines restored (746 lines total)
-- `scripts/csv_to_json.py.backup-broken` - Preserved for reference
-
-#### CRITICAL: v0.4.0 Feature Restoration - Widget Display and Glossary Links (Phase 2)
-- **Continuation of Phase 1**: Restored remaining v0.4.0 features deleted in commit f62acee
-- **Focus**: Frontend display components (CSS, JavaScript, HTML) for widgets and glossary functionality
-
-**What Was Restored:**
-
-1. **Widget Panel-Specific Styling** (assets/css/telar.scss) - ~60 lines
-   - Panel-specific widget backgrounds: Layer 1 widgets use Layer 2 panel colors for visual contrast
-   - Carousel caption panel colors: Layer 1 captions use Layer 2 bg/text, Layer 2 captions use Layer 1 bg/text
-   - Tabs panel-specific styling: Tab navigation and content colored according to parent panel
-   - Accordion panel-specific styling: Accordion items, buttons, and bodies inherit panel colors
-
-2. **Enhanced Glossary Link Functionality** (assets/js/telar.js) - ~40 lines
-   - Support for both `.glossary-term-link` (glossary index) and `.glossary-inline-link` (story content) selectors
-   - Container parameter for `initializeGlossaryLinks()` to support dynamic content re-initialization
-   - Extracted `handleGlossaryLinkClick()` function for proper event listener cleanup
-   - Export to `window.Telar.initializeGlossaryLinks` for use in dynamically loaded panels
-   - **Title extraction fix**: Glossary panels now show proper term title from metadata instead of link text
-     - JavaScript extracts `<h1>` content from fetched glossary page
-     - Replaces temporary link text with actual term title
-
-3. **Widget Initialization** (_layouts/story.html)
-   - Added `<script src="{{ '/assets/js/widgets.js' | relative_url }}"></script>` after story.js
-   - Enables Bootstrap carousel initialization for carousel widgets
-
-4. **Glossary Panel Language Integration** (_includes/panels.html) - ~15 lines
-   - Restored "Key term:" prefix with language support (`{{ lang.panels.glossary_term_prefix }}`)
-   - Replaced all hardcoded English strings with Liquid variables:
-     - Back buttons: `← Back` → `{{ lang.buttons.back }}`
-     - Panel titles: `Panel Title` → `{{ lang.panels.default_title }}`
-     - Glossary title: `Glossary Term` → `{{ lang.panels.glossary_term_title }}`
-   - Restored CSS for `.glossary-term-prefix` (opacity: 0.5, margin-bottom: 0.25rem)
-   - **Multilingual support**: Works with existing English/Spanish language files
-
-**Impact - Features Restored:**
-- **Widget visual integration**: Widgets now properly themed with opposite panel colors
-  - Example: Dark purple widget backgrounds on white Layer 1 panels
-  - Example: White widget backgrounds on dark purple Layer 2 panels
-- **Carousel functionality**: Carousel navigation (prev/next/indicators) now works correctly
-- **Glossary link clicking**: Both glossary index links and inline `[[term]]` links open glossary panel
-- **Proper glossary titles**: Panels show "Livestock" instead of link text "cattle"
-- **Multilingual UI**: Panel labels display in configured language (English or Spanish)
-
-**Testing:**
-- Build successful: `bundle exec jekyll build` completes without errors
-- Language strings verified in built HTML:
-  - English (en): "Key term:", "← Back"
-  - Spanish (es): "Palabra clave:", "← Atrás"
-- Widget HTML structure validated in `_data/story-1.json`
-- Glossary inline links found with correct `data-term-id` attributes
-
-**Files Modified:**
-- `assets/css/telar.scss` - ~60 lines added (panel-specific widget styling)
-- `assets/js/telar.js` - ~40 lines added/modified (enhanced glossary links, title extraction)
-- `_layouts/story.html` - 1 line added (widgets.js script tag)
-- `_includes/panels.html` - ~15 lines modified (language strings, glossary prefix)
-- `_data/*.json` - Regenerated with restored widget HTML
-
-**Historical Reference:**
-The pre-restoration broken state is preserved in git commit f62acee (2025-11-08)
+- **Automated v0.4.x → v0.5.0 migration**:
+  - File relocation: old subdirectories → `components/images/`
+  - CSV column update: `iiif_manifest` → `source_url`
+  - Name conflict detection and empty directory cleanup
+- **Full backward compatibility**: No breaking changes for existing sites
 
 ---
 
