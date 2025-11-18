@@ -104,6 +104,13 @@ All notable changes to Telar will be documented in this file.
 #### Layer 2 Panel Heading Colors
 - **Fixed h2, h3, h4 color inheritance** in layer 2 panels (white on dark purple background)
 
+#### Glossary Warning Message Clarity
+- **Improved error message formatting** for missing glossary terms with quoted, bold term IDs
+- **Added file path context** showing exactly which markdown file contains the broken reference
+- **Natural sentence structure** replaces technical phrasing for better readability
+- **Example**: "In the file stories/story2/step4-layer2.md, you reference the glossary term 'term', but this term does not exist in components/texts/glossary/"
+- Files modified: `scripts/csv_to_json.py`, `_data/languages/en.yml`, `_data/languages/es.yml`
+
 ### Migration
 
 - **Automated v0.4.x → v0.5.0 migration**:
