@@ -9,7 +9,11 @@
   {% assign theme = site.data.defaults.themes.paisajes %}
 {% endunless %}
 
-/* Telar - Digital Storytelling Framework CSS */
+/**
+ * Telar - Digital Storytelling Framework CSS
+ *
+ * @version v0.5.0-beta
+ */
 
 /* CSS Variables with hardcoded paisajes defaults as ultimate fallback */
 :root {
@@ -505,6 +509,12 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
 }
 
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4 {
+  color: var(--color-panel-layer2-text);
+}
+
 /* Panel buttons styling */
 #panel-layer1 .btn-close,
 #panel-layer2 .btn-close {
@@ -984,7 +994,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Panel Images */
 .offcanvas-body img {
-  max-width: 300px;
+  max-width: 100%;
   height: auto;
   display: block;
   margin: 1rem 0;
@@ -1028,7 +1038,7 @@ h1, h2, h3, h4, h5, h6 {
     min-height: 40vh;
     max-height: 40vh;
     padding: 1.5rem;
-    overflow: hidden;
+    overflow-y: auto;
     transform: none !important;
     opacity: 1 !important;
   }
@@ -1380,27 +1390,37 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Offcanvas panels - 10-15% reduction */
-  .offcanvas-body {
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
     padding: 1.75rem !important;
-    font-size: 0.95rem;
-    line-height: 1.7;
+    font-size: 1rem;
+    line-height: 1.5;
   }
 
-  .offcanvas-body .offcanvas-title {
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
     font-size: 1.75rem;
     margin-bottom: 1.3rem;
   }
 
-  .offcanvas-body blockquote {
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
     margin: 1.3rem 0;
     padding: 0.9rem 1.3rem;
   }
 
-  .offcanvas-body hr {
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
     margin: 2.2rem 0 1.3rem 0;
   }
 
-  .offcanvas-body p:has(a[href^="#_ftnref"]) {
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
     font-size: 0.85rem;
     margin-bottom: 0.65rem;
   }
@@ -1477,33 +1497,45 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Offcanvas panels - 20-25% reduction */
-  .offcanvas-body {
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
     padding: 1.5rem !important;
-    font-size: 0.875rem;
-    line-height: 1.6;
+    font-size: 0.95rem;
+    line-height: 1.4;
   }
 
-  .offcanvas-body .offcanvas-title {
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
     font-size: 1.6rem;
     margin-bottom: 1.2rem;
   }
 
-  .offcanvas-body blockquote {
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
     margin: 1.2rem 0;
     padding: 0.8rem 1.2rem;
   }
 
-  .offcanvas-body hr {
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
     margin: 2rem 0 1.2rem 0;
   }
 
-  .offcanvas-body p:has(a[href^="#_ftnref"]) {
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
     font-size: 0.75rem;
     margin-bottom: 0.6rem;
   }
 
-  .offcanvas-body img {
-    max-width: 250px;
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
     margin: 0.8rem 0;
   }
 
@@ -1573,33 +1605,45 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Offcanvas panels - 30-35% reduction */
-  .offcanvas-body {
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
     padding: 1.3rem !important;
-    font-size: 0.75rem;
-    line-height: 1.5;
+    font-size: 0.9rem;
+    line-height: 1.35;
   }
 
-  .offcanvas-body .offcanvas-title {
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
     font-size: 1.4rem;
     margin-bottom: 1rem;
   }
 
-  .offcanvas-body blockquote {
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
     margin: 1rem 0;
     padding: 0.7rem 1rem;
   }
 
-  .offcanvas-body hr {
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
     margin: 1.75rem 0 1rem 0;
   }
 
-  .offcanvas-body p:has(a[href^="#_ftnref"]) {
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
     font-size: 0.7rem;
     margin-bottom: 0.5rem;
   }
 
-  .offcanvas-body img {
-    max-width: 200px;
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
     margin: 0.7rem 0;
   }
 
@@ -1701,6 +1745,19 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* Panel-specific widget colors: widgets use opposite panel colors */
+#panel-layer1 .telar-widget {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer2 .telar-widget {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
 /* Widget Error Display */
 .telar-widget-error {
   padding: 1rem;
@@ -1726,40 +1783,71 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #000;
+}
+
+.telar-widget-carousel .carousel-inner {
+  height: 550px;
+}
+
+.telar-widget-carousel .carousel-item {
+  height: 100%;
+}
+
+.telar-widget-carousel .carousel-image-container {
+  height: calc(100% - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
 }
 
 .telar-widget-carousel .carousel-item img {
-  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
-  object-fit: cover;
-  max-height: 600px;
+  object-fit: contain;
 }
 
-.telar-widget-carousel .carousel-caption {
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  padding: 1.5rem;
-  border-radius: 4px;
-  bottom: 2rem;
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 800px;
+.telar-widget-carousel .carousel-caption-below {
+  height: 80px;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  overflow-y: auto;
 }
 
-.telar-widget-carousel .carousel-caption .caption-text {
-  margin-bottom: 0.5rem;
-  font-size: 1rem;
-  line-height: 1.5;
-  color: #fff;
+.telar-widget-carousel .carousel-caption-below .caption-text {
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+  line-height: 1.3;
 }
 
-.telar-widget-carousel .carousel-caption .caption-credit {
+.telar-widget-carousel .carousel-caption-below .caption-credit {
   margin-bottom: 0;
-  font-size: 0.85rem;
-  opacity: 0.9;
-  color: #fff;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+/* Panel-specific carousel caption colors */
+#panel-layer1 .telar-widget-carousel .carousel-caption-below {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-carousel .carousel-caption-below small,
+#panel-layer1 .telar-widget-carousel .carousel-caption-below .caption-credit {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#panel-layer2 .telar-widget-carousel .carousel-caption-below {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-carousel .carousel-caption-below small,
+#panel-layer2 .telar-widget-carousel .carousel-caption-below .caption-credit {
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .telar-widget-carousel .carousel-control-prev,
@@ -1784,7 +1872,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .telar-widget-carousel .carousel-indicators {
-  margin-bottom: 1rem;
+  bottom: 90px;
+  margin-bottom: 0;
 }
 
 .telar-widget-carousel .carousel-indicators button {
@@ -1801,6 +1890,19 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 1;
   background-color: rgba(255, 255, 255, 0.9);
   transform: scale(1.2);
+}
+
+/* Carousel size variants (auto-detected based on image aspect ratios) */
+.carousel-size-compact .carousel-inner {
+  height: 400px;
+}
+
+.carousel-size-tall .carousel-inner {
+  height: 700px;
+}
+
+.carousel-size-portrait .carousel-inner {
+  height: 850px;
 }
 
 /* ========================================
@@ -2017,6 +2119,45 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1rem;
 }
 
+/* Panel-specific tabs styling */
+#panel-layer1 .telar-widget-tabs {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-tabs {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-link {
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer2 .telar-widget-tabs {
+  background: var(--color-panel-layer1-bg);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-tabs {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-link {
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-tabs .nav-link.active {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+}
+
 /* ========================================
    ACCORDION WIDGET
    ======================================== */
@@ -2099,6 +2240,45 @@ h1, h2, h3, h4, h5, h6 {
 .telar-widget-accordion .accordion-body h4 {
   margin-top: 1.5rem;
   margin-bottom: 1rem;
+}
+
+/* Panel-specific accordion styling */
+#panel-layer1 .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer1 .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer2-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer1-bg);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-button {
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-panel-layer1-text);
+}
+
+#panel-layer2 .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer1-text);
 }
 
 /* ========================================
@@ -2218,5 +2398,687 @@ h1, h2, h3, h4, h5, h6 {
   .telar-widget-tabs .nav-link {
     font-size: 0.85rem;
     padding: 0.5rem 0.75rem;
+  }
+}
+
+/* =========================================
+   EMBED MODE
+   ========================================= */
+
+/* Embed mode: Hide navigation chrome for Canvas LMS / iframe embedding */
+body.embed-mode {
+  /* Hide home button */
+  .btn-home {
+    display: none !important;
+  }
+
+  /* Hide share button */
+  .share-button {
+    display: none !important;
+  }
+
+  /* Hide viewer overlay (contains "Loading..." text) */
+  .viewer-overlay {
+    display: none !important;
+  }
+
+  /* Show embed banner */
+  .telar-embed-banner {
+    display: flex !important;
+  }
+
+  /* Maximize content area */
+  .story-container {
+    padding-top: 0;
+  }
+
+  /* Always show navigation buttons in embed mode (like mobile) */
+  .story-navigation {
+    display: block !important;
+  }
+
+  /* Show mobile hint in embed mode (hide desktop hint) */
+  .hint-desktop {
+    display: none;
+  }
+
+  .hint-mobile {
+    display: inline;
+  }
+
+  /**
+   * Embed mode navigation pattern (v0.5.0):
+   * - Button navigation (like mobile) for iframe/Canvas LMS compatibility
+   * - Desktop-style layout and vertical centering
+   * - Static positioning instead of absolute (simpler show/hide logic)
+   */
+
+  /* Hide all story steps by default */
+  .story-step {
+    display: none;
+    position: static;
+    height: 100vh;
+    width: 100%;
+    padding: 2rem;
+    background: #fff;
+    border-left: 3px solid transparent;
+    /* Remove desktop transforms and transitions */
+    transform: none;
+    opacity: 1;
+    transition: none;
+  }
+
+  /* Show only the active step with desktop flex layout */
+  .story-step.mobile-active {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Preserve desktop-style vertical centering via .step-content */
+  .story-step .step-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* Show mobile navigation buttons in embed mode (even on desktop viewports) */
+  /* Positioned over narrative panel, horizontally centered, with dynamic bottom spacing */
+  .mobile-nav {
+    position: fixed !important;
+    left: 20% !important;
+    bottom: max(8%, 1.5rem) !important;
+    transform: translateX(-50%) !important;
+    z-index: 1040 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.75rem !important;
+  }
+
+  .mobile-nav button {
+    width: 66px !important;
+    height: 66px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 2px solid rgba(0, 0, 0, 0.1) !important;
+    color: #333 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .mobile-nav button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 1) !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .mobile-nav .mobile-prev:hover:not(:disabled) {
+    transform: scale(1.1) translateY(-4px) !important;
+  }
+
+  .mobile-nav .mobile-next:hover:not(:disabled) {
+    transform: scale(1.1) translateY(4px) !important;
+  }
+
+  .mobile-nav button:disabled {
+    opacity: 0.3 !important;
+    cursor: not-allowed !important;
+  }
+
+  /**
+   * Width and height-responsive typography for embed mode
+   * Ensures content remains readable in narrow or short iframes
+   */
+
+  /* Narrow viewports (< 900px width) */
+  @media (max-width: 900px) {
+    .story-step {
+      padding: 1.5rem !important;
+    }
+
+    .story-intro .intro-title {
+      font-size: 2.75rem !important;
+      line-height: 1.2 !important;
+    }
+
+    .story-intro .intro-byline {
+      font-size: 0.95rem !important;
+    }
+
+    .story-intro .intro-description {
+      font-size: 1rem !important;
+      line-height: 1.6 !important;
+    }
+
+    .story-step .step-content {
+      font-size: 1rem !important;
+      line-height: 1.7 !important;
+    }
+
+    .story-step h2 {
+      font-size: 1.65rem !important;
+    }
+  }
+
+  /* Medium-short viewports (< 650px height) */
+  @media (max-height: 650px) {
+    .story-step {
+      padding: 1.5rem !important;
+    }
+
+    .story-intro .intro-title {
+      font-size: 2.5rem !important;
+      line-height: 1.2 !important;
+      margin-bottom: 0.75rem !important;
+    }
+
+    .story-intro .intro-byline {
+      font-size: 0.95rem !important;
+      margin-bottom: 0.75rem !important;
+    }
+
+    .story-intro .intro-description {
+      font-size: 1rem !important;
+      line-height: 1.5 !important;
+      margin-bottom: 0.75rem !important;
+    }
+
+    .story-step .step-content {
+      font-size: 1rem !important;
+      line-height: 1.6 !important;
+    }
+
+    .story-step h2 {
+      font-size: 1.5rem !important;
+      margin-bottom: 0.75rem !important;
+    }
+  }
+
+  /* Very short viewports (< 500px height) */
+  @media (max-height: 500px) {
+    .story-step {
+      padding: 1rem !important;
+    }
+
+    .story-intro .intro-title {
+      font-size: 2rem !important;
+      line-height: 1.1 !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-intro .intro-byline {
+      font-size: 0.875rem !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-intro .intro-description {
+      font-size: 0.95rem !important;
+      line-height: 1.4 !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-step .step-content {
+      font-size: 0.95rem !important;
+      line-height: 1.5 !important;
+    }
+
+    .story-step h2 {
+      font-size: 1.25rem !important;
+      margin-bottom: 0.5rem !important;
+    }
+
+    .story-step p {
+      margin-bottom: 0.75rem !important;
+    }
+  }
+}
+
+/* Mobile-sized embeds: revert to mobile positioning (right side, vertically stacked) */
+/* This media query is at root level to ensure proper source order over desktop embed rules */
+@media (max-width: 768px) {
+  body.embed-mode .mobile-nav {
+    right: 1rem !important;
+    left: auto !important;
+    bottom: 50% !important;
+    transform: translateY(50%) !important;
+    flex-direction: column !important;
+  }
+
+  body.embed-mode .mobile-nav button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 1) !important;
+    transform: scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  body.embed-mode .mobile-nav .mobile-prev:hover:not(:disabled),
+  body.embed-mode .mobile-nav .mobile-next:hover:not(:disabled) {
+    transform: scale(1.05) !important;
+  }
+}
+
+/* "View full site" floating modal (only visible in embed mode) */
+.telar-embed-banner {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1050;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: min(380px, calc(100% - 40px));
+  line-height: 1.5;
+  backdrop-filter: blur(2px);
+
+  &-text {
+    color: #6c757d;
+
+    .material-symbols-outlined {
+      display: none;
+    }
+
+    a {
+      color: var(--color-link);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  &-link {
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    &::after {
+      content: '→';
+      font-size: 1.1em;
+    }
+  }
+
+  &-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: #adb5bd;
+    line-height: 1;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: -2px;
+
+    .material-symbols-outlined {
+      font-size: 1.25rem;
+    }
+
+    &:hover {
+      color: #6c757d;
+    }
+  }
+}
+
+/* Hide banner in normal (non-embed) mode */
+body:not(.embed-mode) .telar-embed-banner {
+  display: none;
+}
+
+/* =========================================
+   SHARE & EMBED UI
+   ========================================= */
+
+/* Share Button - Light Style (matches Back to Home button) */
+.share-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem; /* Slightly taller to match home button height */
+  background: rgba(255, 255, 255, 0.8);
+  color: #5a6c7d;
+  border: 1px solid #cbd5e0;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  line-height: 1;
+
+  .share-button-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: white;
+    color: var(--color-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+
+  &:focus {
+    outline: 2px solid #cbd5e0;
+    outline-offset: 2px;
+  }
+}
+
+/* Icon+text variant (story pages) - fixed position floating on right side of narrative column */
+.share-button-icon-text {
+  position: fixed !important;
+  top: 2rem !important;
+  left: 40% !important;
+  transform: translateX(calc(-100% - 2rem)) !important;
+  z-index: 1040 !important;
+
+  .share-button-text {
+    display: inline;
+  }
+
+  /* Mobile: Ghost/transparent style (Option 2) */
+  @media (max-width: 768px) {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+    left: auto !important;
+    right: 1rem !important;
+    top: 1rem !important;
+    transform: none !important;
+
+    /* Ghost style - very subtle when not hovered */
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.6); /* Icon matches border color */
+
+    .share-button-icon {
+      color: rgba(255, 255, 255, 0.6); /* Ensure SVG icon matches */
+      fill: rgba(255, 255, 255, 0.6);
+    }
+
+    .share-button-text {
+      display: none;
+    }
+
+    /* Solid on hover */
+    &:hover {
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      color: #333;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+      .share-button-icon {
+        color: #333;
+        fill: #333;
+      }
+    }
+  }
+}
+
+/* Navbar variant (for header) - styled as button with nav colors */
+.share-button-navbar {
+  position: static !important;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: rgba(0, 0, 0, 0.55);
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  border-radius: 20px;
+  margin-left: 0.5rem; // Space from hamburger
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.3);
+    color: rgba(0, 0, 0, 0.7);
+    transform: none;
+    box-shadow: none;
+  }
+
+  .share-button-text {
+    display: inline;
+  }
+
+  .share-button-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  // Mobile: Icon only, match hamburger size and color
+  @media (max-width: 991px) {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50px; // Full circle
+    color: rgba(0, 0, 0, 0.75); // Match hamburger color
+
+    .share-button-text {
+      display: none;
+    }
+
+    .share-button-icon {
+      width: 1.3rem;
+      height: 1.3rem;
+      color: rgba(0, 0, 0, 0.75); // Match hamburger icon color
+      fill: rgba(0, 0, 0, 0.75);
+    }
+
+    &:hover {
+      color: rgba(0, 0, 0, 0.75);
+
+      .share-button-icon {
+        color: rgba(0, 0, 0, 0.75);
+      }
+    }
+  }
+}
+
+// Round the navbar toggler (hamburger menu)
+.navbar-toggler {
+  border-radius: 50px; // Full circle
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  width: 48px; // Match share button width on mobile
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1);
+  }
+
+  .navbar-toggler-icon {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+}
+
+// Style the collapsed navbar menu items
+@media (max-width: 991px) {
+  .navbar-collapse {
+    .navbar-nav {
+      text-align: center;
+
+      .nav-item {
+        .nav-link {
+          font-size: 1.1rem;
+          padding: 0.75rem 1rem;
+        }
+      }
+    }
+  }
+}
+
+/* Share Panel Modal */
+#panel-share {
+  // Modal dialog sizing
+  .modal-dialog {
+    max-width: 600px;
+    width: 90vw;
+    margin: 1.75rem auto;
+  }
+
+  @media (max-width: 768px) {
+    .modal-dialog {
+      width: 95vw;
+      max-width: 95vw;
+      margin: 1rem auto;
+    }
+  }
+
+  .offcanvas-title {
+    font-family: var(--font-headings);
+    color: var(--color-heading);
+    font-size: 1.5rem;
+    margin-bottom: 0;
+  }
+
+  .nav-tabs {
+    border-bottom: 1px solid #dee2e6;
+
+    .nav-link {
+      color: #6c757d;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: none;
+      padding: 0.75rem 1rem;
+      transition: all 0.2s;
+
+      &:hover {
+        color: var(--color-link);
+        border-bottom-color: var(--color-link);
+      }
+
+      &.active {
+        color: var(--color-link);
+        border-bottom-color: var(--color-link);
+        background: none;
+      }
+    }
+  }
+
+  .share-section {
+    padding-top: 1rem;
+  }
+
+  // Success message styling
+  .share-success-message {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+    border-radius: 4px;
+
+    .material-symbols-outlined {
+      font-size: 1.2rem;
+    }
+  }
+
+  // Button icons in input groups
+  .btn .material-symbols-outlined {
+    font-size: 1.1rem;
+    vertical-align: middle;
+  }
+
+  .btn-icon {
+    margin-right: 0;
+  }
+
+  @media (max-width: 576px) {
+    .btn-text {
+      display: none; // Hide button text on very small screens
+    }
+
+    .btn-icon {
+      margin-right: 0;
+    }
+  }
+
+  // Embed code textarea
+  #embed-code-textarea {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    resize: vertical;
+    background: #f8f9fa;
+
+    // Smaller font on mobile for shorter panel height
+    @media (max-width: 768px) {
+      font-size: 0.65rem;
+      line-height: 1.3;
+    }
+  }
+
+  // Form controls
+  .form-label {
+    font-weight: 600;
+    color: var(--color-body);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-control,
+  .form-select {
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+
+    &:focus {
+      border-color: var(--color-link);
+      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
+    }
+  }
+
+  // Make copy buttons 80% width (all screen sizes)
+  .btn-primary.w-100 {
+    width: 80% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+  }
+
+  // Style links in help text to match site theme
+  .text-muted a {
+    color: var(--color-link);
+    text-decoration: underline;
+
+    &:hover {
+      color: var(--color-link-hover);
+      text-decoration: none;
+    }
+  }
+}
+
+/* Story intro share button placement */
+.story-intro {
+  .share-button {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
   }
 }

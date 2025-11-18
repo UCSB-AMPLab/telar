@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.4.3--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-0.4.2--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
 
@@ -10,7 +10,7 @@ A minimal computing framework for creating visual narrative exhibitions with III
 
 ---
 
-> **⚠️ Beta Release - v0.4.3-beta**
+> **⚠️ Beta Release - v0.4.2-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
@@ -56,7 +56,7 @@ Plan your narrative structure before building. Sketch out your stories, identify
    - **CSV files**: Edit CSV files directly in your repository
 
 3. **Add your content**
-   - Upload images to `components/images/objects/` or use IIIF manifests from institutions
+   - Upload images to `components/images/` or use IIIF manifests from institutions
    - Create markdown files in `components/texts/stories/` for your narrative text
    - Configure your objects and stories in Google Sheets or CSV files
 
@@ -127,7 +127,7 @@ For detailed local development instructions, see the [Local Development Guide](h
 
 Telar uses a components-based architecture:
 - `components/structures/` - CSV files (or Google Sheets) with site and story data
-- `components/images/objects/` - Source images for IIIF processing
+- `components/images/` - Source images for IIIF processing
 - `components/texts/stories/` - Markdown files for narrative content
 - `components/texts/glossary/` - Glossary term definitions
 
@@ -135,7 +135,7 @@ For detailed information about organizing your content, see the [Content Structu
 
 ## IIIF Integration
 
-Telar supports both local images (auto-generated IIIF tiles) and external IIIF resources from museums and libraries. Upload images to `components/images/objects/` or reference external IIIF manifests in your object metadata.
+Telar supports both local images (auto-generated IIIF tiles) and external IIIF resources from museums and libraries. Upload images to `components/images/` or reference external IIIF manifests in your object metadata.
 
 For complete details on working with IIIF images, see the [IIIF Integration Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/4-iiif-integration).
 

@@ -4,6 +4,8 @@ Generate IIIF tiles and manifests from source images
 
 Uses iiif library (Python) to generate static IIIF Level 0 tiles.
 Alternative to Bodleian tool, simpler for basic use cases.
+
+Version: v0.5.0-beta
 """
 
 import os
@@ -17,14 +19,23 @@ def check_dependencies():
     try:
         from iiif.static import IIIFStatic
         from PIL import Image, ImageOps
-        return True
     except ImportError as e:
         print("❌ Missing required dependencies!")
         print("\nPlease install:")
         print("  pip install iiif Pillow")
         print("\nOr use the provided requirements file:")
-        print("  pip install -r scripts/requirements.txt")
+        print("  pip install -r requirements.txt")
         return False
+
+    # Check for optional HEIC support
+    try:
+        from pillow_heif import register_heif_opener
+    except ImportError:
+        print("⚠️  pillow-heif not installed - HEIC/HEIF files will not be supported")
+        print("   To enable HEIC support: pip install pillow-heif")
+        print()
+
+    return True
 
 def get_base_url_from_config():
     """
@@ -62,6 +73,13 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
     from PIL import Image, ImageOps
     import tempfile
 
+    # Register HEIF plugin for HEIC/HEIF support if available
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+    except ImportError:
+        pass  # HEIC support unavailable
+
     # Preprocess PNG images with transparency (RGBA) to RGB
     # because IIIF library saves as JPEG which doesn't support alpha
     processed_image_path = image_path
@@ -77,23 +95,49 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
         if img is None:
             # No EXIF orientation data, use original
             img = img_before_exif
-
-        exif_applied = (img != img_before_exif)
-        if exif_applied:
+        elif img != img_before_exif:
             print(f"  ↻ Applied EXIF orientation correction")
 
-        # Handle RGBA conversion
-        if img.mode == 'RGBA':
-            print(f"  ⚠️  Converting RGBA to RGB (removing transparency)")
-            # Create RGB image with white background
-            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
-            rgb_img.paste(img, mask=img.split()[3])  # Use alpha channel as mask
-            img = rgb_img
+        # Convert image to RGB if needed and create JPEG for IIIF processing
+        needs_conversion = False
+        converted_img = img
 
-        # Save to temp file if we modified the image (EXIF correction or RGBA conversion)
-        if exif_applied or img_before_exif.mode == 'RGBA':
+        # Handle transparency/alpha channel modes
+        if img.mode in ['RGBA', 'LA']:
+            print(f"  ⚠️  Converting {img.mode} to RGB (removing transparency)")
+            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+            rgb_img.paste(img, mask=img.split()[-1])  # Use alpha channel as mask
+            converted_img = rgb_img
+            needs_conversion = True
+
+        # Handle palette mode (GIF, some PNGs)
+        elif img.mode == 'P':
+            print(f"  ⚠️  Converting palette mode to RGB")
+            converted_img = img.convert('RGB')
+            needs_conversion = True
+
+        # Handle other uncommon modes
+        elif img.mode not in ['RGB', 'L']:
+            print(f"  ⚠️  Converting {img.mode} mode to RGB")
+            converted_img = img.convert('RGB')
+            needs_conversion = True
+
+        # Check if we need to convert to JPEG (for non-JPEG formats)
+        file_ext = image_path.suffix.lower()
+        if needs_conversion or file_ext not in ['.jpg', '.jpeg']:
+            # Show format-specific message
+            if file_ext in ['.heic', '.heif']:
+                print(f"  ⚠️  Converting HEIC to JPEG for IIIF processing")
+            elif file_ext == '.webp':
+                print(f"  ⚠️  Converting WebP to JPEG for IIIF processing")
+            elif file_ext in ['.tif', '.tiff']:
+                print(f"  ⚠️  Converting TIFF to JPEG for IIIF processing")
+            elif file_ext == '.png' and not needs_conversion:
+                print(f"  ⚠️  Converting PNG to JPEG for IIIF processing")
+
+            # Save to temporary JPEG file
             temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-            img.save(temp_file.name, 'JPEG', quality=95)
+            converted_img.save(temp_file.name, 'JPEG', quality=95)
             processed_image_path = Path(temp_file.name)
             temp_file.close()
     except Exception as e:
@@ -284,13 +328,77 @@ def load_object_metadata(object_id):
         print(f"  ⚠️  Could not load metadata: {e}")
     return {}
 
-def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif/objects', base_url=None):
+def load_objects_needing_tiles():
     """
-    Generate IIIF tiles for all images in source directory
+    Load list of object_ids that need IIIF tiles generated from objects.json
+
+    Returns:
+        list: Object IDs that need self-hosted IIIF tiles (have no external source URL)
+    """
+    try:
+        objects_json = Path('_data/objects.json')
+        if not objects_json.exists():
+            print("⚠️  objects.json not found - run csv_to_json.py first")
+            return None
+
+        with open(objects_json, 'r') as f:
+            objects = json.load(f)
+
+        # Find objects that need IIIF tiles (no external source URL/IIIF manifest)
+        objects_needing_tiles = []
+        for obj in objects:
+            object_id = obj.get('object_id')
+
+            # Check source_url first (v0.5.0+), fall back to iiif_manifest (v0.4.x)
+            source_url = obj.get('source_url', '').strip()
+            if not source_url:
+                source_url = obj.get('iiif_manifest', '').strip()
+
+            # Skip if no object_id
+            if not object_id:
+                continue
+
+            # Need tiles if source URL is empty or not a URL
+            if not source_url or not source_url.startswith('http'):
+                objects_needing_tiles.append(object_id)
+
+        return objects_needing_tiles
+
+    except Exception as e:
+        print(f"❌ Error loading objects.json: {e}")
+        return None
+
+def find_image_for_object(object_id, source_dir):
+    """
+    Find image file for a given object_id, checking multiple extensions (case-insensitive)
 
     Args:
-        source_dir: Directory containing source images
-        output_dir: Directory to output IIIF tiles and manifests
+        object_id: Object identifier
+        source_dir: Directory to search for images
+
+    Returns:
+        Path object if found, None otherwise
+    """
+    source_path = Path(source_dir)
+    # Priority order: Common formats first, then newer/specialized formats
+    image_extensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.tif', '.tiff']
+
+    for ext in image_extensions:
+        # Check both lowercase and uppercase extensions
+        for case_ext in [ext, ext.upper()]:
+            image_path = source_path / f"{object_id}{case_ext}"
+            if image_path.exists():
+                return image_path
+
+    return None
+
+def generate_iiif_tiles(source_dir='components/images', output_dir='iiif/objects', base_url=None):
+    """
+    Generate IIIF tiles for objects listed in objects.json
+
+    Args:
+        source_dir: Directory containing source images (default: components/images)
+        output_dir: Directory to output IIIF tiles and manifests (default: iiif/objects)
         base_url: Base URL for the site
     """
     if not check_dependencies():
@@ -333,30 +441,41 @@ def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif
     print("=" * 60)
     print()
 
-    # Supported image extensions
-    image_extensions = ['.jpg', '.jpeg', '.png', '.tif', '.tiff']
+    # Load objects from objects.json (CSV-driven approach)
+    print("📋 Loading objects from objects.json...")
+    objects_needing_tiles = load_objects_needing_tiles()
 
-    # Find all images
-    images = [f for f in source_path.iterdir()
-              if f.is_file() and f.suffix.lower() in image_extensions]
-
-    if not images:
-        print(f"⚠️  No images found in {source_dir}")
-        print(f"   Supported formats: {', '.join(image_extensions)}")
+    if objects_needing_tiles is None:
+        print("❌ Could not load objects.json")
         return False
 
-    print(f"Found {len(images)} images to process\n")
+    if not objects_needing_tiles:
+        print("ℹ️  No objects need IIIF tiles (all use external manifests)")
+        return True
 
-    # Process each image file
-    for i, image_file in enumerate(images, 1):
-        # Get object ID from filename (without extension)
-        object_id = image_file.stem
+    print(f"✓ Found {len(objects_needing_tiles)} objects needing tiles\n")
+
+    # Process each object
+    processed_count = 0
+    skipped_count = 0
+
+    for i, object_id in enumerate(objects_needing_tiles, 1):
+        print(f"[{i}/{len(objects_needing_tiles)}] Processing {object_id}...")
+
+        # Find image file for this object
+        image_file = find_image_for_object(object_id, source_dir)
+
+        if not image_file:
+            print(f"  ⚠️  No image file found for {object_id}")
+            print(f"      Checked: {object_id}.jpg, .jpeg, .png, .heic, .heif, .webp, .tif, .tiff (case-insensitive)")
+            skipped_count += 1
+            print()
+            continue
+
+        print(f"  Found: {image_file.name}")
 
         # Output directory for this object
         object_output = output_path / object_id
-
-        print(f"[{i}/{len(images)}] Processing {image_file.name}...")
-        print(f"  Object ID: {object_id}")
 
         try:
             # Remove existing output if present
@@ -369,18 +488,22 @@ def generate_iiif_tiles(source_dir='components/images/objects', output_dir='iiif
             generate_iiif_for_image(image_file, object_output, object_id, base_url)
 
             print(f"  ✓ Generated tiles for {object_id}")
+            processed_count += 1
             print()
 
         except Exception as e:
             print(f"  ❌ Error processing {image_file.name}: {e}")
             import traceback
             traceback.print_exc()
+            skipped_count += 1
             print()
             continue
 
     print("=" * 60)
     print("✓ IIIF generation complete!")
-    print(f"  Generated tiles for {len(images)} objects")
+    print(f"  Processed: {processed_count} objects")
+    if skipped_count > 0:
+        print(f"  Skipped: {skipped_count} objects (missing images or errors)")
     print(f"  Output directory: {output_dir}")
     print("=" * 60)
     return True
@@ -390,12 +513,12 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Generate IIIF tiles and manifests for Telar objects'
+        description='Generate IIIF tiles and manifests for Telar objects (CSV-driven)'
     )
     parser.add_argument(
         '--source-dir',
-        default='components/images/objects',
-        help='Source directory containing images (default: components/images/objects)'
+        default='components/images',
+        help='Source directory containing images (default: components/images)'
     )
     parser.add_argument(
         '--output-dir',
@@ -404,7 +527,7 @@ def main():
     )
     parser.add_argument(
         '--base-url',
-        help='Base URL for the site (default: from SITE_URL env or http://localhost:4000/telar)'
+        help='Base URL for the site (default: from _config.yml or http://localhost:4000)'
     )
 
     args = parser.parse_args()

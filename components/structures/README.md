@@ -3,7 +3,7 @@
 This folder contains CSV files that define the organizational structure of your Telar site.
 
 > **⚠️ Note for Google Sheets Users:**
-> If you're using the [Google Sheets integration](../../docs/google_sheets_integration/README.md), you **do not need to manually edit the CSV files in this folder**. The `fetch_google_sheets.py` script (or GitHub Actions workflow) will automatically fetch and update these CSVs from your Google Sheet.
+> If you're using the Google Sheets integration, you **do not need to manually edit the CSV files in this folder**. The `fetch_google_sheets.py` script (or GitHub Actions workflow) will automatically fetch and update these CSVs from your Google Sheet.
 
 ## Purpose
 

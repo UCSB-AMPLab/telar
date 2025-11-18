@@ -16,12 +16,6 @@ Complete documentation for Telar is now available at:
 - [Markdown Syntax Reference](https://ampl.clair.ucsb.edu/telar-docs/docs/reference/markdown-syntax/)
 - [GitHub Actions Reference](https://ampl.clair.ucsb.edu/telar-docs/docs/reference/github-actions/)
 
-## Local Development Setup
-
-For Google Sheets integration with local development, see:
-
-- [google_sheets_integration/README.md](google_sheets_integration/README.md)
-
 ## Support
 
 - **Report Issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)

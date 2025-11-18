@@ -4,7 +4,7 @@ title: Rich Media in Panels
 
 Telar panels can include **rich media** alongside text:
 
-![AMPL Logo](/components/images/additional/ampl-logo.png){sm}
+![AMPL Logo](/components/images/ampl-logo.png){sm}
 
 **Images** can be embedded directly in panel content using Markdown syntax. Simply reference images from your project's assets. You can control image sizing with `{sm}`, `{md}`, `{lg}`, or `{full}` tags.
 

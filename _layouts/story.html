@@ -34,7 +34,11 @@
   // Expose language strings to JavaScript
   window.telarLang = {
     goDeeper: "{{ lang.buttons.go_deeper }}",
-    stepNumber: "{{ lang.story.step_number }}"
+    stepNumber: "{{ lang.story.step_number }}",
+    embedBanner: {
+      text: {{ lang.embed_banner.text | jsonify }},
+      link: "{{ lang.embed_banner.link }}"
+    }
   };
 
   // If Christmas Tree Mode is active, add 🎄 to all warning headings
@@ -60,17 +64,23 @@
   <!-- Material Symbols for home icon -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
 
+  <!-- Embed Mode Detection (must load early) -->
+  <script src="{{ '/assets/js/embed.js' | relative_url }}"></script>
+
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
 
   {% seo %}
 </head>
 <body class="story-page">
-  <!-- Fixed Back to Home Button -->
+  <!-- Fixed Back to Home Button (hidden in embed mode) -->
   <a href="{{ '/' | relative_url }}" class="btn-home">
     <span class="material-symbols-outlined btn-home-icon">home</span>
     <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>
   </a>
+
+  <!-- Fixed Share Button (hidden in embed mode, floats on right) -->
+  {% include share-button.html variant="icon-text" context="story" %}
 
   <div class="story-container">
     <!-- Left Column: Card Stacking Narrative -->
@@ -88,6 +98,7 @@
             {% if page.byline %}
             <h3 class="intro-byline">{{ page.byline }}</h3>
             {% endif %}
+
             {% if page.description %}
             <p class="intro-description">{{ page.description }}</p>
             {% endif %}
@@ -173,15 +184,15 @@
   <!-- Panels -->
   {% include panels.html %}
 
+  <!-- Share Panel -->
+  {% include share-panel.html %}
+
   <!-- Bootstrap 5 JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <!-- UniversalViewer IIIF Viewer -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/uv.css">
   <script src="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/umd/UV.js"></script>
-
-  <!-- Scrollama -->
-  <script src="{{ '/assets/js/scrollama.min.js' | relative_url }}"></script>
 
   <!-- Telar Core -->
   <script src="{{ '/assets/js/telar.js' | relative_url }}"></script>
@@ -212,5 +223,9 @@
     window.objectsData = {{ site.data.objects | jsonify }};
   </script>
   <script src="{{ '/assets/js/story.js' | relative_url }}"></script>
+  <script src="{{ '/assets/js/widgets.js' | relative_url }}"></script>
+
+  <!-- Share Panel JavaScript -->
+  <script src="{{ '/assets/js/share-panel.js' | relative_url }}"></script>
 </body>
 </html>

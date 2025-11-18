@@ -192,12 +192,13 @@ layout: default
         <dd class="col-sm-8">{{ page.credit }}</dd>
         {% endif %}
 
-        {% if page.iiif_manifest and page.iiif_manifest != "" %}
+        {% assign external_source = page.source_url | default: page.iiif_manifest %}
+        {% if external_source and external_source != "" %}
         <dt class="col-sm-4">IIIF Manifest</dt>
         <dd class="col-sm-8">
           <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
-            <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ page.iiif_manifest }}</code>
-            <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ page.iiif_manifest }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
+            <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ external_source }}</code>
+            <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ external_source }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
               <i class="bi bi-clipboard"></i>
             </button>
           </div>
@@ -251,8 +252,9 @@ layout: default
   };
 
   document.addEventListener('DOMContentLoaded', function() {
-    {% if page.iiif_manifest and page.iiif_manifest != "" %}
-    const manifestUrl = '{{ page.iiif_manifest }}';
+    {% assign external_source = page.source_url | default: page.iiif_manifest %}
+    {% if external_source and external_source != "" %}
+    const manifestUrl = '{{ external_source }}';
     {% elsif page.object_id %}
     const manifestUrl = '{{ site.baseurl }}/iiif/objects/{{ page.object_id }}/manifest.json';
     {% else %}

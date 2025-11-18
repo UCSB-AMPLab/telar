@@ -2,6 +2,118 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.5.0-beta] - 2025-11-17
+
+### Added
+
+#### Canvas LMS Embedding Support
+- **Complete iframe embedding system** for educational and blog platforms (Canvas, Moodle, Blackboard, WordPress, Squarespace, Wix)
+- **Embed mode detection** via `?embed=true` URL parameter with automatic UI adjustments
+- **Forced navigation buttons** on all viewports including desktop with custom positioning and responsive typography
+- **"View full site" dismissible banner** with multilingual support and frosted glass effect
+- **Successfully tested** in production Canvas LMS with cross-browser and mobile testing complete
+- **Comprehensive documentation** with educator guide and troubleshooting section
+
+#### Share & Embed UI
+- **Share button component** with OS-specific icons and three variants (story page, navbar, icon-only)
+- **Share panel modal** with two tabs: Share Links (clean URLs) and Embed Code (8 dimension presets)
+- **Platform presets**: Canvas (100% × 800px), Moodle/Blackboard (100% × 700px), WordPress (100% × 600px), Squarespace (100% × 600px), Wix (100% × 550px), Mobile (375px × 500px), Fixed (800 × 600), Custom
+- **Copy to clipboard** with visual feedback for both share URLs and embed codes
+- **Full multilingual support** (English + Spanish) with platform documentation links
+
+#### Extended Image Format Support
+- **Native support** for HEIC (iPhone photos), WebP, and TIFF formats
+- **Case-insensitive extension matching** (`.JPG`, `.png`, `.HEIC` all work)
+- **Automatic JPEG conversion** during IIIF tile generation with original file preservation
+- **Handles transparency** (RGBA, LA modes) and palette modes with proper conversion
+- **Eliminates false warnings** for uppercase file extensions
+
+#### Automatic Carousel Height Detection
+- **Build-time dimension analysis** using PIL/Pillow with zero runtime cost
+- **Four size classes**: Compact (400px), Default (550px), Tall (700px), Portrait (850px)
+- **Automatic assignment** based on maximum aspect ratio in carousel
+- **Eliminates manual configuration** for carousel heights
+
+#### Responsive Typography for Slide-Over Panels
+- **Extended fluid typography** from story steps to all panel contents using CSS `clamp()`
+- **Max-width constraints** for panel images on narrow screens
+- **Improved readability** across all device sizes
+
+#### Mobile Panel Quality-of-Life Improvements
+- **Scrollable story steps** prevent navigation button cutoff (changed `overflow: hidden` to `overflow-y: auto`)
+- **Panel image width constraints** force `max-width: 100%` on mobile (≤768px) while preserving desktop sizing
+
+#### Carousel Widget Styling Improvements
+- **Captions moved below images** for better accessibility
+- **Black container background** for better image contrast
+- **Reduced typography** (0.9rem text, 0.8rem credit) with indicators positioned above captions
+- **Disabled keyboard navigation** to prevent story navigation interference
+
+#### Future Media Type Directory Structure
+- **Placeholder directories** with READMEs: `components/pdfs/` (v0.6.0), `components/audio/` (v0.7.0), `components/3d-models/` (v0.8.0)
+- **Prevents incompatible implementations** before official support
+
+#### Version Headers in All Code Files
+- **All scripts, styles, and workflows** now include version headers for better tracking
+- **Format**: `Version: v0.5.0-beta` (Python/YAML) or `@version v0.5.0-beta` (JS/CSS)
+
+### Changed
+
+#### Flattened Image Directory Structure
+- **Removed subdirectories**: `components/images/objects/` and `components/images/additional/` → `components/images/`
+- **Updated default paths** in csv_to_json.py, generate_iiif.py, and validation
+- **Automated migration** via upgrade script
+
+#### CSV-Driven IIIF Tile Generation
+- **Changed from directory-based to CSV-driven**: Only processes objects in `objects.csv` without external manifests
+- **Automatic file detection** by `object_id` supporting multiple extensions (case-insensitive)
+- **Faster generation** with no orphaned tiles
+
+#### Unified source_url Column Name
+- **Renamed `iiif_manifest` → `source_url`** for future media type compatibility (PDFs, videos, 3D, audio)
+- **Full backward compatibility**: Both column names work, automatic aliasing in both directions
+- **Updated templates** with Liquid fallback pattern
+
+#### CSV-Aware GitHub Actions Monitoring
+- **Smart change detection** only triggers IIIF when changed images match object IDs in objects.csv
+- **Cache optimization** for more efficient CI/CD pipeline
+
+#### Removed Unused Dependencies
+- **Deleted scrollama.min.js and openseadragon.min.js** (~47KB savings) - Telar uses custom scroll system and UniversalViewer's bundled OpenSeadragon
+- **Deleted docs/google_sheets_integration/** folder - fully documented in official docs site
+
+### Fixed
+
+#### CRITICAL: v0.4.0 Feature Restoration (Phase 1 - Data Pipeline)
+- **Restored 1,382 lines** accidentally deleted from `csv_to_json.py` in commit f62acee (Nov 8, 2025)
+- **Root cause**: Commit overwrote file, removing core v0.4.0 functionality
+- **Features restored**:
+  - Widget processing (~350 lines): accordion, carousel, tabs with Bootstrap HTML generation
+  - IIIF metadata auto-population (~400 lines): extracts title, creator, period, location, credit
+  - Glossary auto-linking (~150 lines): `[[term_id]]` syntax processing
+  - Multilingual support (~100 lines): language string loading and interpolation
+- **Applied v0.5.0 updates** to restored code (version header, flattened image paths)
+
+#### CRITICAL: v0.4.0 Feature Restoration (Phase 2 - Display Components)
+- **Restored frontend components** for widgets and glossary (~115 lines total)
+- **Widget panel-specific styling**: Layer 1 widgets use Layer 2 colors and vice versa
+- **Enhanced glossary functionality**: Proper title extraction, both inline and index links work
+- **Widget initialization**: Added widgets.js script tag
+- **Glossary multilingual support**: Language-aware panel labels and "Key term:" prefix
+
+#### Layer 2 Panel Heading Colors
+- **Fixed h2, h3, h4 color inheritance** in layer 2 panels (white on dark purple background)
+
+### Migration
+
+- **Automated v0.4.x → v0.5.0 migration**:
+  - File relocation: old subdirectories → `components/images/`
+  - CSV column update: `iiif_manifest` → `source_url`
+  - Name conflict detection and empty directory cleanup
+- **Full backward compatibility**: No breaking changes for existing sites
+
+---
+
 ## [0.4.3-beta] - 2025-11-15
 
 ### Fixed
