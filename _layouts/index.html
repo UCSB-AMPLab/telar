@@ -6,11 +6,6 @@ title: Home
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-11 mx-auto">
-      {% assign logo_path = site.logo | strip %}
-      {% if logo_path != "" %}
-      <img src="{{ logo_path | relative_url }}" alt="{{ site.title }}" class="mb-4" style="max-width: 200px;">
-      {% endif %}
-
       <h1 class="display-4 mb-3">{{ site.telar.project_title | default: site.title }}</h1>
 
       {% if site.telar.tagline %}
