@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-0.5.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-A minimal computing framework for creating visual narrative exhibitions with IIIF images and scrollytelling.
+A minimal-computing framework for creating layered IIIF visual narratives for digital scholarship, public exhibitions, community storytelling, and classroom projects.
 
 ---
 
