@@ -29,7 +29,20 @@ Thumbs.db
 # Build artifacts
 *.log
 
-# Demo Content (fetched from content.telar.org, never committed)
+# Generated JSON files (from components/structures/*.csv by csv_to_json.py)
+# Source of truth is the CSV files - JSON is regenerated on every build
+_data/objects.json
+_data/project.json
+_data/story-*.json
+
+# Generated Jekyll collection files (from components/texts/ by generate_collections.py)
+# Source of truth is the markdown files in components/texts/
+_jekyll-files/
+
+# Demo glossary files (created by csv_to_json.py from demo bundle)
+components/texts/glossary/_demo_*
+
+# Demo Content bundle (fetched from content.telar.org, never committed)
 _demo_content/
 
 # IIIF Generated Tiles
