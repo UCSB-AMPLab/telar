@@ -29,6 +29,9 @@ Thumbs.db
 # Build artifacts
 *.log
 
+# Demo Content (fetched from content.telar.org, never committed)
+_demo_content/
+
 # IIIF Generated Tiles
 # TODO: Remove this when testing GitHub Actions workflow
 # Tiles should be tracked in production for optimization
