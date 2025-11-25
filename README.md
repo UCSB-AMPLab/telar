@@ -6,14 +6,14 @@ A minimal-computing framework for creating layered IIIF visual narratives for di
 
 ---
 
-**[Full Documentation](https://ampl.clair.ucsb.edu/telar-docs)** | **[Example Site](https://ampl.clair.ucsb.edu/telar)** | **[Report Issues](https://github.com/UCSB-AMPLab/telar/issues)**
+**[Full Documentation](https://telar.org/docs)** | **[Example Site](https://ampl.clair.ucsb.edu/telar)** | **[Report Issues](https://github.com/UCSB-AMPLab/telar/issues)**
 
 ---
 
 > **⚠️ Beta Release - v0.5.0-beta**
-> This is a beta release for testing and feedback. For detailed documentation, visit **[ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**.
+> This is a beta release for testing and feedback. For detailed documentation, visit **[telar.org/docs](https://telar.org/docs)**.
 
-> **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/3-upgrading/) for instructions.
+> **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/3-upgrading/) for instructions.
 
 ## Overview
 
@@ -37,7 +37,7 @@ We gratefully acknowledge the support of the [Caribbean Digital Scholarship Coll
 
 ## Quick Start (no installation required!)
 
-**For comprehensive step-by-step guides, see the [full documentation site](https://ampl.clair.ucsb.edu/telar-docs).** This Quick Start provides the essential steps to get your site running—detailed workflows and advanced topics are covered in the docs.
+**For comprehensive step-by-step guides, see the [full documentation site](https://telar.org/docs).** This Quick Start provides the essential steps to get your site running—detailed workflows and advanced topics are covered in the docs.
 
 Get started with Telar in just a few steps. Telar narratives combine IIIF images with layered storytelling—each story unfolds through steps that show images alongside brief text, with optional panels for deeper exploration.
 
@@ -72,10 +72,10 @@ Plan your narrative structure before building. Sketch out your stories, identify
 
 ### Next Steps
 
-- **Detailed workflows**: See [GitHub Web Interface](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/1-github-web) or [Local Development](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/2-local-dev) guides
-- **Content structure**: Learn about [organizing your content](https://ampl.clair.ucsb.edu/telar-docs/docs/3-content-structure)
-- **IIIF integration**: Understand [how to work with IIIF images](https://ampl.clair.ucsb.edu/telar-docs/docs/4-iiif-integration)
-- **Customization**: Explore [themes and styling options](https://ampl.clair.ucsb.edu/telar-docs/docs/6-customization/)
+- **Detailed workflows**: See [GitHub Web Interface](https://telar.org/docs/2-workflows/1-github-web) or [Local Development](https://telar.org/docs/2-workflows/2-local-dev) guides
+- **Content structure**: Learn about [organizing your content](https://telar.org/docs/3-content-structure)
+- **IIIF integration**: Understand [how to work with IIIF images](https://telar.org/docs/4-iiif-integration)
+- **Customization**: Explore [themes and styling options](https://telar.org/docs/6-customization/)
 
 ---
 
@@ -104,7 +104,7 @@ First-time setup required (one-time only):
 2. Run your first automated upgrade
 3. All future upgrades will be automated
 
-**For complete upgrade instructions**, including detailed setup steps, troubleshooting, and version history, see the [Upgrading Telar Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/upgrading/) in the documentation.
+**For complete upgrade instructions**, including detailed setup steps, troubleshooting, and version history, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/upgrading/) in the documentation.
 
 ---
 
@@ -121,7 +121,7 @@ pip install -r requirements.txt
 bundle exec jekyll serve
 ```
 
-For detailed local development instructions, see the [Local Development Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/2-local-dev) in the documentation.
+For detailed local development instructions, see the [Local Development Guide](https://telar.org/docs/2-workflows/2-local-dev) in the documentation.
 
 ## Content Structure
 
@@ -131,31 +131,31 @@ Telar uses a components-based architecture:
 - `components/texts/stories/` - Markdown files for narrative content
 - `components/texts/glossary/` - Glossary term definitions
 
-For detailed information about organizing your content, see the [Content Structure Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/3-content-structure) in the documentation.
+For detailed information about organizing your content, see the [Content Structure Guide](https://telar.org/docs/3-content-structure) in the documentation.
 
 ## IIIF Integration
 
 Telar supports both local images (auto-generated IIIF tiles) and external IIIF resources from museums and libraries. Upload images to `components/images/` or reference external IIIF manifests in your object metadata.
 
-For complete details on working with IIIF images, see the [IIIF Integration Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/4-iiif-integration).
+For complete details on working with IIIF images, see the [IIIF Integration Guide](https://telar.org/docs/4-iiif-integration).
 
 ## Configuration
 
 Configure your site in `_config.yml` (site title, theme, Google Sheets URLs, etc.). Telar includes 4 preset themes: Paisajes, Neogranadina, Santa Barbara, and Austin.
 
-For all configuration options, see the [Configuration Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/5-configuration).
+For all configuration options, see the [Configuration Guide](https://telar.org/docs/5-configuration).
 
 ## Deployment
 
 The build process is fully automated via GitHub Actions. Push changes to the main branch and GitHub Pages automatically rebuilds and deploys your site. To manually trigger a rebuild (e.g., after editing Google Sheets), go to the Actions tab and run the "Build and Deploy" workflow.
 
-For details on the automated workflow, see the [GitHub Actions Reference](https://ampl.clair.ucsb.edu/telar-docs/docs/7-reference/1-github-actions).
+For details on the automated workflow, see the [GitHub Actions Reference](https://telar.org/docs/7-reference/1-github-actions).
 
 ## Automated Upgrades
 
 Telar v0.3.4+ includes an automated upgrade workflow that migrates your site to the latest version.
 
-> **Note:** The automated upgrade workflow is available for sites running **v0.3.4 or later**. If you're upgrading from an earlier version (v0.2.0-v0.3.3), you'll need to manually copy the upgrade workflow files to your repository first. See the [Upgrade Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/upgrading) for detailed instructions.
+> **Note:** The automated upgrade workflow is available for sites running **v0.3.4 or later**. If you're upgrading from an earlier version (v0.2.0-v0.3.3), you'll need to manually copy the upgrade workflow files to your repository first. See the [Upgrade Guide](https://telar.org/docs/workflows/upgrading) for detailed instructions.
 
 **To upgrade your site (v0.3.4+):**
 1. Go to your repository's **Actions** tab on GitHub
@@ -170,13 +170,13 @@ The upgrade system automatically:
 - Updates framework files and configurations
 - Generates an upgrade summary with any manual steps
 
-For detailed instructions, see the [Upgrade Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/upgrading).
+For detailed instructions, see the [Upgrade Guide](https://telar.org/docs/workflows/upgrading).
 
 ## Customization
 
 Telar includes 4 preset themes (Paisajes, Neogranadina, Santa Barbara, Austin) that can be switched via `_config.yml`. You can also create custom themes with your own colors and fonts.
 
-For theme customization and advanced styling, see the [Customization Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/6-customization/).
+For theme customization and advanced styling, see the [Customization Guide](https://telar.org/docs/6-customization/).
 
 ---
 
@@ -202,6 +202,6 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 
 ## Support
 
-- **Documentation:** [ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
+- **Documentation:** [telar.org/docs](https://telar.org/docs)
 - **Report Issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
 - **Example Site:** [ampl.clair.ucsb.edu/telar](https://ampl.clair.ucsb.edu/telar)

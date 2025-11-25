@@ -2,19 +2,19 @@
 
 Complete documentation for Telar is now available at:
 
-**[https://ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)**
+**[https://telar.org/docs](https://telar.org/docs)**
 
 ## Quick Links
 
-- [Getting Started](https://ampl.clair.ucsb.edu/telar-docs/docs/getting-started/)
-- [GitHub Web Workflow](https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/github-web/)
-- [Local Development](https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/local-dev/)
-- [Content Structure](https://ampl.clair.ucsb.edu/telar-docs/docs/content-structure/)
-- [IIIF Integration](https://ampl.clair.ucsb.edu/telar-docs/docs/iiif-integration/)
-- [Configuration](https://ampl.clair.ucsb.edu/telar-docs/docs/configuration/)
-- [Customization](https://ampl.clair.ucsb.edu/telar-docs/docs/customization/)
-- [Markdown Syntax Reference](https://ampl.clair.ucsb.edu/telar-docs/docs/reference/markdown-syntax/)
-- [GitHub Actions Reference](https://ampl.clair.ucsb.edu/telar-docs/docs/reference/github-actions/)
+- [Getting Started](https://telar.org/docs/getting-started/)
+- [GitHub Web Workflow](https://telar.org/docs/workflows/github-web/)
+- [Local Development](https://telar.org/docs/workflows/local-dev/)
+- [Content Structure](https://telar.org/docs/content-structure/)
+- [IIIF Integration](https://telar.org/docs/iiif-integration/)
+- [Configuration](https://telar.org/docs/configuration/)
+- [Customization](https://telar.org/docs/customization/)
+- [Markdown Syntax Reference](https://telar.org/docs/reference/markdown-syntax/)
+- [GitHub Actions Reference](https://telar.org/docs/reference/github-actions/)
 
 ## Support
 

@@ -14,7 +14,7 @@ Block quotations, like this:
 
 You can even include footnotes[^2] for citations and references.
 
-**Want to learn more?** See the complete [Markdown Syntax Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/reference/markdown-syntax/) for image sizing, rich media embeds, code blocks, and best practices.
+**Want to learn more?** See the complete [Markdown Syntax Guide](https://telar.org/docs/reference/markdown-syntax/) for image sizing, rich media embeds, code blocks, and best practices.
 
 [^1]: The Museo del Oro in Bogotá holds extensive collections of these artifacts.
 [^2]: Footnotes appear at the bottom of panel content with proper styling.

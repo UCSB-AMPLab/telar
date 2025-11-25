@@ -14,7 +14,7 @@ objects_intro: "Browse {count} objects featured in the stories."
 This site showcases the features and capabilities of Telar (v.[{{ site.telar.version }}](https://github.com/UCSB-AMPLab/telar/releases/tag/v{{ site.telar.version }})). Build your own visual narrative exhibition by visiting:
 
 - Our **[GitHub repository](https://github.com/UCSB-AMPLab/telar)**, where you can copy the template to create your own project
-- The **[documentation site](https://ampl.clair.ucsb.edu/telar-docs)**, where you can find guides and tutorials
+- The **[documentation site](https://telar.org/docs)**, where you can find guides and tutorials
 
 No installation is required: you can manage your content with Google Sheets and publish it for free on GitHub Pages.
 

@@ -245,7 +245,7 @@ Please complete these after merging:
     checklist += """
 ## Resources
 
-- [Full Documentation](https://ampl.clair.ucsb.edu/telar-docs)
+- [Full Documentation](https://telar.org/docs)
 - [CHANGELOG](https://github.com/UCSB-AMPLab/telar/blob/main/CHANGELOG.md)
 - [Report Issues](https://github.com/UCSB-AMPLab/telar/issues)
 """

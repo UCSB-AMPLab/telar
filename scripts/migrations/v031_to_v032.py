@@ -30,7 +30,7 @@ objects_intro: "Browse {count} objects featured in the stories."
 
 {% include upgrade-alert.html %}
 
-The homepage can now be customized by editing the `index.md` file in the root folder of your repository. Edit it to remove or replace this message. To learn more, visit the [documentation](https://ampl.clair.ucsb.edu/telar-docs/docs/6-customization/3-home-page/).
+The homepage can now be customized by editing the `index.md` file in the root folder of your repository. Edit it to remove or replace this message. To learn more, visit the [documentation](https://telar.org/docs/6-customization/3-home-page/).
 """
 
     def check_applicable(self) -> bool:
@@ -72,13 +72,13 @@ The homepage can now be customized by editing the `index.md` file in the root fo
         if workflow_content and 'schedule:' in workflow_content:
             manual_steps.append({
                 'description': 'Update GitHub Actions workflow file (.github/workflows/build.yml) - Replace with latest version from https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml to remove deprecated cron schedule',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/upgrading/'
+                'doc_url': 'https://telar.org/docs/2-workflows/upgrading/'
             })
 
         # Always include optional customization step
         manual_steps.append({
             'description': '(Optional) Customize index.md content to personalize your site',
-            'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/docs/6-customization/3-home-page/'
+            'doc_url': 'https://telar.org/docs/6-customization/3-home-page/'
         })
 
         return manual_steps

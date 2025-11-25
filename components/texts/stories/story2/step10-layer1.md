@@ -16,4 +16,4 @@ Telar panels can include **rich media** alongside text:
 
 **Combine everything**: Mix IIIF images from global repositories, locally-hosted materials, pan and zoom navigation, layered information, Markdown formatting, and rich media to create compelling scholarly narratives.
 
-For complete details on all available markdown features, see the [Markdown Syntax Guide](https://ampl.clair.ucsb.edu/telar-docs/docs/reference/markdown-syntax/).
+For complete details on all available markdown features, see the [Markdown Syntax Guide](https://telar.org/docs/reference/markdown-syntax/).

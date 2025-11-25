@@ -331,23 +331,23 @@ class Migration034to040(BaseMigration):
         return [
             {
                 'description': 'Review multilingual configuration in _config.yml (telar_language: "en" or "es")',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/multilingual-setup'
+                'doc_url': 'https://telar.org/docs/multilingual-setup'
             },
             {
                 'description': 'Optionally add widgets to your stories (carousel, tabs, accordion)',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/widgets'
+                'doc_url': 'https://telar.org/docs/widgets'
             },
             {
                 'description': 'Optionally create glossary terms and add [[term]] links to your content',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/glossary'
+                'doc_url': 'https://telar.org/docs/glossary'
             },
             {
                 'description': 'Test IIIF metadata auto-population by leaving object fields blank in CSV',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/iiif-metadata'
+                'doc_url': 'https://telar.org/docs/iiif-metadata'
             },
             {
                 'description': 'Add theme creator attribution to your theme YAML file (optional)',
-                'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/themes#creator-attribution'
+                'doc_url': 'https://telar.org/docs/themes#creator-attribution'
             },
             {
                 'description': 'Run "bundle exec jekyll build" to test your upgraded site',

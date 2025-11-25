@@ -15,4 +15,4 @@ This directory is reserved for audio files (oral histories, soundscapes, music, 
 ## Questions?
 
 - **Report issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
-- **Documentation:** [https://ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
+- **Documentation:** [https://telar.org/docs](https://telar.org/docs)
