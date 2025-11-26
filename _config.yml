@@ -9,7 +9,7 @@ url: "https://juancobo.com"
 author: ""
 email: ""
 telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
-logo: "/components/images/ampl-logo.png" # Path to logo image (optional, max 80px tall, 200-300px wide recommended)
+logo: "" # Path to logo image (optional, max 80px tall, 200-300px wide recommended)
 telar_language: "en" # Options: "en" (English), "es" (Español)
 
 # Google Sheets Integration (optional)

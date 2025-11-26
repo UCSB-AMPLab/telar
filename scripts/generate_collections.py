@@ -219,6 +219,10 @@ title: "{story_title}"
         if story_subtitle:
             frontmatter += f'subtitle: "{story_subtitle}"\n'
 
+        story_byline = story.get('byline', '')
+        if story_byline:
+            frontmatter += f'byline: "{story_byline}"\n'
+
         if is_demo:
             frontmatter += f'demo: true\n'
 

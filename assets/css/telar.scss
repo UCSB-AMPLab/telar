@@ -56,6 +56,16 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-heading);
 }
 
+/* Global link styling - theme color with underline */
+a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
 /* Display headings - ensure proper word wrapping on mobile */
 .navbar-brand {
   white-space: normal !important;
@@ -117,15 +127,6 @@ h1, h2, h3, h4, h5, h6 {
 
 .page-content p {
   margin-bottom: 1.5rem;
-}
-
-.page-content a {
-  color: var(--color-link);
-  text-decoration: underline;
-}
-
-.page-content a:hover {
-  opacity: 0.8;
 }
 
 /* Site Description - Links appear darker than body text, show theme color and underline on hover */
@@ -733,6 +734,13 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
 }
 
+.story-card-byline {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
 /* Demo story badge */
 .story-card .card {
   position: relative;
@@ -748,10 +756,10 @@ h1, h2, h3, h4, h5, h6 {
   left: 0.5rem;
   background: rgba(108, 117, 125, 0.85);
   color: white;
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 600;
   padding: 0.3rem 0.6rem;
-  border-radius: 0.25rem;
+  border-radius: 0.3rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   z-index: 10;

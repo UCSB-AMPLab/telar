@@ -300,6 +300,9 @@ title: Home
 
               <div class="card-body">
                 <h3>{{ story.title }}</h3>
+                {% if story.byline %}
+                <p class="story-card-byline">{{ story.byline | markdownify | strip_html | strip }}</p>
+                {% endif %}
               </div>
             </div>
           </a>
