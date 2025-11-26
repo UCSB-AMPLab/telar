@@ -43,7 +43,7 @@
     "layer2_button": "",
     "viewer_warning": "",
     "layer1_title": "Markdown Formatting",
-    "layer1_text": "<p>Telar panels support <strong>full Markdown syntax</strong> for rich text formatting:</p>\n<ul>\n<li><strong>Bold text</strong> for emphasis</li>\n<li><em>Italic text</em> for nuance</li>\n<li><a href=\"https://iiif.io\">External links</a> to resources</li>\n<li>Numbered and bulleted lists</li>\n</ul>\n<p>Block quotations, like this: </p>\n<blockquote>\n<p>This gold figure, dating from 600-1600 CE, is an example of the Muisca's sophisticated <em>metalworking techniques</em>.<sup id=\"fnref:1\"><a class=\"footnote-ref\" href=\"#fn:1\">2</a></sup></p>\n</blockquote>\n<p>You can even include footnotes<sup id=\"fnref:2\"><a class=\"footnote-ref\" href=\"#fn:2\">1</a></sup> for citations and references.</p>\n<p><strong>Want to learn more?</strong> See the complete <a href=\"https://telar.org/docs/docs/reference/markdown-syntax/\">Markdown Syntax Guide</a> for image sizing, rich media embeds, code blocks, and best practices.</p>\n<div class=\"footnote\">\n<hr />\n<ol>\n<li id=\"fn:2\">\n<p>Footnotes appear at the bottom of panel content with proper styling.&#160;<a class=\"footnote-backref\" href=\"#fnref:2\" title=\"Jump back to footnote 1 in the text\">&#8617;</a></p>\n</li>\n<li id=\"fn:1\">\n<p>The Museo del Oro in Bogotá holds extensive collections of these artifacts.&#160;<a class=\"footnote-backref\" href=\"#fnref:1\" title=\"Jump back to footnote 2 in the text\">&#8617;</a></p>\n</li>\n</ol>\n</div>",
+    "layer1_text": "<p>Telar panels support <strong>full Markdown syntax</strong> for rich text formatting:</p>\n<ul>\n<li><strong>Bold text</strong> for emphasis</li>\n<li><em>Italic text</em> for nuance</li>\n<li><a href=\"https://iiif.io\">External links</a> to resources</li>\n<li>Numbered and bulleted lists</li>\n</ul>\n<p>Block quotations, like this: </p>\n<blockquote>\n<p>This gold figure, dating from 600-1600 CE, is an example of the Muisca's sophisticated <em>metalworking techniques</em>.<sup id=\"fnref:1\"><a class=\"footnote-ref\" href=\"#fn:1\">2</a></sup></p>\n</blockquote>\n<p>You can even include footnotes<sup id=\"fnref:2\"><a class=\"footnote-ref\" href=\"#fn:2\">1</a></sup> for citations and references.</p>\n<p><strong>Want to learn more?</strong> See the complete <a href=\"https://telar.org/docs/reference/markdown-syntax/\">Markdown Syntax Guide</a> for image sizing, rich media embeds, code blocks, and best practices.</p>\n<div class=\"footnote\">\n<hr />\n<ol>\n<li id=\"fn:2\">\n<p>Footnotes appear at the bottom of panel content with proper styling.&#160;<a class=\"footnote-backref\" href=\"#fnref:2\" title=\"Jump back to footnote 1 in the text\">&#8617;</a></p>\n</li>\n<li id=\"fn:1\">\n<p>The Museo del Oro in Bogotá holds extensive collections of these artifacts.&#160;<a class=\"footnote-backref\" href=\"#fnref:1\" title=\"Jump back to footnote 2 in the text\">&#8617;</a></p>\n</li>\n</ol>\n</div>",
     "layer2_title": "",
     "layer2_text": ""
   },
@@ -65,7 +65,7 @@
   },
   {
     "step": 5,
-    "object": "example-piedrahita-title_page",
+    "object": "example-piedrahita-title-page",
     "x": "0.5",
     "y": "0.5",
     "zoom": "1.5",
@@ -81,7 +81,7 @@
   },
   {
     "step": 6,
-    "object": "example-piedrahita-title_page",
+    "object": "example-piedrahita-title-page",
     "x": "0.25",
     "y": "0.3",
     "zoom": "4.0",
@@ -97,7 +97,7 @@
   },
   {
     "step": 7,
-    "object": "example-piedrahita-title_page",
+    "object": "example-piedrahita-title-page",
     "x": "0.49",
     "y": "0.06",
     "zoom": "4.0",
@@ -113,7 +113,7 @@
   },
   {
     "step": 8,
-    "object": "example-piedrahita-title_page",
+    "object": "example-piedrahita-title-page",
     "x": "0.75",
     "y": "0.3",
     "zoom": "4.0",
@@ -129,7 +129,7 @@
   },
   {
     "step": 9,
-    "object": "example-piedrahita-title_page",
+    "object": "example-piedrahita-title-page",
     "x": "0.5",
     "y": "0.5",
     "zoom": "1.0",
@@ -155,7 +155,7 @@
     "layer2_button": "",
     "viewer_warning": "",
     "layer1_title": "Rich Media in Panels",
-    "layer1_text": "<p>Telar panels can include <strong>rich media</strong> alongside text:</p>\n<p><img src=\"/components/images/ampl-logo.png\" alt=\"AMPL Logo\" class=\"img-sm\"></p>\n<p><strong>Images</strong> can be embedded directly in panel content using Markdown syntax. Simply reference images from your project's assets. You can control image sizing with <code>{sm}</code>, <code>{md}</code>, <code>{lg}</code>, or <code>{full}</code> tags.</p>\n<p><strong>Videos</strong> can also be embedded, allowing you to combine IIIF images with multimedia explanations, oral histories, or documentary footage:</p>\n<div style=\"position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 1.5rem 0;\">\n  <iframe style=\"position: absolute; top: 0; left: 0; width: 100%; height: 100%;\" src=\"https://www.youtube.com/embed/EKOJgD0vLUI\" frameborder=\"0\" allowfullscreen></iframe>\n</div>\n\n<p><strong>Combine everything</strong>: Mix IIIF images from global repositories, locally-hosted materials, pan and zoom navigation, layered information, Markdown formatting, and rich media to create compelling scholarly narratives.</p>\n<p>For complete details on all available markdown features, see the <a href=\"https://telar.org/docs/docs/reference/markdown-syntax/\">Markdown Syntax Guide</a>.</p>",
+    "layer1_text": "<p>Telar panels can include <strong>rich media</strong> alongside text:</p>\n<p><img src=\"/components/images/ampl-logo.png\" alt=\"AMPL Logo\" class=\"img-sm\"></p>\n<p><strong>Images</strong> can be embedded directly in panel content using Markdown syntax. Simply reference images from your project's assets. You can control image sizing with <code>{sm}</code>, <code>{md}</code>, <code>{lg}</code>, or <code>{full}</code> tags.</p>\n<p><strong>Videos</strong> can also be embedded, allowing you to combine IIIF images with multimedia explanations, oral histories, or documentary footage:</p>\n<div style=\"position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 1.5rem 0;\">\n  <iframe style=\"position: absolute; top: 0; left: 0; width: 100%; height: 100%;\" src=\"https://www.youtube.com/embed/EKOJgD0vLUI\" frameborder=\"0\" allowfullscreen></iframe>\n</div>\n\n<p><strong>Combine everything</strong>: Mix IIIF images from global repositories, locally-hosted materials, pan and zoom navigation, layered information, Markdown formatting, and rich media to create compelling scholarly narratives.</p>\n<p>For complete details on all available markdown features, see the <a href=\"https://telar.org/docs/reference/markdown-syntax/\">Markdown Syntax Guide</a>.</p>",
     "layer2_title": "",
     "layer2_text": ""
   }

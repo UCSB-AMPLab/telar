@@ -1,16 +1,16 @@
 ---
 object_id: example-terrafirma-map
 title: "Terra firma et novum regnum Granatense et Popayan"
-creator: ""
-period: ""
+creator: "Jansson, Jan, 1588-1664, publisher. ; Hondius, Hendrik, 1597-1651. ; Kashnor, Leon, 1880-1955, seller. ; Museum Book Store."
+period: "1630; 1631"
 medium: ""
 dimensions: ""
-location: ""
-credit: ""
+location: "Huntington Digital Library"
+credit: "Huntington Digital Library"
 thumbnail: ""
 iiif_manifest: "https://hdl.huntington.org/iiif/info/p15150coll4/3342/manifest.json"
-object_warning: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
-object_warning_short: "Validation error: could not be validated"
+object_warning: ""
+object_warning_short: ""
 layout: object
 ---
 

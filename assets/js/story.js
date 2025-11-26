@@ -1233,7 +1233,10 @@ function openPanel(panelType, contentId) {
 
   if (content) {
     // Update panel content
-    document.getElementById(`${panelId}-title`).textContent = content.title;
+    const titleElement = document.getElementById(`${panelId}-title`);
+    const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
+    const demoBadge = content.demo ? `<span class="demo-badge-inline" style="margin-left: 0.5rem;">${demoBadgeText}</span>` : '';
+    titleElement.innerHTML = content.title + demoBadge;
     const contentElement = document.getElementById(`${panelId}-content`);
     contentElement.innerHTML = content.html;
 
@@ -1309,7 +1312,8 @@ function getPanelContent(panelType, contentId) {
 
     return {
       title: step.layer1_title || 'Layer 1',
-      html: html
+      html: html,
+      demo: step.layer1_demo || false
     };
   } else if (panelType === 'layer2') {
     return {
@@ -1317,7 +1321,8 @@ function getPanelContent(panelType, contentId) {
       html: formatPanelContent({
         text: step.layer2_text,
         media: step.layer2_media
-      })
+      }),
+      demo: step.layer2_demo || false
     };
   } else if (panelType === 'glossary') {
     // Fetch from glossary data

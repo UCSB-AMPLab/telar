@@ -2,7 +2,7 @@
 """
 Fetch demo content from content.telar.org
 
-Downloads demo stories and glossary content based on site version and language.
+Downloads the demo content bundle based on site version and language.
 Demo content is stored in _demo_content/ (gitignored, never committed).
 
 When include_demo_content is false, cleans up _demo_content/ directory.
@@ -30,7 +30,7 @@ def load_config():
     try:
         config_path = Path('_config.yml')
         if not config_path.exists():
-            print("❌ Error: _config.yml not found")
+            print("Error: _config.yml not found")
             print("   Run this script from your Telar site root directory")
             return None
 
@@ -57,7 +57,7 @@ def load_config():
         }
 
     except Exception as e:
-        print(f"❌ Error reading _config.yml: {e}")
+        print(f"Error reading _config.yml: {e}")
         return None
 
 
@@ -73,189 +73,155 @@ def cleanup_demo_content():
     if demo_dir.exists():
         try:
             shutil.rmtree(demo_dir)
-            print(f"🗑️  Cleaned up {demo_dir}/")
+            print(f"Cleaned up {demo_dir}/")
             return True
         except Exception as e:
-            print(f"⚠️  Warning: Could not remove {demo_dir}/: {e}")
+            print(f"Warning: Could not remove {demo_dir}/: {e}")
             return False
 
     return True
 
 
-def fetch_manifest(version):
+def fetch_versions_index():
     """
-    Fetch demo manifest from content.telar.org
-
-    Args:
-        version: Version string (e.g., "0.6.0")
+    Fetch available versions from content.telar.org/demos/versions.json
 
     Returns:
-        dict: Manifest data
+        list: List of version strings (e.g., ["0.6.0", "0.6.1", "0.7.0"])
         None: If fetch failed
     """
     base_url = "https://content.telar.org"
-    manifest_url = f"{base_url}/demos/v{version}/manifest.json"
+    versions_url = f"{base_url}/demos/versions.json"
 
     try:
-        print(f"📡 Fetching manifest from {manifest_url}")
+        with urllib.request.urlopen(versions_url, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return data.get('versions', [])
 
-        with urllib.request.urlopen(manifest_url, timeout=10) as response:
-            manifest = json.loads(response.read().decode('utf-8'))
+    except Exception:
+        # Silently fail - caller will handle fallback
+        return None
 
-        print(f"✅ Manifest loaded (version {manifest.get('version', 'unknown')})")
-        return manifest
+
+def find_best_version(site_version, available_versions):
+    """
+    Find highest available version <= site_version
+
+    Examples:
+    - site=0.6.3, available=[0.6.0, 0.6.1, 0.7.0] -> returns 0.6.1
+    - site=0.5.9, available=[0.6.0, 0.6.1, 0.7.0] -> returns None (no compatible)
+    - site=0.8.0, available=[0.6.0, 0.7.0] -> returns 0.7.0
+
+    Args:
+        site_version: Version string from site config (e.g., "0.6.3")
+        available_versions: List of available version strings
+
+    Returns:
+        str: Best matching version string
+        None: If no compatible version exists
+    """
+    def parse_version(v):
+        parts = v.split('.')
+        return tuple(int(p) for p in parts)
+
+    try:
+        site_v = parse_version(site_version)
+    except (ValueError, AttributeError):
+        return None
+
+    candidates = []
+
+    for v in available_versions:
+        try:
+            v_parsed = parse_version(v)
+            if v_parsed <= site_v:
+                candidates.append((v_parsed, v))
+        except (ValueError, AttributeError):
+            continue
+
+    if not candidates:
+        return None
+
+    # Return the highest compatible version
+    return max(candidates, key=lambda x: x[0])[1]
+
+
+def fetch_bundle(version, language):
+    """
+    Fetch demo bundle from content.telar.org
+
+    Args:
+        version: Version string (e.g., "0.6.0")
+        language: Language code (e.g., "en", "es")
+
+    Returns:
+        dict: Bundle data
+        None: If fetch failed
+    """
+    base_url = "https://content.telar.org"
+    bundle_url = f"{base_url}/demos/v{version}/{language}/telar-demo-bundle.json"
+
+    try:
+        print(f"Fetching bundle from {bundle_url}")
+
+        with urllib.request.urlopen(bundle_url, timeout=30) as response:
+            bundle = json.loads(response.read().decode('utf-8'))
+
+        meta = bundle.get('_meta', {})
+        print(f"Bundle loaded:")
+        print(f"   Telar version: {meta.get('telar_version', 'unknown')}")
+        print(f"   Language: {meta.get('language', 'unknown')}")
+        print(f"   Generated: {meta.get('generated', 'unknown')}")
+
+        return bundle
 
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"❌ Error: Demo content for version {version} not found")
-            print(f"   Available versions at: {base_url}/demos/")
+            print(f"Error: Demo bundle for v{version}/{language} not found")
+            print(f"   URL: {bundle_url}")
         else:
-            print(f"❌ HTTP Error {e.code}: {e.reason}")
+            print(f"HTTP Error {e.code}: {e.reason}")
         return None
 
     except urllib.error.URLError as e:
-        print(f"❌ Network error: {e.reason}")
+        print(f"Network error: {e.reason}")
         print(f"   Could not connect to {base_url}")
         return None
 
     except json.JSONDecodeError as e:
-        print(f"❌ Error: Invalid manifest JSON: {e}")
+        print(f"Error: Invalid bundle JSON: {e}")
         return None
 
     except Exception as e:
-        print(f"❌ Unexpected error fetching manifest: {e}")
+        print(f"Unexpected error fetching bundle: {e}")
         return None
 
 
-def download_file(url, dest_path):
+def save_bundle(bundle):
     """
-    Download a file from URL to destination path
+    Save bundle to _demo_content/telar-demo-bundle.json
 
     Args:
-        url: Source URL
-        dest_path: Destination Path object
+        bundle: Bundle dict to save
 
     Returns:
-        bool: True if download succeeded, False otherwise
+        bool: True if save succeeded, False otherwise
     """
-    try:
-        # Create parent directory if it doesn't exist
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with urllib.request.urlopen(url, timeout=10) as response:
-            dest_path.write_bytes(response.read())
-
-        return True
-
-    except Exception as e:
-        print(f"  ⚠️  Failed to download {url}: {e}")
-        return False
-
-
-def fetch_demo_files(manifest, version, language):
-    """
-    Download all demo files for the specified language
-
-    Args:
-        manifest: Manifest dict
-        version: Version string
-        language: Language code (en, es)
-
-    Returns:
-        bool: True if all downloads succeeded, False if any failed
-    """
-    base_url = "https://content.telar.org"
-
-    # Check if language exists in manifest
-    if language not in manifest.get('languages', {}):
-        print(f"❌ Error: Language '{language}' not found in manifest")
-        available = list(manifest.get('languages', {}).keys())
-        if available:
-            print(f"   Available languages: {', '.join(available)}")
-        return False
-
-    lang_data = manifest['languages'][language]
-    stories = lang_data.get('stories', {})
-    glossary_files = lang_data.get('glossary', [])
-
-    if not stories:
-        print(f"⚠️  Warning: No stories found for language '{language}'")
-        return True
-
-    print(f"\n📥 Downloading {len(stories)} story/stories for language '{language}'")
-    print("-" * 50)
-
-    total_files = 0
-    failed_files = 0
     demo_dir = Path('_demo_content')
+    bundle_path = demo_dir / 'telar-demo-bundle.json'
 
-    # Download shared files (demo-project.csv, demo-objects.csv)
-    shared_files = lang_data.get('files', {})
-    for file_type, filename in shared_files.items():
-        url = f"{base_url}/demos/v{version}/{language}/{filename}"
-        dest = demo_dir / 'structures' / filename
+    try:
+        demo_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"  {filename}...", end=' ')
-        if download_file(url, dest):
-            print("✓")
-            total_files += 1
-        else:
-            print("✗")
-            failed_files += 1
+        with open(bundle_path, 'w', encoding='utf-8') as f:
+            json.dump(bundle, f, indent=2, ensure_ascii=False)
 
-    # Download each story's files
-    for story_id, story_info in stories.items():
-        print(f"\n  {story_info.get('title', story_id)}:")
+        print(f"Saved to {bundle_path}")
+        return True
 
-        # Download story CSV
-        story_csv = story_info.get('csv', f"{story_id}.csv")
-        url = f"{base_url}/demos/v{version}/{language}/{story_csv}"
-        dest = demo_dir / 'structures' / story_csv
-
-        print(f"    {story_csv}...", end=' ')
-        if download_file(url, dest):
-            print("✓")
-            total_files += 1
-        else:
-            print("✗")
-            failed_files += 1
-
-        # Download story texts
-        story_texts = story_info.get('texts', [])
-        for text_file in story_texts:
-            url = f"{base_url}/demos/v{version}/{language}/texts/stories/{story_id}/{text_file}"
-            dest = demo_dir / 'texts' / 'stories' / story_id / text_file
-
-            if download_file(url, dest):
-                total_files += 1
-            else:
-                failed_files += 1
-
-        if story_texts:
-            print(f"    {len(story_texts)} story text(s) ✓")
-
-    # Download shared glossary files
-    if glossary_files:
-        print(f"\n  Shared glossary:")
-        for glossary_file in glossary_files:
-            url = f"{base_url}/demos/v{version}/{language}/texts/glossary/{glossary_file}"
-            dest = demo_dir / 'texts' / 'glossary' / glossary_file
-
-            if download_file(url, dest):
-                total_files += 1
-            else:
-                failed_files += 1
-
-        print(f"    {len(glossary_files)} glossary term(s) ✓")
-
-    print("-" * 50)
-    print(f"✅ Downloaded {total_files} file(s) to _demo_content/")
-
-    if failed_files > 0:
-        print(f"⚠️  {failed_files} file(s) failed to download")
+    except Exception as e:
+        print(f"Error saving bundle: {e}")
         return False
-
-    return True
 
 
 def main():
@@ -270,36 +236,70 @@ def main():
 
     # If demo content is disabled, clean up and exit
     if not config['enabled']:
-        print("ℹ️  Demo content disabled (include_demo_content: false)")
+        print("Demo content disabled (include_demo_content: false)")
         cleanup_demo_content()
-        print("✅ Done")
+        print("Done")
         sys.exit(0)
 
     # Demo content is enabled
-    print(f"ℹ️  Demo content enabled for:")
-    print(f"   Version: {config['version']}")
-    print(f"   Language: {config['language']}")
+    site_version = config['version']
+    language = config['language']
+
+    print(f"Demo content enabled for:")
+    print(f"   Site version: {site_version}")
+    print(f"   Language: {language}")
     print()
 
     # Clean up old demo content
     cleanup_demo_content()
 
-    # Fetch manifest
-    manifest = fetch_manifest(config['version'])
-    if manifest is None:
-        print("\n❌ Failed to fetch demo content")
+    # Try to find best matching version
+    available_versions = fetch_versions_index()
+    target_version = site_version  # Default: exact match
+
+    if available_versions:
+        best_version = find_best_version(site_version, available_versions)
+
+        if best_version is None:
+            print(f"Warning: No compatible demo content for v{site_version}")
+            print(f"   Available versions: {', '.join(available_versions)}")
+            print("   Your site will build without demos")
+            sys.exit(1)
+        elif best_version != site_version:
+            print(f"Demo content for v{site_version} not available")
+            print(f"   Using compatible version: v{best_version}")
+            print()
+            target_version = best_version
+        # else: exact match found, use site_version
+    else:
+        # versions.json unavailable, fall back to exact match
+        print("Version index unavailable, trying exact match...")
+        print()
+
+    # Fetch bundle for target version and language
+    bundle = fetch_bundle(target_version, language)
+    if bundle is None:
+        print("\nFailed to fetch demo content")
         print("   Your site will build without demos")
         sys.exit(1)
 
-    # Download demo files
-    success = fetch_demo_files(manifest, config['version'], config['language'])
+    # Save bundle
+    if save_bundle(bundle):
+        # Print summary
+        projects = len(bundle.get('project', []))
+        objects = len(bundle.get('objects', {}))
+        stories = len(bundle.get('stories', {}))
+        glossary = len(bundle.get('glossary', {}))
 
-    if success:
-        print("\n✅ Demo content ready")
+        print()
+        print(f"Demo content ready:")
+        print(f"   {projects} project(s)")
+        print(f"   {objects} object(s)")
+        print(f"   {stories} story/stories")
+        print(f"   {glossary} glossary term(s)")
         sys.exit(0)
     else:
-        print("\n⚠️  Demo content partially downloaded")
-        print("   Your site may be missing some demos")
+        print("\nFailed to save demo content")
         sys.exit(1)
 
 

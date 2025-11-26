@@ -58,8 +58,14 @@ object:
   # Object thumbnails
   no_image: "No image"
 
+# Demo content labels
+demo:
+  badge: "DEMO"
+  panel_badge: "Demo content"
+
 # Story interface
 story:
+  demo_label: "Demo content"
   step_number: "Step {{ number }}"
   scroll_hint: "Press ↓ or scroll to begin"
   scroll_hint_mobile: "Use the arrow buttons to navigate"

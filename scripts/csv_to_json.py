@@ -262,7 +262,9 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         # Check if term exists in glossary
         if term_id in glossary_terms:
             # Valid term - create link (JavaScript will construct full URL with basePath)
-            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}">{display_text}</a>'
+            # Add data-demo attribute for demo terms (prefixed with demo-)
+            demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
+            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}"{demo_attr}>{display_text}</a>'
         else:
             # Invalid term - create error indicator
             if warnings_list is not None:
@@ -2036,6 +2038,202 @@ def process_story(df, christmas_tree=False):
 
     return df
 
+def load_demo_bundle():
+    """
+    Load demo content bundle if it exists.
+
+    Returns:
+        dict: Demo bundle data, or None if not present
+    """
+    bundle_path = Path('_demo_content/telar-demo-bundle.json')
+
+    if not bundle_path.exists():
+        return None
+
+    try:
+        with open(bundle_path, 'r', encoding='utf-8') as f:
+            bundle = json.load(f)
+
+        meta = bundle.get('_meta', {})
+        print(f"[INFO] Loaded demo bundle v{meta.get('telar_version', 'unknown')} ({meta.get('language', 'unknown')})")
+        return bundle
+
+    except Exception as e:
+        print(f"[WARN] Could not load demo bundle: {e}")
+        return None
+
+
+def merge_demo_content(bundle):
+    """
+    Merge demo bundle content with user content.
+
+    Merges:
+    - Demo projects into _data/project.json
+    - Demo objects into _data/objects.json
+    - Demo stories as additional story files
+    - Demo glossary files (written to components/texts/glossary/_demo_*.md)
+
+    Args:
+        bundle: Demo bundle dict
+    """
+    data_dir = Path('_data')
+
+    # Merge projects
+    project_path = data_dir / 'project.json'
+    if project_path.exists() and bundle.get('project'):
+        try:
+            with open(project_path, 'r', encoding='utf-8') as f:
+                user_project = json.load(f)
+
+            # Convert demo project format to match user format
+            # Use project_id as story identifier (matches story-{project_id}.json filenames)
+            demo_stories = []
+            for proj in bundle['project']:
+                demo_stories.append({
+                    'number': proj.get('project_id', ''),
+                    'title': proj.get('title', ''),
+                    'subtitle': proj.get('subtitle', ''),
+                    'byline': proj.get('byline', ''),
+                    '_demo': True  # Mark as demo content
+                })
+
+            # Merge: demo stories first, then user stories
+            if 'stories' in user_project[0]:
+                user_project[0]['stories'] = demo_stories + user_project[0]['stories']
+            else:
+                user_project[0]['stories'] = demo_stories
+
+            with open(project_path, 'w', encoding='utf-8') as f:
+                json.dump(user_project, f, indent=2, ensure_ascii=False)
+
+            print(f"  Merged {len(demo_stories)} demo project(s) into project.json")
+
+        except Exception as e:
+            print(f"  [WARN] Could not merge demo projects: {e}")
+
+    # Merge objects
+    objects_path = data_dir / 'objects.json'
+    if objects_path.exists() and bundle.get('objects'):
+        try:
+            with open(objects_path, 'r', encoding='utf-8') as f:
+                user_objects = json.load(f)
+
+            # Get existing object IDs to avoid duplicates
+            existing_ids = {obj.get('object_id') for obj in user_objects if not obj.get('_metadata')}
+
+            # Convert demo objects format and add new ones
+            demo_count = 0
+            for obj_id, obj_data in bundle['objects'].items():
+                if obj_id not in existing_ids:
+                    demo_obj = {
+                        'object_id': obj_id,
+                        'title': obj_data.get('title', ''),
+                        'description': obj_data.get('description', ''),
+                        'source_url': obj_data.get('source_url', ''),
+                        'iiif_manifest': obj_data.get('source_url', ''),  # Backward compat
+                        'creator': obj_data.get('creator', ''),
+                        'period': obj_data.get('period', ''),
+                        'medium': obj_data.get('medium', ''),
+                        'dimensions': obj_data.get('dimensions', ''),
+                        'location': obj_data.get('location', ''),
+                        'credit': obj_data.get('credit', ''),
+                        'thumbnail': obj_data.get('thumbnail', ''),
+                        '_demo': True
+                    }
+                    user_objects.append(demo_obj)
+                    demo_count += 1
+
+            with open(objects_path, 'w', encoding='utf-8') as f:
+                json.dump(user_objects, f, indent=2, ensure_ascii=False)
+
+            print(f"  Merged {demo_count} demo object(s) into objects.json")
+
+        except Exception as e:
+            print(f"  [WARN] Could not merge demo objects: {e}")
+
+    # Create demo story files
+    if bundle.get('stories'):
+        for story_id, story_data in bundle['stories'].items():
+            try:
+                story_path = data_dir / f'story-{story_id}.json'
+
+                # Convert demo story format to match user format
+                steps = []
+                for step in story_data.get('steps', []):
+                    step_data = {
+                        'step': step.get('step'),
+                        'object': step.get('object', ''),
+                        'x': str(step.get('x', '0.5')),
+                        'y': str(step.get('y', '0.5')),
+                        'zoom': str(step.get('zoom', '1')),
+                        'question': step.get('question', ''),
+                        'answer': step.get('answer', ''),
+                        '_demo': True
+                    }
+
+                    # Build glossary terms dict from bundle for link processing
+                    glossary_terms = {}
+                    if bundle.get('glossary'):
+                        for term_id, term_data in bundle['glossary'].items():
+                            glossary_terms[term_id] = term_data.get('term', term_id)
+
+                    # Process layers
+                    layers = step.get('layers', {})
+                    for layer_key in ['layer1', 'layer2']:
+                        layer = layers.get(layer_key, {})
+                        if layer:
+                            step_data[f'{layer_key}_button'] = layer.get('button', '')
+                            step_data[f'{layer_key}_title'] = layer.get('button', '')  # Use button text as title
+
+                            content = layer.get('content', '')
+                            if content:
+                                # Initialize warnings list for widget processing
+                                widget_warnings = []
+
+                                # Process widgets BEFORE markdown conversion
+                                content = process_widgets(content, f'demo-{story_id}', widget_warnings)
+
+                                # Process image size syntax BEFORE markdown conversion
+                                content = process_image_sizes(content)
+
+                                # Convert markdown to HTML
+                                content = markdown.markdown(content, extensions=['extra', 'nl2br'])
+
+                                # Process glossary links AFTER markdown conversion
+                                content = process_glossary_links(content, glossary_terms)
+
+                            step_data[f'{layer_key}_text'] = content
+                            step_data[f'{layer_key}_demo'] = True  # All demo bundle layers are demo content
+
+                    steps.append(step_data)
+
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(steps, f, indent=2, ensure_ascii=False)
+
+                print(f"  Created demo story: story-{story_id}.json ({len(steps)} steps)")
+
+            except Exception as e:
+                print(f"  [WARN] Could not create demo story {story_id}: {e}")
+
+    # Write demo glossary to _data/demo-glossary.json
+    # (generate_collections.py will read this and create Jekyll collection files)
+    if bundle.get('glossary'):
+        glossary_data = []
+        for term_id, term_data in bundle['glossary'].items():
+            glossary_data.append({
+                'term_id': term_id,
+                'title': term_data.get('term', term_id),
+                'content': term_data.get('content', ''),
+                '_demo': True
+            })
+
+        glossary_json_path = Path('_data/demo-glossary.json')
+        with open(glossary_json_path, 'w', encoding='utf-8') as f:
+            json.dump(glossary_data, f, indent=2, ensure_ascii=False)
+
+        print(f"  Created _data/demo-glossary.json ({len(glossary_data)} demo terms)")
+
+
 def main():
     """Main conversion process"""
     # Check if Christmas Tree Mode is enabled in _config.yml
@@ -2133,6 +2331,13 @@ def main():
                 str(json_file),
                 process_story
             )
+
+    # Merge demo content if available
+    print("-" * 50)
+    demo_bundle = load_demo_bundle()
+    if demo_bundle:
+        print("Merging demo content...")
+        merge_demo_content(demo_bundle)
 
     print("-" * 50)
     print("Conversion complete!")

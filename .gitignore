@@ -39,8 +39,8 @@ _data/story-*.json
 # Source of truth is the markdown files in components/texts/
 _jekyll-files/
 
-# Demo glossary files (created by csv_to_json.py from demo bundle)
-components/texts/glossary/_demo_*
+# Demo glossary JSON (created by csv_to_json.py from demo bundle)
+_data/demo-glossary.json
 
 # Demo Content bundle (fetched from content.telar.org, never committed)
 _demo_content/

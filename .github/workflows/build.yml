@@ -1,6 +1,6 @@
 name: Build and Deploy Telar Site
 # Build and deploy Jekyll site with smart IIIF tile generation
-# Version: v0.5.0-beta
+# Version: v0.6.0-beta
 
 on:
   push:
@@ -52,6 +52,12 @@ jobs:
           else
             echo "✓ Google Sheets integration disabled - using existing CSV files"
           fi
+
+      - name: Fetch demo content (if enabled)
+        run: |
+          # fetch_demo_content.py checks include_demo_content setting internally
+          # and handles cleanup when disabled
+          python3 scripts/fetch_demo_content.py
 
       - name: Convert CSV to JSON
         run: |

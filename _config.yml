@@ -33,7 +33,7 @@ google_sheets:
 # Story Interface Settings
 story_interface:
   show_story_steps: true # Set to false to hide "Step X" overlay in stories
-  include_demo_content: false # v0.5.0 feature - demo stories from external repository
+  include_demo_content: true # Fetch demo stories from content.telar.org
 
 
 #
@@ -96,8 +96,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "0.5.0-beta"
-  release_date: "2025-11-17"
+  version: "0.6.0-beta"
+  release_date: "2025-11-25"
 
 # Plugins
 plugins:
