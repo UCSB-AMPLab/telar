@@ -12,6 +12,11 @@ telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin
 logo: "" # Path to logo image (optional, max 80px tall, 200-300px wide recommended)
 telar_language: "en" # Options: "en" (English), "es" (Español)
 
+# Story Interface Settings
+story_interface:
+  show_story_steps: true # Set to false to hide "Step X" overlay in stories
+  include_demo_content: true # Fetch demo stories from content.telar.org. Switch this off to hide demo stories and their content.
+
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.
 # See https://telar.org/docs/workflows/google-sheets/ for detailed setup instructions.
@@ -29,11 +34,6 @@ google_sheets:
   enabled: true
   shared_url: "https://docs.google.com/spreadsheets/d/1jxH4Fb4LkLE_015_YFE39kcnGw_o2JN8HW2q2XkLOaY/edit"
   published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQNkHBDyx7uqL0pdfv9zpcnWLohyVCN7RpKdnFT2eCyAQrXUGFukPr0Dy6ph2acG8e_GBxpG1NqRiVG/pubhtml"
-
-# Story Interface Settings
-story_interface:
-  show_story_steps: true # Set to false to hide "Step X" overlay in stories
-  include_demo_content: true # Fetch demo stories from content.telar.org
 
 
 #

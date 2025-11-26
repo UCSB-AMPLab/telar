@@ -559,6 +559,21 @@ a:hover {
   max-width: 600px;
 }
 
+/* Widgets - constrain to same width as text */
+.offcanvas-body .telar-widget-accordion,
+.offcanvas-body .telar-widget-carousel,
+.offcanvas-body .telar-widget-tabs {
+  max-width: 650px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-layer2 .offcanvas-body .telar-widget-accordion,
+#panel-layer2 .offcanvas-body .telar-widget-carousel,
+#panel-layer2 .offcanvas-body .telar-widget-tabs {
+  max-width: 600px;
+}
+
 /* Panel buttons styling */
 #panel-layer1 .btn-close,
 #panel-layer2 .btn-close {
@@ -639,6 +654,12 @@ a:hover {
   max-width: 550px;
   margin-left: auto;
   margin-right: auto;
+}
+
+#panel-glossary .offcanvas-body .telar-widget-accordion,
+#panel-glossary .offcanvas-body .telar-widget-carousel,
+#panel-glossary .offcanvas-body .telar-widget-tabs {
+  max-width: 550px;
 }
 
 /* Glossary back button uses default Bootstrap outline-secondary styling */
@@ -1111,12 +1132,14 @@ a:hover {
   opacity: 0.8;
 }
 
-/* Panel Images */
+/* Panel Images - centered with max-height */
 .offcanvas-body img {
   max-width: 100%;
+  max-height: 80vh;
   height: auto;
   display: block;
-  margin: 1rem 0;
+  object-fit: contain;
+  margin: 1rem auto;
 }
 
 /* Responsive */
@@ -1655,7 +1678,7 @@ a:hover {
   #panel-layer2 .offcanvas-body img,
   #panel-glossary .offcanvas-body img {
     max-width: 100%;
-    margin: 0.8rem 0;
+    margin: 0.8rem auto;
   }
 
   /* Site-wide content - 20-25% reduction */
@@ -1763,7 +1786,7 @@ a:hover {
   #panel-layer2 .offcanvas-body img,
   #panel-glossary .offcanvas-body img {
     max-width: 100%;
-    margin: 0.7rem 0;
+    margin: 0.7rem auto;
   }
 
   /* Site-wide content - 30-35% reduction */
@@ -2344,7 +2367,9 @@ a:hover {
 
 .telar-widget-accordion .accordion-body img {
   max-width: 100%;
+  max-height: 80vh;
   height: auto;
+  object-fit: contain;
   border-radius: 4px;
   margin: 1rem 0;
 }
