@@ -470,7 +470,7 @@ a:hover {
 /* Layer 1 Panel - Light blue background, wide coverage */
 #panel-layer1 {
   width: 65% !important;
-  max-width: 900px;
+  max-width: 800px;
   background: var(--color-panel-layer1-bg);
 }
 
@@ -498,7 +498,7 @@ a:hover {
 /* Layer 2 Panel - Dark purple background, narrower than layer1 */
 #panel-layer2 {
   width: 55% !important;
-  max-width: 800px;
+  max-width: 750px;
   background: var(--color-panel-layer2-bg);
 }
 
@@ -527,6 +527,36 @@ a:hover {
 #panel-layer2 .offcanvas-body h3,
 #panel-layer2 .offcanvas-body h4 {
   color: var(--color-panel-layer2-text);
+}
+
+/* Panel text max-width for readability (centered, images/widgets span full width) */
+.offcanvas-body p,
+.offcanvas-body ul,
+.offcanvas-body ol,
+.offcanvas-body blockquote,
+.offcanvas-body h1,
+.offcanvas-body h2,
+.offcanvas-body h3,
+.offcanvas-body h4,
+.offcanvas-body h5,
+.offcanvas-body h6 {
+  max-width: 650px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Layer 2 panel - narrower text for better proportions */
+#panel-layer2 .offcanvas-body p,
+#panel-layer2 .offcanvas-body ul,
+#panel-layer2 .offcanvas-body ol,
+#panel-layer2 .offcanvas-body blockquote,
+#panel-layer2 .offcanvas-body h1,
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4,
+#panel-layer2 .offcanvas-body h5,
+#panel-layer2 .offcanvas-body h6 {
+  max-width: 600px;
 }
 
 /* Panel buttons styling */
@@ -559,7 +589,7 @@ a:hover {
 /* Glossary Panel - Cream/beige background */
 #panel-glossary {
   width: 45% !important;
-  max-width: 600px;
+  max-width: 700px;
   background: var(--color-panel-glossary-bg);
 }
 
@@ -591,6 +621,24 @@ a:hover {
 
 #panel-glossary .btn-close:hover {
   opacity: 1;
+}
+
+/* Glossary panel - narrower text for better proportions */
+#panel-glossary .glossary-term-prefix,
+#panel-glossary .offcanvas-title,
+#panel-glossary .offcanvas-body p,
+#panel-glossary .offcanvas-body ul,
+#panel-glossary .offcanvas-body ol,
+#panel-glossary .offcanvas-body blockquote,
+#panel-glossary .offcanvas-body h1,
+#panel-glossary .offcanvas-body h2,
+#panel-glossary .offcanvas-body h3,
+#panel-glossary .offcanvas-body h4,
+#panel-glossary .offcanvas-body h5,
+#panel-glossary .offcanvas-body h6 {
+  max-width: 550px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Glossary back button uses default Bootstrap outline-secondary styling */

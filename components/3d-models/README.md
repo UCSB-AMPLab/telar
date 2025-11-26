@@ -1,6 +1,6 @@
 # 3D Models Directory
 
-**Status:** 🚧 Coming in v0.8.0
+**Status:** 🚧 Coming in v0.9.0
 
 This directory is reserved for 3D model files (archaeological artifacts, architectural models, sculptures) that will be displayed in interactive viewers.
 

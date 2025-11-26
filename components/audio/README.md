@@ -1,6 +1,6 @@
 # Audio Directory
 
-**Status:** 🚧 Coming in v0.7.0
+**Status:** 🚧 Coming in v0.8.0
 
 This directory is reserved for audio files (oral histories, soundscapes, music, field recordings) that will be embedded in story steps.
 

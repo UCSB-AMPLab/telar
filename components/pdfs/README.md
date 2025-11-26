@@ -1,6 +1,6 @@
 # PDFs Directory
 
-**Status:** 🚧 Coming in v0.6.0
+**Status:** 🚧 Coming in v0.7.0
 
 This directory is reserved for multi-page PDF documents that will be displayed using IIIF Presentation API 3.0.
 
