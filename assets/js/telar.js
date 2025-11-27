@@ -17,7 +17,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize glossary back button
   initializeGlossaryBackButton();
+
+  // Initialize click-outside-to-close for glossary panels (works on all pages)
+  initializeClickOutsideClose();
 });
+
+/**
+ * Initialize click-outside-to-close behavior for glossary panels
+ * Works on all pages including glossary index, user pages, etc.
+ */
+function initializeClickOutsideClose() {
+  document.addEventListener('click', function(e) {
+    const glossaryPanel = document.getElementById('panel-glossary');
+    if (!glossaryPanel) return;
+
+    // Check if glossary panel is open
+    if (!glossaryPanel.classList.contains('show')) return;
+
+    // Don't close if clicking inside any panel
+    if (e.target.closest('.offcanvas')) return;
+
+    // Don't close if clicking on glossary links or triggers
+    if (e.target.closest('.glossary-term-link')) return;
+    if (e.target.closest('.glossary-inline-link')) return;
+    if (e.target.closest('[data-panel]')) return;
+
+    // Close the glossary panel
+    const bsOffcanvas = bootstrap.Offcanvas.getInstance(glossaryPanel);
+    if (bsOffcanvas) {
+      bsOffcanvas.hide();
+    }
+  });
+}
 
 /**
  * Initialize panel trigger buttons

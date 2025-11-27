@@ -2,7 +2,7 @@
 """
 Convert CSV files from Google Sheets to JSON for Jekyll
 
-Version: v0.5.0-beta
+Version: v0.6.0-beta
 """
 
 import pandas as pd
@@ -147,45 +147,89 @@ def get_source_url(row):
 
     return ''
 
-def process_image_sizes(text):
+def process_images(text):
     """
-    Replace ![alt](path){size} with HTML img tags with size classes
+    Process markdown images: handle sizes and captions.
 
-    Syntax: ![Description](image.jpg){md} or ![Description](image.jpg){medium}
-    Sizes: sm/small, md/medium, lg/large, full
+    Must be called BEFORE markdown conversion (works on raw text).
 
-    Default path: /components/images/
-    - Relative paths (no leading /) get prepended with default path
-    - Absolute paths (starting with /) used as-is
-    - URLs (http/https) used as-is
+    Syntax:
+    - ![alt](path) - basic image
+    - ![alt](path){size} - image with size (sm, md, lg, full)
+    - Caption: line immediately following image becomes caption
+    - Optional "caption: " prefix gets stripped
+
+    Example:
+        ![Portrait](image.jpg){md}
+        Francisco Maldonado, encomendero of Fontibón
+
+    Produces:
+        <figure class="telar-image-figure">
+          <img src="..." alt="Portrait" class="img-md">
+          <figcaption class="telar-image-caption">Francisco Maldonado...</figcaption>
+        </figure>
     """
-    # Map long form to short form for CSS classes
     size_map = {
-        'small': 'sm',
-        'medium': 'md',
-        'large': 'lg',
-        'full': 'full',
-        'sm': 'sm',
-        'md': 'md',
-        'lg': 'lg'
+        'small': 'sm', 'medium': 'md', 'large': 'lg', 'full': 'full',
+        'sm': 'sm', 'md': 'md', 'lg': 'lg'
     }
 
-    def replace_image(match):
-        alt = match.group(1)
-        src = match.group(2)
-        size_input = match.group(3).lower()
+    lines = text.split('\n')
+    result = []
+    i = 0
 
-        # Map to CSS class
-        size_class = size_map.get(size_input, 'md')
+    # Pattern for image with optional size
+    img_pattern = r'^!\[([^\]]*)\]\(([^)]+)\)(?:\{(sm|small|md|medium|lg|large|full)\})?$'
 
-        # Prepend default path if relative
-        if not src.startswith('/') and not src.startswith('http'):
-            src = f'/components/images/{src}'
+    while i < len(lines):
+        line = lines[i]
+        match = re.match(img_pattern, line.strip(), re.IGNORECASE)
 
-        return f'<img src="{src}" alt="{alt}" class="img-{size_class}">'
+        if match:
+            alt = match.group(1)
+            src = match.group(2)
+            size_input = match.group(3)
 
-    pattern = r'!\[([^\]]*)\]\(([^)]+)\)\{(sm|small|md|medium|lg|large|full)\}'
-    return re.sub(pattern, replace_image, text, flags=re.IGNORECASE)
+            # Determine size class
+            if size_input:
+                size_class = size_map.get(size_input.lower(), 'md')
+                class_attr = f' class="img-{size_class}"'
+            else:
+                class_attr = ''
+
+            # Prepend default path if relative
+            if not src.startswith('/') and not src.startswith('http'):
+                src = f'/components/images/{src}'
+
+            # Check for caption on next line
+            caption = None
+            if i + 1 < len(lines):
+                next_line = lines[i + 1]
+                # Caption exists if next line is non-empty and not another image/widget/blank
+                if next_line.strip() and not next_line.strip().startswith('!') and not next_line.strip().startswith(':::'):
+                    caption = next_line.strip()
+                    # Strip "caption: " prefix if present
+                    if caption.lower().startswith('caption:'):
+                        caption = caption[8:].strip()
+                    i += 1  # Skip the caption line
+
+            # Build HTML
+            img_tag = f'<img src="{src}" alt="{alt}"{class_attr}>'
+            if caption:
+                # Convert caption markdown to HTML (strip wrapping <p> tags)
+                caption_html = markdown.markdown(caption)
+                caption_html = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+                html = f'<figure class="telar-image-figure">{img_tag}<figcaption class="telar-image-caption">{caption_html}</figcaption></figure>'
+            else:
+                html = f'<figure class="telar-image-figure">{img_tag}</figure>'
+
+            result.append(html)
+        else:
+            result.append(line)
+
+        i += 1
+
+    return '\n'.join(result)
 
 
 def load_glossary_terms():
@@ -261,7 +305,10 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
 
         # Check if term exists in glossary
         if term_id in glossary_terms:
-            # Valid term - create link (JavaScript will construct full URL with basePath)
+            # Valid term - create glossary link
+            # Note: data-term-url is intentionally omitted; JavaScript fallback in telar.js
+            # constructs the URL dynamically from the current page URL, which correctly
+            # handles baseurl for all deployment scenarios (GitHub Pages, subpaths, etc.)
             # Add data-demo attribute for demo terms (prefixed with demo-)
             demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
             return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}"{demo_attr}>{display_text}</a>'
@@ -438,6 +485,14 @@ def parse_carousel_widget(content, file_path, warnings_list):
                 'message': f'Carousel item {block_num} missing alt text (accessibility concern)'
             })
             data['alt'] = ''
+
+        # Process caption/credit through markdown (for italics, etc.)
+        if 'caption' in data:
+            caption_html = markdown.markdown(data['caption'])
+            data['caption'] = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+        if 'credit' in data:
+            credit_html = markdown.markdown(data['credit'])
+            data['credit'] = re.sub(r'^<p>(.*)</p>$', r'\1', credit_html.strip())
 
         items.append(data)
 
@@ -715,8 +770,8 @@ def read_markdown_file(file_path, widget_warnings=None):
             # Process widgets BEFORE markdown conversion
             body = process_widgets(body, file_path, widget_warnings)
 
-            # Process image size syntax before markdown conversion
-            body = process_image_sizes(body)
+            # Process images (sizes and captions) BEFORE markdown conversion
+            body = process_images(body)
 
             # Convert markdown to HTML
             html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
@@ -732,8 +787,8 @@ def read_markdown_file(file_path, widget_warnings=None):
             # Process widgets BEFORE markdown conversion
             content_body = process_widgets(content_body, file_path, widget_warnings)
 
-            # Process image sizes
-            content_body = process_image_sizes(content_body)
+            # Process images (sizes and captions) BEFORE markdown conversion
+            content_body = process_images(content_body)
 
             # Convert markdown to HTML
             html_content = markdown.markdown(content_body, extensions=['extra', 'nl2br'])
@@ -2183,7 +2238,8 @@ def merge_demo_content(bundle):
                         layer = layers.get(layer_key, {})
                         if layer:
                             step_data[f'{layer_key}_button'] = layer.get('button', '')
-                            step_data[f'{layer_key}_title'] = layer.get('button', '')  # Use button text as title
+                            # Use explicit title if provided, fall back to button text
+                            step_data[f'{layer_key}_title'] = layer.get('title', layer.get('button', ''))
 
                             content = layer.get('content', '')
                             if content:
@@ -2193,8 +2249,8 @@ def merge_demo_content(bundle):
                                 # Process widgets BEFORE markdown conversion
                                 content = process_widgets(content, f'demo-{story_id}', widget_warnings)
 
-                                # Process image size syntax BEFORE markdown conversion
-                                content = process_image_sizes(content)
+                                # Process images (sizes and captions) BEFORE markdown conversion
+                                content = process_images(content)
 
                                 # Convert markdown to HTML
                                 content = markdown.markdown(content, extensions=['extra', 'nl2br'])
