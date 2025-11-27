@@ -6,6 +6,8 @@ Changes:
 - Remove tracked generated files from git index
 - Add demo content fetch to build workflow
 - Multilingual UI support
+- Custom pages system (move pages/about.md to components/texts/pages/)
+- Data-driven navigation menu (_data/navigation.yml)
 
 Version: v0.6.0-beta
 """
@@ -18,11 +20,11 @@ from .base import BaseMigration
 
 
 class Migration050to060(BaseMigration):
-    """Migration from v0.5.0 to v0.6.0 - gitignore generated files, multilingual UI."""
+    """Migration from v0.5.0 to v0.6.0 - gitignore generated files, multilingual UI, custom pages."""
 
     from_version = "0.5.0-beta"
     to_version = "0.6.0-beta"
-    description = "Gitignore generated files, multilingual UI support"
+    description = "Gitignore generated files, multilingual UI support, custom pages system"
 
     def check_applicable(self) -> bool:
         """

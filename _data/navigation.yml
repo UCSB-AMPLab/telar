@@ -1,0 +1,45 @@
+# Navigation Menu Configuration
+# Configuración del menú de navegación
+#
+# Each menu item needs:
+# Cada elemento del menú necesita:
+#   - title_en: English text / Texto en inglés
+#   - titulo_es: Spanish text / Texto en español
+#   - url: Link destination / Destino del enlace
+#
+# Optional / Opcional:
+#   - external: true (opens in new tab / abre en nueva pestaña)
+#
+# A title is required in at least one language. Falls back to the other if missing.
+# Se requiere un título en al menos un idioma. Si uno falta se usa el otro.
+#
+# To add a page: create it in components/texts/pages/, then add here.
+# Para agregar una página: créala en components/texts/pages/, luego agrégala aquí.
+
+menu:
+  - title_en: Home
+    titulo_es: Inicio
+    url: /
+
+  - title_en: Objects
+    titulo_es: Objetos
+    url: /objects/
+
+  - title_en: Glossary
+    titulo_es: Glosario
+    url: /glossary/
+
+  - title_en: About
+    titulo_es: Acerca de
+    url: /about/
+
+  # Example: Add a custom page / Ejemplo: Agregar una página personalizada
+  # - title_en: Credits
+  #   titulo_es: Créditos
+  #   url: /credits/
+
+  # Example: External link / Ejemplo: Enlace externo
+  # - title_en: Project Repository
+  #   titulo_es: Repositorio del proyecto
+  #   url: https://github.com/your-org/your-repo
+  #   external: true

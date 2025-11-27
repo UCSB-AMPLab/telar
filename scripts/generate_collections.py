@@ -2,12 +2,23 @@
 """
 Generate Jekyll collection markdown files from JSON data
 
-Version: v0.5.0-beta
+Version: v0.6.0-beta
 """
 
 import json
+import re
 import shutil
 from pathlib import Path
+
+import markdown
+
+# Import processing functions from csv_to_json
+from csv_to_json import (
+    process_widgets,
+    process_images,
+    process_glossary_links,
+    load_glossary_terms
+)
 
 def generate_objects():
     """Generate object markdown files from objects.json"""
@@ -242,6 +253,87 @@ data_file: story-{story_num}
         demo_label = " [DEMO]" if is_demo else ""
         print(f"✓ Generated {filepath}{demo_label}")
 
+def generate_pages():
+    """Generate processed page files from user markdown sources.
+
+    Reads from components/texts/pages/*.md, processes widgets and glossary links,
+    and outputs to _jekyll-files/_pages/ for the pages collection.
+    """
+    source_dir = Path('components/texts/pages')
+    output_dir = Path('_jekyll-files/_pages')
+
+    # Skip if source directory doesn't exist
+    if not source_dir.exists():
+        print("No components/texts/pages/ directory found - skipping page generation")
+        return
+
+    # Clean up old files
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+        print("✓ Cleaned up old page files")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load glossary terms for link processing
+    glossary_terms = load_glossary_terms()
+
+    # Process each markdown file
+    for source_file in source_dir.glob('*.md'):
+        filename = source_file.name
+
+        with open(source_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Parse frontmatter and body
+        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
+        match = re.match(frontmatter_pattern, content, re.DOTALL)
+
+        if not match:
+            print(f"Error: No frontmatter found in {source_file}")
+            print("  Pages must have YAML frontmatter (--- at start and end)")
+            continue
+
+        frontmatter_text = match.group(1)
+        body = match.group(2).strip()
+
+        # Process body through the same pipeline as story layers
+        warnings_list = []
+
+        # 1. Process widgets (:::carousel, :::tabs, :::accordion)
+        processed = process_widgets(body, str(source_file), warnings_list)
+
+        # 2. Process images (size syntax and captions)
+        processed = process_images(processed)
+
+        # 3. Convert markdown to HTML
+        processed = markdown.markdown(
+            processed,
+            extensions=['extra', 'nl2br', 'sane_lists']
+        )
+
+        # 4. Process glossary links ([[term]] syntax)
+        processed = process_glossary_links(processed, glossary_terms, warnings_list)
+
+        # Print any warnings
+        for warning in warnings_list:
+            print(f"  Warning: {warning}")
+
+        # Write processed file to output directory
+        output_file = output_dir / filename
+
+        output_content = f"""---
+{frontmatter_text}
+---
+
+{processed}
+"""
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(output_content)
+
+        print(f"✓ Generated {output_file}")
+
+
 def main():
     """Generate all collection files"""
     print("Generating Jekyll collection files...")
@@ -254,6 +346,9 @@ def main():
     print()
 
     generate_stories()
+    print()
+
+    generate_pages()
 
     print("-" * 50)
     print("Generation complete!")

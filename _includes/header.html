@@ -19,18 +19,35 @@
 
       <div class="collapse navbar-collapse order-lg-1" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="{{ '/' | relative_url }}">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ '/objects/' | relative_url }}">Objects</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ '/glossary/' | relative_url }}">Glossary</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ '/about/' | relative_url }}">About</a>
-          </li>
+          {% if site.data.navigation.menu %}
+            {% for item in site.data.navigation.menu %}
+            <li class="nav-item">
+              <a class="nav-link"
+                 href="{{ item.url | relative_url }}"
+                 {% if item.external %}target="_blank" rel="noopener"{% endif %}>
+                {% if site.telar_language == 'es' %}
+                  {{ item.titulo_es | default: item.title_en }}
+                {% else %}
+                  {{ item.title_en | default: item.titulo_es }}
+                {% endif %}
+              </a>
+            </li>
+            {% endfor %}
+          {% else %}
+            <!-- Fallback: navigation.yml missing or broken -->
+            <li class="nav-item">
+              <a class="nav-link" href="{{ '/' | relative_url }}">Home</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ '/objects/' | relative_url }}">Objects</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ '/glossary/' | relative_url }}">Glossary</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ '/about/' | relative_url }}">About</a>
+            </li>
+          {% endif %}
         </ul>
       </div>
     </div>

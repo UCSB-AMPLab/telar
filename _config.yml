@@ -55,6 +55,9 @@ collections:
   glossary:
     output: true
     permalink: /glossary/:name/
+  pages:
+    output: true
+    permalink: /:name/
 
 # Collections Directory (a folder where Jekyll and the Telar scripts will put all auto-generated object and story working files)
 collections_dir: _jekyll-files
@@ -89,6 +92,11 @@ defaults:
       type: "glossary"
     values:
       layout: "glossary"
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "user-page"
 
 # Tell Jekyll not to expect dates for these collections
 future: true
