@@ -235,6 +235,9 @@ Example:
         sys.exit(1)
 
     # Map tab names/numbers to environment variable names
+    # System tabs
+    system_tabs = {'project', 'objects', 'instructions', 'tab 1', 'tab 2', 'tab 3'}
+
     tab_mapping = {
         'project': 'PROJECT_GID',
         'objects': 'OBJECTS_GID',
@@ -244,13 +247,13 @@ Example:
     }
 
     # Dynamically add story tabs discovered in the sheet (v0.6.0+)
-    # Supports both numeric (story-1) and semantic (story-your-story) identifiers
+    # Supports both semantic (your-story, tu-historia) and traditional (story-1, story-2) identifiers
     for tab_name, _ in working_tabs:
         tab_lower = tab_name.lower()
-        # Match story-{identifier} or chapter-{identifier} patterns
-        if re.match(r'^(story|chapter)-[a-z0-9\-_]+$', tab_lower):
+        # Any tab that's not a system tab is a story/chapter tab
+        if tab_lower not in system_tabs and not tab_lower.startswith('#'):
             # Create environment variable name from tab name
-            # story-1 → STORY_1_GID, story-your-story → STORY_YOUR_STORY_GID
+            # your-story → YOUR_STORY_GID, story-1 → STORY_1_GID
             safe_name = re.sub(r'[^A-Z0-9_]', '_', tab_name.upper())
             tab_mapping[tab_lower] = f'{safe_name}_GID'
 

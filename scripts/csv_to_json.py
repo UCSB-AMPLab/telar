@@ -2168,11 +2168,12 @@ def merge_demo_content(bundle):
                 user_project = json.load(f)
 
             # Convert demo project format to match user format
-            # Use project_id as story identifier (matches story-{project_id}.json filenames)
+            # Use order for number field, story_id for identifier (v0.6.0+)
             demo_stories = []
             for proj in bundle['project']:
                 demo_stories.append({
-                    'number': proj.get('project_id', ''),
+                    'number': str(proj.get('order', '')),
+                    'story_id': proj.get('story_id', ''),
                     'title': proj.get('title', ''),
                     'subtitle': proj.get('subtitle', ''),
                     'byline': proj.get('byline', ''),
@@ -2237,7 +2238,7 @@ def merge_demo_content(bundle):
     if bundle.get('stories'):
         for story_id, story_data in bundle['stories'].items():
             try:
-                story_path = data_dir / f'story-{story_id}.json'
+                story_path = data_dir / f'{story_id}.json'
 
                 # Convert demo story format to match user format
                 steps = []
@@ -2293,7 +2294,7 @@ def merge_demo_content(bundle):
                 with open(story_path, 'w', encoding='utf-8') as f:
                     json.dump(steps, f, indent=2, ensure_ascii=False)
 
-                print(f"  Created demo story: story-{story_id}.json ({len(steps)} steps)")
+                print(f"  Created demo story: {story_id}.json ({len(steps)} steps)")
 
             except Exception as e:
                 print(f"  [WARN] Could not create demo story {story_id}: {e}")
@@ -2377,43 +2378,31 @@ def main():
     # and processed by generate_collections.py
 
     # Convert story files (with optional Christmas Tree mode)
-    # Look for any CSV files that start with "story-" or "chapter-"
+    # v0.6.0+: Process ALL CSVs except system files (supports both semantic and traditional naming)
+    # System files: project.csv, objects.csv
+    # Story files: your-story.csv, tu-historia.csv, story-1.csv, story-2.csv, etc.
+    system_csvs = {'project.csv', 'objects.csv'}
+
     if christmas_tree_mode:
-        for csv_file in structures_dir.glob('story-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                lambda df: process_story(df, christmas_tree=True)
-            )
-
-        for csv_file in structures_dir.glob('chapter-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                lambda df: process_story(df, christmas_tree=True)
-            )
+        for csv_file in structures_dir.glob('*.csv'):
+            if csv_file.name not in system_csvs:
+                json_filename = csv_file.stem + '.json'
+                json_file = data_dir / json_filename
+                csv_to_json(
+                    str(csv_file),
+                    str(json_file),
+                    lambda df: process_story(df, christmas_tree=True)
+                )
     else:
-        for csv_file in structures_dir.glob('story-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                process_story
-            )
-
-        for csv_file in structures_dir.glob('chapter-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                process_story
-            )
+        for csv_file in structures_dir.glob('*.csv'):
+            if csv_file.name not in system_csvs:
+                json_filename = csv_file.stem + '.json'
+                json_file = data_dir / json_filename
+                csv_to_json(
+                    str(csv_file),
+                    str(json_file),
+                    process_story
+                )
 
     # Merge demo content if available
     print("-" * 50)

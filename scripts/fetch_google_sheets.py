@@ -136,16 +136,19 @@ def main():
             continue
 
         # Determine output filename based on tab name
+        # Known system tabs
+        system_tabs = {'project', 'objects', 'instructions'}
+
         if tab_lower == 'project':
             filename = 'project.csv'
         elif tab_lower == 'objects':
             filename = 'objects.csv'
-        elif re.match(r'^story-[a-z0-9\-_]+$', tab_lower):
-            # Dynamic story matching: story-1, story-2, story-your-story, etc.
-            # Supports both numeric (story-1) and semantic (story-your-story) identifiers (v0.6.0+)
+        elif tab_lower not in system_tabs and not tab_lower.startswith('#'):
+            # Story tab: either semantic (your-story, tu-historia) or traditional (story-1, story-2)
+            # v0.6.0+: Supports both formats for backward compatibility
             filename = f'{tab_lower}.csv'
         else:
-            # Unknown tab - skip it
+            # Unknown system tab or instruction tab - skip it
             print(f"⊘ {tab_name:20s} → Skipped (unknown tab type)")
             continue
 
