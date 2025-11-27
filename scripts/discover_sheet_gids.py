@@ -238,16 +238,21 @@ Example:
     tab_mapping = {
         'project': 'PROJECT_GID',
         'objects': 'OBJECTS_GID',
-        'story-1': 'STORY_1_GID',
-        'story-2': 'STORY_2_GID',
-        'story-3': 'STORY_3_GID',
-        'story-4': 'STORY_4_GID',
         'tab 1': 'PROJECT_GID',  # Fallback for generic tab names
         'tab 2': 'PROJECT_GID',
         'tab 3': 'OBJECTS_GID',
-        'tab 4': 'STORY_1_GID',
-        'tab 5': 'STORY_2_GID',
     }
+
+    # Dynamically add story tabs discovered in the sheet (v0.6.0+)
+    # Supports both numeric (story-1) and semantic (story-your-story) identifiers
+    for tab_name, _ in working_tabs:
+        tab_lower = tab_name.lower()
+        # Match story-{identifier} or chapter-{identifier} patterns
+        if re.match(r'^(story|chapter)-[a-z0-9\-_]+$', tab_lower):
+            # Create environment variable name from tab name
+            # story-1 → STORY_1_GID, story-your-story → STORY_YOUR_STORY_GID
+            safe_name = re.sub(r'[^A-Z0-9_]', '_', tab_name.upper())
+            tab_mapping[tab_lower] = f'{safe_name}_GID'
 
     if output_env:
         # Output environment variables for GitHub Actions

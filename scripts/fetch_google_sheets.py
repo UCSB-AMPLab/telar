@@ -140,8 +140,9 @@ def main():
             filename = 'project.csv'
         elif tab_lower == 'objects':
             filename = 'objects.csv'
-        elif re.match(r'story-\d+', tab_lower):
-            # Dynamic story matching: story-1, story-2, story-3, etc.
+        elif re.match(r'^story-[a-z0-9\-_]+$', tab_lower):
+            # Dynamic story matching: story-1, story-2, story-your-story, etc.
+            # Supports both numeric (story-1) and semantic (story-your-story) identifiers (v0.6.0+)
             filename = f'{tab_lower}.csv'
         else:
             # Unknown tab - skip it

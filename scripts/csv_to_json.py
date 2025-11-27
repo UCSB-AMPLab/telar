@@ -861,9 +861,13 @@ def csv_to_json(csv_path, json_path, process_func=None):
 def process_project_setup(df):
     """
     Process project setup CSV
-    Expected columns: order, title, subtitle (optional), byline (optional)
+    Expected columns: order, title, subtitle (optional), byline (optional), story_id (optional)
+
+    story_id: Optional semantic identifier for stories (e.g., "your-story", "tutorial")
+              If not provided, system falls back to using order number
     """
     stories_list = []
+    seen_ids = set()  # Track duplicate story_ids
 
     for _, row in df.iterrows():
         order = str(row.get('order', '')).strip()
@@ -871,14 +875,37 @@ def process_project_setup(df):
         subtitle = row.get('subtitle', '')
         byline = row.get('byline', '')
 
+        # Check if story_id column exists and extract value (v0.6.0+)
+        story_id = ''
+        if 'story_id' in df.columns:
+            story_id_raw = row.get('story_id', '')
+            if pd.notna(story_id_raw):
+                story_id = str(story_id_raw).strip()
+
         # Skip rows with empty order (placeholder rows)
         if not order or not pd.notna(title):
             continue
+
+        # Validate story_id if provided
+        if story_id:
+            # Check for invalid characters (must be lowercase, numbers, hyphens, underscores)
+            import re
+            if not re.match(r'^[a-z0-9\-_]+$', story_id):
+                print(f"  Warning: story_id '{story_id}' contains invalid characters. Use lowercase letters, numbers, hyphens, underscores only.")
+
+            # Check for duplicates
+            if story_id in seen_ids:
+                print(f"  Warning: Duplicate story_id '{story_id}' found in project.csv")
+            seen_ids.add(story_id)
 
         story_entry = {
             'number': order,
             'title': title
         }
+
+        # Add story_id to JSON only if it exists and is non-empty
+        if story_id:
+            story_entry['story_id'] = story_id
 
         # Add subtitle if present
         if pd.notna(subtitle) and str(subtitle).strip():

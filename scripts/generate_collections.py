@@ -200,16 +200,20 @@ def generate_stories():
         story_num = story.get('number', '')
         story_title = story.get('title', '')
         story_subtitle = story.get('subtitle', '')
+        story_id = story.get('story_id', '')  # Optional semantic ID (v0.6.0+)
         is_demo = story.get('_demo', False)
 
         # Skip entries without number or title
         if not story_num or not story_title:
             continue
 
+        # Use story_id if provided, otherwise fall back to order number
+        identifier = story_id if story_id else story_num
+
         # Check if story data file exists
-        data_file = Path(f'_data/story-{story_num}.json')
+        data_file = Path(f'_data/story-{identifier}.json')
         if not data_file.exists():
-            print(f"Warning: No data file found for Story {story_num}")
+            print(f"Warning: No data file found for story-{identifier}.json")
             continue
 
         # Assign sort order
@@ -220,9 +224,10 @@ def generate_stories():
             sort_order = user_index
             user_index += 1
 
-        filepath = stories_dir / f"story-{story_num}.md"
+        # Use semantic identifier for filename
+        filepath = stories_dir / f"story-{identifier}.md"
 
-        # Build frontmatter
+        # Build frontmatter (story_number remains numeric for display)
         frontmatter = f"""---
 story_number: "{story_num}"
 title: "{story_title}"
@@ -240,7 +245,7 @@ title: "{story_title}"
         frontmatter += f'sort_order: {sort_order}\n'
 
         frontmatter += f"""layout: story
-data_file: story-{story_num}
+data_file: story-{identifier}
 ---
 
 """
