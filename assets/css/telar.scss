@@ -129,6 +129,84 @@ a:hover {
   margin-bottom: 1.5rem;
 }
 
+/* User Page Widget Styling - styled as if inside panel-layer1 */
+/* Widgets span full column width (no max-width constraint) */
+
+/* Carousel captions - same as panel-layer1 (uses layer2 colors for contrast) */
+.user-page .telar-widget-carousel .carousel-caption-below {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-carousel .carousel-caption-below small,
+.user-page .telar-widget-carousel .carousel-caption-below .caption-credit {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Accordion styling - user pages use layer2 colors (like panel-layer1) */
+.user-page .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-page .telar-widget-accordion .accordion-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer2-text);
+}
+
+/* Tabs styling - user pages use layer2 colors (like accordions in panel-layer1) */
+.user-page .telar-widget-tabs {
+  background: transparent;
+  border: none;
+}
+
+.user-page .telar-widget-tabs .nav-tabs {
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-item {
+  margin: 0;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-item:first-child .nav-link {
+  margin-left: 0;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  opacity: 0.7;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border: none;
+  opacity: 1;
+}
+
+.user-page .telar-widget-tabs .tab-content {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-radius: 0 0.5rem 0 0;
+}
+
 /* Site Description - Links appear darker than body text, show theme color and underline on hover */
 .site-description a {
   color: var(--color-body);
@@ -942,7 +1020,7 @@ a:hover {
   font-weight: 600;
   color: var(--color-link);
   text-decoration: none;
-  display: block;
+  display: inline;
   transition: color 0.2s ease;
 }
 
@@ -1140,6 +1218,30 @@ a:hover {
   display: block;
   object-fit: contain;
   margin: 1rem auto;
+}
+
+/* Image figures with captions */
+.telar-image-figure {
+  display: block;
+  margin: 1rem auto;
+  text-align: center;
+}
+
+.telar-image-figure img {
+  margin: 0 auto 0.25rem auto;
+}
+
+.telar-image-caption {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin-top: 0.25rem;
+  text-align: center;
+  display: block;
+  max-width: 70%;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.2;
+  font-weight: 400;
 }
 
 /* Responsive */
@@ -1954,15 +2056,20 @@ a:hover {
 
 .telar-widget-carousel .carousel-caption-below {
   height: 80px;
-  padding: 0.75rem 1rem;
-  text-align: left;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   overflow-y: auto;
 }
 
 .telar-widget-carousel .carousel-caption-below .caption-text {
   margin-bottom: 0.25rem;
-  font-size: 0.9rem;
-  line-height: 1.3;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 100;
+  opacity: 0.9;
 }
 
 .telar-widget-carousel .carousel-caption-below .caption-credit {
@@ -2262,42 +2369,84 @@ a:hover {
 }
 
 /* Panel-specific tabs styling */
+/* Panel-layer1: uses layer2 colors (dark purple) */
 #panel-layer1 .telar-widget-tabs {
-  background: var(--color-panel-layer2-bg);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: none;
 }
 
 #panel-layer1 .telar-widget-tabs .nav-tabs {
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
 }
 
-#panel-layer1 .telar-widget-tabs .nav-link {
-  color: var(--color-panel-layer2-text);
+#panel-layer1 .telar-widget-tabs .nav-tabs .nav-item {
+  margin: 0;
 }
 
-#panel-layer1 .telar-widget-tabs .nav-link.active {
+#panel-layer1 .telar-widget-tabs .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
   background: var(--color-panel-layer2-bg);
   color: var(--color-panel-layer2-text);
+  opacity: 0.7;
 }
 
+#panel-layer1 .telar-widget-tabs .nav-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border: none;
+  opacity: 1;
+}
+
+#panel-layer1 .telar-widget-tabs .tab-content {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-radius: 0 0.5rem 0 0;
+}
+
+/* Panel-layer2: uses layer1 colors (light purple) */
 #panel-layer2 .telar-widget-tabs {
-  background: var(--color-panel-layer1-bg);
-  border-color: rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border: none;
 }
 
 #panel-layer2 .telar-widget-tabs .nav-tabs {
-  background: rgba(0, 0, 0, 0.02);
-  border-bottom-color: rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
 }
 
-#panel-layer2 .telar-widget-tabs .nav-link {
-  color: var(--color-panel-layer1-text);
+#panel-layer2 .telar-widget-tabs .nav-tabs .nav-item {
+  margin: 0;
 }
 
-#panel-layer2 .telar-widget-tabs .nav-link.active {
+#panel-layer2 .telar-widget-tabs .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
   background: var(--color-panel-layer1-bg);
   color: var(--color-panel-layer1-text);
+  opacity: 0.7;
+}
+
+#panel-layer2 .telar-widget-tabs .nav-tabs .nav-link.active {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border: none;
+  opacity: 1;
+}
+
+#panel-layer2 .telar-widget-tabs .tab-content {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border-radius: 0 0.5rem 0 0;
 }
 
 /* ========================================
@@ -3083,6 +3232,9 @@ body:not(.embed-mode) .telar-embed-banner {
 
 /* Share Panel Modal */
 #panel-share {
+  // PANEL FREEZE SYSTEM: Share panel must appear above all other panels including glossary (1070)
+  z-index: 1080 !important;
+
   // Modal dialog sizing
   .modal-dialog {
     max-width: 600px;

@@ -2,7 +2,7 @@
  * Telar Story - UniversalViewer + Step-Based Navigation
  * Handles card-stacking interactions for story pages
  *
- * @version v0.5.0-beta
+ * @version v0.6.0-beta
  */
 
 // Step navigation
@@ -749,31 +749,153 @@ function prevStep() {
   goToStep(currentStepIndex - 1, 'backward');
 }
 
+/* ============================================================
+   PANEL FREEZE SYSTEM & SCROLL ISOLATION (v0.6.0)
+   ============================================================
+   When panels are open, story navigation is frozen to allow users
+   to scroll panel content without triggering step changes.
+
+   Panel hierarchy:
+   - Layer 1: Freezes story navigation
+   - Layer 2: Stacked on Layer 1
+   - Glossary: Can open from any context
+
+   Keyboard navigation:
+   - ↑/↓: Step navigation (blocked when panel open)
+   - ←: Close current panel
+   - →: Open next panel level (L1 if none, L2 if L1 open)
+   - Escape: Close current panel
+
+   Scroll isolation zones:
+   - Viewer column: Wheel events ignored (UV handles zoom/pan)
+   - Narrative column: Normal step navigation
+   - Open panels: Blocked by scrollLockActive flag
+
+   Click outside: Closes topmost panel
+   Backdrop: Subtle 2.5% dark overlay when panels open
+
+   Based on initial work by Sanjana Bhupathi.
+   ============================================================ */
+
 /**
  * Handle keyboard navigation
+ * PANEL FREEZE: ←/→ control panels, ↑/↓ control steps (blocked when panel open)
  */
 function handleKeyboard(e) {
   switch(e.key) {
     case 'ArrowDown':
-    case 'ArrowRight':
     case 'PageDown':
       e.preventDefault();
-      nextStep();
-      break;
-    case 'ArrowUp':
-    case 'ArrowLeft':
-    case 'PageUp':
-      e.preventDefault();
-      prevStep();
-      break;
-    case ' ': // Space
-      e.preventDefault();
-      if (e.shiftKey) {
-        prevStep();
-      } else {
+      if (!scrollLockActive) {
         nextStep();
       }
       break;
+
+    case 'ArrowUp':
+    case 'PageUp':
+      e.preventDefault();
+      if (!scrollLockActive) {
+        prevStep();
+      }
+      break;
+
+    case 'ArrowRight':
+      e.preventDefault();
+      if (!isPanelOpen) {
+        // No panel open - try to open L1
+        const stepForL1 = getCurrentStepData();
+        const stepNumForL1 = getCurrentStepNumber();
+        if (stepForL1 && stepHasLayer1Content(stepForL1)) {
+          openPanel('layer1', stepNumForL1);
+        }
+      } else if (panelStack.length === 1 && panelStack[0]?.type === 'layer1') {
+        // L1 is open - try to open L2
+        const stepForL2 = getCurrentStepData();
+        const stepNumForL2 = getCurrentStepNumber();
+        if (stepForL2 && stepHasLayer2Content(stepForL2)) {
+          openPanel('layer2', stepNumForL2);
+        }
+      }
+      // If L2 or glossary is open, do nothing
+      break;
+
+    case 'ArrowLeft':
+      e.preventDefault();
+      if (isPanelOpen) {
+        closeTopPanel();  // Close only the topmost panel
+      }
+      // If no panel open, do nothing
+      break;
+
+    case 'Escape':
+      if (isPanelOpen) {
+        e.preventDefault();
+        closeTopPanel();
+      }
+      break;
+
+    case ' ': // Space
+      e.preventDefault();
+      if (!scrollLockActive) {
+        if (e.shiftKey) {
+          prevStep();
+        } else {
+          nextStep();
+        }
+      }
+      break;
+  }
+}
+
+/**
+ * Get current step number from the DOM element
+ * Helper for keyboard panel navigation
+ */
+function getCurrentStepNumber() {
+  if (currentStepIndex < 0 || currentStepIndex >= allSteps.length) {
+    return null;
+  }
+  // Get step number from the step element's data attribute
+  return allSteps[currentStepIndex].dataset.step;
+}
+
+/**
+ * Get current step data from story data
+ * Helper for keyboard panel navigation
+ */
+function getCurrentStepData() {
+  const stepNumber = getCurrentStepNumber();
+  if (!stepNumber) return null;
+  const steps = window.storyData?.steps || [];
+  return steps.find(s => s.step == stepNumber);
+}
+
+/**
+ * Check if step has Layer 1 content
+ */
+function stepHasLayer1Content(step) {
+  if (!step) return false;
+  return (step.layer1_title && step.layer1_title.trim() !== '') ||
+         (step.layer1_text && step.layer1_text.trim() !== '');
+}
+
+/**
+ * Check if step has Layer 2 content
+ */
+function stepHasLayer2Content(step) {
+  if (!step) return false;
+  return (step.layer2_title && step.layer2_title.trim() !== '') ||
+         (step.layer2_text && step.layer2_text.trim() !== '');
+}
+
+/**
+ * Close only the topmost panel in the stack
+ */
+function closeTopPanel() {
+  if (panelStack.length > 0) {
+    const top = panelStack[panelStack.length - 1];
+    closePanel(top.type);
+    panelStack.pop();
   }
 }
 
@@ -781,6 +903,18 @@ function handleKeyboard(e) {
  * Handle scroll accumulation with acceleration prevention
  */
 function handleScroll(e) {
+  // PANEL FREEZE: Skip scroll processing when any panel is open
+  if (scrollLockActive) {
+    scrollAccumulator = 0;  // Reset to prevent momentum buildup
+    return;
+  }
+
+  // VIEWER SCROLL ISOLATION: Ignore wheel events from the viewer column
+  // Users should be able to zoom/pan in the UV without triggering step changes
+  if (e.target.closest('.viewer-column')) {
+    return;
+  }
+
   const now = Date.now();
   const timeSinceLastChange = now - lastStepChangeTime;
 
@@ -846,6 +980,11 @@ function handleTouchEnd(e) {
 
   // Respect cooldown period to prevent rapid step changes during animations
   if (timeSinceLastChange < STEP_COOLDOWN) {
+    return;
+  }
+
+  // PANEL FREEZE: Skip swipe processing when any panel is open
+  if (scrollLockActive) {
     return;
   }
 
@@ -1401,37 +1540,74 @@ function initializeScrollLock() {
   const narrativeColumn = document.querySelector('.narrative-column');
   if (!narrativeColumn) return;
 
-  let scrollTimeout;
+  // Create the dark backdrop element (PANEL FREEZE SYSTEM)
+  const backdrop = document.createElement('div');
+  backdrop.id = 'panel-backdrop';
+  backdrop.style.cssText = `
+    position: fixed;
+    inset: -50px;
+    background: rgba(0, 0, 0, 0.025);
+    z-index: 1040;
+    display: none;
+    pointer-events: none;
+  `;
+  document.body.appendChild(backdrop);
 
-  narrativeColumn.addEventListener('scroll', function() {
-    if (!isPanelOpen) return;
-
-    // Clear existing timeout
-    clearTimeout(scrollTimeout);
-
-    // Set timeout to close panels if scrolling continues
-    scrollTimeout = setTimeout(() => {
-      if (isPanelOpen) {
-        closeAllPanels();
+  // Click outside to close panels (PANEL FREEZE SYSTEM)
+  const storyContainer = document.querySelector('.story-container');
+  if (storyContainer) {
+    storyContainer.addEventListener('click', function(e) {
+      // Don't close if clicking on panel, panel triggers, or share button
+      if (isPanelOpen &&
+          !e.target.closest('.offcanvas') &&
+          !e.target.closest('[data-panel]') &&
+          !e.target.closest('.share-button')) {
+        closeTopPanel();
       }
-    }, 300); // Close after 300ms of scrolling
-  });
+    });
+  }
+
+  // Note: Auto-close on scroll was removed in v0.6.0 (Panel Freeze System).
+  // Panels are now truly modal - users must explicitly dismiss via X, Escape,
+  // Left arrow, or click outside.
 }
 
 /**
  * Activate scroll lock
  * Prevents step changes while panel is open
+ * Shows subtle dark backdrop behind panels
+ * Locks native scroll on background elements
  */
 function activateScrollLock() {
   scrollLockActive = true;
+  const backdrop = document.getElementById('panel-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'block';
+  }
+  // Lock native scroll on narrative column to prevent background scrolling
+  const narrativeColumn = document.querySelector('.narrative-column');
+  if (narrativeColumn) {
+    narrativeColumn.style.overflow = 'hidden';
+  }
 }
 
 /**
  * Deactivate scroll lock
  * Allows step changes when panel is closed
+ * Hides the dark backdrop
+ * Restores native scroll on background elements
  */
 function deactivateScrollLock() {
   scrollLockActive = false;
+  const backdrop = document.getElementById('panel-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'none';
+  }
+  // Restore native scroll on narrative column
+  const narrativeColumn = document.querySelector('.narrative-column');
+  if (narrativeColumn) {
+    narrativeColumn.style.overflow = '';
+  }
 }
 
 /**
@@ -1454,7 +1630,6 @@ function closeAllPanels() {
 // GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
 //
 // Helper functions for mobile story navigation coordination
-// See: telar-dev-notes/releases/0.4.0/mobile-story-transitions-research.md
 // ============================================================================
 
 /**
