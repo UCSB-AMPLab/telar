@@ -36,10 +36,16 @@
     goDeeper: "{{ lang.buttons.go_deeper }}",
     stepNumber: "{{ lang.story.step_number }}",
     demoPanelBadge: "{{ lang.demo.panel_badge }}",
+    creditPrefix: "{{ lang.object.credit_prefix }}",
     embedBanner: {
       text: {{ lang.embed_banner.text | jsonify }},
       link: "{{ lang.embed_banner.link }}"
     }
+  };
+
+  // Expose config options to JavaScript
+  window.telarConfig = {
+    showObjectCredits: {{ site.story_interface.show_object_credits | default: false }}
   };
 
   // If Christmas Tree Mode is active, add 🎄 to all warning headings

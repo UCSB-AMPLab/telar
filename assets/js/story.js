@@ -22,6 +22,7 @@ let panelStack = [];
 let objectsIndex = {}; // Quick lookup for object data
 let isPanelOpen = false; // Track if any panel is open
 let scrollLockActive = false; // Track if scroll-lock is active
+let creditsDismissed = false; // Track object credits dismissal (per-session)
 
 // Touch navigation for iPad/tablets in desktop mode (v0.4.3)
 // Handles swipe gestures to navigate between story steps
@@ -66,6 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   initializePanels();
   initializeScrollLock();
+  initializeCredits();
 });
 
 /**
@@ -107,6 +109,9 @@ function initializeFirstViewer() {
     currentViewerCard = viewerCard;
     viewerCard.element.classList.remove('card-below');
     viewerCard.element.classList.add('card-active');
+
+    // Show credits badge for initial object
+    updateObjectCredits(firstObjectId);
   }
 }
 
@@ -275,8 +280,8 @@ function destroyViewerCard(viewerCard) {
     viewerCard.element.parentNode.removeChild(viewerCard.element);
   }
 
-  // TODO: Properly dispose UV instance if API provides method
-  // For now, just remove reference
+  // UniversalViewer doesn't provide a disposal API
+  // Remove reference and let garbage collection handle cleanup
   viewerCard.uvInstance = null;
   viewerCard.osdViewer = null;
 }
@@ -576,6 +581,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
 
       // Update reference
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     } else if (elapsed < MAX_WAIT_TIME) {
       setTimeout(activateWhenReady, 100);
     } else {
@@ -593,6 +601,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
       newViewerCard.element.classList.remove('card-below');
       newViewerCard.element.classList.add('card-active');
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     }
   };
 
@@ -637,11 +648,11 @@ function initializeStepController() {
 function goToStep(newIndex, direction = 'forward') {
   // Bounds check with improved logging
   if (newIndex < 0) {
-    console.log(`⚠️ Cannot go to step ${newIndex}: already at first step (0)`);
+    console.log(`Cannot go to step ${newIndex}: already at first step (0)`);
     return;
   }
   if (newIndex >= allSteps.length) {
-    console.log(`⚠️ Cannot go to step ${newIndex}: already at last step (${allSteps.length - 1})`);
+    console.log(`Cannot go to step ${newIndex}: already at last step (${allSteps.length - 1})`);
     return;
   }
 
@@ -1030,7 +1041,7 @@ function preloadUpcomingViewers(currentIndex) {
     const y = parseFloat(nextStep.dataset.y);
     const zoom = parseFloat(nextStep.dataset.zoom);
 
-    console.log(`⏳ Preloading viewer for step ${nextIndex}: ${objectId}`);
+    console.log(`Preloading viewer for step ${nextIndex}: ${objectId}`);
     getOrCreateViewerCard(objectId, nextIndex, x, y, zoom);
   }
 
@@ -1050,7 +1061,7 @@ function preloadUpcomingViewers(currentIndex) {
     const y = parseFloat(prevStep.dataset.y);
     const zoom = parseFloat(prevStep.dataset.zoom);
 
-    console.log(`⏳ Preloading previous viewer for step ${prevIndex}: ${objectId}`);
+    console.log(`Preloading previous viewer for step ${prevIndex}: ${objectId}`);
     getOrCreateViewerCard(objectId, prevIndex, x, y, zoom);
   }
 }
@@ -1124,6 +1135,9 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
 
       // Update current viewer card reference
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     } else if (elapsed < MAX_WAIT_TIME) {
       console.log(`Viewer not ready yet, waiting... (${elapsed}ms elapsed)`);
       setTimeout(slideUpWhenReady, 100);
@@ -1170,6 +1184,9 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
       }
 
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     }
   };
 
@@ -1186,7 +1203,7 @@ function animateViewerToPosition(viewerCard, x, y, zoom) {
     return;
   }
 
-  console.log(`Animating viewer to position: x=${x}, y=${y}, zoom=${zoom} over 36 seconds`);
+  console.log(`Animating viewer to position: x=${x}, y=${y}, zoom=${zoom} over 4 seconds`);
 
   const osdViewer = viewerCard.osdViewer;
   const viewport = osdViewer.viewport;
@@ -1301,6 +1318,49 @@ function updateViewerInfo(stepNumber) {
     // Use language string from Jekyll with fallback to English
     const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
     infoElement.textContent = stepTemplate.replace("{{ number }}", stepNumber);
+  }
+}
+
+/**
+ * Initialize object credits badge
+ */
+function initializeCredits() {
+  // Check config flag
+  if (!window.telarConfig?.showObjectCredits) return;
+
+  // Set up dismiss handler
+  const dismissBtn = document.getElementById('object-credits-dismiss');
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', function() {
+      const badge = document.getElementById('object-credits-badge');
+      if (badge) badge.classList.add('d-none');
+      creditsDismissed = true;
+    });
+  }
+}
+
+/**
+ * Update object credits badge when object changes
+ */
+function updateObjectCredits(objectId) {
+  if (!window.telarConfig?.showObjectCredits) return;
+  if (creditsDismissed) return;
+
+  const badge = document.getElementById('object-credits-badge');
+  const textElement = document.getElementById('object-credits-text');
+
+  if (!badge || !textElement) return;
+
+  // Get credit from objects data
+  const objectData = objectsIndex[objectId];
+  const credit = objectData?.credit;
+
+  if (credit && credit.trim()) {
+    const prefix = window.telarLang?.creditPrefix || 'Credit:';
+    textElement.textContent = `${prefix} ${credit}`;
+    badge.classList.remove('d-none');
+  } else {
+    badge.classList.add('d-none');
   }
 }
 
@@ -1681,7 +1741,7 @@ function preloadMobileViewers(currentIndex) {
     const y = parseFloat(step.dataset.y);
     const zoom = parseFloat(step.dataset.zoom);
 
-    console.log(`⏳ Mobile preloading step ${idx}: ${objectId}`);
+    console.log(`Mobile preloading step ${idx}: ${objectId}`);
     getOrCreateViewerCard(objectId, idx, x, y, zoom);
   }
 }
@@ -1690,7 +1750,6 @@ function preloadMobileViewers(currentIndex) {
 window.TelarStory = {
   viewerCards,
   currentViewerCard,
-  scroller,
   switchToObject,
   animateViewerToPosition,
   openPanel,

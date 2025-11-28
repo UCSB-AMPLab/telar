@@ -39,6 +39,9 @@ object:
     iiif_manifest: "Manifiesto IIIF"
     appears_in_stories: "Aparece en historias"
 
+  # Insignia de créditos (superposición del visor)
+  credit_prefix: "Crédito:"
+
   # Herramienta de identificación de coordenadas
   coordinates:
     heading: "Instrucciones"

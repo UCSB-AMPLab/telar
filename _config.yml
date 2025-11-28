@@ -15,6 +15,7 @@ telar_language: "en" # Options: "en" (English), "es" (Español)
 # Story Interface Settings
 story_interface:
   show_story_steps: true # Set to false to hide "Step X" overlay in stories
+  show_object_credits: true # Set to true to display object credits badge (bottom-left corner, dismissable)
   include_demo_content: true # Fetch demo stories from content.telar.org. Switch this off to hide demo stories and their content.
 
 # Google Sheets Integration (optional)

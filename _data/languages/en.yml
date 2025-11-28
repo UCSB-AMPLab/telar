@@ -39,6 +39,9 @@ object:
     iiif_manifest: "IIIF Manifest"
     appears_in_stories: "Appears in Stories"
 
+  # Credits badge (viewer overlay)
+  credit_prefix: "Credit:"
+
   # Coordinate identification tool
   coordinates:
     heading: "Instructions"
