@@ -5,7 +5,7 @@ Telar Upgrade Script
 Automatically migrates Telar installations from older versions to the latest version.
 Detects current version, applies necessary migrations, and generates checklist for manual steps.
 
-Version: v0.5.0-beta
+Version: v0.6.0-beta
 
 Usage:
     python scripts/upgrade.py              # Normal upgrade
@@ -30,10 +30,12 @@ from migrations.v033_to_v034 import Migration033to034
 from migrations.v034_to_v040 import Migration034to040
 from migrations.v040_to_v041 import Migration040to041
 from migrations.v041_to_v042 import Migration041to042
+from migrations.v043_to_v050 import Migration043to050
+from migrations.v050_to_v060 import Migration050to060
 
 
 # Latest version
-LATEST_VERSION = "0.4.2-beta"
+LATEST_VERSION = "0.6.0-beta"
 
 # All available migrations in order
 MIGRATIONS = [
@@ -45,6 +47,8 @@ MIGRATIONS = [
     Migration034to040,
     Migration040to041,
     Migration041to042,
+    Migration043to050,
+    Migration050to060,
 ]
 
 

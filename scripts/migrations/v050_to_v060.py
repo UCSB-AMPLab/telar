@@ -220,14 +220,143 @@ class Migration050to060(BaseMigration):
 
         return changes
 
+    def _get_referenced_files(self) -> set:
+        """
+        Parse user's CSV files to find which old demo files are still being used.
+
+        This reads the CSVs synced from Google Sheets to determine the source of truth
+        for what content is actively in use. Returns CSVs, markdown files, and images
+        that are actively referenced.
+
+        Returns:
+            Set of relative file paths that are actively referenced
+        """
+        import csv
+        import re
+
+        referenced = set()
+
+        # System CSV files to exclude from story scanning
+        system_csvs = {'objects.csv', 'new-objects.csv', 'project.csv',
+                       'objetos.csv', 'proyecto.csv'}  # Include Spanish names
+
+        # 1. Check objects.csv AND new-objects.csv for local image references
+        for obj_csv in ['objects.csv', 'new-objects.csv']:
+            csv_path = os.path.join(self.repo_root, 'components/structures', obj_csv)
+            if not os.path.exists(csv_path):
+                continue
+
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # Skip comment rows
+                        object_id = row.get('object_id', '')
+                        if object_id.startswith('#'):
+                            continue
+
+                        source_url = row.get('source_url', '').strip()
+
+                        # Empty source_url OR local path = local image
+                        if not source_url or not source_url.startswith('http'):
+                            # Try common image extensions
+                            for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tiff']:
+                                img_path = f'components/images/{object_id}{ext}'
+                                if self._file_exists(img_path):
+                                    referenced.add(img_path)
+                                    break
+            except Exception as e:
+                # Don't fail migration if CSV can't be read
+                print(f"  Warning: Could not read {obj_csv}: {e}")
+                continue
+
+        # 2. Check story CSVs for markdown file references
+        structures_dir = os.path.join(self.repo_root, 'components/structures')
+        if os.path.exists(structures_dir):
+            for filename in os.listdir(structures_dir):
+                if not filename.endswith('.csv'):
+                    continue
+                if filename in system_csvs:
+                    continue
+
+                csv_path = os.path.join(structures_dir, filename)
+
+                # Also keep the CSV itself if it exists
+                csv_rel_path = f'components/structures/{filename}'
+                if self._file_exists(csv_rel_path):
+                    referenced.add(csv_rel_path)
+
+                try:
+                    with open(csv_path, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            # Skip comment rows
+                            step = str(row.get('step', '')).strip()
+                            if step.startswith('#') or not step:
+                                continue
+
+                            # Check layer columns
+                            for col in ['layer1_file', 'layer2_file', 'layer3_file']:
+                                file_ref = row.get(col, '').strip()
+                                if file_ref:
+                                    # Normalize path (story1/file.md → components/texts/stories/story1/file.md)
+                                    if '/' in file_ref:
+                                        # Already has directory
+                                        md_path = f'components/texts/stories/{file_ref}'
+                                    else:
+                                        # Just filename, skip
+                                        continue
+
+                                    referenced.add(md_path)
+                except Exception as e:
+                    print(f"  Warning: Could not read {filename}: {e}")
+                    continue
+
+        # 3. Parse referenced markdown files for embedded images
+        for md_file in [f for f in referenced if f.endswith('.md')]:
+            full_path = os.path.join(self.repo_root, md_file)
+            if not os.path.exists(full_path):
+                continue
+
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                # Extract image paths from markdown
+                # Matches: ![alt](path), <img src="path">, url(path)
+                patterns = [
+                    r'!\[.*?\]\(([^)]+)\)',  # Markdown images
+                    r'<img[^>]+src=["\']([^"\']+)["\']',  # HTML images
+                    r'url\(["\']?([^)"\' ]+)["\']?\)',  # CSS background images
+                ]
+
+                for pattern in patterns:
+                    for match in re.finditer(pattern, content):
+                        img_path = match.group(1)
+
+                        # Normalize path (../components/images/foo.jpg → components/images/foo.jpg)
+                        img_path = img_path.replace('../', '').lstrip('/')
+
+                        # Only care about components/images/ references
+                        if 'components/images/' in img_path:
+                            referenced.add(img_path)
+
+            except Exception as e:
+                print(f"  Warning: Could not parse {md_file}: {e}")
+                continue
+
+        return referenced
+
     def _cleanup_old_demo_content(self) -> List[str]:
         """
-        Remove old demo content from v0.5.0, preserving user modifications.
+        Remove old demo content that is NOT being used by user's current Google Sheet.
 
         Strategy:
-        - Text files (.md, .csv): Compare with v0.5.0-beta, only delete if unmodified
-        - Images: Keep all for safety (too risky to auto-delete)
-        - Empty directories: Remove after file cleanup
+        1. Get CSV-referenced files (source of truth from Google Sheets)
+        2. For each old demo file:
+           a. If CSV-referenced → KEEP (user is using it)
+           b. If not referenced but modified → KEEP (user customized)
+           c. If not referenced and unmodified → DELETE (safe to remove)
 
         Returns:
             List of change descriptions
@@ -235,11 +364,13 @@ class Migration050to060(BaseMigration):
         import shutil
 
         changes = []
-        kept_modified = []
 
-        # Files to check (text files only)
-        files_to_check = [
-            # story1 markdown files
+        # Get what's currently in use from CSVs (source of truth)
+        referenced_files = self._get_referenced_files()
+
+        # Complete list of old demo files to consider (v0.5.0 demo content)
+        old_demo_files = {
+            # story1 markdown files (6 files)
             'components/texts/stories/story1/bogota_savanna.md',
             'components/texts/stories/story1/encomendero_biography.md',
             'components/texts/stories/story1/legal_painting.md',
@@ -247,7 +378,7 @@ class Migration050to060(BaseMigration):
             'components/texts/stories/story1/maldonado_lineage.md',
             'components/texts/stories/story1/ways_of_mapping.md',
 
-            # story2 markdown files
+            # story2 markdown files (9 files)
             'components/texts/stories/story2/step1-layer1-test.md',
             'components/texts/stories/story2/step1-layer1.md',
             'components/texts/stories/story2/step10-layer1.md',
@@ -258,72 +389,12 @@ class Migration050to060(BaseMigration):
             'components/texts/stories/story2/step5-layer1.md',
             'components/texts/stories/story2/step8-layer1.md',
 
-            # CSV files
+            # CSV files (3 files)
             'components/structures/story-1.csv',
             'components/structures/story-2.csv',
             'components/structures/new-objects.csv',
-        ]
 
-        # Check each file
-        for rel_path in files_to_check:
-            if not self._file_exists(rel_path):
-                continue
-
-            # Check if modified
-            if self._is_file_modified(rel_path, compare_tag='v0.5.0-beta'):
-                # User modified, keep it
-                kept_modified.append(rel_path)
-            else:
-                # Unmodified, safe to delete
-                full_path = os.path.join(self.repo_root, rel_path)
-                try:
-                    os.remove(full_path)
-                    changes.append(f"Removed unmodified demo file: {rel_path}")
-                except Exception as e:
-                    changes.append(f"⚠️  Warning: Could not remove {rel_path}: {e}")
-
-        # Remove empty directories
-        old_dirs = [
-            'components/texts/stories/story1',
-            'components/texts/stories/story2',
-        ]
-
-        for rel_path in old_dirs:
-            full_path = os.path.join(self.repo_root, rel_path)
-            if os.path.exists(full_path):
-                try:
-                    # Only remove if empty
-                    if not os.listdir(full_path):
-                        os.rmdir(full_path)
-                        changes.append(f"Removed empty directory: {rel_path}/")
-                except:
-                    pass  # Not empty or can't remove
-
-        # Remove paisajes images directory
-        paisajes_dir = os.path.join(self.repo_root, 'components/images/paisajes')
-        if os.path.exists(paisajes_dir):
-            try:
-                file_count = len([f for f in os.listdir(paisajes_dir)
-                                if os.path.isfile(os.path.join(paisajes_dir, f))])
-                shutil.rmtree(paisajes_dir)
-                changes.append(f"Removed paisajes/ directory ({file_count} demo images)")
-            except Exception as e:
-                changes.append(f"⚠️  Warning: Could not remove paisajes/: {e}")
-
-        # Report kept files (with bilingual message)
-        if kept_modified:
-            lang = self._detect_language()
-            if lang == 'es':
-                msg = f"⚠️  Se mantuvieron {len(kept_modified)} archivos de demo modificados por el usuario"
-            else:
-                msg = f"⚠️  Kept {len(kept_modified)} user-modified demo files"
-            changes.append(msg)
-
-            for rel_path in kept_modified:
-                changes.append(f"  • {rel_path}")
-
-        # Note about root-level demo images (kept for safety)
-        root_images = [
+            # Demo images (18 files)
             'components/images/ampl-logo.png',
             'components/images/babylonian-6c-bce-world-map.png',
             'components/images/bogota-1614-painting.jpg',
@@ -342,18 +413,93 @@ class Migration050to060(BaseMigration):
             'components/images/example-bogota-1614.png',
             'components/images/example-ceramic-figure.png',
             'components/images/example-muisca-goldwork.jpg',
+        }
+
+        kept_in_use = []
+        kept_modified = []
+        removed_count = 0
+
+        for file_path in old_demo_files:
+            if not self._file_exists(file_path):
+                continue
+
+            # Is user actively using this file?
+            if file_path in referenced_files:
+                kept_in_use.append(file_path)
+                continue  # KEEP IT - CSV says it's in use
+
+            # Not referenced - check if user modified text files
+            if file_path.endswith(('.md', '.csv')):
+                if self._is_file_modified(file_path, compare_tag='v0.5.0-beta'):
+                    kept_modified.append(file_path)
+                    continue  # KEEP IT - user customized
+
+            # Not in use, not modified - safe to delete
+            full_path = os.path.join(self.repo_root, file_path)
+            try:
+                os.remove(full_path)
+                removed_count += 1
+                changes.append(f"Removed v0.5.0 example file: {file_path}")
+            except Exception as e:
+                changes.append(f"⚠️  Warning: Could not remove {file_path}: {e}")
+
+        # Remove empty directories
+        old_dirs = [
+            'components/texts/stories/story1',
+            'components/texts/stories/story2',
+            'components/images/paisajes',
         ]
 
-        existing_root_images = [img for img in root_images if self._file_exists(img)]
+        for rel_path in old_dirs:
+            full_path = os.path.join(self.repo_root, rel_path)
+            if os.path.exists(full_path):
+                try:
+                    if not os.listdir(full_path):
+                        os.rmdir(full_path)
+                        changes.append(f"Removed empty directory: {rel_path}/")
+                    else:
+                        shutil.rmtree(full_path)
+                        changes.append(f"Removed directory: {rel_path}/")
+                except:
+                    pass  # Not empty or can't remove
 
-        if existing_root_images:
-            lang = self._detect_language()
+        # Report what was kept and why (bilingual)
+        lang = self._detect_language()
+
+        if kept_in_use:
             if lang == 'es':
-                msg = f"ℹ️  Se mantuvieron {len(existing_root_images)} imágenes de demo antiguas por seguridad"
+                msg = f"ℹ️  Se mantuvieron {len(kept_in_use)} archivos de ejemplo v0.5.0 (aún referenciados en Google Sheet)"
             else:
-                msg = f"ℹ️  Kept {len(existing_root_images)} old demo images for safety"
+                msg = f"ℹ️  Kept {len(kept_in_use)} v0.5.0 example files (still referenced in Google Sheet)"
             changes.append(msg)
-            changes.append("  (You can manually delete these if not using them)")
+
+            for f in kept_in_use[:5]:  # Show first 5
+                changes.append(f"  • {f}")
+            if len(kept_in_use) > 5:
+                changes.append(f"  ... and {len(kept_in_use) - 5} more")
+
+        if kept_modified:
+            if lang == 'es':
+                msg = f"⚠️  Se mantuvieron {len(kept_modified)} archivos de ejemplo v0.5.0 (los modificaste)"
+            else:
+                msg = f"⚠️  Kept {len(kept_modified)} v0.5.0 example files (you modified them)"
+            changes.append(msg)
+
+            for f in kept_modified:
+                changes.append(f"  • {f}")
+
+        if removed_count > 0:
+            if lang == 'es':
+                msg = f"✓ Eliminados {removed_count} archivos de ejemplo v0.5.0 (no en uso)"
+            else:
+                msg = f"✓ Removed {removed_count} v0.5.0 example files (not in use)"
+            changes.append(msg)
+
+            # Add reassurance that custom content is safe
+            if lang == 'es':
+                changes.append("ℹ️  Tu contenido personalizado está preservado")
+            else:
+                changes.append("ℹ️  Your custom content is preserved")
 
         return changes
 
