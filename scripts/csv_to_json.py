@@ -2448,8 +2448,91 @@ def find_csv_with_fallback(base_path, spanish_name):
         # Return English path (will trigger "file not found" warning in csv_to_json)
         return english_path
 
+
+def fetch_demo_content_if_enabled():
+    """
+    Automatically fetch demo content bundle before processing CSVs.
+
+    This function runs fetch_demo_content.py as a subprocess to ensure the demo
+    bundle is available before csv_to_json.py attempts to load and merge it.
+
+    **Why this is needed:**
+    - csv_to_json.py expects demo content at _demo_content/telar-demo-bundle.json
+    - Without this auto-fetch, users would need to manually update build.yml workflow
+    - Calling fetch as subprocess maintains clean separation of concerns
+
+    **Behavior:**
+    - Checks _config.yml for include_demo_content setting (via fetch_demo_content.py)
+    - If enabled: Downloads demo bundle from content.telar.org
+    - If disabled: Cleans up any existing demo content
+    - If fetch fails: Continues gracefully (csv_to_json.py handles missing bundle)
+
+    **Output:**
+    - Prints fetch_demo_content.py output so users see what's happening
+    - Warnings are printed for timeouts or errors, then processing continues
+
+    **Idempotent:**
+    - Safe to call multiple times - fetch_demo_content.py handles existing bundles
+    - No-op if demo content disabled in config
+
+    **Error handling:**
+    - Non-zero exit code from fetch_demo_content.py is acceptable
+      (demo might be disabled or unavailable)
+    - csv_to_json.py's load_demo_bundle() already handles missing bundle gracefully
+    - Timeouts and exceptions are caught and logged as warnings
+
+    **Performance:**
+    - 60 second timeout prevents hanging on slow network
+    - Only downloads when include_demo_content: true
+    - Cached demo bundles are reused if already fetched
+
+    Returns:
+        None
+    """
+    import subprocess
+
+    try:
+        # Run fetch_demo_content.py to ensure bundle exists
+        # This checks config and either fetches, cleans up, or no-ops accordingly
+        result = subprocess.run(
+            ['python3', 'scripts/fetch_demo_content.py'],
+            capture_output=True,
+            text=True,
+            timeout=60  # 60 second timeout for network fetch
+        )
+
+        # Print output so users see what happened
+        # This includes: enabled/disabled status, fetch progress, bundle metadata
+        if result.stdout:
+            print(result.stdout)
+
+        # Note: Non-zero exit is acceptable here
+        # Reasons for non-zero exit:
+        # - Demo content disabled (exit 0 after cleanup)
+        # - Demo bundle not available for this version (exit 1)
+        # - Network error (exit 1)
+        # In all cases, csv_to_json.py will continue and handle missing bundle
+
+    except subprocess.TimeoutExpired:
+        # Network fetch took too long - continue without demo content
+        print("[WARN] Demo content fetch timed out (skipping)")
+        print("[WARN] Your site will build without demo content")
+
+    except Exception as e:
+        # Unexpected error (subprocess not found, permission denied, etc.)
+        print(f"[WARN] Could not fetch demo content: {e}")
+        print("[WARN] Your site will build without demo content")
+        # Continue anyway - csv_to_json.py handles missing bundle gracefully
+
+
 def main():
     """Main conversion process"""
+    # IMPORTANT: Fetch demo content FIRST (before any CSV processing)
+    # This ensures _demo_content/telar-demo-bundle.json exists before we try to load it
+    # later in this script (see load_demo_bundle() call near end of main())
+    # This auto-fetch eliminates the need for users to manually update build.yml workflow
+    fetch_demo_content_if_enabled()
+
     # Check if Christmas Tree Mode is enabled in _config.yml
     christmas_tree_mode = False
     try:
