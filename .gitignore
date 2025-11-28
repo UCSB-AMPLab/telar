@@ -31,9 +31,11 @@ Thumbs.db
 
 # Generated JSON files (from components/structures/*.csv by csv_to_json.py)
 # Source of truth is the CSV files - JSON is regenerated on every build
+# Note: With story_id feature, story files use semantic names (e.g., your-story.json, paisajes-demo.json)
 _data/objects.json
 _data/project.json
-_data/story-*.json
+_data/*.json
+!_data/languages/
 
 # Generated Jekyll collection files (from components/texts/ by generate_collections.py)
 # Source of truth is the markdown files in components/texts/
@@ -49,10 +51,6 @@ _demo_content/
 # TODO: Remove this when testing GitHub Actions workflow
 # Tiles should be tracked in production for optimization
 iiif/objects/
-
-# Custom Themes
-# Users can create custom.yml for their own theme without tracking it
-_data/themes/custom.yml
 
 # Python
 __pycache__/
