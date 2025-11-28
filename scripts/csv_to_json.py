@@ -23,6 +23,39 @@ from io import BytesIO
 # Global language data cache
 _lang_data = None
 
+# Bilingual column name mapping (Spanish → English)
+# Supports bilingual story CSV headers (v0.6.0+)
+COLUMN_NAME_MAPPING = {
+    # Story step columns (Spanish → English)
+    'paso': 'step',
+    'objeto': 'object',
+    'pregunta': 'question',
+    'respuesta': 'answer',
+    'boton_capa1': 'layer1_button',
+    'archivo_capa1': 'layer1_file',
+    'boton_capa2': 'layer2_button',
+    'archivo_capa2': 'layer2_file',
+    # x, y, zoom are the same in both languages
+
+    # Objects columns (Spanish → English) - for IIIF auto-populator support
+    'titulo': 'title',
+    'descripcion': 'description',
+    'url_fuente': 'source_url',
+    'creador': 'creator',
+    'periodo': 'period',
+    'medio': 'medium',
+    'dimensiones': 'dimensions',
+    'ubicacion': 'location',
+    'credito': 'credit',
+    'miniatura': 'thumbnail',
+
+    # Project columns (Spanish → English)
+    'orden': 'order',
+    'id_historia': 'story_id',
+    'subtitulo': 'subtitle',
+    'firma': 'byline',
+}
+
 def load_language_data():
     """
     Load language strings from _config.yml and corresponding language file.
@@ -801,6 +834,62 @@ def read_markdown_file(file_path, widget_warnings=None):
         print(f"Error reading markdown file {full_path}: {e}")
         return None
 
+def normalize_column_names(df):
+    """
+    Normalize column names to English using bilingual mapping.
+    Supports both English and Spanish column headers (v0.6.0+).
+
+    Args:
+        df: pandas DataFrame with potentially Spanish column names
+
+    Returns:
+        DataFrame: DataFrame with normalized (English) column names
+    """
+    # Create a mapping for this dataframe's columns
+    rename_map = {}
+    for col in df.columns:
+        col_lower = col.lower().strip()
+        if col_lower in COLUMN_NAME_MAPPING:
+            rename_map[col] = COLUMN_NAME_MAPPING[col_lower]
+            print(f"  [INFO] Normalized column '{col}' → '{COLUMN_NAME_MAPPING[col_lower]}'")
+
+    # Rename columns if any mappings found
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    return df
+
+def is_header_row(row_values):
+    """
+    Check if a row contains header names (English or Spanish).
+
+    Args:
+        row_values: List of cell values from a row
+
+    Returns:
+        bool: True if row appears to be a header row
+    """
+    # Get all valid column names (English and Spanish)
+    valid_names = set(COLUMN_NAME_MAPPING.keys()) | set(COLUMN_NAME_MAPPING.values())
+
+    # Also include common column names not in the mapping
+    valid_names.update(['x', 'y', 'zoom', 'order', 'story_id', 'title', 'subtitle',
+                        'byline', 'object_id', 'description', 'source_url', 'creator',
+                        'period', 'medium', 'dimensions', 'location', 'credit', 'thumbnail'])
+
+    # Count how many cells match known column names
+    matches = 0
+    total = 0
+    for val in row_values:
+        if pd.notna(val):
+            val_lower = str(val).lower().strip()
+            total += 1
+            if val_lower in valid_names:
+                matches += 1
+
+    # If 80%+ of non-empty cells are column names, it's a header row
+    return total > 0 and (matches / total) >= 0.8
+
 def csv_to_json(csv_path, json_path, process_func=None):
     """
     Convert CSV file to JSON
@@ -828,6 +917,16 @@ def csv_to_json(csv_path, json_path, process_func=None):
 
         # Filter out columns starting with # (instruction columns)
         df = df[[col for col in df.columns if not col.startswith('#')]]
+
+        # Check if first data row is actually a duplicate header row (bilingual CSVs)
+        if len(df) > 0:
+            first_row = df.iloc[0]
+            if is_header_row(first_row.values):
+                print(f"  [INFO] Detected duplicate header row - skipping row 2")
+                df = df.iloc[1:].reset_index(drop=True)
+
+        # Normalize column names (Spanish → English) for bilingual support
+        df = normalize_column_names(df)
 
         # Sanitize user data - remove 🎄 emoji to prevent accidental Christmas Tree Mode triggering
         df = sanitize_dataframe(df)
@@ -2318,6 +2417,35 @@ def merge_demo_content(bundle):
         print(f"  Created _data/demo-glossary.json ({len(glossary_data)} demo terms)")
 
 
+def find_csv_with_fallback(base_path, spanish_name):
+    """
+    Find CSV file with bilingual fallback support.
+    Checks for English name first, then Spanish equivalent.
+
+    Args:
+        base_path: Base path like 'components/structures/project'
+        spanish_name: Spanish filename like 'proyecto'
+
+    Returns:
+        str: Path to found CSV file, or original English path if neither exists
+
+    Example:
+        find_csv_with_fallback('components/structures/project', 'proyecto')
+        Returns: 'components/structures/project.csv' or
+                 'components/structures/proyecto.csv' (fallback)
+    """
+    english_path = f'{base_path}.csv'
+    spanish_path = f'{base_path.rsplit("/", 1)[0]}/{spanish_name}.csv'
+
+    if Path(english_path).exists():
+        return english_path
+    elif Path(spanish_path).exists():
+        print(f"  [INFO] Using Spanish file: {spanish_name}.csv")
+        return spanish_path
+    else:
+        # Return English path (will trigger "file not found" warning in csv_to_json)
+        return english_path
+
 def main():
     """Main conversion process"""
     # Check if Christmas Tree Mode is enabled in _config.yml
@@ -2353,23 +2481,25 @@ def main():
     print("Converting CSV files to JSON...")
     print("-" * 50)
 
-    # Convert project setup
+    # Convert project setup (with bilingual fallback: project.csv or proyecto.csv)
+    project_path = find_csv_with_fallback('components/structures/project', 'proyecto')
     csv_to_json(
-        'components/structures/project.csv',
+        project_path,
         '_data/project.json',
         process_project_setup
     )
 
-    # Convert objects (with optional Christmas Tree mode)
+    # Convert objects (with bilingual fallback: objects.csv or objetos.csv)
+    objects_path = find_csv_with_fallback('components/structures/objects', 'objetos')
     if christmas_tree_mode:
         csv_to_json(
-            'components/structures/objects.csv',
+            objects_path,
             '_data/objects.json',
             lambda df: process_objects(df, christmas_tree=True)
         )
     else:
         csv_to_json(
-            'components/structures/objects.csv',
+            objects_path,
             '_data/objects.json',
             process_objects
         )
@@ -2379,9 +2509,9 @@ def main():
 
     # Convert story files (with optional Christmas Tree mode)
     # v0.6.0+: Process ALL CSVs except system files (supports both semantic and traditional naming)
-    # System files: project.csv, objects.csv
+    # System files: project.csv/proyecto.csv, objects.csv/objetos.csv
     # Story files: your-story.csv, tu-historia.csv, story-1.csv, story-2.csv, etc.
-    system_csvs = {'project.csv', 'objects.csv'}
+    system_csvs = {'project.csv', 'proyecto.csv', 'objects.csv', 'objetos.csv'}
 
     if christmas_tree_mode:
         for csv_file in structures_dir.glob('*.csv'):
