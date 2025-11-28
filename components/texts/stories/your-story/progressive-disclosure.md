@@ -17,6 +17,6 @@ You're now viewing a **layer 2 panel** - the deepest level of detail in Telar.
 
 **Glossary linking:**
 
-[[Panel]]s like this one can include glossary terms using `[[term-id]]` syntax. The [[viewer]] allows readers to explore image details themselves while your text guides their interpretation.
+[[panel|Panels]] like this one can include glossary terms using double-bracket syntax. The [[viewer]] allows readers to explore image details themselves while your text guides their interpretation.
 
 Try it: click on any glossary term (shown in color) to see its definition.

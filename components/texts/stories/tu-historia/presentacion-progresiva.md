@@ -17,6 +17,6 @@ Estás viendo un **panel de capa 2**, el nivel más profundo de detalle en Telar
 
 **Enlaces al glosario:**
 
-Los [[panel-es]] como este pueden incluir términos del glosario con la sintaxis `[[term-id]]`. El [[visor]] permite que las personas lectoras exploren los detalles por su cuenta mientras tu texto guía la interpretación.
+Los [[panel-es|paneles]] como este pueden incluir términos del glosario con la sintaxis de doble corchete. El [[visor]] permite que las personas lectoras exploren los detalles por su cuenta mientras tu texto guía la interpretación.
 
 Pruébalo: haz clic en cualquier término del glosario (en color) para ver su definición.
