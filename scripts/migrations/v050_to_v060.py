@@ -495,32 +495,87 @@ class Migration050to060(BaseMigration):
         changes = []
 
         framework_files = {
-            # Python scripts with v0.6.0 changes
-            'scripts/csv_to_json.py': 'Demo content processing with widgets/glossary',
-            'scripts/fetch_demo_content.py': 'Demo content bundle fetcher',
-            'scripts/generate_collections.py': 'Collection generation',
-
-            # GitHub Actions workflows
-            '.github/workflows/build.yml': 'Demo content fetch step added',
-            '.github/workflows/upgrade.yml': 'v0.6.0 migration support',
+            # Python scripts
+            'scripts/csv_to_json.py': 'Demo content processing, bilingual CSV support, story_id',
+            'scripts/fetch_demo_content.py': 'Demo content bundle fetcher (NEW)',
+            'scripts/generate_collections.py': 'Custom pages support, demo glossary',
+            'scripts/fetch_google_sheets.py': 'Bilingual tab support, story_id support',
+            'scripts/discover_sheet_gids.py': 'Story_id support',
+            'scripts/generate_iiif.py': 'Version header update',
 
             # Language files - multilingual UI
-            '_data/languages/en.yml': 'Multilingual UI strings',
-            '_data/languages/es.yml': 'Spanish translations',
+            '_data/languages/en.yml': 'Credit prefix, updated strings',
+            '_data/languages/es.yml': 'Spanish translations, credit prefix',
 
-            # Layouts and includes
-            '_layouts/story.html': 'Multilingual support',
+            # Data files
+            '_data/navigation.yml': 'Bilingual navigation menu configuration (NEW)',
+
+            # Layouts
+            '_layouts/story.html': 'Credit prefix exposure, byline markdown support',
             '_layouts/default.html': 'Multilingual support',
+            '_layouts/user-page.html': 'Custom pages layout (NEW)',
+            '_layouts/objects-index.html': 'Object ordering bug fix',
+            '_layouts/index.html': 'Logo display removed',
+            '_layouts/glossary.html': 'Demo badge text fix',
+
+            # Includes
+            '_includes/header.html': 'Data-driven navigation, logo CSS',
+            '_includes/viewer.html': 'Object credits badge HTML/CSS',
+
+            # Stylesheets
+            'assets/css/telar.scss': 'Logo, panel freeze, tab widget, glossary, credits badge',
 
             # JavaScript
-            'assets/js/story.js': 'Demo content support',
+            'assets/js/story.js': 'Panel freeze system, credits badge, viewer scroll isolation',
+            'assets/js/telar.js': 'Glossary link handling, click-outside-to-close',
 
             # Documentation
             'README.md': 'v0.6.0 documentation',
             'CHANGELOG.md': 'v0.6.0 changelog',
 
-            # Gitignore (updated with generated file patterns)
+            # Gitignore
             '.gitignore': 'Generated files gitignored',
+
+            # Template story content - English (your-story)
+            'components/texts/stories/your-story/about-coordinates.md': 'Coordinate system explanation',
+            'components/texts/stories/your-story/guiding-attention.md': 'Question/Answer/Invitation pattern',
+            'components/texts/stories/your-story/building-argument.md': 'Coordinate sequences as argument',
+            'components/texts/stories/your-story/visual-rhetoric.md': 'Visual contrast analysis',
+            'components/texts/stories/your-story/the-reveal.md': 'Full view synthesis',
+            'components/texts/stories/your-story/progressive-disclosure.md': 'Layer 2 panel explanation',
+            'components/texts/stories/your-story/ruler-place.md': 'Charles III marginalized position',
+            'components/texts/stories/your-story/multiple-images.md': 'IIIF vs self-hosted comparison',
+            'components/texts/stories/your-story/whats-next.md': 'Template overview',
+
+            # Template story content - Spanish (tu-historia)
+            'components/texts/stories/tu-historia/acerca-de-coordenadas.md': 'Sistema de coordenadas',
+            'components/texts/stories/tu-historia/guiar-atencion.md': 'Patrón Pregunta/Respuesta/Invitación',
+            'components/texts/stories/tu-historia/construir-argumento.md': 'Secuencias como argumento',
+            'components/texts/stories/tu-historia/retorica-visual.md': 'Análisis de contraste visual',
+            'components/texts/stories/tu-historia/la-revelacion.md': 'Síntesis de vista completa',
+            'components/texts/stories/tu-historia/divulgacion-progresiva.md': 'Explicación de capa 2',
+            'components/texts/stories/tu-historia/lugar-gobernante.md': 'Posición marginalizada',
+            'components/texts/stories/tu-historia/multiples-imagenes.md': 'Comparación IIIF vs autoalojadas',
+            'components/texts/stories/tu-historia/que-sigue.md': 'Resumen de plantilla',
+
+            # Glossary entries - English
+            'components/texts/glossary/story.md': 'Story glossary entry',
+            'components/texts/glossary/step.md': 'Step glossary entry',
+            'components/texts/glossary/viewer.md': 'Viewer glossary entry',
+            'components/texts/glossary/panel.md': 'Panel glossary entry',
+
+            # Glossary entries - Spanish
+            'components/texts/glossary/historia.md': 'Historia glossary entry',
+            'components/texts/glossary/paso.md': 'Paso glossary entry',
+            'components/texts/glossary/visor.md': 'Visor glossary entry',
+            'components/texts/glossary/panel-es.md': 'Panel-es glossary entry',
+
+            # Template images
+            'components/images/leviathan.jpg': 'Hobbes Leviathan frontispiece (self-hosted demo)',
+
+            # Note: components/texts/pages/about.md is handled by _move_about_page()
+            # Note: .github/workflows/*.yml files CANNOT be auto-updated (security restriction)
+            #       They are included in manual steps instead
         }
 
         for file_path, description in framework_files.items():
