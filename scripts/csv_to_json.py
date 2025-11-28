@@ -905,11 +905,12 @@ def csv_to_json(csv_path, json_path, process_func=None):
         return
 
     try:
-        # Read CSV file and filter out comment lines (starting with #)
+        # Read CSV file and filter out comment lines (starting with # or "#)
         # We can't use pandas' comment parameter because it treats # anywhere as a comment,
         # which breaks hex color codes like #2c3e50
+        # Note: CSV export quotes cells containing commas, so we also filter lines starting with "#
         with open(csv_path, 'r', encoding='utf-8') as f:
-            lines = [line for line in f if not line.strip().startswith('#')]
+            lines = [line for line in f if not (line.strip().startswith('#') or line.strip().startswith('"#'))]
 
         # Parse filtered CSV content
         from io import StringIO
