@@ -590,22 +590,136 @@ class Migration050to060(BaseMigration):
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
         """
-        Manual steps for users to complete after migration.
+        Return manual steps in user's language.
+
+        Detects site language and returns appropriate bilingual manual steps.
 
         Returns:
-            List of manual step descriptions
+            List of manual step dicts with 'description' and optional 'doc_url' keys
         """
+        lang = self._detect_language()
+
+        if lang == 'es':
+            return self._get_manual_steps_es()
+        else:
+            return self._get_manual_steps_en()
+
+    def _get_manual_steps_en(self) -> List[Dict[str, str]]:
+        """English manual steps for v0.6.0 migration."""
         return [
             {
-                'description': 'Run the build scripts to regenerate files: python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py',
+                'description': '''⚠️ **CRITICAL: Update Your GitHub Actions Workflows** ⚠️
+
+**Without this step, your site may not build correctly with the new demo content feature.**
+
+The v0.6.0 upgrade adds support for demo content fetching in the build workflow. You must update two workflow files: `build.yml` and `upgrade.yml`.
+
+---
+
+**Option 1: Using the GitHub Website**
+
+1. **Update build.yml:**
+   - Open this link in a new tab: https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml
+   - Select all the text (Ctrl+A on Windows/Linux, Cmd+A on Mac) and copy it (Ctrl+C or Cmd+C)
+   - Go to your GitHub repository and navigate to `.github/workflows/build.yml`
+   - Click the pencil (✏️) icon in the top-right corner to edit
+   - Select all existing content and delete it
+   - Paste the new content you copied
+   - Scroll to the bottom and click "Commit changes"
+
+2. **Update upgrade.yml:**
+   - Repeat the same process for: https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml
+   - Navigate to `.github/workflows/upgrade.yml` in your repository
+   - Edit, replace content, and commit
+
+---
+
+**Option 2: Using the Command Line** (if comfortable with git)
+
+```bash
+# Download the updated workflows
+curl -o .github/workflows/build.yml https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml
+curl -o .github/workflows/upgrade.yml https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml
+
+# Commit the changes
+git add .github/workflows/
+git commit -m "Update workflows for v0.6.0 demo content"
+git push
+```
+
+**Why this is necessary:** GitHub Actions workflow files cannot be automatically updated by other workflows for security reasons. This manual step ensures your automated builds use the latest workflow logic.
+
+**That's it!** Your next build will include demo content support.''',
+                'doc_url': 'https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/',
+                'critical': True
             },
             {
-                'description': 'Test your site build: bundle exec jekyll build',
+                'description': 'Run the build scripts to regenerate files: `python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py`',
             },
             {
-                'description': 'Optional: Enable demo content by setting include_demo_content: true in _config.yml under story_interface',
+                'description': 'Test your site build: `bundle exec jekyll build`',
             },
             {
-                'description': 'If using demo content, run: python3 scripts/fetch_demo_content.py to download the demo bundle',
+                'description': 'Optional: Enable demo content by setting `include_demo_content: true` in `_config.yml` under `story_interface`. Then run `python3 scripts/fetch_demo_content.py` to download the demo bundle.',
+            },
+        ]
+
+    def _get_manual_steps_es(self) -> List[Dict[str, str]]:
+        """Spanish manual steps for v0.6.0 migration."""
+        return [
+            {
+                'description': '''⚠️ **CRÍTICO: Actualiza Tus Flujos de Trabajo de GitHub Actions** ⚠️
+
+**Sin este paso, tu sitio podría no compilarse correctamente con la nueva función de contenido demo.**
+
+La actualización v0.6.0 añade soporte para la descarga de contenido demo en el flujo de compilación. Debes actualizar dos archivos de flujo de trabajo: `build.yml` y `upgrade.yml`.
+
+---
+
+**Opción 1: Usando el Sitio Web de GitHub**
+
+1. **Actualizar build.yml:**
+   - Abre este enlace en una pestaña nueva: https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml
+   - Selecciona todo el texto (Ctrl+A en Windows/Linux, Cmd+A en Mac) y cópialo (Ctrl+C o Cmd+C)
+   - Ve a tu repositorio de GitHub y navega a `.github/workflows/build.yml`
+   - Haz clic en el ícono del lápiz (✏️) en la esquina superior derecha para editar
+   - Selecciona todo el contenido existente y bórralo
+   - Pega el nuevo contenido que copiaste
+   - Desplázate hacia abajo y haz clic en "Commit changes"
+
+2. **Actualizar upgrade.yml:**
+   - Repite el mismo proceso para: https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml
+   - Navega a `.github/workflows/upgrade.yml` en tu repositorio
+   - Edita, reemplaza el contenido, y haz commit
+
+---
+
+**Opción 2: Usando la Línea de Comandos** (si te sientes cómodo con git)
+
+```bash
+# Descarga los flujos de trabajo actualizados
+curl -o .github/workflows/build.yml https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/build.yml
+curl -o .github/workflows/upgrade.yml https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/upgrade.yml
+
+# Haz commit de los cambios
+git add .github/workflows/
+git commit -m "Actualizar flujos de trabajo para contenido demo v0.6.0"
+git push
+```
+
+**Por qué esto es necesario:** Los archivos de flujo de trabajo de GitHub Actions no pueden ser actualizados automáticamente por otros flujos de trabajo por razones de seguridad. Este paso manual asegura que tus compilaciones automatizadas usen la lógica de flujo de trabajo más reciente.
+
+**¡Eso es todo!** Tu próxima compilación incluirá soporte para contenido demo.''',
+                'doc_url': 'https://raw.githubusercontent.com/UCSB-AMPLab/telar/main/.github/workflows/',
+                'critical': True
+            },
+            {
+                'description': 'Ejecuta los scripts de compilación para regenerar archivos: `python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py`',
+            },
+            {
+                'description': 'Prueba la compilación de tu sitio: `bundle exec jekyll build`',
+            },
+            {
+                'description': 'Opcional: Habilita el contenido demo configurando `include_demo_content: true` en `_config.yml` bajo `story_interface`. Luego ejecuta `python3 scripts/fetch_demo_content.py` para descargar el paquete demo.',
             },
         ]
