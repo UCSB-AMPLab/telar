@@ -38,6 +38,7 @@ COLUMN_NAME_MAPPING = {
     # x, y, zoom are the same in both languages
 
     # Objects columns (Spanish → English) - for IIIF auto-populator support
+    'id_objeto': 'object_id',
     'titulo': 'title',
     'descripcion': 'description',
     'url_fuente': 'source_url',

@@ -32,8 +32,8 @@ story_interface:
 #    - If running locally: Run `python3 scripts/fetch_google_sheets.py` before building
 google_sheets:
   enabled: true
-  shared_url: "https://docs.google.com/spreadsheets/d/1jxH4Fb4LkLE_015_YFE39kcnGw_o2JN8HW2q2XkLOaY/edit"
-  published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQNkHBDyx7uqL0pdfv9zpcnWLohyVCN7RpKdnFT2eCyAQrXUGFukPr0Dy6ph2acG8e_GBxpG1NqRiVG/pubhtml"
+  shared_url: "https://docs.google.com/spreadsheets/d/1k9h2t9PeqH9zyaS6Z1mrnkaGABkl2TS8EhPLZnvkbkk/edit?usp=sharing"
+  published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpWIrYEfvRkaWVDu9_ab02jn7BaoKSmg6hG3aeojp7orDhEetv5TcQOHZ6czeF77uAUlg9XrVM9gMD/pubhtml"
 
 
 #
