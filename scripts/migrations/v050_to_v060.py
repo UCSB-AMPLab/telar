@@ -443,7 +443,8 @@ class Migration050to060(BaseMigration):
             except Exception as e:
                 changes.append(f"⚠️  Warning: Could not remove {file_path}: {e}")
 
-        # Remove empty directories
+        # Remove directories ONLY if empty (after individual file cleanup above)
+        # CRITICAL: Don't use shutil.rmtree() - it would delete kept files!
         old_dirs = [
             'components/texts/stories/story1',
             'components/texts/stories/story2',
@@ -454,14 +455,13 @@ class Migration050to060(BaseMigration):
             full_path = os.path.join(self.repo_root, rel_path)
             if os.path.exists(full_path):
                 try:
+                    # Only remove if directory is actually empty
                     if not os.listdir(full_path):
                         os.rmdir(full_path)
                         changes.append(f"Removed empty directory: {rel_path}/")
-                    else:
-                        shutil.rmtree(full_path)
-                        changes.append(f"Removed directory: {rel_path}/")
+                    # If not empty, it contains files we decided to keep - leave it alone
                 except:
-                    pass  # Not empty or can't remove
+                    pass  # Can't remove or permission issue
 
         # Report what was kept and why (bilingual)
         lang = self._detect_language()
