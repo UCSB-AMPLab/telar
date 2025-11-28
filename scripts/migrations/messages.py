@@ -89,7 +89,7 @@ MESSAGES = {
 
     'es': {
         # upgrade.py console messages
-        'upgrade_title': 'Script de Actualización de Telar',
+        'upgrade_title': 'Script de actualización de Telar',
         'detecting_version': 'Detectando versión actual...',
         'current_version': 'Versión actual: {}',
         'target_version': 'Versión destino: {}',
@@ -101,10 +101,10 @@ MESSAGES = {
         'updating_config': 'Actualizando _config.yml con nueva versión...',
         'config_updated': '✓ _config.yml actualizado a versión {}',
         'config_update_warning': '⚠️  Advertencia: No se pudo actualizar la versión en _config.yml',
-        'regenerating_data': 'Regenerando archivos de datos y tiles IIIF...',
-        'data_regenerated': '✓ Archivos de datos y tiles IIIF regenerados',
+        'regenerating_data': 'Regenerando archivos de datos y teselas (*tiles*) IIIF...',
+        'data_regenerated': '✓ Archivos de datos y teselas (*tiles*) IIIF regenerados',
         'data_regenerate_warning': '⚠️  Advertencia: No se pudieron regenerar archivos de datos (los scripts podrían no existir)',
-        'upgrade_complete': '✓ Actualización completa!',
+        'upgrade_complete': '✓ Actualización completa.',
         'created_summary': 'Creado: UPGRADE_SUMMARY.md',
         'review_summary': 'Por favor revisa UPGRADE_SUMMARY.md para ver los pasos manuales.',
         'uncommitted_warning': '⚠️  Advertencia: Tienes cambios sin confirmar.',
@@ -120,21 +120,21 @@ MESSAGES = {
         'phase': 'Fase {}',
 
         # UPGRADE_SUMMARY.md structure
-        'summary_title': 'Resumen de Actualización',
+        'summary_title': 'Resumen de actualización',
         'summary_from': 'Desde',
         'summary_to': 'Hasta',
         'summary_date': 'Fecha',
         'summary_automated_changes': 'Cambios automatizados',
         'summary_manual_steps': 'Pasos manuales',
-        'automated_changes_applied': 'Cambios Automatizados Aplicados',
-        'manual_steps_required': 'Pasos Manuales Requeridos',
+        'automated_changes_applied': 'Cambios automatizados aplicados',
+        'manual_steps_required': 'Pasos manuales requeridos',
         'complete_after_merge': 'Por favor completa estos pasos:',
-        'no_manual_steps': 'No Se Requieren Pasos Manuales',
+        'no_manual_steps': 'No se requieren pasos manuales',
         'all_automated': '¡Todos los cambios han sido automatizados!',
         'resources': 'Recursos',
-        'full_documentation': 'Documentación Completa',
+        'full_documentation': 'Documentación completa',
         'changelog': 'CHANGELOG',
-        'report_issues': 'Reportar Problemas',
+        'report_issues': 'Informar problemas',
 
         # Category labels (for organizing changes in UPGRADE_SUMMARY.md)
         'category_configuration': 'Configuración',
@@ -162,8 +162,8 @@ MESSAGES = {
         'could_not_remove': '⚠️  Advertencia: No se pudo eliminar {}: {}',
 
         # Safety messages (for preserved user content)
-        'kept_modified_files': '⚠️  Se mantuvieron {} archivos de demo modificados por el usuario',
-        'kept_images_safety': 'ℹ️  Se mantuvieron {} imágenes de demo antiguas por seguridad',
+        'kept_modified_files': '⚠️  Se conservaron {} archivos de demostración modificados por el usuario',
+        'kept_images_safety': 'ℹ️  Se conservaron {} imágenes de demostración antiguas por seguridad',
         'manual_delete_note': '(Puedes eliminarlas manualmente si no las usas)',
     }
 }
