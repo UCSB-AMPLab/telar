@@ -14,7 +14,7 @@ Complete documentation for Telar is now available at:
 - [Configuration](https://telar.org/docs/configuration/)
 - [Customization](https://telar.org/docs/customization/)
 - [Markdown Syntax Reference](https://telar.org/docs/reference/markdown-syntax/)
-- [GitHub Actions Reference](https://telar.org/docs/reference/github-actions/)
+- [GitHub Actions Reference](https://telar.org/docs/developers/github-actions/)
 
 ## Support
 
