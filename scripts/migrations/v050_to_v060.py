@@ -754,13 +754,20 @@ class Migration050to060(BaseMigration):
         """English manual steps for v0.6.0 migration."""
         return [
             {
-                'description': 'Run the build scripts to regenerate files: `python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py`',
+                'description': '''**If you use GitHub Pages:**
+
+No further actions needed. GitHub Actions will automatically rebuild your site with the upgraded framework.''',
             },
             {
-                'description': 'Test your site build: `bundle exec jekyll build`',
+                'description': '''**If you work with your site locally:**
+
+1. Regenerate data files: `python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py`
+2. Test your site build: `bundle exec jekyll build`''',
             },
             {
-                'description': 'Optional: Enable demo content by setting `include_demo_content: true` in `_config.yml` under `story_interface`. Demo content will be automatically fetched when you run `csv_to_json.py`.',
+                'description': '''**Optional (all users):**
+
+Enable demo content by setting `include_demo_content: true` in `_config.yml` under `story_interface`. Demo content will be automatically fetched during the build process.''',
             },
         ]
 
@@ -768,12 +775,19 @@ class Migration050to060(BaseMigration):
         """Spanish manual steps for v0.6.0 migration."""
         return [
             {
-                'description': 'Ejecuta los scripts de compilación para regenerar archivos: `python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py`',
+                'description': '''**Si usas GitHub Pages:**
+
+No se requieren más acciones. GitHub Actions reconstruirá automáticamente tu sitio con el framework actualizado.''',
             },
             {
-                'description': 'Prueba la compilación de tu sitio: `bundle exec jekyll build`',
+                'description': '''**Si trabajas con tu sitio localmente:**
+
+1. Regenera los archivos de datos: `python3 scripts/csv_to_json.py && python3 scripts/generate_collections.py`
+2. Prueba la compilación de tu sitio: `bundle exec jekyll build`''',
             },
             {
-                'description': 'Opcional: Habilita el contenido demo configurando `include_demo_content: true` en `_config.yml` bajo `story_interface`. El contenido demo se descargará automáticamente cuando ejecutes `csv_to_json.py`.',
+                'description': '''**Opcional (todos los usuarios):**
+
+Habilita el contenido demo configurando `include_demo_content: true` en `_config.yml` bajo `story_interface`. El contenido demo se descargará automáticamente durante el proceso de compilación.''',
             },
         ]
