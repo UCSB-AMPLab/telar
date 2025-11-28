@@ -74,7 +74,11 @@ layout: default
   {% endif %}
 
   <div class="collection-grid">
-    {% for object in site.objects %}
+    {% comment %}Sort objects: non-demo first, then demo, alphabetically within each group{% endcomment %}
+    {% assign non_demo_objects = site.objects | where_exp: "obj", "obj.demo != true" | sort: "title" %}
+    {% assign demo_objects = site.objects | where_exp: "obj", "obj.demo == true" | sort: "title" %}
+    {% assign sorted_objects = non_demo_objects | concat: demo_objects %}
+    {% for object in sorted_objects %}
     <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}">
       {% if object.demo %}
       <span class="demo-badge">{{ lang.demo.badge }}</span>
