@@ -72,10 +72,12 @@ class Migration050to060(BaseMigration):
         changes = []
 
         # Generated JSON files
+        # Note: With story_id feature, story files use semantic names (e.g., your-story.json, paisajes-demo.json)
         json_entries = [
             '_data/objects.json',
             '_data/project.json',
-            '_data/story-*.json',
+            '_data/*.json',
+            '!_data/languages/',
         ]
 
         if self._ensure_gitignore_entries(
@@ -130,12 +132,14 @@ class Migration050to060(BaseMigration):
             '_data/project.json',
         ]
 
-        # Add story-*.json files
-        story_pattern = os.path.join(self.repo_root, '_data/story-*.json')
-        json_files.extend([
-            os.path.relpath(f, self.repo_root)
-            for f in glob.glob(story_pattern)
-        ])
+        # Add all story JSON files (includes both story-*.json and semantic names like your-story.json)
+        # Exclude demo-glossary.json and languages/ directory
+        data_pattern = os.path.join(self.repo_root, '_data/*.json')
+        for json_file in glob.glob(data_pattern):
+            rel_path = os.path.relpath(json_file, self.repo_root)
+            # Exclude demo-glossary.json (handled separately) and any non-story files
+            if rel_path not in ['_data/objects.json', '_data/project.json', '_data/demo-glossary.json']:
+                json_files.append(rel_path)
 
         for file_path in json_files:
             full_path = os.path.join(self.repo_root, file_path)
