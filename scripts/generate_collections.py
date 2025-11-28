@@ -2,12 +2,23 @@
 """
 Generate Jekyll collection markdown files from JSON data
 
-Version: v0.5.0-beta
+Version: v0.6.0-beta
 """
 
 import json
+import re
 import shutil
 from pathlib import Path
+
+import markdown
+
+# Import processing functions from csv_to_json
+from csv_to_json import (
+    process_widgets,
+    process_images,
+    process_glossary_links,
+    load_glossary_terms
+)
 
 def generate_objects():
     """Generate object markdown files from objects.json"""
@@ -28,6 +39,8 @@ def generate_objects():
         if not object_id:
             continue
 
+        is_demo = obj.get('_demo', False)
+
         # Generate main object page
         filepath = objects_dir / f"{object_id}.md"
 
@@ -44,7 +57,11 @@ thumbnail: "{obj.get('thumbnail', '')}"
 iiif_manifest: "{obj.get('iiif_manifest', '')}"
 object_warning: "{obj.get('object_warning', '')}"
 object_warning_short: "{obj.get('object_warning_short', '')}"
-layout: object
+"""
+        if is_demo:
+            content += "demo: true\n"
+
+        content += f"""layout: object
 ---
 
 {obj.get('description', '')}
@@ -53,16 +70,17 @@ layout: object
         with open(filepath, 'w') as f:
             f.write(content)
 
-        print(f"✓ Generated {filepath}")
+        demo_label = " [DEMO]" if is_demo else ""
+        print(f"✓ Generated {filepath}{demo_label}")
 
 def generate_glossary():
-    """Generate glossary markdown files from components/texts/glossary/"""
-    import re
+    """Generate glossary markdown files from user content and demo JSON.
 
-    source_dir = Path('components/texts/glossary')
-    if not source_dir.exists():
-        print("Warning: components/texts/glossary/ directory not found")
-        return
+    Reads from:
+    - components/texts/glossary/*.md (user content)
+    - _data/demo-glossary.json (demo content from bundle)
+    """
+    import re
 
     glossary_dir = Path('_jekyll-files/_glossary')
 
@@ -73,33 +91,36 @@ def generate_glossary():
 
     glossary_dir.mkdir(parents=True, exist_ok=True)
 
-    for source_file in source_dir.glob('*.md'):
-        # Read the source markdown file
-        with open(source_file, 'r', encoding='utf-8') as f:
-            content = f.read()
+    # 1. Process user glossary from markdown files
+    source_dir = Path('components/texts/glossary')
+    if source_dir.exists():
+        for source_file in source_dir.glob('*.md'):
+            # Read the source markdown file
+            with open(source_file, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-        # Parse frontmatter and body
-        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
-        match = re.match(frontmatter_pattern, content, re.DOTALL)
+            # Parse frontmatter and body
+            frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
+            match = re.match(frontmatter_pattern, content, re.DOTALL)
 
-        if not match:
-            print(f"Warning: No frontmatter found in {source_file}")
-            continue
+            if not match:
+                print(f"Warning: No frontmatter found in {source_file}")
+                continue
 
-        frontmatter_text = match.group(1)
-        body = match.group(2).strip()
+            frontmatter_text = match.group(1)
+            body = match.group(2).strip()
 
-        # Extract term_id to determine output filename
-        term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
-        if not term_id_match:
-            print(f"Warning: No term_id found in {source_file}")
-            continue
+            # Extract term_id to determine output filename
+            term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
+            if not term_id_match:
+                print(f"Warning: No term_id found in {source_file}")
+                continue
 
-        term_id = term_id_match.group(1)
-        filepath = glossary_dir / f"{term_id}.md"
+            term_id = term_id_match.group(1)
+            filepath = glossary_dir / f"{term_id}.md"
 
-        # Write to collection with layout added
-        output_content = f"""---
+            # Write to collection with layout added
+            output_content = f"""---
 {frontmatter_text}
 layout: glossary
 ---
@@ -107,39 +128,60 @@ layout: glossary
 {body}
 """
 
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(output_content)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(output_content)
 
-        print(f"✓ Generated {filepath}")
+            print(f"✓ Generated {filepath}")
 
-def generate_stories():
-    """Generate story markdown files based on project.csv stories list"""
+    # 2. Process demo glossary from JSON
+    demo_glossary_path = Path('_data/demo-glossary.json')
+    if demo_glossary_path.exists():
+        with open(demo_glossary_path, 'r', encoding='utf-8') as f:
+            demo_glossary = json.load(f)
 
-    import csv
-
-    # Parse project.csv to get stories (now with order, title, subtitle columns)
-    stories = []
-    with open('components/structures/project.csv', 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            order = row.get('order', '').strip() if row.get('order') else ''
-            title = row.get('title', '').strip() if row.get('title') else ''
-            subtitle = row.get('subtitle', '').strip() if row.get('subtitle') else ''
-
-            # Skip rows with empty order or title
-            if not order or not title:
+        for term in demo_glossary:
+            term_id = term.get('term_id', '')
+            if not term_id:
                 continue
 
-            story_entry = {
-                'number': order,
-                'title': title
-            }
+            filepath = glossary_dir / f"{term_id}.md"
 
-            # Add subtitle if present
-            if subtitle:
-                story_entry['subtitle'] = subtitle
+            # Create markdown with frontmatter
+            output_content = f"""---
+term_id: {term_id}
+title: "{term.get('title', term_id)}"
+layout: glossary
+demo: true
+---
 
-            stories.append(story_entry)
+{term.get('content', '')}
+"""
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(output_content)
+
+            print(f"✓ Generated {filepath} [DEMO]")
+
+def generate_stories():
+    """Generate story markdown files based on project.json stories list
+
+    Reads from _data/project.json which includes both user stories and
+    merged demo content (when include_demo_content is enabled).
+    """
+
+    # Read from project.json (has merged user + demo stories)
+    project_path = Path('_data/project.json')
+    if not project_path.exists():
+        print("Warning: _data/project.json not found")
+        return
+
+    with open(project_path, 'r', encoding='utf-8') as f:
+        project_data = json.load(f)
+
+    # Get stories from first project entry
+    stories = []
+    if project_data and len(project_data) > 0:
+        stories = project_data[0].get('stories', [])
 
     stories_dir = Path('_jekyll-files/_stories')
 
@@ -150,29 +192,65 @@ def generate_stories():
 
     stories_dir.mkdir(parents=True, exist_ok=True)
 
-    for story in stories:
-        story_num = story['number']
-        story_title = story['title']
-        story_subtitle = story.get('subtitle', '')
+    # Track sort order: demos get 0-999, user stories get 1000+
+    demo_index = 0
+    user_index = 1000
 
-        # Check if story data file exists
-        data_file = Path(f'_data/story-{story_num}.json')
-        if not data_file.exists():
-            print(f"Warning: No data file found for Story {story_num}")
+    for story in stories:
+        story_num = story.get('number', '')
+        story_title = story.get('title', '')
+        story_subtitle = story.get('subtitle', '')
+        story_id = story.get('story_id', '')  # Optional semantic ID (v0.6.0+)
+        is_demo = story.get('_demo', False)
+
+        # Skip entries without number or title
+        if not story_num or not story_title:
             continue
 
-        filepath = stories_dir / f"story-{story_num}.md"
+        # Use story_id as-is, or construct story-{order} for fallback
+        # With story_id: "your-story" → files are "your-story.json", "your-story.md"
+        # Without story_id: order=1 → files are "story-1.json", "story-1.md"
+        if story_id:
+            identifier = story_id  # No prefix: "your-story"
+        else:
+            identifier = f'story-{story_num}'  # With prefix: "story-1"
 
-        # Build frontmatter
+        # Check if story data file exists
+        data_file = Path(f'_data/{identifier}.json')
+        if not data_file.exists():
+            print(f"Warning: No data file found for {identifier}.json")
+            continue
+
+        # Assign sort order
+        if is_demo:
+            sort_order = demo_index
+            demo_index += 1
+        else:
+            sort_order = user_index
+            user_index += 1
+
+        # Use identifier for filename (no additional prefix)
+        filepath = stories_dir / f"{identifier}.md"
+
+        # Build frontmatter (story_number remains numeric for display)
         frontmatter = f"""---
-story_number: {story_num}
+story_number: "{story_num}"
 title: "{story_title}"
 """
         if story_subtitle:
             frontmatter += f'subtitle: "{story_subtitle}"\n'
 
+        story_byline = story.get('byline', '')
+        if story_byline:
+            frontmatter += f'byline: "{story_byline}"\n'
+
+        if is_demo:
+            frontmatter += f'demo: true\n'
+
+        frontmatter += f'sort_order: {sort_order}\n'
+
         frontmatter += f"""layout: story
-data_file: story-{story_num}
+data_file: {identifier}
 ---
 
 """
@@ -182,7 +260,89 @@ data_file: story-{story_num}
         with open(filepath, 'w') as f:
             f.write(content)
 
-        print(f"✓ Generated {filepath}")
+        demo_label = " [DEMO]" if is_demo else ""
+        print(f"✓ Generated {filepath}{demo_label}")
+
+def generate_pages():
+    """Generate processed page files from user markdown sources.
+
+    Reads from components/texts/pages/*.md, processes widgets and glossary links,
+    and outputs to _jekyll-files/_pages/ for the pages collection.
+    """
+    source_dir = Path('components/texts/pages')
+    output_dir = Path('_jekyll-files/_pages')
+
+    # Skip if source directory doesn't exist
+    if not source_dir.exists():
+        print("No components/texts/pages/ directory found - skipping page generation")
+        return
+
+    # Clean up old files
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+        print("✓ Cleaned up old page files")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load glossary terms for link processing
+    glossary_terms = load_glossary_terms()
+
+    # Process each markdown file
+    for source_file in source_dir.glob('*.md'):
+        filename = source_file.name
+
+        with open(source_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Parse frontmatter and body
+        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
+        match = re.match(frontmatter_pattern, content, re.DOTALL)
+
+        if not match:
+            print(f"Error: No frontmatter found in {source_file}")
+            print("  Pages must have YAML frontmatter (--- at start and end)")
+            continue
+
+        frontmatter_text = match.group(1)
+        body = match.group(2).strip()
+
+        # Process body through the same pipeline as story layers
+        warnings_list = []
+
+        # 1. Process widgets (:::carousel, :::tabs, :::accordion)
+        processed = process_widgets(body, str(source_file), warnings_list)
+
+        # 2. Process images (size syntax and captions)
+        processed = process_images(processed)
+
+        # 3. Convert markdown to HTML
+        processed = markdown.markdown(
+            processed,
+            extensions=['extra', 'nl2br', 'sane_lists']
+        )
+
+        # 4. Process glossary links ([[term]] syntax)
+        processed = process_glossary_links(processed, glossary_terms, warnings_list)
+
+        # Print any warnings
+        for warning in warnings_list:
+            print(f"  Warning: {warning}")
+
+        # Write processed file to output directory
+        output_file = output_dir / filename
+
+        output_content = f"""---
+{frontmatter_text}
+---
+
+{processed}
+"""
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(output_content)
+
+        print(f"✓ Generated {output_file}")
+
 
 def main():
     """Generate all collection files"""
@@ -196,6 +356,9 @@ def main():
     print()
 
     generate_stories()
+    print()
+
+    generate_pages()
 
     print("-" * 50)
     print("Generation complete!")

@@ -32,7 +32,7 @@ class Migration032to033(BaseMigration):
             return [
                 {
                     'description': 'Update GitHub Actions workflow file (.github/workflows/build.yml) - Replace with latest version from https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml to remove deprecated git push step',
-                    'doc_url': 'https://ampl.clair.ucsb.edu/telar-docs/docs/2-workflows/upgrading/'
+                    'doc_url': 'https://telar.org/docs/2-workflows/upgrading/'
                 }
             ]
         return []

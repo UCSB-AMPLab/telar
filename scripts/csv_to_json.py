@@ -2,7 +2,7 @@
 """
 Convert CSV files from Google Sheets to JSON for Jekyll
 
-Version: v0.5.0-beta
+Version: v0.6.0-beta
 """
 
 import pandas as pd
@@ -22,6 +22,40 @@ from io import BytesIO
 
 # Global language data cache
 _lang_data = None
+
+# Bilingual column name mapping (Spanish → English)
+# Supports bilingual story CSV headers (v0.6.0+)
+COLUMN_NAME_MAPPING = {
+    # Story step columns (Spanish → English)
+    'paso': 'step',
+    'objeto': 'object',
+    'pregunta': 'question',
+    'respuesta': 'answer',
+    'boton_capa1': 'layer1_button',
+    'archivo_capa1': 'layer1_file',
+    'boton_capa2': 'layer2_button',
+    'archivo_capa2': 'layer2_file',
+    # x, y, zoom are the same in both languages
+
+    # Objects columns (Spanish → English) - for IIIF auto-populator support
+    'id_objeto': 'object_id',
+    'titulo': 'title',
+    'descripcion': 'description',
+    'url_fuente': 'source_url',
+    'creador': 'creator',
+    'periodo': 'period',
+    'medio': 'medium',
+    'dimensiones': 'dimensions',
+    'ubicacion': 'location',
+    'credito': 'credit',
+    'miniatura': 'thumbnail',
+
+    # Project columns (Spanish → English)
+    'orden': 'order',
+    'id_historia': 'story_id',
+    'subtitulo': 'subtitle',
+    'firma': 'byline',
+}
 
 def load_language_data():
     """
@@ -147,45 +181,89 @@ def get_source_url(row):
 
     return ''
 
-def process_image_sizes(text):
+def process_images(text):
     """
-    Replace ![alt](path){size} with HTML img tags with size classes
+    Process markdown images: handle sizes and captions.
 
-    Syntax: ![Description](image.jpg){md} or ![Description](image.jpg){medium}
-    Sizes: sm/small, md/medium, lg/large, full
+    Must be called BEFORE markdown conversion (works on raw text).
 
-    Default path: /components/images/
-    - Relative paths (no leading /) get prepended with default path
-    - Absolute paths (starting with /) used as-is
-    - URLs (http/https) used as-is
+    Syntax:
+    - ![alt](path) - basic image
+    - ![alt](path){size} - image with size (sm, md, lg, full)
+    - Caption: line immediately following image becomes caption
+    - Optional "caption: " prefix gets stripped
+
+    Example:
+        ![Portrait](image.jpg){md}
+        Francisco Maldonado, encomendero of Fontibón
+
+    Produces:
+        <figure class="telar-image-figure">
+          <img src="..." alt="Portrait" class="img-md">
+          <figcaption class="telar-image-caption">Francisco Maldonado...</figcaption>
+        </figure>
     """
-    # Map long form to short form for CSS classes
     size_map = {
-        'small': 'sm',
-        'medium': 'md',
-        'large': 'lg',
-        'full': 'full',
-        'sm': 'sm',
-        'md': 'md',
-        'lg': 'lg'
+        'small': 'sm', 'medium': 'md', 'large': 'lg', 'full': 'full',
+        'sm': 'sm', 'md': 'md', 'lg': 'lg'
     }
 
-    def replace_image(match):
-        alt = match.group(1)
-        src = match.group(2)
-        size_input = match.group(3).lower()
+    lines = text.split('\n')
+    result = []
+    i = 0
 
-        # Map to CSS class
-        size_class = size_map.get(size_input, 'md')
+    # Pattern for image with optional size
+    img_pattern = r'^!\[([^\]]*)\]\(([^)]+)\)(?:\{(sm|small|md|medium|lg|large|full)\})?$'
 
-        # Prepend default path if relative
-        if not src.startswith('/') and not src.startswith('http'):
-            src = f'/components/images/{src}'
+    while i < len(lines):
+        line = lines[i]
+        match = re.match(img_pattern, line.strip(), re.IGNORECASE)
 
-        return f'<img src="{src}" alt="{alt}" class="img-{size_class}">'
+        if match:
+            alt = match.group(1)
+            src = match.group(2)
+            size_input = match.group(3)
 
-    pattern = r'!\[([^\]]*)\]\(([^)]+)\)\{(sm|small|md|medium|lg|large|full)\}'
-    return re.sub(pattern, replace_image, text, flags=re.IGNORECASE)
+            # Determine size class
+            if size_input:
+                size_class = size_map.get(size_input.lower(), 'md')
+                class_attr = f' class="img-{size_class}"'
+            else:
+                class_attr = ''
+
+            # Prepend default path if relative
+            if not src.startswith('/') and not src.startswith('http'):
+                src = f'/components/images/{src}'
+
+            # Check for caption on next line
+            caption = None
+            if i + 1 < len(lines):
+                next_line = lines[i + 1]
+                # Caption exists if next line is non-empty and not another image/widget/blank
+                if next_line.strip() and not next_line.strip().startswith('!') and not next_line.strip().startswith(':::'):
+                    caption = next_line.strip()
+                    # Strip "caption: " prefix if present
+                    if caption.lower().startswith('caption:'):
+                        caption = caption[8:].strip()
+                    i += 1  # Skip the caption line
+
+            # Build HTML
+            img_tag = f'<img src="{src}" alt="{alt}"{class_attr}>'
+            if caption:
+                # Convert caption markdown to HTML (strip wrapping <p> tags)
+                caption_html = markdown.markdown(caption)
+                caption_html = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+                html = f'<figure class="telar-image-figure">{img_tag}<figcaption class="telar-image-caption">{caption_html}</figcaption></figure>'
+            else:
+                html = f'<figure class="telar-image-figure">{img_tag}</figure>'
+
+            result.append(html)
+        else:
+            result.append(line)
+
+        i += 1
+
+    return '\n'.join(result)
 
 
 def load_glossary_terms():
@@ -228,7 +306,7 @@ def load_glossary_terms():
     return glossary_terms
 
 
-def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None, file_path=None):
+def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
     """
     Transform [[term]] or [[display|term]] syntax into glossary link HTML.
 
@@ -238,7 +316,6 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         warnings_list: Optional list to append warning messages
         step_num: Optional step number for warning messages
         layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
-        file_path: Optional file path for warning context
 
     Returns:
         str: Text with glossary links transformed to HTML
@@ -262,20 +339,24 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
 
         # Check if term exists in glossary
         if term_id in glossary_terms:
-            # Valid term - create link (JavaScript will construct full URL with basePath)
-            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}">{display_text}</a>'
+            # Valid term - create glossary link
+            # Note: data-term-url is intentionally omitted; JavaScript fallback in telar.js
+            # constructs the URL dynamically from the current page URL, which correctly
+            # handles baseurl for all deployment scenarios (GitHub Pages, subpaths, etc.)
+            # Add data-demo attribute for demo terms (prefixed with demo-)
+            demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
+            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}"{demo_attr}>{display_text}</a>'
         else:
             # Invalid term - create error indicator
             if warnings_list is not None:
                 # Determine layer number for display
                 layer_num = layer_name[-1] if layer_name and layer_name.startswith('layer') else ''
-                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num, file_path=file_path)
+                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num)
                 warnings_list.append({
                     'step': step_num,
                     'type': 'glossary',
                     'term_id': term_id,
                     'layer': layer_name,
-                    'file_path': file_path,
                     'message': warning_msg
                 })
             return f'<span class="glossary-link-error" data-term-id="{term_id}">⚠️ [[{match.group(1)}]]</span>'
@@ -438,6 +519,14 @@ def parse_carousel_widget(content, file_path, warnings_list):
                 'message': f'Carousel item {block_num} missing alt text (accessibility concern)'
             })
             data['alt'] = ''
+
+        # Process caption/credit through markdown (for italics, etc.)
+        if 'caption' in data:
+            caption_html = markdown.markdown(data['caption'])
+            data['caption'] = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+        if 'credit' in data:
+            credit_html = markdown.markdown(data['credit'])
+            data['credit'] = re.sub(r'^<p>(.*)</p>$', r'\1', credit_html.strip())
 
         items.append(data)
 
@@ -715,8 +804,8 @@ def read_markdown_file(file_path, widget_warnings=None):
             # Process widgets BEFORE markdown conversion
             body = process_widgets(body, file_path, widget_warnings)
 
-            # Process image size syntax before markdown conversion
-            body = process_image_sizes(body)
+            # Process images (sizes and captions) BEFORE markdown conversion
+            body = process_images(body)
 
             # Convert markdown to HTML
             html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
@@ -732,8 +821,8 @@ def read_markdown_file(file_path, widget_warnings=None):
             # Process widgets BEFORE markdown conversion
             content_body = process_widgets(content_body, file_path, widget_warnings)
 
-            # Process image sizes
-            content_body = process_image_sizes(content_body)
+            # Process images (sizes and captions) BEFORE markdown conversion
+            content_body = process_images(content_body)
 
             # Convert markdown to HTML
             html_content = markdown.markdown(content_body, extensions=['extra', 'nl2br'])
@@ -745,6 +834,62 @@ def read_markdown_file(file_path, widget_warnings=None):
     except Exception as e:
         print(f"Error reading markdown file {full_path}: {e}")
         return None
+
+def normalize_column_names(df):
+    """
+    Normalize column names to English using bilingual mapping.
+    Supports both English and Spanish column headers (v0.6.0+).
+
+    Args:
+        df: pandas DataFrame with potentially Spanish column names
+
+    Returns:
+        DataFrame: DataFrame with normalized (English) column names
+    """
+    # Create a mapping for this dataframe's columns
+    rename_map = {}
+    for col in df.columns:
+        col_lower = col.lower().strip()
+        if col_lower in COLUMN_NAME_MAPPING:
+            rename_map[col] = COLUMN_NAME_MAPPING[col_lower]
+            print(f"  [INFO] Normalized column '{col}' → '{COLUMN_NAME_MAPPING[col_lower]}'")
+
+    # Rename columns if any mappings found
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    return df
+
+def is_header_row(row_values):
+    """
+    Check if a row contains header names (English or Spanish).
+
+    Args:
+        row_values: List of cell values from a row
+
+    Returns:
+        bool: True if row appears to be a header row
+    """
+    # Get all valid column names (English and Spanish)
+    valid_names = set(COLUMN_NAME_MAPPING.keys()) | set(COLUMN_NAME_MAPPING.values())
+
+    # Also include common column names not in the mapping
+    valid_names.update(['x', 'y', 'zoom', 'order', 'story_id', 'title', 'subtitle',
+                        'byline', 'object_id', 'description', 'source_url', 'creator',
+                        'period', 'medium', 'dimensions', 'location', 'credit', 'thumbnail'])
+
+    # Count how many cells match known column names
+    matches = 0
+    total = 0
+    for val in row_values:
+        if pd.notna(val):
+            val_lower = str(val).lower().strip()
+            total += 1
+            if val_lower in valid_names:
+                matches += 1
+
+    # If 80%+ of non-empty cells are column names, it's a header row
+    return total > 0 and (matches / total) >= 0.8
 
 def csv_to_json(csv_path, json_path, process_func=None):
     """
@@ -760,11 +905,12 @@ def csv_to_json(csv_path, json_path, process_func=None):
         return
 
     try:
-        # Read CSV file and filter out comment lines (starting with #)
+        # Read CSV file and filter out comment lines (starting with # or "#)
         # We can't use pandas' comment parameter because it treats # anywhere as a comment,
         # which breaks hex color codes like #2c3e50
+        # Note: CSV export quotes cells containing commas, so we also filter lines starting with "#
         with open(csv_path, 'r', encoding='utf-8') as f:
-            lines = [line for line in f if not line.strip().startswith('#')]
+            lines = [line for line in f if not (line.strip().startswith('#') or line.strip().startswith('"#'))]
 
         # Parse filtered CSV content
         from io import StringIO
@@ -773,6 +919,16 @@ def csv_to_json(csv_path, json_path, process_func=None):
 
         # Filter out columns starting with # (instruction columns)
         df = df[[col for col in df.columns if not col.startswith('#')]]
+
+        # Check if first data row is actually a duplicate header row (bilingual CSVs)
+        if len(df) > 0:
+            first_row = df.iloc[0]
+            if is_header_row(first_row.values):
+                print(f"  [INFO] Detected duplicate header row - skipping row 2")
+                df = df.iloc[1:].reset_index(drop=True)
+
+        # Normalize column names (Spanish → English) for bilingual support
+        df = normalize_column_names(df)
 
         # Sanitize user data - remove 🎄 emoji to prevent accidental Christmas Tree Mode triggering
         df = sanitize_dataframe(df)
@@ -806,9 +962,13 @@ def csv_to_json(csv_path, json_path, process_func=None):
 def process_project_setup(df):
     """
     Process project setup CSV
-    Expected columns: order, title, subtitle (optional), byline (optional)
+    Expected columns: order, title, subtitle (optional), byline (optional), story_id (optional)
+
+    story_id: Optional semantic identifier for stories (e.g., "your-story", "tutorial")
+              If not provided, system falls back to using order number
     """
     stories_list = []
+    seen_ids = set()  # Track duplicate story_ids
 
     for _, row in df.iterrows():
         order = str(row.get('order', '')).strip()
@@ -816,14 +976,37 @@ def process_project_setup(df):
         subtitle = row.get('subtitle', '')
         byline = row.get('byline', '')
 
+        # Check if story_id column exists and extract value (v0.6.0+)
+        story_id = ''
+        if 'story_id' in df.columns:
+            story_id_raw = row.get('story_id', '')
+            if pd.notna(story_id_raw):
+                story_id = str(story_id_raw).strip()
+
         # Skip rows with empty order (placeholder rows)
         if not order or not pd.notna(title):
             continue
+
+        # Validate story_id if provided
+        if story_id:
+            # Check for invalid characters (must be lowercase, numbers, hyphens, underscores)
+            import re
+            if not re.match(r'^[a-z0-9\-_]+$', story_id):
+                print(f"  Warning: story_id '{story_id}' contains invalid characters. Use lowercase letters, numbers, hyphens, underscores only.")
+
+            # Check for duplicates
+            if story_id in seen_ids:
+                print(f"  Warning: Duplicate story_id '{story_id}' found in project.csv")
+            seen_ids.add(story_id)
 
         story_entry = {
             'number': order,
             'title': title
         }
+
+        # Add story_id to JSON only if it exists and is non-empty
+        if story_id:
+            story_entry['story_id'] = story_id
 
         # Add subtitle if present
         if pd.notna(subtitle) and str(subtitle).strip():
@@ -1922,8 +2105,7 @@ def process_story(df, christmas_tree=False):
                             glossary_terms,
                             glossary_warnings,
                             step_num,
-                            base_name,
-                            file_path
+                            base_name
                         )
                         df.at[idx, text_col] = content_with_glossary
                     else:
@@ -2039,8 +2221,318 @@ def process_story(df, christmas_tree=False):
 
     return df
 
+def load_demo_bundle():
+    """
+    Load demo content bundle if it exists.
+
+    Returns:
+        dict: Demo bundle data, or None if not present
+    """
+    bundle_path = Path('_demo_content/telar-demo-bundle.json')
+
+    if not bundle_path.exists():
+        return None
+
+    try:
+        with open(bundle_path, 'r', encoding='utf-8') as f:
+            bundle = json.load(f)
+
+        meta = bundle.get('_meta', {})
+        print(f"[INFO] Loaded demo bundle v{meta.get('telar_version', 'unknown')} ({meta.get('language', 'unknown')})")
+        return bundle
+
+    except Exception as e:
+        print(f"[WARN] Could not load demo bundle: {e}")
+        return None
+
+
+def merge_demo_content(bundle):
+    """
+    Merge demo bundle content with user content.
+
+    Merges:
+    - Demo projects into _data/project.json
+    - Demo objects into _data/objects.json
+    - Demo stories as additional story files
+    - Demo glossary files (written to components/texts/glossary/_demo_*.md)
+
+    Args:
+        bundle: Demo bundle dict
+    """
+    data_dir = Path('_data')
+
+    # Merge projects
+    project_path = data_dir / 'project.json'
+    if project_path.exists() and bundle.get('project'):
+        try:
+            with open(project_path, 'r', encoding='utf-8') as f:
+                user_project = json.load(f)
+
+            # Convert demo project format to match user format
+            # Use order for number field, story_id for identifier (v0.6.0+)
+            demo_stories = []
+            for proj in bundle['project']:
+                demo_stories.append({
+                    'number': str(proj.get('order', '')),
+                    'story_id': proj.get('story_id', ''),
+                    'title': proj.get('title', ''),
+                    'subtitle': proj.get('subtitle', ''),
+                    'byline': proj.get('byline', ''),
+                    '_demo': True  # Mark as demo content
+                })
+
+            # Merge: demo stories first, then user stories
+            if 'stories' in user_project[0]:
+                user_project[0]['stories'] = demo_stories + user_project[0]['stories']
+            else:
+                user_project[0]['stories'] = demo_stories
+
+            with open(project_path, 'w', encoding='utf-8') as f:
+                json.dump(user_project, f, indent=2, ensure_ascii=False)
+
+            print(f"  Merged {len(demo_stories)} demo project(s) into project.json")
+
+        except Exception as e:
+            print(f"  [WARN] Could not merge demo projects: {e}")
+
+    # Merge objects
+    objects_path = data_dir / 'objects.json'
+    if objects_path.exists() and bundle.get('objects'):
+        try:
+            with open(objects_path, 'r', encoding='utf-8') as f:
+                user_objects = json.load(f)
+
+            # Get existing object IDs to avoid duplicates
+            existing_ids = {obj.get('object_id') for obj in user_objects if not obj.get('_metadata')}
+
+            # Convert demo objects format and add new ones
+            demo_count = 0
+            for obj_id, obj_data in bundle['objects'].items():
+                if obj_id not in existing_ids:
+                    demo_obj = {
+                        'object_id': obj_id,
+                        'title': obj_data.get('title', ''),
+                        'description': obj_data.get('description', ''),
+                        'source_url': obj_data.get('source_url', ''),
+                        'iiif_manifest': obj_data.get('source_url', ''),  # Backward compat
+                        'creator': obj_data.get('creator', ''),
+                        'period': obj_data.get('period', ''),
+                        'medium': obj_data.get('medium', ''),
+                        'dimensions': obj_data.get('dimensions', ''),
+                        'location': obj_data.get('location', ''),
+                        'credit': obj_data.get('credit', ''),
+                        'thumbnail': obj_data.get('thumbnail', ''),
+                        '_demo': True
+                    }
+                    user_objects.append(demo_obj)
+                    demo_count += 1
+
+            with open(objects_path, 'w', encoding='utf-8') as f:
+                json.dump(user_objects, f, indent=2, ensure_ascii=False)
+
+            print(f"  Merged {demo_count} demo object(s) into objects.json")
+
+        except Exception as e:
+            print(f"  [WARN] Could not merge demo objects: {e}")
+
+    # Create demo story files
+    if bundle.get('stories'):
+        for story_id, story_data in bundle['stories'].items():
+            try:
+                story_path = data_dir / f'{story_id}.json'
+
+                # Convert demo story format to match user format
+                steps = []
+                for step in story_data.get('steps', []):
+                    step_data = {
+                        'step': step.get('step'),
+                        'object': step.get('object', ''),
+                        'x': str(step.get('x', '0.5')),
+                        'y': str(step.get('y', '0.5')),
+                        'zoom': str(step.get('zoom', '1')),
+                        'question': step.get('question', ''),
+                        'answer': step.get('answer', ''),
+                        '_demo': True
+                    }
+
+                    # Build glossary terms dict from bundle for link processing
+                    glossary_terms = {}
+                    if bundle.get('glossary'):
+                        for term_id, term_data in bundle['glossary'].items():
+                            glossary_terms[term_id] = term_data.get('term', term_id)
+
+                    # Process layers
+                    layers = step.get('layers', {})
+                    for layer_key in ['layer1', 'layer2']:
+                        layer = layers.get(layer_key, {})
+                        if layer:
+                            step_data[f'{layer_key}_button'] = layer.get('button', '')
+                            # Use explicit title if provided, fall back to button text
+                            step_data[f'{layer_key}_title'] = layer.get('title', layer.get('button', ''))
+
+                            content = layer.get('content', '')
+                            if content:
+                                # Initialize warnings list for widget processing
+                                widget_warnings = []
+
+                                # Process widgets BEFORE markdown conversion
+                                content = process_widgets(content, f'demo-{story_id}', widget_warnings)
+
+                                # Process images (sizes and captions) BEFORE markdown conversion
+                                content = process_images(content)
+
+                                # Convert markdown to HTML
+                                content = markdown.markdown(content, extensions=['extra', 'nl2br'])
+
+                                # Process glossary links AFTER markdown conversion
+                                content = process_glossary_links(content, glossary_terms)
+
+                            step_data[f'{layer_key}_text'] = content
+                            step_data[f'{layer_key}_demo'] = True  # All demo bundle layers are demo content
+
+                    steps.append(step_data)
+
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(steps, f, indent=2, ensure_ascii=False)
+
+                print(f"  Created demo story: {story_id}.json ({len(steps)} steps)")
+
+            except Exception as e:
+                print(f"  [WARN] Could not create demo story {story_id}: {e}")
+
+    # Write demo glossary to _data/demo-glossary.json
+    # (generate_collections.py will read this and create Jekyll collection files)
+    if bundle.get('glossary'):
+        glossary_data = []
+        for term_id, term_data in bundle['glossary'].items():
+            glossary_data.append({
+                'term_id': term_id,
+                'title': term_data.get('term', term_id),
+                'content': term_data.get('content', ''),
+                '_demo': True
+            })
+
+        glossary_json_path = Path('_data/demo-glossary.json')
+        with open(glossary_json_path, 'w', encoding='utf-8') as f:
+            json.dump(glossary_data, f, indent=2, ensure_ascii=False)
+
+        print(f"  Created _data/demo-glossary.json ({len(glossary_data)} demo terms)")
+
+
+def find_csv_with_fallback(base_path, spanish_name):
+    """
+    Find CSV file with bilingual fallback support.
+    Checks for English name first, then Spanish equivalent.
+
+    Args:
+        base_path: Base path like 'components/structures/project'
+        spanish_name: Spanish filename like 'proyecto'
+
+    Returns:
+        str: Path to found CSV file, or original English path if neither exists
+
+    Example:
+        find_csv_with_fallback('components/structures/project', 'proyecto')
+        Returns: 'components/structures/project.csv' or
+                 'components/structures/proyecto.csv' (fallback)
+    """
+    english_path = f'{base_path}.csv'
+    spanish_path = f'{base_path.rsplit("/", 1)[0]}/{spanish_name}.csv'
+
+    if Path(english_path).exists():
+        return english_path
+    elif Path(spanish_path).exists():
+        print(f"  [INFO] Using Spanish file: {spanish_name}.csv")
+        return spanish_path
+    else:
+        # Return English path (will trigger "file not found" warning in csv_to_json)
+        return english_path
+
+
+def fetch_demo_content_if_enabled():
+    """
+    Automatically fetch demo content bundle before processing CSVs.
+
+    This function runs fetch_demo_content.py as a subprocess to ensure the demo
+    bundle is available before csv_to_json.py attempts to load and merge it.
+
+    **Why this is needed:**
+    - csv_to_json.py expects demo content at _demo_content/telar-demo-bundle.json
+    - Without this auto-fetch, users would need to manually update build.yml workflow
+    - Calling fetch as subprocess maintains clean separation of concerns
+
+    **Behavior:**
+    - Checks _config.yml for include_demo_content setting (via fetch_demo_content.py)
+    - If enabled: Downloads demo bundle from content.telar.org
+    - If disabled: Cleans up any existing demo content
+    - If fetch fails: Continues gracefully (csv_to_json.py handles missing bundle)
+
+    **Output:**
+    - Prints fetch_demo_content.py output so users see what's happening
+    - Warnings are printed for timeouts or errors, then processing continues
+
+    **Idempotent:**
+    - Safe to call multiple times - fetch_demo_content.py handles existing bundles
+    - No-op if demo content disabled in config
+
+    **Error handling:**
+    - Non-zero exit code from fetch_demo_content.py is acceptable
+      (demo might be disabled or unavailable)
+    - csv_to_json.py's load_demo_bundle() already handles missing bundle gracefully
+    - Timeouts and exceptions are caught and logged as warnings
+
+    **Performance:**
+    - 60 second timeout prevents hanging on slow network
+    - Only downloads when include_demo_content: true
+    - Cached demo bundles are reused if already fetched
+
+    Returns:
+        None
+    """
+    import subprocess
+
+    try:
+        # Run fetch_demo_content.py to ensure bundle exists
+        # This checks config and either fetches, cleans up, or no-ops accordingly
+        result = subprocess.run(
+            ['python3', 'scripts/fetch_demo_content.py'],
+            capture_output=True,
+            text=True,
+            timeout=60  # 60 second timeout for network fetch
+        )
+
+        # Print output so users see what happened
+        # This includes: enabled/disabled status, fetch progress, bundle metadata
+        if result.stdout:
+            print(result.stdout)
+
+        # Note: Non-zero exit is acceptable here
+        # Reasons for non-zero exit:
+        # - Demo content disabled (exit 0 after cleanup)
+        # - Demo bundle not available for this version (exit 1)
+        # - Network error (exit 1)
+        # In all cases, csv_to_json.py will continue and handle missing bundle
+
+    except subprocess.TimeoutExpired:
+        # Network fetch took too long - continue without demo content
+        print("[WARN] Demo content fetch timed out (skipping)")
+        print("[WARN] Your site will build without demo content")
+
+    except Exception as e:
+        # Unexpected error (subprocess not found, permission denied, etc.)
+        print(f"[WARN] Could not fetch demo content: {e}")
+        print("[WARN] Your site will build without demo content")
+        # Continue anyway - csv_to_json.py handles missing bundle gracefully
+
+
 def main():
     """Main conversion process"""
+    # IMPORTANT: Fetch demo content FIRST (before any CSV processing)
+    # This ensures _demo_content/telar-demo-bundle.json exists before we try to load it
+    # later in this script (see load_demo_bundle() call near end of main())
+    # This auto-fetch eliminates the need for users to manually update build.yml workflow
+    fetch_demo_content_if_enabled()
+
     # Check if Christmas Tree Mode is enabled in _config.yml
     christmas_tree_mode = False
     try:
@@ -2074,23 +2566,25 @@ def main():
     print("Converting CSV files to JSON...")
     print("-" * 50)
 
-    # Convert project setup
+    # Convert project setup (with bilingual fallback: project.csv or proyecto.csv)
+    project_path = find_csv_with_fallback('components/structures/project', 'proyecto')
     csv_to_json(
-        'components/structures/project.csv',
+        project_path,
         '_data/project.json',
         process_project_setup
     )
 
-    # Convert objects (with optional Christmas Tree mode)
+    # Convert objects (with bilingual fallback: objects.csv or objetos.csv)
+    objects_path = find_csv_with_fallback('components/structures/objects', 'objetos')
     if christmas_tree_mode:
         csv_to_json(
-            'components/structures/objects.csv',
+            objects_path,
             '_data/objects.json',
             lambda df: process_objects(df, christmas_tree=True)
         )
     else:
         csv_to_json(
-            'components/structures/objects.csv',
+            objects_path,
             '_data/objects.json',
             process_objects
         )
@@ -2099,43 +2593,38 @@ def main():
     # and processed by generate_collections.py
 
     # Convert story files (with optional Christmas Tree mode)
-    # Look for any CSV files that start with "story-" or "chapter-"
+    # v0.6.0+: Process ALL CSVs except system files (supports both semantic and traditional naming)
+    # System files: project.csv/proyecto.csv, objects.csv/objetos.csv
+    # Story files: your-story.csv, tu-historia.csv, story-1.csv, story-2.csv, etc.
+    system_csvs = {'project.csv', 'proyecto.csv', 'objects.csv', 'objetos.csv'}
+
     if christmas_tree_mode:
-        for csv_file in structures_dir.glob('story-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                lambda df: process_story(df, christmas_tree=True)
-            )
-
-        for csv_file in structures_dir.glob('chapter-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                lambda df: process_story(df, christmas_tree=True)
-            )
+        for csv_file in structures_dir.glob('*.csv'):
+            if csv_file.name not in system_csvs:
+                json_filename = csv_file.stem + '.json'
+                json_file = data_dir / json_filename
+                csv_to_json(
+                    str(csv_file),
+                    str(json_file),
+                    lambda df: process_story(df, christmas_tree=True)
+                )
     else:
-        for csv_file in structures_dir.glob('story-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                process_story
-            )
+        for csv_file in structures_dir.glob('*.csv'):
+            if csv_file.name not in system_csvs:
+                json_filename = csv_file.stem + '.json'
+                json_file = data_dir / json_filename
+                csv_to_json(
+                    str(csv_file),
+                    str(json_file),
+                    process_story
+                )
 
-        for csv_file in structures_dir.glob('chapter-*.csv'):
-            json_filename = csv_file.stem + '.json'
-            json_file = data_dir / json_filename
-            csv_to_json(
-                str(csv_file),
-                str(json_file),
-                process_story
-            )
+    # Merge demo content if available
+    print("-" * 50)
+    demo_bundle = load_demo_bundle()
+    if demo_bundle:
+        print("Merging demo content...")
+        merge_demo_content(demo_bundle)
 
     print("-" * 50)
     print("Conversion complete!")

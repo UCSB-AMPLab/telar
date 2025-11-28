@@ -235,19 +235,27 @@ Example:
         sys.exit(1)
 
     # Map tab names/numbers to environment variable names
+    # System tabs
+    system_tabs = {'project', 'objects', 'instructions', 'tab 1', 'tab 2', 'tab 3'}
+
     tab_mapping = {
         'project': 'PROJECT_GID',
         'objects': 'OBJECTS_GID',
-        'story-1': 'STORY_1_GID',
-        'story-2': 'STORY_2_GID',
-        'story-3': 'STORY_3_GID',
-        'story-4': 'STORY_4_GID',
         'tab 1': 'PROJECT_GID',  # Fallback for generic tab names
         'tab 2': 'PROJECT_GID',
         'tab 3': 'OBJECTS_GID',
-        'tab 4': 'STORY_1_GID',
-        'tab 5': 'STORY_2_GID',
     }
+
+    # Dynamically add story tabs discovered in the sheet (v0.6.0+)
+    # Supports both semantic (your-story, tu-historia) and traditional (story-1, story-2) identifiers
+    for tab_name, _ in working_tabs:
+        tab_lower = tab_name.lower()
+        # Any tab that's not a system tab is a story/chapter tab
+        if tab_lower not in system_tabs and not tab_lower.startswith('#'):
+            # Create environment variable name from tab name
+            # your-story → YOUR_STORY_GID, story-1 → STORY_1_GID
+            safe_name = re.sub(r'[^A-Z0-9_]', '_', tab_name.upper())
+            tab_mapping[tab_lower] = f'{safe_name}_GID'
 
     if output_env:
         # Output environment variables for GitHub Actions
