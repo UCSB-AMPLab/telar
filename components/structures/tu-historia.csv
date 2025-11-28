@@ -1,7 +1,7 @@
 paso,objeto,x,y,zoom,pregunta,respuesta,boton_capa1,archivo_capa1,boton_capa2,archivo_capa2
 #,id_objeto de la pestaña objetos / objects,Posición horizontal 0-1 (0.5 = centro),Posición vertical 0-1 (0.5 = centro),1.0 = imagen completa,Encabezado para este paso,Texto breve de 1-2 oraciones,"Texto opcional del botón (predeterminado: ""Saber más"")",Ruta al archivo markdown (ej. tu-historia/archivo.md),"Texto opcional del segundo botón (predeterminado: ""Profundizar más"")",Ruta al segundo archivo markdown
 2,atlas-allegory,0.5,0.5,1,¿Qué es Telar?,Un framework para narrativas visuales. Este ejemplo explora un mapa alegórico que revela más de lo que parece mostrar a primera vista.,,,,
-3,atlas-allegory,0.5,0.5,1,¿Qué es esta imagen?,"Este grabado de 1761 parece celebrar el imperio español, pero como verás, en realidad lo cuestiona. La historiadora Natalie Cobo guía a las personas lectoras a través de detalles reveladores.",,,,
+3,atlas-allegory,0.5,0.5,1,¿Qué es esta imagen?,"Este grabado de 1761 parece celebrar el imperio español, pero como verás, en realidad lo cuestiona. La académica Natalie Cobo guía a las personas lectoras a través de detalles reveladores.",,,,
 4,atlas-allegory,0.477,0.125,8.9,Observa la cabeza,España aparece como la cabeza de este proyecto imperial.,Sobre las coordenadas,tu-historia/acerca-de-coordenadas.md,,
 5,atlas-allegory,0.486,0.277,10,Fíjate en el collar,La cadena está hecha de barcos: fueron las invasiones de ultramar las que ampliaron el mundo hispánico de la temprana modernidad.,Guiar la atención,tu-historia/guiar-atencion.md,,
 6,atlas-allegory,0.504,0.415,2.9,Mira a América,La masa continental americana forma un manto indefinido que cubre a la figura alegórica.,Construir un argumento,tu-historia/construir-argumento.md,,
