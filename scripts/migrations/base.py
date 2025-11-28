@@ -289,5 +289,72 @@ class BaseMigration(ABC):
             print(f"  ⚠️  Warning: Error fetching {path}: {e}")
             return None
 
+    def _detect_language(self) -> str:
+        """
+        Detect site language from _config.yml.
+
+        Reads telar.telar_language setting (added in v0.6.0).
+        Useful for providing bilingual migration messages and summaries.
+
+        Returns:
+            'es' for Spanish, 'en' for English (default)
+        """
+        config_path = os.path.join(self.repo_root, '_config.yml')
+
+        try:
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+
+            # Get telar_language setting (added in v0.6.0)
+            lang = config.get('telar', {}).get('telar_language', 'en')
+
+            # Normalize to 'en' or 'es'
+            return 'es' if lang.lower().startswith('es') else 'en'
+
+        except Exception:
+            # Safe default if config can't be read
+            return 'en'
+
+    def _is_file_modified(self, rel_path: str, compare_tag: str = 'v0.5.0-beta') -> bool:
+        """
+        Check if user modified a file compared to original version.
+
+        Compares user's current file with original from GitHub tag.
+        Useful for safely cleaning up demo content without losing user customizations.
+
+        Args:
+            rel_path: Path relative to repo root (e.g., 'components/texts/stories/story1/file.md')
+            compare_tag: Git tag to compare against (default: 'v0.5.0-beta')
+
+        Returns:
+            True if file was modified by user, False if identical to original
+
+        Example:
+            >>> self._is_file_modified('components/texts/stories/story1/intro.md')
+            True  # User customized the demo story
+        """
+        # Fetch original from GitHub
+        original_content = self._fetch_from_github(rel_path, branch=compare_tag)
+
+        if not original_content:
+            # Can't fetch original, assume modified (safe default)
+            return True
+
+        # Read user's current file
+        current_content = self._read_file(rel_path)
+
+        if not current_content:
+            # File doesn't exist, not modified
+            return False
+
+        # Normalize whitespace for comparison
+        # Split into lines and strip each line to ignore formatting differences
+        original_lines = [line.strip() for line in original_content.split('\n')]
+        current_lines = [line.strip() for line in current_content.split('\n')]
+
+        # Compare normalized content
+        return original_lines != current_lines
+
     def __str__(self) -> str:
         return f"Migration {self.from_version} → {self.to_version}: {self.description}"
