@@ -71,8 +71,9 @@ class Migration060to061(BaseMigration):
         }
 
         for file_path, description in framework_files.items():
-            full_path = os.path.join(self.repo_root, file_path)
-            if self._fetch_from_github(file_path, full_path):
+            content = self._fetch_from_github(file_path)
+            if content:
+                self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:
                 changes.append(f"Warning: Failed to update {file_path}")
