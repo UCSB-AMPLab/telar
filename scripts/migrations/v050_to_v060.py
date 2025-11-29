@@ -80,20 +80,24 @@ class Migration050to060(BaseMigration):
         Create new directories for v0.6.0 features.
 
         Creates:
-        - components/texts/pages/ for custom user pages
-        - components/texts/stories/your-story/ for English template
-        - components/texts/stories/tu-historia/ for Spanish template
+        - components/texts/pages/ for custom user pages (always)
+        - components/texts/stories/your-story/ for English template (only if new site)
+        - components/texts/stories/tu-historia/ for Spanish template (only if new site)
 
         Returns:
             List of change descriptions
         """
         changes = []
 
-        directories = [
-            'components/texts/pages',
-            'components/texts/stories/your-story',
-            'components/texts/stories/tu-historia',
-        ]
+        # Always create pages directory
+        directories = ['components/texts/pages']
+
+        # Only add template directories for new sites (no custom stories)
+        if not self._has_custom_stories():
+            directories.extend([
+                'components/texts/stories/your-story',
+                'components/texts/stories/tu-historia',
+            ])
 
         for dir_path in directories:
             full_path = os.path.join(self.repo_root, dir_path)
@@ -816,22 +820,52 @@ class Migration050to060(BaseMigration):
             # Gitignore
             '.gitignore': 'Generated files gitignored',
 
-            # Glossary entries - English
-            'components/texts/glossary/story.md': 'Story glossary entry',
-            'components/texts/glossary/step.md': 'Step glossary entry',
-            'components/texts/glossary/viewer.md': 'Viewer glossary entry',
-            'components/texts/glossary/panel.md': 'Panel glossary entry',
-
-            # Glossary entries - Spanish
-            'components/texts/glossary/historia.md': 'Historia glossary entry',
-            'components/texts/glossary/paso.md': 'Paso glossary entry',
-            'components/texts/glossary/visor.md': 'Visor glossary entry',
-            'components/texts/glossary/panel-es.md': 'Panel-es glossary entry',
-
             # Note: components/texts/pages/about.md is handled by _move_about_page()
             # Note: .github/workflows/*.yml files CANNOT be auto-updated (security restriction)
             #       They are included in manual steps instead
         }
+
+        # Template files - only add for new sites (no custom stories)
+        if not self._has_custom_stories():
+            template_files = {
+                # Glossary entries - English
+                'components/texts/glossary/story.md': 'Story glossary entry',
+                'components/texts/glossary/step.md': 'Step glossary entry',
+                'components/texts/glossary/viewer.md': 'Viewer glossary entry',
+                'components/texts/glossary/panel.md': 'Panel glossary entry',
+
+                # Glossary entries - Spanish
+                'components/texts/glossary/historia.md': 'Historia glossary entry',
+                'components/texts/glossary/paso.md': 'Paso glossary entry',
+                'components/texts/glossary/visor.md': 'Visor glossary entry',
+                'components/texts/glossary/panel-es.md': 'Panel-es glossary entry',
+
+                # Template tutorial stories - English
+                'components/texts/stories/your-story/about-coordinates.md': 'Coordinate system explanation',
+                'components/texts/stories/your-story/guiding-attention.md': 'Question/Answer/Invitation pattern',
+                'components/texts/stories/your-story/building-argument.md': 'Coordinate sequences as argument',
+                'components/texts/stories/your-story/visual-rhetoric.md': 'Visual contrast analysis',
+                'components/texts/stories/your-story/the-reveal.md': 'Full view synthesis',
+                'components/texts/stories/your-story/progressive-disclosure.md': 'Layer 2 panel explanation',
+                'components/texts/stories/your-story/ruler-place.md': 'Charles III marginalized position',
+                'components/texts/stories/your-story/multiple-images.md': 'IIIF vs self-hosted comparison',
+                'components/texts/stories/your-story/whats-next.md': 'Template overview',
+
+                # Template tutorial stories - Spanish
+                'components/texts/stories/tu-historia/acerca-de-coordenadas.md': 'Sistema de coordenadas',
+                'components/texts/stories/tu-historia/guiar-atencion.md': 'Patrón Pregunta/Respuesta/Invitación',
+                'components/texts/stories/tu-historia/construir-argumento.md': 'Secuencias como argumento',
+                'components/texts/stories/tu-historia/retorica-visual.md': 'Análisis de contraste visual',
+                'components/texts/stories/tu-historia/la-revelacion.md': 'Síntesis de vista completa',
+                'components/texts/stories/tu-historia/divulgacion-progresiva.md': 'Explicación de panel capa 2',
+                'components/texts/stories/tu-historia/lugar-gobernante.md': 'Posición marginalizada',
+                'components/texts/stories/tu-historia/multiples-imagenes.md': 'Comparación IIIF vs autoalojadas',
+                'components/texts/stories/tu-historia/que-sigue.md': 'Resumen de plantilla',
+
+                # Template tutorial image (used in your-story/tu-historia)
+                'components/images/leviathan.jpg': 'Hobbes Leviathan frontispiece (self-hosted demo)',
+            }
+            framework_files.update(template_files)
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path)
