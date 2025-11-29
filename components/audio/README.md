@@ -1,6 +1,6 @@
 # Audio Directory
 
-**Status:** 🚧 Coming in v0.7.0
+**Status:** 🚧 Coming in v0.8.0
 
 This directory is reserved for audio files (oral histories, soundscapes, music, field recordings) that will be embedded in story steps.
 
@@ -15,4 +15,4 @@ This directory is reserved for audio files (oral histories, soundscapes, music, 
 ## Questions?
 
 - **Report issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
-- **Documentation:** [https://ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
+- **Documentation:** [https://telar.org/docs](https://telar.org/docs)

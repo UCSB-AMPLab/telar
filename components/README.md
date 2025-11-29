@@ -90,4 +90,4 @@ On GitHub, steps 2-4 happen automatically via GitHub Actions whenever you push c
 ## Questions?
 
 - **Report issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
-- **Documentation:** [https://ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
+- **Documentation:** [https://telar.org/docs](https://telar.org/docs)

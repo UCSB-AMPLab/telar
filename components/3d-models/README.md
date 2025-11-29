@@ -1,6 +1,6 @@
 # 3D Models Directory
 
-**Status:** 🚧 Coming in v0.8.0
+**Status:** 🚧 Coming in v0.9.0
 
 This directory is reserved for 3D model files (archaeological artifacts, architectural models, sculptures) that will be displayed in interactive viewers.
 
@@ -16,4 +16,4 @@ This directory is reserved for 3D model files (archaeological artifacts, archite
 ## Questions?
 
 - **Report issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
-- **Documentation:** [https://ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
+- **Documentation:** [https://telar.org/docs](https://telar.org/docs)

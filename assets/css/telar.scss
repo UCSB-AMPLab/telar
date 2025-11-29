@@ -56,6 +56,16 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-heading);
 }
 
+/* Global link styling - theme color with underline */
+a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
 /* Display headings - ensure proper word wrapping on mobile */
 .navbar-brand {
   white-space: normal !important;
@@ -72,6 +82,11 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-headings);
   font-size: 1.5rem;
   color: var(--color-heading);
+}
+
+.site-header .site-logo {
+  max-height: 80px;
+  width: auto;
 }
 
 .navbar-toggler {
@@ -114,13 +129,82 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1.5rem;
 }
 
-.page-content a {
-  color: var(--color-link);
-  text-decoration: underline;
+/* User Page Widget Styling - styled as if inside panel-layer1 */
+/* Widgets span full column width (no max-width constraint) */
+
+/* Carousel captions - same as panel-layer1 (uses layer2 colors for contrast) */
+.user-page .telar-widget-carousel .carousel-caption-below {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
 }
 
-.page-content a:hover {
-  opacity: 0.8;
+.user-page .telar-widget-carousel .carousel-caption-below small,
+.user-page .telar-widget-carousel .carousel-caption-below .caption-credit {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Accordion styling - user pages use layer2 colors (like panel-layer1) */
+.user-page .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-page .telar-widget-accordion .accordion-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer2-text);
+}
+
+/* Tabs styling - user pages use layer2 colors (like accordions in panel-layer1) */
+.user-page .telar-widget-tabs {
+  background: transparent;
+  border: none;
+}
+
+.user-page .telar-widget-tabs .nav-tabs {
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-item {
+  margin: 0;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-item:first-child .nav-link {
+  margin-left: 0;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  opacity: 0.7;
+}
+
+.user-page .telar-widget-tabs .nav-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border: none;
+  opacity: 1;
+}
+
+.user-page .telar-widget-tabs .tab-content {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-radius: 0 0.5rem 0 0;
 }
 
 /* Site Description - Links appear darker than body text, show theme color and underline on hover */
@@ -326,6 +410,14 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.2;
 }
 
+.intro-demo-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-accent, #6c757d);
+  margin-bottom: 0.5rem;
+  font-family: var(--font-body);
+}
+
 .intro-byline {
   font-size: 1.1rem;
   color: #5a6c7d;
@@ -456,14 +548,14 @@ h1, h2, h3, h4, h5, h6 {
 /* Layer 1 Panel - Light blue background, wide coverage */
 #panel-layer1 {
   width: 65% !important;
-  max-width: 900px;
+  max-width: 800px;
   background: var(--color-panel-layer1-bg);
 }
 
 #panel-layer1 .offcanvas-header {
   background: var(--color-panel-layer1-bg);
   border-bottom: none;
-  padding: 1.5rem 2rem;
+  padding: 2rem 2rem 1rem 2rem;
 }
 
 #panel-layer1 .offcanvas-body {
@@ -484,14 +576,14 @@ h1, h2, h3, h4, h5, h6 {
 /* Layer 2 Panel - Dark purple background, narrower than layer1 */
 #panel-layer2 {
   width: 55% !important;
-  max-width: 800px;
+  max-width: 750px;
   background: var(--color-panel-layer2-bg);
 }
 
 #panel-layer2 .offcanvas-header {
   background: var(--color-panel-layer2-bg);
   border-bottom: none;
-  padding: 1.5rem 2rem;
+  padding: 2rem 2rem 1rem 2rem;
 }
 
 #panel-layer2 .offcanvas-body {
@@ -513,6 +605,51 @@ h1, h2, h3, h4, h5, h6 {
 #panel-layer2 .offcanvas-body h3,
 #panel-layer2 .offcanvas-body h4 {
   color: var(--color-panel-layer2-text);
+}
+
+/* Panel text max-width for readability (centered, images/widgets span full width) */
+.offcanvas-body p,
+.offcanvas-body ul,
+.offcanvas-body ol,
+.offcanvas-body blockquote,
+.offcanvas-body h1,
+.offcanvas-body h2,
+.offcanvas-body h3,
+.offcanvas-body h4,
+.offcanvas-body h5,
+.offcanvas-body h6 {
+  max-width: 650px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Layer 2 panel - narrower text for better proportions */
+#panel-layer2 .offcanvas-body p,
+#panel-layer2 .offcanvas-body ul,
+#panel-layer2 .offcanvas-body ol,
+#panel-layer2 .offcanvas-body blockquote,
+#panel-layer2 .offcanvas-body h1,
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4,
+#panel-layer2 .offcanvas-body h5,
+#panel-layer2 .offcanvas-body h6 {
+  max-width: 600px;
+}
+
+/* Widgets - constrain to same width as text */
+.offcanvas-body .telar-widget-accordion,
+.offcanvas-body .telar-widget-carousel,
+.offcanvas-body .telar-widget-tabs {
+  max-width: 650px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-layer2 .offcanvas-body .telar-widget-accordion,
+#panel-layer2 .offcanvas-body .telar-widget-carousel,
+#panel-layer2 .offcanvas-body .telar-widget-tabs {
+  max-width: 600px;
 }
 
 /* Panel buttons styling */
@@ -545,14 +682,14 @@ h1, h2, h3, h4, h5, h6 {
 /* Glossary Panel - Cream/beige background */
 #panel-glossary {
   width: 45% !important;
-  max-width: 600px;
+  max-width: 700px;
   background: var(--color-panel-glossary-bg);
 }
 
 #panel-glossary .offcanvas-header {
   background: var(--color-panel-glossary-bg);
   border-bottom: none;
-  padding: 1.5rem 2rem;
+  padding: 2rem 2rem 1rem 2rem;
 }
 
 #panel-glossary .offcanvas-body {
@@ -577,6 +714,30 @@ h1, h2, h3, h4, h5, h6 {
 
 #panel-glossary .btn-close:hover {
   opacity: 1;
+}
+
+/* Glossary panel - narrower text for better proportions */
+#panel-glossary .glossary-term-prefix,
+#panel-glossary .offcanvas-title,
+#panel-glossary .offcanvas-body p,
+#panel-glossary .offcanvas-body ul,
+#panel-glossary .offcanvas-body ol,
+#panel-glossary .offcanvas-body blockquote,
+#panel-glossary .offcanvas-body h1,
+#panel-glossary .offcanvas-body h2,
+#panel-glossary .offcanvas-body h3,
+#panel-glossary .offcanvas-body h4,
+#panel-glossary .offcanvas-body h5,
+#panel-glossary .offcanvas-body h6 {
+  max-width: 550px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-glossary .offcanvas-body .telar-widget-accordion,
+#panel-glossary .offcanvas-body .telar-widget-carousel,
+#panel-glossary .offcanvas-body .telar-widget-tabs {
+  max-width: 550px;
 }
 
 /* Glossary back button uses default Bootstrap outline-secondary styling */
@@ -720,6 +881,62 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
 }
 
+.story-card-byline {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+/* Demo story badge */
+.story-card .card {
+  position: relative;
+}
+
+.story-card .card.demo-story {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.demo-badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(108, 117, 125, 0.85);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  z-index: 10;
+  font-family: var(--font-body);
+}
+
+/* Inline demo badge for lists and inline contexts */
+.demo-badge-inline {
+  display: inline-block;
+  background: rgba(108, 117, 125, 0.15);
+  color: #6c757d;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  font-family: var(--font-body);
+}
+
+.object-demo-label {
+  font-size: 1.75rem;
+  font-weight: 500;
+  color: var(--color-accent, #6c757d);
+  margin-bottom: 0.25rem;
+  font-family: var(--font-body);
+}
+
 .story-thumbnail {
   width: 100%;
   border-radius: 0.25rem 0.25rem 0 0;
@@ -752,6 +969,7 @@ h1, h2, h3, h4, h5, h6 {
   text-decoration: none;
   color: inherit;
   transition: transform 0.3s ease;
+  position: relative;
 }
 
 .collection-item:hover {
@@ -802,7 +1020,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   color: var(--color-link);
   text-decoration: none;
-  display: block;
+  display: inline;
   transition: color 0.2s ease;
 }
 
@@ -992,12 +1210,38 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.8;
 }
 
-/* Panel Images */
+/* Panel Images - centered with max-height */
 .offcanvas-body img {
   max-width: 100%;
+  max-height: 80vh;
   height: auto;
   display: block;
-  margin: 1rem 0;
+  object-fit: contain;
+  margin: 1rem auto;
+}
+
+/* Image figures with captions */
+.telar-image-figure {
+  display: block;
+  margin: 1rem auto;
+  text-align: center;
+}
+
+.telar-image-figure img {
+  margin: 0 auto 0.25rem auto;
+}
+
+.telar-image-caption {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin-top: 0.25rem;
+  text-align: center;
+  display: block;
+  max-width: 70%;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.2;
+  font-weight: 400;
 }
 
 /* Responsive */
@@ -1536,7 +1780,7 @@ h1, h2, h3, h4, h5, h6 {
   #panel-layer2 .offcanvas-body img,
   #panel-glossary .offcanvas-body img {
     max-width: 100%;
-    margin: 0.8rem 0;
+    margin: 0.8rem auto;
   }
 
   /* Site-wide content - 20-25% reduction */
@@ -1644,7 +1888,7 @@ h1, h2, h3, h4, h5, h6 {
   #panel-layer2 .offcanvas-body img,
   #panel-glossary .offcanvas-body img {
     max-width: 100%;
-    margin: 0.7rem 0;
+    margin: 0.7rem auto;
   }
 
   /* Site-wide content - 30-35% reduction */
@@ -1812,15 +2056,20 @@ h1, h2, h3, h4, h5, h6 {
 
 .telar-widget-carousel .carousel-caption-below {
   height: 80px;
-  padding: 0.75rem 1rem;
-  text-align: left;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   overflow-y: auto;
 }
 
 .telar-widget-carousel .carousel-caption-below .caption-text {
   margin-bottom: 0.25rem;
-  font-size: 0.9rem;
-  line-height: 1.3;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 100;
+  opacity: 0.9;
 }
 
 .telar-widget-carousel .carousel-caption-below .caption-credit {
@@ -2120,42 +2369,84 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Panel-specific tabs styling */
+/* Panel-layer1: uses layer2 colors (dark purple) */
 #panel-layer1 .telar-widget-tabs {
-  background: var(--color-panel-layer2-bg);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: none;
 }
 
 #panel-layer1 .telar-widget-tabs .nav-tabs {
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
 }
 
-#panel-layer1 .telar-widget-tabs .nav-link {
-  color: var(--color-panel-layer2-text);
+#panel-layer1 .telar-widget-tabs .nav-tabs .nav-item {
+  margin: 0;
 }
 
-#panel-layer1 .telar-widget-tabs .nav-link.active {
+#panel-layer1 .telar-widget-tabs .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
   background: var(--color-panel-layer2-bg);
   color: var(--color-panel-layer2-text);
+  opacity: 0.7;
 }
 
+#panel-layer1 .telar-widget-tabs .nav-tabs .nav-link.active {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border: none;
+  opacity: 1;
+}
+
+#panel-layer1 .telar-widget-tabs .tab-content {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  border-radius: 0 0.5rem 0 0;
+}
+
+/* Panel-layer2: uses layer1 colors (light purple) */
 #panel-layer2 .telar-widget-tabs {
-  background: var(--color-panel-layer1-bg);
-  border-color: rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border: none;
 }
 
 #panel-layer2 .telar-widget-tabs .nav-tabs {
-  background: rgba(0, 0, 0, 0.02);
-  border-bottom-color: rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
 }
 
-#panel-layer2 .telar-widget-tabs .nav-link {
-  color: var(--color-panel-layer1-text);
+#panel-layer2 .telar-widget-tabs .nav-tabs .nav-item {
+  margin: 0;
 }
 
-#panel-layer2 .telar-widget-tabs .nav-link.active {
+#panel-layer2 .telar-widget-tabs .nav-tabs .nav-link {
+  border: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
   background: var(--color-panel-layer1-bg);
   color: var(--color-panel-layer1-text);
+  opacity: 0.7;
+}
+
+#panel-layer2 .telar-widget-tabs .nav-tabs .nav-link.active {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border: none;
+  opacity: 1;
+}
+
+#panel-layer2 .telar-widget-tabs .tab-content {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  border-radius: 0 0.5rem 0 0;
 }
 
 /* ========================================
@@ -2225,7 +2516,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .telar-widget-accordion .accordion-body img {
   max-width: 100%;
+  max-height: 80vh;
   height: auto;
+  object-fit: contain;
   border-radius: 4px;
   margin: 1rem 0;
 }
@@ -2939,6 +3232,9 @@ body:not(.embed-mode) .telar-embed-banner {
 
 /* Share Panel Modal */
 #panel-share {
+  // PANEL FREEZE SYSTEM: Share panel must appear above all other panels including glossary (1070)
+  z-index: 1080 !important;
+
   // Modal dialog sizing
   .modal-dialog {
     max-width: 600px;

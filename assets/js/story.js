@@ -2,7 +2,7 @@
  * Telar Story - UniversalViewer + Step-Based Navigation
  * Handles card-stacking interactions for story pages
  *
- * @version v0.5.0-beta
+ * @version v0.6.0-beta
  */
 
 // Step navigation
@@ -22,6 +22,7 @@ let panelStack = [];
 let objectsIndex = {}; // Quick lookup for object data
 let isPanelOpen = false; // Track if any panel is open
 let scrollLockActive = false; // Track if scroll-lock is active
+let creditsDismissed = false; // Track object credits dismissal (per-session)
 
 // Touch navigation for iPad/tablets in desktop mode (v0.4.3)
 // Handles swipe gestures to navigate between story steps
@@ -66,6 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   initializePanels();
   initializeScrollLock();
+  initializeCredits();
 });
 
 /**
@@ -107,6 +109,9 @@ function initializeFirstViewer() {
     currentViewerCard = viewerCard;
     viewerCard.element.classList.remove('card-below');
     viewerCard.element.classList.add('card-active');
+
+    // Show credits badge for initial object
+    updateObjectCredits(firstObjectId);
   }
 }
 
@@ -275,8 +280,8 @@ function destroyViewerCard(viewerCard) {
     viewerCard.element.parentNode.removeChild(viewerCard.element);
   }
 
-  // TODO: Properly dispose UV instance if API provides method
-  // For now, just remove reference
+  // UniversalViewer doesn't provide a disposal API
+  // Remove reference and let garbage collection handle cleanup
   viewerCard.uvInstance = null;
   viewerCard.osdViewer = null;
 }
@@ -576,6 +581,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
 
       // Update reference
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     } else if (elapsed < MAX_WAIT_TIME) {
       setTimeout(activateWhenReady, 100);
     } else {
@@ -593,6 +601,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
       newViewerCard.element.classList.remove('card-below');
       newViewerCard.element.classList.add('card-active');
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     }
   };
 
@@ -637,11 +648,11 @@ function initializeStepController() {
 function goToStep(newIndex, direction = 'forward') {
   // Bounds check with improved logging
   if (newIndex < 0) {
-    console.log(`⚠️ Cannot go to step ${newIndex}: already at first step (0)`);
+    console.log(`Cannot go to step ${newIndex}: already at first step (0)`);
     return;
   }
   if (newIndex >= allSteps.length) {
-    console.log(`⚠️ Cannot go to step ${newIndex}: already at last step (${allSteps.length - 1})`);
+    console.log(`Cannot go to step ${newIndex}: already at last step (${allSteps.length - 1})`);
     return;
   }
 
@@ -749,31 +760,153 @@ function prevStep() {
   goToStep(currentStepIndex - 1, 'backward');
 }
 
+/* ============================================================
+   PANEL FREEZE SYSTEM & SCROLL ISOLATION (v0.6.0)
+   ============================================================
+   When panels are open, story navigation is frozen to allow users
+   to scroll panel content without triggering step changes.
+
+   Panel hierarchy:
+   - Layer 1: Freezes story navigation
+   - Layer 2: Stacked on Layer 1
+   - Glossary: Can open from any context
+
+   Keyboard navigation:
+   - ↑/↓: Step navigation (blocked when panel open)
+   - ←: Close current panel
+   - →: Open next panel level (L1 if none, L2 if L1 open)
+   - Escape: Close current panel
+
+   Scroll isolation zones:
+   - Viewer column: Wheel events ignored (UV handles zoom/pan)
+   - Narrative column: Normal step navigation
+   - Open panels: Blocked by scrollLockActive flag
+
+   Click outside: Closes topmost panel
+   Backdrop: Subtle 2.5% dark overlay when panels open
+
+   Based on initial work by Sanjana Bhupathi.
+   ============================================================ */
+
 /**
  * Handle keyboard navigation
+ * PANEL FREEZE: ←/→ control panels, ↑/↓ control steps (blocked when panel open)
  */
 function handleKeyboard(e) {
   switch(e.key) {
     case 'ArrowDown':
-    case 'ArrowRight':
     case 'PageDown':
       e.preventDefault();
-      nextStep();
-      break;
-    case 'ArrowUp':
-    case 'ArrowLeft':
-    case 'PageUp':
-      e.preventDefault();
-      prevStep();
-      break;
-    case ' ': // Space
-      e.preventDefault();
-      if (e.shiftKey) {
-        prevStep();
-      } else {
+      if (!scrollLockActive) {
         nextStep();
       }
       break;
+
+    case 'ArrowUp':
+    case 'PageUp':
+      e.preventDefault();
+      if (!scrollLockActive) {
+        prevStep();
+      }
+      break;
+
+    case 'ArrowRight':
+      e.preventDefault();
+      if (!isPanelOpen) {
+        // No panel open - try to open L1
+        const stepForL1 = getCurrentStepData();
+        const stepNumForL1 = getCurrentStepNumber();
+        if (stepForL1 && stepHasLayer1Content(stepForL1)) {
+          openPanel('layer1', stepNumForL1);
+        }
+      } else if (panelStack.length === 1 && panelStack[0]?.type === 'layer1') {
+        // L1 is open - try to open L2
+        const stepForL2 = getCurrentStepData();
+        const stepNumForL2 = getCurrentStepNumber();
+        if (stepForL2 && stepHasLayer2Content(stepForL2)) {
+          openPanel('layer2', stepNumForL2);
+        }
+      }
+      // If L2 or glossary is open, do nothing
+      break;
+
+    case 'ArrowLeft':
+      e.preventDefault();
+      if (isPanelOpen) {
+        closeTopPanel();  // Close only the topmost panel
+      }
+      // If no panel open, do nothing
+      break;
+
+    case 'Escape':
+      if (isPanelOpen) {
+        e.preventDefault();
+        closeTopPanel();
+      }
+      break;
+
+    case ' ': // Space
+      e.preventDefault();
+      if (!scrollLockActive) {
+        if (e.shiftKey) {
+          prevStep();
+        } else {
+          nextStep();
+        }
+      }
+      break;
+  }
+}
+
+/**
+ * Get current step number from the DOM element
+ * Helper for keyboard panel navigation
+ */
+function getCurrentStepNumber() {
+  if (currentStepIndex < 0 || currentStepIndex >= allSteps.length) {
+    return null;
+  }
+  // Get step number from the step element's data attribute
+  return allSteps[currentStepIndex].dataset.step;
+}
+
+/**
+ * Get current step data from story data
+ * Helper for keyboard panel navigation
+ */
+function getCurrentStepData() {
+  const stepNumber = getCurrentStepNumber();
+  if (!stepNumber) return null;
+  const steps = window.storyData?.steps || [];
+  return steps.find(s => s.step == stepNumber);
+}
+
+/**
+ * Check if step has Layer 1 content
+ */
+function stepHasLayer1Content(step) {
+  if (!step) return false;
+  return (step.layer1_title && step.layer1_title.trim() !== '') ||
+         (step.layer1_text && step.layer1_text.trim() !== '');
+}
+
+/**
+ * Check if step has Layer 2 content
+ */
+function stepHasLayer2Content(step) {
+  if (!step) return false;
+  return (step.layer2_title && step.layer2_title.trim() !== '') ||
+         (step.layer2_text && step.layer2_text.trim() !== '');
+}
+
+/**
+ * Close only the topmost panel in the stack
+ */
+function closeTopPanel() {
+  if (panelStack.length > 0) {
+    const top = panelStack[panelStack.length - 1];
+    closePanel(top.type);
+    panelStack.pop();
   }
 }
 
@@ -781,6 +914,18 @@ function handleKeyboard(e) {
  * Handle scroll accumulation with acceleration prevention
  */
 function handleScroll(e) {
+  // PANEL FREEZE: Skip scroll processing when any panel is open
+  if (scrollLockActive) {
+    scrollAccumulator = 0;  // Reset to prevent momentum buildup
+    return;
+  }
+
+  // VIEWER SCROLL ISOLATION: Ignore wheel events from the viewer column
+  // Users should be able to zoom/pan in the UV without triggering step changes
+  if (e.target.closest('.viewer-column')) {
+    return;
+  }
+
   const now = Date.now();
   const timeSinceLastChange = now - lastStepChangeTime;
 
@@ -849,6 +994,11 @@ function handleTouchEnd(e) {
     return;
   }
 
+  // PANEL FREEZE: Skip swipe processing when any panel is open
+  if (scrollLockActive) {
+    return;
+  }
+
   // Calculate swipe distance (positive = swipe down, negative = swipe up)
   const swipeDistance = touchEndY - touchStartY;
 
@@ -891,7 +1041,7 @@ function preloadUpcomingViewers(currentIndex) {
     const y = parseFloat(nextStep.dataset.y);
     const zoom = parseFloat(nextStep.dataset.zoom);
 
-    console.log(`⏳ Preloading viewer for step ${nextIndex}: ${objectId}`);
+    console.log(`Preloading viewer for step ${nextIndex}: ${objectId}`);
     getOrCreateViewerCard(objectId, nextIndex, x, y, zoom);
   }
 
@@ -911,7 +1061,7 @@ function preloadUpcomingViewers(currentIndex) {
     const y = parseFloat(prevStep.dataset.y);
     const zoom = parseFloat(prevStep.dataset.zoom);
 
-    console.log(`⏳ Preloading previous viewer for step ${prevIndex}: ${objectId}`);
+    console.log(`Preloading previous viewer for step ${prevIndex}: ${objectId}`);
     getOrCreateViewerCard(objectId, prevIndex, x, y, zoom);
   }
 }
@@ -985,6 +1135,9 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
 
       // Update current viewer card reference
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     } else if (elapsed < MAX_WAIT_TIME) {
       console.log(`Viewer not ready yet, waiting... (${elapsed}ms elapsed)`);
       setTimeout(slideUpWhenReady, 100);
@@ -1031,6 +1184,9 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
       }
 
       currentViewerCard = newViewerCard;
+
+      // Update object credits badge
+      updateObjectCredits(objectId);
     }
   };
 
@@ -1047,7 +1203,7 @@ function animateViewerToPosition(viewerCard, x, y, zoom) {
     return;
   }
 
-  console.log(`Animating viewer to position: x=${x}, y=${y}, zoom=${zoom} over 36 seconds`);
+  console.log(`Animating viewer to position: x=${x}, y=${y}, zoom=${zoom} over 4 seconds`);
 
   const osdViewer = viewerCard.osdViewer;
   const viewport = osdViewer.viewport;
@@ -1166,6 +1322,49 @@ function updateViewerInfo(stepNumber) {
 }
 
 /**
+ * Initialize object credits badge
+ */
+function initializeCredits() {
+  // Check config flag
+  if (!window.telarConfig?.showObjectCredits) return;
+
+  // Set up dismiss handler
+  const dismissBtn = document.getElementById('object-credits-dismiss');
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', function() {
+      const badge = document.getElementById('object-credits-badge');
+      if (badge) badge.classList.add('d-none');
+      creditsDismissed = true;
+    });
+  }
+}
+
+/**
+ * Update object credits badge when object changes
+ */
+function updateObjectCredits(objectId) {
+  if (!window.telarConfig?.showObjectCredits) return;
+  if (creditsDismissed) return;
+
+  const badge = document.getElementById('object-credits-badge');
+  const textElement = document.getElementById('object-credits-text');
+
+  if (!badge || !textElement) return;
+
+  // Get credit from objects data
+  const objectData = objectsIndex[objectId];
+  const credit = objectData?.credit;
+
+  if (credit && credit.trim()) {
+    const prefix = window.telarLang?.creditPrefix || 'Credit:';
+    textElement.textContent = `${prefix} ${credit}`;
+    badge.classList.remove('d-none');
+  } else {
+    badge.classList.add('d-none');
+  }
+}
+
+/**
  * Initialize panel system
  */
 function initializePanels() {
@@ -1233,7 +1432,10 @@ function openPanel(panelType, contentId) {
 
   if (content) {
     // Update panel content
-    document.getElementById(`${panelId}-title`).textContent = content.title;
+    const titleElement = document.getElementById(`${panelId}-title`);
+    const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
+    const demoBadge = content.demo ? `<span class="demo-badge-inline" style="margin-left: 0.5rem;">${demoBadgeText}</span>` : '';
+    titleElement.innerHTML = content.title + demoBadge;
     const contentElement = document.getElementById(`${panelId}-content`);
     contentElement.innerHTML = content.html;
 
@@ -1309,7 +1511,8 @@ function getPanelContent(panelType, contentId) {
 
     return {
       title: step.layer1_title || 'Layer 1',
-      html: html
+      html: html,
+      demo: step.layer1_demo || false
     };
   } else if (panelType === 'layer2') {
     return {
@@ -1317,7 +1520,8 @@ function getPanelContent(panelType, contentId) {
       html: formatPanelContent({
         text: step.layer2_text,
         media: step.layer2_media
-      })
+      }),
+      demo: step.layer2_demo || false
     };
   } else if (panelType === 'glossary') {
     // Fetch from glossary data
@@ -1396,37 +1600,74 @@ function initializeScrollLock() {
   const narrativeColumn = document.querySelector('.narrative-column');
   if (!narrativeColumn) return;
 
-  let scrollTimeout;
+  // Create the dark backdrop element (PANEL FREEZE SYSTEM)
+  const backdrop = document.createElement('div');
+  backdrop.id = 'panel-backdrop';
+  backdrop.style.cssText = `
+    position: fixed;
+    inset: -50px;
+    background: rgba(0, 0, 0, 0.025);
+    z-index: 1040;
+    display: none;
+    pointer-events: none;
+  `;
+  document.body.appendChild(backdrop);
 
-  narrativeColumn.addEventListener('scroll', function() {
-    if (!isPanelOpen) return;
-
-    // Clear existing timeout
-    clearTimeout(scrollTimeout);
-
-    // Set timeout to close panels if scrolling continues
-    scrollTimeout = setTimeout(() => {
-      if (isPanelOpen) {
-        closeAllPanels();
+  // Click outside to close panels (PANEL FREEZE SYSTEM)
+  const storyContainer = document.querySelector('.story-container');
+  if (storyContainer) {
+    storyContainer.addEventListener('click', function(e) {
+      // Don't close if clicking on panel, panel triggers, or share button
+      if (isPanelOpen &&
+          !e.target.closest('.offcanvas') &&
+          !e.target.closest('[data-panel]') &&
+          !e.target.closest('.share-button')) {
+        closeTopPanel();
       }
-    }, 300); // Close after 300ms of scrolling
-  });
+    });
+  }
+
+  // Note: Auto-close on scroll was removed in v0.6.0 (Panel Freeze System).
+  // Panels are now truly modal - users must explicitly dismiss via X, Escape,
+  // Left arrow, or click outside.
 }
 
 /**
  * Activate scroll lock
  * Prevents step changes while panel is open
+ * Shows subtle dark backdrop behind panels
+ * Locks native scroll on background elements
  */
 function activateScrollLock() {
   scrollLockActive = true;
+  const backdrop = document.getElementById('panel-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'block';
+  }
+  // Lock native scroll on narrative column to prevent background scrolling
+  const narrativeColumn = document.querySelector('.narrative-column');
+  if (narrativeColumn) {
+    narrativeColumn.style.overflow = 'hidden';
+  }
 }
 
 /**
  * Deactivate scroll lock
  * Allows step changes when panel is closed
+ * Hides the dark backdrop
+ * Restores native scroll on background elements
  */
 function deactivateScrollLock() {
   scrollLockActive = false;
+  const backdrop = document.getElementById('panel-backdrop');
+  if (backdrop) {
+    backdrop.style.display = 'none';
+  }
+  // Restore native scroll on narrative column
+  const narrativeColumn = document.querySelector('.narrative-column');
+  if (narrativeColumn) {
+    narrativeColumn.style.overflow = '';
+  }
 }
 
 /**
@@ -1449,7 +1690,6 @@ function closeAllPanels() {
 // GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
 //
 // Helper functions for mobile story navigation coordination
-// See: telar-dev-notes/releases/0.4.0/mobile-story-transitions-research.md
 // ============================================================================
 
 /**
@@ -1501,7 +1741,7 @@ function preloadMobileViewers(currentIndex) {
     const y = parseFloat(step.dataset.y);
     const zoom = parseFloat(step.dataset.zoom);
 
-    console.log(`⏳ Mobile preloading step ${idx}: ${objectId}`);
+    console.log(`Mobile preloading step ${idx}: ${objectId}`);
     getOrCreateViewerCard(objectId, idx, x, y, zoom);
   }
 }
@@ -1510,7 +1750,6 @@ function preloadMobileViewers(currentIndex) {
 window.TelarStory = {
   viewerCards,
   currentViewerCard,
-  scroller,
   switchToObject,
   animateViewerToPosition,
   openPanel,

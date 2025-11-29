@@ -35,10 +35,17 @@
   window.telarLang = {
     goDeeper: "{{ lang.buttons.go_deeper }}",
     stepNumber: "{{ lang.story.step_number }}",
+    demoPanelBadge: "{{ lang.demo.panel_badge }}",
+    creditPrefix: "{{ lang.object.credit_prefix }}",
     embedBanner: {
       text: {{ lang.embed_banner.text | jsonify }},
       link: "{{ lang.embed_banner.link }}"
     }
+  };
+
+  // Expose config options to JavaScript
+  window.telarConfig = {
+    showObjectCredits: {{ site.story_interface.show_object_credits | default: false }}
   };
 
   // If Christmas Tree Mode is active, add 🎄 to all warning headings
@@ -90,13 +97,17 @@
         <!-- Intro Step - Full screen title card -->
         <div class="story-step story-intro" data-step="0" data-step-index="0">
           <div class="intro-content">
+            {% if page.demo %}
+            <p class="intro-demo-label">{{ lang.story.demo_label }}</p>
+            {% else %}
             <h1 class="intro-title">{{ page.story_number }}.</h1>
+            {% endif %}
             <h1 class="intro-title">{{ page.title }}</h1>
             {% if page.subtitle %}
             <h2 class="intro-subtitle">{{ page.subtitle }}</h2>
             {% endif %}
             {% if page.byline %}
-            <h3 class="intro-byline">{{ page.byline }}</h3>
+            <h3 class="intro-byline">{{ page.byline | markdownify | remove: '<p>' | remove: '</p>' }}</h3>
             {% endif %}
 
             {% if page.description %}
