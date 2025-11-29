@@ -184,6 +184,7 @@ errors:
     iiif_502: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 502). Error 502 significa \"Bad Gateway\": hay un problema en la infraestructura del servidor IIIF. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
     iiif_error_generic: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error {{ code }})"
     iiif_unreachable: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no respondió"
+    iiif_slow: "la URL del manifiesto IIIF que especificaste en tu CSV de configuración o en Google Sheets está respondiendo muy lento. Es posible que el servidor de imágenes esté experimentando alta carga o demoras de red. El manifiesto debería seguir funcionando cuando las personas visiten tu sitio."
     iiif_validation_failed: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación"
 
     # Etiquetas de error cortas (para listas de advertencia)
@@ -196,6 +197,7 @@ errors:
     short_502: "Error 502: problema de conectividad (intenta más tarde)"
     short_error_generic: "Error {{ code }}: no se pudo acceder"
     short_network_error: "Error de red: no se pudo alcanzar"
+    short_slow: "Respuesta lenta: el servidor podría estar experimentando demoras"
     short_validation_error: "Error de validación: no se pudo validar"
 
     # Errores de fuente de imagen

@@ -184,6 +184,7 @@ errors:
     iiif_502: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 502). Error 502 means \"Bad Gateway\": there's a problem with the IIIF server's infrastructure. This is not a problem with your configuration - the institution's server is having connectivity issues. Try rebuilding your site later to see if the issue has been resolved."
     iiif_error_generic: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {{ code }})"
     iiif_unreachable: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
+    iiif_slow: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet is slow to respond. The image server may be experiencing high load or network delays. The manifest should still work when viewers access your site."
     iiif_validation_failed: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
 
     # Short error labels (for warning lists)
@@ -196,6 +197,7 @@ errors:
     short_502: "Error 502: server connectivity issue (try again later)"
     short_error_generic: "Error {{ code }}: could not be accessed"
     short_network_error: "Network error: could not be reached"
+    short_slow: "Slow response: server may be experiencing delays"
     short_validation_error: "Validation error: could not be validated"
 
     # Image source errors

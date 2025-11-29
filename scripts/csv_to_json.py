@@ -1751,7 +1751,7 @@ def process_objects(df, christmas_tree=False):
                 req = urllib.request.Request(manifest_url)
                 req.add_header('User-Agent', 'Telar/0.4.0-beta (IIIF validator)')
 
-                with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
+                with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
                     content_type = response.headers.get('Content-Type', '')
 
                     # Check if response is JSON
@@ -1919,11 +1919,22 @@ def process_objects(df, christmas_tree=False):
                     print(f"  [WARN] {msg}")
                     warnings.append(msg)
             except urllib.error.URLError as e:
-                df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_unreachable')
-                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_network_error')
-                msg = f"IIIF manifest for object {object_id} could not be reached: {e.reason}"
-                print(f"  [WARN] {msg}")
-                warnings.append(msg)
+                # Check if we should skip this network error (unchanged manifest from previous build)
+                skip_network_error = False
+                if object_id in previous_objects:
+                    prev = previous_objects[object_id]
+                    # Skip if: same URL as before AND no warning in previous build
+                    if prev['manifest_url'] == manifest_url and not prev['had_warning']:
+                        skip_network_error = True
+                        print(f"  [INFO] Network timeout but manifest previously validated OK: {object_id} ({manifest_url})")
+
+                # Only process error if not skipping
+                if not skip_network_error:
+                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_slow')
+                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_slow')
+                    msg = f"IIIF manifest for object {object_id} slow to respond: {e.reason}"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
             except Exception as e:
                 df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_validation_failed')
                 df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_validation_error')
