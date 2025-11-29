@@ -2,6 +2,17 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.6.1-beta] - 2025-11-28
+
+### Added
+
+- **Bilingual README**: Framework README now includes both English and Spanish versions in a single file. Streamlined content removes duplication and directs users to comprehensive documentation at telar.org
+
+### Fixed
+
+- **EXIF orientation in thumbnails**: Fixed thumbnails displaying sideways/upside-down for smartphone photos with EXIF rotation metadata. The IIIF tile generator now correctly detects and applies all EXIF orientations (90°, 180°, 270°). Regenerate IIIF tiles to see correctly oriented thumbnails: `python3 scripts/generate_iiif.py`
+- **Migration script template pollution**: Fixed v0.5.0→v0.6.0 migration adding unwanted template files to existing sites. The migration now only adds templates (`your-story/`, `tu-historia/`, demo glossary) to new sites without custom content
+
 ## [0.6.0-beta] - 2025-11-28
 
 ### Added

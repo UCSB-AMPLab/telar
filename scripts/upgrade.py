@@ -32,10 +32,11 @@ from migrations.v040_to_v041 import Migration040to041
 from migrations.v041_to_v042 import Migration041to042
 from migrations.v043_to_v050 import Migration043to050
 from migrations.v050_to_v060 import Migration050to060
+from migrations.v060_to_v061 import Migration060to061
 
 
 # Latest version
-LATEST_VERSION = "0.6.0-beta"
+LATEST_VERSION = "0.6.1-beta"
 
 # All available migrations in order
 MIGRATIONS = [
@@ -49,6 +50,7 @@ MIGRATIONS = [
     Migration041to042,
     Migration043to050,
     Migration050to060,
+    Migration060to061,
 ]
 
 

@@ -1,6 +1,8 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.6.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-0.6.1--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+
+**[Versión en español abajo](#español)** | **[English version](#telar)**
 
 A minimal-computing framework for creating layered IIIF visual narratives for digital scholarship, public exhibitions, community storytelling, and classroom projects.
 
@@ -10,7 +12,7 @@ A minimal-computing framework for creating layered IIIF visual narratives for di
 
 ---
 
-> **⚠️ Beta Release - v0.6.0-beta**
+> **⚠️ Beta Release - v0.6.1-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[telar.org/docs](https://telar.org/docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/3-upgrading/) for instructions.
@@ -35,11 +37,9 @@ We gratefully acknowledge the support of the [Caribbean Digital Scholarship Coll
 
 ---
 
-## Quick Start (no installation required!)
+## Quick Start
 
 **For comprehensive step-by-step guides, see the [full documentation site](https://telar.org/docs).** This Quick Start provides the essential steps to get your site running—detailed workflows and advanced topics are covered in the docs.
-
-Get started with Telar in just a few steps. Telar narratives combine IIIF images with layered storytelling—each story unfolds through steps that show images alongside brief text, with optional panels for deeper exploration.
 
 ### Before You Begin
 
@@ -70,113 +70,18 @@ Plan your narrative structure before building. Sketch out your stories, identify
    - For Google Sheets: Add your sheet URLs to the `google_sheets` section
    - View your site at `https://[username].github.io/[repository]/`
 
-### Next Steps
-
-- **Detailed workflows**: See [GitHub Web Interface](https://telar.org/docs/2-workflows/1-github-web) or [Local Development](https://telar.org/docs/2-workflows/2-local-dev) guides
-- **Content structure**: Learn about [organizing your content](https://telar.org/docs/3-content-structure)
-- **IIIF integration**: Understand [how to work with IIIF images](https://telar.org/docs/4-iiif-integration)
-- **Customization**: Explore [themes and styling options](https://telar.org/docs/6-customization/)
-
 ---
 
-## Upgrading Telar
+## Documentation
 
-**Telar v0.3.4+ includes an automated upgrade system** for easy, safe updates to the latest version.
+For comprehensive guides and references, visit **[telar.org/docs](https://telar.org/docs)**:
 
-### For Sites Running v0.3.4 or Later
-
-Upgrading is fully automated:
-
-1. Go to your repository on GitHub → **Actions** tab
-2. Select **"Upgrade Telar"** workflow
-3. Click **Run workflow**
-4. Review the automatically created upgrade issue
-5. Click the link in the issue to create a pull request
-6. Review changes and merge
-
-The upgrade system detects your current version, applies all necessary migrations, and creates a detailed summary with any manual steps you need to complete.
-
-### For Sites Running v0.2.0 through v0.3.3
-
-First-time setup required (one-time only):
-
-1. Add the upgrade workflow file and updated build workflow from the Telar repository
-2. Run your first automated upgrade
-3. All future upgrades will be automated
-
-**For complete upgrade instructions**, including detailed setup steps, troubleshooting, and version history, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/upgrading/) in the documentation.
-
----
-
-## Local Development
-
-For developers who want to run Telar locally:
-
-**Prerequisites:** Ruby 3.0+, Bundler, Python 3.9+
-
-**Quick setup:**
-```bash
-bundle install
-pip install -r requirements.txt
-bundle exec jekyll serve
-```
-
-For detailed local development instructions, see the [Local Development Guide](https://telar.org/docs/2-workflows/2-local-dev) in the documentation.
-
-## Content Structure
-
-Telar uses a components-based architecture:
-- `components/structures/` - CSV files (or Google Sheets) with site and story data
-- `components/images/` - Source images for IIIF processing
-- `components/texts/stories/` - Markdown files for narrative content
-- `components/texts/glossary/` - Glossary term definitions
-
-For detailed information about organizing your content, see the [Content Structure Guide](https://telar.org/docs/3-content-structure) in the documentation.
-
-## IIIF Integration
-
-Telar supports both local images (auto-generated IIIF tiles) and external IIIF resources from museums and libraries. Upload images to `components/images/` or reference external IIIF manifests in your object metadata.
-
-For complete details on working with IIIF images, see the [IIIF Integration Guide](https://telar.org/docs/4-iiif-integration).
-
-## Configuration
-
-Configure your site in `_config.yml` (site title, theme, Google Sheets URLs, etc.). Telar includes 4 preset themes: Paisajes, Neogranadina, Santa Barbara, and Austin.
-
-For all configuration options, see the [Configuration Guide](https://telar.org/docs/5-configuration).
-
-## Deployment
-
-The build process is fully automated via GitHub Actions. Push changes to the main branch and GitHub Pages automatically rebuilds and deploys your site. To manually trigger a rebuild (e.g., after editing Google Sheets), go to the Actions tab and run the "Build and Deploy" workflow.
-
-For details on the automated workflow, see the [GitHub Actions Reference](https://telar.org/docs/7-reference/1-github-actions).
-
-## Automated Upgrades
-
-Telar v0.3.4+ includes an automated upgrade workflow that migrates your site to the latest version.
-
-> **Note:** The automated upgrade workflow is available for sites running **v0.3.4 or later**. If you're upgrading from an earlier version (v0.2.0-v0.3.3), you'll need to manually copy the upgrade workflow files to your repository first. See the [Upgrade Guide](https://telar.org/docs/workflows/upgrading) for detailed instructions.
-
-**To upgrade your site (v0.3.4+):**
-1. Go to your repository's **Actions** tab on GitHub
-2. Select the **"Upgrade Telar"** workflow
-3. Click **"Run workflow"**
-4. Review the automatically created pull request
-5. Merge the PR to complete the upgrade
-
-The upgrade system automatically:
-- Detects your current version
-- Applies necessary migrations
-- Updates framework files and configurations
-- Generates an upgrade summary with any manual steps
-
-For detailed instructions, see the [Upgrade Guide](https://telar.org/docs/workflows/upgrading).
-
-## Customization
-
-Telar includes 4 preset themes (Paisajes, Neogranadina, Santa Barbara, Austin) that can be switched via `_config.yml`. You can also create custom themes with your own colors and fonts.
-
-For theme customization and advanced styling, see the [Customization Guide](https://telar.org/docs/6-customization/).
+- **Workflows**: [GitHub Web Interface](https://telar.org/docs/2-workflows/1-github-web), [Local Development](https://telar.org/docs/2-workflows/2-local-dev), [Upgrading](https://telar.org/docs/2-workflows/3-upgrading/)
+- **Content Structure**: [Organizing your content](https://telar.org/docs/3-content-structure)
+- **IIIF Integration**: [Working with images](https://telar.org/docs/4-iiif-integration)
+- **Configuration**: [Site settings and themes](https://telar.org/docs/5-configuration)
+- **Customization**: [Themes and styling](https://telar.org/docs/6-customization)
+- **Reference**: [GitHub Actions](https://telar.org/docs/7-reference/1-github-actions), [CSV Schemas](https://telar.org/docs/7-reference/2-csv-schemas)
 
 ---
 
@@ -205,3 +110,119 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 - **Documentation:** [telar.org/docs](https://telar.org/docs)
 - **Report Issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
 - **Example Site:** [ampl.clair.ucsb.edu/telar](https://ampl.clair.ucsb.edu/telar)
+
+---
+---
+
+# Español
+
+![Versión](https://img.shields.io/badge/versi%C3%B3n-0.6.1--beta-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
+
+**[Versión en español](#español)** | **[English version above](#telar)**
+
+Un marco de computación mínima para crear narrativas visuales con capas de texto e imágenes IIIF para humanidades digitales, exposiciones públicas y contextos educativos y comunitarios.
+
+---
+
+**[Documentación completa](https://telar.org/guia)** | **[Sitio de ejemplo](https://ampl.clair.ucsb.edu/telar)** | **[Reportar problemas](https://github.com/UCSB-AMPLab/telar/issues)**
+
+---
+
+> **⚠️ Versión Beta - v0.6.1-beta**
+> Esta es una versión beta para pruebas y retroalimentación. Para documentación detallada, visita **[telar.org/guia](https://telar.org/guia)**.
+
+> **Advertencia:** Si estás actualizando desde v0.3.4 o anterior, consulta la [Guía de Actualización de Telar](https://telar.org/guia/flujos-de-trabajo/actualizacion/) para obtener instrucciones.
+
+## Descripción general
+
+Telar es un generador de sitios estáticos construido sobre Jekyll que entreteje imágenes IIIF, texto narrativo e información contextual en capas en exhibiciones narrativas visuales interactivas. Sigue los principios de computación mínima: autoría en texto plano, generación estática y alojamiento sostenible.
+
+Telar es desarrollado por Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, y estudiantes e investigadores en el [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), el UT Archives, Mapping, and Preservation Lab, y [Neogranadina](https://neogranadina.org).
+
+Agradecemos el apoyo del [Caribbean Digital Scholarship Collective](https://cdscollective.org), el [Center for Innovative Teaching, Research, and Learning (CITRAL)](https://citral.ucsb.edu/home) de la University of California, Santa Barbara, la [UCSB Library](https://library.ucsb.edu), el [Routes of Enslavement in the Americas University of California MRPI](https://www.humanities.uci.edu/routes-enslavement-americas), y el [Department of History of The University of Texas at Austin](https://liberalarts.utexas.edu/history/).
+
+## Características principales
+
+- **Integración IIIF**: Soporte para imágenes locales con teselas (*tiles*) generadas automáticamente y recursos IIIF externos con extracción automática de metadatos
+- **Scrollytelling**: Desplazamiento basado en pasos discretos con soporte para múltiples objetos IIIF en una sola historia - cada objeto precargado en su propia tarjeta de visualización
+- **Widgets interactivos**: Componentes de carrusel, pestañas y acordeón para presentar contenido de forma más rica
+- **Paneles en capas**: Despliegue progresivo con tres capas de contenido más enlace automático del glosario
+- **Interfaz multilingüe**: Soporte completo de interfaz para inglés y español
+- **Galería de objetos**: Cuadrícula navegable de objetos con páginas de detalle
+- **Computación mínima**: Texto plano, generación estática, alojamiento en GitHub Pages
+
+---
+
+## Inicio rápido
+
+**Para guías paso a paso completas, consulta el [sitio de documentación completo](https://telar.org/guia).** Este inicio rápido proporciona los pasos esenciales para poner en marcha tu sitio—los flujos de trabajo detallados y temas avanzados están cubiertos en la documentación.
+
+### Antes de comenzar
+
+Planifica tu estructura narrativa antes de construir. Esboza tus historias, identifica momentos clave, elige imágenes ancla y decide qué información pertenece a respuestas breves versus capas más profundas. Explora el [sitio de ejemplo](https://ampl.clair.ucsb.edu/telar) para inspirarte.
+
+### Pasos de configuración
+
+1. **Crea tu repositorio**
+   - Haz clic en el botón verde **Use this template** arriba
+   - Nombra tu repositorio y créalo
+
+2. **Elige tu enfoque de gestión de contenido**
+   - **Google Sheets** (recomendado): Usa [nuestra plantilla](https://bit.ly/telar-template) para gestionar contenido vía hoja de cálculo
+   - **Archivos CSV**: Edita archivos CSV directamente en tu repositorio
+
+3. **Añade tu contenido**
+   - Sube imágenes a `components/images/` o usa manifiestos IIIF de instituciones
+   - Crea archivos markdown en `components/texts/stories/` para tu texto narrativo
+   - Configura tus objetos e historias en Google Sheets o archivos CSV
+
+4. **Habilita GitHub Pages**
+   - Ve a **Settings** → **Pages** del repositorio
+   - Establece la fuente como **GitHub Actions**
+   - Guarda y espera 2-5 minutos para el despliegue
+
+5. **Configura y personaliza**
+   - Edita `_config.yml` para establecer el título y tema de tu sitio
+   - Para Google Sheets: Añade las URLs de tus hojas a la sección `google_sheets`
+   - Visualiza tu sitio en `https://[usuario].github.io/[repositorio]/`
+
+---
+
+## Documentación
+
+Para guías y referencias completas, visita **[telar.org/guia](https://telar.org/guia)**:
+
+- **Flujos de trabajo**: [Interfaz web de GitHub](https://telar.org/guia/flujos-de-trabajo/interfaz-web-github/), [Desarrollo local](https://telar.org/guia/flujos-de-trabajo/desarrollo-local/), [Actualizar](https://telar.org/guia/flujos-de-trabajo/actualizacion/)
+- **Estructura de contenido**: [Organizar tu contenido](https://telar.org/guia/estructura-de-contenido/)
+- **Integración IIIF**: [Trabajar con imágenes](https://telar.org/guia/integracion-iiif/)
+- **Configuración**: [Ajustes del sitio y temas](https://telar.org/guia/configuracion/)
+- **Personalización**: [Temas y estilos](https://telar.org/guia/personalizacion/)
+- **Referencia**: [GitHub Actions](https://telar.org/guia/referencia/github-actions/), [Esquemas CSV](https://telar.org/guia/referencia/esquemas-csv/)
+
+---
+
+## Licencia
+
+Licencia MIT - consulta el archivo [LICENSE](LICENSE) para más detalles.
+
+**Nota:** Esta licencia cubre el código del marco Telar y la documentación. NO cubre el contenido creado por usuarios (historias, imágenes, metadatos de objetos, texto narrativo) que permanece como propiedad de los creadores de contenido y puede tener licencias separadas.
+
+## Créditos
+
+Telar es desarrollado por Adelaida Ávila, Juan Cobo Betancourt, Santiago Muñoz, y estudiantes e investigadores en el [UCSB Archives, Memory, and Preservation Lab](https://ampl.clair.ucsb.edu), el UT Archives, Mapping, and Preservation Lab, y [Neogranadina](https://neogranadina.org).
+
+Telar está construido con:
+- [Jekyll](https://jekyllrb.com/) - Generador de sitios estáticos
+- [UniversalViewer](https://universalviewer.io/) - Visor IIIF
+- [Bootstrap 5](https://getbootstrap.com/) - Marco CSS
+- [iiif-static](https://github.com/bodleian/iiif-static-choices) - Generador de teselas IIIF
+
+Está basado en [Paisajes Coloniales](https://paisajescoloniales.com/), e inspirado por:
+- [Wax](https://minicomp.github.io/wax/) - Computación mínima para exhibiciones digitales
+- [CollectionBuilder](https://collectionbuilder.github.io/) - Colecciones digitales estáticas
+
+## Soporte
+
+- **Documentación:** [telar.org/guia](https://telar.org/guia)
+- **Reportar problemas:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
+- **Sitio de ejemplo:** [ampl.clair.ucsb.edu/telar](https://ampl.clair.ucsb.edu/telar)
