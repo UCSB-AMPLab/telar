@@ -2,6 +2,102 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.6.0-beta] - 2025-11-28
+
+### Added
+
+#### External Demo Content System
+- **Demo content fetching**: New `include_demo_content` configuration option in `_config.yml` allows sites to optionally fetch versioned, multilingual demo content from content.telar.org
+- **Automatic demo integration**: Demo stories and glossary entries are automatically merged with your content during the build process
+- **Smart cleanup**: Template now ships without bundled demo content - fetch only when needed
+- **Bilingual demos**: Demo content adapts to your site language (English or Spanish)
+- **Version matching**: Fetches highest compatible demo version for your site
+
+#### Custom Pages System
+- **User-editable pages**: Create custom pages in `components/texts/pages/` directory (about, contact, etc.)
+- **Configurable navigation menu**: Edit menu items via `_data/navigation.yml` with bilingual support
+- **Full Telar features**: Widgets and glossary links work on custom pages
+- **Responsive layout**: New `user-page.html` layout provides centered, mobile-friendly content
+
+#### New Telar Website and Documentation
+- **New home: telar.org**: Unified website with landing page, documentation, and demo content hosting
+- **Comprehensive documentation**: Complete documentation site at telar.org/docs (English) and telar.org/guia (Spanish)
+- **Version callouts**: Documentation clearly indicates which features require v0.6.0+
+- **Improved structure**: Documentation reorganized with dedicated developer section (Section 8)
+- **Backwards-compatible redirects**: Old ampl.clair.ucsb.edu/telar-docs URLs redirect to telar.org/docs
+
+#### Story ID Support (Quality of Life)
+- **Semantic story names**: Optional `story_id` column in `project.csv` enables custom story identifiers like "your-story" or "colonial-maps"
+- **Better organization**: Story filenames and tab names match your chosen identifiers exactly
+- **Fully backward compatible**: Falls back to numbered stories (`story-1`, `story-2`) when `story_id` not provided
+- **Automatic discovery**: Scripts process all story CSVs automatically
+
+#### Bilingual CSV Support (Quality of Life)
+- **Spanish column headers**: Use Spanish headers in your CSVs (`paso`, `objeto`, `pregunta`, `respuesta`, etc.)
+- **Dual header rows**: Support for bilingual header rows with automatic detection
+- **Spanish filenames**: Support for Spanish CSV filenames (`proyecto.csv`, `objetos.csv`) with fallback to English
+- **Spanish Google Sheets tabs**: Automatically detects Spanish tab names in Google Sheets
+- **Fully backward compatible**: English-only CSVs work exactly as before
+
+#### Object Credits Badge
+- **Visible attribution**: New dismissable badge displays object credits in bottom-left corner of viewer
+- **Configurable**: Enable/disable via `show_object_credits` in `_config.yml`
+- **Bilingual**: Supports English "Credit:" and Spanish "Crédito:" prefixes
+- **Respectful design**: Matches step number badge styling with subtle transparency
+
+### Fixed
+
+#### Panel Freeze System (Major UX Improvement)
+- **Fixed: Scrolling within panels no longer triggers story navigation** - panels now have proper scroll isolation
+- **Fixed: Viewer column scroll interference** - Universal Viewer zoom/pan now works without triggering step changes
+- **Improved keyboard navigation**: ↑/↓ for steps, ←/→ for panels, Escape to close
+- **Click outside to close**: Panels close when clicking on darkened backdrop
+- **Better visual feedback**: Subtle dark backdrop extends beyond viewport during panel focus
+- Based on initial implementation by Sanjana Bhupathi
+
+#### Objects Page Ordering
+- **Fixed: Demo objects now appear after user objects** - prevents demo content from cluttering the top of the objects index page
+
+#### CSV Comment Line Handling
+- **Fixed: Quoted comment lines now properly filtered** - handles Google Sheets CSV export format where cells containing commas are quoted
+
+### Changed
+
+#### Generated Files Architecture
+- **Gitignore improvements**: Generated files (`_data/*.json`, `_jekyll-files/`) now ignored by git
+- **Single source of truth**: Only source files (CSVs, markdown) tracked in version control
+- **Cleaner git history**: Build-generated content no longer pollutes commit history
+- **Migration handles cleanup**: Upgrade script removes generated files from git index automatically
+
+#### Site Logo Feature Improvements
+- **Better sizing**: Logo limited to max-height 80px with responsive styling
+- **Cleaner homepage**: Logo removed from index page (header only)
+- **Documentation**: Updated config comment with recommended dimensions (300x120px)
+
+#### Byline Markdown Support
+- **Rich text in bylines**: Project bylines now support markdown formatting (links, emphasis, etc.)
+- **Enabled via markdownify filter** in story.html layout
+
+### Developer Improvements
+
+#### Tab Widget Styling
+- **Rounded corners**: Tab buttons have rounded top corners (0.5rem)
+- **Transparent background**: Only tab buttons visible, cleaner appearance
+- **Visual hierarchy**: Inactive tabs dimmed (opacity 0.7), active tabs full opacity
+- **Color consistency**: Matches accordion pattern with appropriate layer colors
+
+#### Multilingual UI Infrastructure
+- **Language data expansion**: New language strings for credits, updated navigation
+- **Improved fallbacks**: Bilingual navigation with graceful degradation
+
+---
+
+**Migration from v0.5.0-beta:**
+- Fully automated via `python3 scripts/upgrade.py`
+- Zero manual steps for GitHub Pages users (automatic rebuild)
+- Local developers: Regenerate data files and test build
+- Demo content cleanup uses CSV-smart detection to preserve user-modified content
+
 ## [0.5.0-beta] - 2025-11-17
 
 ### Added

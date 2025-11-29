@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-0.6.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 A minimal-computing framework for creating layered IIIF visual narratives for digital scholarship, public exhibitions, community storytelling, and classroom projects.
 
@@ -10,7 +10,7 @@ A minimal-computing framework for creating layered IIIF visual narratives for di
 
 ---
 
-> **⚠️ Beta Release - v0.5.0-beta**
+> **⚠️ Beta Release - v0.6.0-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[telar.org/docs](https://telar.org/docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/3-upgrading/) for instructions.
