@@ -62,6 +62,12 @@ class Migration060to061(BaseMigration):
 
             # Migration script - Fix template pollution for existing sites
             'scripts/migrations/v050_to_v060.py': 'v0.5.0→v0.6.0 migration script (template pollution fix)',
+
+            # README - Bilingual version with streamlined content
+            'README.md': 'README (bilingual version)',
+
+            # CHANGELOG - v0.6.1 release notes
+            'CHANGELOG.md': 'CHANGELOG (v0.6.1 release notes)',
         }
 
         for file_path, description in framework_files.items():
