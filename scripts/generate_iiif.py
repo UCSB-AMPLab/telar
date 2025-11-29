@@ -5,7 +5,7 @@ Generate IIIF tiles and manifests from source images
 Uses iiif library (Python) to generate static IIIF Level 0 tiles.
 Alternative to Bodleian tool, simpler for basic use cases.
 
-Version: v0.5.0-beta
+Version: v0.6.1-beta
 """
 
 import os
@@ -123,10 +123,14 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
             needs_conversion = True
 
         # Check if we need to convert to JPEG (for non-JPEG formats)
+        # OR if EXIF transpose was applied (need to save the transposed image)
         file_ext = image_path.suffix.lower()
-        if needs_conversion or file_ext not in ['.jpg', '.jpeg']:
+        exif_was_applied = (img != img_before_exif)
+        if exif_was_applied or needs_conversion or file_ext not in ['.jpg', '.jpeg']:
             # Show format-specific message
-            if file_ext in ['.heic', '.heif']:
+            if exif_was_applied and file_ext in ['.jpg', '.jpeg'] and not needs_conversion:
+                print(f"  💾 Saving rotated image for IIIF processing")
+            elif file_ext in ['.heic', '.heif']:
                 print(f"  ⚠️  Converting HEIC to JPEG for IIIF processing")
             elif file_ext == '.webp':
                 print(f"  ⚠️  Converting WebP to JPEG for IIIF processing")
