@@ -1919,22 +1919,11 @@ def process_objects(df, christmas_tree=False):
                     print(f"  [WARN] {msg}")
                     warnings.append(msg)
             except urllib.error.URLError as e:
-                # Check if we should skip this network error (unchanged manifest from previous build)
-                skip_network_error = False
-                if object_id in previous_objects:
-                    prev = previous_objects[object_id]
-                    # Skip if: same URL as before AND no warning in previous build
-                    if prev['manifest_url'] == manifest_url and not prev['had_warning']:
-                        skip_network_error = True
-                        print(f"  [INFO] Network timeout but manifest previously validated OK: {object_id} ({manifest_url})")
-
-                # Only process error if not skipping
-                if not skip_network_error:
-                    df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_slow')
-                    df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_slow')
-                    msg = f"IIIF manifest for object {object_id} slow to respond: {e.reason}"
-                    print(f"  [WARN] {msg}")
-                    warnings.append(msg)
+                # Network timeout - log for debugging but don't show user-facing warning
+                # These are typically transient issues with slow institutional servers
+                msg = f"IIIF manifest for object {object_id} slow to respond: {e.reason}"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
             except Exception as e:
                 df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_validation_failed')
                 df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_validation_error')
