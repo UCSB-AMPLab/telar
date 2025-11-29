@@ -9,12 +9,18 @@ url: "https://ampl.clair.ucsb.edu"
 author: ""
 email: ""
 telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
-logo: "" # Path to logo image (optional)
+logo: "" # Path to logo image (optional, max 80px tall, 200-300px wide recommended)
 telar_language: "en" # Options: "en" (English), "es" (Español)
+
+# Story Interface Settings
+story_interface:
+  show_story_steps: true # Set to false to hide "Step X" overlay in stories
+  show_object_credits: true # Set to true to display object credits badge (bottom-left corner, dismissable)
+  include_demo_content: true # Fetch demo stories from content.telar.org. Switch this off to hide demo stories and their content.
 
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.
-# See https://ampl.clair.ucsb.edu/telar-docs/docs/workflows/google-sheets/ for detailed setup instructions.
+# See https://telar.org/docs/workflows/google-sheets/ for detailed setup instructions.
 #
 # Setup:
 # 1. Get the template: Duplicate our template at https://bit.ly/telar-template
@@ -29,11 +35,6 @@ google_sheets:
   enabled: true
   shared_url: "https://docs.google.com/spreadsheets/d/18dJWy9wkLD7Muokigg4wp85c3Vsjuphdrn0g51pwkGY/edit"
   published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9eeRoyQCr1j-1uDaWBm-rgZNXtn9A-mepL0I4dqDTx2-E_6gbVD-8x0DYDVhppiAzrFpd20_9cr3z/pubhtml"
-
-# Story Interface Settings
-story_interface:
-  show_story_steps: true # Set to false to hide "Step X" overlay in stories
-  include_demo_content: false # v0.5.0 feature - demo stories from external repository
 
 
 #
@@ -55,6 +56,9 @@ collections:
   glossary:
     output: true
     permalink: /glossary/:name/
+  pages:
+    output: true
+    permalink: /:name/
 
 # Collections Directory (a folder where Jekyll and the Telar scripts will put all auto-generated object and story working files)
 collections_dir: _jekyll-files
@@ -89,6 +93,11 @@ defaults:
       type: "glossary"
     values:
       layout: "glossary"
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "user-page"
 
 # Tell Jekyll not to expect dates for these collections
 future: true
@@ -96,8 +105,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "0.5.0-beta"
-  release_date: "2025-11-17"
+  version: "0.6.0-beta"
+  release_date: "2025-11-28"
 
 # Plugins
 plugins:

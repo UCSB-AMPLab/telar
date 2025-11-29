@@ -1,6 +1,6 @@
 # PDFs Directory
 
-**Status:** 🚧 Coming in v0.6.0
+**Status:** 🚧 Coming in v0.7.0
 
 This directory is reserved for multi-page PDF documents that will be displayed using IIIF Presentation API 3.0.
 
@@ -14,4 +14,4 @@ This directory is reserved for multi-page PDF documents that will be displayed u
 ## Questions?
 
 - **Report issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
-- **Documentation:** [https://ampl.clair.ucsb.edu/telar-docs](https://ampl.clair.ucsb.edu/telar-docs)
+- **Documentation:** [https://telar.org/docs](https://telar.org/docs)

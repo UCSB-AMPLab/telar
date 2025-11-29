@@ -39,6 +39,9 @@ object:
     iiif_manifest: "Manifiesto IIIF"
     appears_in_stories: "Aparece en historias"
 
+  # Insignia de créditos (superposición del visor)
+  credit_prefix: "Crédito:"
+
   # Herramienta de identificación de coordenadas
   coordinates:
     heading: "Instrucciones"
@@ -58,8 +61,14 @@ object:
   # Miniaturas de objetos
   no_image: "Sin imagen"
 
+# Etiquetas de contenido de demostración
+demo:
+  badge: "DEMO"
+  panel_badge: "Contenido de demostración"
+
 # Interfaz de historia
 story:
+  demo_label: "Contenido de demostración"
   step_number: "Paso {{ number }}"
   scroll_hint: "Presiona ↓ o desplázate para empezar"
   scroll_hint_mobile: "Utiliza los botones de las flechas para desplazarte"

@@ -17,7 +17,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize glossary back button
   initializeGlossaryBackButton();
+
+  // Initialize click-outside-to-close for glossary panels (works on all pages)
+  initializeClickOutsideClose();
 });
+
+/**
+ * Initialize click-outside-to-close behavior for glossary panels
+ * Works on all pages including glossary index, user pages, etc.
+ */
+function initializeClickOutsideClose() {
+  document.addEventListener('click', function(e) {
+    const glossaryPanel = document.getElementById('panel-glossary');
+    if (!glossaryPanel) return;
+
+    // Check if glossary panel is open
+    if (!glossaryPanel.classList.contains('show')) return;
+
+    // Don't close if clicking inside any panel
+    if (e.target.closest('.offcanvas')) return;
+
+    // Don't close if clicking on glossary links or triggers
+    if (e.target.closest('.glossary-term-link')) return;
+    if (e.target.closest('.glossary-inline-link')) return;
+    if (e.target.closest('[data-panel]')) return;
+
+    // Close the glossary panel
+    const bsOffcanvas = bootstrap.Offcanvas.getInstance(glossaryPanel);
+    if (bsOffcanvas) {
+      bsOffcanvas.hide();
+    }
+  });
+}
 
 /**
  * Initialize panel trigger buttons
@@ -104,22 +135,27 @@ function handleGlossaryLinkClick(e) {
   e.preventDefault();
   const termId = this.dataset.termId;
   const termTitle = this.textContent.trim();
+  const isDemo = this.dataset.demo === 'true';
 
-  // Construct URL with basePath (same logic as buildLocalInfoJsonUrl)
-  const pathParts = window.location.pathname.split('/').filter(p => p);
-  let basePath = '';
-  if (pathParts.length >= 2) {
-    basePath = '/' + pathParts.slice(0, -2).join('/');
+  // Use the pre-computed URL from the data attribute if available
+  let termUrl = this.dataset.termUrl;
+  if (!termUrl) {
+    // Fallback: construct URL (for inline links that may not have data-term-url)
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+    let basePath = '';
+    if (pathParts.length >= 2) {
+      basePath = '/' + pathParts.slice(0, -2).join('/');
+    }
+    termUrl = basePath + '/glossary/' + termId + '/';
   }
-  const termUrl = basePath + '/glossary/' + termId + '/';
 
-  openGlossaryPanel(termUrl, termTitle);
+  openGlossaryPanel(termUrl, termTitle, isDemo);
 }
 
 /**
  * Fetch glossary term content and open in panel
  */
-function openGlossaryPanel(termUrl, termTitle) {
+function openGlossaryPanel(termUrl, termTitle, isDemo = false) {
   const panel = document.getElementById('panel-glossary');
   const titleElement = document.getElementById('panel-glossary-title');
   const contentElement = document.getElementById('panel-glossary-content');
@@ -139,22 +175,25 @@ function openGlossaryPanel(termUrl, termTitle) {
       panel.removeEventListener('hidden.bs.offcanvas', onHidden);
 
       // Now open with new content
-      loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas);
+      loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas, isDemo);
     }, { once: true });
 
     bsOffcanvas.hide();
   } else {
     // Panel is closed - just open it
-    loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas);
+    loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas, isDemo);
   }
 }
 
 /**
  * Load glossary term content and show panel
  */
-function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas) {
+function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas, isDemo = false) {
   // Set temporary title from link text (will be replaced with actual title from page)
-  titleElement.textContent = termTitle;
+  // Add demo badge if this is demo content
+  const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
+  const demoBadge = isDemo ? `<span class="demo-badge-inline" style="margin-left: 0.5rem;">${demoBadgeText}</span>` : '';
+  titleElement.innerHTML = termTitle + demoBadge;
 
   // Show loading state
   contentElement.innerHTML = '<p class="text-muted">Loading...</p>';
@@ -173,10 +212,10 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
 
-      // Extract the actual title from the page's h1 tag
+      // Extract the actual title from the page's h1 tag (includes demo badge if present)
       const pageTitle = doc.querySelector('h1');
       if (pageTitle) {
-        titleElement.textContent = pageTitle.textContent.trim();
+        titleElement.innerHTML = pageTitle.innerHTML;
       }
 
       const glossaryContent = doc.querySelector('.glossary-content');

@@ -2,6 +2,12 @@
 layout: default
 ---
 
+{% if site.telar_language and site.data.languages[site.telar_language] %}
+  {% assign lang = site.data.languages[site.telar_language] %}
+{% else %}
+  {% assign lang = site.data.languages['en'] %}
+{% endif %}
+
 <div class="container my-5">
   <div class="row">
     <div class="col-12">
@@ -68,8 +74,15 @@ layout: default
   {% endif %}
 
   <div class="collection-grid">
-    {% for object in site.objects %}
-    <a href="{{ object.url | relative_url }}" class="collection-item">
+    {% comment %}Sort objects: non-demo first, then demo, alphabetically within each group{% endcomment %}
+    {% assign non_demo_objects = site.objects | where_exp: "obj", "obj.demo != true" | sort: "title" %}
+    {% assign demo_objects = site.objects | where_exp: "obj", "obj.demo == true" | sort: "title" %}
+    {% assign sorted_objects = non_demo_objects | concat: demo_objects %}
+    {% for object in sorted_objects %}
+    <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}">
+      {% if object.demo %}
+      <span class="demo-badge">{{ lang.demo.badge }}</span>
+      {% endif %}
       <div class="collection-item-image" {% if object.iiif_manifest and object.iiif_manifest != "" %}data-iiif-manifest="{{ object.iiif_manifest }}"{% endif %}>
         {% if object.thumbnail and object.thumbnail != "" %}
         {%- comment -%}Use explicit thumbnail if provided{%- endcomment -%}

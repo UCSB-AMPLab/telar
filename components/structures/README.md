@@ -13,7 +13,9 @@ These CSV files are **source data** that define your site structure. If you're n
 
 - **project.csv** - Site-wide settings and configuration
 - **objects.csv** - Catalog of IIIF objects (maps, documents, artifacts)
-- **story-N.csv** / **chapter-N.csv** - Story structure data with step-by-step navigation - replace "N" with the appropriate number.
+- **story CSVs** - Story structure data with step-by-step navigation
+  - Traditional format: `story-1.csv`, `story-2.csv`, etc.
+  - Semantic format (v0.6.0+): `your-story.csv`, `chapter-1.csv`, etc. (must match `story_id` in project.csv)
 
 ## Workflow
 
