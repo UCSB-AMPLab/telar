@@ -165,10 +165,11 @@ class Migration050to060(BaseMigration):
         Update _config.yml structure for v0.6.0.
 
         Changes:
-        1. Move story_interface section ABOVE "DO NOT EDIT" line
-        2. Add include_demo_content: false to story_interface
-        3. Add pages collection
-        4. Add pages defaults
+        1. Move story_interface section ABOVE Google Sheets/DO NOT EDIT line
+        2. Add show_object_credits flag to story_interface
+        3. Intelligently set include_demo_content based on user's demo usage
+        4. Update Google Sheets comment block URL to telar.org
+        5. Update logo comment to include recommended dimensions
 
         Uses text-based editing to preserve formatting and comments.
 
@@ -184,41 +185,157 @@ class Migration050to060(BaseMigration):
             return changes
 
         lines = content.split('\n')
-        modified = False
 
-        # TODO: Complex config restructuring - will implement in next iteration
-        # For now, just add the include_demo_content setting if missing
-
-        # Find story_interface section
-        in_story_interface = False
-        story_interface_start = -1
+        # Step 1: Find and extract existing story_interface settings
+        show_story_steps = True  # Default
+        old_story_interface_start = -1
+        old_story_interface_end = -1
 
         for i, line in enumerate(lines):
             if line.startswith('story_interface:'):
-                in_story_interface = True
-                story_interface_start = i
+                old_story_interface_start = i
+                # Find the header comment line before it (if any)
+                if i > 0 and lines[i-1].strip().startswith('#'):
+                    old_story_interface_start = i - 1
                 continue
 
-            if in_story_interface:
-                # Exit when we hit a non-indented line
-                if line and not line.startswith('  ') and not line.startswith('\t'):
-                    # Check if include_demo_content exists
-                    section_lines = lines[story_interface_start:i]
-                    if not any('include_demo_content' in l for l in section_lines):
-                        # Add it before the end of the section
-                        indent = '  '
-                        lines.insert(i, f'{indent}include_demo_content: false')
-                        modified = True
-                        changes.append("Added include_demo_content: false to story_interface")
+            if old_story_interface_start != -1 and old_story_interface_end == -1:
+                # Check if we've exited the story_interface section
+                if line and not line.startswith('  ') and not line.startswith('\t') and not line.startswith('#'):
+                    old_story_interface_end = i
+                    # Extract show_story_steps value
+                    section_lines = lines[old_story_interface_start:old_story_interface_end]
+                    for sl in section_lines:
+                        if 'show_story_steps' in sl:
+                            show_story_steps = 'false' not in sl.lower()
                     break
 
-        if modified:
-            self._write_file(config_path, '\n'.join(lines))
+        # Step 2: Determine include_demo_content value
+        should_enable_demos = self._should_enable_demo_content()
+        demo_value = "true" if should_enable_demos else "false"
 
-        # Note: Full config restructuring (moving sections, adding collections)
-        # will be added in next iteration. This is a minimal safe change.
+        # Step 3: Build new story_interface section
+        new_story_interface = [
+            '# Story Interface Settings',
+            'story_interface:',
+            f'  show_story_steps: {"true" if show_story_steps else "false"} # Set to false to hide "Step X" overlay in stories',
+            '  show_object_credits: true # Set to true to display object credits badge (bottom-left corner, dismissable)',
+            f'  include_demo_content: {demo_value} # Fetch demo stories from content.telar.org. Switch this off to hide demo stories and their content.',
+            ''
+        ]
+
+        # Step 4: Remove old story_interface section
+        if old_story_interface_start != -1:
+            del lines[old_story_interface_start:old_story_interface_end]
+            changes.append("Removed old story_interface section")
+
+        # Step 5: Find insertion point (before Google Sheets or DO NOT EDIT)
+        insert_index = -1
+        for i, line in enumerate(lines):
+            if 'google_sheets:' in line.lower() or 'DO NOT EDIT' in line:
+                insert_index = i
+                # Skip back over any comment lines
+                while insert_index > 0 and lines[insert_index-1].strip().startswith('#'):
+                    insert_index -= 1
+                break
+
+        if insert_index == -1:
+            changes.append("⚠️  Warning: Could not find insertion point for story_interface")
+            return changes
+
+        # Step 6: Insert new story_interface section
+        for j, new_line in enumerate(new_story_interface):
+            lines.insert(insert_index + j, new_line)
+
+        changes.append(f"Added story_interface section with include_demo_content: {demo_value}")
+        if demo_value == "true":
+            changes.append("  ℹ️  Enabled demo content (user had unmodified v0.5.0 demos + custom stories)")
+        else:
+            changes.append("  ℹ️  Demo content disabled (user has only demos or customized them)")
+
+        # Step 7: Update Google Sheets comment URL
+        for i, line in enumerate(lines):
+            if 'ampl.clair.ucsb.edu/telar-docs/docs/workflows/google-sheets/' in line:
+                lines[i] = line.replace(
+                    'ampl.clair.ucsb.edu/telar-docs/docs/workflows/google-sheets/',
+                    'telar.org/docs/workflows/google-sheets/'
+                )
+                changes.append("Updated Google Sheets docs URL to telar.org")
+                break
+
+        # Step 8: Update logo comment to include recommended dimensions
+        for i, line in enumerate(lines):
+            if 'logo:' in line and 'Path to logo image (optional)' in line:
+                if '200-300px wide recommended' not in line:
+                    lines[i] = 'logo: "" # Path to logo image (optional, max 80px tall, 200-300px wide recommended)'
+                    changes.append("Updated logo comment with recommended dimensions")
+                break
+
+        # Step 9: Write updated config
+        self._write_file(config_path, '\n'.join(lines))
 
         return changes
+
+    def _has_custom_stories(self) -> bool:
+        """
+        Check if user has any custom (non-demo) stories.
+
+        Returns:
+            bool: True if user has custom story CSVs beyond system/demo files
+        """
+        structures_dir = os.path.join(self.repo_root, 'components/structures')
+        if not os.path.exists(structures_dir):
+            return False
+
+        # System files and old demo files to exclude
+        system_csvs = {
+            'objects.csv', 'new-objects.csv', 'project.csv',
+            'objetos.csv', 'proyecto.csv',
+            'story-1.csv', 'story-2.csv'  # Old v0.5.0 demos
+        }
+
+        for filename in os.listdir(structures_dir):
+            if filename.endswith('.csv') and filename not in system_csvs:
+                return True  # Found a custom story
+
+        return False
+
+    def _should_enable_demo_content(self) -> bool:
+        """
+        Detect if user should use new v0.6.0 demo system.
+
+        Logic:
+        - If never had v0.5.0 demos: False
+        - If modified v0.5.0 demos: False (now user content)
+        - If only has demos (no custom stories): False (site would break)
+        - If has unmodified demos AND custom stories: True (enable new system)
+
+        Returns:
+            bool: True if include_demo_content should be set to true
+        """
+        # Check if v0.5.0 demo CSVs exist
+        old_demo_csvs = ['story-1.csv', 'story-2.csv']
+        has_old_demos = any(
+            self._file_exists(f'components/structures/{csv}')
+            for csv in old_demo_csvs
+        )
+
+        if not has_old_demos:
+            return False  # Never had demos
+
+        # Check if demos were modified
+        for csv in old_demo_csvs:
+            csv_path = f'components/structures/{csv}'
+            if self._file_exists(csv_path):
+                if self._is_file_modified(csv_path, compare_tag='v0.5.0-beta'):
+                    return False  # User customized demos = user content now
+
+        # Unmodified demos exist - but do they have other stories?
+        if not self._has_custom_stories():
+            return False  # Only has demos, can't remove them (site would break)
+
+        # Has unmodified demos AND has other stories → enable new demo system
+        return True
 
     def _get_referenced_files(self) -> set:
         """
@@ -682,28 +799,6 @@ class Migration050to060(BaseMigration):
             # Gitignore
             '.gitignore': 'Generated files gitignored',
 
-            # Template story content - English (your-story)
-            'components/texts/stories/your-story/about-coordinates.md': 'Coordinate system explanation',
-            'components/texts/stories/your-story/guiding-attention.md': 'Question/Answer/Invitation pattern',
-            'components/texts/stories/your-story/building-argument.md': 'Coordinate sequences as argument',
-            'components/texts/stories/your-story/visual-rhetoric.md': 'Visual contrast analysis',
-            'components/texts/stories/your-story/the-reveal.md': 'Full view synthesis',
-            'components/texts/stories/your-story/progressive-disclosure.md': 'Layer 2 panel explanation',
-            'components/texts/stories/your-story/ruler-place.md': 'Charles III marginalized position',
-            'components/texts/stories/your-story/multiple-images.md': 'IIIF vs self-hosted comparison',
-            'components/texts/stories/your-story/whats-next.md': 'Template overview',
-
-            # Template story content - Spanish (tu-historia)
-            'components/texts/stories/tu-historia/acerca-de-coordenadas.md': 'Sistema de coordenadas',
-            'components/texts/stories/tu-historia/guiar-atencion.md': 'Patrón Pregunta/Respuesta/Invitación',
-            'components/texts/stories/tu-historia/construir-argumento.md': 'Secuencias como argumento',
-            'components/texts/stories/tu-historia/retorica-visual.md': 'Análisis de contraste visual',
-            'components/texts/stories/tu-historia/la-revelacion.md': 'Síntesis de vista completa',
-            'components/texts/stories/tu-historia/divulgacion-progresiva.md': 'Explicación de capa 2',
-            'components/texts/stories/tu-historia/lugar-gobernante.md': 'Posición marginalizada',
-            'components/texts/stories/tu-historia/multiples-imagenes.md': 'Comparación IIIF vs autoalojadas',
-            'components/texts/stories/tu-historia/que-sigue.md': 'Resumen de plantilla',
-
             # Glossary entries - English
             'components/texts/glossary/story.md': 'Story glossary entry',
             'components/texts/glossary/step.md': 'Step glossary entry',
@@ -715,9 +810,6 @@ class Migration050to060(BaseMigration):
             'components/texts/glossary/paso.md': 'Paso glossary entry',
             'components/texts/glossary/visor.md': 'Visor glossary entry',
             'components/texts/glossary/panel-es.md': 'Panel-es glossary entry',
-
-            # Template images
-            'components/images/leviathan.jpg': 'Hobbes Leviathan frontispiece (self-hosted demo)',
 
             # Note: components/texts/pages/about.md is handled by _move_about_page()
             # Note: .github/workflows/*.yml files CANNOT be auto-updated (security restriction)
