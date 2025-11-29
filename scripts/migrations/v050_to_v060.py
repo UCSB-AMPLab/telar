@@ -263,6 +263,23 @@ class Migration050to060(BaseMigration):
                 changes.append("Updated Google Sheets docs URL to telar.org")
                 break
 
+        # Step 7b: Update Google Sheets comment format (remove Option A/Option B)
+        # Old format had:
+        #    - Option A: Duplicate our template at https://bit.ly/telar-template
+        #    - Option B: Import docs/google_sheets_integration/telar-template.xlsx to Google Sheets yourself
+        # New format just has:
+        # 1. Get the template: Duplicate our template at https://bit.ly/telar-template
+        for i, line in enumerate(lines):
+            if '# 1. Get the template:' in line:
+                # Check if next lines have Option A/Option B format
+                if i + 2 < len(lines) and '#    - Option A:' in lines[i + 1]:
+                    # Found old format - replace 3 lines with 1 line
+                    lines[i] = '# 1. Get the template: Duplicate our template at https://bit.ly/telar-template'
+                    # Delete the next 2 lines (Option A and Option B)
+                    del lines[i + 1:i + 3]
+                    changes.append("Updated Google Sheets comment format (removed Option A/B)")
+                break
+
         # Step 8: Update logo comment to include recommended dimensions
         for i, line in enumerate(lines):
             if 'logo:' in line and 'Path to logo image (optional)' in line:
