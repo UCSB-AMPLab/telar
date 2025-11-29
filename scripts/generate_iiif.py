@@ -98,6 +98,10 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
         elif img != img_before_exif:
             print(f"  ↻ Applied EXIF orientation correction")
 
+        # Check if image has EXIF orientation metadata (any value other than 1 = normal)
+        exif = img_before_exif.getexif()
+        has_exif_orientation = exif and 274 in exif and exif[274] != 1
+
         # Convert image to RGB if needed and create JPEG for IIIF processing
         needs_conversion = False
         converted_img = img
@@ -123,12 +127,11 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url):
             needs_conversion = True
 
         # Check if we need to convert to JPEG (for non-JPEG formats)
-        # OR if EXIF transpose was applied (need to save the transposed image)
+        # OR if EXIF orientation metadata present (need to save the transposed image)
         file_ext = image_path.suffix.lower()
-        exif_was_applied = (img != img_before_exif)
-        if exif_was_applied or needs_conversion or file_ext not in ['.jpg', '.jpeg']:
+        if has_exif_orientation or needs_conversion or file_ext not in ['.jpg', '.jpeg']:
             # Show format-specific message
-            if exif_was_applied and file_ext in ['.jpg', '.jpeg'] and not needs_conversion:
+            if has_exif_orientation and file_ext in ['.jpg', '.jpeg'] and not needs_conversion:
                 print(f"  💾 Saving rotated image for IIIF processing")
             elif file_ext in ['.heic', '.heif']:
                 print(f"  ⚠️  Converting HEIC to JPEG for IIIF processing")
