@@ -1233,18 +1233,23 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
           });
         }
 
-        // Activate viewer card (matches mobile - simple class changes only)
-        newViewerCard.element.classList.remove('card-below');
-        newViewerCard.element.classList.add('card-active');
-        newViewerCard.element.style.zIndex = newViewerCard.zIndex;
-      } else {
-        // Going backward - fade out current viewer, fade in previous
+        // Deactivate current viewer (fade out)
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
           currentViewerCard.element.classList.remove('card-active');
           currentViewerCard.element.classList.add('card-below');
         }
 
-        // Show previous viewer
+        // Activate new viewer card (fade in)
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
+        newViewerCard.element.style.zIndex = newViewerCard.zIndex;
+      } else {
+        // Going backward - same logic: fade out current, fade in previous
+        if (currentViewerCard && currentViewerCard !== newViewerCard) {
+          currentViewerCard.element.classList.remove('card-active');
+          currentViewerCard.element.classList.add('card-below');
+        }
+
         newViewerCard.element.classList.remove('card-below');
         newViewerCard.element.classList.add('card-active');
       }
@@ -1270,17 +1275,22 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
           });
         }
 
-        // Show viewer anyway to prevent black screen
-        newViewerCard.element.classList.remove('card-below');
-        newViewerCard.element.classList.add('card-active');
-      } else {
-        // Going backward - fade out current viewer, fade in previous
+        // Deactivate current viewer
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
           currentViewerCard.element.classList.remove('card-active');
           currentViewerCard.element.classList.add('card-below');
         }
 
-        // Show previous viewer
+        // Show viewer anyway to prevent black screen
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
+      } else {
+        // Going backward - same logic
+        if (currentViewerCard && currentViewerCard !== newViewerCard) {
+          currentViewerCard.element.classList.remove('card-active');
+          currentViewerCard.element.classList.add('card-below');
+        }
+
         newViewerCard.element.classList.remove('card-below');
         newViewerCard.element.classList.add('card-active');
       }
