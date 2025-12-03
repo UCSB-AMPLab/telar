@@ -372,12 +372,9 @@ function getOrCreateViewerCard(objectId, zIndex, x, y, zoom) {
     existing.element.style.zIndex = zIndex;
     existing.zIndex = zIndex;
 
-    // CRITICAL FIX: Reset card state in case it was left in card-below from previous navigation
-    // This ensures the card can properly transition when reactivated
+    // Reset card state in case it was left in card-below from previous navigation
     console.log(`Resetting viewer card state for ${objectId}`);
     existing.element.classList.remove('card-below');
-    existing.element.style.opacity = ''; // Clear any inline opacity
-    existing.element.style.transition = ''; // Clear any disabled transitions
 
     // For existing viewers, just snap to new position immediately
     if (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
@@ -1241,29 +1238,15 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
         newViewerCard.element.classList.add('card-active');
         newViewerCard.element.style.zIndex = newViewerCard.zIndex;
       } else {
-        // Going backward - instantly hide current viewer and move it away
+        // Going backward - fade out current viewer, fade in previous
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
-          // Instantly hide and move away
-          currentViewerCard.element.style.transition = 'none';
           currentViewerCard.element.classList.remove('card-active');
           currentViewerCard.element.classList.add('card-below');
-          currentViewerCard.element.style.opacity = '0';
-
-          // Re-enable transitions after moving
-          setTimeout(() => {
-            if (currentViewerCard) {
-              currentViewerCard.element.style.transition = '';
-              currentViewerCard.element.style.opacity = '';
-            }
-          }, 50);
         }
 
-        // Previous viewer should already be visible underneath
-        // Just ensure it has card-active
-        if (!newViewerCard.element.classList.contains('card-active')) {
-          newViewerCard.element.classList.remove('card-below');
-          newViewerCard.element.classList.add('card-active');
-        }
+        // Show previous viewer
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
       }
 
       // Update current viewer card reference
@@ -1291,28 +1274,15 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
         newViewerCard.element.classList.remove('card-below');
         newViewerCard.element.classList.add('card-active');
       } else {
-        // Going backward - instantly hide current viewer and move it away
+        // Going backward - fade out current viewer, fade in previous
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
-          // Instantly hide and move away
-          currentViewerCard.element.style.transition = 'none';
           currentViewerCard.element.classList.remove('card-active');
           currentViewerCard.element.classList.add('card-below');
-          currentViewerCard.element.style.opacity = '0';
-
-          // Re-enable transitions after moving
-          setTimeout(() => {
-            if (currentViewerCard) {
-              currentViewerCard.element.style.transition = '';
-              currentViewerCard.element.style.opacity = '';
-            }
-          }, 50);
         }
 
-        // Previous viewer should already be visible underneath
-        if (!newViewerCard.element.classList.contains('card-active')) {
-          newViewerCard.element.classList.remove('card-below');
-          newViewerCard.element.classList.add('card-active');
-        }
+        // Show previous viewer
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
       }
 
       currentViewerCard = newViewerCard;
