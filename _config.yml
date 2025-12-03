@@ -121,7 +121,18 @@ webrick:
 
 # Development & Testing
 # Set to false or remove for production use
-testing-features:
+development-features:
   # Christmas Tree Mode - Displays all warning messages for testing multilingual support
   # Set to true to light up the site with test warnings (test objects, fake errors, etc.)
   christmas_tree_mode: false
+
+  # Viewer preloading configuration
+  # Controls how story viewers are preloaded for smoother navigation.
+  # Higher values = smoother scrolling but more memory usage.
+  # Lower values = less memory but may show loading shimmer during navigation.
+  # These defaults work well for most sites. Only adjust if experiencing issues.
+  viewer_preloading:
+    max_viewer_cards: 10    # Max viewers in memory. Higher = smoother, more memory. (default: 10, max: 15)
+    preload_steps: 6        # Steps to preload ahead. Higher = smoother, more memory. (default: 6)
+    loading_threshold: 5    # Show shimmer on intro if story has >= N viewers. (default: 5)
+    min_ready_viewers: 3    # Hide shimmer when N viewers ready. (default: 3)

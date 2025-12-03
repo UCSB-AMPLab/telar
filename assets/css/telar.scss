@@ -260,48 +260,34 @@ a:hover {
   height: 100%;
 }
 
+/* ============================================================================
+   VIEWER CARD TRANSITIONS (v0.6.2)
+
+   Fade-only transitions for all viewports. Slide-up animation removed in v0.6.2
+   to reduce timing complexity and improve perceived performance.
+   Z-index handles card stacking; opacity handles visibility transitions.
+   ============================================================================ */
 .viewer-card {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+  /* Fade-only transition - no slide animation */
+  transition: opacity 300ms ease-out;
+  /* Cards always positioned at origin; z-index handles stacking */
+  transform: translateY(0);
 }
 
 .card-below {
-  transform: translateY(100%);
   opacity: 0;
+  /* Moved off-screen for z-index purposes (instant, no transition) */
+  transform: translateY(100%);
 }
 
 .card-active {
-  transform: translateY(0);
   opacity: 1;
-}
-
-/* ============================================================================
-   GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
-
-   Mobile viewer transitions: Remove slide animation, use fade only for faster
-   perceived performance. Desktop retains slide-up animation.
-   ============================================================================ */
-@media (max-width: 767px) {
-  .viewer-card {
-    /* Override desktop slide animation - fade only on mobile */
-    transition: opacity 300ms ease-out !important;
-    /* Always at 0 position, no slide */
-    transform: translateY(0) !important;
-  }
-
-  .viewer-card.card-active {
-    opacity: 1;
-  }
-
-  .viewer-card.card-below {
-    opacity: 0;
-    /* Still moved down for z-index purposes, but instantly (no animation) */
-    transform: translateY(100%) !important;
-  }
+  transform: translateY(0);
 }
 
 /* Skeleton loading shimmer - subtle loading indicator during viewer initialization */
