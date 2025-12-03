@@ -129,6 +129,11 @@ a:hover {
   margin-bottom: 1.5rem;
 }
 
+.page-content img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* User Page Widget Styling - styled as if inside panel-layer1 */
 /* Widgets span full column width (no max-width constraint) */
 
@@ -621,6 +626,16 @@ a:hover {
   max-width: 650px;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Increase h1 spacing in panels for better visual hierarchy */
+.offcanvas-body h1 {
+  margin-bottom: 1.5rem;
+}
+
+/* Indent adjacent paragraphs (when user forgets blank line between them) */
+.offcanvas-body p + p {
+  text-indent: 1.5em;
 }
 
 /* Layer 2 panel - narrower text for better proportions */

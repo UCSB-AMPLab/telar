@@ -222,6 +222,8 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
 
       if (glossaryContent) {
         contentElement.innerHTML = glossaryContent.innerHTML;
+        // Initialize glossary links within the loaded content (enables glossary-to-glossary linking)
+        initializeGlossaryLinks(contentElement);
       } else {
         throw new Error('Glossary content not found');
       }
