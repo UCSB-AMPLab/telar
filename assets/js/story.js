@@ -1228,8 +1228,7 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
       console.log(`Viewer ready, transitioning to ${objectId} (${direction})`);
 
       if (direction === 'forward') {
-        // Going forward - slide up both text and viewer
-        // Force a reflow to ensure initial state is rendered before animating
+        // Going forward - activate text step
         if (stepElement) {
           stepElement.offsetHeight; // Force reflow
           requestAnimationFrame(() => {
@@ -1237,18 +1236,10 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
           });
         }
 
-        // Slide up the viewer card with complete state reset
-        // This ensures reused cards are fully visible after backward→forward cycles
-        newViewerCard.element.style.transition = ''; // Clear any disabled transitions
-        newViewerCard.element.style.opacity = ''; // Clear any inline opacity from backward nav
+        // Activate viewer card (matches mobile - simple class changes only)
         newViewerCard.element.classList.remove('card-below');
         newViewerCard.element.classList.add('card-active');
-
-        // CRITICAL: Update z-index to ensure card appears on top
         newViewerCard.element.style.zIndex = newViewerCard.zIndex;
-
-        // Old viewer cards keep card-active class and stay at translateY(0)
-        // Z-index handles layering - newer cards appear on top
       } else {
         // Going backward - instantly hide current viewer and move it away
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
@@ -1296,11 +1287,9 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
           });
         }
 
-        // Slide up anyway to prevent black screen
+        // Show viewer anyway to prevent black screen
         newViewerCard.element.classList.remove('card-below');
         newViewerCard.element.classList.add('card-active');
-
-        // Old viewer cards keep card-active and stay at translateY(0)
       } else {
         // Going backward - instantly hide current viewer and move it away
         if (currentViewerCard && currentViewerCard !== newViewerCard) {

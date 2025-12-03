@@ -275,19 +275,16 @@ a:hover {
   height: 100%;
   /* Fade-only transition - no slide animation */
   transition: opacity 300ms ease-out;
-  /* Cards always positioned at origin; z-index handles stacking */
-  transform: translateY(0);
 }
 
 .card-below {
   opacity: 0;
-  /* Moved off-screen for z-index purposes (instant, no transition) */
-  transform: translateY(100%);
+  pointer-events: none;
 }
 
 .card-active {
   opacity: 1;
-  transform: translateY(0);
+  pointer-events: auto;
 }
 
 /* Skeleton loading shimmer - subtle loading indicator during viewer initialization */
