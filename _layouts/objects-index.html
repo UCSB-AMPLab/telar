@@ -119,6 +119,10 @@ layout: default
     {% endfor %}
   </div>
   {% else %}
+  {%- comment -%}Only show "no objects" message if collections aren't intentionally hidden{%- endcomment -%}
+  {% assign dev_features = site['development-features'] %}
+  {% assign hide_collections = dev_features.hide_collections | default: false %}
+  {% unless hide_collections %}
   <div class="row">
     <div class="col-12">
       <div class="alert alert-info">
@@ -126,6 +130,7 @@ layout: default
       </div>
     </div>
   </div>
+  {% endunless %}
   {% endif %}
 </div>
 

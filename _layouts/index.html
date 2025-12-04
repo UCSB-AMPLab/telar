@@ -256,7 +256,14 @@ title: Home
   </div>
   {% endif %}
 
-  <!-- Stories List -->
+  {%- comment -%}Check if stories are hidden via development flags{%- endcomment -%}
+  {% assign dev_features = site['development-features'] %}
+  {% assign hide_stories = dev_features.hide_stories | default: false %}
+  {% assign hide_collections = dev_features.hide_collections | default: false %}
+  {% if hide_collections %}{% assign hide_stories = true %}{% endif %}
+
+  <!-- Stories List (hidden when hide_stories is enabled) -->
+  {% unless hide_stories %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <h2 class="mb-4">{{ page.stories_heading | default: "Explore the stories" }}</h2>
@@ -316,8 +323,10 @@ title: Home
       {% endif %}
     </div>
   </div>
+  {% endunless %}
 
-  <!-- Objects Teaser -->
+  <!-- Objects Teaser (hidden when hide_collections is enabled) -->
+  {% unless hide_collections %}
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
@@ -329,6 +338,7 @@ title: Home
     </div>
   </div>
   {% endif %}
+  {% endunless %}
 </div>
 
 <script id="telar-stories-data" type="application/json">
@@ -488,5 +498,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
   });
+});
+
+/**
+ * Prefetch story manifests on hover (v0.6.2)
+ * When user hovers over a story card, prefetch its IIIF manifests
+ * to reduce loading time when they enter the story.
+ */
+document.querySelectorAll('.story-card').forEach(function(card) {
+  card.addEventListener('mouseenter', function() {
+    // Find all objects used in this story by looking at its data
+    const storyUrl = this.getAttribute('href');
+    if (!storyUrl) return;
+
+    // Get the story's first object from the thumbnail element
+    const thumbnailEl = this.querySelector('.story-iiif-thumbnail[data-object-id]');
+    if (!thumbnailEl) return;
+
+    const objectId = thumbnailEl.getAttribute('data-object-id');
+    if (!objectId) return;
+
+    // Find object data and prefetch its manifest
+    const objectData = window.objectsData.find(obj => obj.object_id === objectId);
+    if (objectData && objectData.iiif_manifest) {
+      // Create prefetch link if not already prefetched
+      const existingPrefetch = document.querySelector(`link[href="${objectData.iiif_manifest}"]`);
+      if (!existingPrefetch) {
+        const prefetchLink = document.createElement('link');
+        prefetchLink.rel = 'prefetch';
+        prefetchLink.href = objectData.iiif_manifest;
+        document.head.appendChild(prefetchLink);
+        console.log(`Prefetching manifest for ${objectId} on hover`);
+      }
+    }
+  }, { once: true }); // Only prefetch once per story card
 });
 </script>

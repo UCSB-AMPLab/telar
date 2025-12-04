@@ -129,6 +129,11 @@ a:hover {
   margin-bottom: 1.5rem;
 }
 
+.page-content img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* User Page Widget Styling - styled as if inside panel-layer1 */
 /* Widgets span full column width (no max-width constraint) */
 
@@ -255,48 +260,31 @@ a:hover {
   height: 100%;
 }
 
+/* ============================================================================
+   VIEWER CARD TRANSITIONS (v0.6.2)
+
+   Fade-only transitions for all viewports. Slide-up animation removed in v0.6.2
+   to reduce timing complexity and improve perceived performance.
+   Z-index handles card stacking; opacity handles visibility transitions.
+   ============================================================================ */
 .viewer-card {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+  /* Fade-only transition - no slide animation */
+  transition: opacity 300ms ease-out;
 }
 
 .card-below {
-  transform: translateY(100%);
   opacity: 0;
+  pointer-events: none;
 }
 
 .card-active {
-  transform: translateY(0);
   opacity: 1;
-}
-
-/* ============================================================================
-   GRACEFUL PANEL TRANSITIONS ON MOBILE (v0.4.0)
-
-   Mobile viewer transitions: Remove slide animation, use fade only for faster
-   perceived performance. Desktop retains slide-up animation.
-   ============================================================================ */
-@media (max-width: 767px) {
-  .viewer-card {
-    /* Override desktop slide animation - fade only on mobile */
-    transition: opacity 300ms ease-out !important;
-    /* Always at 0 position, no slide */
-    transform: translateY(0) !important;
-  }
-
-  .viewer-card.card-active {
-    opacity: 1;
-  }
-
-  .viewer-card.card-below {
-    opacity: 0;
-    /* Still moved down for z-index purposes, but instantly (no animation) */
-    transform: translateY(100%) !important;
-  }
+  pointer-events: auto;
 }
 
 /* Skeleton loading shimmer - subtle loading indicator during viewer initialization */
@@ -621,6 +609,11 @@ a:hover {
   max-width: 650px;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Increase h1 spacing in panels for better visual hierarchy */
+.offcanvas-body h1 {
+  margin-bottom: 1.5rem;
 }
 
 /* Layer 2 panel - narrower text for better proportions */

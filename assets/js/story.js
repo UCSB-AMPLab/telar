@@ -34,7 +34,16 @@ const TOUCH_THRESHOLD = window.innerHeight * 0.2; // 20vh swipe distance require
 // Viewer card management
 let viewerCards = []; // Array of { objectId, element, uvInstance, osdViewer, isReady, pendingZoom }
 let viewerCardCounter = 0;
-const MAX_VIEWER_CARDS = 5;
+
+// Viewer preloading configuration (set from _config.yml via window.telarConfig)
+// Defaults are used if config is missing. Higher values = smoother but more memory.
+let MAX_VIEWER_CARDS = 10;    // Max UV instances in memory (default: 10, max: 15)
+let PRELOAD_STEPS = 6;        // Steps to preload ahead (default: 6)
+let LOADING_THRESHOLD = 5;    // Show shimmer if >= N unique viewers (default: 5)
+let MIN_READY_VIEWERS = 3;    // Hide shimmer when N viewers ready (default: 3)
+
+// Connection speed estimation from manifest load times
+let manifestLoadTimes = [];
 
 // Mobile navigation state
 let isMobileViewport = false;
@@ -46,7 +55,20 @@ const MOBILE_NAV_COOLDOWN = 400; // ms - prevent rapid clicking
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+  // Read viewer preloading config from _config.yml (via window.telarConfig)
+  // Apply defaults and validation to prevent misconfiguration
+  const viewerConfig = window.telarConfig?.viewer_preloading || {};
+  MAX_VIEWER_CARDS = Math.min(viewerConfig.max_viewer_cards || 10, 15);
+  PRELOAD_STEPS = Math.min(viewerConfig.preload_steps || 6, MAX_VIEWER_CARDS - 2);
+  LOADING_THRESHOLD = viewerConfig.loading_threshold || 5;
+  MIN_READY_VIEWERS = Math.min(viewerConfig.min_ready_viewers || 3, PRELOAD_STEPS);
+
   buildObjectsIndex();
+
+  // Prefetch manifests in background and measure connection speed
+  // Runs async - doesn't block page initialization
+  prefetchStoryManifests();
+
   initializeFirstViewer();
 
   // Determine navigation mode based on viewport and embed status
@@ -78,6 +100,97 @@ function buildObjectsIndex() {
   objects.forEach(obj => {
     objectsIndex[obj.object_id] = obj;
   });
+}
+
+/**
+ * Prefetch all story manifests at page load and measure connection speed.
+ * Runs in background - doesn't block page initialization.
+ * Measures actual fetch times to adjust thresholds for slow connections.
+ */
+async function prefetchStoryManifests() {
+  const objectIds = [...new Set(
+    Array.from(document.querySelectorAll('[data-object]'))
+      .map(el => el.dataset.object)
+      .filter(Boolean)
+  )];
+
+  if (objectIds.length === 0) return;
+
+  // Fetch manifests in parallel, timing each one
+  await Promise.all(objectIds.map(async (id) => {
+    try {
+      const objectData = objectsIndex[id];
+      if (objectData?.iiif_manifest) {
+        const start = performance.now();
+        await fetch(objectData.iiif_manifest);
+        const elapsed = performance.now() - start;
+        manifestLoadTimes.push(elapsed);
+      }
+    } catch (e) { /* silent fail - network errors handled gracefully */ }
+  }));
+
+  // Adjust thresholds based on measured connection speed
+  adjustThresholdsForConnection();
+}
+
+/**
+ * Adjust preloading thresholds based on measured connection speed.
+ * Slow connections = frontload waiting by requiring more viewers ready.
+ */
+function adjustThresholdsForConnection() {
+  if (manifestLoadTimes.length < 2) return; // Need enough samples
+
+  const avgTime = manifestLoadTimes.reduce((a, b) => a + b, 0) / manifestLoadTimes.length;
+  // Manifests are ~2KB, so timing reflects latency + minimal transfer
+
+  if (avgTime > 1000) {
+    // Slow connection (>1s per manifest): frontload wait
+    LOADING_THRESHOLD = 1;        // Always show shimmer
+    MIN_READY_VIEWERS = Math.min(6, PRELOAD_STEPS); // Wait for larger buffer
+    console.log(`Slow connection detected (${Math.round(avgTime)}ms avg), adjusting thresholds`);
+  } else if (avgTime > 500) {
+    // Moderate connection (500ms-1s): slightly more cautious
+    LOADING_THRESHOLD = Math.max(3, LOADING_THRESHOLD - 2);
+    MIN_READY_VIEWERS = Math.min(MIN_READY_VIEWERS + 1, PRELOAD_STEPS);
+    console.log(`Moderate connection detected (${Math.round(avgTime)}ms avg), adjusting thresholds`);
+  }
+  // Fast connection (<500ms): use configured defaults
+}
+
+/**
+ * Initialize shimmer for stories with many unique viewers (v0.6.2)
+ * Shows loading shimmer on intro slide while viewers initialize.
+ * Uses LOADING_THRESHOLD and MIN_READY_VIEWERS from config.
+ */
+function initializeLoadingShimmer() {
+  // Count unique viewers in the story
+  const uniqueViewers = new Set(
+    allSteps.map(step => step.dataset.object).filter(Boolean)
+  ).size;
+
+  console.log(`Story has ${uniqueViewers} unique viewers (threshold: ${LOADING_THRESHOLD})`);
+
+  if (uniqueViewers >= LOADING_THRESHOLD) {
+    showViewerSkeletonState();
+    console.log(`Showing initial load shimmer (${uniqueViewers} >= ${LOADING_THRESHOLD})`);
+
+    // Check periodically for enough ready viewers
+    const checkReadyViewers = () => {
+      const readyCount = viewerCards.filter(v => v.isReady).length;
+      const targetReady = Math.min(MIN_READY_VIEWERS, uniqueViewers);
+
+      if (readyCount >= targetReady) {
+        hideViewerSkeletonState();
+        console.log(`Hiding shimmer: ${readyCount} viewers ready (target: ${targetReady})`);
+      } else {
+        // Keep checking every 200ms
+        setTimeout(checkReadyViewers, 200);
+      }
+    };
+
+    // Start checking after a short delay (give preload time to start)
+    setTimeout(checkReadyViewers, 500);
+  }
 }
 
 /**
@@ -166,54 +279,68 @@ function createViewerCard(objectId, zIndex, x, y, zoom) {
     zIndex
   };
 
-  // Listen for UV initialization
+  // Listen for UV initialization - poll for OSD readiness instead of fixed delay
   uvInstance.on('created', function() {
-    setTimeout(function() {
-      if (uvInstance._assignedContentHandler) {
-        let newViewer = null;
+    let pollCount = 0;
+    const MAX_POLLS = 50; // 5 seconds max (50 × 100ms)
 
+    const checkViewerReady = () => {
+      pollCount++;
+      let newViewer = null;
+
+      if (uvInstance._assignedContentHandler) {
         // Try direct viewer access FIRST (this path works reliably)
         if (uvInstance._assignedContentHandler.viewer) {
           newViewer = uvInstance._assignedContentHandler.viewer;
-          console.log(`Got viewer via direct access for ${objectId}`);
+          console.log(`Got viewer via direct access for ${objectId} after ${pollCount * 100}ms`);
         }
         // Fallback to extension path
         else if (uvInstance._assignedContentHandler.extension) {
           const ext = uvInstance._assignedContentHandler.extension;
           if (ext.centerPanel && ext.centerPanel.viewer) {
             newViewer = ext.centerPanel.viewer;
-            console.log(`Got viewer via extension path for ${objectId}`);
-          }
-        }
-
-        if (newViewer) {
-          viewerCard.osdViewer = newViewer;
-          viewerCard.isReady = true;
-          console.log(`Viewer card for ${objectId} is ready`);
-
-          // Hide UV controls via JavaScript
-          setTimeout(() => {
-            const leftPanel = cardElement.querySelector('.leftPanel');
-            if (leftPanel) {
-              leftPanel.style.display = 'none';
-              leftPanel.style.visibility = 'hidden';
-            }
-          }, 100);
-
-          // Execute pending position snap if any
-          if (viewerCard.pendingZoom) {
-            if (viewerCard.pendingZoom.snap) {
-              // Snap immediately (for new object load)
-              snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-            } else {
-              // Animate smoothly (for same object)
-              animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-            }
-            viewerCard.pendingZoom = null;
+            console.log(`Got viewer via extension path for ${objectId} after ${pollCount * 100}ms`);
           }
         }
       }
-    }, 2000);
+
+      if (newViewer) {
+        viewerCard.osdViewer = newViewer;
+        viewerCard.isReady = true;
+        console.log(`Viewer card for ${objectId} is ready after ${pollCount * 100}ms`);
+
+        // Hide UV controls via JavaScript
+        setTimeout(() => {
+          const leftPanel = cardElement.querySelector('.leftPanel');
+          if (leftPanel) {
+            leftPanel.style.display = 'none';
+            leftPanel.style.visibility = 'hidden';
+          }
+        }, 100);
+
+        // Execute pending position snap if any
+        if (viewerCard.pendingZoom) {
+          if (viewerCard.pendingZoom.snap) {
+            // Snap immediately (for new object load)
+            snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
+          } else {
+            // Animate smoothly (for same object)
+            animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
+          }
+          viewerCard.pendingZoom = null;
+        }
+      } else if (pollCount < MAX_POLLS) {
+        // Keep polling
+        setTimeout(checkViewerReady, 100);
+      } else {
+        // Timeout - allow transition anyway to prevent permanent black screen
+        console.warn(`Viewer for ${objectId} failed to initialize after 5s, allowing transition`);
+        viewerCard.isReady = true;
+      }
+    };
+
+    // Start polling immediately
+    checkViewerReady();
   });
 
   viewerCards.push(viewerCard);
@@ -245,12 +372,9 @@ function getOrCreateViewerCard(objectId, zIndex, x, y, zoom) {
     existing.element.style.zIndex = zIndex;
     existing.zIndex = zIndex;
 
-    // CRITICAL FIX: Reset card state in case it was left in card-below from previous navigation
-    // This ensures the card can properly transition when reactivated
+    // Reset card state in case it was left in card-below from previous navigation
     console.log(`Resetting viewer card state for ${objectId}`);
     existing.element.classList.remove('card-below');
-    existing.element.style.opacity = ''; // Clear any inline opacity
-    existing.element.style.transition = ''; // Clear any disabled transitions
 
     // For existing viewers, just snap to new position immediately
     if (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
@@ -372,6 +496,9 @@ function initializeEmbedNavigation() {
   // Get all story steps
   allSteps = Array.from(document.querySelectorAll('.story-step'));
 
+  // Initialize shimmer for long stories (v0.6.2)
+  initializeLoadingShimmer();
+
   // Hide all steps initially
   allSteps.forEach(step => {
     step.classList.remove('mobile-active');
@@ -408,6 +535,9 @@ function initializeMobileNavigation() {
 
   // Get all story steps
   allSteps = Array.from(document.querySelectorAll('.story-step'));
+
+  // Initialize shimmer for long stories (v0.6.2)
+  initializeLoadingShimmer();
 
   // Hide all steps initially
   allSteps.forEach(step => {
@@ -616,6 +746,9 @@ function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
 function initializeStepController() {
   // Get all steps and assign z-index for stacking
   allSteps = Array.from(document.querySelectorAll('.story-step'));
+
+  // Initialize shimmer for long stories (v0.6.2)
+  initializeLoadingShimmer();
 
   allSteps.forEach((step, index) => {
     step.style.zIndex = index + 1; // Higher index = on top
@@ -1075,6 +1208,11 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
   // Get or create viewer card for this object
   const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
 
+  // Show shimmer if viewer not ready yet (v0.6.2 - matches mobile behavior)
+  if (!newViewerCard.isReady) {
+    showViewerSkeletonState();
+  }
+
   // Wait for viewer to be ready and positioned before sliding up BOTH cards together
   const startTime = Date.now();
   const MAX_WAIT_TIME = 5000; // 5 seconds max
@@ -1083,11 +1221,11 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
     const elapsed = Date.now() - startTime;
 
     if (newViewerCard.isReady) {
+      hideViewerSkeletonState();
       console.log(`Viewer ready, transitioning to ${objectId} (${direction})`);
 
       if (direction === 'forward') {
-        // Going forward - slide up both text and viewer
-        // Force a reflow to ensure initial state is rendered before animating
+        // Going forward - activate text step
         if (stepElement) {
           stepElement.offsetHeight; // Force reflow
           requestAnimationFrame(() => {
@@ -1095,42 +1233,25 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
           });
         }
 
-        // Slide up the viewer card with complete state reset
-        // This ensures reused cards are fully visible after backward→forward cycles
-        newViewerCard.element.style.transition = ''; // Clear any disabled transitions
-        newViewerCard.element.style.opacity = ''; // Clear any inline opacity from backward nav
-        newViewerCard.element.classList.remove('card-below');
-        newViewerCard.element.classList.add('card-active');
-
-        // CRITICAL: Update z-index to ensure card appears on top
-        newViewerCard.element.style.zIndex = newViewerCard.zIndex;
-
-        // Old viewer cards keep card-active class and stay at translateY(0)
-        // Z-index handles layering - newer cards appear on top
-      } else {
-        // Going backward - instantly hide current viewer and move it away
+        // Deactivate current viewer (fade out)
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
-          // Instantly hide and move away
-          currentViewerCard.element.style.transition = 'none';
           currentViewerCard.element.classList.remove('card-active');
           currentViewerCard.element.classList.add('card-below');
-          currentViewerCard.element.style.opacity = '0';
-
-          // Re-enable transitions after moving
-          setTimeout(() => {
-            if (currentViewerCard) {
-              currentViewerCard.element.style.transition = '';
-              currentViewerCard.element.style.opacity = '';
-            }
-          }, 50);
         }
 
-        // Previous viewer should already be visible underneath
-        // Just ensure it has card-active
-        if (!newViewerCard.element.classList.contains('card-active')) {
-          newViewerCard.element.classList.remove('card-below');
-          newViewerCard.element.classList.add('card-active');
+        // Activate new viewer card (fade in)
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
+        newViewerCard.element.style.zIndex = newViewerCard.zIndex;
+      } else {
+        // Going backward - same logic: fade out current, fade in previous
+        if (currentViewerCard && currentViewerCard !== newViewerCard) {
+          currentViewerCard.element.classList.remove('card-active');
+          currentViewerCard.element.classList.add('card-below');
         }
+
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
       }
 
       // Update current viewer card reference
@@ -1143,6 +1264,7 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
       setTimeout(slideUpWhenReady, 100);
     } else {
       console.warn(`Viewer for ${objectId} failed to load after 5 seconds, transitioning anyway`);
+      hideViewerSkeletonState();
 
       if (direction === 'forward') {
         // Activate text step and slide up viewer card anyway
@@ -1153,34 +1275,24 @@ function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction
           });
         }
 
-        // Slide up anyway to prevent black screen
-        newViewerCard.element.classList.remove('card-below');
-        newViewerCard.element.classList.add('card-active');
-
-        // Old viewer cards keep card-active and stay at translateY(0)
-      } else {
-        // Going backward - instantly hide current viewer and move it away
+        // Deactivate current viewer
         if (currentViewerCard && currentViewerCard !== newViewerCard) {
-          // Instantly hide and move away
-          currentViewerCard.element.style.transition = 'none';
           currentViewerCard.element.classList.remove('card-active');
           currentViewerCard.element.classList.add('card-below');
-          currentViewerCard.element.style.opacity = '0';
-
-          // Re-enable transitions after moving
-          setTimeout(() => {
-            if (currentViewerCard) {
-              currentViewerCard.element.style.transition = '';
-              currentViewerCard.element.style.opacity = '';
-            }
-          }, 50);
         }
 
-        // Previous viewer should already be visible underneath
-        if (!newViewerCard.element.classList.contains('card-active')) {
-          newViewerCard.element.classList.remove('card-below');
-          newViewerCard.element.classList.add('card-active');
+        // Show viewer anyway to prevent black screen
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
+      } else {
+        // Going backward - same logic
+        if (currentViewerCard && currentViewerCard !== newViewerCard) {
+          currentViewerCard.element.classList.remove('card-active');
+          currentViewerCard.element.classList.add('card-below');
         }
+
+        newViewerCard.element.classList.remove('card-below');
+        newViewerCard.element.classList.add('card-active');
       }
 
       currentViewerCard = newViewerCard;
@@ -1693,7 +1805,7 @@ function closeAllPanels() {
 // ============================================================================
 
 /**
- * Show skeleton loading state on viewer (MOBILE ONLY)
+ * Show skeleton loading state on viewer
  * Displays subtle shimmer animation to indicate viewer initialization
  */
 function showViewerSkeletonState() {
@@ -1704,7 +1816,7 @@ function showViewerSkeletonState() {
 }
 
 /**
- * Hide skeleton loading state on viewer (MOBILE ONLY)
+ * Hide skeleton loading state on viewer
  * Removes shimmer animation when viewer is ready
  */
 function hideViewerSkeletonState() {

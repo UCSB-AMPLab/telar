@@ -2,6 +2,40 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.6.2-beta] - 2025-12-03
+
+### Added
+
+- **Improved viewer preloading**: Complete overhaul of how Telar loads IIIF viewers eliminates black screens and speeds up navigation. All IIIF manifests are fetched in parallel when the story page loads, so images are ready before you scroll to them. Hovering over a story card on the homepage begins loading its manifests. A subtle shimmer animation shows when a viewer is initializing. Preloading behavior can be tuned via `development-features.viewer_preloading` in `_config.yml`
+
+- **Glossary-to-glossary linking**: You can now use `[[term]]` syntax inside glossary definitions to link to other glossary terms
+
+- **All-in-one build script for local sites**: New `build_local_site.py` runs the complete local build process with a single command. Use `--skip-iiif` for faster rebuilds when images haven't changed, `--skip-fetch` to skip demo content fetching. Serves on port 4001 by default
+
+- **Development feature flags**: New `development-features` section in `_config.yml` with `hide_stories` (temporarily hide stories) and `hide_collections` (hide both objects and stories) for rapid testing
+
+### Fixed
+
+- **Case-insensitive object references**: Object IDs in your story spreadsheet now match regardless of capitalization (e.g., `LEVIATHAN` finds `leviathan`)
+
+- **Case-insensitive file paths**: Markdown file paths work regardless of case, preventing broken links when deploying from Mac to GitHub Pages
+
+- **Index page image overflow**: Large images on the homepage no longer overflow their containers
+
+- **Panel title spacing**: Improved spacing below panel titles for better readability
+
+- **Panel title markup**: Panel titles now use proper `<h1>` elements for accessibility
+
+### Removed
+
+- **Sample glossary entries**: Removed placeholder glossary entries (colonial-period, reduccion, resguardo, viceroyalty, iiif-manifest, markdown) that were not used by the template stories
+
+---
+
+**Migration from v0.6.1-beta:**
+- Run `python3 scripts/upgrade.py` to upgrade automatically
+- No breaking changes
+
 ## [0.6.1-beta] - 2025-11-28
 
 ### Added
