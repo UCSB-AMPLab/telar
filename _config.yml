@@ -105,8 +105,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "0.6.1-beta"
-  release_date: "2025-11-28"
+  version: "0.6.2-beta"
+  release_date: "2025-12-03"
 
 # Plugins
 plugins:
@@ -136,3 +136,12 @@ development-features:
     preload_steps: 6        # Steps to preload ahead. Higher = smoother, more memory. (default: 6)
     loading_threshold: 5    # Show shimmer on intro if story has >= N viewers. (default: 5)
     min_ready_viewers: 3    # Hide shimmer when N viewers ready. (default: 3)
+
+  # Hide stories - skips story generation and hides stories section from index
+  # Objects remain visible and accessible
+  hide_stories: false
+
+  # Hide collections - skips both object AND story generation
+  # Hides stories section, objects teaser, and /objects/ nav link
+  # Use this when building a site with only custom pages (no stories or objects)
+  hide_collections: false

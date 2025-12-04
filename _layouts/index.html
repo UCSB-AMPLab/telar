@@ -256,7 +256,14 @@ title: Home
   </div>
   {% endif %}
 
-  <!-- Stories List -->
+  {%- comment -%}Check if stories are hidden via development flags{%- endcomment -%}
+  {% assign dev_features = site['development-features'] %}
+  {% assign hide_stories = dev_features.hide_stories | default: false %}
+  {% assign hide_collections = dev_features.hide_collections | default: false %}
+  {% if hide_collections %}{% assign hide_stories = true %}{% endif %}
+
+  <!-- Stories List (hidden when hide_stories is enabled) -->
+  {% unless hide_stories %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <h2 class="mb-4">{{ page.stories_heading | default: "Explore the stories" }}</h2>
@@ -316,8 +323,10 @@ title: Home
       {% endif %}
     </div>
   </div>
+  {% endunless %}
 
-  <!-- Objects Teaser -->
+  <!-- Objects Teaser (hidden when hide_collections is enabled) -->
+  {% unless hide_collections %}
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
@@ -329,6 +338,7 @@ title: Home
     </div>
   </div>
   {% endif %}
+  {% endunless %}
 </div>
 
 <script id="telar-stories-data" type="application/json">

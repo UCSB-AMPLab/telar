@@ -616,11 +616,6 @@ a:hover {
   margin-bottom: 1.5rem;
 }
 
-/* Indent adjacent paragraphs (when user forgets blank line between them) */
-.offcanvas-body p + p {
-  text-indent: 1.5em;
-}
-
 /* Layer 2 panel - narrower text for better proportions */
 #panel-layer2 .offcanvas-body p,
 #panel-layer2 .offcanvas-body ul,
