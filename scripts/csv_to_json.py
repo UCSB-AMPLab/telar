@@ -2,7 +2,7 @@
 """
 Convert CSV files from Google Sheets to JSON for Jekyll
 
-Version: v0.6.0-beta
+Version: v0.6.2-beta
 """
 
 import pandas as pd
