@@ -64,7 +64,11 @@ class Migration061to062(BaseMigration):
 
     def _update_config_section(self) -> List[str]:
         """
-        Rename testing-features to development-features in _config.yml.
+        Update development-features section in _config.yml.
+
+        - Rename testing-features to development-features
+        - Add viewer_preloading section if missing
+        - Add hide_stories and hide_collections flags if missing
 
         Returns:
             List of change descriptions
@@ -78,12 +82,83 @@ class Migration061to062(BaseMigration):
         with open(config_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
+        modified = False
+
         # Check if rename is needed
         if 'testing-features:' in content and 'development-features:' not in content:
             content = content.replace('testing-features:', 'development-features:')
+            modified = True
+            changes.append("Renamed config section: testing-features → development-features")
+
+        # Add viewer_preloading section if missing
+        if 'viewer_preloading:' not in content and 'development-features:' in content:
+            viewer_preloading_block = '''
+  # Viewer preloading configuration
+  # Controls how story viewers are preloaded for smoother navigation.
+  # Higher values = smoother scrolling but more memory usage.
+  # Lower values = less memory but may show loading shimmer during navigation.
+  # These defaults work well for most sites. Only adjust if experiencing issues.
+  viewer_preloading:
+    max_viewer_cards: 10    # Max viewers in memory. Higher = smoother, more memory. (default: 10, max: 15)
+    preload_steps: 6        # Steps to preload ahead. Higher = smoother, more memory. (default: 6)
+    loading_threshold: 5    # Show shimmer on intro if story has >= N viewers. (default: 5)
+    min_ready_viewers: 3    # Hide shimmer when N viewers ready. (default: 3)
+'''
+            # Insert after development-features: line
+            content = content.replace('development-features:', 'development-features:' + viewer_preloading_block)
+            modified = True
+            changes.append("Added viewer_preloading configuration section")
+
+        # Add hide_stories if missing
+        if 'hide_stories:' not in content and 'development-features:' in content:
+            hide_stories_block = '''
+  # Hide stories - skips story generation and hides stories section from index
+  # Objects remain visible and accessible
+  hide_stories: false
+'''
+            # Find the end of development-features section and insert before next top-level key
+            lines = content.split('\n')
+            in_dev_features = False
+            insert_index = -1
+            for i, line in enumerate(lines):
+                if line.startswith('development-features:'):
+                    in_dev_features = True
+                elif in_dev_features and line and not line.startswith(' ') and not line.startswith('\t') and not line.startswith('#'):
+                    insert_index = i
+                    break
+            if insert_index > 0:
+                lines.insert(insert_index, hide_stories_block.rstrip())
+                content = '\n'.join(lines)
+                modified = True
+                changes.append("Added hide_stories flag")
+
+        # Add hide_collections if missing
+        if 'hide_collections:' not in content and 'development-features:' in content:
+            hide_collections_block = '''
+  # Hide collections - skips both object AND story generation
+  # Hides stories section, objects teaser, and /objects/ nav link
+  # Use this when building a site with only custom pages (no stories or objects)
+  hide_collections: false
+'''
+            # Find the end of development-features section and insert before next top-level key
+            lines = content.split('\n')
+            in_dev_features = False
+            insert_index = -1
+            for i, line in enumerate(lines):
+                if line.startswith('development-features:'):
+                    in_dev_features = True
+                elif in_dev_features and line and not line.startswith(' ') and not line.startswith('\t') and not line.startswith('#'):
+                    insert_index = i
+                    break
+            if insert_index > 0:
+                lines.insert(insert_index, hide_collections_block.rstrip())
+                content = '\n'.join(lines)
+                modified = True
+                changes.append("Added hide_collections flag")
+
+        if modified:
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            changes.append("Renamed config section: testing-features → development-features")
 
         return changes
 

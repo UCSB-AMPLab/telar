@@ -2593,8 +2593,9 @@ def main():
         if config_path.exists():
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-                testing_features = config.get('testing-features', {})
-                christmas_tree_mode = testing_features.get('christmas_tree_mode', False)
+                # Check development-features (v0.6.2+) or testing-features (legacy)
+                dev_features = config.get('development-features', config.get('testing-features', {}))
+                christmas_tree_mode = dev_features.get('christmas_tree_mode', False)
 
                 if christmas_tree_mode:
                     print("🎄 Christmas Tree Mode enabled - injecting test objects with errors")
