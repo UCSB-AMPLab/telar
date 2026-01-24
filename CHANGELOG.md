@@ -2,6 +2,26 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.6.3-beta] - 2026-01-24
+
+### Added
+
+- **Inline panel content**: Write panel text directly in your spreadsheet instead of creating separate markdown files. Supports three methods: (1) entering text directly in cells, (2) pasting markdown text with optional YAML frontmatter, or (3) referencing external markdown files for complex content. The `layer1_file` column has been renamed to `layer1_content` (old name still works for backward compatibility)
+
+### Changed
+
+- **Column naming**: `layer1_file`, `layer2_file`, `layer3_file` renamed to `layer1_content`, `layer2_content`, `layer3_content` to reflect their expanded purpose. Spanish equivalents: `contenido_capa1`, `contenido_capa2`, `contenido_capa3`. Old column names remain supported for backward compatibility
+
+### Fixed
+
+- **Empty state messages**: Error messages now reference user-editable locations (spreadsheet, `components/` directory) instead of internal Jekyll directories
+
+---
+
+**Migration from v0.6.2-beta:**
+- Run `python3 scripts/upgrade.py` to upgrade automatically
+- No breaking changes — existing spreadsheets and markdown files work without modification
+
 ## [0.6.2-beta] - 2025-12-03
 
 ### Added

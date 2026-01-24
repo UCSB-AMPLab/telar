@@ -2,7 +2,7 @@
 """
 Convert CSV files from Google Sheets to JSON for Jekyll
 
-Version: v0.6.2-beta
+Version: v0.6.3-beta
 """
 
 import pandas as pd
@@ -32,10 +32,16 @@ COLUMN_NAME_MAPPING = {
     'pregunta': 'question',
     'respuesta': 'answer',
     'boton_capa1': 'layer1_button',
-    'archivo_capa1': 'layer1_file',
+    'contenido_capa1': 'layer1_content',  # v0.6.3+ preferred name
+    'archivo_capa1': 'layer1_content',    # backward compatibility
     'boton_capa2': 'layer2_button',
-    'archivo_capa2': 'layer2_file',
+    'contenido_capa2': 'layer2_content',  # v0.6.3+ preferred name
+    'archivo_capa2': 'layer2_content',    # backward compatibility
     # x, y, zoom are the same in both languages
+
+    # English column backward compatibility (layer1_file → layer1_content)
+    'layer1_file': 'layer1_content',
+    'layer2_file': 'layer2_content',
 
     # Objects columns (Spanish → English) - for IIIF auto-populator support
     'id_objeto': 'object_id',
@@ -875,6 +881,61 @@ def read_markdown_file(file_path, widget_warnings=None):
         print(f"Error reading markdown file {full_path}: {e}")
         return None
 
+
+def process_inline_content(text, widget_warnings=None):
+    """
+    Process inline panel content (text written directly in spreadsheet).
+
+    Handles line breaks by splitting into paragraphs and wrapping in <p> tags.
+    Supports markdown formatting (bold, italic, links) and raw HTML.
+    Also supports YAML frontmatter if user pastes a complete markdown file.
+
+    Args:
+        text: Raw text from spreadsheet cell
+        widget_warnings: Optional list to collect widget warnings
+
+    Returns:
+        dict with 'title' and 'content' (HTML) keys
+    """
+    if not text or not text.strip():
+        return None
+
+    if widget_warnings is None:
+        widget_warnings = []
+
+    # Normalize line endings (spreadsheets may use \r\n or \r)
+    content = text.replace('\r\n', '\n').replace('\r', '\n').strip()
+    title = ''
+
+    # Check for YAML frontmatter (same pattern as read_markdown_file)
+    # Only treat as frontmatter if it contains a title: key to avoid
+    # false matches with horizontal rules or other --- usage
+    frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
+    match = re.match(frontmatter_pattern, content, re.DOTALL)
+
+    if match:
+        frontmatter_text = match.group(1)
+        title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
+        if title_match:
+            title = title_match.group(1)
+            content = match.group(2).strip()
+        # else: no title: key found, treat entire content as regular text
+
+    # Process widgets BEFORE markdown conversion
+    content = process_widgets(content, 'inline-content', widget_warnings)
+
+    # Process images (sizes and captions) BEFORE markdown conversion
+    content = process_images(content)
+
+    # Convert markdown to HTML (nl2br handles single line breaks)
+    html_content = markdown.markdown(content, extensions=['extra', 'nl2br'])
+
+    return {
+        'title': title,
+        'content': html_content
+    }
+
+
 def normalize_column_names(df):
     """
     Normalize column names to English using bilingual mapping.
@@ -945,17 +1006,15 @@ def csv_to_json(csv_path, json_path, process_func=None):
         return
 
     try:
-        # Read CSV file and filter out comment lines (starting with # or "#)
-        # We can't use pandas' comment parameter because it treats # anywhere as a comment,
-        # which breaks hex color codes like #2c3e50
-        # Note: CSV export quotes cells containing commas, so we also filter lines starting with "#
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            lines = [line for line in f if not (line.strip().startswith('#') or line.strip().startswith('"#'))]
+        # Read CSV file with pandas
+        # Note: We can't use pandas' comment parameter because it treats # anywhere as a comment,
+        # which breaks hex color codes like #2c3e50 and markdown headers (## Title) in multi-line cells
+        df = pd.read_csv(csv_path, on_bad_lines='warn')
 
-        # Parse filtered CSV content
-        from io import StringIO
-        csv_content = ''.join(lines)
-        df = pd.read_csv(StringIO(csv_content), on_bad_lines='warn')
+        # Filter out comment rows (first column value starts with #)
+        # This handles both # and "# patterns while preserving markdown headers in multi-line cells
+        first_col = df.columns[0]
+        df = df[~df[first_col].astype(str).str.strip().str.startswith('#')]
 
         # Filter out columns starting with # (instruction columns)
         df = df[[col for col in df.columns if not col.startswith('#')]]
@@ -2030,8 +2089,9 @@ def process_objects(df, christmas_tree=False):
 
 def process_story(df, christmas_tree=False):
     """
-    Process story CSV with file references
-    Expected columns: step, question, answer, object, x, y, zoom, layer1_file, layer2_file, etc.
+    Process story CSV with panel content (file references or inline text)
+    Expected columns: step, question, answer, object, x, y, zoom, layer1_content, layer2_content, etc.
+    (Also accepts legacy column names: layer1_file, layer2_file)
     """
     # Tracking for summary
     warnings = []
@@ -2126,11 +2186,15 @@ def process_story(df, christmas_tree=False):
                     print(f"  [WARN] {msg}")
                     warnings.append(msg)
 
-    # Process file reference columns
+    # Process content columns (layer1_content, layer2_content, etc.)
+    # Also handles legacy _file suffix for backward compatibility
     for col in df.columns:
-        if col.endswith('_file'):
-            # Determine the base name (e.g., 'layer1' from 'layer1_file')
-            base_name = col.replace('_file', '')
+        if col.endswith('_content') or col.endswith('_file'):
+            # Determine the base name (e.g., 'layer1' from 'layer1_content' or 'layer1_file')
+            if col.endswith('_content'):
+                base_name = col.replace('_content', '')
+            else:
+                base_name = col.replace('_file', '')
 
             # Create new columns for title and text
             title_col = f'{base_name}_title'
@@ -2142,38 +2206,37 @@ def process_story(df, christmas_tree=False):
             if text_col not in df.columns:
                 df[text_col] = ''
 
-            # Read markdown files and populate columns
+            # Read markdown files or process inline content
             for idx, row in df.iterrows():
-                file_ref = row[col]
-                if file_ref and file_ref.strip():
-                    # Prepend 'stories/' to the path for story files
-                    file_path = f"stories/{file_ref.strip()}"
-                    markdown_data = read_markdown_file(file_path, widget_warnings)
-                    if markdown_data:
-                        step_num = row.get('step', 'unknown')
-                        df.at[idx, title_col] = markdown_data['title']
+                cell_value = row[col]
+                if cell_value and str(cell_value).strip():
+                    cell_value = str(cell_value).strip()
+                    step_num = row.get('step', 'unknown')
+                    content_data = None
+
+                    # Check if this looks like a file reference (.md extension)
+                    if cell_value.endswith('.md'):
+                        # Try to load as markdown file
+                        file_path = f"stories/{cell_value}"
+                        content_data = read_markdown_file(file_path, widget_warnings)
+
+                    # If not a file reference or file not found, treat as inline content
+                    if content_data is None:
+                        content_data = process_inline_content(cell_value, widget_warnings)
+
+                    if content_data:
+                        df.at[idx, title_col] = content_data['title']
                         # Apply glossary link transformation to content
                         content_with_glossary = process_glossary_links(
-                            markdown_data['content'],
+                            content_data['content'],
                             glossary_terms,
                             glossary_warnings,
                             step_num,
                             base_name
                         )
                         df.at[idx, text_col] = content_with_glossary
-                    else:
-                        # Insert error message for missing file
-                        step_num = row.get('step', 'unknown')
-                        df.at[idx, title_col] = get_lang_string('errors.object_warnings.content_missing_label')
-                        error_html = f'''<div class="alert alert-warning" role="alert">
-    <strong>{get_lang_string('errors.object_warnings.content_file_missing', file_ref=file_ref.strip())}</strong>
-</div>'''
-                        df.at[idx, text_col] = error_html
-                        msg = f"Missing markdown file for story step {step_num}, {base_name}: {file_ref.strip()}"
-                        print(f"  [WARN] {msg}")
-                        warnings.append(msg)
 
-            # Drop the _file column as it's no longer needed in JSON
+            # Drop the _content/_file column as it's no longer needed in JSON
             df = df.drop(columns=[col])
 
     # Set default coordinates for empty values
