@@ -97,9 +97,9 @@ panels:
 
 # Empty state messages
 empty_states:
-  no_stories: "No stories available yet. Create story files in the <code>_stories/</code> directory to get started."
-  no_objects: "No objects in the collection yet. Add object files to the <code>_objects/</code> directory to populate the collection."
-  no_glossary: "No glossary terms available yet. Add glossary files to the <code>_glossary/</code> directory to populate the glossary."
+  no_stories: "No stories available yet. Add stories to your spreadsheet or create CSV files in <code>components/structures/</code>."
+  no_objects: "No objects in the collection yet. Add objects to your spreadsheet or to <code>components/structures/objects.csv</code>."
+  no_glossary: "No glossary terms available yet. Add glossary files to <code>components/texts/glossary/</code>."
   thumbnail_load_error: "Failed to load"
 
 # Error messages and warnings (user-facing)
