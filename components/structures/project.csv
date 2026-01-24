@@ -3,4 +3,4 @@ orden,id_historia,titulo,subtitulo,firma
 #,# Optional semantic ID (e.g. your-story) - tab name must match exactly. Leave empty to use story-{order},Story title,Optional subtitle,Optional attribution (supports markdown)
 #,# ID semántico opcional (ej. tu-historia) - el nombre de la pestaña debe coincidir exactamente. Déjalo vacío para usar story-{order},Título de la historia,Subtítulo opcional,Atribución opcional (admite markdown)
 1,your-story,Your Story,An allegorical map that challenges imperial authority,"Start with this template, then make it your own"
-2,tu-historia,Tu Historia,Un mapa alegórico que desafía la autoridad imperial,Empieza con esta plantilla y haz tu propia historia
+2,tu-historia,Tu historia,Un mapa alegórico que desafía la autoridad imperial,Empieza con esta plantilla y haz tu propia historia

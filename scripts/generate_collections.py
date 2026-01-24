@@ -2,7 +2,7 @@
 """
 Generate Jekyll collection markdown files from JSON data
 
-Version: v0.6.0-beta
+Version: v0.6.2-beta
 """
 
 import json
@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 
 import markdown
+import yaml
 
 # Import processing functions from csv_to_json
 from csv_to_json import (
@@ -91,6 +92,9 @@ def generate_glossary():
 
     glossary_dir.mkdir(parents=True, exist_ok=True)
 
+    # Load glossary terms for link processing (enables glossary-to-glossary linking)
+    glossary_terms = load_glossary_terms()
+
     # 1. Process user glossary from markdown files
     source_dir = Path('components/texts/glossary')
     if source_dir.exists():
@@ -119,13 +123,32 @@ def generate_glossary():
             term_id = term_id_match.group(1)
             filepath = glossary_dir / f"{term_id}.md"
 
+            # Process body through the same pipeline as pages (enables glossary-to-glossary linking)
+            warnings_list = []
+
+            # 1. Process images (size syntax and captions)
+            processed = process_images(body)
+
+            # 2. Convert markdown to HTML
+            processed = markdown.markdown(
+                processed,
+                extensions=['extra', 'nl2br', 'sane_lists']
+            )
+
+            # 3. Process glossary links ([[term]] syntax)
+            processed = process_glossary_links(processed, glossary_terms, warnings_list)
+
+            # Print any warnings
+            for warning in warnings_list:
+                print(f"  Warning: {warning}")
+
             # Write to collection with layout added
             output_content = f"""---
 {frontmatter_text}
 layout: glossary
 ---
 
-{body}
+{processed}
 """
 
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -344,20 +367,59 @@ def generate_pages():
         print(f"✓ Generated {output_file}")
 
 
+def load_config():
+    """Load _config.yml and return development-features settings"""
+    config_path = Path('_config.yml')
+    if not config_path.exists():
+        return {}
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+
+    return config.get('development-features', {})
+
+
 def main():
     """Generate all collection files"""
     print("Generating Jekyll collection files...")
     print("-" * 50)
 
-    generate_objects()
+    # Load development feature flags
+    dev_features = load_config()
+    hide_stories = dev_features.get('hide_stories', False)
+    hide_collections = dev_features.get('hide_collections', False)
+
+    # hide_collections implies hide_stories
+    if hide_collections:
+        hide_stories = True
+
+    # Generate objects (skip and clean up if hide_collections)
+    if hide_collections:
+        print("Skipping objects (hide_collections enabled)")
+        objects_dir = Path('_jekyll-files/_objects')
+        if objects_dir.exists():
+            shutil.rmtree(objects_dir)
+            print("✓ Cleaned up object files")
+    else:
+        generate_objects()
     print()
 
+    # Always generate glossary
     generate_glossary()
     print()
 
-    generate_stories()
+    # Generate stories (skip and clean up if hide_stories or hide_collections)
+    if hide_stories:
+        print("Skipping stories (hide_stories enabled)" if not hide_collections else "Skipping stories (hide_collections enabled)")
+        stories_dir = Path('_jekyll-files/_stories')
+        if stories_dir.exists():
+            shutil.rmtree(stories_dir)
+            print("✓ Cleaned up story files")
+    else:
+        generate_stories()
     print()
 
+    # Always generate pages
     generate_pages()
 
     print("-" * 50)

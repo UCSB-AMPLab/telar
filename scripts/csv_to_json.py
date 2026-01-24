@@ -2,7 +2,7 @@
 """
 Convert CSV files from Google Sheets to JSON for Jekyll
 
-Version: v0.6.0-beta
+Version: v0.6.2-beta
 """
 
 import pandas as pd
@@ -374,30 +374,70 @@ def get_widget_id():
     return f"widget-{_widget_counter}"
 
 
+def resolve_path_case_insensitive(base_dir, relative_path):
+    """
+    Resolve a path with case-insensitive fallback.
+
+    Cascading fallback order:
+    1. Try exact path as specified
+    2. Try lowercase filename only (preserve directory case)
+    3. Try lowercase entire path (directory + filename)
+
+    This handles macOS vs Linux case sensitivity differences.
+
+    Args:
+        base_dir: Base directory (e.g., 'components/texts' or 'assets/images')
+        relative_path: Path relative to base_dir
+
+    Returns:
+        Path object if found, None otherwise
+    """
+    full_path = Path(base_dir) / relative_path
+
+    # 1. Try exact path
+    if full_path.exists():
+        return full_path
+
+    # 2. Try lowercase filename only (preserve directory case)
+    lowercase_filename = full_path.parent / full_path.name.lower()
+    if lowercase_filename.exists():
+        return lowercase_filename
+
+    # 3. Try lowercase entire path
+    lowercase_path = Path(base_dir) / relative_path.lower()
+    if lowercase_path.exists():
+        return lowercase_path
+
+    return None
+
+
 def validate_image_path(image_path, file_context):
     """
-    Validate that an image exists at the expected path (case-insensitive for extensions).
+    Validate that an image exists at the expected path with case-insensitive fallback.
     Skips validation for external URLs (http:// or https://).
+
+    Uses resolve_path_case_insensitive() for cascading fallback, plus legacy
+    extension-only matching for backwards compatibility.
 
     Args:
         image_path: Path relative to assets/images/, or external URL
         file_context: Context string for error messages (e.g., markdown file name)
 
     Returns:
-        tuple: (exists: bool, full_path: str)
+        tuple: (exists: bool, actual_path: str)
     """
     # Skip validation for external URLs
     if image_path.startswith('http://') or image_path.startswith('https://'):
         return (True, image_path)
 
-    full_path = Path('assets/images') / image_path
+    # Use centralized case-insensitive path resolution
+    resolved = resolve_path_case_insensitive('assets/images', image_path)
+    if resolved:
+        return (True, str(resolved))
 
-    # Check exact path first
-    if full_path.exists():
-        return (True, str(full_path))
-
-    # If not found, try case-insensitive extension match
+    # Legacy fallback: case-insensitive extension match only
     # e.g., if looking for image.jpg, also try image.JPG
+    full_path = Path('assets/images') / image_path
     if full_path.suffix:
         # Try with uppercase extension
         path_with_upper = full_path.with_suffix(full_path.suffix.upper())
@@ -775,10 +815,10 @@ def read_markdown_file(file_path, widget_warnings=None):
     Returns:
         dict with 'title' and 'content' keys, or None if file doesn't exist
     """
-    full_path = Path('components/texts') / file_path
+    full_path = resolve_path_case_insensitive('components/texts', file_path)
 
-    if not full_path.exists():
-        print(f"Warning: Markdown file not found: {full_path}")
+    if full_path is None:
+        print(f"Warning: Markdown file not found: components/texts/{file_path}")
         return None
 
     # Initialize widget warnings list if not provided
@@ -2031,6 +2071,9 @@ def process_story(df, christmas_tree=False):
 
     # Validate object references
     if 'object' in df.columns and objects_data:
+        # Build case-insensitive lookup map for objects
+        objects_lower_map = {k.lower(): k for k in objects_data.keys()}
+
         for idx, row in df.iterrows():
             object_id = str(row.get('object', '')).strip()
             step_num = row.get('step', 'unknown')
@@ -2039,8 +2082,18 @@ def process_story(df, christmas_tree=False):
             if not object_id:
                 continue
 
-            # Check if object exists
-            if object_id not in objects_data:
+            # Check if object exists (case-insensitive)
+            actual_object_id = None
+            if object_id in objects_data:
+                # Exact match
+                actual_object_id = object_id
+            elif object_id.lower() in objects_lower_map:
+                # Case-insensitive match - use the correct-case version
+                actual_object_id = objects_lower_map[object_id.lower()]
+                # Update the DataFrame with correct case
+                df.at[idx, 'object'] = actual_object_id
+
+            if actual_object_id is None:
                 error_msg = get_lang_string('errors.object_warnings.object_not_found', object_id=object_id)
                 df.at[idx, 'viewer_warning'] = error_msg
                 msg = f"Story step {step_num} references missing object: {object_id}"
@@ -2049,7 +2102,7 @@ def process_story(df, christmas_tree=False):
                 continue
 
             # Check if object has IIIF manifest or local image
-            obj = objects_data[object_id]
+            obj = objects_data[actual_object_id]
             iiif_manifest = obj.get('iiif_manifest', '').strip()
 
             # If no external IIIF manifest, check for local image file
@@ -2059,17 +2112,17 @@ def process_story(df, christmas_tree=False):
                 has_local_image = False
 
                 for ext in valid_extensions:
-                    local_image_path = Path(f'components/images/{object_id}{ext}')
+                    local_image_path = Path(f'components/images/{actual_object_id}{ext}')
                     if local_image_path.exists():
                         has_local_image = True
-                        print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")
+                        print(f"  [INFO] Object {actual_object_id} uses local image: {local_image_path}")
                         break
 
                 # Only warn if object has neither external manifest nor local image
                 if not has_local_image:
-                    error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=object_id)
+                    error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=actual_object_id)
                     df.at[idx, 'viewer_warning'] = error_msg
-                    msg = f"Story step {step_num} references object without IIIF source: {object_id}"
+                    msg = f"Story step {step_num} references object without IIIF source: {actual_object_id}"
                     print(f"  [WARN] {msg}")
                     warnings.append(msg)
 
@@ -2540,8 +2593,9 @@ def main():
         if config_path.exists():
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
-                testing_features = config.get('testing-features', {})
-                christmas_tree_mode = testing_features.get('christmas_tree_mode', False)
+                # Check development-features (v0.6.2+) or testing-features (legacy)
+                dev_features = config.get('development-features', config.get('testing-features', {}))
+                christmas_tree_mode = dev_features.get('christmas_tree_mode', False)
 
                 if christmas_tree_mode:
                     print("🎄 Christmas Tree Mode enabled - injecting test objects with errors")

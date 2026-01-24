@@ -17,7 +17,7 @@
 
   <!-- Check if Christmas Tree Mode is enabled in config -->
   {% assign is_christmas_tree_mode = false %}
-  {% if site.testing-features.christmas_tree_mode %}
+  {% if site.development-features.christmas_tree_mode %}
     {% assign is_christmas_tree_mode = true %}
   {% endif %}
 
@@ -45,7 +45,13 @@
 
   // Expose config options to JavaScript
   window.telarConfig = {
-    showObjectCredits: {{ site.story_interface.show_object_credits | default: false }}
+    showObjectCredits: {{ site.story_interface.show_object_credits | default: false }},
+    viewer_preloading: {
+      max_viewer_cards: {{ site.development-features.viewer_preloading.max_viewer_cards | default: 10 }},
+      preload_steps: {{ site.development-features.viewer_preloading.preload_steps | default: 6 }},
+      loading_threshold: {{ site.development-features.viewer_preloading.loading_threshold | default: 5 }},
+      min_ready_viewers: {{ site.development-features.viewer_preloading.min_ready_viewers | default: 3 }}
+    }
   };
 
   // If Christmas Tree Mode is active, add 🎄 to all warning headings

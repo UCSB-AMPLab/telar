@@ -27,24 +27,9 @@
     pointer-events: auto;
   }
 
-  /* Viewer Card Styling */
+  /* Viewer Card Styling - main styles in telar.scss */
   .viewer-card {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
     background: #000;
-    transition: transform 0.6s ease-out;
-    will-change: transform;
-  }
-
-  .viewer-card.card-below {
-    transform: translateY(100%);
-  }
-
-  .viewer-card.card-active {
-    transform: translateY(0);
   }
 
   .viewer-instance {

@@ -2,6 +2,51 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.6.2-beta] - 2025-12-03
+
+### Added
+
+- **Improved viewer preloading**: Complete overhaul of how Telar loads IIIF viewers eliminates black screens and speeds up navigation. All IIIF manifests are fetched in parallel when the story page loads, so images are ready before you scroll to them. Hovering over a story card on the homepage begins loading its manifests. A subtle shimmer animation shows when a viewer is initializing. Preloading behavior can be tuned via `development-features.viewer_preloading` in `_config.yml`
+
+- **Glossary-to-glossary linking**: You can now use `[[term]]` syntax inside glossary definitions to link to other glossary terms
+
+- **All-in-one build script for local sites**: New `build_local_site.py` runs the complete local build process with a single command. Use `--skip-iiif` for faster rebuilds when images haven't changed, `--skip-fetch` to skip demo content fetching. Serves on port 4001 by default
+
+- **Development feature flags**: New `development-features` section in `_config.yml` with `hide_stories` (temporarily hide stories) and `hide_collections` (hide both objects and stories) for rapid testing
+
+### Fixed
+
+- **Case-insensitive object references**: Object IDs in your story spreadsheet now match regardless of capitalization (e.g., `LEVIATHAN` finds `leviathan`)
+
+- **Case-insensitive file paths**: Markdown file paths work regardless of case, preventing broken links when deploying from Mac to GitHub Pages
+
+- **Index page image overflow**: Large images on the homepage no longer overflow their containers
+
+- **Panel title spacing**: Improved spacing below panel titles for better readability
+
+- **Panel title markup**: Panel titles now use proper `<h1>` elements for accessibility
+
+### Removed
+
+- **Sample glossary entries**: Removed placeholder glossary entries (colonial-period, reduccion, resguardo, viceroyalty, iiif-manifest, markdown) that were not used by the template stories
+
+---
+
+**Migration from v0.6.1-beta:**
+- Run `python3 scripts/upgrade.py` to upgrade automatically
+- No breaking changes
+
+## [0.6.1-beta] - 2025-11-28
+
+### Added
+
+- **Bilingual README**: Framework README now includes both English and Spanish versions in a single file. Streamlined content removes duplication and directs users to comprehensive documentation at telar.org
+
+### Fixed
+
+- **EXIF orientation in thumbnails**: Fixed thumbnails displaying sideways/upside-down for smartphone photos with EXIF rotation metadata. The IIIF tile generator now correctly detects and applies all EXIF orientations (90°, 180°, 270°). Regenerate IIIF tiles to see correctly oriented thumbnails: `python3 scripts/generate_iiif.py`
+- **Migration script template pollution**: Fixed v0.5.0→v0.6.0 migration adding unwanted template files to existing sites. The migration now only adds templates (`your-story/`, `tu-historia/`, demo glossary) to new sites without custom content
+
 ## [0.6.0-beta] - 2025-11-28
 
 ### Added
@@ -214,6 +259,41 @@ All notable changes to Telar will be documented in this file.
   - CSV column update: `iiif_manifest` → `source_url`
   - Name conflict detection and empty directory cleanup
 - **Full backward compatibility**: No breaking changes for existing sites
+
+---
+
+## [0.4.3-beta] - 2025-11-15
+
+### Fixed
+
+#### v0.4.1 Migration Script Comment Restoration
+- **Complete framework comments restored**: Migration now restores all missing comments in _config.yml
+- **Top header comments**: Framework title and GitHub URL now restored at file beginning
+- **Complete testing-features section**: Entire section created if missing (not just comments)
+- **Impact**: Sites upgrading from v0.3.4 through multiple versions now have complete config structure
+- Files modified: `scripts/migrations/v040_to_v041.py`
+
+#### iPad Touch Scrolling for Story Navigation
+- **Touch navigation support**: iPad and touch devices can now navigate stories using swipe gestures
+- **Desktop viewport mode**: Fixes issue where touch scrolling didn't trigger story step changes
+- **Swipe to navigate**: Swipe up for next step, swipe down for previous step
+- **Respects cooldowns**: Same 600ms cooldown as mouse/trackpad scrolling
+- Files modified: `assets/js/story.js` (added touch event handlers)
+
+#### IIIF Regeneration on Config Changes
+- **Automatic regeneration**: IIIF tiles now regenerate when _config.yml changes
+- **Prevents broken images**: Fixes issue where baseurl changes caused image serving failures
+- **Smart detection**: Added _config.yml to change detection pattern in build workflow
+- Thanks to Tara for reporting this issue
+- Files modified: `.github/workflows/build.yml` (updated change detection pattern)
+
+#### EXIF Orientation Handling in IIIF Generation
+- **Portrait photos now display correctly**: Images from phones/cameras no longer appear rotated 90 degrees
+- **EXIF metadata respected**: Script now applies EXIF orientation data before generating IIIF tiles
+- **User experience**: Students can upload phone photos directly without manual rotation
+- **Visual feedback**: Console displays "↻ Applied EXIF orientation correction" when rotation is applied
+- Thanks to Tara for helping spot this issue
+- Files modified: `scripts/generate_iiif.py` (both `generate_iiif_for_image()` and `copy_base_image()`)
 
 ---
 
