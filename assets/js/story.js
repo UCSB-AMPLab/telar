@@ -2,7 +2,7 @@
  * Telar Story - UniversalViewer + Step-Based Navigation
  * Handles card-stacking interactions for story pages
  *
- * @version v0.6.2-beta
+ * @version v0.6.3-beta
  */
 
 // Step navigation
@@ -1622,13 +1622,13 @@ function getPanelContent(panelType, contentId) {
     }
 
     return {
-      title: step.layer1_title || 'Layer 1',
+      title: step.layer1_title || step.layer1_button || 'Layer 1',
       html: html,
       demo: step.layer1_demo || false
     };
   } else if (panelType === 'layer2') {
     return {
-      title: step.layer2_title || 'Layer 2',
+      title: step.layer2_title || step.layer2_button || 'Layer 2',
       html: formatPanelContent({
         text: step.layer2_text,
         media: step.layer2_media

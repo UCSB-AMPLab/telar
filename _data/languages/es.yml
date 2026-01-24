@@ -97,9 +97,9 @@ panels:
 
 # Mensajes de estado vacío
 empty_states:
-  no_stories: "Aún no hay historias disponibles. Crea archivos de historias en el directorio <code>_stories/</code> para empezar."
-  no_objects: "Aún no hay objetos en la colección. Agrega archivos de objetos al directorio <code>_objects/</code> para poblarla."
-  no_glossary: "Aún no hay términos en el glosario. Agrega archivos de glosario al directorio <code>_glossary/</code> para poblarlo."
+  no_stories: "Aún no hay historias disponibles. Agrega historias a tu hoja de cálculo o crea archivos CSV en <code>components/structures/</code>."
+  no_objects: "Aún no hay objetos en la colección. Agrega objetos a tu hoja de cálculo o a <code>components/structures/objects.csv</code>."
+  no_glossary: "Aún no hay términos en el glosario. Agrega archivos de glosario a <code>components/texts/glossary/</code>."
   thumbnail_load_error: "Error al cargar"
 
 # Mensajes de error y advertencias (visibles para el usuario)
