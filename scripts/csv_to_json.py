@@ -4,7 +4,7 @@ Convert CSV files from Google Sheets to JSON for Jekyll
 
 Thin wrapper that delegates to the telar package. All functionality
 has been modularised into telar.config, telar.csv_utils, telar.images,
-telar.iiif, telar.glossary, telar.widgets, telar.markdown,
+telar.iiif_metadata, telar.glossary, telar.widgets, telar.markdown,
 telar.processors.*, telar.demo, and telar.core.
 
 This file exists for backward compatibility: existing imports like
@@ -24,7 +24,7 @@ from telar.images import (
     process_images, resolve_path_case_insensitive,
     validate_image_path, get_image_dimensions
 )
-from telar.iiif import (
+from telar.iiif_metadata import (
     detect_iiif_version, extract_language_map_value, strip_html_tags,
     clean_metadata_value, find_metadata_field, is_legal_boilerplate,
     extract_credit, extract_manifest_metadata, apply_metadata_fallback

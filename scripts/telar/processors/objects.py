@@ -30,7 +30,7 @@ steps before returning the cleaned DataFrame for JSON serialisation:
 
 5. **IIIF metadata extraction** — when a manifest validates successfully,
    extracts title, description, creator, period, location, and credit
-   using the functions from the iiif module, then applies the fallback
+   using the functions from the iiif_metadata module, then applies the fallback
    hierarchy (CSV values always win over IIIF values).
 
 6. **Local image fallback** — objects without an external manifest are
@@ -60,7 +60,7 @@ import pandas as pd
 
 from telar.config import get_lang_string, load_site_language
 from telar.csv_utils import get_source_url
-from telar.iiif import (
+from telar.iiif_metadata import (
     detect_iiif_version, extract_language_map_value, strip_html_tags,
     clean_metadata_value, find_metadata_field, extract_credit,
     apply_metadata_fallback
