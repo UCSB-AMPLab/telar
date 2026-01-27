@@ -29,14 +29,14 @@ class TestParseCarouselWidget:
     @pytest.fixture
     def mock_image_validation(self):
         """Mock validate_image_path to always return True."""
-        with patch('csv_to_json.validate_image_path') as mock:
+        with patch('telar.widgets.validate_image_path') as mock:
             mock.return_value = (True, '/full/path/to/image.jpg')
             yield mock
 
     @pytest.fixture
     def mock_image_dimensions(self):
         """Mock get_image_dimensions to return standard dimensions."""
-        with patch('csv_to_json.get_image_dimensions') as mock:
+        with patch('telar.widgets.get_image_dimensions') as mock:
             mock.return_value = (800, 600)  # Landscape aspect ratio
             yield mock
 
@@ -92,7 +92,7 @@ caption: Has caption but no alt"""
 
     def test_warns_image_not_found(self, mock_image_dimensions):
         """Should warn when image file doesn't exist."""
-        with patch('csv_to_json.validate_image_path') as mock:
+        with patch('telar.widgets.validate_image_path') as mock:
             mock.return_value = (False, '/path/to/missing.jpg')
             content = """image: missing.jpg
 alt: Missing image"""
@@ -135,7 +135,7 @@ alt: Second"""
 
     def test_size_class_landscape(self, mock_image_validation):
         """Should set 'default' size class for landscape images."""
-        with patch('csv_to_json.get_image_dimensions') as mock:
+        with patch('telar.widgets.get_image_dimensions') as mock:
             mock.return_value = (800, 600)  # 0.75 aspect ratio
             content = """image: landscape.jpg
 alt: Landscape image"""
@@ -145,7 +145,7 @@ alt: Landscape image"""
 
     def test_size_class_portrait(self, mock_image_validation):
         """Should set 'portrait' size class for portrait images."""
-        with patch('csv_to_json.get_image_dimensions') as mock:
+        with patch('telar.widgets.get_image_dimensions') as mock:
             mock.return_value = (600, 1000)  # 1.67 aspect ratio
             content = """image: portrait.jpg
 alt: Portrait image"""
@@ -155,7 +155,7 @@ alt: Portrait image"""
 
     def test_size_class_compact(self, mock_image_validation):
         """Should set 'compact' size class for wide panoramas."""
-        with patch('csv_to_json.get_image_dimensions') as mock:
+        with patch('telar.widgets.get_image_dimensions') as mock:
             mock.return_value = (1000, 400)  # 0.4 aspect ratio
             content = """image: panorama.jpg
 alt: Panorama image"""
@@ -165,7 +165,7 @@ alt: Panorama image"""
 
     def test_size_class_tall(self, mock_image_validation):
         """Should set 'tall' size class for square to mild portrait."""
-        with patch('csv_to_json.get_image_dimensions') as mock:
+        with patch('telar.widgets.get_image_dimensions') as mock:
             mock.return_value = (800, 900)  # 1.125 aspect ratio
             content = """image: square.jpg
 alt: Square-ish image"""
@@ -183,7 +183,7 @@ alt: Square-ish image"""
             call_count[0] += 1
             return result
 
-        with patch('csv_to_json.get_image_dimensions', side_effect=mock_dimensions):
+        with patch('telar.widgets.get_image_dimensions', side_effect=mock_dimensions):
             content = """image: landscape.jpg
 alt: Landscape
 

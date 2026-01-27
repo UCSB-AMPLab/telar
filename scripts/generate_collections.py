@@ -13,13 +13,10 @@ from pathlib import Path
 import markdown
 import yaml
 
-# Import processing functions from csv_to_json
-from csv_to_json import (
-    process_widgets,
-    process_images,
-    process_glossary_links,
-    load_glossary_terms
-)
+# Import processing functions from telar package
+from telar.widgets import process_widgets
+from telar.images import process_images
+from telar.glossary import process_glossary_links, load_glossary_terms
 
 def generate_objects():
     """Generate object markdown files from objects.json"""

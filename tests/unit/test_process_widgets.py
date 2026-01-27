@@ -22,7 +22,7 @@ from unittest.mock import patch, MagicMock
 # Add scripts directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
-import csv_to_json
+import telar.widgets
 from csv_to_json import process_widgets, get_widget_id, render_widget_html
 
 
@@ -32,14 +32,14 @@ class TestGetWidgetId:
     def test_returns_widget_id_format(self):
         """Should return ID in widget-N format."""
         # Reset counter for predictable testing
-        csv_to_json._widget_counter = 0
+        telar.widgets._widget_counter = 0
         widget_id = get_widget_id()
         assert widget_id.startswith('widget-')
         assert widget_id == 'widget-1'
 
     def test_increments_counter(self):
         """Should increment counter for each call."""
-        csv_to_json._widget_counter = 0
+        telar.widgets._widget_counter = 0
         id1 = get_widget_id()
         id2 = get_widget_id()
         id3 = get_widget_id()
@@ -49,7 +49,7 @@ class TestGetWidgetId:
 
     def test_returns_unique_ids(self):
         """Should return unique IDs across multiple calls."""
-        csv_to_json._widget_counter = 0
+        telar.widgets._widget_counter = 0
         ids = [get_widget_id() for _ in range(100)]
         assert len(ids) == len(set(ids))
 
@@ -60,7 +60,7 @@ class TestProcessWidgets:
     @pytest.fixture(autouse=True)
     def reset_counter(self):
         """Reset widget counter before each test."""
-        csv_to_json._widget_counter = 0
+        telar.widgets._widget_counter = 0
 
     def test_detects_carousel_widget(self):
         """Should detect and process carousel widget blocks."""
@@ -73,8 +73,8 @@ alt: Description
 
 Some text after."""
 
-        with patch('csv_to_json.parse_carousel_widget') as mock_parse, \
-             patch('csv_to_json.render_widget_html') as mock_render:
+        with patch('telar.widgets.parse_carousel_widget') as mock_parse, \
+             patch('telar.widgets.render_widget_html') as mock_render:
             mock_parse.return_value = {'items': []}
             mock_render.return_value = '<div class="carousel">Rendered</div>'
 
@@ -92,8 +92,8 @@ Some text after."""
 Content
 :::"""
 
-        with patch('csv_to_json.parse_tabs_widget') as mock_parse, \
-             patch('csv_to_json.render_widget_html') as mock_render:
+        with patch('telar.widgets.parse_tabs_widget') as mock_parse, \
+             patch('telar.widgets.render_widget_html') as mock_render:
             mock_parse.return_value = {'tabs': []}
             mock_render.return_value = '<div class="tabs">Rendered</div>'
 
@@ -109,8 +109,8 @@ Content
 Content
 :::"""
 
-        with patch('csv_to_json.parse_accordion_widget') as mock_parse, \
-             patch('csv_to_json.render_widget_html') as mock_render:
+        with patch('telar.widgets.parse_accordion_widget') as mock_parse, \
+             patch('telar.widgets.render_widget_html') as mock_render:
             mock_parse.return_value = {'panels': []}
             mock_render.return_value = '<div class="accordion">Rendered</div>'
 
@@ -160,9 +160,9 @@ Some text between.
 Content
 :::"""
 
-        with patch('csv_to_json.parse_tabs_widget') as mock_tabs, \
-             patch('csv_to_json.parse_accordion_widget') as mock_accordion, \
-             patch('csv_to_json.render_widget_html') as mock_render:
+        with patch('telar.widgets.parse_tabs_widget') as mock_tabs, \
+             patch('telar.widgets.parse_accordion_widget') as mock_accordion, \
+             patch('telar.widgets.render_widget_html') as mock_render:
             mock_tabs.return_value = {'tabs': []}
             mock_accordion.return_value = {'panels': []}
             mock_render.return_value = '<div>Widget</div>'
@@ -181,8 +181,8 @@ Content
 Content
 :::"""
 
-        with patch('csv_to_json.parse_tabs_widget') as mock_parse, \
-             patch('csv_to_json.render_widget_html') as mock_render:
+        with patch('telar.widgets.parse_tabs_widget') as mock_parse, \
+             patch('telar.widgets.render_widget_html') as mock_render:
             mock_parse.return_value = {'tabs': []}
             mock_render.return_value = '<div>Tabs</div>'
 
@@ -197,8 +197,8 @@ Content
 image: photo.jpg
 :::"""
 
-        with patch('csv_to_json.parse_carousel_widget') as mock_parse, \
-             patch('csv_to_json.render_widget_html') as mock_render:
+        with patch('telar.widgets.parse_carousel_widget') as mock_parse, \
+             patch('telar.widgets.render_widget_html') as mock_render:
             mock_parse.return_value = {'items': []}
             mock_render.return_value = '<div>Carousel</div>'
 
@@ -222,7 +222,7 @@ class TestRenderWidgetHtml:
 
     def test_includes_widget_id(self):
         """Should include widget_id when rendering template."""
-        with patch('csv_to_json.Environment') as MockEnv:
+        with patch('telar.widgets.Environment') as MockEnv:
             mock_template = MagicMock()
             mock_template.render.return_value = '<div id="widget-1">Content</div>'
             mock_env = MagicMock()
@@ -237,7 +237,7 @@ class TestRenderWidgetHtml:
 
     def test_includes_base_url_placeholder(self):
         """Should include Jekyll base_url placeholder."""
-        with patch('csv_to_json.Environment') as MockEnv:
+        with patch('telar.widgets.Environment') as MockEnv:
             mock_template = MagicMock()
             mock_template.render.return_value = '<div>Content</div>'
             mock_env = MagicMock()
