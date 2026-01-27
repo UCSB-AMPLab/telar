@@ -1,5 +1,32 @@
 name: Build and Deploy Telar Site
-# Build and deploy Jekyll site with smart IIIF tile generation
+#
+# There are two equally valid ways to build a Telar site: locally on the user's
+# own computer (using scripts/build_local_site.py), or through this GitHub
+# Actions workflow which builds and deploys to GitHub Pages automatically.
+#
+# This workflow runs the full Telar build pipeline:
+#
+#   1. Set up the three runtime environments (Ruby for Jekyll, Python for the
+#      build scripts, Node.js for the JavaScript bundler)
+#   2. Fetch content from Google Sheets (if enabled in _config.yml) — this
+#      downloads the spreadsheet tabs as CSV files into components/structures/
+#   3. Run csv_to_json.py to process the CSV data into the JSON files that
+#      Jekyll uses to render story pages
+#   4. Run generate_collections.py to turn the markdown texts in
+#      components/texts/ into Jekyll collection files
+#   5. Bundle the JavaScript source modules (assets/js/telar-story/) into a
+#      single file using esbuild
+#   6. Build the Jekyll site
+#   7. Generate IIIF deep-zoom image tiles for self-hosted exhibition objects
+#      (with smart caching — tiles are only regenerated when source images or
+#      objects.csv change)
+#   8. Deploy the built site to GitHub Pages
+#
+# The IIIF tile generation includes a change-detection step that compares the
+# current commit against the previous one. If only content files changed (not
+# images or objects.csv), it restores tiles from the GitHub Actions cache
+# instead of regenerating them, which saves significant build time.
+#
 # Version: v0.7.0-beta
 
 on:
