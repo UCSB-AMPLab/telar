@@ -1,4 +1,4 @@
-name: Test Telar Scripts
+name: Test Telar Python Scripts
 #
 # Telar's build pipeline is driven by Python scripts in the scripts/ directory.
 # These scripts handle everything from fetching Google Sheets data to processing
