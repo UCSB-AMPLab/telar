@@ -16,8 +16,13 @@ Run tests:
 Version: v0.7.0-beta
 """
 
+import re
 import pytest
 from playwright.sync_api import expect
+
+
+# Use a known story URL (story IDs are slugs, not numbers)
+STORY_PATH = "/stories/your-story/"
 
 
 class TestEmbedModeActivation:
@@ -25,19 +30,17 @@ class TestEmbedModeActivation:
 
     def test_embed_mode_activates_with_param(self, page, base_url):
         """Should activate embed mode when ?embed=true is present."""
-        page.goto(f"{base_url}/stories/1/?embed=true")
+        page.goto(f"{base_url}{STORY_PATH}?embed=true")
         page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
 
-        # Body should have embed class or data attribute
+        # Body should have embed-mode class
         body = page.locator("body")
-        body_class = body.get_attribute("class") or ""
-        body_data = body.get_attribute("data-embed") or ""
-
-        assert "embed" in body_class.lower() or body_data == "true"
+        expect(body).to_have_class(re.compile(r"embed-mode"))
 
     def test_header_hidden_in_embed_mode(self, page, base_url):
         """Should hide site header in embed mode."""
-        page.goto(f"{base_url}/stories/1/?embed=true")
+        page.goto(f"{base_url}{STORY_PATH}?embed=true")
         page.wait_for_load_state("networkidle")
 
         # Header should be hidden
@@ -47,7 +50,7 @@ class TestEmbedModeActivation:
 
     def test_footer_hidden_in_embed_mode(self, page, base_url):
         """Should hide site footer in embed mode."""
-        page.goto(f"{base_url}/stories/1/?embed=true")
+        page.goto(f"{base_url}{STORY_PATH}?embed=true")
         page.wait_for_load_state("networkidle")
 
         # Footer should be hidden
@@ -58,13 +61,13 @@ class TestEmbedModeActivation:
     def test_nav_buttons_visible_in_embed_mode(self, page, base_url):
         """Should show navigation buttons in embed mode (like mobile)."""
         page.set_viewport_size({"width": 1280, "height": 720})  # Desktop size
-        page.goto(f"{base_url}/stories/1/?embed=true")
+        page.goto(f"{base_url}{STORY_PATH}?embed=true")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
 
-        # Nav buttons should be visible even on desktop in embed mode
-        nav_buttons = page.locator(".nav-button, .telar-nav-btn, [class*='nav-arrow']")
-        expect(nav_buttons.first).to_be_visible()
+        # Mobile-style nav buttons should be visible in embed mode
+        nav_container = page.locator(".mobile-nav")
+        expect(nav_container).to_be_visible()
 
 
 class TestEmbedModeNavigation:
@@ -73,7 +76,7 @@ class TestEmbedModeNavigation:
     @pytest.fixture
     def embed_story_page(self, page, base_url):
         """Navigate to story in embed mode."""
-        page.goto(f"{base_url}/stories/1/?embed=true")
+        page.goto(f"{base_url}{STORY_PATH}?embed=true")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
         return page
@@ -82,28 +85,33 @@ class TestEmbedModeNavigation:
         """Should support keyboard navigation in embed mode."""
         page = embed_story_page
 
-        initial_step = page.locator(".step-indicator, [data-step]").first.text_content()
+        # Verify intro is visible
+        intro = page.locator(".story-step.story-intro")
+        expect(intro).to_be_visible()
 
+        # Navigate forward
         page.keyboard.press("ArrowDown")
         page.wait_for_timeout(800)
 
-        new_step = page.locator(".step-indicator, [data-step]").first.text_content()
-        assert new_step != initial_step or "1" not in initial_step
+        # Step 1 should have is-active (embed uses same navigation as desktop)
+        step1 = page.locator(".story-step[data-step-index='1']")
+        expect(step1).to_have_class(re.compile(r"is-active"))
 
     def test_button_navigation_works(self, embed_story_page):
         """Should support button navigation in embed mode."""
         page = embed_story_page
 
-        initial_step = page.locator(".step-indicator, [data-step]").first.text_content()
+        # Embed mode shows mobile-nav buttons
+        next_btn = page.locator(".mobile-next")
+        expect(next_btn).to_be_visible()
 
         # Click next button
-        next_btn = page.locator(".nav-button-down, .nav-next, [class*='nav-down']").first
-        if next_btn.is_visible():
-            next_btn.click()
-            page.wait_for_timeout(800)
+        next_btn.click()
+        page.wait_for_timeout(800)
 
-            new_step = page.locator(".step-indicator, [data-step]").first.text_content()
-            assert new_step != initial_step or "1" not in initial_step
+        # Step 1 should now be active
+        step1 = page.locator(".story-step[data-step-index='1']")
+        expect(step1).to_have_class(re.compile(r"is-active"))
 
 
 class TestEmbedModeIframe:
@@ -120,7 +128,7 @@ class TestEmbedModeIframe:
                 <h1>Embedded Story</h1>
                 <iframe
                     id="story-frame"
-                    src="{base_url}/stories/1/?embed=true"
+                    src="{base_url}{STORY_PATH}?embed=true"
                     width="800"
                     height="600"
                     style="border: 1px solid #ccc;">
@@ -131,10 +139,10 @@ class TestEmbedModeIframe:
 
         # Wait for iframe to load
         frame = page.frame_locator("#story-frame")
-        frame.locator(".story-container, .telar-story").wait_for(state="visible", timeout=15000)
+        frame.locator(".story-container").wait_for(state="visible", timeout=15000)
 
         # Story should be visible within iframe
-        story = frame.locator(".story-container, .telar-story")
+        story = frame.locator(".story-container")
         expect(story).to_be_visible()
 
     def test_navigation_works_in_iframe(self, page, base_url):
@@ -146,7 +154,7 @@ class TestEmbedModeIframe:
             <body>
                 <iframe
                     id="story-frame"
-                    src="{base_url}/stories/1/?embed=true"
+                    src="{base_url}{STORY_PATH}?embed=true"
                     width="800"
                     height="600">
                 </iframe>
@@ -155,22 +163,23 @@ class TestEmbedModeIframe:
         """)
 
         frame = page.frame_locator("#story-frame")
-        frame.locator(".story-container, .telar-story").wait_for(state="visible", timeout=15000)
+        frame.locator(".story-container").wait_for(state="visible", timeout=15000)
 
-        # Get initial step
-        initial_step = frame.locator(".step-indicator, [data-step]").first.text_content()
+        # Verify intro is visible in iframe
+        intro = frame.locator(".story-step.story-intro")
+        expect(intro).to_be_visible()
 
         # Click within iframe to focus it, then navigate
-        frame.locator(".story-container, .telar-story").first.click()
+        frame.locator(".story-container").click()
         page.wait_for_timeout(500)
 
         # Use keyboard navigation
         page.keyboard.press("ArrowDown")
         page.wait_for_timeout(800)
 
-        new_step = frame.locator(".step-indicator, [data-step]").first.text_content()
-        # Navigation should work
-        assert new_step is not None
+        # Step 1 should be active now
+        step1 = frame.locator(".story-step[data-step-index='1']")
+        expect(step1).to_have_class(re.compile(r"is-active"))
 
 
 class TestEmbedModeWithoutParam:
@@ -178,7 +187,7 @@ class TestEmbedModeWithoutParam:
 
     def test_header_visible_without_embed(self, page, base_url):
         """Should show header in normal mode."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
 
         header = page.locator("header, .site-header, .telar-header")
@@ -187,7 +196,7 @@ class TestEmbedModeWithoutParam:
 
     def test_embed_class_absent(self, page, base_url):
         """Should not have embed class in normal mode."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
 
         body = page.locator("body")

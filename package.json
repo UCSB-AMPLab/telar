@@ -1,0 +1,10 @@
+{
+  "name": "telar",
+  "private": true,
+  "scripts": {
+    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/story.js --format=iife"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

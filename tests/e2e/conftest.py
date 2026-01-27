@@ -25,33 +25,8 @@ MOBILE_VIEWPORT = {"width": 375, "height": 667}
 TABLET_VIEWPORT = {"width": 768, "height": 1024}
 
 
-def pytest_addoption(parser):
-    """Add custom command-line options for E2E tests."""
-    parser.addoption(
-        "--base-url",
-        action="store",
-        default=DEFAULT_BASE_URL,
-        help="Base URL for the Telar site under test"
-    )
-    parser.addoption(
-        "--headed",
-        action="store_true",
-        default=False,
-        help="Run browser in headed mode (visible window)"
-    )
-    parser.addoption(
-        "--slow-mo",
-        action="store",
-        type=int,
-        default=0,
-        help="Slow down operations by specified milliseconds"
-    )
-
-
-@pytest.fixture(scope="session")
-def base_url(request):
-    """Get the base URL for tests."""
-    return request.config.getoption("--base-url")
+# Note: --base-url is provided by pytest-playwright
+# Use: pytest tests/e2e/ --base-url http://127.0.0.1:4001/telar
 
 
 @pytest.fixture(scope="session")

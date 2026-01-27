@@ -31,7 +31,7 @@ class TestPanelButtons:
     @pytest.fixture
     def story_page(self, page, base_url):
         """Navigate to story page."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}/stories/your-story/")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
         return page
@@ -66,7 +66,7 @@ class TestPanelOpening:
     @pytest.fixture
     def story_page(self, page, base_url):
         """Navigate to story page."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}/stories/your-story/")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
         return page
@@ -124,7 +124,7 @@ class TestPanelClosing:
     @pytest.fixture
     def open_panel_page(self, page, base_url):
         """Navigate to story and open a panel."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}/stories/your-story/")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
 
@@ -168,10 +168,11 @@ class TestPanelClosing:
         """Should close panel when clicking outside."""
         page = open_panel_page
 
-        # Click on story container (outside panel)
-        story = page.locator(".story-container, .telar-story").first
-        story.click(position={"x": 10, "y": 10})
-        page.wait_for_timeout(500)
+        # Click on viewer column (outside panel area)
+        viewer = page.locator(".viewer-column")
+        if viewer.count() > 0 and viewer.is_visible():
+            viewer.click(position={"x": 50, "y": 50}, timeout=5000)
+            page.wait_for_timeout(500)
 
         # Panel may close depending on implementation
 
@@ -182,7 +183,7 @@ class TestPanelContent:
     @pytest.fixture
     def open_panel_page(self, page, base_url):
         """Navigate to story and open a panel."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}/stories/your-story/")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
 
@@ -231,7 +232,7 @@ class TestMultiplePanels:
     @pytest.fixture
     def story_page(self, page, base_url):
         """Navigate to story page."""
-        page.goto(f"{base_url}/stories/1/")
+        page.goto(f"{base_url}/stories/your-story/")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
         return page
