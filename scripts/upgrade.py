@@ -2,10 +2,26 @@
 """
 Telar Upgrade Script
 
-Automatically migrates Telar installations from older versions to the latest version.
-Detects current version, applies necessary migrations, and generates checklist for manual steps.
+When a new version of Telar is released, existing sites need to be
+updated to match the new framework. This script automates that process
+by detecting the site's current version and applying every migration
+needed to reach the latest version.
 
-Version: v0.6.2-beta
+Each migration is a Python class in scripts/migrations/ that knows how
+to transform a site from one specific version to the next. Migrations
+can add, modify, or delete files — for example, adding new layout
+templates, updating _config.yml with new settings, or renaming
+directories. The script chains these together: upgrading from v0.3.0
+to v0.6.2 runs every intermediate migration in sequence.
+
+After applying automated changes, the script regenerates all data files
+(JSON, collections, IIIF tiles) to apply any new validation or
+processing logic introduced in the new version. The output is an
+UPGRADE_SUMMARY.md file listing every automated change made and any
+manual steps the user still needs to complete. The --dry-run flag
+previews what would happen without making changes.
+
+Version: v0.7.0-beta
 
 Usage:
     python scripts/upgrade.py              # Normal upgrade

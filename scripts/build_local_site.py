@@ -1,11 +1,30 @@
 #!/usr/bin/env python3
 """
-Build Telar site for local development
+Build Telar Site for Local Development
 
-Runs all build scripts in sequence, mimicking the GitHub Actions workflow.
-Use this instead of running individual scripts manually.
+This script orchestrates the full Telar build pipeline on a user's own
+computer. The same pipeline also runs as a GitHub Actions workflow —
+this script and the workflow are two equally valid ways to build a
+Telar site.
 
-Version: v0.6.2-beta
+The build pipeline has six steps, each handled by a separate script
+or tool:
+
+1. Fetch Google Sheets data as CSV files (fetch_google_sheets.py)
+2. Convert CSV to JSON, processing widgets, IIIF metadata, glossary
+   links, and demo content (csv_to_json.py / telar package)
+3. Generate Jekyll collection markdown files from JSON
+   (generate_collections.py)
+4. Generate IIIF image tiles for self-hosted objects (generate_iiif.py)
+5. Bundle JavaScript modules into story.js (esbuild)
+6. Build or serve the Jekyll site
+
+Each step can be skipped with flags (--skip-fetch, --skip-iiif,
+--build-only) for faster iteration when only some data has changed.
+The default behaviour is to run all steps and start a local Jekyll
+server on port 4001.
+
+Version: v0.7.0-beta
 
 Usage:
     python3 scripts/build_local_site.py              # Build and serve on port 4001
@@ -81,25 +100,25 @@ def main():
             if gs_enabled:
                 run_command(
                     'python3 scripts/fetch_google_sheets.py',
-                    'Step 1/5: Fetching data from Google Sheets'
+                    'Step 1/6: Fetching data from Google Sheets'
                 )
             else:
-                print("\n✓ Step 1/5: Google Sheets disabled - using existing CSV files")
+                print("\n✓ Step 1/6: Google Sheets disabled - using existing CSV files")
         else:
-            print("\n⚠ Step 1/5: No _config.yml found - skipping Google Sheets fetch")
+            print("\n⚠ Step 1/6: No _config.yml found - skipping Google Sheets fetch")
     else:
-        print("\n✓ Step 1/5: Skipping Google Sheets fetch (--skip-fetch)")
+        print("\n✓ Step 1/6: Skipping Google Sheets fetch (--skip-fetch)")
 
     # Step 2: Convert CSV to JSON
     run_command(
         'python3 scripts/csv_to_json.py',
-        'Step 2/5: Converting CSV to JSON'
+        'Step 2/6: Converting CSV to JSON'
     )
 
     # Step 3: Generate Jekyll collections
     run_command(
         'python3 scripts/generate_collections.py',
-        'Step 3/5: Generating Jekyll collections'
+        'Step 3/6: Generating Jekyll collections'
     )
 
     # Step 4: Generate IIIF tiles (unless skipped)
@@ -117,15 +136,21 @@ def main():
 
         run_command(
             f'python3 scripts/generate_iiif.py --base-url {base_url}',
-            f'Step 4/5: Generating IIIF tiles (base URL: {base_url})'
+            f'Step 4/6: Generating IIIF tiles (base URL: {base_url})'
         )
     else:
-        print("\n✓ Step 4/5: Skipping IIIF generation (--skip-iiif)")
+        print("\n✓ Step 4/6: Skipping IIIF generation (--skip-iiif)")
 
-    # Step 5: Build or serve Jekyll
+    # Step 5: Build JavaScript bundle
+    run_command(
+        'npm run build:js',
+        'Step 5/6: Building JavaScript bundle'
+    )
+
+    # Step 6: Build or serve Jekyll
     if serve:
         print("\n" + "="*60)
-        print(f"  Step 5/5: Starting Jekyll server on port {args.port}")
+        print(f"  Step 6/6: Starting Jekyll server on port {args.port}")
         print("="*60)
         print(f"\n  Site will be available at: http://127.0.0.1:{args.port}/telar/")
         print("  Press Ctrl+C to stop the server\n")
@@ -139,7 +164,7 @@ def main():
     else:
         run_command(
             'bundle exec jekyll build',
-            'Step 5/5: Building Jekyll site'
+            'Step 6/6: Building Jekyll site'
         )
         print("\n" + "="*60)
         print("  Build complete! Site is in _site/")

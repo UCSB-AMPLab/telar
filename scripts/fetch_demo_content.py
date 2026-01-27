@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 """
-Fetch demo content from content.telar.org
+Fetch Demo Content from content.telar.org
 
-Downloads the demo content bundle based on site version and language.
-Demo content is stored in _demo_content/ (gitignored, never committed).
+When a new Telar site is first set up, it has no real content yet — no
+objects, no stories, no glossary terms. Demo content fills this gap by
+providing sample data that shows how the site will look and behave once
+real content is added. Users can toggle it on or off with the
+include_demo_content setting in _config.yml.
 
-When include_demo_content is false, cleans up _demo_content/ directory.
+This script downloads a demo content bundle from content.telar.org,
+Telar's content distribution server. Each bundle is version-specific
+and language-specific (English or Spanish), so the script reads the
+site's current version and language from _config.yml and fetches the
+matching bundle. If an exact version match is not available, it falls
+back to the closest compatible version.
 
-Version: v0.6.0-beta
+The bundle is saved to _demo_content/ (gitignored, never committed).
+The csv_to_json.py build script (telar package) merges demo content
+into the JSON data alongside the user's real content, marking demo
+items with a _demo flag so the site can style them differently.
+
+Version: v0.7.0-beta
 """
 
 import json

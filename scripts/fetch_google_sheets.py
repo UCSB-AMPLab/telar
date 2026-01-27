@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
 """
-Fetch Google Sheets data and save as CSVs
+Fetch Google Sheets Data as CSV Files
 
-Reads Google Sheets URLs from _config.yml, discovers tab GIDs,
-and fetches all data as CSV files to components/structures/
+This is the first step in the web-based GitHub Pages Telar build
+pipeline. It downloads the raw content data from a Google Sheets
+spreadsheet and saves each tab as a separate CSV file in
+components/structures/.
 
-Version: v0.5.0-beta
+A Telar spreadsheet typically has these tabs: project (site-level
+settings like title, subtitle, language), objects (exhibition objects
+with metadata and IIIF manifest URLs), and one or more story tabs (story
+steps with narrative text, viewer positions, and panel content).
+
+The script reads the shared and published Google Sheets URLs from
+_config.yml, uses discover_sheet_gids.py to find the GID for each tab,
+then fetches each tab as CSV via Google's export API. Instruction and
+help tabs are skipped automatically.
+
+The resulting CSV files are the input for the next build step:
+csv_to_json.py (the telar package), which processes them into the JSON
+data that Jekyll uses to render the site.
+
+Version: v0.7.0-beta
 
 Usage:
     python3 scripts/fetch_google_sheets.py
