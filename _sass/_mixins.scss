@@ -1,0 +1,118 @@
+/**
+ * Reusable Patterns
+ *
+ * Reusable patterns shared across partials. The main pattern here is the panel
+ * colour inversion for tabs: in Telar's panel system, widgets inside panels use
+ * the opposite panel's colours for visual contrast. A tabs widget in the Layer 1
+ * panel (light background) gets Layer 2 colours (dark), and a tabs widget in
+ * Layer 2 gets Layer 1 colours. User pages follow the same convention as
+ * Layer 1. Rather than duplicating those colour rules for every context, this
+ * mixin generates them from a single definition.
+ *
+ * @version v0.7.0-beta
+ */
+
+/* Tabs panel colour inversion
+ *
+ * Generates the full set of overrides needed to restyle a .telar-widget-tabs
+ * inside a particular context (a panel or a page type). The overrides strip the
+ * default white background and borders, then apply the provided colour pair to
+ * tab headers, active states, and tab content areas.
+ *
+ * $bg-var:   CSS custom property name for the background, e.g. --color-panel-layer2-bg
+ * $text-var: CSS custom property name for the text, e.g. --color-panel-layer2-text
+ */
+@mixin widget-tabs-panel-colours($bg-var, $text-var) {
+  .telar-widget-tabs {
+    background: transparent;
+    border: none;
+  }
+
+  .telar-widget-tabs .nav-tabs {
+    background: transparent;
+    border-bottom: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .telar-widget-tabs .nav-tabs .nav-item {
+    margin: 0;
+  }
+
+  .telar-widget-tabs .nav-tabs .nav-item:first-child .nav-link {
+    margin-left: 0;
+  }
+
+  .telar-widget-tabs .nav-tabs .nav-link {
+    border: none;
+    border-radius: 0.5rem 0.5rem 0 0;
+    padding: 0.75rem 1.25rem;
+    margin: 0;
+    background: var(#{$bg-var});
+    color: var(#{$text-var});
+    opacity: 0.7;
+  }
+
+  .telar-widget-tabs .nav-tabs .nav-link.active {
+    background: var(#{$bg-var});
+    color: var(#{$text-var});
+    border: none;
+    opacity: 1;
+  }
+
+  .telar-widget-tabs .tab-content {
+    background: var(#{$bg-var});
+    color: var(#{$text-var});
+    border-radius: 0 0.5rem 0 0;
+  }
+}
+
+/* UniversalViewer control hiding
+ *
+ * UV ships with its own toolbar buttons (zoom, download, share, thumbnails,
+ * etc.) which Telar hides to present a clean viewing experience. Both story
+ * pages and object pages need the same set of controls hidden, but target
+ * different parent selectors. This mixin generates the hiding rules for a
+ * given parent selector.
+ *
+ * $parent: CSS selector for the viewer container, e.g. .viewer-instance or #object-viewer
+ */
+@mixin hide-uv-controls($parent) {
+  #{$parent} .headerPanel,
+  #{$parent} .footerPanel,
+  #{$parent} .leftPanel,
+  #{$parent} .rightPanel,
+  #{$parent} .mobilePanel,
+  #{$parent} .btn,
+  #{$parent} .download,
+  #{$parent} .share,
+  #{$parent} .embed,
+  #{$parent} .more,
+  #{$parent} .pagingToggle,
+  #{$parent} .searchButton,
+  #{$parent} .bookmark,
+  #{$parent} .zoomIn,
+  #{$parent} .zoomOut,
+  #{$parent} .goHome {
+    display: none !important;
+  }
+
+  #{$parent} .centerPanel {
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+
+  #{$parent} .informationBox,
+  #{$parent} .moreInfoButton,
+  #{$parent} .attribution,
+  #{$parent} .title,
+  #{$parent} .subtitle,
+  #{$parent} .titlePanel,
+  #{$parent} .metadata,
+  #{$parent} h1,
+  #{$parent} h2 {
+    display: none !important;
+  }
+}

@@ -1,0 +1,47 @@
+/**
+ * Typography
+ *
+ * Global text styles: body font, heading hierarchy, link colours, and display
+ * heading responsive sizing. These apply site-wide across all page types (home,
+ * story, object, glossary). Font families and colours come from CSS custom
+ * properties set by the theme system in the main stylesheet.
+ *
+ * @version v0.7.0-beta
+ */
+
+/* Body */
+body {
+  font-family: var(--font-body);
+  color: var(--color-body);
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-headings);
+  color: var(--color-heading);
+}
+
+/* Global link styling - theme color with underline */
+a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* Display headings - ensure proper word wrapping on mobile */
+@media (max-width: 767px) {
+  .display-4 {
+    font-size: 2.5rem;
+  }
+}

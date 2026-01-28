@@ -1,0 +1,67 @@
+/**
+ * Viewer
+ *
+ * Overrides for UniversalViewer, the IIIF image viewer embedded in story and
+ * object pages. UV ships with its own controls (zoom buttons, thumbnails panel,
+ * download, share, settings) which are hidden in Telar to present a clean
+ * viewing experience. The overrides target specific UV component classes and
+ * force the central image area to fill the available space.
+ *
+ * Story pages and object pages both need the same controls hidden but use
+ * different parent selectors (.viewer-instance vs #object-viewer), so a shared
+ * mixin generates the hiding rules for each context.
+ *
+ * @version v0.7.0-beta
+ */
+
+@use 'mixins' as *;
+
+/* Viewer Containers */
+#viewer-container {
+  width: 100%;
+  height: 100%;
+}
+
+#object-viewer {
+  width: 100%;
+  height: 600px;
+}
+
+/* UniversalViewer - Clean Story Viewer Display */
+/* Hide all UV controls in story pages for clean presentation */
+@include hide-uv-controls('.viewer-instance');
+
+/* Extra aggressive hiding for left panel thumbnails/color bars */
+.viewer-card .leftPanel,
+.viewer-card .thumbsView,
+.viewer-card .galleryView,
+.uv .leftPanel,
+.uv .thumbsView,
+.uv .galleryView {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+}
+
+/* UniversalViewer - Clean Object Page Display */
+/* Hide all UV controls on object pages for clean presentation */
+@include hide-uv-controls('#object-viewer');
+
+/* Hide UniversalViewer UI controls for cleaner viewing */
+.uv .leftPanel,
+.uv .rightPanel,
+.uv .footerPanel .options,
+.uv .headerPanel .options,
+.uv .moreInfo,
+.uv .download,
+.uv .share,
+.uv .bookmark,
+.uv .toggle {
+  display: none !important;
+}
+
+/* Keep only essential navigation controls */
+.uv .footerPanel .zoom {
+  display: block;
+}
