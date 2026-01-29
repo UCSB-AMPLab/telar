@@ -343,7 +343,7 @@ def generate_pages():
         match = re.match(frontmatter_pattern, content, re.DOTALL)
 
         if not match:
-            print(f"Error: No frontmatter found in {source_file}")
+            print(f"❌ Error: No frontmatter found in {source_file}")
             print("  Pages must have YAML frontmatter (--- at start and end)")
             continue
 

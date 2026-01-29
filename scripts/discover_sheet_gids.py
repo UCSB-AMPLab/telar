@@ -139,7 +139,7 @@ def discover_gids_from_published(published_url):
             return None
 
     except Exception as e:
-        print(f"Error fetching published sheet: {e}", file=sys.stderr)
+        print(f"❌ Error fetching published sheet: {e}", file=sys.stderr)
         return None
 
 def test_gid(sheet_id, gid):

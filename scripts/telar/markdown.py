@@ -101,7 +101,7 @@ def read_markdown_file(file_path, widget_warnings=None):
             }
 
     except Exception as e:
-        print(f"Error reading markdown file {full_path}: {e}")
+        print(f"❌ Error reading markdown file {full_path}: {e}")
         return None
 
 

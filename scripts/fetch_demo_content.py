@@ -43,7 +43,7 @@ def load_config():
     try:
         config_path = Path('_config.yml')
         if not config_path.exists():
-            print("Error: _config.yml not found")
+            print("❌ Error: _config.yml not found")
             print("   Run this script from your Telar site root directory")
             return None
 
@@ -70,7 +70,7 @@ def load_config():
         }
 
     except Exception as e:
-        print(f"Error reading _config.yml: {e}")
+        print(f"❌ Error reading _config.yml: {e}")
         return None
 
 
@@ -89,7 +89,7 @@ def cleanup_demo_content():
             print(f"Cleaned up {demo_dir}/")
             return True
         except Exception as e:
-            print(f"Warning: Could not remove {demo_dir}/: {e}")
+            print(f"⚠️  Warning: Could not remove {demo_dir}/: {e}")
             return False
 
     return True
@@ -190,23 +190,23 @@ def fetch_bundle(version, language):
 
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"Error: Demo bundle for v{version}/{language} not found")
+            print(f"❌ Error: Demo bundle for v{version}/{language} not found")
             print(f"   URL: {bundle_url}")
         else:
-            print(f"HTTP Error {e.code}: {e.reason}")
+            print(f"❌ HTTP Error {e.code}: {e.reason}")
         return None
 
     except urllib.error.URLError as e:
-        print(f"Network error: {e.reason}")
+        print(f"❌ Network error: {e.reason}")
         print(f"   Could not connect to {base_url}")
         return None
 
     except json.JSONDecodeError as e:
-        print(f"Error: Invalid bundle JSON: {e}")
+        print(f"❌ Error: Invalid bundle JSON: {e}")
         return None
 
     except Exception as e:
-        print(f"Unexpected error fetching bundle: {e}")
+        print(f"❌ Unexpected error fetching bundle: {e}")
         return None
 
 
@@ -233,7 +233,7 @@ def save_bundle(bundle):
         return True
 
     except Exception as e:
-        print(f"Error saving bundle: {e}")
+        print(f"❌ Error saving bundle: {e}")
         return False
 
 

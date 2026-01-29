@@ -85,7 +85,7 @@ def detect_current_version(repo_root: str) -> Optional[str]:
     config_path = os.path.join(repo_root, '_config.yml')
 
     if not os.path.exists(config_path):
-        print("Error: _config.yml not found. Are you in a Telar repository?")
+        print("❌ Error: _config.yml not found. Are you in a Telar repository?")
         return None
 
     try:
@@ -101,7 +101,7 @@ def detect_current_version(repo_root: str) -> Optional[str]:
         return "0.2.0-beta"
 
     except (yaml.YAMLError, KeyError) as e:
-        print(f"Error reading _config.yml: {e}")
+        print(f"❌ Error reading _config.yml: {e}")
         return None
 
 

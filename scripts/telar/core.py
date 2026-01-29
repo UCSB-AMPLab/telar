@@ -109,7 +109,7 @@ def csv_to_json(csv_path, json_path, process_func=None):
         print(f"\u2713 Converted {csv_path} to {json_path}")
 
     except Exception as e:
-        print(f"Error converting {csv_path}: {e}")
+        print(f"❌ Error converting {csv_path}: {e}")
 
 
 def find_csv_with_fallback(base_path, spanish_name):
