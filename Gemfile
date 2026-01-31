@@ -11,5 +11,5 @@ gem "jekyll-seo-tag", "~> 2.8"
 
 # Development dependencies
 group :development do
-  gem "webrick", "~> 1.8" # Required for Ruby 3.0+
+  gem "webrick", "~> 1.9" # Required for Ruby 3.0+
 end
