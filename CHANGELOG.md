@@ -2,6 +2,43 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.7.0-beta] - 2026-01-31
+
+Infrastructure and code quality release focusing on maintainability, testing, and accessibility.
+
+### Added
+
+- **Test infrastructure**: Comprehensive automated testing with 305 tests across three frameworks. Python unit tests (235 tests) cover CSV processing, widget parsing, IIIF metadata extraction, and more. JavaScript unit tests (35 tests) verify viewer, navigation, and panel logic. End-to-end tests (35 tests) use Playwright to test story navigation, embed mode, and panel interactions in a real browser
+
+- **Consolidated CI workflow**: Single `telar-tests.yml` workflow runs both Python and JavaScript tests on push/PR. Supports selective test runs via workflow dispatch for faster iteration
+
+- **Dependabot**: Automatic security updates for GitHub Actions dependencies
+
+### Changed
+
+- **Modular Python scripts**: The 2,750-line `csv_to_json.py` is now a 14-module `telar/` package with clear separation of concerns. Each module has a focused purpose: `csv_utils.py` for CSV handling, `widgets.py` for widget parsing, `iiif_metadata.py` for IIIF extraction, etc. The original script remains as a backward-compatible wrapper
+
+- **Modular JavaScript**: The 1,872-line `story.js` is now 6 ES modules bundled by esbuild. `state.js` centralises all mutable state, `navigation.js` handles all navigation modes, `viewer.js` manages IIIF viewer lifecycle, etc. Consolidated 135 lines of duplicated code into shared utilities
+
+- **SCSS partials**: The 3,374-line `telar.scss` is now 9 focused partials in `_sass/`. Reusable mixins for tab colours and viewer hiding reduce duplication. Each partial has a narrative description explaining its purpose
+
+- **Node.js required**: esbuild is now used to bundle JavaScript. Run `npm install` before building locally. The `build_local_site.py` script handles this automatically
+
+### Fixed
+
+- **Accessibility (WCAG AA)**: Fixed colour contrast on intro hints, added navigation landmark for home button, changed story container to semantic `<main>` element. Verified with axe-core accessibility audit
+
+- **Navigation z-index**: Fixed intro step covering navigation buttons when scrolling back from later steps
+
+- **Pandas 3.0 compatibility**: Fixed emoji sanitisation failing on pandas 3.0 due to StringDtype change
+
+---
+
+**Migration from v0.6.3-beta:**
+- Run `python3 scripts/upgrade.py` to upgrade automatically
+- **Manual step required**: Copy updated GitHub Actions workflows from the Telar repository (build.yml, upgrade.yml, telar-tests.yml)
+- **For local development**: Run `npm install` to install esbuild for JavaScript bundling
+
 ## [0.6.3-beta] - 2026-01-24
 
 ### Added

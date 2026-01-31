@@ -1,11 +1,34 @@
 #!/usr/bin/env python3
 """
-Generate IIIF tiles and manifests from source images
+Generate IIIF Image Tiles and Manifests
 
-Uses iiif library (Python) to generate static IIIF Level 0 tiles.
-Alternative to Bodleian tool, simpler for basic use cases.
+IIIF (International Image Interoperability Framework) is a standard for
+serving high-resolution images over the web. Instead of loading one
+enormous image file, the image is sliced into small tiles at multiple
+zoom levels. The viewer (UniversalViewer, in Telar's case) requests
+only the tiles visible on screen, enabling smooth deep-zoom into large
+images without overwhelming the browser or network.
 
-Version: v0.6.1-beta
+Telar supports two ways of serving images: external (the object's
+source_url points to an existing IIIF server, e.g. a library's digital
+collection — no tile generation needed) and self-hosted (the user
+places image files in components/images/ and this script generates
+static IIIF Level 0 tiles and a Presentation API v3 manifest for each
+one).
+
+The script reads objects.json to find which objects need tiles (those
+without an external source URL), locates the source image for each,
+and generates a directory of tile files plus a manifest.json that
+UniversalViewer can load. It handles format conversion (PNG, HEIC,
+WebP, TIFF to JPEG), EXIF orientation correction, and transparency
+removal.
+
+The --base-url flag is important: tiles must be generated with the
+correct URL prefix so the manifest points to the right location. For
+local development, use the localhost URL; for production, use the
+site's public URL.
+
+Version: v0.7.0-beta
 """
 
 import os

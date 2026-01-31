@@ -1,0 +1,81 @@
+name: Test Telar Scripts
+#
+# This workflow runs Telar's test suites: Python unit tests for the build
+# pipeline scripts, and JavaScript unit tests for the story page logic.
+#
+# On push or pull request to main, all test suites run automatically. When
+# triggered manually via workflow_dispatch, you can choose which suites to
+# run using the checkboxes — useful for quick iteration on a specific area.
+#
+# The Python tests cover the scripts/telar/ package: CSV parsing, column
+# normalisation, widget rendering, IIIF metadata extraction, glossary linking,
+# and image processing. They use pytest with mocked inputs.
+#
+# The JavaScript tests cover the assets/js/telar-story/ modules: coordinate
+# maths, manifest URL resolution, content detection predicates, and state
+# structure. They use Vitest with jsdom for browser API simulation.
+#
+# Both suites are pure logic tests — no running Jekyll server, network access,
+# or real external data is needed.
+#
+# Version: v0.7.0-beta
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_python:
+        description: 'Run Python tests'
+        type: boolean
+        default: true
+      run_javascript:
+        description: 'Run JavaScript tests'
+        type: boolean
+        default: true
+
+jobs:
+  python:
+    name: Python Unit Tests
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_python }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Python unit tests
+        run: |
+          python -m pytest tests/unit/ -v --tb=short
+
+  javascript:
+    name: JavaScript Unit Tests
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_javascript }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run JavaScript unit tests
+        run: npm run test:js

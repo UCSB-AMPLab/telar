@@ -1,0 +1,724 @@
+/**
+ * Panels
+ *
+ * The information panels that slide in from the right side of the screen. Telar
+ * has three panel types: Layer 1 (light background, broad coverage), Layer 2
+ * (dark background, narrower, stacks on top of Layer 1), and Glossary (cream
+ * background, opens from any context). This partial covers the panel base
+ * styling, header and body layout, trigger buttons, the scroll-lock backdrop,
+ * and content elements that appear inside panels: footnotes, blockquotes,
+ * hyperlinks, images, and glossary inline links.
+ *
+ * @version v0.7.0-beta
+ */
+
+/* Panels - Theme-aware trigger buttons */
+.panel-trigger {
+  display: inline-block;
+  padding: 0.5rem 1.25rem;
+  background: var(--color-button-bg);
+  color: var(--color-button-text);
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 20px;
+  border: none;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+}
+
+.panel-trigger:hover {
+  background: var(--color-button-bg);
+  color: var(--color-button-text);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  opacity: 0.9;
+}
+
+/* Layer 1 Panel - Light blue background, wide coverage */
+#panel-layer1 {
+  width: 65% !important;
+  max-width: 800px;
+  background: var(--color-panel-layer1-bg);
+}
+
+#panel-layer1 .offcanvas-header {
+  background: var(--color-panel-layer1-bg);
+  border-bottom: none;
+  padding: 2rem 2rem 1rem 2rem;
+}
+
+#panel-layer1 .offcanvas-body {
+  background: var(--color-panel-layer1-bg);
+  color: var(--color-panel-layer1-text);
+  padding: 2rem;
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
+
+#panel-layer1 .offcanvas-title {
+  color: var(--color-panel-layer1-text);
+  font-family: var(--font-headings);
+  font-size: 2rem;
+  font-weight: 400;
+}
+
+/* Layer 2 Panel - Dark purple background, narrower than layer1 */
+#panel-layer2 {
+  width: 55% !important;
+  max-width: 750px;
+  background: var(--color-panel-layer2-bg);
+}
+
+#panel-layer2 .offcanvas-header {
+  background: var(--color-panel-layer2-bg);
+  border-bottom: none;
+  padding: 2rem 2rem 1rem 2rem;
+}
+
+#panel-layer2 .offcanvas-body {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+  padding: 2rem;
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
+
+#panel-layer2 .offcanvas-title {
+  color: var(--color-panel-layer2-text);
+  font-family: var(--font-headings);
+  font-size: 2rem;
+  font-weight: 400;
+}
+
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4 {
+  color: var(--color-panel-layer2-text);
+}
+
+/* Panel text max-width for readability (centered, images/widgets span full width) */
+.offcanvas-body p,
+.offcanvas-body ul,
+.offcanvas-body ol,
+.offcanvas-body blockquote,
+.offcanvas-body h1,
+.offcanvas-body h2,
+.offcanvas-body h3,
+.offcanvas-body h4,
+.offcanvas-body h5,
+.offcanvas-body h6 {
+  max-width: 650px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Increase h1 spacing in panels for better visual hierarchy */
+.offcanvas-body h1 {
+  margin-bottom: 1.5rem;
+}
+
+/* Layer 2 panel - narrower text for better proportions */
+#panel-layer2 .offcanvas-body p,
+#panel-layer2 .offcanvas-body ul,
+#panel-layer2 .offcanvas-body ol,
+#panel-layer2 .offcanvas-body blockquote,
+#panel-layer2 .offcanvas-body h1,
+#panel-layer2 .offcanvas-body h2,
+#panel-layer2 .offcanvas-body h3,
+#panel-layer2 .offcanvas-body h4,
+#panel-layer2 .offcanvas-body h5,
+#panel-layer2 .offcanvas-body h6 {
+  max-width: 600px;
+}
+
+/* Widgets - constrain to same width as text */
+.offcanvas-body .telar-widget-accordion,
+.offcanvas-body .telar-widget-carousel,
+.offcanvas-body .telar-widget-tabs {
+  max-width: 650px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-layer2 .offcanvas-body .telar-widget-accordion,
+#panel-layer2 .offcanvas-body .telar-widget-carousel,
+#panel-layer2 .offcanvas-body .telar-widget-tabs {
+  max-width: 600px;
+}
+
+/* Panel buttons styling */
+#panel-layer1 .btn-close,
+#panel-layer2 .btn-close {
+  filter: brightness(0) invert(1);
+  opacity: 0.7;
+}
+
+#panel-layer1 .btn-close:hover,
+#panel-layer2 .btn-close:hover {
+  opacity: 1;
+}
+
+#panel-layer1-back,
+#panel-layer2-back {
+  background: rgba(255,255,255,0.2);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+}
+
+#panel-layer1-back:hover,
+#panel-layer2-back:hover {
+  background: rgba(255,255,255,0.3);
+  color: #ffffff;
+}
+
+/* Glossary Panel - Cream/beige background */
+#panel-glossary {
+  width: 45% !important;
+  max-width: 700px;
+  background: var(--color-panel-glossary-bg);
+}
+
+#panel-glossary .offcanvas-header {
+  background: var(--color-panel-glossary-bg);
+  border-bottom: none;
+  padding: 2rem 2rem 1rem 2rem;
+}
+
+#panel-glossary .offcanvas-body {
+  background: var(--color-panel-glossary-bg);
+  color: var(--color-panel-glossary-text);
+  padding: 2rem;
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
+
+#panel-glossary .offcanvas-title {
+  color: var(--color-panel-glossary-text);
+  font-family: var(--font-headings);
+  font-size: 2rem;
+  font-weight: 400;
+}
+
+#panel-glossary .btn-close {
+  filter: none;
+  opacity: 0.7;
+}
+
+#panel-glossary .btn-close:hover {
+  opacity: 1;
+}
+
+/* Glossary panel - narrower text for better proportions */
+#panel-glossary .glossary-term-prefix,
+#panel-glossary .offcanvas-title,
+#panel-glossary .offcanvas-body p,
+#panel-glossary .offcanvas-body ul,
+#panel-glossary .offcanvas-body ol,
+#panel-glossary .offcanvas-body blockquote,
+#panel-glossary .offcanvas-body h1,
+#panel-glossary .offcanvas-body h2,
+#panel-glossary .offcanvas-body h3,
+#panel-glossary .offcanvas-body h4,
+#panel-glossary .offcanvas-body h5,
+#panel-glossary .offcanvas-body h6 {
+  max-width: 550px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-glossary .offcanvas-body .telar-widget-accordion,
+#panel-glossary .offcanvas-body .telar-widget-carousel,
+#panel-glossary .offcanvas-body .telar-widget-tabs {
+  max-width: 550px;
+}
+
+/* Glossary back button uses default Bootstrap outline-secondary styling */
+
+/* Glossary Inline Links (in story panel content) */
+.glossary-inline-link {
+  background-color: var(--color-panel-glossary-bg);
+  color: var(--color-panel-glossary-text);
+  padding: 0.02em 0.4em; /* Minimal vertical padding for very snug fit */
+  border-radius: 6px; /* Increased for more rounded corners */
+  text-decoration: none;
+  font-size: 0.95em;
+  display: inline-block;
+  transition: opacity 0.2s ease;
+}
+
+.glossary-inline-link:hover {
+  opacity: 0.85;
+  text-decoration: none;
+  color: var(--color-panel-glossary-text);
+}
+
+/* Glossary Link Error Indicator (nonexistent terms) */
+.glossary-link-error {
+  background-color: #fff3cd;
+  color: #856404;
+  padding: 0.02em 0.4em; /* Minimal vertical padding for very snug fit */
+  border-radius: 6px; /* Increased for more rounded corners */
+  border: 1px solid #ffc107;
+  font-size: 0.95em;
+  display: inline-block;
+}
+
+/* Footnotes Styling */
+/* Footnote reference links in text (superscript numbers) */
+.offcanvas-body a[href^="#_ftn"] {
+  font-size: 0.75em;
+  vertical-align: super;
+  line-height: 0;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0 0.15em;
+}
+
+/* Layer 1 (light blue) footnote references */
+#panel-layer1 .offcanvas-body a[href^="#_ftn"] {
+  color: var(--color-link);
+}
+
+#panel-layer1 .offcanvas-body a[href^="#_ftn"]:hover {
+  color: #1a252f;
+  text-decoration: underline;
+}
+
+/* Layer 2 (dark purple) footnote references */
+#panel-layer2 .offcanvas-body a[href^="#_ftn"] {
+  color: var(--color-link);
+}
+
+#panel-layer2 .offcanvas-body a[href^="#_ftn"]:hover {
+  color: #C5DBE8;
+  text-decoration: underline;
+}
+
+/* Horizontal rule separator before footnotes */
+.offcanvas-body hr {
+  margin: 2.5rem 0 1.5rem 0;
+  border: 0;
+  border-top: 2px solid rgba(0,0,0,0.1);
+  opacity: 0.5;
+}
+
+#panel-layer2 .offcanvas-body hr {
+  border-top-color: rgba(255,255,255,0.2);
+}
+
+/* Footnote section styling */
+.offcanvas-body p:has(a[href^="#_ftnref"]) {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+  opacity: 0.9;
+}
+
+/* Footnote number at start of footnote */
+.offcanvas-body a[href^="#_ftnref"] {
+  font-size: 0.85em;
+  text-decoration: none;
+  font-weight: 600;
+  margin-right: 0.5em;
+}
+
+/* Layer 1 footnote numbers */
+#panel-layer1 .offcanvas-body a[href^="#_ftnref"] {
+  color: var(--color-link);
+}
+
+#panel-layer1 .offcanvas-body a[href^="#_ftnref"]:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/* Layer 2 footnote numbers */
+#panel-layer2 .offcanvas-body a[href^="#_ftnref"] {
+  color: var(--color-link);
+}
+
+#panel-layer2 .offcanvas-body a[href^="#_ftnref"]:hover {
+  color: #E8DCC4;
+  text-decoration: underline;
+}
+
+/* Blockquote Styling */
+.offcanvas-body blockquote {
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+  border-left: 4px solid;
+  font-style: italic;
+  position: relative;
+}
+
+/* Layer 1 (light blue) blockquotes */
+#panel-layer1 .offcanvas-body blockquote {
+  border-left-color: var(--color-primary);
+  background: rgba(44, 62, 80, 0.05);
+  color: var(--color-primary);
+}
+
+/* Layer 2 (dark purple) blockquotes */
+#panel-layer2 .offcanvas-body blockquote {
+  border-left-color: var(--color-panel-layer1-bg);
+  background: rgba(168, 197, 212, 0.1);
+  color: #C5DBE8;
+}
+
+/* Blockquote paragraph spacing */
+.offcanvas-body blockquote p {
+  margin-bottom: 0;
+}
+
+.offcanvas-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* General Hyperlinks in Panels (non-footnote links) */
+.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]) {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):hover {
+  opacity: 0.8;
+}
+
+/* Panel Images - centered with max-height */
+.offcanvas-body img {
+  max-width: 100%;
+  max-height: 80vh;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  margin: 1rem auto;
+}
+
+/* Image figures with captions */
+.telar-image-figure {
+  display: block;
+  margin: 1rem auto;
+  text-align: center;
+}
+
+.telar-image-figure img {
+  margin: 0 auto 0.25rem auto;
+}
+
+.telar-image-caption {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin-top: 0.25rem;
+  text-align: center;
+  display: block;
+  max-width: 70%;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.2;
+  font-weight: 400;
+}
+
+/* Mobile Responsive - Panel System */
+@media (max-width: 768px) {
+  /* Panel System - full width bottom sheets */
+  /* Layer 1 Panel - most content, tallest panel */
+  #panel-layer1 {
+    width: 100% !important;
+    height: 65vh !important;
+    max-width: 100% !important;
+    max-height: 65vh !important;
+  }
+
+  /* Layer 2 Panel - medium content */
+  #panel-layer2 {
+    width: 100% !important;
+    height: 60vh !important;
+    max-width: 100% !important;
+    max-height: 60vh !important;
+  }
+
+  /* Glossary Panel - brief definitions, shortest panel */
+  #panel-glossary {
+    width: 100% !important;
+    height: 55vh !important;
+    max-width: 100% !important;
+    max-height: 55vh !important;
+  }
+
+  /* Touch Target Optimization - 44x44px minimum for accessibility */
+  .panel-trigger {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .offcanvas-header .btn-close {
+    width: 33px;
+    height: 33px;
+    padding: 0.5rem;
+  }
+
+  /* Mobile Offcanvas Panel Positioning - Option 2B (Right-Slide with Fixed Size & Top/Bottom Gaps) */
+  .offcanvas-end {
+    position: fixed !important;
+    right: 0 !important;
+    left: auto !important;
+    box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 300ms ease-out;
+    border-radius: 0 !important; // No rounded corners
+
+    // Slide in from right
+    transform: translateX(100%);
+    &.show {
+      transform: translateX(0);
+    }
+  }
+
+  /* Layer 1 - "Go Deeper" panels */
+  #panel-layer1.offcanvas-end {
+    top: 12vh !important;
+    height: 76vh !important;
+    max-height: 76vh !important;
+    width: 98vw !important;
+    max-width: 98vw !important;
+    z-index: 1050;
+  }
+
+  /* Layer 2 - "Learn More" panels */
+  #panel-layer2.offcanvas-end {
+    top: 10vh !important;
+    height: 76vh !important;
+    max-height: 76vh !important;
+    width: 96vw !important;
+    max-width: 96vw !important;
+    z-index: 1051;
+  }
+
+  /* Glossary */
+  #panel-glossary.offcanvas-end {
+    top: 8vh !important;
+    height: 76vh !important;
+    max-height: 76vh !important;
+    left: 6vw !important;
+    width: 94vw !important;
+    max-width: 94vw !important;
+  }
+
+  .offcanvas-body {
+    overflow-y: auto;
+  }
+
+  /* Hide Back buttons on mobile - X button is sufficient */
+  #panel-layer1-back,
+  #panel-layer2-back,
+  #panel-glossary-back {
+    display: none !important;
+  }
+
+  /* Center close button when Back button is hidden */
+  .offcanvas-header {
+    justify-content: flex-end;
+  }
+
+  /* Unified panel scrolling - header transparent, buttons float over content */
+  .offcanvas {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .offcanvas-header {
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 10;
+    background: transparent !important;
+    border: none !important;
+    padding: 1rem !important;
+    padding-top: max(1rem, env(safe-area-inset-top)) !important;
+    min-height: auto !important;
+  }
+
+  .offcanvas-body {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    position: static !important;
+    padding: 1.5rem !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Title is now inside body - add top margin to clear floating close button */
+  .offcanvas-body .offcanvas-title {
+    margin-top: max(3rem, calc(env(safe-area-inset-top) + 2.5rem));
+    margin-bottom: 1.5rem;
+  }
+
+  /* Float close button over content - match navigation button style */
+  .offcanvas-header .btn-close {
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    /* Remove white filter on mobile - show dark X like arrows/home */
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  /* Back button gets same treatment on desktop */
+  .offcanvas-header .btn-outline-secondary {
+    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Glossary inline links - slightly smaller on mobile */
+  .glossary-inline-link,
+  .glossary-link-error {
+    padding: 0.1em 0.35em;
+    font-size: 0.9em;
+  }
+}
+
+/* ============================================================================
+   HEIGHT-BASED RESPONSIVE: PANEL ADJUSTMENTS
+   Progressive reductions for phones with limited vertical space.
+   ============================================================================ */
+
+/* Tier 1: Small Mobile - phones with 700px or less height */
+@media (max-width: 768px) and (max-height: 700px) {
+  /* Offcanvas panels - 10-15% reduction */
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
+    padding: 1.75rem !important;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
+    font-size: 1.75rem;
+    margin-bottom: 1.3rem;
+  }
+
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
+    margin: 1.3rem 0;
+    padding: 0.9rem 1.3rem;
+  }
+
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
+    margin: 2.2rem 0 1.3rem 0;
+  }
+
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
+    font-size: 0.85rem;
+    margin-bottom: 0.65rem;
+  }
+}
+
+/* Tier 2: Tiny Mobile - phones with 667px or less height (iPhone SE, etc.) */
+@media (max-width: 768px) and (max-height: 667px) {
+  /* Offcanvas panels - 20-25% reduction */
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
+    padding: 1.5rem !important;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
+    font-size: 1.6rem;
+    margin-bottom: 1.2rem;
+  }
+
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
+    margin: 1.2rem 0;
+    padding: 0.8rem 1.2rem;
+  }
+
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
+    margin: 2rem 0 1.2rem 0;
+  }
+
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
+    font-size: 0.75rem;
+    margin-bottom: 0.6rem;
+  }
+
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
+    margin: 0.8rem auto;
+  }
+}
+
+/* Tier 3: Micro Mobile - very small Android phones with 600px or less height */
+@media (max-width: 768px) and (max-height: 600px) {
+  /* Offcanvas panels - 30-35% reduction */
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
+    padding: 1.3rem !important;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+  }
+
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
+    margin: 1rem 0;
+    padding: 0.7rem 1rem;
+  }
+
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
+    margin: 1.75rem 0 1rem 0;
+  }
+
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
+    font-size: 0.7rem;
+    margin-bottom: 0.5rem;
+  }
+
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
+    margin: 0.7rem auto;
+  }
+}

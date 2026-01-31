@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 """
-Fetch demo content from content.telar.org
+Fetch Demo Content from content.telar.org
 
-Downloads the demo content bundle based on site version and language.
-Demo content is stored in _demo_content/ (gitignored, never committed).
+When a new Telar site is first set up, it has no real content yet — no
+objects, no stories, no glossary terms. Demo content fills this gap by
+providing sample data that shows how the site will look and behave once
+real content is added. Users can toggle it on or off with the
+include_demo_content setting in _config.yml.
 
-When include_demo_content is false, cleans up _demo_content/ directory.
+This script downloads a demo content bundle from content.telar.org,
+Telar's content distribution server. Each bundle is version-specific
+and language-specific (English or Spanish), so the script reads the
+site's current version and language from _config.yml and fetches the
+matching bundle. If an exact version match is not available, it falls
+back to the closest compatible version.
 
-Version: v0.6.0-beta
+The bundle is saved to _demo_content/ (gitignored, never committed).
+The csv_to_json.py build script (telar package) merges demo content
+into the JSON data alongside the user's real content, marking demo
+items with a _demo flag so the site can style them differently.
+
+Version: v0.7.0-beta
 """
 
 import json
@@ -30,7 +43,7 @@ def load_config():
     try:
         config_path = Path('_config.yml')
         if not config_path.exists():
-            print("Error: _config.yml not found")
+            print("❌ Error: _config.yml not found")
             print("   Run this script from your Telar site root directory")
             return None
 
@@ -57,7 +70,7 @@ def load_config():
         }
 
     except Exception as e:
-        print(f"Error reading _config.yml: {e}")
+        print(f"❌ Error reading _config.yml: {e}")
         return None
 
 
@@ -76,7 +89,7 @@ def cleanup_demo_content():
             print(f"Cleaned up {demo_dir}/")
             return True
         except Exception as e:
-            print(f"Warning: Could not remove {demo_dir}/: {e}")
+            print(f"⚠️  Warning: Could not remove {demo_dir}/: {e}")
             return False
 
     return True
@@ -177,23 +190,23 @@ def fetch_bundle(version, language):
 
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"Error: Demo bundle for v{version}/{language} not found")
+            print(f"❌ Error: Demo bundle for v{version}/{language} not found")
             print(f"   URL: {bundle_url}")
         else:
-            print(f"HTTP Error {e.code}: {e.reason}")
+            print(f"❌ HTTP Error {e.code}: {e.reason}")
         return None
 
     except urllib.error.URLError as e:
-        print(f"Network error: {e.reason}")
+        print(f"❌ Network error: {e.reason}")
         print(f"   Could not connect to {base_url}")
         return None
 
     except json.JSONDecodeError as e:
-        print(f"Error: Invalid bundle JSON: {e}")
+        print(f"❌ Error: Invalid bundle JSON: {e}")
         return None
 
     except Exception as e:
-        print(f"Unexpected error fetching bundle: {e}")
+        print(f"❌ Unexpected error fetching bundle: {e}")
         return None
 
 
@@ -220,7 +233,7 @@ def save_bundle(bundle):
         return True
 
     except Exception as e:
-        print(f"Error saving bundle: {e}")
+        print(f"❌ Error saving bundle: {e}")
         return False
 
 

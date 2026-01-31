@@ -2,10 +2,26 @@
 """
 Telar Upgrade Script
 
-Automatically migrates Telar installations from older versions to the latest version.
-Detects current version, applies necessary migrations, and generates checklist for manual steps.
+When a new version of Telar is released, existing sites need to be
+updated to match the new framework. This script automates that process
+by detecting the site's current version and applying every migration
+needed to reach the latest version.
 
-Version: v0.6.2-beta
+Each migration is a Python class in scripts/migrations/ that knows how
+to transform a site from one specific version to the next. Migrations
+can add, modify, or delete files — for example, adding new layout
+templates, updating _config.yml with new settings, or renaming
+directories. The script chains these together: upgrading from v0.3.0
+to v0.6.2 runs every intermediate migration in sequence.
+
+After applying automated changes, the script regenerates all data files
+(JSON, collections, IIIF tiles) to apply any new validation or
+processing logic introduced in the new version. The output is an
+UPGRADE_SUMMARY.md file listing every automated change made and any
+manual steps the user still needs to complete. The --dry-run flag
+previews what would happen without making changes.
+
+Version: v0.7.0-beta
 
 Usage:
     python scripts/upgrade.py              # Normal upgrade
@@ -34,10 +50,12 @@ from migrations.v043_to_v050 import Migration043to050
 from migrations.v050_to_v060 import Migration050to060
 from migrations.v060_to_v061 import Migration060to061
 from migrations.v061_to_v062 import Migration061to062
+from migrations.v062_to_v063 import Migration062to063
+from migrations.v063_to_v070 import Migration063to070
 
 
 # Latest version
-LATEST_VERSION = "0.6.2-beta"
+LATEST_VERSION = "0.7.0-beta"
 
 # All available migrations in order
 MIGRATIONS = [
@@ -53,6 +71,8 @@ MIGRATIONS = [
     Migration050to060,
     Migration060to061,
     Migration061to062,
+    Migration062to063,
+    Migration063to070,
 ]
 
 
@@ -69,7 +89,7 @@ def detect_current_version(repo_root: str) -> Optional[str]:
     config_path = os.path.join(repo_root, '_config.yml')
 
     if not os.path.exists(config_path):
-        print("Error: _config.yml not found. Are you in a Telar repository?")
+        print("❌ Error: _config.yml not found. Are you in a Telar repository?")
         return None
 
     try:
@@ -85,7 +105,7 @@ def detect_current_version(repo_root: str) -> Optional[str]:
         return "0.2.0-beta"
 
     except (yaml.YAMLError, KeyError) as e:
-        print(f"Error reading _config.yml: {e}")
+        print(f"❌ Error reading _config.yml: {e}")
         return None
 
 

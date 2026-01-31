@@ -1,0 +1,14 @@
+{
+  "name": "telar",
+  "private": true,
+  "scripts": {
+    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap",
+    "test:js": "vitest run",
+    "test:js:watch": "vitest"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "jsdom": "^27.4.0",
+    "vitest": "^4.0.18"
+  }
+}

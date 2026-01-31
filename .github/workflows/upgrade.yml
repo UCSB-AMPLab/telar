@@ -1,6 +1,26 @@
 name: Upgrade Telar
-# Automated Telar upgrade workflow
-# Version: v0.5.0-beta
+#
+# When a new version of Telar is released, site owners use this workflow to
+# upgrade their site. It is triggered manually from the Actions tab in GitHub
+# — the user clicks "Run workflow" and the rest is automatic.
+#
+# The workflow works by fetching the latest scripts from the main Telar
+# repository (UCSB-AMPLab/telar), then running upgrade.py — the migration
+# script that applies version-to-version changes. Each migration step knows
+# how to transform a site from one version to the next: adding new files,
+# updating configuration, modifying templates, and so on. The script walks
+# the chain from the site's current version to the latest, applying each
+# migration in sequence.
+#
+# Rather than modifying the site's main branch directly, the workflow creates
+# a separate upgrade branch with all the changes, then opens a GitHub issue
+# with a clear summary of what changed and a link to review and merge. This
+# gives the site owner a chance to inspect the changes before they go live.
+# The issue also lists any manual steps that need to be completed after
+# merging (for example, updating custom content that the script cannot
+# migrate automatically).
+#
+# Version: v0.7.0-beta
 
 on:
   workflow_dispatch:
