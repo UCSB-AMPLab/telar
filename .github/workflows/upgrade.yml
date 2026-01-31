@@ -61,12 +61,16 @@ jobs:
           curl -L https://github.com/UCSB-AMPLab/telar/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 telar-main/scripts
           echo "✓ Latest upgrade scripts fetched"
 
-      - name: Check current version
+      - name: Check current version and language
         id: check_version
         run: |
           CURRENT_VERSION=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('telar', {}).get('version', '0.2.0-beta'))")
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $CURRENT_VERSION"
+
+          SITE_LANG=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('telar_language', 'en'))")
+          echo "site_language=$SITE_LANG" >> $GITHUB_OUTPUT
+          echo "Site language: $SITE_LANG"
 
       - name: Run upgrade script
         id: upgrade
@@ -115,6 +119,7 @@ jobs:
           BRANCH="${{ steps.create_branch.outputs.branch_name }}"
           VERSION="${{ steps.upgrade.outputs.version }}"
           FROM_VERSION="${{ steps.check_version.outputs.current_version }}"
+          SITE_LANG="${{ steps.check_version.outputs.site_language }}"
           COMPARE_URL="https://github.com/$REPO/compare/main...$BRANCH"
 
           # Strip YAML frontmatter from UPGRADE_SUMMARY.md (remove everything between first --- and second ---)
@@ -127,28 +132,85 @@ jobs:
           # Extract manual steps from UPGRADE_SUMMARY.md (if any)
           MANUAL_STEPS_TEXT=$(sed -n '/## Manual Steps Required/,/## Resources/p' UPGRADE_SUMMARY.md | sed '1d;$d' | sed '/^Please complete these after merging:/d' | sed '/^$/d')
 
-          # Create issue body directly with variable expansion
-          cat > issue_body.md << EOF
-          ## Upgrade Ready: v$FROM_VERSION → v$VERSION
+          # Set language-specific strings
+          if [ "$SITE_LANG" = "es" ]; then
+            TITLE="Actualizar Telar a $VERSION"
+            HEADER="## Actualizacion lista: v$FROM_VERSION → v$VERSION"
+            STATUS="**Estado:** Actualizacion automatica completada"
+            BRANCH_LABEL="**Rama:**"
+            CHANGES_LABEL="**Cambios:** $AUTOMATED_CHANGES automaticos, $MANUAL_STEPS manuales"
+            NEXT_STEP="## Siguiente paso: Revisar y fusionar"
+            INTRO="Tu sitio Telar ha sido actualizado exitosamente y esta listo para fusionar."
+            CTA="### **[Haz clic aqui para revisar los cambios y crear pull request]($COMPARE_URL)**"
+            CTA_FOLLOW="Luego haz clic en el boton verde \"Create pull request\", revisa los cambios y fusiona para completar la actualizacion."
+            CLI_SUMMARY="<b>Para usuarios que prefieren la linea de comandos</b> (clic para expandir)"
+            CLI_INTRO="Si prefieres trabajar desde tu terminal:"
+            CLI_NOTE="Esto fusionara la rama de actualizacion en tu rama principal. Recomendamos usar el metodo de pull request de arriba, ya que proporciona una mejor interfaz de revision."
+            AFTER_MERGE="## Despues de fusionar"
+            AFTER_INTRO="Una vez que hayas fusionado la actualizacion, por favor completa lo siguiente:"
+            MANUAL_HEADER="### Pasos manuales"
+            VERIFY_HEADER="### Verifica tu sitio"
+            VERIFY_STEPS="Despues de que la actualizacion se complete y tu sitio se reconstruya:
 
-          **Status:** ✅ Automated upgrade complete
-          **Branch:** \`$BRANCH\`
-          **Changes:** $AUTOMATED_CHANGES automated, $MANUAL_STEPS manual
+          1. Visita tu sitio en vivo y navega por algunas paginas
+          2. Busca mensajes de advertencia o alertas sobre problemas de configuracion
+          3. Si ves advertencias, sigue los enlaces o documentacion proporcionada para resolverlas
+          4. Prueba las funciones clave como navegacion de historias, visualizacion de imagenes y terminos del glosario
+          5. **Cierra este issue** una vez que todo este funcionando - esto marca la actualizacion como completa"
+            WHAT_CHANGED="## Que cambio"
+            CHANGES_SUMMARY="<b>Ver cambios automaticos por categoria</b> (clic para expandir)"
+            FOOTER="<sub>Esta actualizacion fue realizada automaticamente por el workflow de actualizacion de Telar.</sub>"
+          else
+            TITLE="Upgrade Telar to $VERSION"
+            HEADER="## Upgrade Ready: v$FROM_VERSION → v$VERSION"
+            STATUS="**Status:** Automated upgrade complete"
+            BRANCH_LABEL="**Branch:**"
+            CHANGES_LABEL="**Changes:** $AUTOMATED_CHANGES automated, $MANUAL_STEPS manual"
+            NEXT_STEP="## Next Step: Review and Merge"
+            INTRO="Your Telar site has been successfully upgraded and is ready to merge."
+            CTA="### **[Click here to review changes and create pull request]($COMPARE_URL)**"
+            CTA_FOLLOW="Then click the green \"Create pull request\" button, review the changes, and merge to complete the upgrade."
+            CLI_SUMMARY="<b>For users who prefer the command line</b> (click to expand)"
+            CLI_INTRO="If you prefer working from your terminal:"
+            CLI_NOTE="This will merge the upgrade branch into your main branch. We recommend using the pull request method above instead, as it provides a better review interface."
+            AFTER_MERGE="## After Merging"
+            AFTER_INTRO="Once you've merged the upgrade, please complete the following:"
+            MANUAL_HEADER="### Manual Steps"
+            VERIFY_HEADER="### Verify Your Site"
+            VERIFY_STEPS="After the upgrade completes and your site rebuilds:
+
+          1. Visit your live site and navigate through a few pages
+          2. Check for any warning messages or alerts about configuration issues
+          3. If you see any warnings, follow the links or documentation provided to resolve them
+          4. Test key features like story navigation, image viewing, and glossary terms
+          5. **Close this issue** once everything is working - this marks the upgrade as complete"
+            WHAT_CHANGED="## What Changed"
+            CHANGES_SUMMARY="<b>View automated changes by category</b> (click to expand)"
+            FOOTER="<sub>This upgrade was performed automatically by the Telar upgrade workflow.</sub>"
+          fi
+
+          # Create issue body
+          cat > issue_body.md << EOF
+          $HEADER
+
+          $STATUS
+          $BRANCH_LABEL \`$BRANCH\`
+          $CHANGES_LABEL
 
           ---
 
-          ## Next Step: Review and Merge
+          $NEXT_STEP
 
-          Your Telar site has been successfully upgraded and is ready to merge.
+          $INTRO
 
-          ### **[Click here to review changes and create pull request]($COMPARE_URL)**
+          $CTA
 
-          Then click the green "Create pull request" button, review the changes, and merge to complete the upgrade.
+          $CTA_FOLLOW
 
           <details>
-          <summary><b>For users who prefer the command line</b> (click to expand)</summary>
+          <summary>$CLI_SUMMARY</summary>
 
-          If you prefer working from your terminal:
+          $CLI_INTRO
 
           \`\`\`bash
           git fetch origin
@@ -157,22 +219,22 @@ jobs:
           git push origin main
           \`\`\`
 
-          This will merge the upgrade branch into your main branch. We recommend using the pull request method above instead, as it provides a better review interface.
+          $CLI_NOTE
 
           </details>
 
           ---
 
-          ## After Merging
+          $AFTER_MERGE
 
-          Once you've merged the upgrade, please complete the following:
+          $AFTER_INTRO
 
           EOF
 
           # Add manual steps section only if there are manual steps
           if [ "$MANUAL_STEPS" != "0" ] && [ -n "$MANUAL_STEPS_TEXT" ]; then
             cat >> issue_body.md << EOF
-          ### Manual Steps
+          $MANUAL_HEADER
 
           $MANUAL_STEPS_TEXT
 
@@ -181,22 +243,16 @@ jobs:
 
           # Always add verify section
           cat >> issue_body.md << EOF
-          ### Verify Your Site
+          $VERIFY_HEADER
 
-          After the upgrade completes and your site rebuilds:
-
-          1. Visit your live site and navigate through a few pages
-          2. Check for any warning messages or alerts about configuration issues
-          3. If you see any warnings, follow the links or documentation provided to resolve them
-          4. Test key features like story navigation, image viewing, and glossary terms
-          5. **Close this issue** once everything is working - this marks the upgrade as complete
+          $VERIFY_STEPS
 
           ---
 
-          ## What Changed
+          $WHAT_CHANGED
 
           <details>
-          <summary><b>View automated changes by category</b> (click to expand)</summary>
+          <summary>$CHANGES_SUMMARY</summary>
 
           $SUMMARY_CONTENT
 
@@ -204,7 +260,7 @@ jobs:
 
           ---
 
-          <sub>This upgrade was performed automatically by the Telar upgrade workflow.</sub>
+          $FOOTER
           EOF
 
           # Create upgrade label if it doesn't exist
@@ -212,7 +268,7 @@ jobs:
 
           # Create the issue
           gh issue create \
-            --title "Upgrade Telar to $VERSION" \
+            --title "$TITLE" \
             --body-file issue_body.md \
             --label "upgrade"
 

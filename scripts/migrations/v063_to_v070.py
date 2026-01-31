@@ -234,6 +234,9 @@ class Migration063to070(BaseMigration):
             'tests/js/viewer.test.js': 'Viewer function tests',
             'tests/js/panels.test.js': 'Panel function tests',
 
+            # GitHub configuration (non-workflow files can be auto-fetched)
+            '.github/dependabot.yml': 'Dependabot configuration for dependency updates',
+
             # Build configuration
             'package.json': 'Node.js dependencies (esbuild, vitest)',
             'requirements.txt': 'Python dependencies (pytest, playwright)',
