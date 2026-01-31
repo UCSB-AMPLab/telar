@@ -95,7 +95,7 @@ def sanitize_dataframe(df):
     tree_pattern = re.compile(re.escape(tree_emoji))
     df = df.copy()
     for col in df.columns:
-        if df[col].dtype == 'object':  # String columns
+        if pd.api.types.is_string_dtype(df[col]):  # String columns (works with pandas 2.x and 3.x)
             df[col] = df[col].apply(lambda x: tree_pattern.sub('', str(x)) if pd.notna(x) else x)
 
     return df

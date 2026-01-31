@@ -34,10 +34,9 @@ class TestSanitizeDataframe:
 
     def test_removes_christmas_tree_emoji(self):
         """Christmas tree emoji should be removed from all string fields."""
-        tree = chr(0x1F384)  # Christmas tree emoji
         df = pd.DataFrame({
-            'title': [f'Hello {tree} World'],
-            'description': [f'Test {tree} content {tree}']
+            'title': ['Hello 🎄 World'],
+            'description': ['Test 🎄 content 🎄']
         })
         result = sanitize_dataframe(df)
         assert result['title'].iloc[0] == 'Hello  World'
