@@ -34,33 +34,11 @@ class TestSanitizeDataframe:
 
     def test_removes_christmas_tree_emoji(self):
         """Christmas tree emoji should be removed from all string fields."""
-        import sys
-        import re
-
-        # Debug: Check Python version and emoji handling
-        tree_emoji = '\U0001f384'
-        print(f"\n=== DEBUG INFO ===")
-        print(f"Python version: {sys.version}")
-        print(f"Tree emoji repr: {repr(tree_emoji)}")
-        print(f"Tree emoji bytes: {tree_emoji.encode('utf-8')}")
-
-        # Test regex pattern directly
-        pattern = re.compile(r'\U0001f384')
-        test_str = f'Hello {tree_emoji} World'
-        print(f"Test string repr: {repr(test_str)}")
-        print(f"Pattern match: {pattern.search(test_str)}")
-        print(f"After sub: {repr(pattern.sub('', test_str))}")
-
-        # Now run actual test
         df = pd.DataFrame({
-            'title': [f'Hello {tree_emoji} World'],
-            'description': [f'Test {tree_emoji} content {tree_emoji}']
+            'title': ['Hello \U0001f384 World'],
+            'description': ['Test \U0001f384 content \U0001f384']
         })
-        print(f"Input title repr: {repr(df['title'].iloc[0])}")
         result = sanitize_dataframe(df)
-        print(f"Output title repr: {repr(result['title'].iloc[0])}")
-        print(f"=== END DEBUG ===\n")
-
         assert result['title'].iloc[0] == 'Hello  World'
         assert result['description'].iloc[0] == 'Test  content '
 
