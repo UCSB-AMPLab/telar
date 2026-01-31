@@ -114,7 +114,7 @@ export function goToStep(newIndex, direction = 'forward') {
   } else if (newIndex === 0 && oldIndex > 0) {
     const intro = state.steps[0];
     if (intro.classList.contains('story-intro')) {
-      intro.style.zIndex = '10000';
+      intro.style.zIndex = '100'; // Above other steps (1-11) but below fixed buttons (1040)
       intro.style.transform = 'translateY(0)';
     }
     state.currentViewerCard = null;

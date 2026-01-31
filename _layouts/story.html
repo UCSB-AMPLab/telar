@@ -87,15 +87,17 @@
 </head>
 <body class="story-page">
   <!-- Fixed Back to Home Button (hidden in embed mode) -->
-  <a href="{{ '/' | relative_url }}" class="btn-home">
-    <span class="material-symbols-outlined btn-home-icon">home</span>
-    <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>
-  </a>
+  <nav aria-label="Site navigation">
+    <a href="{{ '/' | relative_url }}" class="btn-home">
+      <span class="material-symbols-outlined btn-home-icon">home</span>
+      <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>
+    </a>
+  </nav>
 
   <!-- Fixed Share Button (hidden in embed mode, floats on right) -->
   {% include share-button.html variant="icon-text" context="story" %}
 
-  <div class="story-container">
+  <main class="story-container">
     <!-- Left Column: Card Stacking Narrative -->
     <div class="narrative-column">
       <!-- Story Steps (including intro as step 0) -->
@@ -196,7 +198,7 @@
     <div class="viewer-column {% unless show_story_steps %}hide-step-indicators{% endunless %}">
       {% include viewer.html %}
     </div>
-  </div>
+  </main>
 
   <!-- Panels -->
   {% include panels.html %}

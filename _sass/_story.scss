@@ -209,7 +209,7 @@
 
 .intro-hint {
   margin-top: 3rem;
-  opacity: 0.6;
+  /* No opacity — text-muted class provides sufficient contrast reduction */
 }
 
 /* Responsive hint text - show appropriate hint for device */
