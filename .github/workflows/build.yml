@@ -104,7 +104,7 @@ jobs:
 
       - name: Restore IIIF tiles from cache
         id: cache-iiif
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: cached-iiif/
           # v0.5.0: Flattened image directory structure - now all images in components/images/
@@ -205,7 +205,7 @@ jobs:
 
       - name: Save IIIF tiles to cache
         if: steps.detect-changes.outputs.needs_iiif == 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: cached-iiif/
           # v0.5.0: Flattened image directory structure
