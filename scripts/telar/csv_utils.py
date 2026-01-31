@@ -92,10 +92,15 @@ def sanitize_dataframe(df):
     import re
     # Christmas tree emoji: U+1F384
     tree_pattern = re.compile(r'\U0001f384')
+    print(f"[sanitize_dataframe] Called with columns: {list(df.columns)}")
+    print(f"[sanitize_dataframe] Pattern: {tree_pattern.pattern}")
     df = df.copy()
     for col in df.columns:
         if df[col].dtype == 'object':  # String columns
+            before = df[col].iloc[0] if len(df) > 0 else None
             df[col] = df[col].apply(lambda x: tree_pattern.sub('', str(x)) if pd.notna(x) else x)
+            after = df[col].iloc[0] if len(df) > 0 else None
+            print(f"[sanitize_dataframe] Col '{col}': {repr(before)} -> {repr(after)}")
 
     return df
 
