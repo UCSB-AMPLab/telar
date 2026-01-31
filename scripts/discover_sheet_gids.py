@@ -1,10 +1,25 @@
 #!/usr/bin/env python3
 """
-Discover Google Sheets tab GIDs automatically
+Discover Google Sheets Tab GIDs
 
-This script extracts GIDs from a published Google Sheet and pairs them
-with the shared Sheet ID for CSV exports. This enables automatic setup
-without manually finding each GID.
+Telar sites can draw their content from Google Sheets spreadsheets.
+Each spreadsheet has multiple tabs (sheets) — typically one for the
+project setup, one for objects, and one per story. To download a
+specific tab as CSV, Google requires a numeric identifier called a GID.
+
+Google Sheets exposes two different URL types, and Telar needs both:
+the "shared" URL (from the Share button) contains the Sheet ID, used
+to construct CSV export URLs; the "published" URL (from File > Share >
+Publish to web) contains an HTML page with tab names and their GIDs
+embedded in the markup.
+
+This script parses the published HTML page to discover all tab names
+and their GIDs, then tests each GID against the shared Sheet ID to
+confirm it works. The result is a mapping of tab names to GIDs that
+fetch_google_sheets.py uses to download each tab as a CSV file. It can
+also output environment variables for GitHub Actions workflows.
+
+Version: v0.7.0-beta
 
 Usage:
     python scripts/discover_sheet_gids.py <SHARED_URL> <PUBLISHED_URL>
@@ -124,7 +139,7 @@ def discover_gids_from_published(published_url):
             return None
 
     except Exception as e:
-        print(f"Error fetching published sheet: {e}", file=sys.stderr)
+        print(f"❌ Error fetching published sheet: {e}", file=sys.stderr)
         return None
 
 def test_gid(sheet_id, gid):

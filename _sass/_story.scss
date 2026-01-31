@@ -1,0 +1,561 @@
+/**
+ * Story Layout
+ *
+ * The split-screen story layout that is the core of a Telar story page. The
+ * left column holds the narrative (story steps stacked vertically), and the
+ * right column holds the fixed IIIF viewer. This partial covers the step
+ * container positioning, the intro and outro cards, the viewer card stacking
+ * and transition system, step indicators, the back-to-home button, the mobile
+ * navigation buttons, and the height-based mobile tiers that adjust step sizing
+ * for small phone screens.
+ *
+ * @version v0.7.0-beta
+ */
+
+/* Story Layout - Split Screen with Card Stacking */
+.story-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.narrative-column {
+  flex: 0 0 40%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fff;
+  position: relative;
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 10vh;
+}
+
+.viewer-column {
+  flex: 1;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Viewer Card Stacking System */
+#viewer-cards-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================================================
+   VIEWER CARD TRANSITIONS (v0.6.2)
+
+   Fade-only transitions for all viewports. Slide-up animation removed in v0.6.2
+   to reduce timing complexity and improve perceived performance.
+   Z-index handles card stacking; opacity handles visibility transitions.
+   ============================================================================ */
+.viewer-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* Fade-only transition - no slide animation */
+  transition: opacity 300ms ease-out;
+}
+
+.card-below {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.card-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Skeleton loading shimmer - subtle loading indicator during viewer initialization */
+#viewer-cards-container.skeleton-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Subtle gradient that sweeps across */
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: skeleton-shimmer 2s infinite;
+  z-index: 999;
+  pointer-events: none; /* Don't block viewer interactions */
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Story Steps Container - Fixed height for absolute positioning */
+.story-steps {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Story Step - Absolute positioned cards that stack */
+.story-step {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  padding: 2rem;
+  background: #fff;
+  border-left: 3px solid transparent;
+  transform: translateY(100%);
+  opacity: 0;
+  transition:
+    border-color 0.3s ease,
+    opacity 0.4s ease-out,
+    transform 0.4s ease-out;
+
+  /* Flex layout for content and button */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Main content wrapper - centered vertically */
+.step-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Active state - slides up to visible position */
+.story-step.is-active {
+  border-left-color: var(--color-primary);
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Return Home Button - at bottom of last step */
+.step-home-button {
+  padding-top: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-top: 1px solid #e0e0e0;
+  width: 100%;
+}
+
+/* Intro Step - First step in narrative column */
+.story-intro {
+  /* Uses same absolute positioning as normal steps */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-left: none !important;
+  background: #f5f7fa;
+  /* Start visible (like normal step) */
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+}
+
+.intro-content {
+  text-align: center;
+  max-width: 600px;
+  padding: 2rem;
+}
+
+.intro-title {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+
+.intro-demo-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-accent, #6c757d);
+  margin-bottom: 0.5rem;
+  font-family: var(--font-body);
+}
+
+.intro-byline {
+  font-size: 1.1rem;
+  color: #5a6c7d;
+  margin-top: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-weight: 400;
+}
+
+.intro-description {
+  font-size: 1.25rem;
+  color: #5a6c7d;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.intro-hint {
+  margin-top: 3rem;
+  /* No opacity — text-muted class provides sufficient contrast reduction */
+}
+
+/* Responsive hint text - show appropriate hint for device */
+.hint-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .hint-desktop {
+    display: none;
+  }
+
+  .hint-mobile {
+    display: inline;
+  }
+}
+
+.btn-home {
+  position: fixed !important;
+  top: 2rem !important;
+  left: 2rem !important;
+  text-decoration: none;
+  color: #5a6c7d;
+  padding: 0.5rem 1rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+  z-index: 1040 !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-home:hover {
+  background: white;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* Home button icon - hidden on desktop */
+.btn-home-icon {
+  display: none;
+}
+
+/* Outro Step - End card in narrative column only */
+.story-outro {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-left: none !important;
+  background: #f5f7fa;
+}
+
+.outro-content {
+  text-align: center;
+  max-width: 600px;
+  padding: 2rem;
+}
+
+.outro-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: var(--color-primary);
+}
+
+.outro-text {
+  font-size: 1.25rem;
+  margin-bottom: 2rem;
+  color: #5a6c7d;
+}
+
+/* Story step text */
+.story-step h2 {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.story-step p {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Step Indicator Toggle */
+.hide-step-indicators .step-indicator {
+  display: none !important;
+}
+
+/* Mobile Responsive - Story Layout */
+@media (max-width: 768px) {
+  .story-container {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .viewer-column {
+    flex: 0 0 60vh;
+    order: 1;
+    position: relative;
+    height: 60vh;
+    margin-bottom: 0;
+  }
+
+  .narrative-column {
+    flex: 0 0 40vh;
+    height: 40vh !important;
+    order: 2;
+    overflow-y: auto !important;
+  }
+
+  /* Mobile Button Navigation System */
+  /* Fix story steps container height */
+  .story-steps {
+    height: auto;
+    min-height: 40vh;
+    position: relative;
+  }
+
+  /* Hide all story steps by default on mobile */
+  .story-step {
+    display: none;
+    position: static !important;
+    height: auto !important;
+    min-height: 40vh;
+    max-height: 40vh;
+    padding: 1.5rem;
+    overflow-y: auto;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  /* Show only the active step */
+  .story-step.mobile-active {
+    display: flex;
+  }
+
+  /* Mobile intro styling - smaller text, left-aligned */
+  .story-intro .intro-content {
+    text-align: left;
+    max-width: 100%;
+    padding: 1rem;
+  }
+
+  .story-intro .intro-title {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .story-intro .intro-byline {
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+  }
+
+  .story-intro .intro-description {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .story-intro .intro-hint {
+    font-size: 0.9rem;
+    margin-top: 1.5rem;
+  }
+
+  /* Move panel trigger buttons to bottom on mobile */
+  .story-step .step-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .story-step .panel-trigger {
+    margin-top: auto;
+    align-self: flex-start;
+  }
+
+  /* Mobile Navigation Buttons - positioned on right side */
+  .mobile-nav {
+    position: fixed;
+    right: 1rem;
+    bottom: 50%;
+    transform: translateY(50%);
+    z-index: 1040;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .mobile-nav button {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    color: #333;
+    font-size: 1.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-nav button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 1);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .mobile-nav button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Mobile home button - match navigation button style */
+  .btn-home {
+    min-height: 44px;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    top: 1rem !important;
+    left: 1rem !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Hide text on mobile, show only icon */
+  .btn-home-text {
+    display: none;
+  }
+
+  .btn-home-icon {
+    display: block !important; /* Override desktop hide */
+    font-size: 1.5rem;
+  }
+}
+
+/* ============================================================================
+   HEIGHT-BASED RESPONSIVE DESIGN FOR SMALL MOBILE SCREENS (v0.4.0)
+   Progressive reductions in typography and spacing for phones with limited
+   vertical space (iPhone SE, small Android devices). Ensures "Learn More"
+   buttons and other UI elements remain visible and accessible.
+   ============================================================================ */
+
+/* Tier 1: Small Mobile - phones with 700px or less height */
+@media (max-width: 768px) and (max-height: 700px) {
+  .story-step {
+    padding: 1.3rem !important;
+  }
+
+  .story-step h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .story-step p {
+    font-size: 1rem;
+    margin-bottom: 1.3rem;
+  }
+
+  .panel-trigger {
+    font-size: 0.85rem;
+    padding: 0.45rem 1.1rem;
+  }
+}
+
+/* Tier 2: Tiny Mobile - phones with 667px or less height (iPhone SE, etc.) */
+@media (max-width: 768px) and (max-height: 667px) {
+  /* Adjust viewer:panel ratio from 60:40 to 55:45 for more step panel space */
+  .viewer-column {
+    flex: 0 0 55vh !important;
+    height: 55vh !important;
+  }
+
+  .narrative-column {
+    flex: 0 0 45vh !important;
+    height: 45vh !important;
+  }
+
+  .story-steps {
+    min-height: 45vh !important;
+  }
+
+  .story-step {
+    min-height: 45vh !important;
+    max-height: 45vh !important;
+    padding: 1.2rem !important;
+  }
+
+  .story-step h2 {
+    font-size: 1.4rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .story-step p {
+    font-size: 0.95rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .panel-trigger {
+    font-size: 0.8rem;
+    padding: 0.4rem 1rem;
+  }
+
+  /* Navigation buttons - smaller for tiny screens */
+  .mobile-nav button {
+    width: 45px !important;
+    height: 45px !important;
+  }
+}
+
+/* Tier 3: Micro Mobile - very small Android phones with 600px or less height */
+@media (max-width: 768px) and (max-height: 600px) {
+  /* Maintain 55:45 ratio, further reduce typography */
+  .story-step {
+    padding: 1rem !important;
+  }
+
+  .story-step h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .story-step p {
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .panel-trigger {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.9rem;
+  }
+
+  /* Navigation buttons - smaller for micro screens */
+  .mobile-nav button {
+    width: 45px !important;
+    height: 45px !important;
+  }
+}

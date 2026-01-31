@@ -1,8 +1,32 @@
 #!/usr/bin/env python3
 """
-Generate Jekyll collection markdown files from JSON data
+Generate Jekyll Collection Markdown Files from JSON Data
 
-Version: v0.6.2-beta
+This script is the bridge between Telar's JSON data and Jekyll's
+content system. Jekyll requires each page to be a markdown file with
+YAML frontmatter in a specific directory (called a "collection"). This
+script reads the JSON files produced by csv_to_json.py and generates
+those markdown files.
+
+It creates four types of collection files:
+
+- Objects (_jekyll-files/_objects/): One file per exhibition object,
+  with metadata like title, creator, period, and IIIF manifest URL in
+  the frontmatter.
+- Stories (_jekyll-files/_stories/): One file per story, linking to its
+  JSON data file and setting the story layout.
+- Glossary (_jekyll-files/_glossary/): Terms from both user markdown
+  files (components/texts/glossary/) and demo content, with glossary-
+  to-glossary link processing.
+- Pages (_jekyll-files/_pages/): User-authored pages from
+  components/texts/pages/, processed through the widget and glossary
+  pipeline.
+
+The script respects development feature flags (hide_stories,
+hide_collections) from _config.yml, which allow developers to
+temporarily suppress certain collections during development.
+
+Version: v0.7.0-beta
 """
 
 import json
@@ -13,13 +37,10 @@ from pathlib import Path
 import markdown
 import yaml
 
-# Import processing functions from csv_to_json
-from csv_to_json import (
-    process_widgets,
-    process_images,
-    process_glossary_links,
-    load_glossary_terms
-)
+# Import processing functions from telar package
+from telar.widgets import process_widgets
+from telar.images import process_images
+from telar.glossary import process_glossary_links, load_glossary_terms
 
 def generate_objects():
     """Generate object markdown files from objects.json"""
@@ -322,7 +343,7 @@ def generate_pages():
         match = re.match(frontmatter_pattern, content, re.DOTALL)
 
         if not match:
-            print(f"Error: No frontmatter found in {source_file}")
+            print(f"❌ Error: No frontmatter found in {source_file}")
             print("  Pages must have YAML frontmatter (--- at start and end)")
             continue
 

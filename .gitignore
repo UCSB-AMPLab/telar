@@ -28,6 +28,8 @@ Thumbs.db
 
 # Build artifacts
 *.log
+assets/js/telar-story.js
+assets/js/telar-story.js.map
 
 # Generated JSON files (from components/structures/*.csv by csv_to_json.py)
 # Source of truth is the CSV files - JSON is regenerated on every build

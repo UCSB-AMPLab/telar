@@ -1,8 +1,0 @@
-# Python dependencies for Telar scripts
-
-# IIIF tile generation
-iiif>=1.0.0
-Pillow>=9.0.0
-
-# CSV/JSON processing (for data conversion scripts)
-# (No additional dependencies needed - uses standard library)

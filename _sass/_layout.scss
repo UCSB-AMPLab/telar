@@ -1,0 +1,562 @@
+/**
+ * Layout
+ *
+ * The structural elements that appear on most pages: site header with navigation
+ * bar, footer, page content grid, story card components (used on the home page
+ * to list stories), collection gallery grid, glossary index page, global button
+ * styling, and the demo story badge. These create the overall page frame that
+ * story-specific and content-specific styles build on.
+ *
+ * User page widget styling is also here: widgets on standalone user pages
+ * (outside of panels) follow the same colour convention as Layer 1 panels,
+ * using Layer 2 colours for contrast.
+ *
+ * @version v0.7.0-beta
+ */
+
+@use 'mixins' as *;
+
+/* Navigation */
+.navbar-brand {
+  white-space: normal !important;
+}
+
+.site-header .navbar-brand {
+  font-family: var(--font-headings);
+  font-size: 1.5rem;
+  color: var(--color-heading);
+}
+
+.site-header .site-logo {
+  max-height: 80px;
+  width: auto;
+}
+
+.navbar-toggler {
+  margin-left: auto;
+}
+
+/* Footer */
+.site-footer {
+  border-top: 1px solid #dee2e6;
+}
+
+.footer-link {
+  color: #6c757d;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* Page Content */
+.page-content {
+  font-size: 1.25rem;
+  font-weight: 300;
+}
+
+.page-content h1 {
+  margin-bottom: 1.5rem;
+  font-weight: 400;
+}
+
+.page-content h2 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  font-weight: 400;
+}
+
+.page-content p {
+  margin-bottom: 1.5rem;
+}
+
+.page-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* User Page Widget Styling - styled as if inside panel-layer1 */
+/* Widgets span full column width (no max-width constraint) */
+
+/* Carousel captions - same as panel-layer1 (uses layer2 colors for contrast) */
+.user-page .telar-widget-carousel .carousel-caption-below {
+  background: var(--color-panel-layer2-bg);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-carousel .carousel-caption-below small,
+.user-page .telar-widget-carousel .carousel-caption-below .caption-credit {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Accordion styling - user pages use layer2 colors (like panel-layer1) */
+.user-page .telar-widget-accordion .accordion-item {
+  background: var(--color-panel-layer2-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-page .telar-widget-accordion .accordion-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-accordion .accordion-button:not(.collapsed) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-panel-layer2-text);
+}
+
+.user-page .telar-widget-accordion .accordion-body {
+  color: var(--color-panel-layer2-text);
+}
+
+/* Tabs styling - user pages use layer2 colors (like accordions in panel-layer1) */
+.user-page {
+  @include widget-tabs-panel-colours(--color-panel-layer2-bg, --color-panel-layer2-text);
+}
+
+/* Site Description - Links appear darker than body text, show theme color and underline on hover */
+.site-description a {
+  color: var(--color-body);
+  text-decoration: none;
+  transition: all 0.3s ease;
+  filter: brightness(0.7);
+}
+
+.site-description a:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+  filter: brightness(1);
+}
+
+/* Story Cards - Paisajes Colonial Style */
+.story-card {
+  display: block;
+  color: inherit;
+  transition: transform 0.3s ease;
+}
+
+.story-card:hover {
+  transform: translateY(-5px);
+}
+
+.story-card .card {
+  transition: box-shadow 0.3s ease;
+}
+
+.story-card:hover .card {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+}
+
+.story-card .card-body {
+  text-align: left;
+}
+
+.story-card h3 {
+  font-family: var(--font-headings);
+  color: var(--color-primary);
+  font-size: 1.2rem;
+  margin-top: 1rem;
+  font-weight: 400;
+}
+
+.story-card-byline {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+/* Demo story badge */
+.story-card .card {
+  position: relative;
+}
+
+.story-card .card.demo-story {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.demo-badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(108, 117, 125, 0.85);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  z-index: 10;
+  font-family: var(--font-body);
+}
+
+/* Inline demo badge for lists and inline contexts */
+.demo-badge-inline {
+  display: inline-block;
+  background: rgba(108, 117, 125, 0.15);
+  color: #6c757d;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  font-family: var(--font-body);
+}
+
+.object-demo-label {
+  font-size: 1.75rem;
+  font-weight: 500;
+  color: var(--color-accent, #6c757d);
+  margin-bottom: 0.25rem;
+  font-family: var(--font-body);
+}
+
+.story-thumbnail {
+  width: 100%;
+  border-radius: 0.25rem 0.25rem 0 0;
+}
+
+.story-thumbnail-placeholder {
+  font-family: var(--font-headings);
+  font-size: 3rem;
+  font-weight: 700;
+  border-radius: 0.25rem 0.25rem 0 0;
+}
+
+/* Story Byline */
+.story-byline {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+}
+
+/* Collection Gallery */
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 2rem;
+  padding: 2rem 0;
+}
+
+.collection-item {
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.3s ease;
+  position: relative;
+}
+
+.collection-item:hover {
+  transform: translateY(-5px);
+}
+
+.collection-item img {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.collection-item h3 {
+  font-size: 1.2rem;
+  margin-top: 1rem;
+}
+
+/* Glossary Index */
+.glossary-list {
+  padding: 2rem 0;
+}
+
+.glossary-letter {
+  margin-top: 3rem;
+  margin-bottom: 1.5rem;
+  font-size: 2rem;
+  color: var(--color-primary);
+  border-bottom: 2px solid var(--color-primary);
+  padding-bottom: 0.5rem;
+}
+
+.glossary-term {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-left: 3px solid var(--color-secondary);
+  background: #f8f9fa;
+}
+
+.glossary-term h3 {
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.glossary-term-link {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-link);
+  text-decoration: none;
+  display: inline;
+  transition: color 0.2s ease;
+}
+
+.glossary-term-link:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+/* Global Button Styling - Rounded like panel-trigger buttons */
+.btn {
+  border-radius: 20px !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Theme-aware button colors */
+.btn-primary {
+  background-color: var(--color-button-bg) !important;
+  border-color: var(--color-button-bg) !important;
+  color: var(--color-button-text) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background-color: var(--color-button-bg) !important;
+  border-color: var(--color-button-bg) !important;
+  opacity: 0.9;
+  color: var(--color-button-text) !important;
+}
+
+/* Telar Alert Standardization */
+.telar-alert {
+  max-width: 900px !important;
+  margin-bottom: 1.5rem !important;
+  font-size: 1rem !important;
+  font-weight: 400 !important;
+}
+
+// Round the navbar toggler (hamburger menu)
+.navbar-toggler {
+  border-radius: 50px; // Full circle
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  width: 48px; // Match share button width on mobile
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1);
+  }
+
+  .navbar-toggler-icon {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+}
+
+// Style the collapsed navbar menu items
+@media (max-width: 991px) {
+  .navbar-collapse {
+    .navbar-nav {
+      text-align: center;
+
+      .nav-item {
+        .nav-link {
+          font-size: 1.1rem;
+          padding: 0.75rem 1rem;
+        }
+      }
+    }
+  }
+}
+
+/* Mobile responsive grid - override auto-fill behavior */
+@media (max-width: 768px) {
+  .collection-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .collection-item img {
+    height: 180px;
+  }
+
+  /* Glossary Index - reduce spacing on mobile */
+  .glossary-letter {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+  }
+
+  .glossary-term {
+    margin-bottom: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .glossary-term h3 {
+    font-size: 1.1rem;
+  }
+
+  .glossary-term-link {
+    font-size: 1rem;
+  }
+}
+
+/* Single column for screens up to 441px (iPhone Pro Max at 440px stays 1 column) */
+@media (max-width: 441px) {
+  .collection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-item img {
+    height: 200px;
+  }
+}
+
+/* Small Phones: 576px and below - adjust collection grid spacing */
+@media (max-width: 576px) {
+  .collection-grid {
+    gap: 0.75rem;
+  }
+
+  .collection-item img {
+    height: 150px;
+  }
+}
+
+/* ============================================================================
+   HEIGHT-BASED RESPONSIVE: LAYOUT ADJUSTMENTS
+   Progressive reductions for phones with limited vertical space.
+   ============================================================================ */
+
+/* Tier 1: Small Mobile - phones with 700px or less height */
+@media (max-width: 768px) and (max-height: 700px) {
+  /* Site-wide content - 10-15% reduction */
+  .page-content {
+    font-size: 1.125rem;
+  }
+
+  .page-content h1 {
+    margin-bottom: 1.3rem;
+  }
+
+  .page-content h2 {
+    margin-top: 2.2rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .page-content p {
+    margin-bottom: 1.3rem;
+  }
+
+  .collection-grid {
+    gap: 1.75rem;
+    padding: 1.75rem 0;
+  }
+
+  .collection-item h3 {
+    font-size: 1.1rem;
+    margin-top: 0.9rem;
+  }
+
+  .navbar-brand {
+    font-size: 1.35rem;
+  }
+}
+
+/* Tier 2: Tiny Mobile - phones with 667px or less height (iPhone SE, etc.) */
+@media (max-width: 768px) and (max-height: 667px) {
+  /* Site-wide content - 20-25% reduction */
+  .page-content {
+    font-size: 1rem;
+  }
+
+  .page-content h1 {
+    margin-bottom: 1.2rem;
+  }
+
+  .page-content h2 {
+    margin-top: 2rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .page-content p {
+    margin-bottom: 1.2rem;
+  }
+
+  .collection-grid {
+    gap: 1.5rem;
+    padding: 1.5rem 0;
+  }
+
+  .collection-item img {
+    height: 200px;
+  }
+
+  .collection-item h3 {
+    font-size: 1rem;
+    margin-top: 0.8rem;
+  }
+
+  .navbar-brand {
+    font-size: 1.25rem;
+  }
+}
+
+/* Tier 3: Micro Mobile - very small Android phones with 600px or less height */
+@media (max-width: 768px) and (max-height: 600px) {
+  /* Site-wide content - 30-35% reduction */
+  .page-content {
+    font-size: 0.875rem;
+  }
+
+  .page-content h1 {
+    margin-bottom: 1rem;
+  }
+
+  .page-content h2 {
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .page-content p {
+    margin-bottom: 1rem;
+  }
+
+  .collection-grid {
+    gap: 1.25rem;
+    padding: 1.25rem 0;
+  }
+
+  .collection-item img {
+    height: 175px;
+  }
+
+  .collection-item h3 {
+    font-size: 0.9rem;
+    margin-top: 0.7rem;
+  }
+
+  .navbar-brand {
+    font-size: 1.125rem;
+  }
+}
