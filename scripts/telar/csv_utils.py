@@ -91,7 +91,7 @@ def sanitize_dataframe(df):
     """
     for col in df.columns:
         if df[col].dtype == 'object':  # String columns
-            df[col] = df[col].apply(lambda x: str(x).replace('\U0001f384', '') if pd.notna(x) else x)
+            df[col] = df[col].apply(lambda x: str(x).replace('🎄', '') if pd.notna(x) else x)
 
     return df
 
