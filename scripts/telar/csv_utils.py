@@ -87,11 +87,15 @@ def sanitize_dataframe(df):
         df: pandas DataFrame to sanitize
 
     Returns:
-        DataFrame: Sanitized dataframe
+        DataFrame: Sanitized dataframe (copy of input)
     """
+    import re
+    # Christmas tree emoji: U+1F384
+    tree_pattern = re.compile(r'\U0001f384')
+    df = df.copy()
     for col in df.columns:
         if df[col].dtype == 'object':  # String columns
-            df[col] = df[col].apply(lambda x: str(x).replace('🎄', '') if pd.notna(x) else x)
+            df[col] = df[col].apply(lambda x: tree_pattern.sub('', str(x)) if pd.notna(x) else x)
 
     return df
 
