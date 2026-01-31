@@ -91,7 +91,8 @@ def sanitize_dataframe(df):
     """
     import re
     # Christmas tree emoji: U+1F384
-    tree_pattern = re.compile(r'\U0001f384')
+    tree_emoji = chr(0x1F384)
+    tree_pattern = re.compile(re.escape(tree_emoji))
     df = df.copy()
     for col in df.columns:
         if df[col].dtype == 'object':  # String columns
