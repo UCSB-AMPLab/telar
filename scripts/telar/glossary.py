@@ -2,15 +2,24 @@
 Glossary Loading and Linking
 
 This module deals with Telar's glossary system, which lets authors link
-terms in story panel text to glossary definitions. Glossary terms are
-markdown files in `components/texts/glossary/`, each with YAML frontmatter
-containing a `term_id` and `title`.
+terms in story panel text to glossary definitions. Glossary terms can be
+defined in two ways:
 
-`load_glossary_terms()` scans that directory and builds a dictionary
-mapping each `term_id` to its display title. This dictionary is then
-passed to `process_glossary_links()`, which runs on already-converted
-HTML text (after markdown processing) and replaces `[[term_id]]` or
-`[[display text|term_id]]` syntax with clickable glossary links.
+1. **CSV file** (v0.8.0+): `components/structures/glossary.csv` with columns
+   `term_id`, `title`, `definition`, and `related_terms`. This is the
+   preferred method for spreadsheet-first workflows.
+
+2. **Markdown files** (legacy): Individual `.md` files in
+   `components/texts/glossary/`, each with YAML frontmatter containing
+   `term_id` and `title`.
+
+If both exist, CSV takes precedence and a warning is shown.
+
+`load_glossary_terms()` checks for CSV first, then falls back to markdown.
+It builds a dictionary mapping each `term_id` to its display title. This
+dictionary is then passed to `process_glossary_links()`, which runs on
+already-converted HTML text (after markdown processing) and replaces
+`[[term_id]]` or `[[display text|term_id]]` syntax with clickable links.
 
 If a term ID exists in the glossary, the link is rendered as an `<a>` tag
 with `class="glossary-inline-link"` and a `data-term-id` attribute.
@@ -24,26 +33,61 @@ visible error indicator with a warning emoji, and a warning is appended
 to the `warnings_list` so it appears in the build output and in the
 story's intro panel.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import re
 from pathlib import Path
+import pandas as pd
 from telar.config import get_lang_string
 
 
-def load_glossary_terms():
+def load_glossary_from_csv(csv_path):
     """
-    Load glossary terms from components/texts/glossary/*.md files.
+    Load glossary terms from a CSV file.
+
+    Args:
+        csv_path: Path to glossary.csv
 
     Returns:
-        dict: Dictionary mapping term_id to term title, or empty dict if loading fails
+        dict: Dictionary mapping term_id to term title
     """
     glossary_terms = {}
-    glossary_dir = Path('components/texts/glossary')
 
-    if not glossary_dir.exists():
-        return glossary_terms
+    try:
+        df = pd.read_csv(csv_path)
+
+        # Normalize column names to lowercase
+        df.columns = df.columns.str.lower().str.strip()
+
+        if 'term_id' not in df.columns or 'title' not in df.columns:
+            print(f"  ⚠️ glossary.csv missing required columns (term_id, title)")
+            return glossary_terms
+
+        for _, row in df.iterrows():
+            term_id = str(row.get('term_id', '')).strip()
+            title = str(row.get('title', '')).strip()
+
+            if term_id and title:
+                glossary_terms[term_id] = title
+
+    except Exception as e:
+        print(f"  ⚠️ Could not load glossary.csv: {e}")
+
+    return glossary_terms
+
+
+def load_glossary_from_markdown(glossary_dir):
+    """
+    Load glossary terms from markdown files (legacy method).
+
+    Args:
+        glossary_dir: Path to components/texts/glossary/
+
+    Returns:
+        dict: Dictionary mapping term_id to term title
+    """
+    glossary_terms = {}
 
     try:
         for glossary_file in glossary_dir.glob('*.md'):
@@ -67,9 +111,34 @@ def load_glossary_terms():
                     glossary_terms[term_id] = title
 
     except Exception as e:
-        print(f"  [WARN] Could not load glossary terms: {e}")
+        print(f"  ⚠️ Could not load glossary markdown files: {e}")
 
     return glossary_terms
+
+
+def load_glossary_terms():
+    """
+    Load glossary terms from CSV or markdown files.
+
+    Checks for glossary.csv first (preferred), falls back to markdown files.
+    If both exist, CSV takes precedence and a warning is shown.
+
+    Returns:
+        dict: Dictionary mapping term_id to term title, or empty dict if no glossary found
+    """
+    csv_path = Path('components/structures/glossary.csv')
+    md_path = Path('components/texts/glossary')
+
+    # Check if CSV exists (preferred source)
+    if csv_path.exists():
+        return load_glossary_from_csv(csv_path)
+
+    # Fall back to markdown files
+    elif md_path.exists() and any(md_path.glob('*.md')):
+        return load_glossary_from_markdown(md_path)
+
+    # No glossary content
+    return {}
 
 
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
