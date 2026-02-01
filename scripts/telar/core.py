@@ -45,6 +45,7 @@ from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
 from telar.demo import load_demo_bundle, merge_demo_content, fetch_demo_content_if_enabled
 from telar.encryption import encrypt_story, get_protected_stories, get_story_key_from_config
+from telar.search import generate_search_data
 
 
 def csv_to_json(csv_path, json_path, process_func=None):
@@ -275,6 +276,9 @@ def main():
             '_data/objects.json',
             process_objects
         )
+
+    # Generate search data for gallery filtering (if enabled in config)
+    generate_search_data()
 
     # Convert story files (with optional Christmas Tree mode)
     # v0.6.0+: Process ALL CSVs except system files

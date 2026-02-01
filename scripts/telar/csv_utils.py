@@ -66,9 +66,18 @@ COLUMN_NAME_MAPPING = {
     'periodo': 'period',
     'medio': 'medium',
     'dimensiones': 'dimensions',
-    'ubicacion': 'location',
+    'ubicacion': 'source',  # v0.8.0: renamed from 'location' to 'source'
     'credito': 'credit',
     'miniatura': 'thumbnail',
+    # v0.8.0 gallery filtering columns
+    'año': 'year',
+    'tipo_objeto': 'object_type',
+    'temas': 'subjects',
+    'materias': 'subjects',  # Dublin Core official Spanish translation
+    'destacado': 'featured',
+    'fuente': 'source',
+    # Backward compatibility: location -> source (v0.8.0 schema change)
+    'location': 'source',
 
     # Project columns (Spanish -> English)
     'orden': 'order',
@@ -171,7 +180,8 @@ def is_header_row(row_values):
     # Also include common column names not in the mapping
     valid_names.update(['x', 'y', 'zoom', 'order', 'story_id', 'title', 'subtitle',
                         'byline', 'object_id', 'description', 'source_url', 'creator',
-                        'period', 'medium', 'dimensions', 'location', 'credit', 'thumbnail'])
+                        'period', 'medium', 'dimensions', 'location', 'source', 'credit',
+                        'thumbnail', 'year', 'object_type', 'subjects', 'featured'])
 
     # Count how many cells match known column names
     matches = 0

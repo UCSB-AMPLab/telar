@@ -139,9 +139,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://example.com/nonexistent/manifest.json',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -152,9 +150,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://httpstat.us/503',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -165,9 +161,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'not-a-valid-url',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -178,9 +172,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': '',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -191,9 +183,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://httpstat.us/500',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -204,9 +194,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://httpstat.us/429',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         }
@@ -472,25 +460,50 @@ def process_objects(df, christmas_tree=False):
                                     site_language
                                 )
 
-                                # Location (Repository/Institution name, not geographic location)
-                                extracted['location'] = find_metadata_field(
+                                # Source (Repository/Institution name, not geographic location)
+                                # Note: renamed from 'location' to 'source' in v0.8.0
+                                extracted['source'] = find_metadata_field(
                                     metadata_array,
-                                    ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
+                                    ['Repository', 'Holding Institution', 'Institution', 'Source', 'Current Location'],
                                     version,
                                     site_language
                                 )
 
-                                # If location not found in metadata, try provider (v3.0)
-                                if not extracted['location'] and version == '3.0':
+                                # If source not found in metadata, try provider (v3.0)
+                                if not extracted['source'] and version == '3.0':
                                     providers = data.get('provider', [])
                                     if providers and isinstance(providers, list) and len(providers) > 0:
                                         provider = providers[0]
                                         if isinstance(provider, dict):
                                             provider_label = provider.get('label', {})
                                             if isinstance(provider_label, dict):
-                                                extracted['location'] = extract_language_map_value(provider_label, site_language)
+                                                extracted['source'] = extract_language_map_value(provider_label, site_language)
                                             else:
-                                                extracted['location'] = str(provider_label).strip()
+                                                extracted['source'] = str(provider_label).strip()
+
+                                # Year (structured date for filtering/timeline)
+                                extracted['year'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Date', 'Year', 'Date Created', 'Creation Date'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Object type (classification for filtering)
+                                extracted['object_type'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Type', 'Object Type', 'Resource Type', 'Format'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Subjects (tags for filtering)
+                                extracted['subjects'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Subject', 'Subjects', 'Keywords', 'Tags', 'Topic'],
+                                    version,
+                                    site_language
+                                )
 
                                 # Credit
                                 extracted['credit'] = extract_credit(data, version, site_language)
@@ -500,12 +513,16 @@ def process_objects(df, christmas_tree=False):
                                 apply_metadata_fallback(row_dict, extracted)
 
                                 # Update dataframe with extracted values
-                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
-                                    df.at[idx, field] = row_dict[field]
+                                # Core fields that can be auto-populated from IIIF
+                                iiif_fields = ['title', 'description', 'creator', 'period', 'source', 'credit',
+                                               'year', 'object_type', 'subjects']
+                                for field in iiif_fields:
+                                    if field in row_dict:
+                                        df.at[idx, field] = row_dict[field]
 
                                 # Log if any fields were auto-populated
                                 populated_fields = []
-                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
+                                for field in iiif_fields:
                                     csv_val = str(row.get(field, '')).strip()
                                     final_val = str(row_dict.get(field, '')).strip()
                                     if not csv_val and final_val:
@@ -630,5 +647,9 @@ def process_objects(df, christmas_tree=False):
     # Print summary if there were issues
     if warnings:
         print(f"\n  Objects validation summary: {len(warnings)} warning(s)")
+
+    # Final cleanup: ensure no NaN values in output
+    # (new columns added via IIIF extraction may leave NaN for objects without IIIF)
+    df = df.fillna('')
 
     return df
