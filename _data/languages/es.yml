@@ -89,6 +89,25 @@ pages:
   objects_heading: "Explora los objetos detrás de las historias"
   objects_count: "Explora {count} objetos presentes en las historias."
 
+# Objects browse and search (v0.8.0)
+objects:
+  showing: "Mostrando"
+  of: "de"
+  objects: "objetos"
+  clear_all: "Limpiar todo"
+  search_placeholder: "Buscar objetos..."
+  clear_search: "Limpiar búsqueda"
+  filter_by: "Filtrar por:"
+  loading_filters: "Cargando filtros..."
+  no_results: "Ningún objeto coincide con tu búsqueda"
+  type: "Tipo"
+  creator: "Creador"
+  period: "Período"
+  subjects: "Materias"
+  sort_by: "Ordenar por"
+  sort_title: "título"
+  sort_year: "año"
+
 # Sistema de paneles
 panels:
   default_title: "Título del panel"
@@ -227,38 +246,68 @@ errors:
 share:
   button: "Compartir"
   title: "Compartir"
+  copy: "COPIAR"
+  copied: "¡Copiado!"
+
+  # Pestañas estilo píldora
+  tab_this_story: "esta historia"
+  tab_a_single_story: "una historia"
+  tab_this_whole_site: "todo el sitio"
+
+  # Encabezados de sección
+  story_privacy: "Privacidad de la historia"
+  share_link_heading: "Enlace para compartir"
+  embed_code_heading: "Código para insertar"
+  select_story_heading: "Seleccionar historia"
+
+  # Control de privacidad de historia
+  privacy_question: "¿Quieres compartir tu historia con o sin la clave de acceso?"
+  without_key: "Sin la clave"
+  with_key: "Con la clave"
+  include_key_label: "Opción de incluir clave"
+
+  # Placeholders
+  select_placeholder: "Elige una historia..."
+  select_story_first: "Selecciona una historia arriba"
+
+  # Texto de ayuda
+  help_story_link_story: "Copia un enlace directo a esta historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
+  help_site_link: "Copia un enlace a la página inicial del sitio, donde las personas pueden explorar todas las historias."
+  help_embed_story: "Inserta esta historia en otro sitio web o LMS."
+
+  # Tamaños de incrustación predefinidos
+  preset_sizes: "Tamaños predefinidos para distintas plataformas"
+  canvas_lms: "Canvas LMS"
+  moodle_blackboard: "Moodle/Blackboard"
+  wordpress: "WordPress"
+  squarespace: "Squarespace"
+  wix: "Wix"
+  mobile: "Móvil"
+  fixed: "Fijo"
+  custom: "Personalizado"
+  width: "Ancho"
+  height: "Alto"
+
+  # Mensajes de advertencia
+  include_key_warning: "Cualquier persona con este enlace podrá ver la historia."
+  embed_key_warning: "Cualquier persona con este código podrá ver la historia."
+  protected_story_warning: "Esta historia está protegida. Las personas que la reciban necesitarán la clave para verla."
+  protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
+
+  # Claves heredadas (mantenidas por compatibilidad)
   title_site: "Compartir este sitio"
   tab_link: "Compartir enlaces"
   tab_embed: "Insertar (*embed*)"
   copy_link: "Copiar enlace"
   copy_embed: "Copiar código para insertar (*embed*)"
-  copied: "¡Copiado!"
-
-  # Generador de código de incrustación
   embed_presets: "Tamaños predefinidos"
-  canvas_lms: "Canvas LMS (100% × 800px)"
-  moodle_blackboard: "Moodle/Blackboard (100% × 700px)"
-  wordpress: "WordPress (100% × 600px)"
-  squarespace: "Squarespace (100% × 600px)"
-  wix: "Wix (100% × 550px)"
-  mobile: "Móvil (375px × 500px)"
-  fixed: "Fijo (800px × 600px)"
-  custom: "Dimensiones personalizadas"
-  width: "Ancho"
-  height: "Alto"
   select_story: "Selecciona una historia"
   share_a_story: "Compartir una historia"
   select_option: "Seleccionar historia"
   embed_preview: "Vista previa del código"
-
-  # Encabezados de sección
   share_story_heading: "Compartir esta historia"
   share_site_heading: "Compartir este sitio"
-
-  # Texto de ayuda
-  help_story_link_story: "Copia un enlace directo a esta historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
   help_story_link_homepage: "Copia un enlace directo a una historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
-  help_site_link: "Copia un enlace a la página inicial del sitio, donde las personas pueden explorar todas las historias."
   help_embed_intro_stories: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
   help_embed_intro_homepage: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona una historia e indica un tamaño (usando un tamaño predefinido o indicando dimensiones específicas), luego copia el código y pégalo en tu sitio."
   help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."

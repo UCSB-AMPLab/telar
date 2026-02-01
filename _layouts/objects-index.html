@@ -22,6 +22,13 @@ layout: default
 
   {% if site.objects.size > 0 %}
 
+  {% comment %}Check browse_and_search setting (default: true if not explicitly set){% endcomment %}
+  {% if site.collection_interface.browse_and_search == false %}
+    {% assign browse_and_search = false %}
+  {% else %}
+    {% assign browse_and_search = site.collection_interface.browse_and_search | default: true %}
+  {% endif %}
+
   {% comment %}Check for objects with warnings{% endcomment %}
   {% assign objects_with_warnings = "" | split: "" %}
   {% for object in site.objects %}
@@ -73,13 +80,120 @@ layout: default
   </div>
   {% endif %}
 
-  <div class="collection-grid">
+  {% if browse_and_search %}
+  {% comment %}Browse and Search Layout Container{% endcomment %}
+  <div class="objects-layout">
+    {% comment %}Sidebar (desktop) / Top controls (mobile){% endcomment %}
+    <aside class="objects-sidebar">
+      {% comment %}Search input (always visible){% endcomment %}
+      <div class="objects-search-wrapper">
+        <input type="text"
+               class="objects-search-input"
+               id="objects-search-input"
+               placeholder="{{ lang.objects.search_placeholder | default: 'Search objects...' }}"
+               aria-label="{{ lang.objects.search_placeholder | default: 'Search objects' }}">
+        <button type="button" class="objects-search-clear" id="objects-search-clear" style="display: none;" aria-label="{{ lang.objects.clear_search | default: 'Clear search' }}">&times;</button>
+      </div>
+
+      {% comment %}Active filters (chips) - shown when filters are active{% endcomment %}
+      <div class="objects-active-filters" id="objects-sidebar-active-filters" style="display: none;">
+        <div class="objects-filter-chips" id="objects-sidebar-filter-chips"></div>
+        <button type="button" class="objects-clear-all" id="objects-sidebar-clear-all">{{ lang.objects.clear_all | default: "Clear all" }}</button>
+      </div>
+
+      {% comment %}Mobile: Collapsible wrapper / Desktop: Always visible{% endcomment %}
+      <div class="objects-filters-wrapper">
+        <button type="button" class="objects-filters-mobile-toggle" id="objects-filters-mobile-toggle" aria-expanded="false">
+          <span>{{ lang.objects.filter_by | default: "Filter by" }}</span>
+          <svg class="objects-filter-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <div class="objects-filters-content" id="objects-filters-content">
+          <h3 class="objects-filter-heading">{{ lang.objects.filter_by | default: "Filter by" }}</h3>
+
+          {% comment %}Type filter{% endcomment %}
+          <div class="objects-filter-section" data-filter="object_type">
+            <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
+              <span>{{ lang.objects.type | default: "Type" }}</span>
+              <span class="objects-filter-indicator">+</span>
+            </button>
+            <div class="objects-filter-options">
+              {% comment %}Options populated by JavaScript{% endcomment %}
+            </div>
+          </div>
+
+          {% comment %}Creator filter{% endcomment %}
+          <div class="objects-filter-section" data-filter="creator">
+            <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
+              <span>{{ lang.objects.creator | default: "Creator" }}</span>
+              <span class="objects-filter-indicator">+</span>
+            </button>
+            <div class="objects-filter-options">
+              {% comment %}Options populated by JavaScript{% endcomment %}
+            </div>
+          </div>
+
+          {% comment %}Period filter{% endcomment %}
+          <div class="objects-filter-section" data-filter="period">
+            <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
+              <span>{{ lang.objects.period | default: "Period" }}</span>
+              <span class="objects-filter-indicator">+</span>
+            </button>
+            <div class="objects-filter-options">
+              {% comment %}Options populated by JavaScript{% endcomment %}
+            </div>
+          </div>
+
+          {% comment %}Subjects filter{% endcomment %}
+          <div class="objects-filter-section" data-filter="subjects">
+            <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
+              <span>{{ lang.objects.subjects | default: "Subjects" }}</span>
+              <span class="objects-filter-indicator">+</span>
+            </button>
+            <div class="objects-filter-options">
+              {% comment %}Options populated by JavaScript{% endcomment %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    {% comment %}Main content area with results and grid{% endcomment %}
+    <div class="objects-main">
+      {% comment %}Results count, sort options, and active filters{% endcomment %}
+      <div class="objects-header">
+        <div class="objects-header-row">
+          <div class="objects-results-count">
+            {{ lang.objects.showing | default: "Showing" }} <span id="objects-visible-count">{{ site.objects.size }}</span> {{ lang.objects.of | default: "of" }} {{ site.objects.size }} {{ lang.objects.objects | default: "objects" }}
+          </div>
+          <div class="objects-sort">
+            <span class="objects-sort-label">{{ lang.objects.sort_by | default: "Sort by" }}:</span>
+            <button type="button" class="objects-sort-btn active" data-sort="title" data-direction="asc">
+              {{ lang.objects.sort_title | default: "Title" }}
+              <span class="objects-sort-arrow">↑</span>
+            </button>
+            <span class="objects-sort-divider">|</span>
+            <button type="button" class="objects-sort-btn" data-sort="year" data-direction="asc">
+              {{ lang.objects.sort_year | default: "Year" }}
+              <span class="objects-sort-arrow">↑</span>
+            </button>
+          </div>
+        </div>
+        <div class="objects-active-filters" id="objects-active-filters" style="display: none;">
+          <div class="objects-filter-chips" id="objects-filter-chips"></div>
+          <button type="button" class="objects-clear-all" id="objects-clear-all">{{ lang.objects.clear_all | default: "Clear all" }}</button>
+        </div>
+      </div>
+
+      <div class="collection-grid">
     {% comment %}Sort objects: non-demo first, then demo, alphabetically within each group{% endcomment %}
     {% assign non_demo_objects = site.objects | where_exp: "obj", "obj.demo != true" | sort: "title" %}
     {% assign demo_objects = site.objects | where_exp: "obj", "obj.demo == true" | sort: "title" %}
     {% assign sorted_objects = non_demo_objects | concat: demo_objects %}
     {% for object in sorted_objects %}
-    <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}">
+    <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}" data-object-id="{{ object.object_id }}"{% if browse_and_search %} data-object-type="{{ object.object_type }}" data-creator="{{ object.creator }}" data-period="{{ object.period }}" data-subjects="{{ object.subjects }}" data-year="{{ object.year }}" data-title="{{ object.title }}" data-description="{{ object.description }}"{% endif %}>
       {% if object.demo %}
       <span class="demo-badge">{{ lang.demo.badge }}</span>
       {% endif %}
@@ -117,12 +231,58 @@ layout: default
       {% endif %}
     </a>
     {% endfor %}
+      </div>
+    </div>
   </div>
   {% else %}
-  {%- comment -%}Only show "no objects" message if collections aren't intentionally hidden{%- endcomment -%}
+  {% comment %}Simple grid without browse/search{% endcomment %}
+  <div class="collection-grid">
+    {% assign non_demo_objects = site.objects | where_exp: "obj", "obj.demo != true" | sort: "title" %}
+    {% assign demo_objects = site.objects | where_exp: "obj", "obj.demo == true" | sort: "title" %}
+    {% assign sorted_objects = non_demo_objects | concat: demo_objects %}
+    {% for object in sorted_objects %}
+    <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}" data-object-id="{{ object.object_id }}">
+      {% if object.demo %}
+      <span class="demo-badge">{{ lang.demo.badge }}</span>
+      {% endif %}
+      <div class="collection-item-image" {% if object.iiif_manifest and object.iiif_manifest != "" %}data-iiif-manifest="{{ object.iiif_manifest }}"{% endif %}>
+        {% if object.thumbnail and object.thumbnail != "" %}
+        <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}">
+        {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
+        <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.title }}" class="iiif-thumbnail">
+        {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
+        <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
+          <span class="text-muted">Loading...</span>
+        </div>
+        {% elsif object.object_id %}
+        <div class="local-iiif-thumbnail" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}">
+          <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
+            <span class="text-muted">Loading...</span>
+          </div>
+        </div>
+        {% else %}
+        <div class="placeholder-image bg-secondary d-flex align-items-center justify-content-center" style="height: 250px;">
+          <span class="text-white">No image</span>
+        </div>
+        {% endif %}
+      </div>
+      <h3>{{ object.title }}</h3>
+      {% if object.period %}
+      <p class="text-muted mb-0">{{ object.period }}</p>
+      {% endif %}
+      {% if object.creator %}
+      <p class="text-muted mb-0">{{ object.creator }}</p>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% else %}
+  {%- comment -%}Only show "no objects" message if collections aren't intentionally skipped{%- endcomment -%}
   {% assign dev_features = site['development-features'] %}
-  {% assign hide_collections = dev_features.hide_collections | default: false %}
-  {% unless hide_collections %}
+  {%- comment -%}Support both new name (skip_collections) and legacy name (hide_collections){%- endcomment -%}
+  {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
+  {% unless skip_collections %}
   <div class="row">
     <div class="col-12">
       <div class="alert alert-info">
@@ -274,3 +434,8 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+
+{% if browse_and_search %}
+<script src="{{ '/assets/js/lunr.min.js' | relative_url }}"></script>
+<script src="{{ '/assets/js/objects-filter.js' | relative_url }}"></script>
+{% endif %}
