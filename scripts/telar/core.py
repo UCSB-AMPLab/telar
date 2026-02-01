@@ -26,9 +26,10 @@ CSV types in order: project setup, objects, and story files. Story files
 are discovered dynamically — every CSV in `components/structures/` that
 is not a system file (`project.csv`, `objects.csv`, or their Spanish
 equivalents) is treated as a story. After all CSVs are converted, demo
-content is loaded and merged if available.
+content is loaded and merged if available. Protected stories (v0.8.0+)
+are then encrypted using the story_key from _config.yml.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import os
@@ -43,6 +44,7 @@ from telar.processors.project import process_project_setup
 from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
 from telar.demo import load_demo_bundle, merge_demo_content, fetch_demo_content_if_enabled
+from telar.encryption import encrypt_story, get_protected_stories, get_story_key_from_config
 
 
 def csv_to_json(csv_path, json_path, process_func=None):
@@ -135,6 +137,81 @@ def find_csv_with_fallback(base_path, spanish_name):
     else:
         # Return English path (will trigger "file not found" warning in csv_to_json)
         return english_path
+
+
+def _encrypt_protected_stories(data_dir):
+    """
+    Encrypt story JSON files that are marked as protected.
+
+    Reads project.json to find protected stories, then encrypts their
+    corresponding JSON files using the story_key from _config.yml.
+
+    Args:
+        data_dir: Path to _data directory containing JSON files
+    """
+    # Read _config.yml for story_key
+    config_path = Path('_config.yml')
+    if not config_path.exists():
+        return
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        print(f"  [WARN] Could not read _config.yml: {e}")
+        return
+
+    story_key = get_story_key_from_config(config)
+
+    # Read project.json to find protected stories
+    project_path = data_dir / 'project.json'
+    if not project_path.exists():
+        return
+
+    try:
+        with open(project_path, 'r', encoding='utf-8') as f:
+            project_data = json.load(f)
+    except Exception as e:
+        print(f"  [WARN] Could not read project.json: {e}")
+        return
+
+    protected_stories = get_protected_stories(project_data)
+
+    if not protected_stories:
+        print("No protected stories found.")
+        return
+
+    if not story_key:
+        print(f"  ⚠️ Found {len(protected_stories)} protected story/stories but no story_key in _config.yml")
+        print("  ⚠️ Add 'story_key: yourkey' to _config.yml to enable encryption")
+        return
+
+    print(f"Encrypting {len(protected_stories)} protected story/stories...")
+
+    for story_id in protected_stories:
+        # Story JSON filename matches story_id or CSV filename
+        story_json = data_dir / f"{story_id}.json"
+
+        if not story_json.exists():
+            print(f"  ⚠️ Story JSON not found: {story_json}")
+            continue
+
+        try:
+            # Read story data
+            with open(story_json, 'r', encoding='utf-8') as f:
+                story_data = json.load(f)
+
+            # Encrypt story
+            encrypted = encrypt_story(story_data, story_key)
+
+            # Write encrypted data back
+            with open(story_json, 'w', encoding='utf-8') as f:
+                json.dump(encrypted, f, indent=2, ensure_ascii=False)
+
+            print(f"  🔒 Encrypted {story_json.name}")
+
+        except Exception as e:
+            print(f"  ❌ Failed to encrypt {story_json.name}: {e}")
 
 
 def main():
@@ -230,6 +307,10 @@ def main():
     if demo_bundle:
         print("Merging demo content...")
         merge_demo_content(demo_bundle)
+
+    # Encrypt protected stories (v0.8.0+)
+    print("-" * 50)
+    _encrypt_protected_stories(data_dir)
 
     print("-" * 50)
     print("Conversion complete!")
