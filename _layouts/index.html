@@ -275,15 +275,27 @@ title: Home
       {% assign sorted_stories = site.stories | sort: "sort_order" %}
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-5">
         {% for story in sorted_stories %}
+        {%- comment -%}Load story data file and check if encrypted{%- endcomment -%}
+        {% assign story_data = site.data[story.data_file] %}
+        {% assign is_encrypted = false %}
+        {% if story_data.encrypted %}
+          {% assign is_encrypted = true %}
+        {% endif %}
         <div class="col">
           <a href="{{ story.url | relative_url }}" class="story-card text-decoration-none">
             <div class="card h-100 border-0 shadow-sm{% if story.demo %} demo-story{% endif %}">
               {% if story.demo %}
               <span class="demo-badge">{{ lang.demo.badge }}</span>
               {% endif %}
-              {%- comment -%}Load story data file and extract first object{%- endcomment -%}
-              {% assign story_data = site.data[story.data_file] %}
-              {% if story_data and story_data.size > 0 %}
+              {% if is_encrypted %}
+                {%- comment -%}Protected story — show keyhole instead of thumbnail{%- endcomment -%}
+                <div class="story-protected-thumbnail d-flex align-items-center justify-content-center" style="aspect-ratio: 1;">
+                  <svg viewBox="0 0 48 72" fill="none" xmlns="http://www.w3.org/2000/svg" class="protected-keyhole">
+                    <circle cx="24" cy="20" r="16" fill="#fff"/>
+                    <path d="M17 32L10 68H38L31 32H17Z" fill="#fff"/>
+                  </svg>
+                </div>
+              {% elsif story_data and story_data.size > 0 %}
                 {% assign first_step = story_data[0] %}
                 {% if first_step.object %}
                   {%- comment -%}Load thumbnail with object ID for remote/local detection{%- endcomment -%}
@@ -307,7 +319,9 @@ title: Home
 
               <div class="card-body">
                 <h3>{{ story.title }}</h3>
-                {% if story.byline %}
+                {% if is_encrypted %}
+                <p class="story-card-byline">{{ lang.unlock.card_description | default: "This story is protected. You need a key to unlock it." }}</p>
+                {% elsif story.byline %}
                 <p class="story-card-byline">{{ story.byline | markdownify | strip_html | strip }}</p>
                 {% endif %}
               </div>

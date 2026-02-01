@@ -264,6 +264,15 @@ share:
   help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."
   help_embed: "Copia este código y pégalo en tu sitio web, LMS o blog para insertar (*embed*) esta historia."
 
+# Pantalla de desbloqueo de historias protegidas
+unlock:
+  title: "Esta historia está protegida"
+  description: "El acceso a esta historia está restringido. Ingresa la clave para continuar."
+  placeholder: "Ingresa la clave"
+  button: "Abrir"
+  back_link: "← Volver a las historias"
+  card_description: "Esta historia está protegida. Necesitas una clave para abrirla."
+
 # Mensajes de actualización
 upgrade:
   summary_message: "Tu sitio Telar se actualizó. Revisa el resumen a continuación."

@@ -229,6 +229,18 @@
   border-radius: 0.25rem 0.25rem 0 0;
 }
 
+/* Protected story thumbnail — keyhole on themed background */
+.story-protected-thumbnail {
+  background: var(--color-panel-layer2-bg, #3d2645);
+  border-radius: 0.25rem 0.25rem 0 0;
+
+  .protected-keyhole {
+    width: 48px;
+    height: 72px;
+    opacity: 0.9;
+  }
+}
+
 /* Story Byline */
 .story-byline {
   font-size: 0.9rem;

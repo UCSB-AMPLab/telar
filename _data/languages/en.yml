@@ -264,6 +264,15 @@ share:
   help_dimensions: "Enter dimensions as pixels (e.g. 800) or percentages (e.g. 100%)."
   help_embed: "Copy this code and paste it into your website, LMS, or blog post to embed this story."
 
+# Protected stories unlock screen
+unlock:
+  title: "This story is protected"
+  description: "The author has restricted access to this story. Enter the key to continue."
+  placeholder: "Enter key"
+  button: "Unlock"
+  back_link: "← Back to stories"
+  card_description: "This story is protected. You need a key to unlock it."
+
 # Upgrade messages
 upgrade:
   summary_message: "Your Telar site has been upgraded. Review the summary below."
