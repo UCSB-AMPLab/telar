@@ -38,14 +38,20 @@ function getStoryId() {
 
 /**
  * Get cached decryption from sessionStorage.
- * @returns {object|null} Decrypted story data or null
+ * @returns {object|null} Object with steps and key, or null
  */
 function getCachedDecryption() {
   const storyId = getStoryId();
   const cached = sessionStorage.getItem(`telar_unlock_${storyId}`);
   if (cached) {
     try {
-      return JSON.parse(cached);
+      const parsed = JSON.parse(cached);
+      // Handle both old format (array) and new format (object with steps/key)
+      if (Array.isArray(parsed)) {
+        // Old cache format - just steps, no key
+        return { steps: parsed, key: null };
+      }
+      return parsed;
     } catch (e) {
       return null;
     }
@@ -56,10 +62,14 @@ function getCachedDecryption() {
 /**
  * Cache successful decryption in sessionStorage.
  * @param {object} decryptedData - The decrypted story data
+ * @param {string} key - The decryption key (for share panel integration)
  */
-function cacheDecryption(decryptedData) {
+function cacheDecryption(decryptedData, key) {
   const storyId = getStoryId();
-  sessionStorage.setItem(`telar_unlock_${storyId}`, JSON.stringify(decryptedData));
+  sessionStorage.setItem(`telar_unlock_${storyId}`, JSON.stringify({
+    steps: decryptedData,
+    key: key
+  }));
 }
 
 /**
@@ -299,7 +309,10 @@ async function attemptUnlock(key) {
       firstObject: firstStep?.object || '',
     };
 
-    cacheDecryption(decryptedSteps);
+    // Expose the key for share panel integration
+    window.telarStoryKey = key;
+
+    cacheDecryption(decryptedSteps, key);
 
     // Render the decrypted steps into the DOM
     renderDecryptedSteps(decryptedSteps);
@@ -357,13 +370,27 @@ async function initializeStoryUnlock() {
   // Check for cached decryption
   const cached = getCachedDecryption();
   if (cached) {
-    const firstStep = cached[0]?._metadata ? cached[1] : cached[0];
+    const steps = cached.steps;
+    const firstStep = steps[0]?._metadata ? steps[1] : steps[0];
     window.storyData = {
-      steps: cached,
+      steps: steps,
       firstObject: firstStep?.object || '',
     };
+
+    // Restore the key for share panel integration
+    if (cached.key) {
+      window.telarStoryKey = cached.key;
+    }
+
+    // Ensure overlay is hidden when loading from cache
+    const overlay = document.getElementById('story-unlock-overlay');
+    if (overlay) {
+      overlay.classList.add('d-none');
+      overlay.classList.remove('show');
+    }
+
     // Render steps from cache
-    renderDecryptedSteps(cached);
+    renderDecryptedSteps(steps);
     return;
   }
 

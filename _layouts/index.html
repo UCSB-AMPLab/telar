@@ -256,14 +256,19 @@ title: Home
   </div>
   {% endif %}
 
-  {%- comment -%}Check if stories are hidden via development flags{%- endcomment -%}
+  {%- comment -%}Check if stories/collections are hidden via development flags or interface settings{%- endcomment -%}
   {% assign dev_features = site['development-features'] %}
-  {% assign hide_stories = dev_features.hide_stories | default: false %}
-  {% assign hide_collections = dev_features.hide_collections | default: false %}
-  {% if hide_collections %}{% assign hide_stories = true %}{% endif %}
+  {%- comment -%}Support both new names (skip_*) and legacy names (hide_*){%- endcomment -%}
+  {% assign skip_stories = dev_features.skip_stories | default: dev_features.hide_stories | default: false %}
+  {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
+  {% if skip_collections %}{% assign skip_stories = true %}{% endif %}
 
-  <!-- Stories List (hidden when hide_stories is enabled) -->
-  {% unless hide_stories %}
+  {%- comment -%}Also check interface settings for homepage visibility{%- endcomment -%}
+  {% assign story_show_on_homepage = site.story_interface.show_on_homepage | default: true %}
+  {% assign collection_show_link = site.collection_interface.show_link_on_homepage | default: true %}
+
+  <!-- Stories List (hidden when skip_stories enabled or show_on_homepage: false) -->
+  {% unless skip_stories or story_show_on_homepage == false %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <h2 class="mb-4">{{ page.stories_heading | default: "Explore the stories" }}</h2>
@@ -339,8 +344,8 @@ title: Home
   </div>
   {% endunless %}
 
-  <!-- Objects Teaser (hidden when hide_collections is enabled) -->
-  {% unless hide_collections %}
+  <!-- Objects Link (hidden when skip_collections enabled or show_link_on_homepage: false) -->
+  {% unless skip_collections or collection_show_link == false %}
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
@@ -358,9 +363,11 @@ title: Home
 <script id="telar-stories-data" type="application/json">
 [
   {% for story in site.stories %}
+  {% assign story_data = site.data[story.data_file] %}
   {
     "title": {{ story.title | jsonify }},
-    "url": "{{ story.url | absolute_url }}"
+    "url": "{{ story.url | absolute_url }}",
+    "protected": {% if story_data.encrypted %}true{% else %}false{% endif %}
   }{% unless forloop.last %},{% endunless %}
   {% endfor %}
 ]
