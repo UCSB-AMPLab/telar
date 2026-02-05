@@ -21,14 +21,15 @@ story_interface:
 
 # Collection Interface Settings
 collection_interface:
-  show_link_on_homepage: true # Set to false to hide "View the objects" link from homepage
-  show_sample_on_homepage: false # Set to true to show a sample of objects on homepage
   browse_and_search: true # Set to false to disable filtering sidebar and search on objects page
+  show_link_on_homepage: true # Set to false to hide "View the objects" link from homepage
+  show_sample_on_homepage: true # Set to true to show a sample of objects on homepage
+  featured_count: 4 # Number of objects to show on homepage (default 4)
 
 # Story Protection (optional)
 # Stories with protected=yes in project.csv will be encrypted.
 # Viewers need this key to unlock protected stories.
-story_key: "test-key-2026"
+story_key: "test"
 
 # Google Sheets Integration (optional)
 # Manage content via Google Sheets instead of editing CSV files directly.

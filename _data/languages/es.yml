@@ -18,7 +18,7 @@ buttons:
   back_to_glossary: "← Volver al glosario"
   learn_more: "Saber más"
   read_more: "Leer más"
-  view_objects: "Ver objetos"
+  view_objects: "Ver todos los objetos"
   copy: "Copiar"
   copied: "¡Copiado!"
   close: "Cerrar"
@@ -88,9 +88,15 @@ pages:
   stories_heading: "Explora las historias"
   objects_heading: "Explora los objetos detrás de las historias"
   objects_count: "Explora {count} objetos presentes en las historias."
+  objects_count_collection: "Explora {count} objetos en la colección."
+  objects_intro_all_stories: "Hay {count} objetos presentes en las historias. Míralos a continuación."
+  objects_intro_all_collection: "Hay {count} objetos en la colección. Míralos a continuación."
+  objects_intro_sample_stories: "Hay {count} objetos presentes en las historias. Mira {sample} de ellos a continuación."
+  objects_intro_sample_collection: "Hay {count} objetos en la colección. Mira {sample} de ellos a continuación."
 
 # Objects browse and search (v0.8.0)
 objects:
+  featured_heading: "Objetos destacados"
   showing: "Mostrando"
   of: "de"
   objects: "objetos"

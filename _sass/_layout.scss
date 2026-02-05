@@ -1076,3 +1076,49 @@
     padding: 0.65rem 0.875rem;
   }
 }
+
+/* ==========================================================================
+   Featured Objects Grid (Homepage) — v0.8.0
+   Smaller cards for homepage sample display
+   ========================================================================== */
+
+.featured-objects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(167px, 170px));
+  gap: 1.5rem;
+}
+
+.featured-objects-grid .collection-item {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.featured-objects-grid .collection-thumbnail {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f0f0f0;
+}
+
+.featured-objects-grid .collection-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.featured-objects-grid .collection-info {
+  padding-top: 0.75rem;
+}
+
+.featured-objects-grid .collection-title {
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+  color: var(--color-heading);
+}
+
+.featured-objects-grid .collection-meta {
+  margin: 0;
+  color: #666;
+  font-size: 0.75rem;
+}

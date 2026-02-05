@@ -90,6 +90,8 @@ object_warning_short: "{obj.get('object_warning_short', '')}"
             content += f'object_type: "{obj.get("object_type")}"\n'
         if obj.get('subjects'):
             content += f'subjects: "{obj.get("subjects")}"\n'
+        if obj.get('is_featured_sample'):
+            content += "is_featured_sample: true\n"
 
         if is_demo:
             content += "demo: true\n"

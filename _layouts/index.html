@@ -344,16 +344,74 @@ title: Home
   </div>
   {% endunless %}
 
-  <!-- Objects Link (hidden when skip_collections enabled or show_link_on_homepage: false) -->
+  <!-- Objects Section (hidden when skip_collections enabled or show_link_on_homepage: false) -->
   {% unless skip_collections or collection_show_link == false %}
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
       <h3 class="mb-4">{{ page.objects_heading | default: "See the objects behind the stories" }}</h3>
-      {% assign objects_text = page.objects_intro | default: "Browse {count} objects featured in the stories." %}
+      {% assign featured_objects = site.objects | where: "is_featured_sample", true %}
+      {% assign show_featured = false %}
+      {% if site.collection_interface.show_sample_on_homepage == true and featured_objects.size > 0 %}
+        {% assign show_featured = true %}
+      {% endif %}
+      {% assign has_stories = false %}
+      {% if site.stories.size > 0 %}{% assign has_stories = true %}{% endif %}
+      {% if show_featured %}
+        {% if featured_objects.size == site.objects.size %}
+          {% if has_stories %}
+            {% assign objects_text = lang.pages.objects_intro_all_stories | default: "There are {count} objects featured in the stories. Have a look at them below." %}
+          {% else %}
+            {% assign objects_text = lang.pages.objects_intro_all_collection | default: "There are {count} objects in the collection. Have a look at them below." %}
+          {% endif %}
+        {% else %}
+          {% if has_stories %}
+            {% assign objects_text = lang.pages.objects_intro_sample_stories | default: "There are {count} objects featured in the stories. Have a look at {sample} of them below." %}
+          {% else %}
+            {% assign objects_text = lang.pages.objects_intro_sample_collection | default: "There are {count} objects in the collection. Have a look at {sample} of them below." %}
+          {% endif %}
+          {% assign objects_text = objects_text | replace: "{sample}", featured_objects.size %}
+        {% endif %}
+      {% else %}
+        {% if has_stories %}
+          {% assign objects_text = lang.pages.objects_count | default: "Browse {count} objects featured in the stories." %}
+        {% else %}
+          {% assign objects_text = lang.pages.objects_count_collection | default: "Browse {count} objects in the collection." %}
+        {% endif %}
+      {% endif %}
       {% assign objects_text = objects_text | replace: "{count}", site.objects.size %}
       <p class="lead">{{ objects_text }}</p>
-      <a href="{{ '/objects/' | relative_url }}" class="btn btn-primary">View Objects</a>
+
+      <!-- Featured Objects Sample (shown when show_sample_on_homepage: true) -->
+      {% if show_featured %}
+      <h4 class="mt-4 mb-4">{{ lang.objects.featured_heading | default: "Featured objects" }}</h4>
+      <div class="featured-objects-grid">
+        {% for object in featured_objects %}
+        <a href="{{ object.url | relative_url }}" class="collection-item">
+          <div class="collection-thumbnail">
+            {% if object.thumbnail and object.thumbnail != "" %}
+              <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}" loading="lazy">
+            {% else %}
+              <div class="featured-iiif-thumbnail" data-object-id="{{ object.object_id }}" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}">
+                <span class="thumbnail-placeholder">{{ object.title | truncate: 15 }}</span>
+              </div>
+            {% endif %}
+          </div>
+          <div class="collection-info">
+            <h4 class="collection-title">{{ object.title }}</h4>
+            {% if object.period and object.period != "" %}
+            <p class="collection-meta">{{ object.period }}</p>
+            {% endif %}
+            {% if object.creator and object.creator != "" %}
+            <p class="collection-meta">{{ object.creator }}</p>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <a href="{{ '/objects/' | relative_url }}" class="btn btn-primary mt-4">{{ lang.buttons.view_objects | default: "View all objects" }}</a>
     </div>
   </div>
   {% endif %}
@@ -519,6 +577,115 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
   });
+});
+
+/**
+ * Load featured object thumbnails from local IIIF tiles
+ */
+const featuredThumbnails = document.querySelectorAll('.featured-iiif-thumbnail[data-object-id]');
+featuredThumbnails.forEach(function(item) {
+  const objectId = item.getAttribute('data-object-id');
+  const localInfoUrl = item.getAttribute('data-info-json');
+
+  // Find object in objectsData for potential remote manifest
+  const objectData = window.objectsData.find(obj => obj.object_id === objectId);
+
+  // Check for explicit thumbnail first
+  if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
+    const img = document.createElement('img');
+    img.src = objectData.thumbnail;
+    img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    item.innerHTML = '';
+    item.appendChild(img);
+  }
+  // Check for remote IIIF manifest
+  else if (objectData && objectData.iiif_manifest) {
+    fetch(objectData.iiif_manifest)
+      .then(response => response.json())
+      .then(manifest => {
+        let imageServiceUrl = null;
+        let fallbackImageUrl = null;
+
+        // IIIF Presentation API 2.1
+        if (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) {
+          const firstCanvas = manifest.sequences[0].canvases[0];
+          if (firstCanvas && firstCanvas.images && firstCanvas.images[0]) {
+            const resource = firstCanvas.images[0].resource;
+            if (resource.service) {
+              const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
+              imageServiceUrl = service['@id'] || service.id;
+            }
+            if (!imageServiceUrl && resource['@id']) {
+              fallbackImageUrl = resource['@id'];
+            }
+          }
+        }
+        // IIIF Presentation API 3.0
+        else if (manifest.items && manifest.items[0]) {
+          const firstCanvas = manifest.items[0];
+          if (firstCanvas.items && firstCanvas.items[0] && firstCanvas.items[0].items) {
+            const annotationBody = firstCanvas.items[0].items[0].body;
+            if (annotationBody.service && annotationBody.service.length > 0) {
+              imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
+            }
+            if (!imageServiceUrl && annotationBody.id) {
+              fallbackImageUrl = annotationBody.id;
+            }
+          }
+        }
+
+        let thumbnailUrl = null;
+        if (imageServiceUrl) {
+          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
+          thumbnailUrl = `${imageServiceUrl}/full/!200,200/0/default.jpg`;
+        } else if (fallbackImageUrl) {
+          thumbnailUrl = fallbackImageUrl;
+        }
+
+        if (thumbnailUrl) {
+          const img = document.createElement('img');
+          img.src = thumbnailUrl;
+          img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          item.innerHTML = '';
+          item.appendChild(img);
+        }
+      })
+      .catch(error => {
+        console.error('Error loading featured object manifest:', objectData.iiif_manifest, error);
+      });
+  }
+  // Local IIIF info.json
+  else {
+    fetch(localInfoUrl)
+      .then(response => response.json())
+      .then(info => {
+        const sizes = info.sizes || [];
+        let thumbnailSize = sizes[0];
+
+        if (thumbnailSize) {
+          const baseUrl = info.id || info['@id'];
+          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},/0/default.jpg`;
+
+          const img = document.createElement('img');
+          img.src = thumbnailUrl;
+          img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          item.innerHTML = '';
+          item.appendChild(img);
+        }
+      })
+      .catch(error => {
+        console.error('Error loading featured object info.json:', localInfoUrl, error);
+      });
+  }
 });
 
 /**

@@ -44,12 +44,13 @@ objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import re
 import json
 import ssl
+import random
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -57,6 +58,7 @@ from urllib.parse import urlparse
 from difflib import SequenceMatcher
 
 import pandas as pd
+import yaml
 
 from telar.config import get_lang_string, load_site_language
 from telar.csv_utils import get_source_url
@@ -651,5 +653,75 @@ def process_objects(df, christmas_tree=False):
     # Final cleanup: ensure no NaN values in output
     # (new columns added via IIIF extraction may leave NaN for objects without IIIF)
     df = df.fillna('')
+
+    # Featured objects selection for homepage display
+    # Mark objects with is_featured_sample: true for Liquid to filter
+    df = _select_featured_objects(df)
+
+    return df
+
+
+def _select_featured_objects(df):
+    """
+    Select objects to feature on the homepage.
+
+    If any objects have featured=yes, those are selected.
+    Otherwise, randomly select objects (count from config, default 4).
+    Selected objects are marked with is_featured_sample=true.
+
+    Args:
+        df: pandas DataFrame of objects
+
+    Returns:
+        pandas DataFrame with is_featured_sample column added
+    """
+    # Read config for settings
+    config = {}
+    config_path = Path('_config.yml')
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"  [WARN] Could not read _config.yml for featured objects: {e}")
+
+    # Get settings from collection_interface
+    collection_config = config.get('collection_interface', {})
+    show_sample = collection_config.get('show_sample_on_homepage', False)
+    featured_count = collection_config.get('featured_count', 4)
+
+    # Initialize column
+    df['is_featured_sample'] = False
+
+    # Skip if show_sample_on_homepage is disabled
+    if not show_sample:
+        return df
+
+    # Check for explicitly featured objects (case-insensitive yes/true/si)
+    featured_values = {'yes', 'true', 'si', 'sí', '1'}
+    if 'featured' in df.columns:
+        featured_mask = df['featured'].astype(str).str.lower().str.strip().isin(featured_values)
+        featured_objects = df[featured_mask]
+
+        if len(featured_objects) > 0:
+            # Use explicitly featured objects
+            df.loc[featured_mask, 'is_featured_sample'] = True
+            print(f"  [INFO] Selected {len(featured_objects)} explicitly featured object(s) for homepage")
+            return df
+
+    # No explicit featured objects — select randomly
+    # Filter to objects without warnings (only show good objects on homepage)
+    valid_objects = df[df['object_warning'].astype(str).str.strip() == '']
+
+    if len(valid_objects) == 0:
+        print("  [INFO] No valid objects available for homepage sample")
+        return df
+
+    # Select up to featured_count random objects
+    sample_size = min(featured_count, len(valid_objects))
+    sample_indices = random.sample(list(valid_objects.index), sample_size)
+
+    df.loc[sample_indices, 'is_featured_sample'] = True
+    print(f"  [INFO] Randomly selected {sample_size} object(s) for homepage sample")
 
     return df
