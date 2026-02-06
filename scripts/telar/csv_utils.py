@@ -84,6 +84,9 @@ COLUMN_NAME_MAPPING = {
     'id_historia': 'story_id',
     'subtitulo': 'subtitle',
     'firma': 'byline',
+    'private': 'protected',
+    'privada': 'protected',
+    'protegida': 'protected',
 }
 
 
@@ -181,7 +184,8 @@ def is_header_row(row_values):
     valid_names.update(['x', 'y', 'zoom', 'order', 'story_id', 'title', 'subtitle',
                         'byline', 'object_id', 'description', 'source_url', 'creator',
                         'period', 'medium', 'dimensions', 'location', 'source', 'credit',
-                        'thumbnail', 'year', 'object_type', 'subjects', 'featured'])
+                        'thumbnail', 'year', 'object_type', 'subjects', 'featured',
+                        'protected'])
 
     # Count how many cells match known column names
     matches = 0
