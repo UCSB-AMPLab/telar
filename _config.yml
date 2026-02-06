@@ -118,8 +118,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "0.8.0-alpha"
-  release_date: "2026-01-31"
+  version: "0.8.0-beta"
+  release_date: "2026-02-05"
 
 # Plugins
 plugins:
