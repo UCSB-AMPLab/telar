@@ -39,7 +39,7 @@ Helper functions `strip_html_tags()` and `clean_metadata_value()` sanitize
 extracted text by removing HTML markup, decoding entities, and normalizing
 whitespace. Many IIIF manifests contain HTML-formatted metadata.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import re
@@ -426,7 +426,10 @@ def apply_metadata_fallback(row_dict, iiif_metadata):
         row_dict: Dictionary of object data from CSV
         iiif_metadata: Dictionary of extracted IIIF metadata
     """
-    fields = ['title', 'description', 'creator', 'period', 'location', 'credit']
+    # Core fields that can be auto-populated from IIIF
+    # Note: 'location' renamed to 'source' in v0.8.0
+    fields = ['title', 'description', 'creator', 'period', 'source', 'credit',
+              'year', 'object_type', 'subjects']
 
     for field in fields:
         csv_value = str(row_dict.get(field, '')).strip()

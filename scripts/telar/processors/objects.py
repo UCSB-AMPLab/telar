@@ -44,12 +44,13 @@ objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import re
 import json
 import ssl
+import random
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -57,6 +58,7 @@ from urllib.parse import urlparse
 from difflib import SequenceMatcher
 
 import pandas as pd
+import yaml
 
 from telar.config import get_lang_string, load_site_language
 from telar.csv_utils import get_source_url
@@ -139,9 +141,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://example.com/nonexistent/manifest.json',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -152,9 +152,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://httpstat.us/503',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -165,9 +163,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'not-a-valid-url',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -178,9 +174,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': '',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -191,9 +185,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://httpstat.us/500',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         },
@@ -204,9 +196,7 @@ def inject_christmas_tree_errors(df):
             'iiif_manifest': 'https://httpstat.us/429',
             'creator': 'Test',
             'period': 'Test',
-            'medium': '',
-            'dimensions': '',
-            'location': '',
+            'source': '',
             'credit': '',
             'thumbnail': ''
         }
@@ -472,25 +462,50 @@ def process_objects(df, christmas_tree=False):
                                     site_language
                                 )
 
-                                # Location (Repository/Institution name, not geographic location)
-                                extracted['location'] = find_metadata_field(
+                                # Source (Repository/Institution name, not geographic location)
+                                # Note: renamed from 'location' to 'source' in v0.8.0
+                                extracted['source'] = find_metadata_field(
                                     metadata_array,
-                                    ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
+                                    ['Repository', 'Holding Institution', 'Institution', 'Source', 'Current Location'],
                                     version,
                                     site_language
                                 )
 
-                                # If location not found in metadata, try provider (v3.0)
-                                if not extracted['location'] and version == '3.0':
+                                # If source not found in metadata, try provider (v3.0)
+                                if not extracted['source'] and version == '3.0':
                                     providers = data.get('provider', [])
                                     if providers and isinstance(providers, list) and len(providers) > 0:
                                         provider = providers[0]
                                         if isinstance(provider, dict):
                                             provider_label = provider.get('label', {})
                                             if isinstance(provider_label, dict):
-                                                extracted['location'] = extract_language_map_value(provider_label, site_language)
+                                                extracted['source'] = extract_language_map_value(provider_label, site_language)
                                             else:
-                                                extracted['location'] = str(provider_label).strip()
+                                                extracted['source'] = str(provider_label).strip()
+
+                                # Year (structured date for filtering/timeline)
+                                extracted['year'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Date', 'Year', 'Date Created', 'Creation Date'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Object type (classification for filtering)
+                                extracted['object_type'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Type', 'Object Type', 'Resource Type', 'Format'],
+                                    version,
+                                    site_language
+                                )
+
+                                # Subjects (tags for filtering)
+                                extracted['subjects'] = find_metadata_field(
+                                    metadata_array,
+                                    ['Subject', 'Subjects', 'Keywords', 'Tags', 'Topic'],
+                                    version,
+                                    site_language
+                                )
 
                                 # Credit
                                 extracted['credit'] = extract_credit(data, version, site_language)
@@ -500,12 +515,16 @@ def process_objects(df, christmas_tree=False):
                                 apply_metadata_fallback(row_dict, extracted)
 
                                 # Update dataframe with extracted values
-                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
-                                    df.at[idx, field] = row_dict[field]
+                                # Core fields that can be auto-populated from IIIF
+                                iiif_fields = ['title', 'description', 'creator', 'period', 'source', 'credit',
+                                               'year', 'object_type', 'subjects']
+                                for field in iiif_fields:
+                                    if field in row_dict:
+                                        df.at[idx, field] = row_dict[field]
 
                                 # Log if any fields were auto-populated
                                 populated_fields = []
-                                for field in ['title', 'description', 'creator', 'period', 'location', 'credit']:
+                                for field in iiif_fields:
                                     csv_val = str(row.get(field, '')).strip()
                                     final_val = str(row_dict.get(field, '')).strip()
                                     if not csv_val and final_val:
@@ -630,5 +649,79 @@ def process_objects(df, christmas_tree=False):
     # Print summary if there were issues
     if warnings:
         print(f"\n  Objects validation summary: {len(warnings)} warning(s)")
+
+    # Final cleanup: ensure no NaN values in output
+    # (new columns added via IIIF extraction may leave NaN for objects without IIIF)
+    df = df.fillna('')
+
+    # Featured objects selection for homepage display
+    # Mark objects with is_featured_sample: true for Liquid to filter
+    df = _select_featured_objects(df)
+
+    return df
+
+
+def _select_featured_objects(df):
+    """
+    Select objects to feature on the homepage.
+
+    If any objects have featured=yes, those are selected.
+    Otherwise, randomly select objects (count from config, default 4).
+    Selected objects are marked with is_featured_sample=true.
+
+    Args:
+        df: pandas DataFrame of objects
+
+    Returns:
+        pandas DataFrame with is_featured_sample column added
+    """
+    # Read config for settings
+    config = {}
+    config_path = Path('_config.yml')
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"  [WARN] Could not read _config.yml for featured objects: {e}")
+
+    # Get settings from collection_interface
+    collection_config = config.get('collection_interface', {})
+    show_sample = collection_config.get('show_sample_on_homepage', False)
+    featured_count = collection_config.get('featured_count', 4)
+
+    # Initialize column
+    df['is_featured_sample'] = False
+
+    # Skip if show_sample_on_homepage is disabled
+    if not show_sample:
+        return df
+
+    # Check for explicitly featured objects (case-insensitive yes/true/si)
+    featured_values = {'yes', 'true', 'si', 'sí', '1'}
+    if 'featured' in df.columns:
+        featured_mask = df['featured'].astype(str).str.lower().str.strip().isin(featured_values)
+        featured_objects = df[featured_mask]
+
+        if len(featured_objects) > 0:
+            # Use explicitly featured objects
+            df.loc[featured_mask, 'is_featured_sample'] = True
+            print(f"  [INFO] Selected {len(featured_objects)} explicitly featured object(s) for homepage")
+            return df
+
+    # No explicit featured objects — select randomly
+    # Filter to objects without warnings (only show good objects on homepage)
+    valid_objects = df[df['object_warning'].astype(str).str.strip() == '']
+
+    if len(valid_objects) == 0:
+        print("  [INFO] No valid objects available for homepage sample")
+        return df
+
+    # Select up to featured_count random objects
+    sample_size = min(featured_count, len(valid_objects))
+    sample_indices = random.sample(list(valid_objects.index), sample_size)
+
+    df.loc[sample_indices, 'is_featured_sample'] = True
+    print(f"  [INFO] Randomly selected {sample_size} object(s) for homepage sample")
 
     return df

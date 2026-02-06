@@ -14,20 +14,22 @@ name: Build and Deploy Telar Site
 #      Jekyll uses to render story pages
 #   4. Run generate_collections.py to turn the markdown texts in
 #      components/texts/ into Jekyll collection files
-#   5. Bundle the JavaScript source modules (assets/js/telar-story/) into a
+#   5. Run search.py to generate search-data.json with facet counts for the
+#      browse-and-search UI on the objects page
+#   6. Bundle the JavaScript source modules (assets/js/telar-story/) into a
 #      single file using esbuild
-#   6. Build the Jekyll site
-#   7. Generate IIIF deep-zoom image tiles for self-hosted exhibition objects
+#   7. Build the Jekyll site
+#   8. Generate IIIF deep-zoom image tiles for self-hosted exhibition objects
 #      (with smart caching — tiles are only regenerated when source images or
 #      objects.csv change)
-#   8. Deploy the built site to GitHub Pages
+#   9. Deploy the built site to GitHub Pages
 #
 # The IIIF tile generation includes a change-detection step that compares the
 # current commit against the previous one. If only content files changed (not
 # images or objects.csv), it restores tiles from the GitHub Actions cache
 # instead of regenerating them, which saves significant build time.
 #
-# Version: v0.7.0-beta
+# Version: v0.8.0-beta
 
 on:
   push:
@@ -97,6 +99,10 @@ jobs:
       - name: Generate Jekyll collections
         run: |
           python scripts/generate_collections.py
+
+      - name: Generate search data
+        run: |
+          python scripts/telar/search.py
 
       - name: Build Jekyll site
         run: |

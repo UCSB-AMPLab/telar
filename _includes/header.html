@@ -21,12 +21,13 @@
         <ul class="navbar-nav ms-auto">
           {%- comment -%}Check if objects should be hidden from nav{%- endcomment -%}
           {% assign dev_features = site['development-features'] %}
-          {% assign hide_collections = dev_features.hide_collections | default: false %}
+          {%- comment -%}Support both new name (skip_collections) and legacy name (hide_collections){%- endcomment -%}
+          {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
 
           {% if site.data.navigation.menu %}
             {% for item in site.data.navigation.menu %}
-              {%- comment -%}Skip /objects/ link when hide_collections is enabled{%- endcomment -%}
-              {% if hide_collections and item.url == '/objects/' %}
+              {%- comment -%}Skip /objects/ link when skip_collections is enabled{%- endcomment -%}
+              {% if skip_collections and item.url == '/objects/' %}
                 {% continue %}
               {% endif %}
             <li class="nav-item">
@@ -46,7 +47,7 @@
             <li class="nav-item">
               <a class="nav-link" href="{{ '/' | relative_url }}">Home</a>
             </li>
-            {% unless hide_collections %}
+            {% unless skip_collections %}
             <li class="nav-item">
               <a class="nav-link" href="{{ '/objects/' | relative_url }}">Objects</a>
             </li>

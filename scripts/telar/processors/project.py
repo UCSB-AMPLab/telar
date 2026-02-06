@@ -5,7 +5,7 @@ This module deals with converting the project CSV into the JSON structure
 that tells Telar which stories exist and in what order they appear. The
 project spreadsheet is the simplest of the three CSVs — each row defines
 one story with an order number, a title, and optional fields for subtitle,
-byline, and story ID.
+byline, story ID, and protected status.
 
 `process_project_setup()` iterates over the DataFrame rows and builds a
 list of story entries. It skips rows with empty order numbers (placeholder
@@ -19,11 +19,15 @@ numbers. The function validates that story IDs contain only lowercase
 letters, numbers, hyphens, and underscores, and flags duplicates. If no
 story_id is provided, the system falls back to the order number.
 
+The protected field (added in v0.8.0) marks stories for client-side
+encryption. Stories with protected=yes will have their content encrypted
+at build time, requiring a key to view.
+
 The function returns a pandas DataFrame wrapping a single dictionary with
 a `stories` key, which `csv_to_json()` in the core module serialises to
 `_data/project.json`.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import re
@@ -35,7 +39,7 @@ def process_project_setup(df):
     Process project setup CSV.
 
     Expected columns: order, title, subtitle (optional), byline (optional),
-    story_id (optional)
+    story_id (optional), protected (optional)
 
     Args:
         df: pandas DataFrame from project CSV
@@ -51,6 +55,7 @@ def process_project_setup(df):
         title = row.get('title', '')
         subtitle = row.get('subtitle', '')
         byline = row.get('byline', '')
+        protected = row.get('protected', '')
 
         # Check if story_id column exists and extract value (v0.6.0+)
         story_id = ''
@@ -90,6 +95,10 @@ def process_project_setup(df):
         # Add byline if present
         if pd.notna(byline) and str(byline).strip():
             story_entry['byline'] = str(byline).strip()
+
+        # Add protected flag if set to yes/true/sí/si (v0.8.0+)
+        if pd.notna(protected) and str(protected).strip().lower() in ('yes', 'true', 'sí', 'si'):
+            story_entry['protected'] = True
 
         stories_list.append(story_entry)
 

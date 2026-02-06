@@ -31,7 +31,7 @@ compatibility: it checks the `source_url` column first (v0.5.0+ standard),
 then falls back to the legacy `iiif_manifest` column (v0.4.x), returning
 an empty string if neither is present.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import pandas as pd
@@ -66,15 +66,38 @@ COLUMN_NAME_MAPPING = {
     'periodo': 'period',
     'medio': 'medium',
     'dimensiones': 'dimensions',
-    'ubicacion': 'location',
+    'ubicacion': 'source',  # v0.8.0: renamed from 'location' to 'source'
     'credito': 'credit',
     'miniatura': 'thumbnail',
+    # v0.8.0 gallery filtering columns
+    'año': 'year',
+    'ano': 'year',  # without tilde
+    'tipo_objeto': 'object_type',
+    'temas': 'subjects',
+    'materias': 'subjects',  # Dublin Core official Spanish translation
+    'materia': 'subjects',
+    'destacado': 'featured',
+    'fuente': 'source',
+    # Backward compatibility: location -> source (v0.8.0 schema change)
+    'location': 'source',
 
     # Project columns (Spanish -> English)
     'orden': 'order',
     'id_historia': 'story_id',
     'subtitulo': 'subtitle',
     'firma': 'byline',
+    'private': 'protected',
+    'privada': 'protected',
+    'protegida': 'protected',
+
+    # Glossary columns (Spanish -> English)
+    'id_termino': 'term_id',
+    'id_término': 'term_id',
+    'título': 'title',
+    'definición': 'definition',
+    'definicion': 'definition',
+    'términos_relacionados': 'related_terms',
+    'terminos_relacionados': 'related_terms',
 }
 
 
@@ -171,7 +194,9 @@ def is_header_row(row_values):
     # Also include common column names not in the mapping
     valid_names.update(['x', 'y', 'zoom', 'order', 'story_id', 'title', 'subtitle',
                         'byline', 'object_id', 'description', 'source_url', 'creator',
-                        'period', 'medium', 'dimensions', 'location', 'credit', 'thumbnail'])
+                        'period', 'medium', 'dimensions', 'location', 'source', 'credit',
+                        'thumbnail', 'year', 'object_type', 'subjects', 'featured',
+                        'protected'])
 
     # Count how many cells match known column names
     matches = 0
