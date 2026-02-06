@@ -139,6 +139,7 @@ jobs:
         if: matrix.viewport == 'desktop'
         run: |
           pytest tests/e2e/ -v \
+            --ignore=tests/e2e/test_visual_regression.py \
             --base-url http://127.0.0.1:4000/telar \
             --browser chromium \
             --screenshot on \
@@ -148,6 +149,7 @@ jobs:
         if: matrix.viewport == 'mobile'
         run: |
           pytest tests/e2e/ -v \
+            --ignore=tests/e2e/test_visual_regression.py \
             --base-url http://127.0.0.1:4000/telar \
             --browser chromium \
             --device "iPhone 12" \

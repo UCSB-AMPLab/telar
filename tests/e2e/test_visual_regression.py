@@ -1,8 +1,14 @@
 """
 Visual Regression Tests
 
+TEST INSTANCE ONLY - DO NOT PORT TO TELAR/
+
 This module captures screenshots of key views and compares them against
-baseline images to detect unintended visual changes.
+baseline images to detect unintended visual changes. These tests are tied
+to the specific demo content in this test instance and will fail on user
+sites with different content.
+
+Run locally during development only (excluded from CI).
 
 Baseline images are stored in tests/e2e/snapshots/ and should be committed
 to the repository.
