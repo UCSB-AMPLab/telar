@@ -120,8 +120,15 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
 
     # Normalize column names (lowercase + bilingual mapping)
     df.columns = df.columns.str.lower().str.strip()
-    from telar.csv_utils import normalize_column_names
+    from telar.csv_utils import normalize_column_names, is_header_row
     df = normalize_column_names(df)
+
+    # Filter out instruction columns starting with #
+    df = df[[col for col in df.columns if not col.startswith('#')]]
+
+    # Drop duplicate header row (bilingual CSVs have Spanish aliases in row 2)
+    if len(df) > 0 and is_header_row(df.iloc[0].values):
+        df = df.iloc[1:].reset_index(drop=True)
 
     required_cols = ['term_id', 'title', 'definition']
     for col in required_cols:
@@ -138,20 +145,30 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         if not term_id or not title:
             continue
 
+        # Skip comment/instruction rows (e.g. "# Make it lower-case...")
+        if term_id.startswith('#'):
+            continue
+
         # Parse related_terms (pipe-separated)
         related_terms = []
         if related_terms_raw and related_terms_raw != 'nan':
             related_terms = [t.strip() for t in related_terms_raw.split('|') if t.strip()]
 
         # Process definition: file reference or inline content
-        # Try as file first (with or without .md extension)
-        file_def = definition if definition.endswith('.md') else f'{definition}.md'
-        glossary_path = file_def if file_def.startswith('glossary/') else f'glossary/{file_def}'
-        content_data = read_markdown_file(glossary_path)
+        # If definition looks like a filename (short, no spaces/newlines), try as file first
+        looks_like_filename = ('\n' not in definition and ' ' not in definition
+                               and len(definition) <= 200)
+        if looks_like_filename:
+            file_def = definition if definition.endswith('.md') else f'{definition}.md'
+            glossary_path = file_def if file_def.startswith('glossary/') else f'glossary/{file_def}'
+            content_data = read_markdown_file(glossary_path)
+        else:
+            content_data = None
+
         if content_data:
             body = content_data['content']
         else:
-            # No file found — treat as inline content
+            # No file found or inline content — treat as inline
             content_data = process_inline_content(definition)
             body = content_data['content'] if content_data else ''
 
