@@ -11,7 +11,7 @@ Key behavior:
 - IIIF values used when CSV field is empty
 - Fields affected: title, description, creator, period, location, credit
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import sys
@@ -124,7 +124,7 @@ class TestApplyMetadataFallback:
             'description': 'Description',
             'creator': 'Creator',
             'period': 'Period',
-            'location': 'Location',
+            'source': 'Source',
             'credit': 'Credit'
         }
         apply_metadata_fallback(row_dict, iiif_metadata)
@@ -132,7 +132,7 @@ class TestApplyMetadataFallback:
         assert row_dict['description'] == 'Description'
         assert row_dict['creator'] == 'Creator'
         assert row_dict['period'] == 'Period'
-        assert row_dict['location'] == 'Location'
+        assert row_dict['source'] == 'Source'
         assert row_dict['credit'] == 'Credit'
 
     def test_partial_csv_override(self):
@@ -142,7 +142,7 @@ class TestApplyMetadataFallback:
             'description': '',
             'creator': 'Custom Creator',
             'period': '',
-            'location': '',
+            'source': '',
             'credit': ''
         }
         iiif_metadata = {
@@ -150,7 +150,7 @@ class TestApplyMetadataFallback:
             'description': 'IIIF Description',
             'creator': 'IIIF Creator',
             'period': '1850-1900',
-            'location': 'British Museum',
+            'source': 'British Museum',
             'credit': 'Museum Collection'
         }
         apply_metadata_fallback(row_dict, iiif_metadata)
@@ -158,7 +158,7 @@ class TestApplyMetadataFallback:
         assert row_dict['description'] == 'IIIF Description'
         assert row_dict['creator'] == 'Custom Creator'
         assert row_dict['period'] == '1850-1900'
-        assert row_dict['location'] == 'British Museum'
+        assert row_dict['source'] == 'British Museum'
         assert row_dict['credit'] == 'Museum Collection'
 
     def test_modifies_dict_in_place(self):

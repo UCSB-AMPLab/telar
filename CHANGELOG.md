@@ -2,6 +2,37 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.8.0-beta] - 2026-02-05
+
+Content and access release adding story protection, an enhanced gallery system, and glossary CSV support.
+
+### Added
+
+- **Protected stories**: Stories can now be encrypted with a site-wide key. Add `protected=yes` to a story's row in `project.csv` and set `story_key` in `_config.yml`. Protected stories are encrypted at build time using AES-256-GCM and decrypted in the browser when viewers enter the key. An unlock overlay with session persistence means the key only needs to be entered once per browser session. Share links can optionally include the key for convenient access
+
+- **Browse and search for objects**: The objects page now includes a filter sidebar, full-text search (powered by Lunr.js), and sort controls. Filters use OR within a category and AND across categories. Desktop shows a 250px sidebar on the right; mobile shows a collapsible "Filter by" pill. Disable with `browse_and_search: false` in `_config.yml`
+
+- **Featured objects on homepage**: Optionally display a sample of objects on the homepage with smaller 170px cards. Configure with `show_sample_on_homepage: true` and `featured_count` in `_config.yml`. Objects can be explicitly marked with a `featured` column in `objects.csv`, or selected randomly at build time
+
+- **Glossary CSV support**: Define glossary terms in `components/structures/glossary.csv` as an alternative to individual markdown files. Supports inline definitions and file references. Existing markdown glossaries continue to work unchanged
+
+- **Share panel redesign**: The share panel now uses pill-style tabs ("this story" / "this whole site") with inline copy buttons. For protected stories, a privacy toggle lets you choose whether to include the key in shared links and embed codes, with clear warnings about access implications
+
+### Changed
+
+- **Config setting renames**: `hide_stories` renamed to `skip_stories` and `hide_collections` renamed to `skip_collections` under `development-features`. Old names still work for backward compatibility
+
+- **New config section**: `collection_interface` settings control the objects gallery (browse and search, homepage link, featured objects)
+
+- **Object metadata fields**: Objects CSV now supports `year`, `object_type`, `subjects`, and `featured` columns for richer filtering. The `location` field has been renamed to `source` (old name still supported)
+
+---
+
+**Migration from v0.7.0-beta:**
+- Run `python3 scripts/upgrade.py` to upgrade automatically
+- **Manual step required**: Copy updated `.github/workflows/build.yml` from the Telar repository (adds search data generation step)
+- **For local development**: Install `cryptography` package: `pip install -r requirements.txt`
+
 ## [0.7.0-beta] - 2026-01-31
 
 Infrastructure and code quality release focusing on maintainability, testing, and accessibility.

@@ -27,6 +27,16 @@
     {% assign show_story_steps = false %}
   {% endif %}
 
+  <!-- Check if story is encrypted (protected) -->
+  {% assign is_encrypted = false %}
+  {% if page.data_file %}
+    {% assign data_file_name = page.data_file %}
+    {% assign story_json = site.data[data_file_name] %}
+    {% if story_json.encrypted %}
+      {% assign is_encrypted = true %}
+    {% endif %}
+  {% endif %}
+
   <script>
   // Expose Christmas Tree Mode to JavaScript
   window.christmasTreeMode = {{ is_christmas_tree_mode }};
@@ -163,27 +173,32 @@
         {% if page.data_file %}
           {% assign data_file_name = page.data_file %}
           {% assign steps = site.data[data_file_name] %}
-          {% for step in steps %}
-            {% unless step._metadata %}
-              {% include story-step.html
-                step_number=step.step
-                question=step.question
-                answer=step.answer
-                object_id=step.object
-                x=step.x
-                y=step.y
-                zoom=step.zoom
-                layer1button=step.layer1_button
-                layer1_title=step.layer1_title
-                layer1_text=step.layer1_text
-                layer2button=step.layer2_button
-                layer2_title=step.layer2_title
-                layer2_text=step.layer2_text
-                viewer_warning=step.viewer_warning
-                is_last=forloop.last
-              %}
-            {% endunless %}
-          {% endfor %}
+          {% if is_encrypted %}
+            <!-- Steps will be rendered by JavaScript after decryption -->
+            <div id="encrypted-steps-container"></div>
+          {% else %}
+            {% for step in steps %}
+              {% unless step._metadata %}
+                {% include story-step.html
+                  step_number=step.step
+                  question=step.question
+                  answer=step.answer
+                  object_id=step.object
+                  x=step.x
+                  y=step.y
+                  zoom=step.zoom
+                  layer1button=step.layer1_button
+                  layer1_title=step.layer1_title
+                  layer1_text=step.layer1_text
+                  layer2button=step.layer2_button
+                  layer2_title=step.layer2_title
+                  layer2_text=step.layer2_text
+                  viewer_warning=step.viewer_warning
+                  is_last=forloop.last
+                %}
+              {% endunless %}
+            {% endfor %}
+          {% endif %}
         {% else %}
           {{ content }}
         {% endif %}
@@ -220,17 +235,22 @@
   <script>
     // Pass story data to JavaScript
     {% if page.data_file %}
-    // Load steps from data file
     {% assign data_file_name = page.data_file %}
-    {% assign steps_data = site.data[data_file_name] %}
-    {% assign first_step = steps_data[0] %}
+    {% assign story_json = site.data[data_file_name] %}
+    {% if story_json.encrypted %}
+    // Story is encrypted - pass encrypted data
+    window.storyData = {{ story_json | jsonify }};
+    {% else %}
+    // Story is not encrypted - pass steps normally
+    {% assign first_step = story_json[0] %}
     {% if first_step._metadata %}
-      {% assign first_step = steps_data[1] %}
+      {% assign first_step = story_json[1] %}
     {% endif %}
     window.storyData = {
-      steps: {{ steps_data | jsonify }},
+      steps: {{ story_json | jsonify }},
       firstObject: "{{ first_step.object }}"
     };
+    {% endif %}
     {% else %}
     window.storyData = {
       steps: {{ page.steps | jsonify }},
@@ -241,10 +261,43 @@
     // Pass objects data for manifest lookup
     window.objectsData = {{ site.data.objects | jsonify }};
   </script>
+  {% if is_encrypted %}
+  <!-- Bootstrap Icons for unlock overlay -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <script src="{{ '/assets/js/story-unlock.js' | relative_url }}"></script>
+  {% endif %}
   <script src="{{ '/assets/js/telar-story.js' | relative_url }}"></script>
   <script src="{{ '/assets/js/widgets.js' | relative_url }}"></script>
 
   <!-- Share Panel JavaScript -->
   <script src="{{ '/assets/js/share-panel.js' | relative_url }}"></script>
+
+  <!-- Story Unlock Overlay (for protected stories) - must be last for z-index -->
+  {% if is_encrypted %}
+  <div id="story-unlock-overlay" class="story-unlock-overlay d-none">
+    <div class="unlock-content">
+      <div class="unlock-icon">
+        <!-- Minimalist keyhole -->
+        <svg viewBox="0 0 48 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="20" r="16" fill="#fff"/>
+          <path d="M17 32L10 68H38L31 32H17Z" fill="#fff"/>
+        </svg>
+      </div>
+      <h2 class="unlock-title">{{ lang.unlock.title | default: "This story is protected" }}</h2>
+      <p class="unlock-description">{{ lang.unlock.description | default: "The author has restricted access to this story. Enter the key to continue." }}</p>
+      <form id="unlock-form" class="unlock-form">
+        <div class="input-group">
+          <input type="password" id="unlock-key-input" placeholder="{{ lang.unlock.placeholder | default: 'Enter key' }}" autocomplete="off">
+          <button type="button" id="toggle-key-visibility" aria-label="Toggle key visibility">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        <div id="unlock-error" class="unlock-error d-none"></div>
+        <button type="submit" class="unlock-button">{{ lang.unlock.button | default: "Unlock" }}</button>
+      </form>
+      <a href="{{ '/' | relative_url }}" class="unlock-back-link">{{ lang.unlock.back_link | default: "← Back to stories" }}</a>
+    </div>
+  </div>
+  {% endif %}
 </body>
 </html>

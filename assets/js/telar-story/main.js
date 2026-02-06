@@ -24,10 +24,14 @@
  * viewports (narrower than 768 px) both use button navigation. Desktop
  * viewports use scroll-based navigation with keyboard and touch support.
  *
+ * For protected stories (v0.8.0+), initialization waits until the story is
+ * unlocked via story-unlock.js. The unlock module fires a 'telar:story-unlocked'
+ * event when decryption succeeds.
+ *
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v0.7.0-beta
+ * @version v0.8.0-beta
  */
 
 import { state } from './state.js';
@@ -55,7 +59,12 @@ import {
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', function () {
+/**
+ * Initialize the story viewer and navigation.
+ * Called on DOMContentLoaded for unencrypted stories,
+ * or after unlock for encrypted stories.
+ */
+function initializeStory() {
   // Read viewer preloading config from _config.yml (via window.telarConfig)
   const viewerConfig = window.telarConfig?.viewer_preloading || {};
   state.config.maxViewerCards = Math.min(viewerConfig.max_viewer_cards || 10, 15);
@@ -89,6 +98,19 @@ document.addEventListener('DOMContentLoaded', function () {
   initializePanels();
   initializeScrollLock();
   initializeCredits();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Check if story is encrypted and blocked
+  if (window.storyData?.encrypted) {
+    // Story is encrypted - wait for unlock event
+    window.addEventListener('telar:story-unlocked', function () {
+      initializeStory();
+    }, { once: true });
+  } else {
+    // Story is not encrypted - initialize immediately
+    initializeStory();
+  }
 });
 
 // ── Debugging export ─────────────────────────────────────────────────────────

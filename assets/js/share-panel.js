@@ -1,8 +1,9 @@
 /**
  * Share Panel Functionality
- * @version v0.5.0-beta
+ * @version v0.8.0-beta
  *
  * Handles share link and embed code generation for Telar stories.
+ * Redesigned with pill-style tabs and unified privacy toggle.
  * Supports both story-specific and site-wide sharing contexts.
  */
 
@@ -12,24 +13,17 @@
   // State
   let currentStoryUrl = window.location.href;
   let availableStories = [];
+  let currentStoryProtected = false;
+  let storyKey = null; // Will be set from config if available
+  let includeKey = false; // Single toggle controls both share and embed
 
   // DOM elements
   const sharePanel = document.getElementById('panel-share');
 
-  // Share Link tab elements
-  const shareUrlInput = document.getElementById('share-url-input');
-  const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
-  const shareSiteUrlInput = document.getElementById('share-site-url-input');
-  const shareCopySiteBtn = document.getElementById('share-copy-site-btn');
-  const shareStorySelect = document.getElementById('share-story-select');
-
-  // Embed Code tab elements
-  const embedPresetSelect = document.getElementById('embed-preset-select');
-  const embedWidthInput = document.getElementById('embed-width-input');
-  const embedHeightInput = document.getElementById('embed-height-input');
-  const embedCodeTextarea = document.getElementById('embed-code-textarea');
-  const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
-  const embedStorySelect = document.getElementById('embed-story-select');
+  // Check if we're on a story page or homepage
+  const isStoryPage = document.body.classList.contains('story-page') ||
+                      document.querySelector('.story-layout') !== null ||
+                      window.location.pathname.includes('/stories/');
 
   /**
    * Initialize share panel
@@ -40,19 +34,45 @@
     // Initialize URLs on panel open
     sharePanel.addEventListener('show.bs.modal', handlePanelOpen);
 
-    // Event listeners
+    // Get DOM elements after panel structure is known
+    const shareUrlInput = document.getElementById('share-url-input');
+    const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
+    const shareSiteUrlInput = document.getElementById('share-site-url-input');
+    const shareCopySiteBtn = document.getElementById('share-copy-site-btn');
+    const shareStorySelect = document.getElementById('share-story-select');
+    const embedPresetSelect = document.getElementById('embed-preset-select');
+    const embedWidthInput = document.getElementById('embed-width-input');
+    const embedHeightInput = document.getElementById('embed-height-input');
+    const embedCodeTextarea = document.getElementById('embed-code-textarea');
+    const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
+
+    // Story page: Privacy toggle
+    const shareKeyWithoutBtn = document.getElementById('share-key-without');
+    const shareKeyWithBtn = document.getElementById('share-key-with');
+
+    // Event listeners for copy buttons
     if (shareCopyLinkBtn) {
-      shareCopyLinkBtn.addEventListener('click', copyShareLink);
+      shareCopyLinkBtn.addEventListener('click', function() {
+        const input = document.getElementById('share-url-input');
+        if (input) copyToClipboard(input.value, this);
+      });
     }
 
     if (shareCopySiteBtn) {
-      shareCopySiteBtn.addEventListener('click', copySiteLink);
+      shareCopySiteBtn.addEventListener('click', function() {
+        const input = document.getElementById('share-site-url-input');
+        if (input) copyToClipboard(input.value, this);
+      });
     }
 
     if (embedCopyCodeBtn) {
-      embedCopyCodeBtn.addEventListener('click', copyEmbedCode);
+      embedCopyCodeBtn.addEventListener('click', function() {
+        const textarea = document.getElementById('embed-code-textarea');
+        if (textarea) copyToClipboard(textarea.value, this);
+      });
     }
 
+    // Embed preset/dimension changes
     if (embedPresetSelect) {
       embedPresetSelect.addEventListener('change', handlePresetChange);
     }
@@ -65,37 +85,102 @@
       embedHeightInput.addEventListener('input', updateEmbedCode);
     }
 
+    // Story page: Key toggle (single toggle controls both share and embed)
+    if (shareKeyWithoutBtn) {
+      shareKeyWithoutBtn.addEventListener('click', function() {
+        includeKey = false;
+        shareKeyWithoutBtn.classList.add('active');
+        shareKeyWithBtn.classList.remove('active');
+        updateShareUrl();
+        updateEmbedCode();
+        updateWarnings();
+      });
+    }
+
+    if (shareKeyWithBtn) {
+      shareKeyWithBtn.addEventListener('click', function() {
+        includeKey = true;
+        shareKeyWithBtn.classList.add('active');
+        shareKeyWithoutBtn.classList.remove('active');
+        updateShareUrl();
+        updateEmbedCode();
+        updateWarnings();
+      });
+    }
+
+    // Homepage: Story selector
     if (shareStorySelect) {
       shareStorySelect.addEventListener('change', handleStoryChange);
     }
 
-    if (embedStorySelect) {
-      embedStorySelect.addEventListener('change', handleStoryChange);
-    }
-
-    // Load available stories for homepage context (if selectors exist)
+    // Load available stories for homepage context
     loadAvailableStories();
 
+    // Check if current story is protected (for story pages)
+    detectProtectedStory();
+
     console.log('[Telar Share] Share panel initialized');
+  }
+
+  /**
+   * Detect if the current story is protected and get the key
+   */
+  function detectProtectedStory() {
+    // Check if we're on a story page with encrypted data
+    if (window.storyData && window.storyData.encrypted) {
+      currentStoryProtected = true;
+    } else if (document.getElementById('story-unlock-overlay')) {
+      // Overlay exists = this is a protected story page (even after unlock)
+      currentStoryProtected = true;
+    }
+
+    // Try to get story key from config (set by story-unlock.js after successful unlock)
+    if (window.telarStoryKey) {
+      storyKey = window.telarStoryKey;
+    }
   }
 
   /**
    * Handle panel opening - initialize URLs
    */
   function handlePanelOpen(event) {
-    // Check if we're on a story page or homepage by checking if story selectors exist
-    const isHomepage = shareStorySelect !== null;
+    // Refresh protected story detection (key may have been set after init)
+    detectProtectedStory();
 
-    if (isHomepage) {
+    // Reset include key state
+    includeKey = false;
+    const shareKeyWithoutBtn = document.getElementById('share-key-without');
+    const shareKeyWithBtn = document.getElementById('share-key-with');
+    if (shareKeyWithoutBtn) shareKeyWithoutBtn.classList.add('active');
+    if (shareKeyWithBtn) shareKeyWithBtn.classList.remove('active');
+
+    if (isStoryPage) {
+      // Story page: Set current story URL
+      currentStoryUrl = window.location.href;
+
+      // Show Story Privacy section if story is protected and we have the key
+      const privacySection = document.getElementById('story-privacy-section');
+      if (privacySection) {
+        if (currentStoryProtected && storyKey) {
+          privacySection.classList.remove('d-none');
+        } else {
+          privacySection.classList.add('d-none');
+        }
+      }
+    } else {
       // Homepage: Clear story URL and disable copy buttons until story selected
       currentStoryUrl = '';
+      currentStoryProtected = false;
 
-      // Reset story selectors to default option
+      const shareStorySelect = document.getElementById('share-story-select');
+      const shareUrlInput = document.getElementById('share-url-input');
+      const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
+      const embedCodeTextarea = document.getElementById('embed-code-textarea');
+      const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
+
+      // Reset story selector
       if (shareStorySelect) {
         shareStorySelect.value = '';
-      }
-      if (embedStorySelect) {
-        embedStorySelect.value = '';
       }
 
       if (shareUrlInput) {
@@ -110,28 +195,24 @@
       if (embedCopyCodeBtn) {
         embedCopyCodeBtn.disabled = true;
       }
-    } else {
-      // Story page: Set current story URL
-      currentStoryUrl = window.location.href;
     }
 
-    // Update share URL
+    // Update URLs
     updateShareUrl();
-
-    // Update embed code
+    updateSiteUrl();
     updateEmbedCode();
+    updateWarnings();
   }
 
   /**
    * Load available stories from Jekyll data
    */
   function loadAvailableStories() {
-    // Try to get stories from page data
     const storiesData = document.getElementById('telar-stories-data');
     if (storiesData) {
       try {
         availableStories = JSON.parse(storiesData.textContent);
-        populateStorySelectors();
+        populateStorySelector();
       } catch (e) {
         console.warn('[Telar Share] Could not parse stories data');
       }
@@ -139,62 +220,49 @@
   }
 
   /**
-   * Populate story dropdown selectors
+   * Populate story dropdown selector
    */
-  function populateStorySelectors() {
+  function populateStorySelector() {
     if (availableStories.length === 0) return;
 
-    [shareStorySelect, embedStorySelect].forEach(select => {
-      if (!select) return;
+    const shareStorySelect = document.getElementById('share-story-select');
+    if (!shareStorySelect) return;
 
-      // Clear existing options but preserve the default "Select" option
-      select.innerHTML = '';
+    // Clear existing options but preserve the default "Select" option
+    const firstOption = shareStorySelect.querySelector('option[value=""]');
+    shareStorySelect.innerHTML = '';
+    if (firstOption) {
+      shareStorySelect.appendChild(firstOption);
+    }
 
-      // Add default "Select" option
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-      // Get the select option text from the first option if it exists, or use a fallback
-      const langData = document.documentElement.dataset.lang;
-      if (langData) {
-        try {
-          const lang = JSON.parse(langData);
-          defaultOption.textContent = lang.share.select_option || 'Select';
-        } catch (e) {
-          defaultOption.textContent = 'Select';
-        }
-      } else {
-        defaultOption.textContent = 'Select';
-      }
-      select.appendChild(defaultOption);
-
-      // Add story options
-      availableStories.forEach(story => {
-        const option = document.createElement('option');
-        option.value = story.url;
-        option.textContent = story.title;
-        select.appendChild(option);
-      });
+    // Add story options with lock icon for protected stories
+    availableStories.forEach(story => {
+      const option = document.createElement('option');
+      option.value = story.url;
+      option.dataset.protected = story.protected ? 'true' : 'false';
+      // Add lock symbol for protected stories
+      option.textContent = story.protected ? '🔒 ' + story.title : story.title;
+      shareStorySelect.appendChild(option);
     });
   }
 
   /**
-   * Handle story selection change
+   * Handle story selection change (homepage)
    */
   function handleStoryChange(event) {
     const selectedValue = event.target.value;
+    const selectedOption = event.target.options[event.target.selectedIndex];
 
     // Update currentStoryUrl based on selection
     currentStoryUrl = selectedValue;
 
-    // Sync both dropdowns if they exist
-    if (event.target.id === 'share-story-select' && embedStorySelect) {
-      embedStorySelect.value = selectedValue;
-    } else if (event.target.id === 'embed-story-select' && shareStorySelect) {
-      shareStorySelect.value = selectedValue;
-    }
+    // Check if selected story is protected
+    currentStoryProtected = selectedOption && selectedOption.dataset.protected === 'true';
 
     // Enable/disable copy buttons based on whether a story is selected
     const hasSelection = currentStoryUrl !== '';
+    const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
+    const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
 
     if (shareCopyLinkBtn) {
       shareCopyLinkBtn.disabled = !hasSelection;
@@ -206,52 +274,46 @@
     // Update URLs and embed code
     updateShareUrl();
     updateEmbedCode();
+    updateWarnings();
   }
 
   /**
    * Update share URL input
    */
   function updateShareUrl() {
-    // Always populate site URL
-    if (shareSiteUrlInput) {
-      const pathParts = window.location.pathname.split('/').filter(p => p);
-      const baseUrl = window.location.origin + (pathParts.length > 0 ? '/' + pathParts[0] + '/' : '/');
-      shareSiteUrlInput.value = baseUrl;
-    }
-
-    // For story URL: only populate if we have a current story URL
-    if (shareUrlInput) {
-      if (currentStoryUrl) {
-        // Clean the story URL - remove hash and query parameters (viewer state)
-        try {
-          const url = new URL(currentStoryUrl);
-          const cleanUrl = url.origin + url.pathname;
-          shareUrlInput.value = cleanUrl;
-        } catch (e) {
-          shareUrlInput.value = currentStoryUrl;
-        }
-      } else {
-        shareUrlInput.value = '';
-      }
-    }
-  }
-
-  /**
-   * Copy share link to clipboard
-   */
-  function copyShareLink() {
+    const shareUrlInput = document.getElementById('share-url-input');
     if (!shareUrlInput) return;
 
-    copyToClipboard(shareUrlInput.value, shareCopyLinkBtn);
+    if (currentStoryUrl) {
+      // Clean the story URL - remove hash and query parameters (viewer state)
+      try {
+        const url = new URL(currentStoryUrl);
+        let cleanUrl = url.origin + url.pathname;
+
+        // Add key parameter if toggle is set to "With key" and we have a key
+        if (includeKey && storyKey) {
+          cleanUrl += '?key=' + encodeURIComponent(storyKey);
+        }
+
+        shareUrlInput.value = cleanUrl;
+      } catch (e) {
+        shareUrlInput.value = currentStoryUrl;
+      }
+    } else {
+      shareUrlInput.value = '';
+    }
   }
 
   /**
-   * Copy site link to clipboard
+   * Update site URL input
    */
-  function copySiteLink() {
+  function updateSiteUrl() {
+    const shareSiteUrlInput = document.getElementById('share-site-url-input');
     if (!shareSiteUrlInput) return;
 
-    copyToClipboard(shareSiteUrlInput.value, shareCopySiteBtn);
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+    const baseUrl = window.location.origin + (pathParts.length > 0 ? '/' + pathParts[0] + '/' : '/');
+    shareSiteUrlInput.value = baseUrl;
   }
 
   /**
@@ -259,6 +321,8 @@
    */
   function handlePresetChange(event) {
     const preset = event.target.value;
+    const embedWidthInput = document.getElementById('embed-width-input');
+    const embedHeightInput = document.getElementById('embed-height-input');
 
     const presets = {
       canvas: { width: '100%', height: '800' },
@@ -270,7 +334,7 @@
       fixed: { width: '800', height: '600' }
     };
 
-    if (presets[preset]) {
+    if (presets[preset] && embedWidthInput && embedHeightInput) {
       embedWidthInput.value = presets[preset].width;
       embedHeightInput.value = presets[preset].height;
       updateEmbedCode();
@@ -286,8 +350,11 @@
       return '';
     }
 
-    const width = embedWidthInput.value.trim() || '100%';
-    const height = embedHeightInput.value.trim() || '800';
+    const embedWidthInput = document.getElementById('embed-width-input');
+    const embedHeightInput = document.getElementById('embed-height-input');
+
+    const width = embedWidthInput ? embedWidthInput.value.trim() || '100%' : '100%';
+    const height = embedHeightInput ? embedHeightInput.value.trim() || '800' : '800';
 
     // Normalize dimension values
     const widthAttr = normalizeDimension(width);
@@ -301,9 +368,7 @@
 
     // Generate iframe code
     const iframeCode = `<iframe src="${embedUrl}"
-  width="${widthAttr}"
-  height="${heightAttr}"
-  title="${storyTitle}"
+  width="${widthAttr}" height="${heightAttr}" title="${storyTitle}"
   frameborder="0">
 </iframe>`;
 
@@ -314,7 +379,6 @@
    * Normalize dimension value (add px if just a number)
    */
   function normalizeDimension(value) {
-    // If it's just a number, add 'px'
     if (/^\d+$/.test(value)) {
       return value + 'px';
     }
@@ -323,6 +387,7 @@
 
   /**
    * Add ?embed=true parameter to URL (strips existing query params and hash)
+   * Optionally includes key parameter for protected stories
    */
   function addEmbedParameter(url) {
     try {
@@ -332,11 +397,21 @@
       urlObj.hash = '';
       // Add clean embed parameter
       urlObj.searchParams.set('embed', 'true');
+
+      // Add key parameter if toggle is set to "With key" and we have a key
+      if (includeKey && storyKey) {
+        urlObj.searchParams.set('key', storyKey);
+      }
+
       return urlObj.toString();
     } catch (e) {
-      // Fallback if URL parsing fails - strip everything after ? or #
+      // Fallback if URL parsing fails
       const cleanUrl = url.split(/[?#]/)[0];
-      return cleanUrl + '?embed=true';
+      let embedUrl = cleanUrl + '?embed=true';
+      if (includeKey && storyKey) {
+        embedUrl += '&key=' + encodeURIComponent(storyKey);
+      }
+      return embedUrl;
     }
   }
 
@@ -345,18 +420,12 @@
    */
   function getStoryTitle() {
     // Try to get from selected story in dropdown
-    // Check both dropdowns (they should be synced, but check both to be safe)
+    const shareStorySelect = document.getElementById('share-story-select');
     if (shareStorySelect && shareStorySelect.value) {
       const selectedOption = shareStorySelect.options[shareStorySelect.selectedIndex];
       if (selectedOption && selectedOption.value) {
-        return selectedOption.textContent;
-      }
-    }
-
-    if (embedStorySelect && embedStorySelect.value) {
-      const selectedOption = embedStorySelect.options[embedStorySelect.selectedIndex];
-      if (selectedOption && selectedOption.value) {
-        return selectedOption.textContent;
+        // Remove lock emoji if present
+        return selectedOption.textContent.replace(/^🔒\s*/, '');
       }
     }
 
@@ -381,31 +450,67 @@
    * Update embed code textarea
    */
   function updateEmbedCode() {
+    const embedCodeTextarea = document.getElementById('embed-code-textarea');
     if (!embedCodeTextarea) return;
     embedCodeTextarea.value = generateEmbedCode();
   }
 
   /**
-   * Copy embed code to clipboard
+   * Update warning messages based on protection status and key inclusion
    */
-  function copyEmbedCode() {
-    if (!embedCodeTextarea) return;
-    copyToClipboard(embedCodeTextarea.value, embedCopyCodeBtn);
+  function updateWarnings() {
+    // Story page warnings (shown when "With key" is selected)
+    const shareKeyWarning = document.getElementById('share-key-warning');
+    const embedKeyWarning = document.getElementById('embed-key-warning');
+
+    if (shareKeyWarning) {
+      if (currentStoryProtected && includeKey && storyKey) {
+        shareKeyWarning.classList.remove('d-none');
+      } else {
+        shareKeyWarning.classList.add('d-none');
+      }
+    }
+
+    if (embedKeyWarning) {
+      if (currentStoryProtected && includeKey && storyKey) {
+        embedKeyWarning.classList.remove('d-none');
+      } else {
+        embedKeyWarning.classList.add('d-none');
+      }
+    }
+
+    // Homepage warnings (shown when protected story is selected)
+    const shareProtectedWarning = document.getElementById('share-protected-warning');
+    const embedProtectedWarning = document.getElementById('embed-protected-warning');
+
+    if (shareProtectedWarning) {
+      if (currentStoryProtected && currentStoryUrl) {
+        shareProtectedWarning.classList.remove('d-none');
+      } else {
+        shareProtectedWarning.classList.add('d-none');
+      }
+    }
+
+    if (embedProtectedWarning) {
+      if (currentStoryProtected && currentStoryUrl) {
+        embedProtectedWarning.classList.remove('d-none');
+      } else {
+        embedProtectedWarning.classList.add('d-none');
+      }
+    }
   }
 
   /**
    * Copy text to clipboard and show success feedback
    */
   function copyToClipboard(text, triggerButton) {
+    if (!text) return;
+
     navigator.clipboard.writeText(text).then(() => {
       showSuccessFeedback(triggerButton);
     }).catch(err => {
       console.error('[Telar Share] Failed to copy:', err);
-
-      // Fallback: select text for manual copy
-      if (text) {
-        alert('Please manually copy the text');
-      }
+      alert('Please manually copy the text');
     });
   }
 
@@ -413,19 +518,6 @@
    * Show success feedback
    */
   function showSuccessFeedback(triggerButton) {
-    // Find the success message in the same tab
-    const tab = triggerButton.closest('.tab-pane');
-    const successMessage = tab ? tab.querySelector('.share-success-message') : null;
-
-    if (successMessage) {
-      successMessage.style.display = 'block';
-
-      // Hide after 3 seconds
-      setTimeout(() => {
-        successMessage.style.display = 'none';
-      }, 3000);
-    }
-
     // Update button icon temporarily
     const btnIcon = triggerButton.querySelector('.material-symbols-outlined');
     if (btnIcon) {

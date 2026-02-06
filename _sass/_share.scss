@@ -7,7 +7,7 @@
  * copy-to-clipboard functionality, embed code generation, and social media
  * sharing links.
  *
- * @version v0.7.0-beta
+ * @version v0.8.0-beta
  */
 
 /* =========================================
@@ -173,9 +173,14 @@
 
   // Modal dialog sizing
   .modal-dialog {
-    max-width: 600px;
+    max-width: 500px;
     width: 90vw;
     margin: 1.75rem auto;
+  }
+
+  .modal-content {
+    border-radius: 24px;
+    overflow: hidden;
   }
 
   @media (max-width: 768px) {
@@ -186,42 +191,319 @@
     }
   }
 
-  .offcanvas-title {
-    font-family: var(--font-headings);
-    color: var(--color-heading);
-    font-size: 1.5rem;
-    margin-bottom: 0;
+  // Header with pill tabs
+  .share-panel-header {
+    border-bottom: none;
+    padding-bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
   }
 
-  .nav-tabs {
-    border-bottom: 1px solid #dee2e6;
+  .share-header-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
 
-    .nav-link {
-      color: #6c757d;
-      border: none;
-      border-bottom: 2px solid transparent;
-      background: none;
-      padding: 0.75rem 1rem;
-      transition: all 0.2s;
+  .share-panel-title {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--color-heading);
+  }
 
-      &:hover {
-        color: var(--color-link);
-        border-bottom-color: var(--color-link);
-      }
+  // Pill-style tabs
+  .share-pill-tabs {
+    display: inline-flex;
+    background: #e8e8e8;
+    border-radius: 50px;
+    padding: 4px;
+  }
 
-      &.active {
-        color: var(--color-link);
-        border-bottom-color: var(--color-link);
-        background: none;
-      }
+  .share-pill-tab {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 50px;
+    background: transparent;
+    color: #666;
+    font-size: 0.875rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(.active) {
+      color: #333;
+    }
+
+    &.active {
+      background: var(--color-heading);
+      color: white;
+    }
+
+    &:focus {
+      outline: 2px solid var(--color-link);
+      outline-offset: 2px;
     }
   }
 
-  .share-section {
-    padding-top: 1rem;
+  // Modal body
+  .modal-body {
+    padding-top: 0.25rem;
   }
 
-  // Success message styling
+  // Section styling
+  .share-section {
+    margin-bottom: 1rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .share-section-label {
+    font-weight: 600;
+    color: var(--color-body);
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .share-section-help {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+  }
+
+  // Story Privacy section
+  .share-privacy-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    // Stack vertically on mobile
+    @media (max-width: 576px) {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+  }
+
+  .share-privacy-question {
+    color: #6c757d;
+    font-size: 0.8rem;
+    flex: 1;
+  }
+
+  // Key toggle (pill-button style)
+  .share-key-toggle {
+    display: inline-flex;
+    background: #e8e8e8;
+    border-radius: 50px;
+    padding: 3px;
+    flex-shrink: 0;
+  }
+
+  .share-key-btn {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 50px;
+    background: transparent;
+    color: #666;
+    font-size: 0.75rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(.active) {
+      color: #333;
+    }
+
+    &.active {
+      background: var(--color-heading);
+      color: white;
+    }
+
+    &:focus {
+      outline: 2px solid var(--color-link);
+      outline-offset: 2px;
+    }
+  }
+
+  // Input row with inline copy button
+  .share-input-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .share-input {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #f8f9fa;
+    font-size: 0.8rem;
+    height: 31px;
+
+    &:focus {
+      border-color: var(--color-link);
+      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
+      outline: none;
+    }
+  }
+
+  // Copy button (pill-shaped)
+  .share-copy-btn {
+    padding: 0 16px;
+    background: var(--color-heading);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 31px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+
+    .material-symbols-outlined {
+      font-size: 1rem;
+    }
+
+    // Icon-only on mobile
+    @media (max-width: 576px) {
+      padding: 0 10px;
+
+      .btn-text {
+        display: none;
+      }
+    }
+
+    &:hover {
+      opacity: 0.9;
+    }
+
+    &:focus {
+      outline: 2px solid var(--color-link);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  // Warning messages (brown theme color)
+  .share-warning {
+    color: #856404;
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  // Textarea for embed code
+  .share-textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #f8f9fa;
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    resize: none;
+    margin-bottom: 0.25rem;
+
+    &:focus {
+      border-color: var(--color-link);
+      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
+      outline: none;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 0.65rem;
+      line-height: 1.3;
+    }
+  }
+
+  // Embed controls row
+  .share-embed-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+
+    // Stack preset on its own row on mobile
+    @media (max-width: 576px) {
+      flex-wrap: wrap;
+    }
+  }
+
+  .share-embed-preset {
+    flex: 1.5;
+
+    @media (max-width: 576px) {
+      flex: 1 1 100%;
+      margin-bottom: 0.5rem;
+    }
+  }
+
+  .share-embed-dimension {
+    flex: 0.5;
+
+    @media (max-width: 576px) {
+      flex: 1;
+    }
+  }
+
+  .share-embed-copy {
+    flex: 0;
+  }
+
+  .share-embed-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .share-embed-select,
+  .share-embed-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    height: 31px;
+
+    &:focus {
+      border-color: var(--color-link);
+      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
+      outline: none;
+    }
+  }
+
+  // Story selector dropdown (homepage)
+  .share-story-select {
+    width: 100%;
+    padding: 6px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+
+    &:focus {
+      border-color: var(--color-link);
+      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
+      outline: none;
+    }
+  }
+
+  // Success message styling (for copy feedback)
   .share-success-message {
     display: flex;
     align-items: center;
@@ -231,78 +513,6 @@
 
     .material-symbols-outlined {
       font-size: 1.2rem;
-    }
-  }
-
-  // Button icons in input groups
-  .btn .material-symbols-outlined {
-    font-size: 1.1rem;
-    vertical-align: middle;
-  }
-
-  .btn-icon {
-    margin-right: 0;
-  }
-
-  @media (max-width: 576px) {
-    .btn-text {
-      display: none; // Hide button text on very small screens
-    }
-
-    .btn-icon {
-      margin-right: 0;
-    }
-  }
-
-  // Embed code textarea
-  #embed-code-textarea {
-    font-family: 'Courier New', monospace;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    resize: vertical;
-    background: #f8f9fa;
-
-    // Smaller font on mobile for shorter panel height
-    @media (max-width: 768px) {
-      font-size: 0.65rem;
-      line-height: 1.3;
-    }
-  }
-
-  // Form controls
-  .form-label {
-    font-weight: 600;
-    color: var(--color-body);
-    margin-bottom: 0.5rem;
-  }
-
-  .form-control,
-  .form-select {
-    border-radius: 4px;
-    border: 1px solid #ced4da;
-
-    &:focus {
-      border-color: var(--color-link);
-      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
-    }
-  }
-
-  // Make copy buttons 80% width (all screen sizes)
-  .btn-primary.w-100 {
-    width: 80% !important;
-    margin-left: auto;
-    margin-right: auto;
-    display: block;
-  }
-
-  // Style links in help text to match site theme
-  .text-muted a {
-    color: var(--color-link);
-    text-decoration: underline;
-
-    &:hover {
-      color: var(--color-link-hover);
-      text-decoration: none;
     }
   }
 }

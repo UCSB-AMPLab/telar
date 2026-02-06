@@ -18,7 +18,7 @@ buttons:
   back_to_glossary: "← Back to Glossary"
   learn_more: "Learn more"
   read_more: "Read More"
-  view_objects: "View Objects"
+  view_objects: "View all objects"
   copy: "Copy"
   copied: "Copied!"
   close: "Close"
@@ -88,6 +88,31 @@ pages:
   stories_heading: "Explore the stories"
   objects_heading: "See the objects behind the stories"
   objects_count: "Browse {count} objects featured in the stories."
+  objects_count_collection: "Browse {count} objects in the collection."
+  objects_intro_all_stories: "There are {count} objects featured in the stories. Have a look at them below."
+  objects_intro_all_collection: "There are {count} objects in the collection. Have a look at them below."
+  objects_intro_sample_stories: "There are {count} objects featured in the stories. Have a look at {sample} of them below."
+  objects_intro_sample_collection: "There are {count} objects in the collection. Have a look at {sample} of them below."
+
+# Objects browse and search (v0.8.0)
+objects:
+  featured_heading: "Featured objects"
+  showing: "Showing"
+  of: "of"
+  objects: "objects"
+  clear_all: "Clear all"
+  search_placeholder: "Search objects..."
+  clear_search: "Clear search"
+  filter_by: "Filter by:"
+  loading_filters: "Loading filters..."
+  no_results: "No objects match your search"
+  type: "Type"
+  creator: "Creator"
+  period: "Period"
+  subjects: "Subjects"
+  sort_by: "Sort by"
+  sort_title: "Title"
+  sort_year: "Year"
 
 # Panels system
 panels:
@@ -227,42 +252,81 @@ errors:
 share:
   button: "Share"
   title: "Share"
+  copy: "COPY"
+  copied: "Copied!"
+
+  # Pill-style tabs
+  tab_this_story: "this story"
+  tab_a_single_story: "a single story"
+  tab_this_whole_site: "this whole site"
+
+  # Section headings
+  story_privacy: "Story Privacy"
+  share_link_heading: "Share Link"
+  embed_code_heading: "Embed Code"
+  select_story_heading: "Select Story"
+
+  # Story privacy toggle
+  privacy_question: "Do you want to share your story with or without the access key?"
+  without_key: "Without key"
+  with_key: "With key"
+  include_key_label: "Include key option"
+
+  # Placeholders
+  select_placeholder: "Choose a story..."
+  select_story_first: "Select a story above"
+
+  # Help text
+  help_story_link_story: "Copy a direct link to this story to share by email, social media, or messaging apps."
+  help_site_link: "Copy a link to the site homepage, where visitors can browse all stories."
+  help_embed_story: "Embed this story in another website or LMS."
+
+  # Embed presets
+  preset_sizes: "Preset sizes for different platforms"
+  canvas_lms: "Canvas LMS"
+  moodle_blackboard: "Moodle/Blackboard"
+  wordpress: "WordPress"
+  squarespace: "Squarespace"
+  wix: "Wix"
+  mobile: "Mobile"
+  fixed: "Fixed"
+  custom: "Custom"
+  width: "Width"
+  height: "Height"
+
+  # Warning messages
+  include_key_warning: "Anyone with this link will be able to view the story."
+  embed_key_warning: "Anyone with this embed will be able to view the story."
+  protected_story_warning: "This story is protected. Recipients will need the key to view it."
+  protected_embed_warning: "This story is protected. The embed will show a lock screen until viewers enter the key."
+
+  # Legacy keys (kept for compatibility)
   title_site: "Share This Site"
   tab_link: "Share Links"
   tab_embed: "Embed Code"
   copy_link: "Copy Link"
   copy_embed: "Copy Embed Code"
-  copied: "Copied!"
-
-  # Embed code generator
   embed_presets: "Dimension Presets"
-  canvas_lms: "Canvas LMS (100% × 800px)"
-  moodle_blackboard: "Moodle/Blackboard (100% × 700px)"
-  wordpress: "WordPress (100% × 600px)"
-  squarespace: "Squarespace (100% × 600px)"
-  wix: "Wix (100% × 550px)"
-  mobile: "Mobile (375px × 500px)"
-  fixed: "Fixed (800px × 600px)"
-  custom: "Custom Dimensions"
-  width: "Width"
-  height: "Height"
   select_story: "Select a story"
   share_a_story: "Share a story"
   select_option: "Select Story"
   embed_preview: "Embed Code Preview"
-
-  # Section headings
   share_story_heading: "Share This Story"
   share_site_heading: "Share This Site"
-
-  # Help text
-  help_story_link_story: "Copy a direct link to this story to share by email, social media, or messaging apps."
   help_story_link_homepage: "Copy a direct link to a story to share by email, social media, or messaging apps."
-  help_site_link: "Copy a link to the site homepage, where visitors can browse all stories."
   help_embed_intro_stories: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
   help_embed_intro_homepage: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a story and specify a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
   help_dimensions: "Enter dimensions as pixels (e.g. 800) or percentages (e.g. 100%)."
   help_embed: "Copy this code and paste it into your website, LMS, or blog post to embed this story."
+
+# Protected stories unlock screen
+unlock:
+  title: "This story is protected"
+  description: "The author has restricted access to this story. Enter the key to continue."
+  placeholder: "Enter key"
+  button: "Unlock"
+  back_link: "← Back to stories"
+  card_description: "This story is protected. You need a key to unlock it."
 
 # Upgrade messages
 upgrade:
