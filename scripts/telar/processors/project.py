@@ -96,8 +96,8 @@ def process_project_setup(df):
         if pd.notna(byline) and str(byline).strip():
             story_entry['byline'] = str(byline).strip()
 
-        # Add protected flag if set to yes (v0.8.0+)
-        if pd.notna(protected) and str(protected).strip().lower() == 'yes':
+        # Add protected flag if set to yes/true/sí/si (v0.8.0+)
+        if pd.notna(protected) and str(protected).strip().lower() in ('yes', 'true', 'sí', 'si'):
             story_entry['protected'] = True
 
         stories_list.append(story_entry)
