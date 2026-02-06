@@ -57,8 +57,10 @@ def load_glossary_from_csv(csv_path):
     try:
         df = pd.read_csv(csv_path)
 
-        # Normalize column names to lowercase
+        # Normalize column names (lowercase + bilingual mapping)
         df.columns = df.columns.str.lower().str.strip()
+        from telar.csv_utils import normalize_column_names
+        df = normalize_column_names(df)
 
         if 'term_id' not in df.columns or 'title' not in df.columns:
             print(f"  ⚠️ glossary.csv missing required columns (term_id, title)")

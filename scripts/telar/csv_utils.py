@@ -71,9 +71,11 @@ COLUMN_NAME_MAPPING = {
     'miniatura': 'thumbnail',
     # v0.8.0 gallery filtering columns
     'año': 'year',
+    'ano': 'year',  # without tilde
     'tipo_objeto': 'object_type',
     'temas': 'subjects',
     'materias': 'subjects',  # Dublin Core official Spanish translation
+    'materia': 'subjects',
     'destacado': 'featured',
     'fuente': 'source',
     # Backward compatibility: location -> source (v0.8.0 schema change)
@@ -87,6 +89,15 @@ COLUMN_NAME_MAPPING = {
     'private': 'protected',
     'privada': 'protected',
     'protegida': 'protected',
+
+    # Glossary columns (Spanish -> English)
+    'id_termino': 'term_id',
+    'id_término': 'term_id',
+    'título': 'title',
+    'definición': 'definition',
+    'definicion': 'definition',
+    'términos_relacionados': 'related_terms',
+    'terminos_relacionados': 'related_terms',
 }
 
 

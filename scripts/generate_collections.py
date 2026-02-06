@@ -118,8 +118,10 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
     """
     df = pd.read_csv(csv_path)
 
-    # Normalize column names
+    # Normalize column names (lowercase + bilingual mapping)
     df.columns = df.columns.str.lower().str.strip()
+    from telar.csv_utils import normalize_column_names
+    df = normalize_column_names(df)
 
     required_cols = ['term_id', 'title', 'definition']
     for col in required_cols:
