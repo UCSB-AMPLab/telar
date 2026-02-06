@@ -144,19 +144,14 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
             related_terms = [t.strip() for t in related_terms_raw.split('|') if t.strip()]
 
         # Process definition: file reference or inline content
-        if definition.endswith('.md'):
-            # Try to load as markdown file (path is relative to components/texts/glossary/)
-            glossary_path = definition if definition.startswith('glossary/') else f'glossary/{definition}'
-            content_data = read_markdown_file(glossary_path)
-            if content_data:
-                body = content_data['content']
-            else:
-                # File not found — treat as inline
-                print(f"  ⚠️ Glossary file not found: {definition} — treating as inline")
-                content_data = process_inline_content(definition)
-                body = content_data['content'] if content_data else ''
+        # Try as file first (with or without .md extension)
+        file_def = definition if definition.endswith('.md') else f'{definition}.md'
+        glossary_path = file_def if file_def.startswith('glossary/') else f'glossary/{file_def}'
+        content_data = read_markdown_file(glossary_path)
+        if content_data:
+            body = content_data['content']
         else:
-            # Inline content
+            # No file found — treat as inline content
             content_data = process_inline_content(definition)
             body = content_data['content'] if content_data else ''
 
