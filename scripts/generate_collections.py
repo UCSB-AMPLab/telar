@@ -145,8 +145,9 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
 
         # Process definition: file reference or inline content
         if definition.endswith('.md'):
-            # Try to load as markdown file (path is relative to components/texts/)
-            content_data = read_markdown_file(definition)
+            # Try to load as markdown file (path is relative to components/texts/glossary/)
+            glossary_path = definition if definition.startswith('glossary/') else f'glossary/{definition}'
+            content_data = read_markdown_file(glossary_path)
             if content_data:
                 body = content_data['content']
             else:
