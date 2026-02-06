@@ -219,7 +219,6 @@ Due to GitHub security restrictions, workflow files cannot be updated automatica
 Please manually copy these files from the Telar repository:
 
 1. `.github/workflows/build.yml` - Updated with search data generation step
-2. `.github/workflows/telar-tests.yml` - Updated with E2E test job
 
 Download from: https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows''',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows'
@@ -266,7 +265,6 @@ Debido a restricciones de seguridad de GitHub, los archivos de workflow no puede
 Por favor copia manualmente estos archivos del repositorio de Telar:
 
 1. `.github/workflows/build.yml` - Actualizado con paso de generacion de datos de busqueda
-2. `.github/workflows/telar-tests.yml` - Actualizado con pruebas E2E
 
 Descarga de: https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows''',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows'

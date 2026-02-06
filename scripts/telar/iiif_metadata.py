@@ -39,7 +39,7 @@ Helper functions `strip_html_tags()` and `clean_metadata_value()` sanitize
 extracted text by removing HTML markup, decoding entities, and normalizing
 whitespace. Many IIIF manifests contain HTML-formatted metadata.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import re

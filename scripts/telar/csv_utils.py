@@ -31,7 +31,7 @@ compatibility: it checks the `source_url` column first (v0.5.0+ standard),
 then falls back to the legacy `iiif_manifest` column (v0.4.x), returning
 an empty string if neither is present.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import pandas as pd

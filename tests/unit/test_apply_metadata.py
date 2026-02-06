@@ -11,7 +11,7 @@ Key behavior:
 - IIIF values used when CSV field is empty
 - Fields affected: title, description, creator, period, location, credit
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 """
 
 import sys

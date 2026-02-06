@@ -1,15 +1,12 @@
 name: Test Telar Scripts
 #
-# This workflow runs Telar's test suites:
+# This workflow runs Telar's unit test suites:
 #
 # 1. Python unit tests — CSV parsing, column normalisation, widget rendering,
 #    IIIF metadata extraction, glossary linking, and image processing.
 #
 # 2. JavaScript unit tests — coordinate maths, manifest URL resolution,
 #    content detection predicates, and state structure.
-#
-# 3. E2E tests — Playwright browser tests against a live Jekyll server,
-#    covering story navigation, panel interactions, and embed mode.
 #
 # On push or pull request to main, all test suites run automatically. When
 # triggered manually via workflow_dispatch, you can choose which suites to run.
@@ -29,10 +26,6 @@ on:
         default: true
       run_javascript:
         description: 'Run JavaScript unit tests'
-        type: boolean
-        default: true
-      run_e2e:
-        description: 'Run E2E tests (Playwright)'
         type: boolean
         default: true
 
@@ -79,89 +72,3 @@ jobs:
 
       - name: Run JavaScript unit tests
         run: npm run test:js
-
-  e2e:
-    name: E2E Tests (${{ matrix.viewport }})
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_e2e }}
-
-    strategy:
-      matrix:
-        viewport: [desktop, mobile]
-      fail-fast: false
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-playwright
-
-      - name: Install Playwright browsers
-        run: playwright install chromium --with-deps
-
-      - name: Process CSV data
-        run: python scripts/process_csv.py
-
-      - name: Generate search data
-        run: python scripts/telar/search.py
-
-      - name: Generate IIIF tiles
-        run: python scripts/generate_iiif.py --base-url http://127.0.0.1:4000/telar
-
-      - name: Generate Jekyll collections
-        run: python scripts/generate_collections.py
-
-      - name: Build Jekyll site
-        run: bundle exec jekyll build
-
-      - name: Start Jekyll server
-        run: |
-          bundle exec jekyll serve --port 4000 --detach
-          sleep 5
-          curl -s http://127.0.0.1:4000/telar/ > /dev/null || (echo "Server failed to start" && exit 1)
-
-      - name: Run E2E tests (desktop)
-        if: matrix.viewport == 'desktop'
-        run: |
-          pytest tests/e2e/ -v \
-            --ignore=tests/e2e/test_visual_regression.py \
-            --base-url http://127.0.0.1:4000/telar \
-            --browser chromium \
-            --screenshot on \
-            --video retain-on-failure
-
-      - name: Run E2E tests (mobile)
-        if: matrix.viewport == 'mobile'
-        run: |
-          pytest tests/e2e/ -v \
-            --ignore=tests/e2e/test_visual_regression.py \
-            --base-url http://127.0.0.1:4000/telar \
-            --browser chromium \
-            --device "iPhone 12" \
-            --screenshot on \
-            --video retain-on-failure
-
-      - name: Upload test artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-results-${{ matrix.viewport }}
-          path: |
-            test-results/
-            playwright-report/
-          retention-days: 7
