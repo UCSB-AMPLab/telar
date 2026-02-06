@@ -47,6 +47,10 @@ from telar.markdown import read_markdown_file, process_inline_content
 
 def generate_objects():
     """Generate object markdown files from objects.json"""
+    if not Path('_data/objects.json').exists():
+        print("No objects.json found — skipping object generation")
+        return
+
     with open('_data/objects.json', 'r') as f:
         objects = json.load(f)
 
