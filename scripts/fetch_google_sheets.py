@@ -21,7 +21,7 @@ The resulting CSV files are the input for the next build step:
 csv_to_json.py (the telar package), which processes them into the JSON
 data that Jekyll uses to render the site.
 
-Version: v0.7.0-beta
+Version: v0.8.0-beta
 
 Usage:
     python3 scripts/fetch_google_sheets.py
@@ -140,7 +140,7 @@ def main():
     print("-" * 70)
 
     # Skip tabs that shouldn't be fetched
-    skip_tabs = ['instructions', 'readme', 'help', 'info']
+    skip_tabs = ['instructions', 'instrucciones', 'readme', 'help', 'info']
 
     success_count = 0
     for tab_name, gid in tabs:
@@ -153,12 +153,15 @@ def main():
 
         # Determine output filename based on tab name
         # Known system tabs (English and Spanish)
-        system_tabs = {'project', 'proyecto', 'objects', 'objetos', 'instructions', 'instrucciones'}
+        system_tabs = {'project', 'proyecto', 'objects', 'objetos', 'glossary', 'glosario',
+                       'instructions', 'instrucciones'}
 
         if tab_lower == 'project' or tab_lower == 'proyecto':
             filename = 'project.csv' if tab_lower == 'project' else 'proyecto.csv'
         elif tab_lower == 'objects' or tab_lower == 'objetos':
             filename = 'objects.csv' if tab_lower == 'objects' else 'objetos.csv'
+        elif tab_lower == 'glossary' or tab_lower == 'glosario':
+            filename = 'glossary.csv' if tab_lower == 'glossary' else 'glosario.csv'
         elif tab_lower not in system_tabs and not tab_lower.startswith('#'):
             # Story tab: either semantic (your-story, tu-historia) or traditional (story-1, story-2)
             # v0.6.0+: Supports both formats for backward compatibility

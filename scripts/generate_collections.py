@@ -27,7 +27,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v0.8.0-beta
+Version: v0.8.1-beta
 """
 
 import json
@@ -44,6 +44,7 @@ from telar.widgets import process_widgets
 from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.markdown import read_markdown_file, process_inline_content
+from telar.core import find_csv_with_fallback
 
 def generate_objects():
     """Generate object markdown files from objects.json"""
@@ -275,7 +276,7 @@ def generate_glossary():
     """Generate glossary markdown files from user content and demo JSON.
 
     Reads from (in order of precedence):
-    - components/structures/glossary.csv (v0.8.0+ preferred)
+    - components/structures/glossary.csv or glosario.csv (v0.8.0+ preferred)
     - components/texts/glossary/*.md (legacy markdown files)
     - _data/demo-glossary.json (demo content from bundle)
 
@@ -293,7 +294,7 @@ def generate_glossary():
     # Load glossary terms for link processing (enables glossary-to-glossary linking)
     glossary_terms = load_glossary_terms()
 
-    csv_path = Path('components/structures/glossary.csv')
+    csv_path = Path(find_csv_with_fallback('components/structures/glossary', 'glosario'))
     md_path = Path('components/texts/glossary')
 
     # 1. Process user glossary from CSV (preferred) or markdown (legacy)
