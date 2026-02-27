@@ -31,7 +31,12 @@ demo content from user content. During story merging, layer content goes
 through the same widget, image, markdown, and glossary pipeline that
 regular stories use.
 
-Version: v0.7.0-beta
+Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
+`location` object fields; v0.8.0+ bundles use `year`, `object_type`,
+`subjects`, `featured`, and `source`. Both formats are supported — new fields
+are populated when present, old fields are ignored gracefully.
+
+Version: v0.8.1-beta
 """
 
 import json
@@ -133,6 +138,9 @@ def merge_demo_content(bundle):
             demo_count = 0
             for obj_id, obj_data in bundle['objects'].items():
                 if obj_id not in existing_ids:
+                    # Build object with v0.8.0 fields; fall back for v0.6.0 bundles
+                    # where 'location' was the field name and year/object_type/subjects
+                    # /featured were absent.
                     demo_obj = {
                         'object_id': obj_id,
                         'title': obj_data.get('title', ''),
@@ -141,9 +149,11 @@ def merge_demo_content(bundle):
                         'iiif_manifest': obj_data.get('source_url', ''),  # Backward compat
                         'creator': obj_data.get('creator', ''),
                         'period': obj_data.get('period', ''),
-                        'medium': obj_data.get('medium', ''),
-                        'dimensions': obj_data.get('dimensions', ''),
-                        'location': obj_data.get('location', ''),
+                        'year': obj_data.get('year', ''),
+                        'object_type': obj_data.get('object_type', ''),
+                        'subjects': obj_data.get('subjects', ''),
+                        'featured': obj_data.get('featured', ''),
+                        'source': obj_data.get('source', obj_data.get('location', '')),
                         'credit': obj_data.get('credit', ''),
                         'thumbnail': obj_data.get('thumbnail', ''),
                         '_demo': True

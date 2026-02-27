@@ -2,6 +2,22 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.8.1-beta] - 2026-02-26
+
+Onboarding and demo content release with documentation restructure, template simplification, and Spanish-language spreadsheet support.
+
+### Added
+
+- **Spanish-language spreadsheet support**: Google Sheets tabs named `glosario` are now recognized and routed correctly alongside `glossary`. The `instrucciones` tab is also properly skipped during fetch
+
+- **Updated demo content**: Demo bundles now include v0.8.0 metadata fields (year, object_type, subjects, featured, source) so demo objects appear correctly in the gallery filter system
+
+### Changed
+
+- **Google Sheets template simplified**: Reduced from 8 tabs to 6 by removing example story tabs. Users now duplicate `blank_template` / `plantilla_en_blanco` to create new stories
+
+- **Demo object merging**: The demo content system now handles both v0.6.0 bundles (with `medium`, `dimensions`, `location`) and v0.8.0+ bundles (with `year`, `object_type`, `subjects`, `featured`, `source`)
+
 ## [0.8.0-beta] - 2026-02-05
 
 Content and access release adding story protection, an enhanced gallery system, and glossary CSV support.

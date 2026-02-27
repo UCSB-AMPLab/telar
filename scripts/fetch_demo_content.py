@@ -20,16 +20,32 @@ The csv_to_json.py build script (telar package) merges demo content
 into the JSON data alongside the user's real content, marking demo
 items with a _demo flag so the site can style them differently.
 
-Version: v0.7.0-beta
+Version: v0.8.1-beta
 """
 
 import json
 import shutil
+import ssl
 import sys
 import urllib.request
 import urllib.error
 from pathlib import Path
 import yaml
+
+# macOS Python 3.13+ (python.org installer) does not link to the system
+# certificate store, causing HTTPS fetches to fail. Use certifi's bundle when
+# available so local builds work out of the box. No effect on Linux/CI.
+try:
+    import certifi
+    urllib.request.install_opener(
+        urllib.request.build_opener(
+            urllib.request.HTTPSHandler(
+                context=ssl.create_default_context(cafile=certifi.where())
+            )
+        )
+    )
+except ImportError:
+    pass
 
 
 def load_config():
