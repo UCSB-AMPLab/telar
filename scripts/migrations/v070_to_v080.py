@@ -261,10 +261,10 @@ See the documentation for details on each feature.''',
             {
                 'description': '''**Actualiza los workflows de GitHub Actions:**
 
-Debido a restricciones de seguridad de GitHub, los archivos de workflow no pueden actualizarse automaticamente.
+Debido a restricciones de seguridad de GitHub, los archivos de workflow no pueden actualizarse automáticamente.
 Por favor copia manualmente estos archivos del repositorio de Telar:
 
-1. `.github/workflows/build.yml` - Actualizado con paso de generacion de datos de busqueda
+1. `.github/workflows/build.yml` - Actualizado con paso de generación de datos de búsqueda
 
 Descarga de: https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows''',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows'
@@ -272,7 +272,7 @@ Descarga de: https://github.com/UCSB-AMPLab/telar/tree/main/.github/workflows'''
             {
                 'description': '''**Si usas GitHub Pages:**
 
-No se requieren acciones adicionales aparte de actualizar los archivos de workflow. Tu sitio usara automaticamente las nuevas funciones cuando se reconstruya.''',
+No se requieren acciones adicionales aparte de actualizar los archivos de workflow. Tu sitio usará automáticamente las nuevas funciones cuando se reconstruya.''',
             },
             {
                 'description': '''**Si trabajas con tu sitio localmente:**
@@ -294,9 +294,9 @@ pip install -r requirements.txt
 
 1. **Historias protegidas**: Agrega la columna `protected` a project.csv (yes/no) y configura `story_key` en _config.yml
 2. **Glosario CSV**: Crea `components/structures/glossary.csv` como alternativa a archivos markdown individuales
-3. **Explorar y buscar**: Se activa automaticamente en la pagina de objetos (desactiva con `browse_and_search: false` en _config.yml)
-4. **Objetos destacados**: Configura `show_sample_on_homepage: true` en _config.yml para mostrar objetos en la pagina principal
+3. **Explorar y buscar**: Se activa automáticamente en la página de objetos (desactiva con `browse_and_search: false` en _config.yml)
+4. **Objetos destacados**: Configura `show_sample_on_homepage: true` en _config.yml para mostrar objetos en la página principal
 
-Consulta la documentacion para detalles sobre cada funcion.''',
+Consulta la documentación para detalles sobre cada función.''',
             },
         ]
