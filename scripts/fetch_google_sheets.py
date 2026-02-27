@@ -21,7 +21,7 @@ The resulting CSV files are the input for the next build step:
 csv_to_json.py (the telar package), which processes them into the JSON
 data that Jekyll uses to render the site.
 
-Version: v0.8.0-beta
+Version: v0.8.1-beta
 
 Usage:
     python3 scripts/fetch_google_sheets.py

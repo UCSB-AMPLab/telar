@@ -36,7 +36,7 @@ Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
 `subjects`, `featured`, and `source`. Both formats are supported — new fields
 are populated when present, old fields are ignored gracefully.
 
-Version: v0.8.0-beta
+Version: v0.8.1-beta
 """
 
 import json
