@@ -10,6 +10,7 @@
      data-y="{{ include.y }}"
      data-zoom="{{ include.zoom }}"
      data-region="{{ include.region }}"
+     {% if include.page %}data-page="{{ include.page }}"{% endif %}
      style="z-index: {{ include.step_number }}">
 
   <!-- Main content wrapper -->

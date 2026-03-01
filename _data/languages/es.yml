@@ -44,19 +44,19 @@ object:
 
   # Controles del visor
   viewer:
-    fullscreen: ""
-    exit_fullscreen: ""
-    thumbnails: ""
-    page: ""
+    fullscreen: "Pantalla completa"
+    exit_fullscreen: "Cerrar pantalla completa"
+    thumbnails: "Miniaturas"
+    page: "Página"
 
   # Herramienta de identificación de coordenadas
   coordinates:
     heading: "Instrucciones"
-    page_label: ""
+    page_label: "Página"
     x_label: "X"
     y_label: "Y"
     zoom_label: "Zoom"
-    copy_page_tooltip: ""
+    copy_page_tooltip: "Copiar número de página"
     instructions_p1: "Usa este panel para identificar las coordenadas de las ubicaciones en una imagen para tu historia. Las coordenadas se actualizan mientras haces paneo o zoom sobre la imagen con el mouse haciendo clic, arrastrando y usando la rueda."
     instructions_p2: "Cuando encuentres una ubicación, anota los valores de X, Y y Zoom para incluirlos en tu hoja de cálculo de estructura. También puedes usar los botones de la derecha para copiar las tres coordenadas de una sola vez."
     copy_x_tooltip: "Copiar coordenada X"

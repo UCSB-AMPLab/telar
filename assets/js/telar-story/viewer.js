@@ -57,32 +57,42 @@ export function buildObjectsIndex() {
  * manifest built from the site's base path.
  *
  * @param {string} objectId - The object identifier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {string} The manifest URL.
  */
-export function getManifestUrl(objectId) {
+export function getManifestUrl(objectId, page) {
   const object = state.objectsIndex[objectId];
 
   if (!object) {
     console.warn('Object not found:', objectId);
-    return buildLocalInfoJsonUrl(objectId);
+    return buildLocalInfoJsonUrl(objectId, page);
   }
 
   const sourceUrl = object.source_url || object.iiif_manifest;
   if (sourceUrl && sourceUrl.trim() !== '') {
-    return sourceUrl;
+    return sourceUrl;  // External manifests: page handling deferred
   }
 
-  return buildLocalInfoJsonUrl(objectId);
+  return buildLocalInfoJsonUrl(objectId, page);
 }
 
 /**
  * Build a local IIIF manifest URL from the site's base path.
  *
+ * For multi-page objects (PDFs), when a page > 1 is specified, returns
+ * the per-page single-canvas manifest URL instead of the root manifest.
+ *
  * @param {string} objectId - The object identifier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {string} Full URL to the local manifest.json.
  */
-function buildLocalInfoJsonUrl(objectId) {
+function buildLocalInfoJsonUrl(objectId, page) {
   const basePath = getBasePath();
+  if (page && page > 1) {
+    const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/page-${page}/manifest.json`;
+    console.log('Building local IIIF page manifest URL:', manifestUrl);
+    return manifestUrl;
+  }
   const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/manifest.json`;
   console.log('Building local IIIF manifest URL:', manifestUrl);
   return manifestUrl;
@@ -116,9 +126,10 @@ function buildLocalInfoJsonUrl(objectId) {
  * @param {number} [x] - Normalised x position (0–1).
  * @param {number} [y] - Normalised y position (0–1).
  * @param {number} [zoom] - Zoom multiplier relative to home zoom.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {ViewerCard|null} The created card, or null on error.
  */
-export function createViewerCard(objectId, zIndex, x, y, zoom) {
+export function createViewerCard(objectId, zIndex, x, y, zoom, page) {
   const container = document.getElementById('viewer-cards-container');
 
   const cardElement = document.createElement('div');
@@ -134,9 +145,9 @@ export function createViewerCard(objectId, zIndex, x, y, zoom) {
   cardElement.appendChild(viewerDiv);
   container.appendChild(cardElement);
 
-  console.log(`Created viewer card for ${objectId} with z-index ${zIndex}, will snap to x=${x}, y=${y}, zoom=${zoom}`);
+  console.log(`Created viewer card for ${objectId} with z-index ${zIndex}, will snap to x=${x}, y=${y}, zoom=${zoom}${page ? `, page=${page}` : ''}`);
 
-  const manifestUrl = getManifestUrl(objectId);
+  const manifestUrl = getManifestUrl(objectId, page);
   if (!manifestUrl) {
     console.error('Could not determine manifest URL for:', objectId);
     return null;
@@ -203,9 +214,10 @@ export function createViewerCard(objectId, zIndex, x, y, zoom) {
  * @param {number} [x] - Normalised x position.
  * @param {number} [y] - Normalised y position.
  * @param {number} [zoom] - Zoom multiplier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {ViewerCard|null}
  */
-export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom) {
+export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom, page) {
   console.log(`getOrCreateViewerCard called for ${objectId}`);
   console.log(`Current viewerCards: ${state.viewerCards.map(vc => vc.objectId).join(', ')}`);
 
@@ -231,7 +243,7 @@ export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom) {
   }
 
   console.log(`Creating new viewer card for ${objectId}`);
-  return createViewerCard(objectId, zIndex, x, y, zoom);
+  return createViewerCard(objectId, zIndex, x, y, zoom, page);
 }
 
 /**
@@ -278,8 +290,9 @@ export function initializeFirstViewer() {
   const x = firstRealStep ? parseFloat(firstRealStep.x) : undefined;
   const y = firstRealStep ? parseFloat(firstRealStep.y) : undefined;
   const zoom = firstRealStep ? parseFloat(firstRealStep.zoom) : undefined;
+  const page = firstRealStep?.page ? parseInt(firstRealStep.page, 10) : undefined;
 
-  const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom);
+  const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom, page);
 
   if (viewerCard) {
     state.currentViewerCard = viewerCard;
@@ -470,11 +483,12 @@ function activateViewerCard(newViewerCard, objectId, options = {}) {
  * @param {number} zoom - Zoom multiplier.
  * @param {HTMLElement} stepElement - The text step element in the page.
  * @param {string} [direction='forward'] - Navigation direction.
+ * @param {number} [page] - Optional page number for multi-page objects.
  */
-export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction = 'forward') {
-  console.log(`Switching to object: ${objectId} at step ${stepNumber} with position x=${x}, y=${y}, zoom=${zoom} (${direction})`);
+export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction = 'forward', page) {
+  console.log(`Switching to object: ${objectId} at step ${stepNumber} with position x=${x}, y=${y}, zoom=${zoom} (${direction})${page ? `, page=${page}` : ''}`);
 
-  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
+  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom, page);
 
   activateViewerCard(newViewerCard, objectId, {
     onReady: (card) => {
@@ -501,11 +515,12 @@ export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, di
  * @param {number} x - Normalised x position.
  * @param {number} y - Normalised y position.
  * @param {number} zoom - Zoom multiplier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  */
-export function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
-  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}`);
+export function switchToObjectMobile(objectId, stepNumber, x, y, zoom, page) {
+  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}${page ? `, page=${page}` : ''}`);
 
-  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
+  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom, page);
   activateViewerCard(newViewerCard, objectId);
 }
 
@@ -622,9 +637,10 @@ export function preloadNearbyViewers(currentIndex, ahead, behind) {
     const x = parseFloat(step.dataset.x);
     const y = parseFloat(step.dataset.y);
     const zoom = parseFloat(step.dataset.zoom);
+    const page = step.dataset.page ? parseInt(step.dataset.page, 10) : undefined;
 
     console.log(`Preloading viewer for step ${idx}: ${objectId}`);
-    getOrCreateViewerCard(objectId, idx, x, y, zoom);
+    getOrCreateViewerCard(objectId, idx, x, y, zoom, page);
   }
 }
 
