@@ -88,7 +88,7 @@ export function getManifestUrl(objectId, page) {
  */
 function buildLocalInfoJsonUrl(objectId, page) {
   const basePath = getBasePath();
-  if (page && page > 1) {
+  if (page) {
     const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/page-${page}/manifest.json`;
     console.log('Building local IIIF page manifest URL:', manifestUrl);
     return manifestUrl;
