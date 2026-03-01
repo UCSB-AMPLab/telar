@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 """
-IIIF Utility Functions
+IIIF Shared Utilities for Tile Generation and Manifest Creation
 
-Shared functions for IIIF tile generation and manifest creation, used by
-both generate_iiif.py (single-image pipeline) and process_pdf.py
-(multi-page PDF pipeline).
+IIIF tile generation in Telar has two entry points: generate_iiif.py
+handles regular images (one image per object), and process_pdf.py
+handles PDF documents (one image per page, many pages per object).
+Both need the same core operations — detecting the tile backend,
+preprocessing images into clean JPEGs, running libvips to slice them
+into tiles, patching the resulting info.json, generating the full-size
+canonical image, copying a base image for the viewer, creating IIIF
+Presentation v3 manifests, and loading object metadata from
+objects.json.
 
-Extracted from generate_iiif.py to avoid duplication between the two
-entry points.
+This module holds all of those shared functions. It was extracted from
+generate_iiif.py when PDF support was added, so that the two scripts
+could share the same tile-generation and manifest-creation code
+without duplicating it.
+
+None of these functions are meant to be run directly. They are
+imported by the two entry-point scripts.
 
 Version: v0.9.0-beta
 """
