@@ -260,16 +260,17 @@ layout: default
   </div>
 </div>
 
-<!-- UniversalViewer IIIF Viewer -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/uv.css">
-<script src="https://cdn.jsdelivr.net/npm/universalviewer@4.0.0/dist/umd/UV.js"></script>
-<script>
+<!-- Tify IIIF Viewer -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tify@0.35.0/dist/tify.css">
+<script type="module">
+  import Tify from 'https://cdn.jsdelivr.net/npm/tify@0.35.0/dist/tify.js';
+
   // Expose language strings to JavaScript
   window.telarCoordLang = {
     copied: "{{ lang.object.coordinates.copied }}"
   };
 
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', async function() {
     {% assign external_source = page.source_url | default: page.iiif_manifest %}
     {% if external_source and external_source != "" %}
     const manifestUrl = '{{ external_source }}';
@@ -280,95 +281,32 @@ layout: default
     return;
     {% endif %}
 
-    console.log('Loading IIIF resource with UniversalViewer:', manifestUrl);
+    console.log('Loading IIIF resource with Tify:', manifestUrl);
 
-    // Clear localStorage to prevent UV from restoring cached viewport state
+    // Initialize Tify with IIIF manifest
+    const tify = new Tify({
+      container: '#object-viewer',
+      manifestUrl: manifestUrl,
+      panels: [],
+      urlQueryKey: false,
+    });
+
+    // Wait for Tify's OpenSeadragon viewer to be ready
     try {
-      localStorage.removeItem('uv');
-      console.log('Cleared UV localStorage');
-    } catch (e) {
-      console.warn('Could not clear localStorage:', e);
-    }
-
-    // Clear URL hash to prevent UV from restoring previous viewport state
-    if (window.location.hash) {
-      console.log('Clearing URL hash to reset viewport');
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
-
-    // Initialize UniversalViewer with IIIF manifest
-    // Use embedded: true to disable UV's state persistence
-    var urlAdaptor = new UV.IIIFURLAdaptor();
-    const data = urlAdaptor.getInitialData({
-      manifest: manifestUrl,
-      embedded: true  // true = disable state persistence in URL
-    });
-
-    var uv = UV.init('object-viewer', data);
-    // Don't bind urlAdaptor to prevent UV from updating URL with viewport state
-    // urlAdaptor.bindTo(uv);
-
-    // Store UV instance globally for coordinate tracking
-    window.uvInstance = uv;
-
-    // Set up coordinate tracking when UV is ready - use multiple attempts at different timings
-    uv.on('created', function() {
-      console.log('UV created event fired');
-
-      // Try immediately
-      setTimeout(function() {
-        console.log('First attempt to setup tracking (100ms)');
-        setupCoordinateTracking();
-      }, 100);
-
-      // Try again after 500ms
-      setTimeout(function() {
-        console.log('Second attempt to setup tracking (500ms)');
-        setupCoordinateTracking();
-      }, 500);
-
-      // And again after 2 seconds as fallback
-      setTimeout(function() {
-        console.log('Third attempt to setup tracking (2000ms)');
-        setupCoordinateTracking();
-      }, 2000);
-    });
-  });
-
-  // Coordinate tracking functionality
-  let osdViewer = null;
-  let updateInterval = null;
-
-  let trackingSetup = false;
-
-  function setupCoordinateTracking() {
-    // Try to access OpenSeadragon viewer from UniversalViewer
-    let viewer = null;
-    if (window.uvInstance && window.uvInstance._assignedContentHandler) {
-      if (window.uvInstance._assignedContentHandler.viewer) {
-        viewer = window.uvInstance._assignedContentHandler.viewer;
-      } else if (window.uvInstance._assignedContentHandler.extension) {
-        const ext = window.uvInstance._assignedContentHandler.extension;
-        if (ext.centerPanel && ext.centerPanel.viewer) {
-          viewer = ext.centerPanel.viewer;
-        }
-      }
-    }
-
-    if (!viewer) {
-      console.warn('Could not access OpenSeadragon viewer for coordinate tracking (viewer not ready yet)');
+      await tify.ready;
+    } catch (err) {
+      console.error('Tify failed to initialize:', err);
       return;
     }
 
-    // Store viewer reference globally
-    osdViewer = viewer;
+    // Access OpenSeadragon viewer directly via Tify's public API
+    const osdViewer = tify.viewer;
     console.log('Got OSD viewer reference, world items:', osdViewer.world.getItemCount());
 
-    // If no items loaded yet, we can set constraints before tiles load
+    // If no items loaded yet, set up viewport for when image loads
     if (osdViewer.world.getItemCount() === 0) {
       console.log('No items loaded yet - setting up viewport for when image loads');
 
-      // Reset immediately when image opens
       osdViewer.addHandler('open', function() {
         console.log('OSD open event - forcing goHome()');
         setTimeout(function() {
@@ -376,70 +314,66 @@ layout: default
         }, 100);
       });
     } else {
-      // Items already loaded, force viewport to home
       console.log('Items already loaded, forcing goHome()');
       osdViewer.viewport.goHome(true);
     }
 
-    // Set up event handlers only once
-    if (!trackingSetup) {
-      trackingSetup = true;
-      console.log('Setting up coordinate tracking event handlers');
+    // Listen for 'add-item' event to reset after tiles load
+    osdViewer.world.addHandler('add-item', function() {
+      console.log('Image loaded (add-item event), resetting to home position');
+      setTimeout(function() {
+        osdViewer.viewport.goHome(true);
+      }, 50);
+    });
 
-      // Listen for 'add-item' event to reset again after tiles load
-      osdViewer.world.addHandler('add-item', function() {
-        console.log('Image loaded (add-item event), resetting to home position');
-        setTimeout(function() {
-          osdViewer.viewport.goHome(true);
-        }, 50);
-      });
+    // Listen for 'open-failed' to catch any errors
+    osdViewer.addHandler('open-failed', function(event) {
+      console.error('OpenSeadragon open failed:', event);
+    });
 
-      // Listen for 'open-failed' to catch any errors
-      osdViewer.addHandler('open-failed', function(event) {
-        console.error('OpenSeadragon open failed:', event);
-      });
+    // Coordinate tracking
+    function updateCoordinates() {
+      if (!osdViewer || !osdViewer.viewport) return;
 
-      // Add viewport change handlers
-      osdViewer.addHandler('animation', updateCoordinates);
-      osdViewer.addHandler('animation-finish', updateCoordinates);
-      osdViewer.addHandler('zoom', updateCoordinates);
-      osdViewer.addHandler('pan', updateCoordinates);
+      try {
+        const viewport = osdViewer.viewport;
+        const center = viewport.getCenter();
+        const bounds = viewport.getHomeBounds();
 
-      // Update periodically
-      updateInterval = setInterval(updateCoordinates, 500);
+        // Convert to normalized 0-1 coordinates
+        const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
+        const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
 
-      // Initial update
-      updateCoordinates();
+        // Get zoom relative to home zoom
+        const homeZoom = viewport.getHomeZoom();
+        const currentZoom = viewport.getZoom();
+        const zoom = Math.max(0.1, Math.min(10, currentZoom / homeZoom));
+
+        // Update display
+        document.getElementById('coord-x').textContent = x.toFixed(3);
+        document.getElementById('coord-y').textContent = y.toFixed(3);
+        document.getElementById('coord-zoom').textContent = zoom.toFixed(1);
+      } catch (error) {
+        console.error('Error updating coordinates:', error);
+      }
     }
-  }
 
-  function updateCoordinates() {
-    if (!osdViewer || !osdViewer.viewport) return;
+    // Add viewport change handlers
+    osdViewer.addHandler('animation', updateCoordinates);
+    osdViewer.addHandler('animation-finish', updateCoordinates);
+    osdViewer.addHandler('zoom', updateCoordinates);
+    osdViewer.addHandler('pan', updateCoordinates);
 
-    try {
-      const viewport = osdViewer.viewport;
-      const center = viewport.getCenter();
-      const bounds = viewport.getHomeBounds();
+    // Update periodically
+    setInterval(updateCoordinates, 500);
 
-      // Convert to normalized 0-1 coordinates
-      const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
-      const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
+    // Initial update
+    updateCoordinates();
+  });
+</script>
 
-      // Get zoom relative to home zoom
-      const homeZoom = viewport.getHomeZoom();
-      const currentZoom = viewport.getZoom();
-      const zoom = Math.max(0.1, Math.min(10, currentZoom / homeZoom));
-
-      // Update display
-      document.getElementById('coord-x').textContent = x.toFixed(3);
-      document.getElementById('coord-y').textContent = y.toFixed(3);
-      document.getElementById('coord-zoom').textContent = zoom.toFixed(1);
-    } catch (error) {
-      console.error('Error updating coordinates:', error);
-    }
-  }
-
-  // Copy button functionality and panel visibility
+<!-- Copy button functionality and panel visibility -->
+<script>
   document.addEventListener('DOMContentLoaded', function() {
     // Hide/show button when panel opens/closes
     const coordinatePanel = document.getElementById('coordinatePanel');

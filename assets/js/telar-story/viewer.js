@@ -4,14 +4,14 @@
  * This module manages the IIIF viewer cards that display exhibition objects
  * alongside story steps. Each object gets its own viewer card — a container
  * element that the script creates and adds to the page at runtime, holding
- * a UniversalViewer instance inside it. The cards are not part of the HTML
- * template because the number needed depends on the story's content.
+ * a Tify instance inside it. The cards are not part of the HTML template
+ * because the number needed depends on the story's content.
  *
- * UniversalViewer instances are expensive: each one fetches an IIIF manifest
- * over the network, initialises OpenSeadragon (the image viewer library
- * inside UV), and allocates GPU memory for rendering high-resolution tiles.
- * Creating all viewers at page load would exhaust memory on mobile devices
- * and delay the page becoming responsive.
+ * Tify instances are expensive: each one fetches an IIIF manifest over the
+ * network, initialises OpenSeadragon (the image viewer library inside Tify),
+ * and allocates GPU memory for rendering high-resolution tiles. Creating all
+ * viewers at page load would exhaust memory on mobile devices and delay the
+ * page becoming responsive.
  *
  * To solve this, the module uses a card pool with a configurable maximum
  * (default 10 cards). When the user navigates to a step that needs an object
@@ -28,7 +28,7 @@
  * manifest prefetching at page load to warm the browser cache and measure
  * connection speed, loading shimmer states, and the object credits badge.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
 import { state } from './state.js';
@@ -94,7 +94,7 @@ function buildLocalInfoJsonUrl(objectId) {
  * @typedef {Object} ViewerCard
  * @property {string} objectId - The object this card displays.
  * @property {HTMLElement} element - The card's container element in the page.
- * @property {Object} uvInstance - The UniversalViewer instance.
+ * @property {Object} tifyInstance - The Tify viewer instance.
  * @property {Object|null} osdViewer - The OpenSeadragon viewer (null until ready).
  * @property {boolean} isReady - Whether the OSD viewer has initialised.
  * @property {Object|null} pendingZoom - Queued position to apply when ready.
@@ -104,9 +104,9 @@ function buildLocalInfoJsonUrl(objectId) {
 /**
  * Create a new viewer card for an object.
  *
- * Builds a container element, initialises a UniversalViewer instance inside
- * it, and begins polling for the OpenSeadragon viewer to become available.
- * Once ready, any pending zoom position is applied.
+ * Builds a container element, initialises a Tify instance inside it, and
+ * waits for the OpenSeadragon viewer to become available via Tify's ready
+ * promise. Once ready, any pending zoom position is applied.
  *
  * If the card pool exceeds the configured maximum, the oldest card is
  * destroyed to free memory.
@@ -142,80 +142,42 @@ export function createViewerCard(objectId, zIndex, x, y, zoom) {
     return null;
   }
 
-  // Initialise UniversalViewer
-  const urlAdaptor = new UV.IIIFURLAdaptor();
-  const data = urlAdaptor.getInitialData({
-    manifest: manifestUrl,
-    embedded: true,
+  // Initialise Tify
+  const tifyInstance = new window.Tify({
+    container: '#' + viewerId,
+    manifestUrl: manifestUrl,
+    panels: [],
+    urlQueryKey: false,
   });
-
-  const uvInstance = UV.init(viewerId, data);
-  urlAdaptor.bindTo(uvInstance);
 
   const viewerCard = {
     objectId,
     element: cardElement,
-    uvInstance,
+    tifyInstance,
     osdViewer: null,
     isReady: false,
     pendingZoom: (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) ? { x, y, zoom, snap: true } : null,
     zIndex,
   };
 
-  // Poll for OpenSeadragon readiness instead of using a fixed delay
-  uvInstance.on('created', function () {
-    let pollCount = 0;
-    const MAX_POLLS = 50; // 5 seconds max (50 × 100 ms)
+  // Wait for Tify's OpenSeadragon viewer to be ready
+  tifyInstance.ready.then(() => {
+    viewerCard.osdViewer = tifyInstance.viewer;
+    viewerCard.isReady = true;
+    console.log(`Viewer card for ${objectId} is ready`);
 
-    const checkViewerReady = () => {
-      pollCount++;
-      let newViewer = null;
-
-      if (uvInstance._assignedContentHandler) {
-        if (uvInstance._assignedContentHandler.viewer) {
-          newViewer = uvInstance._assignedContentHandler.viewer;
-          console.log(`Got viewer via direct access for ${objectId} after ${pollCount * 100}ms`);
-        } else if (uvInstance._assignedContentHandler.extension) {
-          const ext = uvInstance._assignedContentHandler.extension;
-          if (ext.centerPanel && ext.centerPanel.viewer) {
-            newViewer = ext.centerPanel.viewer;
-            console.log(`Got viewer via extension path for ${objectId} after ${pollCount * 100}ms`);
-          }
-        }
-      }
-
-      if (newViewer) {
-        viewerCard.osdViewer = newViewer;
-        viewerCard.isReady = true;
-        console.log(`Viewer card for ${objectId} is ready after ${pollCount * 100}ms`);
-
-        // Hide UV controls
-        setTimeout(() => {
-          const leftPanel = cardElement.querySelector('.leftPanel');
-          if (leftPanel) {
-            leftPanel.style.display = 'none';
-            leftPanel.style.visibility = 'hidden';
-          }
-        }, 100);
-
-        // Execute pending position
-        if (viewerCard.pendingZoom) {
-          if (viewerCard.pendingZoom.snap) {
-            snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-          } else {
-            animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-          }
-          viewerCard.pendingZoom = null;
-        }
-      } else if (pollCount < MAX_POLLS) {
-        setTimeout(checkViewerReady, 100);
+    // Execute pending position
+    if (viewerCard.pendingZoom) {
+      if (viewerCard.pendingZoom.snap) {
+        snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
       } else {
-        console.warn(`Viewer for ${objectId} failed to initialize after 5s, allowing transition`);
-        viewerCard.isReady = true;
+        animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
       }
-    };
-
-    checkViewerReady();
+      viewerCard.pendingZoom = null;
+    }
+  }).catch(err => {
+    console.error(`Tify failed to initialize for ${objectId}:`, err);
+    viewerCard.isReady = true; // Allow navigation to proceed
   });
 
   state.viewerCards.push(viewerCard);
@@ -284,7 +246,10 @@ export function destroyViewerCard(viewerCard) {
     viewerCard.element.parentNode.removeChild(viewerCard.element);
   }
 
-  viewerCard.uvInstance = null;
+  if (viewerCard.tifyInstance && typeof viewerCard.tifyInstance.destroy === 'function') {
+    viewerCard.tifyInstance.destroy();
+  }
+  viewerCard.tifyInstance = null;
   viewerCard.osdViewer = null;
 }
 

@@ -1,17 +1,16 @@
 /**
  * Viewer
  *
- * Overrides for UniversalViewer, the IIIF image viewer embedded in story and
- * object pages. UV ships with its own controls (zoom buttons, thumbnails panel,
- * download, share, settings) which are hidden in Telar to present a clean
- * viewing experience. The overrides target specific UV component classes and
- * force the central image area to fill the available space.
+ * Overrides for the Tify IIIF image viewer embedded in story and object pages.
+ * Tify ships with its own UI (header, panel buttons, media controls) which is
+ * hidden in Telar to present a clean viewing experience. The overrides target
+ * Tify component classes and force the image area to fill the available space.
  *
- * Story pages and object pages both need the same controls hidden but use
+ * Story pages and object pages both need the same chrome hidden but use
  * different parent selectors (.viewer-instance vs #object-viewer), so a shared
  * mixin generates the hiding rules for each context.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
 @use 'mixins' as *;
@@ -27,41 +26,18 @@
   height: 600px;
 }
 
-/* UniversalViewer - Clean Story Viewer Display */
-/* Hide all UV controls in story pages for clean presentation */
-@include hide-uv-controls('.viewer-instance');
-
-/* Extra aggressive hiding for left panel thumbnails/color bars */
-.viewer-card .leftPanel,
-.viewer-card .thumbsView,
-.viewer-card .galleryView,
-.uv .leftPanel,
-.uv .thumbsView,
-.uv .galleryView {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  width: 0 !important;
+/* Black viewer background — targets Tify internals (same pattern as Zasqua) */
+.viewer-instance .tify-scan,
+.viewer-instance .openseadragon-container,
+#object-viewer .tify-scan,
+#object-viewer .openseadragon-container {
+  background: #000 !important;
 }
 
-/* UniversalViewer - Clean Object Page Display */
-/* Hide all UV controls on object pages for clean presentation */
-@include hide-uv-controls('#object-viewer');
+/* Tify - Clean Story Viewer Display */
+/* Hide all Tify chrome in story pages for clean presentation */
+@include hide-viewer-chrome('.viewer-instance');
 
-/* Hide UniversalViewer UI controls for cleaner viewing */
-.uv .leftPanel,
-.uv .rightPanel,
-.uv .footerPanel .options,
-.uv .headerPanel .options,
-.uv .moreInfo,
-.uv .download,
-.uv .share,
-.uv .bookmark,
-.uv .toggle {
-  display: none !important;
-}
-
-/* Keep only essential navigation controls */
-.uv .footerPanel .zoom {
-  display: block;
-}
+/* Tify - Clean Object Page Display */
+/* Hide all Tify chrome on object pages for clean presentation */
+@include hide-viewer-chrome('#object-viewer');
