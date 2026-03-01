@@ -111,6 +111,9 @@ def process_story(df, christmas_tree=False):
         # Build case-insensitive lookup map for objects
         objects_lower_map = {k.lower(): k for k in objects_data.keys()}
 
+        # Extensions to strip from object references in story CSV
+        strippable_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf']
+
         for idx, row in df.iterrows():
             object_id = str(row.get('object', '')).strip()
             step_num = row.get('step', 'unknown')
@@ -118,6 +121,15 @@ def process_story(df, christmas_tree=False):
             # Skip if no object specified
             if not object_id:
                 continue
+
+            # Strip file extensions from object references (users may type "photo.jpg" instead of "photo")
+            for ext in strippable_extensions:
+                if object_id.lower().endswith(ext):
+                    stripped_id = object_id[:-len(ext)]
+                    print(f"  [INFO] Stripped extension from story object reference: '{object_id}' -> '{stripped_id}'")
+                    object_id = stripped_id
+                    df.at[idx, 'object'] = object_id
+                    break
 
             # Check if object exists (case-insensitive)
             actual_object_id = None

@@ -256,7 +256,7 @@ def process_objects(df, christmas_tree=False):
         df = inject_christmas_tree_errors(df)
 
     # Validate and clean object_id values
-    valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg']
+    valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf']
     for idx, row in df.iterrows():
         object_id = str(row.get('object_id', '')).strip()
         original_id = object_id
