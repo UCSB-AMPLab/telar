@@ -233,6 +233,7 @@ function renderDecryptedSteps(steps) {
     stepEl.setAttribute('data-y', step.y || '');
     stepEl.setAttribute('data-zoom', step.zoom || '');
     stepEl.setAttribute('data-region', step.region || '');
+    if (step.page) stepEl.setAttribute('data-page', step.page);
     stepEl.style.zIndex = step.step || stepIndex;
 
     // Build inner HTML
