@@ -5,13 +5,13 @@ This module deals with Telar's glossary system, which lets authors link
 terms in story panel text to glossary definitions. Glossary terms can be
 defined in two ways:
 
-1. **CSV file** (v0.8.0+): `components/spreadsheets/glossary.csv` (or
+1. **CSV file** (v0.8.0+): `telar-content/spreadsheets/glossary.csv` (or
    `glosario.csv` for Spanish-language spreadsheets) with columns `term_id`,
    `title`, `definition`, and `related_terms`. This is the preferred method
    for spreadsheet-first workflows.
 
 2. **Markdown files** (legacy): Individual `.md` files in
-   `components/texts/glossary/`, each with YAML frontmatter containing
+   `telar-content/texts/glossary/`, each with YAML frontmatter containing
    `term_id` and `title`.
 
 If both exist, CSV takes precedence and a warning is shown.
@@ -85,7 +85,7 @@ def load_glossary_from_markdown(glossary_dir):
     Load glossary terms from markdown files (legacy method).
 
     Args:
-        glossary_dir: Path to components/texts/glossary/
+        glossary_dir: Path to telar-content/texts/glossary/
 
     Returns:
         dict: Dictionary mapping term_id to term title
@@ -130,12 +130,12 @@ def load_glossary_terms():
     Returns:
         dict: Dictionary mapping term_id to term title, or empty dict if no glossary found
     """
-    csv_path = Path('components/spreadsheets/glossary.csv')
+    csv_path = Path('telar-content/spreadsheets/glossary.csv')
     if not csv_path.exists():
-        fallback = Path('components/spreadsheets/glosario.csv')
+        fallback = Path('telar-content/spreadsheets/glosario.csv')
         if fallback.exists():
             csv_path = fallback
-    md_path = Path('components/texts/glossary')
+    md_path = Path('telar-content/texts/glossary')
 
     # Check if CSV exists (preferred source)
     if csv_path.exists():

@@ -12,7 +12,7 @@ browser or network.
 Telar supports two ways of serving images: external (the object's
 source_url points to an existing IIIF server, e.g. a library's digital
 collection — no tile generation needed) and self-hosted (the user
-places image files in components/objects/ and this script generates
+places image files in telar-content/objects/ and this script generates
 static IIIF Level 0 tiles and a Presentation API v3 manifest for each
 one).
 
@@ -191,12 +191,12 @@ def get_base_url_from_config():
         # Silently fail - caller will use fallback
         return None
 
-def generate_iiif_tiles(source_dir='components/objects', output_dir='iiif/objects', base_url=None):
+def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/objects', base_url=None):
     """
     Generate IIIF tiles for objects listed in objects.json
 
     Args:
-        source_dir: Directory containing source images (default: components/objects)
+        source_dir: Directory containing source images (default: telar-content/objects)
         output_dir: Directory to output IIIF tiles and manifests (default: iiif/objects)
         base_url: Base URL for the site
     """
@@ -209,7 +209,7 @@ def generate_iiif_tiles(source_dir='components/objects', output_dir='iiif/object
 
     if not source_path.exists():
         # Check for old directory name (pre-v0.9.0)
-        old_path = Path(str(source_dir).replace('components/objects', 'components/images'))
+        old_path = Path(str(source_dir).replace('telar-content/objects', 'telar-content/images'))
         if old_path.exists() and str(old_path) != str(source_path):
             print(f"⚠️  Found '{old_path}' — please rename to '{source_path}'")
             print(f"   Run: mv {old_path} {source_path}")
@@ -335,8 +335,8 @@ def main():
     )
     parser.add_argument(
         '--source-dir',
-        default='components/objects',
-        help='Source directory containing images and PDFs (default: components/objects)'
+        default='telar-content/objects',
+        help='Source directory containing images and PDFs (default: telar-content/objects)'
     )
     parser.add_argument(
         '--output-dir',

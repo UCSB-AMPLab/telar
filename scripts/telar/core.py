@@ -23,7 +23,7 @@ Spanish equivalent (e.g., `proyecto.csv`).
 `main()` drives the full build. It fetches demo content if enabled,
 checks for Christmas Tree Mode in `_config.yml`, then converts the three
 CSV types in order: project setup, objects, and story files. Story files
-are discovered dynamically — every CSV in `components/spreadsheets/` that
+are discovered dynamically — every CSV in `telar-content/spreadsheets/` that
 is not a system file (`project.csv`, `objects.csv`, or their Spanish
 equivalents) is treated as a story. After all CSVs are converted, demo
 content is loaded and merged if available. Protected stories (v0.8.0+)
@@ -121,7 +121,7 @@ def find_csv_with_fallback(base_path, spanish_name):
     Checks for English name first, then Spanish equivalent.
 
     Args:
-        base_path: Base path like 'components/spreadsheets/project'
+        base_path: Base path like 'telar-content/spreadsheets/project'
         spanish_name: Spanish filename like 'proyecto'
 
     Returns:
@@ -249,9 +249,9 @@ def main():
     data_dir = Path('_data')
     data_dir.mkdir(exist_ok=True)
 
-    structures_dir = Path('components/spreadsheets')
+    structures_dir = Path('telar-content/spreadsheets')
     if not structures_dir.exists():
-        old_dir = Path('components/structures')
+        old_dir = Path('telar-content/structures')
         if old_dir.exists():
             print(f"⚠️  Found '{old_dir}' — please rename to '{structures_dir}'")
             print(f"   Run: mv {old_dir} {structures_dir}")
@@ -261,7 +261,7 @@ def main():
     print("-" * 50)
 
     # Convert project setup (with bilingual fallback: project.csv or proyecto.csv)
-    project_path = find_csv_with_fallback('components/spreadsheets/project', 'proyecto')
+    project_path = find_csv_with_fallback('telar-content/spreadsheets/project', 'proyecto')
     csv_to_json(
         project_path,
         '_data/project.json',
@@ -269,7 +269,7 @@ def main():
     )
 
     # Convert objects (with bilingual fallback: objects.csv or objetos.csv)
-    objects_path = find_csv_with_fallback('components/spreadsheets/objects', 'objetos')
+    objects_path = find_csv_with_fallback('telar-content/spreadsheets/objects', 'objetos')
     if christmas_tree_mode:
         csv_to_json(
             objects_path,

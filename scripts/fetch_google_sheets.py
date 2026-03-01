@@ -5,7 +5,7 @@ Fetch Google Sheets Data as CSV Files
 This is the first step in the web-based GitHub Pages Telar build
 pipeline. It downloads the raw content data from a Google Sheets
 spreadsheet and saves each tab as a separate CSV file in
-components/spreadsheets/.
+telar-content/spreadsheets/.
 
 A Telar spreadsheet typically has these tabs: project (site-level
 settings like title, subtitle, language), objects (exhibition objects
@@ -133,7 +133,7 @@ def main():
     print()
 
     # Create output directory
-    output_dir = Path('components/spreadsheets')
+    output_dir = Path('telar-content/spreadsheets')
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Fetch each tab

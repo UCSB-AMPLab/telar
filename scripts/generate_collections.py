@@ -16,10 +16,10 @@ It creates four types of collection files:
 - Stories (_jekyll-files/_stories/): One file per story, linking to its
   JSON data file and setting the story layout.
 - Glossary (_jekyll-files/_glossary/): Terms from both user markdown
-  files (components/texts/glossary/) and demo content, with glossary-
+  files (telar-content/texts/glossary/) and demo content, with glossary-
   to-glossary link processing.
 - Pages (_jekyll-files/_pages/): User-authored pages from
-  components/texts/pages/, processed through the widget and glossary
+  telar-content/texts/pages/, processed through the widget and glossary
   pipeline.
 
 The script respects development feature flags (skip_stories,
@@ -244,7 +244,7 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
     """Generate glossary files from markdown (legacy method).
 
     Args:
-        md_path: Path to components/texts/glossary/
+        md_path: Path to telar-content/texts/glossary/
         glossary_dir: Output directory for Jekyll files
         glossary_terms: Dict of term_id -> title for link processing
     """
@@ -311,8 +311,8 @@ def generate_glossary():
     """Generate glossary markdown files from user content and demo JSON.
 
     Reads from (in order of precedence):
-    - components/spreadsheets/glossary.csv or glosario.csv (v0.8.0+ preferred)
-    - components/texts/glossary/*.md (legacy markdown files)
+    - telar-content/spreadsheets/glossary.csv or glosario.csv (v0.8.0+ preferred)
+    - telar-content/texts/glossary/*.md (legacy markdown files)
     - _data/demo-glossary.json (demo content from bundle)
 
     If both CSV and markdown exist, CSV takes precedence and a warning is shown.
@@ -329,8 +329,8 @@ def generate_glossary():
     # Load glossary terms for link processing (enables glossary-to-glossary linking)
     glossary_terms = load_glossary_terms()
 
-    csv_path = Path(find_csv_with_fallback('components/spreadsheets/glossary', 'glosario'))
-    md_path = Path('components/texts/glossary')
+    csv_path = Path(find_csv_with_fallback('telar-content/spreadsheets/glossary', 'glosario'))
+    md_path = Path('telar-content/texts/glossary')
 
     # 1. Process user glossary from CSV (preferred) or markdown (legacy)
     if csv_path.exists():
@@ -476,15 +476,15 @@ data_file: {identifier}
 def generate_pages():
     """Generate processed page files from user markdown sources.
 
-    Reads from components/texts/pages/*.md, processes widgets and glossary links,
+    Reads from telar-content/texts/pages/*.md, processes widgets and glossary links,
     and outputs to _jekyll-files/_pages/ for the pages collection.
     """
-    source_dir = Path('components/texts/pages')
+    source_dir = Path('telar-content/texts/pages')
     output_dir = Path('_jekyll-files/_pages')
 
     # Skip if source directory doesn't exist
     if not source_dir.exists():
-        print("No components/texts/pages/ directory found - skipping page generation")
+        print("No telar-content/texts/pages/ directory found - skipping page generation")
         return
 
     # Clean up old files

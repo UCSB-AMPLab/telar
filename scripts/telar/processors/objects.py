@@ -5,7 +5,7 @@ This module deals with converting the objects CSV into validated JSON for
 every exhibition object in a Telar story. Objects are the visual artefacts
 that appear in the viewer panel — maps, paintings, photographs, manuscripts
 — each identified by an `object_id` that links to either an external IIIF
-manifest or a local image file in `components/objects/`.
+manifest or a local image file in `telar-content/objects/`.
 
 `process_objects()` is the main entry point. It receives a pandas DataFrame
 from the objects spreadsheet and runs a series of validation and enrichment
@@ -34,7 +34,7 @@ steps before returning the cleaned DataFrame for JSON serialisation:
    hierarchy (CSV values always win over IIIF values).
 
 6. **Local image fallback** — objects without an external manifest are
-   checked for a matching image file in `components/objects/`. If no exact
+   checked for a matching image file in `telar-content/objects/`. If no exact
    match is found, `_find_similar_image_filenames()` uses fuzzy string
    matching (via `difflib.SequenceMatcher` at 85% threshold) to suggest
    near-matches like case differences or hyphen/underscore variations.
@@ -605,11 +605,11 @@ def process_objects(df, christmas_tree=False):
             continue
 
         # No external IIIF manifest - check for local image file
-        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff']
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf']
         has_local_image = False
 
         for ext in valid_extensions:
-            local_image_path = Path(f'components/objects/{object_id}{ext}')
+            local_image_path = Path(f'telar-content/objects/{object_id}{ext}')
             if local_image_path.exists():
                 has_local_image = True
                 print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")
@@ -618,7 +618,7 @@ def process_objects(df, christmas_tree=False):
         # Warn if object has neither external manifest nor local image
         if not has_local_image:
             # Check for similar filenames (near-matches)
-            similar_files = _find_similar_image_filenames(object_id, Path('components/objects'))
+            similar_files = _find_similar_image_filenames(object_id, Path('telar-content/objects'))
 
             if similar_files:
                 # Found near-matches - provide helpful suggestion
