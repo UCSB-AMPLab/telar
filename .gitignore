@@ -31,7 +31,7 @@ Thumbs.db
 assets/js/telar-story.js
 assets/js/telar-story.js.map
 
-# Generated JSON files (from components/structures/*.csv by csv_to_json.py)
+# Generated JSON files (from components/spreadsheets/*.csv by csv_to_json.py)
 # Source of truth is the CSV files - JSON is regenerated on every build
 # Note: With story_id feature, story files use semantic names (e.g., your-story.json, paisajes-demo.json)
 _data/objects.json

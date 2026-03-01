@@ -191,12 +191,12 @@ def get_base_url_from_config():
         # Silently fail - caller will use fallback
         return None
 
-def generate_iiif_tiles(source_dir='components/images', output_dir='iiif/objects', base_url=None):
+def generate_iiif_tiles(source_dir='components/objects', output_dir='iiif/objects', base_url=None):
     """
     Generate IIIF tiles for objects listed in objects.json
 
     Args:
-        source_dir: Directory containing source images (default: components/images)
+        source_dir: Directory containing source images (default: components/objects)
         output_dir: Directory to output IIIF tiles and manifests (default: iiif/objects)
         base_url: Base URL for the site
     """
@@ -208,9 +208,16 @@ def generate_iiif_tiles(source_dir='components/images', output_dir='iiif/objects
     output_path = Path(output_dir)
 
     if not source_path.exists():
-        print(f"❌ Source directory {source_dir} does not exist.")
-        print(f"   Please create it and add images, or use --source-dir to specify a different location.")
-        return False
+        # Check for old directory name (pre-v0.9.0)
+        old_path = Path(str(source_dir).replace('components/objects', 'components/images'))
+        if old_path.exists() and str(old_path) != str(source_path):
+            print(f"⚠️  Found '{old_path}' — please rename to '{source_path}'")
+            print(f"   Run: mv {old_path} {source_path}")
+            source_path = old_path
+        else:
+            print(f"❌ Source directory {source_dir} does not exist.")
+            print(f"   Please create it and add images, or use --source-dir to specify a different location.")
+            return False
 
     # Get base URL from config or environment
     # Priority: --base-url flag > _config.yml > SITE_URL env var > localhost default
@@ -328,8 +335,8 @@ def main():
     )
     parser.add_argument(
         '--source-dir',
-        default='components/images',
-        help='Source directory containing images (default: components/images)'
+        default='components/objects',
+        help='Source directory containing images and PDFs (default: components/objects)'
     )
     parser.add_argument(
         '--output-dir',

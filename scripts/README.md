@@ -21,7 +21,7 @@ pip install iiif Pillow pandas
 Telar uses a **components-based architecture** where content is separated from structure:
 
 - **`components/`** - Source of truth for all content
-  - `components/images/` - Source images for IIIF processing
+  - `components/objects/` - Source images and PDFs for IIIF processing
   - `components/texts/` - Markdown files with long-form content
 - **CSV files** - Structural data that references component files
   - Story structure (coordinates, objects, file references)

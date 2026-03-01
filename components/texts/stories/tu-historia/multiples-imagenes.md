@@ -11,7 +11,7 @@ En este paso pasamos de `atlas-allegory` a `leviathan` en la columna **object**.
 
 **Imágenes autoalojadas** (como este frontispicio del Leviatán):
 - `source_url` vacío
-- Archivo en `components/images/objects/leviathan.jpg`
+- Archivo en `components/objects/leviathan.jpg`
 - Telar genera las teselas automáticamente en el *build*
 
 **Argumentos comparativos:**

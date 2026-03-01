@@ -1,8 +1,8 @@
-# Structures
+# Spreadsheets
 
 This folder contains CSV files that define the organizational structure of your Telar site.
 
-> **⚠️ Note for Google Sheets Users:**
+> **Note for Google Sheets Users:**
 > If you're using the Google Sheets integration, you **do not need to manually edit the CSV files in this folder**. The `fetch_google_sheets.py` script (or GitHub Actions workflow) will automatically fetch and update these CSVs from your Google Sheet.
 
 ## Purpose
@@ -33,11 +33,8 @@ Each story CSV contains:
 - `answer` - Brief answer text
 - `object` - Object ID to display
 - `x, y, zoom` - IIIF viewer coordinates (0-1 normalized)
-- `layer1_button, layer1_file` - Primary panel button text and markdown file
-- `layer2_button, layer2_file` - Secondary panel button text and markdown file
+- `page` - Page number for multi-page objects (optional, v0.9.0+)
+- `layer1_button, layer1_content` - Primary panel button text and content (markdown file or inline text)
+- `layer2_button, layer2_content` - Secondary panel button text and content (markdown file or inline text)
 
-Markdown files referenced in `layer1_file` and `layer2_file` should be stored in `components/texts/stories/`.
-
-## Why Structures?
-
-This folder is called "structures" because it contains the structural/organizational data that defines how your content is assembled into a cohesive narrative experience.
+Markdown files referenced in content columns should be stored in `components/texts/stories/`.

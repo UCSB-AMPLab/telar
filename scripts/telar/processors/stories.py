@@ -173,12 +173,12 @@ def process_story(df, christmas_tree=False):
 
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
-                # Check for local image in components/images/
+                # Check for local image in components/objects/
                 valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff']
                 has_local_image = False
 
                 for ext in valid_extensions:
-                    local_image_path = Path(f'components/images/{actual_object_id}{ext}')
+                    local_image_path = Path(f'components/objects/{actual_object_id}{ext}')
                     if local_image_path.exists():
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local image: {local_image_path}")

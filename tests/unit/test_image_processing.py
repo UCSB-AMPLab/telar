@@ -35,10 +35,10 @@ class TestProcessImages:
         assert 'alt="Portrait"' in result
 
     def test_prepends_default_path(self):
-        """Should prepend /components/images/ to relative paths."""
+        """Should prepend /components/objects/ to relative paths."""
         text = '![Alt](photo.jpg)'
         result = process_images(text)
-        assert 'src="/components/images/photo.jpg"' in result
+        assert 'src="/components/objects/photo.jpg"' in result
 
     def test_preserves_absolute_paths(self):
         """Should preserve paths starting with /."""

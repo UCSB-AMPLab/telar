@@ -17,7 +17,7 @@ that control display width in the story panel. If the next line after an
 image is non-empty plain text, it is treated as a caption and wrapped in
 a `<figcaption>`. The optional "caption: " prefix is stripped if present.
 Relative image paths are automatically prepended with
-`/components/images/`.
+`/components/objects/`.
 
 Path validation is handled by `validate_image_path()` and
 `resolve_path_case_insensitive()`. These exist because Telar sites are
@@ -97,7 +97,7 @@ def process_images(text):
 
             # Prepend default path if relative
             if not src.startswith('/') and not src.startswith('http'):
-                src = f'/components/images/{src}'
+                src = f'/components/objects/{src}'
 
             # Check for caption on next line
             caption = None

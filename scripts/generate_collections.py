@@ -311,7 +311,7 @@ def generate_glossary():
     """Generate glossary markdown files from user content and demo JSON.
 
     Reads from (in order of precedence):
-    - components/structures/glossary.csv or glosario.csv (v0.8.0+ preferred)
+    - components/spreadsheets/glossary.csv or glosario.csv (v0.8.0+ preferred)
     - components/texts/glossary/*.md (legacy markdown files)
     - _data/demo-glossary.json (demo content from bundle)
 
@@ -329,7 +329,7 @@ def generate_glossary():
     # Load glossary terms for link processing (enables glossary-to-glossary linking)
     glossary_terms = load_glossary_terms()
 
-    csv_path = Path(find_csv_with_fallback('components/structures/glossary', 'glosario'))
+    csv_path = Path(find_csv_with_fallback('components/spreadsheets/glossary', 'glosario'))
     md_path = Path('components/texts/glossary')
 
     # 1. Process user glossary from CSV (preferred) or markdown (legacy)

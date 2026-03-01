@@ -1,19 +1,19 @@
 # Components Directory
 
-This directory contains all the **source components** used to build your Telar site - images, text content, data structures, and other media files.
+This directory contains all the **source components** used to build your Telar site - objects (images and documents), text content, data spreadsheets, and other media files.
 
 ## Directory Structure
 
-### images/
+### objects/
 
-High-resolution images (maps, photographs, documents, artifacts) displayed using IIIF (International Image Interoperability Framework).
+High-resolution images and PDF documents displayed using IIIF (International Image Interoperability Framework).
 
-- **Supported formats:** JPG, PNG, TIFF, WebP, HEIC (v0.5.0+)
-- **Processing:** Telar automatically generates IIIF tiles for deep-zoom viewing
-- **Usage:** Reference images by filename in `objects.csv`
-- See [images/README.md](images/README.md) for details
+- **Supported formats:** JPG, PNG, TIFF, WebP, HEIC, PDF
+- **Processing:** Telar automatically generates IIIF tiles for deep-zoom viewing; PDFs are rendered to page images at build time
+- **Usage:** Reference objects by filename (without extension) in `objects.csv`
+- See [objects/README.md](objects/README.md) for details
 
-### structures/
+### spreadsheets/
 
 CSV files that define your site's organizational structure and content.
 
@@ -23,7 +23,7 @@ CSV files that define your site's organizational structure and content.
 
 These CSV files are processed by `scripts/csv_to_json.py` to generate JSON data in `_data/`.
 
-See [structures/README.md](structures/README.md) for details
+See [spreadsheets/README.md](spreadsheets/README.md) for details
 
 ### texts/
 
@@ -37,50 +37,25 @@ Markdown files are referenced in story CSV files and embedded into the site duri
 
 See [texts/README.md](texts/README.md) for details
 
-### pdfs/
-
-**Status:** Coming in v0.6.0
-
-Multi-page PDF documents displayed using IIIF Presentation API 3.0.
-
-**Planned features:**
-- Multi-page IIIF support with page navigation
-- Page-specific zoom and coordinates
-- Automatic IIIF manifest generation
-
-See [pdfs/README.md](pdfs/README.md)
-
 ### audio/
 
-**Status:** Coming in v0.7.0
+**Status:** Planned
 
 Audio files (oral histories, soundscapes, music, field recordings) embedded in story steps.
-
-**Planned features:**
-- HTML5 audio player with custom styling
-- Waveform visualization
-- Time-coded navigation
-- Transcript synchronization
 
 See [audio/README.md](audio/README.md)
 
 ### 3d-models/
 
-**Status:** Coming in v0.8.0
+**Status:** Planned
 
 3D model files (archaeological artifacts, architectural models, sculptures) displayed in interactive viewers.
-
-**Planned features:**
-- Interactive 3D viewer with rotation and zoom
-- Model annotations and hotspots
-- Multiple format support (glTF, OBJ, PLY, STL)
-- AR/VR compatibility
 
 See [3d-models/README.md](3d-models/README.md)
 
 ## Workflow Overview
 
-1. **Add content** - Place images in `images/`, text in `texts/`, update CSVs in `structures/`
+1. **Add content** - Place images/PDFs in `objects/`, text in `texts/`, update CSVs in `spreadsheets/`
 2. **Process data** - Run `python3 scripts/csv_to_json.py` to convert CSV to JSON
 3. **Generate IIIF tiles** - Run `python3 scripts/generate_iiif.py` to create image tiles (automatic on GitHub)
 4. **Build site** - Run `bundle exec jekyll build` to generate the final site

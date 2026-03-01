@@ -56,7 +56,7 @@ Plan your narrative structure before building. Sketch out your stories, identify
    - **CSV files**: Edit CSV files directly in your repository
 
 3. **Add your content**
-   - Upload images to `components/images/` or use IIIF manifests from institutions
+   - Upload images to `components/objects/` or use IIIF manifests from institutions
    - Create markdown files in `components/texts/stories/` for your narrative text
    - Configure your objects and stories in Google Sheets or CSV files
 
@@ -172,7 +172,7 @@ Planifica tu estructura narrativa antes de construir. Esboza tus historias, iden
    - **Archivos CSV**: Edita archivos CSV directamente en tu repositorio
 
 3. **Añade tu contenido**
-   - Sube imágenes a `components/images/` o usa manifiestos IIIF de instituciones
+   - Sube imágenes a `components/objects/` o usa manifiestos IIIF de instituciones
    - Crea archivos markdown en `components/texts/stories/` para tu texto narrativo
    - Configura tus objetos e historias en Google Sheets o archivos CSV
 

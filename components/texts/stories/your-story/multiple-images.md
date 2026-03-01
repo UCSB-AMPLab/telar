@@ -11,7 +11,7 @@ This step switches from `atlas-allegory` to `leviathan` in the **object** column
 
 **Self-hosted images** (like this Hobbes frontispiece):
 - `source_url` empty
-- Image file in `components/images/objects/leviathan.jpg`
+- Image file in `components/objects/leviathan.jpg`
 - Telar generates tiles automatically at build time
 
 **Comparative arguments:**

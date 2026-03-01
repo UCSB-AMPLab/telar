@@ -5,7 +5,7 @@ This module deals with Telar's glossary system, which lets authors link
 terms in story panel text to glossary definitions. Glossary terms can be
 defined in two ways:
 
-1. **CSV file** (v0.8.0+): `components/structures/glossary.csv` (or
+1. **CSV file** (v0.8.0+): `components/spreadsheets/glossary.csv` (or
    `glosario.csv` for Spanish-language spreadsheets) with columns `term_id`,
    `title`, `definition`, and `related_terms`. This is the preferred method
    for spreadsheet-first workflows.
@@ -130,9 +130,9 @@ def load_glossary_terms():
     Returns:
         dict: Dictionary mapping term_id to term title, or empty dict if no glossary found
     """
-    csv_path = Path('components/structures/glossary.csv')
+    csv_path = Path('components/spreadsheets/glossary.csv')
     if not csv_path.exists():
-        fallback = Path('components/structures/glosario.csv')
+        fallback = Path('components/spreadsheets/glosario.csv')
         if fallback.exists():
             csv_path = fallback
     md_path = Path('components/texts/glossary')

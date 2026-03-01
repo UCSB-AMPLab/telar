@@ -38,7 +38,7 @@ formatting, and will be converted to HTML during build.
 ## Workflow
 
 1. **Write** - Create or edit markdown files with frontmatter
-2. **Reference** - In CSV files (components/structures/), reference these files by path
+2. **Reference** - In CSV files (components/spreadsheets/), reference these files by path
 3. **Convert** - Run `python3 scripts/csv_to_json.py` to embed content into JSON (this happens automatically on GitHub)
 4. **Build** - Run `bundle exec jekyll build` to generate the site (this happens automatically on GitHub)
 
