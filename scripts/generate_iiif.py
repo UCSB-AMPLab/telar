@@ -285,11 +285,21 @@ def generate_iiif_tiles(source_dir='components/images', output_dir='iiif/objects
 
             object_output.mkdir(parents=True, exist_ok=True)
 
-            # Generate IIIF tiles and manifest
-            generate_iiif_for_image(image_file, object_output, object_id, base_url, backend)
+            # PDF files get multi-page processing; everything else is a single image
+            if image_file.suffix.lower() == '.pdf':
+                try:
+                    from process_pdf import process_pdf_object
+                    process_pdf_object(image_file, object_output, object_id, base_url, backend)
+                    print(f"  ✓ Generated multi-page tiles for {object_id}")
+                    processed_count += 1
+                except ImportError:
+                    print(f"  ❌ PyMuPDF not installed — cannot process {image_file.name}")
+                    skipped_count += 1
+            else:
+                generate_iiif_for_image(image_file, object_output, object_id, base_url, backend)
+                print(f"  ✓ Generated tiles for {object_id}")
+                processed_count += 1
 
-            print(f"  ✓ Generated tiles for {object_id}")
-            processed_count += 1
             print()
 
         except Exception as e:

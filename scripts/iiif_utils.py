@@ -80,6 +80,14 @@ def check_dependencies():
         print("   To enable HEIC support: pip install pillow-heif")
         print()
 
+    # Check for optional PDF support
+    try:
+        import fitz
+    except ImportError:
+        print("⚠️  PyMuPDF not installed - PDF files will not be supported")
+        print("   To enable PDF support: pip install PyMuPDF")
+        print()
+
     return backend
 
 
