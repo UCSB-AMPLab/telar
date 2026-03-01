@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (thumbnailSize) {
           const baseUrl = info.id || info['@id'];
           // Use base URL directly - it already points to the image service
-          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},/0/default.jpg`;
+          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
 
           const img = document.createElement('img');
           img.src = thumbnailUrl;

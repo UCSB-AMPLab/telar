@@ -72,38 +72,17 @@ title: Home
   {% assign gs_error_details = "" %}
 
   {% if site.google_sheets.enabled %}
-    {% assign shared_url = site.google_sheets.shared_url | strip %}
     {% assign published_url = site.google_sheets.published_url | strip %}
 
-    {%- comment -%}Check if URLs are missing{%- endcomment -%}
-    {% if shared_url == "" or published_url == "" %}
+    {%- comment -%}Check if published URL is missing{%- endcomment -%}
+    {% if published_url == "" %}
       {% assign has_gs_issue = true %}
       {% assign gs_error_type = "missing_urls" %}
-    {% elsif shared_url == published_url %}
-      {%- comment -%}Check if same URL used for both{%- endcomment -%}
-      {% assign has_gs_issue = true %}
-      {% assign gs_error_type = "same_url" %}
     {% else %}
-      {%- comment -%}Check if URLs are swapped{%- endcomment -%}
-      {% assign shared_has_de = shared_url | split: "/d/e/" | size %}
-      {% assign published_has_edit = published_url | split: "/edit" | size %}
+      {%- comment -%}Check if published URL format is valid{%- endcomment -%}
       {% assign published_has_de = published_url | split: "/d/e/" | size %}
-      {% assign shared_has_d = shared_url | split: "/spreadsheets/d/" | size %}
-
-      {% if shared_has_de > 1 %}
-        {%- comment -%}Shared URL contains /d/e/ (published format){%- endcomment -%}
-        {% assign has_gs_issue = true %}
-        {% assign gs_error_type = "swapped_urls" %}
-      {% elsif published_has_edit > 1 and published_has_de == 1 %}
-        {%- comment -%}Published URL contains /edit but not /d/e/{%- endcomment -%}
-        {% assign has_gs_issue = true %}
-        {% assign gs_error_type = "swapped_urls" %}
-      {% elsif shared_has_d == 1 %}
-        {%- comment -%}Shared URL doesn't contain /spreadsheets/d/{%- endcomment -%}
-        {% assign has_gs_issue = true %}
-        {% assign gs_error_type = "malformed_shared" %}
-      {% elsif published_has_de == 1 %}
-        {%- comment -%}Published URL doesn't contain /d/e/{%- endcomment -%}
+      {% if published_has_de == 1 %}
+        {%- comment -%}Published URL doesn't contain /d/e/ — might be an edit URL{%- endcomment -%}
         {% assign has_gs_issue = true %}
         {% assign gs_error_type = "malformed_published" %}
       {% endif %}
@@ -141,28 +120,7 @@ title: Home
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>⚠️ Your Google Sheets integration is incomplete</strong>
         <p class="mb-0 mt-2">
-          Google Sheets integration is enabled but incomplete. You need to provide both a <code>shared_url</code> and a <code>published_url</code> in <code>_config.yml</code>. The shared URL comes from clicking the "Share" button in your Google Sheet. The published URL comes from File → Share → Publish to web (select "Entire document" and "Comma-separated values"). See the <a href="https://github.com/UCSB-AMPLab/telar/blob/main/docs/GOOGLE_SHEETS_TEMPLATE.md" class="alert-link" target="_blank">Google Sheets setup guide</a> for detailed instructions.
-        </p>
-      </div>
-      {% elsif gs_error_type == "same_url" %}
-      <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets URLs are identical</strong>
-        <p class="mb-0 mt-2">
-          You've used the same URL for both <code>shared_url</code> and <code>published_url</code> in <code>_config.yml</code>. These must be different URLs from the same Google Sheet. The shared URL comes from the "Share" button (ends with <code>/edit</code>). The published URL comes from File → Share → Publish to web (contains <code>/d/e/</code> and ends with <code>/pubhtml</code>).
-        </p>
-      </div>
-      {% elsif gs_error_type == "swapped_urls" %}
-      <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets URLs appear to be swapped</strong>
-        <p class="mb-0 mt-2">
-          Your Google Sheets URLs appear to be swapped in <code>_config.yml</code>. The <code>shared_url</code> should contain <code>/spreadsheets/d/{id}/edit</code> (from the Share button), but yours appears to be in published format. The <code>published_url</code> should contain <code>/d/e/{id}/pubhtml</code> (from Publish to web), but yours appears to be in shared format. Please swap these two URLs.
-        </p>
-      </div>
-      {% elsif gs_error_type == "malformed_shared" %}
-      <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets shared URL is incorrect</strong>
-        <p class="mb-0 mt-2">
-          Your Google Sheets <code>shared_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit</code>. Get this URL by clicking the "Share" button in your Google Sheet and copying the link.
+          Google Sheets integration is enabled but the <code>published_url</code> is missing from <code>_config.yml</code>. To get this URL: open your Google Sheet, go to File → Share → Publish to web, select "Entire document" and "Comma-separated values (.csv)", then click Publish and copy the URL.
         </p>
       </div>
       {% elsif gs_error_type == "malformed_published" %}
@@ -553,7 +511,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
           if (thumbnailSize) {
             const baseUrl = info.id || info['@id'];
-            const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},/0/default.jpg`;
+            const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
 
             const img = document.createElement('img');
             img.src = thumbnailUrl;
@@ -670,7 +628,7 @@ featuredThumbnails.forEach(function(item) {
 
         if (thumbnailSize) {
           const baseUrl = info.id || info['@id'];
-          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},/0/default.jpg`;
+          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
 
           const img = document.createElement('img');
           img.src = thumbnailUrl;
