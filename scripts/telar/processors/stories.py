@@ -90,6 +90,23 @@ def process_story(df, christmas_tree=False):
     # Remove completely empty rows
     df = df[df.astype(str).apply(lambda x: x.str.strip()).ne('').any(axis=1)]
 
+    # Validate and normalize page column
+    if 'page' in df.columns:
+        for idx, row in df.iterrows():
+            page_val = row.get('page', '')
+            step_num = row.get('step', 'unknown')
+            if pd.notna(page_val) and str(page_val).strip():
+                try:
+                    page_int = int(float(str(page_val).strip()))
+                    if page_int < 1:
+                        raise ValueError
+                    df.at[idx, 'page'] = page_int
+                except (ValueError, TypeError):
+                    msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
+                    df.at[idx, 'page'] = ''
+
     # Load objects data for validation
     objects_data = {}
     objects_json_path = Path('_data/objects.json')
