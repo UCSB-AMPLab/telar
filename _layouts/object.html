@@ -103,6 +103,14 @@ layout: default
                   <div style="padding-top: 2rem;">
                     <div style="max-width: 280px; margin: 0 auto;">
                       <dl class="row mb-0">
+                        <dt class="col-sm-6 coord-page-row" style="display: none; color: #c8d8e8; text-align: right; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">{{ lang.object.coordinates.page_label | default: "Page" }}</dt>
+                        <dd class="col-sm-6 coord-page-row" style="display: none; position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; align-items: center; justify-content: center;">
+                          <code id="coord-page" style="color: #c8d8e8;">1</code>
+                          <button class="btn btn-sm" id="copy-page" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="{{ lang.object.coordinates.copy_page_tooltip | default: 'Copy page number' }}">
+                            <i class="bi bi-clipboard"></i>
+                          </button>
+                        </dd>
+
                         <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">X</dt>
                         <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
                           <code id="coord-x" style="color: #c8d8e8;">0.500</code>
@@ -299,6 +307,25 @@ layout: default
       return;
     }
 
+    // Detect multi-page manifest
+    let isMultiPage = false;
+    try {
+      const resp = await fetch(manifestUrl);
+      const manifest = await resp.json();
+      const canvases = manifest.items || (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) || [];
+      isMultiPage = canvases.length > 1;
+      if (isMultiPage) {
+        document.getElementById('object-viewer').classList.add('multipage');
+        const pageRows = document.querySelectorAll('.coord-page-row');
+        pageRows.forEach(function(el) {
+          el.style.display = 'flex';
+        });
+        console.log('Multi-page manifest detected:', canvases.length, 'pages');
+      }
+    } catch (err) {
+      console.log('Could not determine page count:', err);
+    }
+
     // Access OpenSeadragon viewer directly via Tify's public API
     const osdViewer = tify.viewer;
     console.log('Got OSD viewer reference, world items:', osdViewer.world.getItemCount());
@@ -353,6 +380,12 @@ layout: default
         document.getElementById('coord-x').textContent = x.toFixed(3);
         document.getElementById('coord-y').textContent = y.toFixed(3);
         document.getElementById('coord-zoom').textContent = zoom.toFixed(1);
+
+        // Update page number for multi-page objects
+        if (isMultiPage) {
+          const page = (tify.options && tify.options.pages && tify.options.pages.length > 0) ? tify.options.pages[0] : 1;
+          document.getElementById('coord-page').textContent = page;
+        }
       } catch (error) {
         console.error('Error updating coordinates:', error);
       }
@@ -394,7 +427,9 @@ layout: default
       const x = document.getElementById('coord-x').textContent;
       const y = document.getElementById('coord-y').textContent;
       const zoom = document.getElementById('coord-zoom').textContent;
-      const text = `${x},${y},${zoom}`;
+      const pageEl = document.getElementById('coord-page');
+      const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
+      const text = isMulti ? `${pageEl.textContent},${x},${y},${zoom}` : `${x},${y},${zoom}`;
 
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-csv');
@@ -411,7 +446,9 @@ layout: default
       const x = document.getElementById('coord-x').textContent;
       const y = document.getElementById('coord-y').textContent;
       const zoom = document.getElementById('coord-zoom').textContent;
-      const text = `${x}\t${y}\t${zoom}`;
+      const pageEl = document.getElementById('coord-page');
+      const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
+      const text = isMulti ? `${pageEl.textContent}\t${x}\t${y}\t${zoom}` : `${x}\t${y}\t${zoom}`;
 
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-sheets');
@@ -479,6 +516,21 @@ layout: default
         const zoom = document.getElementById('coord-zoom').textContent;
         navigator.clipboard.writeText(zoom).then(function() {
           const btn = document.getElementById('copy-zoom');
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          setTimeout(function() {
+            btn.innerHTML = originalHTML;
+          }, 2000);
+        });
+      });
+    }
+
+    const copyPageBtn = document.getElementById('copy-page');
+    if (copyPageBtn) {
+      copyPageBtn.addEventListener('click', function() {
+        const page = document.getElementById('coord-page').textContent;
+        navigator.clipboard.writeText(page).then(function() {
+          const btn = document.getElementById('copy-page');
           const originalHTML = btn.innerHTML;
           btn.innerHTML = '<i class="bi bi-check-circle"></i>';
           setTimeout(function() {
