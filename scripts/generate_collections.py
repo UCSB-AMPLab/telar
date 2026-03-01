@@ -93,21 +93,29 @@ def generate_objects():
         # Generate main object page
         filepath = objects_dir / f"{object_id}.md"
 
-        content = f"""---
-object_id: {obj.get('object_id', '')}
-title: "{obj.get('title', '')}"
-creator: "{obj.get('creator', '')}"
-period: "{obj.get('period', '')}"
-medium: "{obj.get('medium', '')}"
-dimensions: "{obj.get('dimensions', '')}"
-location: "{obj.get('location', '')}"
-credit: "{obj.get('credit', '')}"
-thumbnail: "{obj.get('thumbnail', '')}"
-iiif_manifest: "{obj.get('iiif_manifest', '')}"
-object_warning: "{obj.get('object_warning', '')}"
-object_warning_short: "{obj.get('object_warning_short', '')}"
-"""
-        # Add optional fields only if they have values
+        # Build front matter, omitting empty fields so Liquid {% if %}
+        # conditionals work correctly (empty strings are truthy in Liquid)
+        content = f'---\nobject_id: {object_id}\n'
+        content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
+
+        # Metadata fields — only include if non-empty
+        metadata_fields = {
+            'creator': obj.get('creator', ''),
+            'period': obj.get('period', ''),
+            'medium': obj.get('medium', ''),
+            'dimensions': obj.get('dimensions', ''),
+            'location': obj.get('source', '') or obj.get('location', ''),
+            'credit': obj.get('credit', ''),
+            'thumbnail': obj.get('thumbnail', ''),
+            'iiif_manifest': obj.get('iiif_manifest', ''),
+            'object_warning': obj.get('object_warning', ''),
+            'object_warning_short': obj.get('object_warning_short', ''),
+        }
+        for key, value in metadata_fields.items():
+            if value:
+                content += f'{key}: "{_yaml_escape(str(value))}"\n'
+
+        # Additional optional fields
         if obj.get('year'):
             content += f'year: "{obj.get("year")}"\n'
         if obj.get('object_type'):
