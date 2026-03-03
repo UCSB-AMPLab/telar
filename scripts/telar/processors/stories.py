@@ -90,6 +90,23 @@ def process_story(df, christmas_tree=False):
     # Remove completely empty rows
     df = df[df.astype(str).apply(lambda x: x.str.strip()).ne('').any(axis=1)]
 
+    # Validate and normalize page column
+    if 'page' in df.columns:
+        for idx, row in df.iterrows():
+            page_val = row.get('page', '')
+            step_num = row.get('step', 'unknown')
+            if pd.notna(page_val) and str(page_val).strip():
+                try:
+                    page_int = int(float(str(page_val).strip()))
+                    if page_int < 1:
+                        raise ValueError
+                    df.at[idx, 'page'] = page_int
+                except (ValueError, TypeError):
+                    msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
+                    df.at[idx, 'page'] = ''
+
     # Load objects data for validation
     objects_data = {}
     objects_json_path = Path('_data/objects.json')
@@ -111,6 +128,9 @@ def process_story(df, christmas_tree=False):
         # Build case-insensitive lookup map for objects
         objects_lower_map = {k.lower(): k for k in objects_data.keys()}
 
+        # Extensions to strip from object references in story CSV
+        strippable_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf']
+
         for idx, row in df.iterrows():
             object_id = str(row.get('object', '')).strip()
             step_num = row.get('step', 'unknown')
@@ -118,6 +138,15 @@ def process_story(df, christmas_tree=False):
             # Skip if no object specified
             if not object_id:
                 continue
+
+            # Strip file extensions from object references (users may type "photo.jpg" instead of "photo")
+            for ext in strippable_extensions:
+                if object_id.lower().endswith(ext):
+                    stripped_id = object_id[:-len(ext)]
+                    print(f"  [INFO] Stripped extension from story object reference: '{object_id}' -> '{stripped_id}'")
+                    object_id = stripped_id
+                    df.at[idx, 'object'] = object_id
+                    break
 
             # Check if object exists (case-insensitive)
             actual_object_id = None
@@ -144,12 +173,12 @@ def process_story(df, christmas_tree=False):
 
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
-                # Check for local image in components/images/
-                valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff']
+                # Check for local image in telar-content/objects/
+                valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf']
                 has_local_image = False
 
                 for ext in valid_extensions:
-                    local_image_path = Path(f'components/images/{actual_object_id}{ext}')
+                    local_image_path = Path(f'telar-content/objects/{actual_object_id}{ext}')
                     if local_image_path.exists():
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local image: {local_image_path}")

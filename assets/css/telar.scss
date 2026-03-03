@@ -3,10 +3,10 @@
 {%- comment -%}Three-tier theme loading with fallback protection{%- endcomment -%}
 {% assign theme = site.data.themes[site.telar_theme] %}
 {% unless theme %}
-  {% assign theme = site.data.themes['paisajes'] %}
+  {% assign theme = site.data.themes['trama'] %}
 {% endunless %}
 {% unless theme %}
-  {% assign theme = site.data.defaults.themes.paisajes %}
+  {% assign theme = site.data.defaults.themes.trama %}
 {% endunless %}
 
 @use 'typography';
@@ -32,27 +32,27 @@
  * embed, and share (highest specificity, most specific). This order matches
  * the original monolithic stylesheet so that overrides work the same way.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
-/* CSS Variables with hardcoded paisajes defaults as ultimate fallback */
+/* CSS Variables with hardcoded trama defaults as ultimate fallback */
 :root {
   /* Text colors */
-  --color-heading: {{ theme.colors.text.heading | default: "#2c3e50" }};
+  --color-heading: {{ theme.colors.text.heading | default: "#333333" }};
   --color-body: {{ theme.colors.text.body | default: "#333333" }};
-  --color-link: {{ theme.colors.text.link | default: "#8b4513" }};
+  --color-link: {{ theme.colors.text.link | default: "#883C36" }};
   --color-button-text: {{ theme.colors.text.button | default: "#FFFFFF" }};
-  --color-panel-layer1-text: {{ theme.colors.text.panel_layer1 | default: "#2c3e50" }};
+  --color-panel-layer1-text: {{ theme.colors.text.panel_layer1 | default: "#333333" }};
   --color-panel-layer2-text: {{ theme.colors.text.panel_layer2 | default: "#FFFFFF" }};
   --color-panel-glossary-text: {{ theme.colors.text.panel_glossary | default: "#333333" }};
 
   /* Background colors */
-  --color-button-bg: {{ theme.colors.background.button | default: "#2c3e50" }};
-  --color-panel-layer1-bg: {{ theme.colors.background.panel_layer1 | default: "#A8C5D4" }};
-  --color-panel-layer2-bg: {{ theme.colors.background.panel_layer2 | default: "#3d2645" }};
-  --color-panel-glossary-bg: {{ theme.colors.background.panel_glossary | default: "#F5EDE1" }};
+  --color-button-bg: {{ theme.colors.background.button | default: "#883C36" }};
+  --color-panel-layer1-bg: {{ theme.colors.background.panel_layer1 | default: "#C6D0F8" }};
+  --color-panel-layer2-bg: {{ theme.colors.background.panel_layer2 | default: "#883C36" }};
+  --color-panel-glossary-bg: {{ theme.colors.background.panel_glossary | default: "#FFF6EF" }};
 
   /* Fonts */
-  --font-headings: {{ theme.fonts.headings | default: "'Playfair Display', serif" }};
-  --font-body: {{ theme.fonts.body | default: "'Source Sans Pro', sans-serif" }};
+  --font-headings: {{ theme.fonts.headings | default: "'Space Grotesk', sans-serif" }};
+  --font-body: {{ theme.fonts.body | default: "'Roboto Condensed', sans-serif" }};
 }

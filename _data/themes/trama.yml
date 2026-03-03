@@ -1,0 +1,29 @@
+name: "Trama"
+description: "The default Telar theme, based on the visual identity designed by Adelaida Ávila. Trama (Spanish for 'weft') is the horizontal thread that the shuttle carries through the warp on a loom."
+creator: "Telar"
+creator_url: "https://telar.io"
+
+colors:
+  # Text/Font colors
+  text:
+    heading: "#333333"        # Heading font color (dark grey)
+    body: "#333333"           # Body text color (dark grey)
+    link: "#883C36"           # Hyperlink color (terracotta)
+    button: "#FFFFFF"         # Button text color
+    panel_layer1: "#333333"   # Layer 1 panel text color (dark grey)
+    panel_layer2: "#FFFFFF"   # Layer 2 panel text color
+    panel_glossary: "#333333" # Glossary panel text color (dark grey)
+
+  # Background colors
+  background:
+    button: "#883C36"         # Button background (terracotta)
+    panel_layer1: "#C6D0F8"   # Layer 1 panel background (lavender)
+    panel_layer2: "#883C36"   # Layer 2 panel background (terracotta)
+    panel_glossary: "#FFF6EF" # Glossary panel background (cream)
+
+# Fonts - Telar visual identity typography by Adelaida Ávila
+# Space Grotesk: geometric sans-serif for headings (Florian Karsten, 2018)
+# Roboto Condensed: condensed body text with friendly open curves
+fonts:
+  headings: "'Space Grotesk', sans-serif"
+  body: "'Roboto Condensed', sans-serif"

@@ -4,14 +4,14 @@
  * This module manages the IIIF viewer cards that display exhibition objects
  * alongside story steps. Each object gets its own viewer card — a container
  * element that the script creates and adds to the page at runtime, holding
- * a UniversalViewer instance inside it. The cards are not part of the HTML
- * template because the number needed depends on the story's content.
+ * a Tify instance inside it. The cards are not part of the HTML template
+ * because the number needed depends on the story's content.
  *
- * UniversalViewer instances are expensive: each one fetches an IIIF manifest
- * over the network, initialises OpenSeadragon (the image viewer library
- * inside UV), and allocates GPU memory for rendering high-resolution tiles.
- * Creating all viewers at page load would exhaust memory on mobile devices
- * and delay the page becoming responsive.
+ * Tify instances are expensive: each one fetches an IIIF manifest over the
+ * network, initialises OpenSeadragon (the image viewer library inside Tify),
+ * and allocates GPU memory for rendering high-resolution tiles. Creating all
+ * viewers at page load would exhaust memory on mobile devices and delay the
+ * page becoming responsive.
  *
  * To solve this, the module uses a card pool with a configurable maximum
  * (default 10 cards). When the user navigates to a step that needs an object
@@ -28,7 +28,7 @@
  * manifest prefetching at page load to warm the browser cache and measure
  * connection speed, loading shimmer states, and the object credits badge.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
 import { state } from './state.js';
@@ -57,32 +57,42 @@ export function buildObjectsIndex() {
  * manifest built from the site's base path.
  *
  * @param {string} objectId - The object identifier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {string} The manifest URL.
  */
-export function getManifestUrl(objectId) {
+export function getManifestUrl(objectId, page) {
   const object = state.objectsIndex[objectId];
 
   if (!object) {
     console.warn('Object not found:', objectId);
-    return buildLocalInfoJsonUrl(objectId);
+    return buildLocalInfoJsonUrl(objectId, page);
   }
 
   const sourceUrl = object.source_url || object.iiif_manifest;
   if (sourceUrl && sourceUrl.trim() !== '') {
-    return sourceUrl;
+    return sourceUrl;  // External manifests: page handling deferred
   }
 
-  return buildLocalInfoJsonUrl(objectId);
+  return buildLocalInfoJsonUrl(objectId, page);
 }
 
 /**
  * Build a local IIIF manifest URL from the site's base path.
  *
+ * For multi-page objects (PDFs), when a page > 1 is specified, returns
+ * the per-page single-canvas manifest URL instead of the root manifest.
+ *
  * @param {string} objectId - The object identifier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {string} Full URL to the local manifest.json.
  */
-function buildLocalInfoJsonUrl(objectId) {
+function buildLocalInfoJsonUrl(objectId, page) {
   const basePath = getBasePath();
+  if (page) {
+    const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/page-${page}/manifest.json`;
+    console.log('Building local IIIF page manifest URL:', manifestUrl);
+    return manifestUrl;
+  }
   const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/manifest.json`;
   console.log('Building local IIIF manifest URL:', manifestUrl);
   return manifestUrl;
@@ -94,7 +104,7 @@ function buildLocalInfoJsonUrl(objectId) {
  * @typedef {Object} ViewerCard
  * @property {string} objectId - The object this card displays.
  * @property {HTMLElement} element - The card's container element in the page.
- * @property {Object} uvInstance - The UniversalViewer instance.
+ * @property {Object} tifyInstance - The Tify viewer instance.
  * @property {Object|null} osdViewer - The OpenSeadragon viewer (null until ready).
  * @property {boolean} isReady - Whether the OSD viewer has initialised.
  * @property {Object|null} pendingZoom - Queued position to apply when ready.
@@ -104,9 +114,9 @@ function buildLocalInfoJsonUrl(objectId) {
 /**
  * Create a new viewer card for an object.
  *
- * Builds a container element, initialises a UniversalViewer instance inside
- * it, and begins polling for the OpenSeadragon viewer to become available.
- * Once ready, any pending zoom position is applied.
+ * Builds a container element, initialises a Tify instance inside it, and
+ * waits for the OpenSeadragon viewer to become available via Tify's ready
+ * promise. Once ready, any pending zoom position is applied.
  *
  * If the card pool exceeds the configured maximum, the oldest card is
  * destroyed to free memory.
@@ -116,9 +126,10 @@ function buildLocalInfoJsonUrl(objectId) {
  * @param {number} [x] - Normalised x position (0–1).
  * @param {number} [y] - Normalised y position (0–1).
  * @param {number} [zoom] - Zoom multiplier relative to home zoom.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {ViewerCard|null} The created card, or null on error.
  */
-export function createViewerCard(objectId, zIndex, x, y, zoom) {
+export function createViewerCard(objectId, zIndex, x, y, zoom, page) {
   const container = document.getElementById('viewer-cards-container');
 
   const cardElement = document.createElement('div');
@@ -134,88 +145,50 @@ export function createViewerCard(objectId, zIndex, x, y, zoom) {
   cardElement.appendChild(viewerDiv);
   container.appendChild(cardElement);
 
-  console.log(`Created viewer card for ${objectId} with z-index ${zIndex}, will snap to x=${x}, y=${y}, zoom=${zoom}`);
+  console.log(`Created viewer card for ${objectId} with z-index ${zIndex}, will snap to x=${x}, y=${y}, zoom=${zoom}${page ? `, page=${page}` : ''}`);
 
-  const manifestUrl = getManifestUrl(objectId);
+  const manifestUrl = getManifestUrl(objectId, page);
   if (!manifestUrl) {
     console.error('Could not determine manifest URL for:', objectId);
     return null;
   }
 
-  // Initialise UniversalViewer
-  const urlAdaptor = new UV.IIIFURLAdaptor();
-  const data = urlAdaptor.getInitialData({
-    manifest: manifestUrl,
-    embedded: true,
+  // Initialise Tify
+  const tifyInstance = new window.Tify({
+    container: '#' + viewerId,
+    manifestUrl: manifestUrl,
+    panels: [],
+    urlQueryKey: false,
   });
-
-  const uvInstance = UV.init(viewerId, data);
-  urlAdaptor.bindTo(uvInstance);
 
   const viewerCard = {
     objectId,
     element: cardElement,
-    uvInstance,
+    tifyInstance,
     osdViewer: null,
     isReady: false,
     pendingZoom: (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) ? { x, y, zoom, snap: true } : null,
     zIndex,
   };
 
-  // Poll for OpenSeadragon readiness instead of using a fixed delay
-  uvInstance.on('created', function () {
-    let pollCount = 0;
-    const MAX_POLLS = 50; // 5 seconds max (50 × 100 ms)
+  // Wait for Tify's OpenSeadragon viewer to be ready
+  tifyInstance.ready.then(() => {
+    viewerCard.osdViewer = tifyInstance.viewer;
+    viewerCard.isReady = true;
+    console.log(`Viewer card for ${objectId} is ready`);
 
-    const checkViewerReady = () => {
-      pollCount++;
-      let newViewer = null;
-
-      if (uvInstance._assignedContentHandler) {
-        if (uvInstance._assignedContentHandler.viewer) {
-          newViewer = uvInstance._assignedContentHandler.viewer;
-          console.log(`Got viewer via direct access for ${objectId} after ${pollCount * 100}ms`);
-        } else if (uvInstance._assignedContentHandler.extension) {
-          const ext = uvInstance._assignedContentHandler.extension;
-          if (ext.centerPanel && ext.centerPanel.viewer) {
-            newViewer = ext.centerPanel.viewer;
-            console.log(`Got viewer via extension path for ${objectId} after ${pollCount * 100}ms`);
-          }
-        }
-      }
-
-      if (newViewer) {
-        viewerCard.osdViewer = newViewer;
-        viewerCard.isReady = true;
-        console.log(`Viewer card for ${objectId} is ready after ${pollCount * 100}ms`);
-
-        // Hide UV controls
-        setTimeout(() => {
-          const leftPanel = cardElement.querySelector('.leftPanel');
-          if (leftPanel) {
-            leftPanel.style.display = 'none';
-            leftPanel.style.visibility = 'hidden';
-          }
-        }, 100);
-
-        // Execute pending position
-        if (viewerCard.pendingZoom) {
-          if (viewerCard.pendingZoom.snap) {
-            snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-          } else {
-            animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-          }
-          viewerCard.pendingZoom = null;
-        }
-      } else if (pollCount < MAX_POLLS) {
-        setTimeout(checkViewerReady, 100);
+    // Execute pending position
+    if (viewerCard.pendingZoom) {
+      if (viewerCard.pendingZoom.snap) {
+        snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
       } else {
-        console.warn(`Viewer for ${objectId} failed to initialize after 5s, allowing transition`);
-        viewerCard.isReady = true;
+        animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
       }
-    };
-
-    checkViewerReady();
+      viewerCard.pendingZoom = null;
+    }
+  }).catch(err => {
+    console.error(`Tify failed to initialize for ${objectId}:`, err);
+    viewerCard.isReady = true; // Allow navigation to proceed
   });
 
   state.viewerCards.push(viewerCard);
@@ -241,9 +214,10 @@ export function createViewerCard(objectId, zIndex, x, y, zoom) {
  * @param {number} [x] - Normalised x position.
  * @param {number} [y] - Normalised y position.
  * @param {number} [zoom] - Zoom multiplier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  * @returns {ViewerCard|null}
  */
-export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom) {
+export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom, page) {
   console.log(`getOrCreateViewerCard called for ${objectId}`);
   console.log(`Current viewerCards: ${state.viewerCards.map(vc => vc.objectId).join(', ')}`);
 
@@ -269,7 +243,7 @@ export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom) {
   }
 
   console.log(`Creating new viewer card for ${objectId}`);
-  return createViewerCard(objectId, zIndex, x, y, zoom);
+  return createViewerCard(objectId, zIndex, x, y, zoom, page);
 }
 
 /**
@@ -284,7 +258,10 @@ export function destroyViewerCard(viewerCard) {
     viewerCard.element.parentNode.removeChild(viewerCard.element);
   }
 
-  viewerCard.uvInstance = null;
+  if (viewerCard.tifyInstance && typeof viewerCard.tifyInstance.destroy === 'function') {
+    viewerCard.tifyInstance.destroy();
+  }
+  viewerCard.tifyInstance = null;
   viewerCard.osdViewer = null;
 }
 
@@ -313,8 +290,9 @@ export function initializeFirstViewer() {
   const x = firstRealStep ? parseFloat(firstRealStep.x) : undefined;
   const y = firstRealStep ? parseFloat(firstRealStep.y) : undefined;
   const zoom = firstRealStep ? parseFloat(firstRealStep.zoom) : undefined;
+  const page = firstRealStep?.page ? parseInt(firstRealStep.page, 10) : undefined;
 
-  const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom);
+  const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom, page);
 
   if (viewerCard) {
     state.currentViewerCard = viewerCard;
@@ -505,11 +483,12 @@ function activateViewerCard(newViewerCard, objectId, options = {}) {
  * @param {number} zoom - Zoom multiplier.
  * @param {HTMLElement} stepElement - The text step element in the page.
  * @param {string} [direction='forward'] - Navigation direction.
+ * @param {number} [page] - Optional page number for multi-page objects.
  */
-export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction = 'forward') {
-  console.log(`Switching to object: ${objectId} at step ${stepNumber} with position x=${x}, y=${y}, zoom=${zoom} (${direction})`);
+export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction = 'forward', page) {
+  console.log(`Switching to object: ${objectId} at step ${stepNumber} with position x=${x}, y=${y}, zoom=${zoom} (${direction})${page ? `, page=${page}` : ''}`);
 
-  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
+  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom, page);
 
   activateViewerCard(newViewerCard, objectId, {
     onReady: (card) => {
@@ -536,11 +515,12 @@ export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, di
  * @param {number} x - Normalised x position.
  * @param {number} y - Normalised y position.
  * @param {number} zoom - Zoom multiplier.
+ * @param {number} [page] - Optional page number for multi-page objects.
  */
-export function switchToObjectMobile(objectId, stepNumber, x, y, zoom) {
-  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}`);
+export function switchToObjectMobile(objectId, stepNumber, x, y, zoom, page) {
+  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}${page ? `, page=${page}` : ''}`);
 
-  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom);
+  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom, page);
   activateViewerCard(newViewerCard, objectId);
 }
 
@@ -657,9 +637,10 @@ export function preloadNearbyViewers(currentIndex, ahead, behind) {
     const x = parseFloat(step.dataset.x);
     const y = parseFloat(step.dataset.y);
     const zoom = parseFloat(step.dataset.zoom);
+    const page = step.dataset.page ? parseInt(step.dataset.page, 10) : undefined;
 
     console.log(`Preloading viewer for step ${idx}: ${objectId}`);
-    getOrCreateViewerCard(objectId, idx, x, y, zoom);
+    getOrCreateViewerCard(objectId, idx, x, y, zoom, page);
   }
 }
 

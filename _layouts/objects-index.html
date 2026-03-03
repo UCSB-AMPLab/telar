@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (thumbnailSize) {
           const baseUrl = info.id || info['@id'];
           // Use base URL directly - it already points to the image service
-          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},/0/default.jpg`;
+          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
 
           const img = document.createElement('img');
           img.src = thumbnailUrl;
@@ -351,6 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(manifest => {
         let imageServiceUrl = null;
+        let imageServiceProfile = null;
         let fallbackImageUrl = null;
 
         // IIIF Presentation API 2.1
@@ -363,6 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (resource.service) {
               const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
               imageServiceUrl = service['@id'] || service.id;
+              imageServiceProfile = service.profile;
             }
 
             // Fallback to full image URL
@@ -380,6 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Try to get image service for resizing
             if (annotationBody.service && annotationBody.service.length > 0) {
               imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
+              imageServiceProfile = annotationBody.service[0].profile;
             }
 
             // Fallback to full image URL
@@ -389,34 +392,64 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
 
-        let thumbnailUrl = null;
+        const isLevel0 = imageServiceProfile && (
+          imageServiceProfile === 'level0' ||
+          imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
+        );
 
-        // If we have an image service, request a 400px thumbnail
-        if (imageServiceUrl) {
-          // Remove trailing slash if present
+        // Level 0: fetch info.json to get available sizes
+        if (imageServiceUrl && isLevel0) {
           imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          thumbnailUrl = `${imageServiceUrl}/full/!400,400/0/default.jpg`;
-        }
-        // Otherwise use fallback image (will be scaled by CSS)
-        else if (fallbackImageUrl) {
-          thumbnailUrl = fallbackImageUrl;
-        }
+          fetch(`${imageServiceUrl}/info.json`)
+            .then(r => r.json())
+            .then(info => {
+              const sizes = info.sizes || [];
+              const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
+              let thumbnailUrl = largest
+                ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
+                : fallbackImageUrl;
 
-        // If we found a thumbnail, replace placeholder
-        if (thumbnailUrl) {
+              if (thumbnailUrl) {
+                const img = document.createElement('img');
+                img.src = thumbnailUrl;
+                img.alt = item.closest('.collection-item').querySelector('h3').textContent;
+                img.className = 'iiif-thumbnail';
+                const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
+                if (placeholder) placeholder.replaceWith(img);
+              }
+            })
+            .catch(() => {
+              if (fallbackImageUrl) {
+                const img = document.createElement('img');
+                img.src = fallbackImageUrl;
+                img.alt = item.closest('.collection-item').querySelector('h3').textContent;
+                img.className = 'iiif-thumbnail';
+                const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
+                if (placeholder) placeholder.replaceWith(img);
+              }
+            });
+        }
+        // Level 1+: request arbitrary size
+        else if (imageServiceUrl) {
+          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
+          const thumbnailUrl = `${imageServiceUrl}/full/!400,400/0/default.jpg`;
           const img = document.createElement('img');
           img.src = thumbnailUrl;
           img.alt = item.closest('.collection-item').querySelector('h3').textContent;
           img.className = 'iiif-thumbnail';
-
-          // Replace placeholder
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-          if (placeholder) {
-            placeholder.replaceWith(img);
-          }
+          if (placeholder) placeholder.replaceWith(img);
+        }
+        // No image service — use fallback directly
+        else if (fallbackImageUrl) {
+          const img = document.createElement('img');
+          img.src = fallbackImageUrl;
+          img.alt = item.closest('.collection-item').querySelector('h3').textContent;
+          img.className = 'iiif-thumbnail';
+          const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
+          if (placeholder) placeholder.replaceWith(img);
         } else {
           console.warn('No image found in manifest:', manifestUrl);
-          // Show "no image" placeholder
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
           if (placeholder) {
             placeholder.innerHTML = '<span class="text-muted">No image</span>';

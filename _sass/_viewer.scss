@@ -1,17 +1,18 @@
 /**
  * Viewer
  *
- * Overrides for UniversalViewer, the IIIF image viewer embedded in story and
- * object pages. UV ships with its own controls (zoom buttons, thumbnails panel,
- * download, share, settings) which are hidden in Telar to present a clean
- * viewing experience. The overrides target specific UV component classes and
- * force the central image area to fill the available space.
+ * Overrides for the Tify IIIF image viewer embedded in story and object pages.
+ * Tify ships with its own UI (header, panel buttons, media controls) which is
+ * hidden in Telar to present a clean viewing experience. The overrides target
+ * Tify component classes and force the image area to fill the available space.
  *
- * Story pages and object pages both need the same controls hidden but use
- * different parent selectors (.viewer-instance vs #object-viewer), so a shared
- * mixin generates the hiding rules for each context.
+ * Story pages use the hide-viewer-chrome mixin for full chrome removal.
+ * Object pages use explicit rules to support both single-page (full chrome
+ * removal) and multi-page (header with pagination controls) modes. The
+ * .multipage class is added by JavaScript when a multi-canvas manifest is
+ * detected.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
 @use 'mixins' as *;
@@ -27,41 +28,119 @@
   height: 600px;
 }
 
-/* UniversalViewer - Clean Story Viewer Display */
-/* Hide all UV controls in story pages for clean presentation */
-@include hide-uv-controls('.viewer-instance');
-
-/* Extra aggressive hiding for left panel thumbnails/color bars */
-.viewer-card .leftPanel,
-.viewer-card .thumbsView,
-.viewer-card .galleryView,
-.uv .leftPanel,
-.uv .thumbsView,
-.uv .galleryView {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  width: 0 !important;
+/* Black viewer background — targets Tify internals (same pattern as Zasqua) */
+.viewer-instance .tify-scan,
+.viewer-instance .openseadragon-container,
+#object-viewer .tify-scan,
+#object-viewer .openseadragon-container {
+  background: #000 !important;
 }
 
-/* UniversalViewer - Clean Object Page Display */
-/* Hide all UV controls on object pages for clean presentation */
-@include hide-uv-controls('#object-viewer');
+/* Tify - Clean Story Viewer Display */
+/* Hide all Tify chrome in story pages for clean presentation */
+@include hide-viewer-chrome('.viewer-instance');
 
-/* Hide UniversalViewer UI controls for cleaner viewing */
-.uv .leftPanel,
-.uv .rightPanel,
-.uv .footerPanel .options,
-.uv .headerPanel .options,
-.uv .moreInfo,
-.uv .download,
-.uv .share,
-.uv .bookmark,
-.uv .toggle {
-  display: none !important;
+/* Tify - Object Page Display */
+/* For single-page objects: hide all chrome (same as story pages).
+ * For multi-page objects (.multipage): show header with pagination only. */
+
+/* Always hide panels and media buttons on object pages */
+#object-viewer .tify-media-buttons { display: none !important; }
+#object-viewer [class*="tify-panel"] { display: none !important; }
+#object-viewer .tify-media { width: 100% !important; height: 100% !important; }
+#object-viewer .tify-media-image { width: 100% !important; height: 100% !important; }
+
+/* Default (single-page): hide header, main fills container */
+#object-viewer .tify-header { display: none !important; }
+#object-viewer .tify-main {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
-/* Keep only essential navigation controls */
-.uv .footerPanel .zoom {
-  display: block;
+/* Multi-page: show header with pagination controls only */
+#object-viewer.multipage .tify-header {
+  display: flex !important;
+  background: #fff !important;
+  border-bottom: 1px solid #dedede !important;
+  box-shadow: none !important;
+  padding: 0.35rem 0.5rem !important;
+}
+
+#object-viewer.multipage .tify-main {
+  top: auto !important;
+}
+
+/* Hide unwanted Tify header chrome */
+#object-viewer.multipage .tify-header-title { display: none !important; }
+#object-viewer.multipage .tify-header-button[title="Toggle double-page"] { display: none !important; }
+#object-viewer.multipage .tify-header-button-group.-toggle { display: none !important; }
+#object-viewer.multipage .tify-header-popup { display: none !important; }
+
+/* First header column: collapse to auto width */
+#object-viewer.multipage .tify-header-column:first-child {
+  min-width: auto;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+/* Pagination arrows — pill style (Zasqua pattern) */
+#object-viewer.multipage .tify-header-button-group.-pagination {
+  display: flex !important;
+  gap: 0.25rem !important;
+}
+
+#object-viewer.multipage .tify-header-button-group.-pagination .tify-header-button {
+  border-radius: 50px !important;
+  border: 1px solid #ddd !important;
+  background: #f8f8f8 !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#object-viewer.multipage .tify-header-button-group.-pagination .tify-header-button:hover {
+  background: #fff !important;
+  border-color: #bbb !important;
+}
+
+#object-viewer.multipage .tify-header-button-group.-pagination .tify-header-button svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Page select button — pill style */
+#object-viewer.multipage .tify-header-button-group.-page-select {
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: none !important;
+}
+
+#object-viewer.multipage .tify-page-select-button {
+  border-radius: 50px !important;
+  border: 1px solid #ddd !important;
+  background: #f8f8f8 !important;
+  color: #757575 !important;
+  font-size: 0.8rem !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 1.8rem 0 0.6rem !important;
+  position: relative !important;
+  cursor: pointer !important;
+}
+
+#object-viewer.multipage .tify-page-select-button::after {
+  content: "\25BE";
+  position: absolute;
+  right: 0.5rem;
+  font-size: 0.7rem;
 }

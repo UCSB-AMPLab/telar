@@ -52,6 +52,8 @@ COLUMN_NAME_MAPPING = {
     'contenido_capa2': 'layer2_content',  # v0.6.3+ preferred name
     'archivo_capa2': 'layer2_content',    # backward compatibility
     # x, y, zoom are the same in both languages
+    'pagina': 'page',
+    'página': 'page',
 
     # English column backward compatibility (layer1_file -> layer1_content)
     'layer1_file': 'layer1_content',
@@ -192,7 +194,7 @@ def is_header_row(row_values):
     valid_names = set(COLUMN_NAME_MAPPING.keys()) | set(COLUMN_NAME_MAPPING.values())
 
     # Also include common column names not in the mapping
-    valid_names.update(['x', 'y', 'zoom', 'order', 'story_id', 'title', 'subtitle',
+    valid_names.update(['x', 'y', 'zoom', 'page', 'order', 'story_id', 'title', 'subtitle',
                         'byline', 'object_id', 'description', 'source_url', 'creator',
                         'period', 'medium', 'dimensions', 'location', 'source', 'credit',
                         'thumbnail', 'year', 'object_type', 'subjects', 'featured',

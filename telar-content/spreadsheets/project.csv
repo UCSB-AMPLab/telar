@@ -1,0 +1,6 @@
+order,story_id,title,subtitle,byline,private
+orden,id_historia,titulo,subtitulo,firma,privada
+#,# Must match the tab name exactly. Use lowercase letters and hyphens (e.g. allegorical-woman),Story title,Optional subtitle,Optional attribution (supports markdown),"If ""yes"", then users will need the key you set in _config.yml to access this story."
+#,# Debe coincidir con el nombre de la pestaña exactamente. Usa letras minúsculas y guiones (p. ej. mujer-alegorica),Título de la historia,Subtítulo opcional,Atribución opcional (admite markdown),"Si ""sí"", los usuarios deberán utilizar la clave que fijes en _config.yml"
+1,blank_template,replace me with your title,,,FALSE
+2,plantilla_en_blanco,reemplázame con tu título,,,FALSE
