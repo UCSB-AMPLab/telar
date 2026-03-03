@@ -1,0 +1,5 @@
+paso,objeto,x,y,zoom,página,pregunta,respuesta,boton_capa1,contenido_capa1,boton_capa2,contenido_capa2
+#,id_objeto de la pestaña objetos / objects,Posición horizontal 0-1 (0.5 = centro),Posición vertical 0-1 (0.5 = centro),1.0 = imagen completa,para objetos con múltiples páginas,Encabezado para este paso,Texto breve de 1-2 oraciones,"Texto opcional del botón (predeterminado: ""Saber más"")","Contenido del panel: escribe texto aquí, pega markdown, o indica ruta a archivo .md (ej. tu-historia/archivo.md)","Texto opcional del segundo botón (predeterminado: ""Profundizar más"")","Segundo panel: escribe texto aquí, pega markdown, o indica ruta a archivo .md"
+1,telar-placeholder,0.353,0.379,6.7,,pregunta,respuesta,,,,
+2,telar-placeholder,0.531,0.413,6.7,,,,,,,
+3,telar-placeholder,0.49,0.455,2.7,,,,,,,

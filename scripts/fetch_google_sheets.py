@@ -87,6 +87,18 @@ def fetch_csv(published_id, gid, output_path):
             if data.startswith('<!DOCTYPE') or data.startswith('<html'):
                 return False
 
+            # Strip trailing empty rows (Google Sheets exports all rows
+            # in the sheet, including blank ones beyond the data).
+            # Cells may contain FALSE from unchecked checkboxes.
+            lines = data.split('\n')
+            while lines:
+                cells = lines[-1].strip().split(',')
+                if all(c.strip() in ('', 'FALSE') for c in cells):
+                    lines.pop()
+                else:
+                    break
+            data = '\n'.join(lines) + '\n'
+
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(data)
 
