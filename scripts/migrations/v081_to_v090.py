@@ -56,12 +56,16 @@ class Migration081to090(BaseMigration):
         print("  Phase 5: Updating framework files...")
         changes.extend(self._update_framework_files())
 
-        # Phase 6: Scan for broken path references in user content
-        print("  Phase 6: Scanning for broken path references...")
+        # Phase 6: Populate missing content (Google Sheets fetch + column augmentation)
+        print("  Phase 6: Populating missing content...")
+        changes.extend(self._populate_missing_content())
+
+        # Phase 7: Scan for broken path references in user content
+        print("  Phase 7: Scanning for broken path references...")
         changes.extend(self._scan_broken_references())
 
-        # Phase 7: Update version
-        print("  Phase 7: Updating version...")
+        # Phase 8: Update version
+        print("  Phase 8: Updating version...")
         from datetime import date
         today = date.today().strftime("%Y-%m-%d")
         if self._update_config_version("0.9.0-beta", today):
@@ -604,7 +608,298 @@ class Migration081to090(BaseMigration):
         return changes
 
     # ------------------------------------------------------------------
-    # Phase 6: Scan for broken path references
+    # Phase 6: Populate missing content
+    # ------------------------------------------------------------------
+
+    # Groups of equivalent column names (any one means the column exists).
+    # Used by _ensure_csv_columns to avoid adding a column that is already
+    # present under a different name or language variant.
+    _COLUMN_ALIASES = {
+        'page': {'page', 'pagina', 'página'},
+        'year': {'year', 'año', 'ano'},
+        'object_type': {'object_type', 'tipo_objeto'},
+        'subjects': {'subjects', 'temas', 'materias', 'materia'},
+        'featured': {'featured', 'destacado'},
+        'private': {'private', 'privada', 'protected', 'protegida'},
+    }
+
+    # Columns that may be missing from older Google Sheets templates,
+    # keyed by CSV type and language.  Only columns added since v0.8.0
+    # are listed — earlier columns are assumed present in all live sites.
+    _EXPECTED_NEW_COLUMNS = {
+        'story': {
+            'en': ['page'],
+            'es': ['página'],
+        },
+        'objects': {
+            'en': ['year', 'object_type', 'subjects', 'featured'],
+            'es': ['año', 'tipo_objeto', 'temas', 'destacado'],
+        },
+        'project': {
+            'en': ['private'],
+            'es': ['privada'],
+        },
+    }
+
+    def _populate_missing_content(self) -> List[str]:
+        """
+        Ensure all expected content files exist and have current column schemas.
+
+        Three sub-steps:
+        6a. Fetch CSVs from Google Sheets (if integration is enabled)
+        6b. Add missing column headers to existing CSVs
+        6c. Create placeholder files for anything still missing
+        """
+        changes = []
+
+        # 6a: Fetch from Google Sheets if enabled
+        changes.extend(self._fetch_google_sheets_content())
+
+        # 6b: Add missing columns to existing CSVs
+        changes.extend(self._ensure_csv_columns())
+
+        # 6c: Ensure placeholder files exist
+        changes.extend(self._ensure_placeholder_files())
+
+        return changes
+
+    def _fetch_google_sheets_content(self) -> List[str]:
+        """Run fetch_google_sheets.py if Google Sheets integration is enabled."""
+        changes = []
+
+        config_path = os.path.join(self.repo_root, '_config.yml')
+        try:
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+
+            gs = config.get('google_sheets', {})
+            if not gs.get('enabled') or not gs.get('published_url', '').strip():
+                changes.append("Google Sheets not enabled — skipping fetch")
+                return changes
+        except Exception:
+            return changes
+
+        script = os.path.join(self.repo_root, 'scripts', 'fetch_google_sheets.py')
+        if not os.path.exists(script):
+            changes.append("⚠️  fetch_google_sheets.py not found — skipping fetch")
+            return changes
+
+        try:
+            result = subprocess.run(
+                ['python3', script],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if result.returncode == 0:
+                changes.append("Fetched CSVs from Google Sheets")
+            else:
+                changes.append("⚠️  Google Sheets fetch returned errors (non-critical)")
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n')[:3]:
+                        changes.append(f"    {line}")
+        except subprocess.TimeoutExpired:
+            changes.append("⚠️  Google Sheets fetch timed out — skipping")
+        except Exception as e:
+            changes.append(f"⚠️  Could not run Google Sheets fetch: {e}")
+
+        return changes
+
+    def _classify_csv(self, filename: str) -> str:
+        """
+        Determine CSV type from filename.
+
+        Returns:
+            'objects', 'project', 'glossary', 'story', or '' if the file
+            should be skipped (e.g. template files that already have all columns).
+        """
+        fn = filename.lower()
+        if fn in ('objects.csv', 'objetos.csv'):
+            return 'objects'
+        elif fn in ('project.csv', 'proyecto.csv'):
+            return 'project'
+        elif fn in ('glossary.csv', 'glosario.csv'):
+            return 'glossary'
+        elif fn.startswith(('blank_template', 'plantilla')):
+            return ''  # Templates already have all columns
+        else:
+            return 'story'
+
+    def _detect_header_language(self, headers_lower: list, csv_type: str) -> str:
+        """Detect CSV language from header row column names."""
+        spanish_indicators = {
+            'story': ['paso', 'objeto', 'pregunta', 'respuesta'],
+            'objects': ['id_objeto', 'titulo', 'descripcion', 'creador'],
+            'project': ['orden', 'id_historia'],
+            'glossary': ['id_término', 'id_termino', 'definición', 'definicion'],
+        }
+
+        for indicator in spanish_indicators.get(csv_type, []):
+            if indicator in headers_lower:
+                return 'es'
+        return 'en'
+
+    def _find_missing_columns(self, headers_lower: list, csv_type: str,
+                              lang: str) -> List[str]:
+        """Return column names that should be added to a CSV."""
+        expected = self._EXPECTED_NEW_COLUMNS.get(csv_type, {}).get(lang, [])
+
+        missing = []
+        for col in expected:
+            aliases = self._COLUMN_ALIASES.get(col.lower(), {col.lower()})
+            if not any(a in headers_lower for a in aliases):
+                missing.append(col)
+        return missing
+
+    def _ensure_csv_columns(self) -> List[str]:
+        """
+        Add missing column headers to existing CSVs.
+
+        Appends new columns (with empty values) to CSVs that were created
+        from older Google Sheets templates missing v0.8.0+ columns like
+        'page', 'year', 'object_type', etc.
+        """
+        import csv
+        import io
+
+        changes = []
+        spreadsheets = os.path.join(
+            self.repo_root, 'telar-content', 'spreadsheets'
+        )
+
+        if not os.path.exists(spreadsheets):
+            return changes
+
+        for filename in sorted(os.listdir(spreadsheets)):
+            if not filename.endswith('.csv'):
+                continue
+
+            csv_type = self._classify_csv(filename)
+            if not csv_type:
+                continue
+
+            filepath = os.path.join(spreadsheets, filename)
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception:
+                continue
+
+            if not content.strip():
+                continue
+
+            lines = content.split('\n')
+
+            # Parse header with csv.reader for proper quoted-field handling
+            reader = csv.reader(io.StringIO(lines[0]))
+            headers = next(reader)
+            headers_lower = [h.strip().lower() for h in headers]
+
+            lang = self._detect_header_language(headers_lower, csv_type)
+            missing = self._find_missing_columns(headers_lower, csv_type, lang)
+
+            if not missing:
+                continue
+
+            # Append missing columns to header
+            lines[0] = lines[0].rstrip('\r') + ',' + ','.join(missing)
+
+            # Append empty values to each non-empty data row
+            empty_suffix = ',' * len(missing)
+            for i in range(1, len(lines)):
+                if lines[i].strip():
+                    lines[i] = lines[i].rstrip('\r') + empty_suffix
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(lines))
+
+            changes.append(
+                f"Added columns to {filename}: {', '.join(missing)}"
+            )
+
+        return changes
+
+    def _ensure_placeholder_files(self) -> List[str]:
+        """
+        Ensure essential placeholder files exist for users without them.
+
+        Fetches from GitHub any missing glossary, pages, or story text
+        placeholders so users have working examples of each content type.
+        """
+        changes = []
+        lang = self._detect_language()
+        spreadsheets = os.path.join(
+            self.repo_root, 'telar-content', 'spreadsheets'
+        )
+
+        # Ensure glossary CSV exists
+        has_glossary = (
+            os.path.exists(os.path.join(spreadsheets, 'glossary.csv'))
+            or os.path.exists(os.path.join(spreadsheets, 'glosario.csv'))
+        )
+        if not has_glossary:
+            filename = 'glosario.csv' if lang == 'es' else 'glossary.csv'
+            content = self._fetch_from_github(
+                f'telar-content/spreadsheets/{filename}'
+            )
+            if content:
+                self._write_file(
+                    f'telar-content/spreadsheets/{filename}', content
+                )
+                changes.append(f"Created placeholder {filename}")
+
+        # Ensure glossary text directory has placeholder files
+        glossary_placeholders = {
+            'telar-content/texts/glossary/example-term.md':
+                'Glossary placeholder (EN)',
+            'telar-content/texts/glossary/ejemplo-termino.md':
+                'Glossary placeholder (ES)',
+        }
+        for path, desc in glossary_placeholders.items():
+            if not os.path.exists(os.path.join(self.repo_root, path)):
+                content = self._fetch_from_github(path)
+                if content:
+                    self._write_file(path, content)
+                    changes.append(f"Created {path}")
+
+        # Ensure pages directory has about.md placeholder
+        about_path = 'telar-content/texts/pages/about.md'
+        if not os.path.exists(os.path.join(self.repo_root, about_path)):
+            content = self._fetch_from_github(about_path)
+            if content:
+                self._write_file(about_path, content)
+                changes.append(f"Created {about_path}")
+
+        # Ensure story text directory has at least one placeholder
+        stories_dir = os.path.join(
+            self.repo_root, 'telar-content', 'texts', 'stories'
+        )
+        has_story_dir = False
+        if os.path.exists(stories_dir):
+            for entry in os.listdir(stories_dir):
+                if os.path.isdir(os.path.join(stories_dir, entry)):
+                    has_story_dir = True
+                    break
+
+        if not has_story_dir:
+            story_placeholders = {
+                'telar-content/texts/stories/blank_template/example-panel.md':
+                    'Story panel placeholder (EN)',
+                'telar-content/texts/stories/plantilla_en_blanco/ejemplo-panel.md':
+                    'Story panel placeholder (ES)',
+            }
+            for path, desc in story_placeholders.items():
+                content = self._fetch_from_github(path)
+                if content:
+                    self._write_file(path, content)
+                    changes.append(f"Created {path}")
+
+        return changes
+
+    # ------------------------------------------------------------------
+    # Phase 7: Scan for broken path references
     # ------------------------------------------------------------------
 
     def _scan_broken_references(self) -> List[str]:
@@ -762,6 +1057,18 @@ The migration script scans for common patterns and warns you, but please also re
 - `components/texts/` → `telar-content/texts/`''',
             },
             {
+                'description': '''**Update Google Sheets columns (if you use Google Sheets):**
+
+The migration automatically added any missing columns to your local CSV files. However, to keep these columns in future builds, you should also add them to your Google Sheets spreadsheet:
+
+- **Story tabs**: Add a `page` column (after `zoom`) — for referencing specific pages of multi-page objects
+- **Objects tab**: Add `year`, `object_type`, `subjects`, and `featured` columns — for gallery filtering and homepage featured objects
+- **Project tab**: Add a `private` column — for password-protecting individual stories
+
+You can also start from an updated template: https://bit.ly/telar-template''',
+                'doc_url': 'https://bit.ly/telar-template'
+            },
+            {
                 'description': '''**What's new in v0.9.0:**
 
 1. **Faster builds**: libvips tile generation is ~28x faster than the Python library
@@ -836,6 +1143,18 @@ El script de migración busca patrones comunes y te advierte, pero también revi
 - `components/images/` → `telar-content/objects/`
 - `components/structures/` → `telar-content/spreadsheets/`
 - `components/texts/` → `telar-content/texts/`''',
+            },
+            {
+                'description': '''**Actualiza las columnas de Google Sheets (si usas Google Sheets):**
+
+La migración agregó automáticamente las columnas faltantes a tus archivos CSV locales. Sin embargo, para mantener estas columnas en futuras compilaciones, también debes agregarlas a tu hoja de cálculo de Google Sheets:
+
+- **Pestañas de historias**: Agrega una columna `página` (después de `zoom`) — para referenciar páginas específicas de objetos multipágina
+- **Pestaña de objetos**: Agrega columnas `año`, `tipo_objeto`, `temas` y `destacado` — para filtrado de galería y objetos destacados en la página principal
+- **Pestaña de proyecto**: Agrega una columna `privada` — para proteger con contraseña historias individuales
+
+También puedes empezar desde una plantilla actualizada: https://bit.ly/telar-template''',
+                'doc_url': 'https://bit.ly/telar-template'
             },
             {
                 'description': '''**Novedades en v0.9.0:**
