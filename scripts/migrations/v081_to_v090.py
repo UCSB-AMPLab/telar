@@ -43,7 +43,7 @@ class Migration081to090(BaseMigration):
         print("  Phase 2: Updating .gitignore...")
         changes.extend(self._update_gitignore())
 
-        # Phase 3: Update _config.yml (theme comment, shared_url cleanup)
+        # Phase 3: Update _config.yml (url order, theme comment, shared_url cleanup)
         print("  Phase 3: Updating configuration...")
         changes.extend(self._update_configuration())
 
@@ -114,13 +114,22 @@ class Migration081to090(BaseMigration):
             changes.append(f"Moved {src}/ → {dest}/")
 
         # Remove remaining components/ directory
+        # After moving the three content dirs, only template placeholder
+        # dirs (3d-models/, audio/, pdfs/) and README.md should remain.
         components_dir = os.path.join(self.repo_root, 'components')
         if os.path.exists(components_dir):
-            remaining = os.listdir(components_dir)
-            if remaining:
+            known_placeholders = {'3d-models', 'audio', 'pdfs', 'README.md'}
+            remaining = set(os.listdir(components_dir))
+            unexpected = remaining - known_placeholders
+            if unexpected:
                 changes.append(
                     f"Note: components/ contained unexpected files: "
-                    f"{remaining[:5]}"
+                    f"{sorted(unexpected)[:5]}"
+                )
+            if remaining & known_placeholders:
+                changes.append(
+                    "Removed placeholder directories "
+                    "(3d-models/, audio/, pdfs/) and README.md"
                 )
             try:
                 shutil.rmtree(components_dir)
@@ -194,7 +203,7 @@ class Migration081to090(BaseMigration):
 
     def _update_configuration(self) -> List[str]:
         """
-        Update _config.yml: theme comment and shared_url cleanup.
+        Update _config.yml: url/baseurl order, theme comment, shared_url cleanup.
 
         Uses text-based editing to preserve comments and formatting.
         Does NOT change the telar_theme value — users who explicitly set
@@ -209,7 +218,24 @@ class Migration081to090(BaseMigration):
 
         modified = False
 
-        # 1. Update telar_theme comment to list trama first
+        # 1. Swap url/baseurl order if baseurl comes first
+        #    The canonical order is url before baseurl.
+        lines = content.split('\n')
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith('baseurl:'):
+                # Check if the next non-blank line is url:
+                for j in range(i + 1, min(i + 3, len(lines))):
+                    if lines[j].strip().startswith('url:'):
+                        # Swap them
+                        lines[i], lines[j] = lines[j], lines[i]
+                        content = '\n'.join(lines)
+                        changes.append("Reordered url before baseurl in _config.yml")
+                        modified = True
+                        break
+                break  # Only check the first baseurl occurrence
+
+        # 2. Update telar_theme comment to list trama first
         old_patterns = [
             '# Options: paisajes, neogranadina, santa-barbara, austin, or custom',
             '# Options: paisajes, neogranadina, santa-barbara, austin or custom',
@@ -223,7 +249,7 @@ class Migration081to090(BaseMigration):
                 modified = True
                 break
 
-        # 2. Remove shared_url and its comment if present
+        # 3. Remove shared_url and its comment if present
         #    shared_url is silently ignored since v0.9.0 but removing keeps
         #    configs clean
         lines = content.split('\n')

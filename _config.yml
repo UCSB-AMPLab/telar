@@ -8,7 +8,7 @@ url: "https://ampl.clair.ucsb.edu"
 baseurl: "/telar"
 author: ""
 email: ""
-telar_theme: "paisajes" # Options: paisajes, neogranadina, santa-barbara, austin, or custom
+telar_theme: "trama" # Options: trama, paisajes, neogranadina, santa-barbara, austin, or custom
 logo: "" # Path to logo image (optional, max 80px tall, 200-300px wide recommended)
 telar_language: "en" # Options: "en" (English), "es" (Español)
 
