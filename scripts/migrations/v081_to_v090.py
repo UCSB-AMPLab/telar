@@ -14,6 +14,7 @@ Version: v0.9.0-beta
 """
 
 from typing import List, Dict
+import hashlib
 import os
 import shutil
 import subprocess
@@ -39,24 +40,28 @@ class Migration081to090(BaseMigration):
         print("  Phase 1: Moving content directories...")
         changes.extend(self._move_content_directories())
 
-        # Phase 2: Update .gitignore (path references)
-        print("  Phase 2: Updating .gitignore...")
+        # Phase 2: Replace template content if pristine
+        print("  Phase 2: Checking template content...")
+        changes.extend(self._update_template_spreadsheets())
+
+        # Phase 3: Update .gitignore (path references)
+        print("  Phase 3: Updating .gitignore...")
         changes.extend(self._update_gitignore())
 
-        # Phase 3: Update _config.yml (url order, theme comment, shared_url cleanup)
-        print("  Phase 3: Updating configuration...")
+        # Phase 4: Update _config.yml (url order, theme comment, shared_url cleanup)
+        print("  Phase 4: Updating configuration...")
         changes.extend(self._update_configuration())
 
-        # Phase 4: Update framework files from GitHub
-        print("  Phase 4: Updating framework files...")
+        # Phase 5: Update framework files from GitHub
+        print("  Phase 5: Updating framework files...")
         changes.extend(self._update_framework_files())
 
-        # Phase 5: Scan for broken path references in user content
-        print("  Phase 5: Scanning for broken path references...")
+        # Phase 6: Scan for broken path references in user content
+        print("  Phase 6: Scanning for broken path references...")
         changes.extend(self._scan_broken_references())
 
-        # Phase 6: Update version
-        print("  Phase 6: Updating version...")
+        # Phase 7: Update version
+        print("  Phase 7: Updating version...")
         from datetime import date
         today = date.today().strftime("%Y-%m-%d")
         if self._update_config_version("0.9.0-beta", today):
@@ -158,7 +163,207 @@ class Migration081to090(BaseMigration):
         return changes
 
     # ------------------------------------------------------------------
-    # Phase 2: Update .gitignore
+    # Phase 2: Replace template spreadsheets if pristine
+    # ------------------------------------------------------------------
+
+    # SHA-256 hashes of the v0.8.1 template CSV files (as shipped in
+    # components/structures/). If a user's file matches exactly, it is
+    # still the original demo content and can be safely replaced.
+    _TEMPLATE_CSV_HASHES = {
+        'objects.csv': '669c98d2d837903ffaec8d2d4c28ed59ea42b8c80e80cff72d1512c8e1fa5906',
+        'project.csv': 'fb2b107eea6a4313c337110520bf2b3e2c974d08861b00cf73fee24e3256db72',
+        'your-story.csv': 'cab7022b9392bd8099646e3b2a1cf4259cbe4aef801662859d7a82dc3b55b36d',
+        'tu-historia.csv': '632345dd19f97c02b11d20630e555df60dc1bb3397c0ea6622265d26a9618621',
+    }
+
+    # SHA-256 hashes of the v0.8.1 template text files (as shipped in
+    # components/texts/). Paths are relative to telar-content/texts/
+    # (after Phase 1 move).
+    _TEMPLATE_TEXT_HASHES = {
+        # stories/your-story/
+        'stories/your-story/about-coordinates.md': '8fa6c28da5e047972f38c19835769ccbbd36bcabdbaf7a8387b3070ba37d2a08',
+        'stories/your-story/building-argument.md': 'f3693d8cef38a1f5eaf3a9ad447f2e98053794a73700ee73567d7d696667df9a',
+        'stories/your-story/guiding-attention.md': 'ce1000fd28631d291dc26e3ef511b5b28d7a57d497f4b13081b5f1acb7383751',
+        'stories/your-story/multiple-images.md': 'bb9b99fd084a9ddc25636ccb9f0392e8a9cb967f18474e68c506a6a4e7603c90',
+        'stories/your-story/progressive-disclosure.md': '4c67727545e61b83a0ec8e62da869c11fe145fbc65976eb282de3584d88c0802',
+        'stories/your-story/ruler-place.md': 'b511c83f8cc2d3c0c13b96df625cdfff268ee5370aa32fe0a09a12fde909a674',
+        'stories/your-story/the-reveal.md': '681c95b6932460f16330a2061c419a2750c2e0f287878d6d483b9f6fd723aab5',
+        'stories/your-story/visual-rhetoric.md': '2bf5f2af885c390d2b90782abe7c6b471c5c4d9f4d2354501ec41a42d5ec29f5',
+        'stories/your-story/whats-next.md': '63541b81a9672e7a85e27489314f13d1b78fb112d804896d792f672f3c36b34d',
+        # stories/tu-historia/
+        'stories/tu-historia/acerca-de-coordenadas.md': '06969e282c82b4b705306a5301c5335df7ca6061bf5324bdba94cecb2968a92b',
+        'stories/tu-historia/construir-argumento.md': '46053a569466d71a25ff8b47e72acc2489bde60939c05e8f7302712701e7e421',
+        'stories/tu-historia/guiar-atencion.md': 'a61d9bae41978ca98e40c67d5dbc011219c53dca0f0a007565af3ee817a3cf92',
+        'stories/tu-historia/la-revelacion.md': '7f62fed6d12f3d875d4641f7aa18e59c7425f473826563dc43f33d1757d03147',
+        'stories/tu-historia/lugar-gobernante.md': '7d2347d7eebb7d6559ceabb7c3e9b20f14bff0c1634560000a32956bab3a49a3',
+        'stories/tu-historia/multiples-imagenes.md': '718c083abfb780dd3cbafee97273f7c0afb2e73b1ddabac256217e25f0141c26',
+        'stories/tu-historia/presentacion-progresiva.md': 'd31833b320fae0b5f487163788cf94499c89bb6def50fd3c7bacb562f4ea2fd5',
+        'stories/tu-historia/que-sigue.md': '5bb1ba8eada3fc12d31096b09cefb1fd8da1382b9b0d71337b83d101258cef03',
+        'stories/tu-historia/retorica-visual.md': '1f9453df289b0630918d48f78c8f3dd34e88d1b3e3d3b0323a29be1c9bf40cd3',
+        # glossary/
+        'glossary/historia.md': '1faf831ee8f6fcbfa4bb2a24c30e9f9d5edd42868220acea5b14962975663126',
+        'glossary/panel-es.md': 'a8ecb2dc50caf725744f4d449f44551ba3425c477beaaeb525ed0551221ed4ed',
+        'glossary/panel.md': 'b67bc08d7f1de1d30881d0ff46cc85d8fe487521a45a85d991e4ba9e5e076f08',
+        'glossary/paso.md': 'c156863275d044d8be78b1aebe96711a78ea82cdcc6a36a24ac371bb99c3ada2',
+        'glossary/step.md': '11cdbb7719e30719ceaf8c69ab6082dabbc78e4053d48770681aa5bd36c18b9d',
+        'glossary/story.md': '3a14974ef5e2a22e31e67fd3812c8149a71d5c483987fb6686e57241f0be3b8f',
+        'glossary/viewer.md': 'a023410d4f8a5a340d9460a35cdf3c4d00692de1d554a88d73aa094b88334ffa',
+        'glossary/visor.md': '68d3ba6d2ad174822eaaa9bb2e6fbf792e52422c2bc765782724bca262af1711',
+    }
+
+    def _file_sha256(self, path: str) -> str:
+        """Compute SHA-256 hash of a file."""
+        h = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _update_template_spreadsheets(self) -> List[str]:
+        """
+        Replace template content if still the v0.8.1 originals.
+
+        Two independent pristine checks:
+        1. CSVs (4 files): If all match, replace with v0.9.0 templates.
+        2. Texts (26 files): If all match, replace demo stories/glossary
+           with blank placeholders.
+
+        Each check is independent — modified CSVs don't block text
+        replacement and vice versa.
+        """
+        changes = []
+        spreadsheets = os.path.join(self.repo_root, 'telar-content', 'spreadsheets')
+
+        if not os.path.exists(spreadsheets):
+            return changes
+
+        # Check each template file against its known hash
+        pristine_count = 0
+        for filename, expected_hash in self._TEMPLATE_CSV_HASHES.items():
+            filepath = os.path.join(spreadsheets, filename)
+            if os.path.exists(filepath):
+                actual_hash = self._file_sha256(filepath)
+                if actual_hash == expected_hash:
+                    pristine_count += 1
+
+        if pristine_count == 0:
+            changes.append("Spreadsheets modified by user — keeping as-is")
+            return changes
+
+        if pristine_count < len(self._TEMPLATE_CSV_HASHES):
+            changes.append(
+                f"Some template spreadsheets modified ({pristine_count}/"
+                f"{len(self._TEMPLATE_CSV_HASHES)} pristine) — keeping all as-is"
+            )
+            return changes
+
+        # All files are pristine — safe to replace with v0.9.0 templates
+        # Fetch new template CSVs from GitHub
+        new_files = {
+            'telar-content/spreadsheets/objects.csv': 'Updated template objects',
+            'telar-content/spreadsheets/project.csv': 'Updated template project',
+            'telar-content/spreadsheets/blank_template.csv': 'New blank story template (EN)',
+            'telar-content/spreadsheets/plantilla_en_blanco.csv': 'New blank story template (ES)',
+            'telar-content/spreadsheets/glossary.csv': 'New glossary template',
+        }
+
+        for path, desc in new_files.items():
+            content = self._fetch_from_github(path)
+            if content:
+                self._write_file(path, content)
+                changes.append(f"Updated {path}")
+            else:
+                changes.append(f"⚠️  Could not fetch {path}")
+
+        # Remove old story CSVs (replaced by blank templates)
+        for old_file in ('your-story.csv', 'tu-historia.csv'):
+            old_path = os.path.join(spreadsheets, old_file)
+            if os.path.exists(old_path):
+                os.remove(old_path)
+                changes.append(f"Removed old template: {old_file}")
+
+        changes.append("Replaced demo spreadsheets with simplified v0.9.0 templates")
+
+        # Also replace demo text files if pristine
+        changes.extend(self._update_template_texts())
+
+        return changes
+
+    def _update_template_texts(self) -> List[str]:
+        """
+        Replace demo text files if they are still the v0.8.1 originals.
+
+        Independent pristine check: all 26 text files must match their
+        known hashes. If any is missing or modified, all are kept as-is.
+        """
+        changes = []
+        texts_dir = os.path.join(self.repo_root, 'telar-content', 'texts')
+
+        if not os.path.exists(texts_dir):
+            return changes
+
+        # Check all text files against known hashes
+        text_pristine = 0
+        for rel_path, expected_hash in self._TEMPLATE_TEXT_HASHES.items():
+            filepath = os.path.join(texts_dir, rel_path)
+            if os.path.exists(filepath):
+                if self._file_sha256(filepath) == expected_hash:
+                    text_pristine += 1
+
+        total = len(self._TEMPLATE_TEXT_HASHES)
+
+        if text_pristine == 0:
+            changes.append("Demo text files modified by user — keeping as-is")
+            return changes
+
+        if text_pristine < total:
+            changes.append(
+                f"Some demo text files modified ({text_pristine}/"
+                f"{total} pristine) — keeping all as-is"
+            )
+            return changes
+
+        # All text files are pristine — safe to replace
+        # Remove old demo story directories
+        for old_story in ('your-story', 'tu-historia'):
+            old_dir = os.path.join(texts_dir, 'stories', old_story)
+            if os.path.exists(old_dir):
+                shutil.rmtree(old_dir)
+                changes.append(f"Removed old demo story: stories/{old_story}/")
+
+        # Remove old glossary .md files (but keep the directory)
+        glossary_dir = os.path.join(texts_dir, 'glossary')
+        if os.path.exists(glossary_dir):
+            for f in os.listdir(glossary_dir):
+                if f.endswith('.md'):
+                    os.remove(os.path.join(glossary_dir, f))
+            changes.append("Removed old demo glossary definitions")
+
+        # Fetch new placeholder text files from GitHub
+        new_text_files = {
+            'telar-content/texts/stories/blank_template/example-panel.md':
+                'Blank story panel template (EN)',
+            'telar-content/texts/stories/plantilla_en_blanco/ejemplo-panel.md':
+                'Blank story panel template (ES)',
+            'telar-content/texts/glossary/example-term.md':
+                'Glossary term template (EN)',
+            'telar-content/texts/glossary/ejemplo-termino.md':
+                'Glossary term template (ES)',
+        }
+
+        for path, desc in new_text_files.items():
+            content = self._fetch_from_github(path)
+            if content:
+                self._write_file(path, content)
+                changes.append(f"Created {path}")
+            else:
+                changes.append(f"⚠️  Could not fetch {path}")
+
+        changes.append("Replaced demo text files with v0.9.0 placeholders")
+        return changes
+
+    # ------------------------------------------------------------------
+    # Phase 3: Update .gitignore
     # ------------------------------------------------------------------
 
     def _update_gitignore(self) -> List[str]:
@@ -198,7 +403,7 @@ class Migration081to090(BaseMigration):
         return changes
 
     # ------------------------------------------------------------------
-    # Phase 3: Update _config.yml
+    # Phase 4: Update _config.yml
     # ------------------------------------------------------------------
 
     def _update_configuration(self) -> List[str]:
@@ -296,7 +501,7 @@ class Migration081to090(BaseMigration):
         return changes
 
     # ------------------------------------------------------------------
-    # Phase 4: Update framework files from GitHub
+    # Phase 5: Update framework files from GitHub
     # ------------------------------------------------------------------
 
     def _update_framework_files(self) -> List[str]:
@@ -379,10 +584,6 @@ class Migration081to090(BaseMigration):
             'telar-content/spreadsheets/README.md': 'Spreadsheets directory guide',
             'telar-content/texts/README.md': 'Texts directory guide',
 
-            # --- Demo story files (updated path references) ---
-            'telar-content/texts/stories/your-story/multiple-images.md': 'Updated paths',
-            'telar-content/texts/stories/tu-historia/multiples-imagenes.md': 'Updated paths',
-
             # --- .gitignore (full replacement with updated paths) ---
             '.gitignore': 'Updated paths and patterns',
 
@@ -401,7 +602,7 @@ class Migration081to090(BaseMigration):
         return changes
 
     # ------------------------------------------------------------------
-    # Phase 5: Scan for broken path references
+    # Phase 6: Scan for broken path references
     # ------------------------------------------------------------------
 
     def _scan_broken_references(self) -> List[str]:
