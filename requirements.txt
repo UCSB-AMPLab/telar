@@ -13,7 +13,7 @@ cryptography>=41.0.0
 # IIIF tile generation
 iiif>=1.0.0
 
-# Image processing (required by iiif-static)
+# Image processing
 Pillow>=10.0.0
 
 # HEIC/HEIF support (iPhone photos)

@@ -3,10 +3,10 @@
  *
  * Tests getManifestUrl and buildObjectsIndex, which handle IIIF manifest
  * URL resolution and object data indexing. These functions depend on
- * state.objectsIndex and window globals but do not require UniversalViewer
+ * state.objectsIndex and window globals but do not require Tify
  * or real DOM elements.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

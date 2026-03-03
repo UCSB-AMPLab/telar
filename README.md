@@ -97,9 +97,9 @@ Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Natalie Cobo, Santi
 
 Telar is built with:
 - [Jekyll](https://jekyllrb.com/) - Static site generator
-- [UniversalViewer](https://universalviewer.io/) - IIIF viewer
+- [Tify](https://tify.rocks/) - IIIF viewer
 - [Bootstrap 5](https://getbootstrap.com/) - CSS framework
-- [iiif-static](https://github.com/bodleian/iiif-static-choices) - IIIF tile generator
+- [libvips](https://www.libvips.org/) - IIIF tile generator
 
 It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspired by:
 - [Wax](https://minicomp.github.io/wax/) - Minimal computing for digital exhibitions
@@ -213,9 +213,9 @@ Telar es desarrollado por Adelaida Ávila, Juan Cobo Betancourt, Natalie Cobo, S
 
 Telar está construido con:
 - [Jekyll](https://jekyllrb.com/) - Generador de sitios estáticos
-- [UniversalViewer](https://universalviewer.io/) - Visor IIIF
+- [Tify](https://tify.rocks/) - Visor IIIF
 - [Bootstrap 5](https://getbootstrap.com/) - Marco CSS
-- [iiif-static](https://github.com/bodleian/iiif-static-choices) - Generador de teselas IIIF
+- [libvips](https://www.libvips.org/) - Generador de teselas IIIF
 
 Está basado en [Paisajes Coloniales](https://paisajescoloniales.com/), e inspirado por:
 - [Wax](https://minicomp.github.io/wax/) - Computación mínima para exhibiciones digitales

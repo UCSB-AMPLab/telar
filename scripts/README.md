@@ -39,9 +39,9 @@ Generate IIIF tiles and manifests for local images.
 
 ### Basic Usage
 
-1. Add images to `images/objects/` directory:
+1. Add images to `telar-content/objects/` directory:
    ```
-   images/objects/
+   telar-content/objects/
    ├── painting-1.jpg
    ├── manuscript-2.tif
    └── map-3.png
@@ -92,14 +92,14 @@ python scripts/generate_iiif.py --base-url https://mysite.github.io/project
 
 ### How It Works
 
-1. **Tile Generation**: Creates IIIF Image API Level 0 tiles
+1. **Tile Generation**: Creates IIIF Image API 3.0 tiles using libvips (with Python `iiif` library as fallback)
    - 512x512 pixel tiles
    - Multiple zoom levels
    - Outputs `info.json` with image metadata
 
 2. **Manifest Creation**: Wraps tiles in IIIF Presentation API v3 manifest
    - Adds metadata from `_data/objects.json`
-   - Compatible with UniversalViewer
+   - Compatible with Tify
    - Outputs `manifest.json`
 
 3. **Object Linking**: Reference in your CSV/JSON:
@@ -119,7 +119,7 @@ python scripts/generate_iiif.py --base-url https://mysite.github.io/project
 - Object ID is derived from filename (without extension)
 - Existing tiles are regenerated (deleted and recreated)
 - Large images may take several minutes to process
-- Default base URL is `http://localhost:4000/telar` (for local testing)
+- Default base URL is `http://localhost:4001/telar` (for local testing)
 
 ## Data Processing Scripts
 
