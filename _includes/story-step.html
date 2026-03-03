@@ -10,6 +10,7 @@
      data-y="{{ include.y }}"
      data-zoom="{{ include.zoom }}"
      data-region="{{ include.region }}"
+     {% if include.page %}data-page="{{ include.page }}"{% endif %}
      style="z-index: {{ include.step_number }}">
 
   <!-- Main content wrapper -->
@@ -28,7 +29,7 @@
       <strong>⚠️ Image viewer unavailable</strong>
       <p class="mb-0 mt-2">
         {{ include.viewer_warning }}<br>
-        Please check <code>components/structures/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
+        Please check <code>telar-content/spreadsheets/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
       </p>
     </div>
     {% endif %}

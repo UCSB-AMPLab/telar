@@ -13,8 +13,8 @@
 # A title is required in at least one language. Falls back to the other if missing.
 # Se requiere un título en al menos un idioma. Si uno falta se usa el otro.
 #
-# To add a page: create it in components/texts/pages/, then add here.
-# Para agregar una página: créala en components/texts/pages/, luego agrégala aquí.
+# To add a page: create it in telar-content/texts/pages/, then add here.
+# Para agregar una página: créala en telar-content/texts/pages/, luego agrégala aquí.
 
 menu:
   - title_en: Home

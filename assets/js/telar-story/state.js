@@ -15,7 +15,7 @@
  * Constants (thresholds, cooldowns, caps) are exported separately so they
  * cannot be accidentally overwritten.
  *
- * @version v0.7.0-beta
+ * @version v0.9.0-beta
  */
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ export const state = {
 
   // ── Viewer preloading config (set from telarConfig in main.js) ───────────
   config: {
-    /** Maximum UV instances kept in memory. */
+    /** Maximum Tify instances kept in memory. */
     maxViewerCards: 10,
     /** Steps to preload ahead of the current position. */
     preloadSteps: 6,

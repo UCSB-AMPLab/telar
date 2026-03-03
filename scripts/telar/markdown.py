@@ -14,7 +14,7 @@ remains to HTML.
 path with case-insensitive fallback (using `resolve_path_case_insensitive`
 from the images module), parses optional YAML frontmatter to extract a
 title, and then runs the content through the widget/image/markdown
-pipeline. Files are expected under `components/texts/`.
+pipeline. Files are expected under `telar-content/texts/`.
 
 `process_inline_content()` handles text written directly in spreadsheet
 cells. It normalises line endings (spreadsheets may use `\\r\\n` or
@@ -38,16 +38,16 @@ def read_markdown_file(file_path, widget_warnings=None):
     Read a markdown file and parse frontmatter
 
     Args:
-        file_path: Path to markdown file relative to components/texts/
+        file_path: Path to markdown file relative to telar-content/texts/
         widget_warnings: Optional list to collect widget warnings
 
     Returns:
         dict with 'title' and 'content' keys, or None if file doesn't exist
     """
-    full_path = resolve_path_case_insensitive('components/texts', file_path)
+    full_path = resolve_path_case_insensitive('telar-content/texts', file_path)
 
     if full_path is None:
-        print(f"Warning: Markdown file not found: components/texts/{file_path}")
+        print(f"Warning: Markdown file not found: telar-content/texts/{file_path}")
         return None
 
     # Initialize widget warnings list if not provided

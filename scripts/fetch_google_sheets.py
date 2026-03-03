@@ -5,17 +5,17 @@ Fetch Google Sheets Data as CSV Files
 This is the first step in the web-based GitHub Pages Telar build
 pipeline. It downloads the raw content data from a Google Sheets
 spreadsheet and saves each tab as a separate CSV file in
-components/structures/.
+telar-content/spreadsheets/.
 
 A Telar spreadsheet typically has these tabs: project (site-level
 settings like title, subtitle, language), objects (exhibition objects
 with metadata and IIIF manifest URLs), and one or more story tabs (story
 steps with narrative text, viewer positions, and panel content).
 
-The script reads the shared and published Google Sheets URLs from
-_config.yml, uses discover_sheet_gids.py to find the GID for each tab,
-then fetches each tab as CSV via Google's export API. Instruction and
-help tabs are skipped automatically.
+The script reads the published Google Sheets URL from _config.yml, uses
+discover_sheet_gids.py to find the GID for each tab, then fetches each
+tab as CSV via Google's published export API. Instruction and help tabs
+are skipped automatically.
 
 The resulting CSV files are the input for the next build step:
 csv_to_json.py (the telar package), which processes them into the JSON
@@ -38,7 +38,7 @@ from pathlib import Path
 
 # Import the discover script functions
 sys.path.insert(0, str(Path(__file__).parent))
-from discover_sheet_gids import extract_sheet_id, discover_gids_from_published, test_gid
+from discover_sheet_gids import extract_published_id, discover_gids_from_published
 
 def read_config():
     """Read Google Sheets URLs from _config.yml"""
@@ -62,18 +62,17 @@ def read_config():
         print("Set 'google_sheets.enabled: true' to enable")
         sys.exit(0)
 
-    shared_url = gs_config.get('shared_url', '').strip()
     published_url = gs_config.get('published_url', '').strip()
 
-    if not shared_url or not published_url:
-        print("ERROR: Both shared_url and published_url must be set in _config.yml", file=sys.stderr)
+    if not published_url:
+        print("ERROR: published_url must be set in _config.yml", file=sys.stderr)
         sys.exit(1)
 
-    return shared_url, published_url
+    return published_url
 
-def fetch_csv(sheet_id, gid, output_path):
+def fetch_csv(published_id, gid, output_path):
     """Fetch CSV from Google Sheets and save to file"""
-    url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?gid={gid}&format=csv'
+    url = f'https://docs.google.com/spreadsheets/d/e/{published_id}/pub?gid={gid}&single=true&output=csv'
 
     try:
         ssl_context = ssl.create_default_context()
@@ -87,6 +86,18 @@ def fetch_csv(sheet_id, gid, output_path):
             # Check if we got HTML error instead of CSV
             if data.startswith('<!DOCTYPE') or data.startswith('<html'):
                 return False
+
+            # Strip trailing empty rows (Google Sheets exports all rows
+            # in the sheet, including blank ones beyond the data).
+            # Cells may contain FALSE from unchecked checkboxes.
+            lines = data.split('\n')
+            while lines:
+                cells = lines[-1].strip().split(',')
+                if all(c.strip() in ('', 'FALSE') for c in cells):
+                    lines.pop()
+                else:
+                    break
+            data = '\n'.join(lines) + '\n'
 
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(data)
@@ -105,18 +116,20 @@ def main():
 
     # Read config
     print("Reading configuration from _config.yml...")
-    shared_url, published_url = read_config()
+    published_url = read_config()
     print("✓ Google Sheets integration enabled")
     print()
 
-    # Extract Sheet ID
-    sheet_id = extract_sheet_id(shared_url)
-    if not sheet_id:
-        print("ERROR: Could not extract Sheet ID from shared_url", file=sys.stderr)
-        print(f"URL: {shared_url}", file=sys.stderr)
+    # Extract published ID
+    published_id = extract_published_id(published_url)
+    if not published_id:
+        print("ERROR: Could not extract published ID from published_url", file=sys.stderr)
+        print(f"URL: {published_url}", file=sys.stderr)
+        print("Make sure your published URL looks like:", file=sys.stderr)
+        print("  https://docs.google.com/spreadsheets/d/e/2PACX-.../pubhtml", file=sys.stderr)
         sys.exit(1)
 
-    print(f"✓ Sheet ID: {sheet_id}")
+    print(f"✓ Published ID: {published_id}")
     print()
 
     # Discover tabs
@@ -132,7 +145,7 @@ def main():
     print()
 
     # Create output directory
-    output_dir = Path('components/structures')
+    output_dir = Path('telar-content/spreadsheets')
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Fetch each tab
@@ -174,7 +187,7 @@ def main():
         output_path = output_dir / filename
 
         # Fetch and save
-        if fetch_csv(sheet_id, gid, output_path):
+        if fetch_csv(published_id, gid, output_path):
             print(f"✓ {tab_name:20s} → {output_path}")
             success_count += 1
         else:
