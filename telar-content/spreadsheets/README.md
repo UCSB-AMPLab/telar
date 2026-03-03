@@ -1,40 +1,64 @@
 # Spreadsheets
 
-This folder contains CSV files that define the organizational structure of your Telar site.
+**[Versión en español abajo](#hojas-de-cálculo)** | **[English version](#spreadsheets)**
 
-> **Note for Google Sheets Users:**
-> If you're using the Google Sheets integration, you **do not need to manually edit the CSV files in this folder**. The `fetch_google_sheets.py` script (or GitHub Actions workflow) will automatically fetch and update these CSVs from your Google Sheet.
+CSV files that define the content and structure of your Telar site.
 
-## Purpose
-
-These CSV files are **source data** that define your site structure. If you're not using Google Sheets, you can edit them directly - they are human-readable and can be managed in spreadsheet applications like Excel or Google Sheets.
+> **Google Sheets users:** If you use the Google Sheets integration, these CSVs are fetched automatically — you do not need to edit them manually.
 
 ## Files
 
-- **project.csv** - Site-wide settings and configuration
-- **objects.csv** - Catalog of IIIF objects (maps, documents, artifacts)
-- **story CSVs** - Story structure data with step-by-step navigation
-  - Traditional format: `story-1.csv`, `story-2.csv`, etc.
-  - Semantic format (v0.6.0+): `your-story.csv`, `chapter-1.csv`, etc. (must match `story_id` in project.csv)
+| File | Purpose |
+|---|---|
+| `project.csv` | Site settings and story list |
+| `objects.csv` | Object catalog (images, IIIF manifests) |
+| `glossary.csv` | Glossary term definitions |
+| Story CSVs | Step-by-step narrative structure |
 
 ## Workflow
 
-1. **Edit** - Modify these CSV files to update your site structure
-2. **Convert** - Run `python3 scripts/csv_to_json.py` to generate JSON files (this happens automatically on GitHub)
-3. **Build** - Run `bundle exec jekyll build` to generate the site (this happens automatically on GitHub)
+1. Edit CSVs directly, or fetch from Google Sheets
+2. Run `python3 scripts/csv_to_json.py` to generate JSON
+3. Run `bundle exec jekyll build` to build the site
 
-The CSV-to-JSON script reads markdown content from `telar-content/texts/` and embeds it into the generated JSON files in `_data/`.
+Steps 2–3 happen automatically on GitHub.
 
-## Story CSV Structure
+## Story CSV columns
 
-Each story CSV contains:
-- `step` - Step number
-- `question` - Step heading
-- `answer` - Brief answer text
-- `object` - Object ID to display
-- `x, y, zoom` - IIIF viewer coordinates (0-1 normalized)
-- `page` - Page number for multi-page objects (optional, v0.9.0+)
-- `layer1_button, layer1_content` - Primary panel button text and content (markdown file or inline text)
-- `layer2_button, layer2_content` - Secondary panel button text and content (markdown file or inline text)
+`step`, `object`, `x`, `y`, `zoom`, `page`, `question`, `answer`, `layer1_button`, `layer1_content`, `layer2_button`, `layer2_content`
 
 Markdown files referenced in content columns should be stored in `telar-content/texts/stories/`.
+
+---
+---
+
+# Hojas de cálculo
+
+**[Versión en español](#hojas-de-cálculo)** | **[English version above](#spreadsheets)**
+
+Archivos CSV que definen el contenido y la estructura de tu sitio Telar.
+
+> **Usuarios de Google Sheets:** Si usas la integración con Google Sheets, estos CSVs se obtienen automáticamente — no necesitas editarlos manualmente.
+
+## Archivos
+
+| Archivo | Propósito |
+|---|---|
+| `project.csv` | Configuración del sitio y lista de historias |
+| `objects.csv` | Catálogo de objetos (imágenes, manifiestos IIIF) |
+| `glossary.csv` | Definiciones del glosario |
+| CSVs de historias | Estructura narrativa paso a paso |
+
+## Flujo de trabajo
+
+1. Edita los CSVs directamente, o descárgalos de Google Sheets
+2. Ejecuta `python3 scripts/csv_to_json.py` para generar JSON
+3. Ejecuta `bundle exec jekyll build` para compilar el sitio
+
+Los pasos 2–3 se ejecutan automáticamente en GitHub.
+
+## Columnas del CSV de historias
+
+`paso`, `objeto`, `x`, `y`, `zoom`, `página`, `pregunta`, `respuesta`, `boton_capa1`, `contenido_capa1`, `boton_capa2`, `contenido_capa2`
+
+Los archivos markdown referenciados en las columnas de contenido deben estar en `telar-content/texts/stories/`.

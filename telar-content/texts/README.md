@@ -1,96 +1,100 @@
 # Texts
 
-This folder contains markdown files with the narrative text content for your Telar site.
+**[Versión en español abajo](#textos)** | **[English version](#texts)**
 
-## Purpose
-
-These markdown files are **content components** that can be referenced and reused throughout your site. Each file contains frontmatter metadata and body content.
+Markdown files with narrative content for your Telar site — story panels, glossary definitions, and static pages.
 
 ## Structure
 
 ```
 texts/
-├── stories/         - Narrative content for story layers/panels
-│   └── story1/      - Optional subfolder for organizing files
-│       ├── step1-layer1.md
-│       ├── step1-layer2.md
-│       └── ...
-└── glossary/        - Glossary term definitions
-    ├── term1.md
-    └── term2.md
+├── stories/          - Story panel content
+│   └── your-story/   - Organized by story (subfolder name = story ID)
+│       └── panel.md
+├── glossary/         - Glossary definitions
+│   └── term.md
+└── pages/            - Static pages
+    └── about.md
 ```
 
-**Note:** Subfolders like `story1/` are **optional**. You can organize your story markdown files however you like - all in the `stories/` folder directly, grouped by story in subfolders, or any other structure that makes sense for your project. Just make sure to reference the correct path (e.g., `story1/step1-layer1.md` or `step1-layer1.md`) in your story spreadsheet or CSV files.
+## Markdown format
 
-## Markdown File Format
-
-Each markdown file should have frontmatter with a title:
+Each file needs YAML frontmatter with a title:
 
 ```markdown
 ---
 title: "Your Title Here"
 ---
 
-Your content text here. This can include multiple paragraphs,
-formatting, and will be converted to HTML during build.
+Your content here. Supports **bold**, *italic*, [links](https://telar.org),
+lists, and other markdown formatting.
 ```
 
-## Workflow
+## How files are referenced
 
-1. **Write** - Create or edit markdown files with frontmatter
-2. **Reference** - In CSV files (telar-content/spreadsheets/), reference these files by path
-3. **Convert** - Run `python3 scripts/csv_to_json.py` to embed content into JSON (this happens automatically on GitHub)
-4. **Build** - Run `bundle exec jekyll build` to generate the site (this happens automatically on GitHub)
+- **Story panels:** Enter the path in the `layer1_content` or `layer2_content` column of your story CSV (e.g., `your-story/panel.md`).
+- **Glossary:** Enter the filename in the `definition` column of `glossary.csv` (e.g., `term.md`), or write definitions directly in the CSV.
+- **Pages:** Processed automatically by `generate_collections.py`.
 
-## Story Content
+## Glossary links in stories
 
-Story markdown files are referenced in story CSV files via `layer1_file` and `layer2_file` columns. The CSV-to-JSON script extracts the title and content from these files and embeds them into the story JSON data.
-
-## Glossary Content
-
-Glossary markdown files are processed by `scripts/generate_collections.py` which creates Jekyll collection files in `_jekyll-files/_glossary/` (this happens automatically on GitHub).
-
-### Glossary Functionality
-
-**Basic features:**
-- Glossary term pages at `/glossary/{term_id}/`
-- Each term page displays the full definition
-- Related terms are linked automatically
-- Browsable glossary index page
-- Clicking terms opens a slide-over panel instead of navigating to new pages
-
-**Auto-linking in story content (v0.4.0+):**
-
-You can link to glossary terms from within your story markdown content using wiki-style syntax:
+Link to glossary terms from story markdown using wiki syntax:
 
 ```markdown
-The [[colonial-period|colonial era]] saw significant changes...
-The territory was governed by the [[viceroyalty]].
+The [[viceroyalty]] was established during the [[colonial-period|colonial era]].
 ```
 
-**Syntax:**
-- `[[term_id]]` - Links to term and displays the term_id as link text
-- `[[term_id|display_text]]` - Links to term but shows custom display text
+- `[[term_id]]` — displays the term ID as link text
+- `[[term_id|display text]]` — displays custom text
 
-**What happens:**
-- Valid terms become clickable links that open the glossary panel
-- Invalid term IDs display as highlighted warnings in the browser
-- Build-time validation checks all glossary links and reports issues
+---
+---
 
-**Example:**
+# Textos
 
-In your story markdown file (`telar-content/texts/stories/step1-layer1.md`):
+**[Versión en español](#textos)** | **[English version above](#texts)**
+
+Archivos markdown con contenido narrativo para tu sitio Telar — paneles de historias, definiciones del glosario y páginas estáticas.
+
+## Estructura
+
+```
+texts/
+├── stories/               - Contenido de paneles de historias
+│   └── tu-historia/       - Organizados por historia (nombre de subcarpeta = ID de historia)
+│       └── panel.md
+├── glossary/              - Definiciones del glosario
+│   └── termino.md
+└── pages/                 - Páginas estáticas
+    └── about.md
+```
+
+## Formato markdown
+
+Cada archivo necesita metadatos YAML con un título:
 
 ```markdown
 ---
-title: "The Founding of Santafé"
+title: "Tu título aquí"
 ---
 
-The city of Santafé de Bogotá was founded in 1537, during the Spanish [[colonial-period|colonial period]]. In the 18th century it became the capital of a new [[viceroyalty]] of New Granada.
+Tu contenido aquí. Admite **negritas**, *cursivas*, [enlaces](https://telar.org),
+listas y otros formatos de markdown.
 ```
 
-The glossary link parser automatically converts these wiki-style links to clickable glossary terms during the build process.
+## Cómo se referencian los archivos
 
-## Why Texts?
+- **Paneles de historias:** Ingresa la ruta en la columna `contenido_capa1` o `contenido_capa2` de tu CSV de historia (ej. `tu-historia/panel.md`).
+- **Glosario:** Ingresa el nombre del archivo en la columna `definición` de `glossary.csv` (ej. `termino.md`), o escribe las definiciones directamente en el CSV.
+- **Páginas:** Se procesan automáticamente con `generate_collections.py`.
 
-This folder is called "texts" because it contains the textual narrative content - the words that tell your story and explain your objects.
+## Enlaces de glosario en historias
+
+Enlaza a términos del glosario desde el markdown de historias usando sintaxis wiki:
+
+```markdown
+El [[virreinato]] se estableció durante la [[periodo-colonial|época colonial]].
+```
+
+- `[[id_termino]]` — muestra el ID del término como texto del enlace
+- `[[id_termino|texto personalizado]]` — muestra texto personalizado

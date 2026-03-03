@@ -1,68 +1,70 @@
 # Telar Content
 
-This directory contains all the **source content** for your Telar site - objects (images and documents), text content, data spreadsheets, and other media files.
+**[Versión en español abajo](#contenido-telar)** | **[English version](#telar-content)**
+
+This directory contains all the **source content** for your Telar site — objects (images and documents), text content, and data spreadsheets.
 
 ## Directory Structure
 
 ### objects/
 
-High-resolution images and PDF documents displayed using IIIF (International Image Interoperability Framework).
-
-- **Supported formats:** JPG, PNG, TIFF, WebP, HEIC, PDF
-- **Processing:** Telar automatically generates IIIF tiles for deep-zoom viewing; PDFs are rendered to page images at build time
-- **Usage:** Reference objects by filename (without extension) in `objects.csv`
-- See [objects/README.md](objects/README.md) for details
+High-resolution images and PDF documents displayed using IIIF (International Image Interoperability Framework). Supported formats: JPG, PNG, TIFF, WebP, HEIC, PDF. See [objects/README.md](objects/README.md) for details.
 
 ### spreadsheets/
 
-CSV files that define your site's organizational structure and content.
-
-- **project.csv** - Site-wide settings and configuration
-- **objects.csv** - Catalog of visual objects (images, IIIF manifests)
-- **story-N.csv** / **chapter-N.csv** - Story navigation and step structure
-
-These CSV files are processed by `scripts/csv_to_json.py` to generate JSON data in `_data/`.
-
-See [spreadsheets/README.md](spreadsheets/README.md) for details
+CSV files that define your site's content and structure: `project.csv` (site settings), `objects.csv` (object catalog), and story CSVs (narrative steps). If you use Google Sheets, these are fetched automatically. See [spreadsheets/README.md](spreadsheets/README.md) for details.
 
 ### texts/
 
-Markdown files containing narrative text, annotations, and educational content.
+Markdown files containing narrative text for story panels, glossary definitions, and static pages. Referenced by path in your story and glossary spreadsheets. See [texts/README.md](texts/README.md) for details.
 
-- **stories/** - Story step panels and educational content
-- **pages/** - Static page content
-- **Supports:** Full GitHub-flavored Markdown, HTML embeds, image references
+## Workflow
 
-Markdown files are referenced in story CSV files and embedded into the site during build.
+1. **Add content** — Place images/PDFs in `objects/`, text in `texts/`, update CSVs in `spreadsheets/`
+2. **Process** — Run `python3 scripts/csv_to_json.py`
+3. **Generate tiles** — Run `python3 scripts/generate_iiif.py`
+4. **Build** — Run `bundle exec jekyll build`
 
-See [texts/README.md](texts/README.md) for details
+On GitHub, steps 2–4 happen automatically via GitHub Actions.
 
-### audio/
+## More info
 
-**Status:** Planned
+- **Documentation:** [telar.org/docs](https://telar.org/docs)
+- **Issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
 
-Audio files (oral histories, soundscapes, music, field recordings) embedded in story steps.
+---
+---
 
-See [audio/README.md](audio/README.md)
+# Contenido Telar
 
-### 3d-models/
+**[Versión en español](#contenido-telar)** | **[English version above](#telar-content)**
 
-**Status:** Planned
+Esta carpeta contiene todo el **contenido fuente** de tu sitio Telar — objetos (imágenes y documentos), contenido de texto y hojas de cálculo de datos.
 
-3D model files (archaeological artifacts, architectural models, sculptures) displayed in interactive viewers.
+## Estructura de carpetas
 
-See [3d-models/README.md](3d-models/README.md)
+### objects/
 
-## Workflow Overview
+Imágenes en alta resolución y documentos PDF que se muestran mediante IIIF (International Image Interoperability Framework). Formatos compatibles: JPG, PNG, TIFF, WebP, HEIC, PDF. Consulta [objects/README.md](objects/README.md) para más detalles.
 
-1. **Add content** - Place images/PDFs in `objects/`, text in `texts/`, update CSVs in `spreadsheets/`
-2. **Process data** - Run `python3 scripts/csv_to_json.py` to convert CSV to JSON
-3. **Generate IIIF tiles** - Run `python3 scripts/generate_iiif.py` to create image tiles (automatic on GitHub)
-4. **Build site** - Run `bundle exec jekyll build` to generate the final site
+### spreadsheets/
 
-On GitHub, steps 2-4 happen automatically via GitHub Actions whenever you push changes.
+Archivos CSV que definen el contenido y la estructura de tu sitio: `project.csv` (configuración), `objects.csv` (catálogo de objetos) y CSVs de historias (pasos narrativos). Si usas Google Sheets, estos se obtienen automáticamente. Consulta [spreadsheets/README.md](spreadsheets/README.md) para más detalles.
 
-## Questions?
+### texts/
 
-- **Report issues:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)
-- **Documentation:** [https://telar.org/docs](https://telar.org/docs)
+Archivos markdown con texto narrativo para los paneles de historias, definiciones del glosario y páginas estáticas. Se referencian por ruta en tus hojas de cálculo de historias y glosario. Consulta [texts/README.md](texts/README.md) para más detalles.
+
+## Flujo de trabajo
+
+1. **Agrega contenido** — Coloca imágenes/PDFs en `objects/`, texto en `texts/`, actualiza los CSVs en `spreadsheets/`
+2. **Procesa** — Ejecuta `python3 scripts/csv_to_json.py`
+3. **Genera mosaicos** — Ejecuta `python3 scripts/generate_iiif.py`
+4. **Compila** — Ejecuta `bundle exec jekyll build`
+
+En GitHub, los pasos 2–4 se ejecutan automáticamente mediante GitHub Actions.
+
+## Más información
+
+- **Documentación:** [telar.org/guia](https://telar.org/guia)
+- **Problemas:** [GitHub Issues](https://github.com/UCSB-AMPLab/telar/issues)

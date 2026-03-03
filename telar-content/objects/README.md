@@ -1,56 +1,54 @@
 # Objects
 
-This folder contains the source files for your Telar objects — images and PDFs that are served via the IIIF protocol.
+**[Versión en español abajo](#objetos)** | **[English version](#objects)**
 
-## Purpose
+This folder contains the source files for your Telar objects — images and PDFs displayed via the IIIF protocol.
 
-This folder stores **visual media** that will be displayed in your stories, including high-resolution images and multi-page PDF documents that are served via the IIIF (International Image Interoperability Framework) protocol.
+## Supported formats
 
-## Structure
+JPEG (.jpg, .jpeg), TIFF (.tif, .tiff), PNG (.png), WebP (.webp), HEIC (.heic, .heif), PDF (.pdf)
 
-```
-objects/
-├── object-id-1.jpg     - High-res images for IIIF objects (used in stories or Objects page)
-├── object-id-2.tif
-├── document.pdf        - Multi-page PDF documents
-├── logo.png            - Additional images (logos, team pictures, etc.)
-└── ...
-```
-
-After running the IIIF generation script, tiled image pyramids will be created in `/iiif/objects/`.
+High-resolution images work best. PDFs are rendered to page images at build time.
 
 ## Workflow
 
-1. **Add** - Place high-resolution images or PDFs in `telar-content/objects/`
-2. **Generate** - Run `python3 scripts/generate_iiif.py` to create IIIF tiles (this happens automatically on GitHub)
-3. **Reference** - Use the object ID in your story CSV files
-4. **View** - Objects are displayed via the Tify viewer with zoom and pan
+1. Place high-resolution images or PDFs here
+2. Run `python3 scripts/generate_iiif.py` to create IIIF tiles (automatic on GitHub)
+3. Reference objects by filename (without extension) in `objects.csv`
 
-## Supported Formats
+## File naming
 
-- JPEG (.jpg, .jpeg)
-- TIFF (.tif, .tiff)
-- PNG (.png)
-- WebP (.webp)
-- HEIC (.heic, .heif)
-- PDF (.pdf) - rendered to page images at build time
-
-High-resolution images work best. The IIIF generation script creates multi-resolution tile pyramids that enable smooth zooming and panning.
-
-## IIIF Generation
-
-The `generate_iiif.py` script:
-- Reads source files from `telar-content/objects/`
-- Generates tiled image pyramids in `/iiif/objects/{object-id}/`
-- Creates `info.json` and `manifest.json` files for IIIF compatibility
-- For PDFs: renders each page, tiles them individually, and creates multi-canvas manifests
-- Enables deep-zoom functionality in the viewer
-
-## File Naming
-
-Source files should be named with a unique object ID that matches the `object_id` field in your objects CSV:
+Source filenames should match the `object_id` in your objects CSV:
 
 ```
-telar-content/objects/example-map-1850.jpg
-telar-content/spreadsheets/objects.csv → object_id: example-map-1850
+telar-content/objects/example-map.jpg  →  object_id: example-map
+```
+
+---
+---
+
+# Objetos
+
+**[Versión en español](#objetos)** | **[English version above](#objects)**
+
+Esta carpeta contiene los archivos fuente de tus objetos Telar — imágenes y PDFs que se muestran mediante el protocolo IIIF.
+
+## Formatos compatibles
+
+JPEG (.jpg, .jpeg), TIFF (.tif, .tiff), PNG (.png), WebP (.webp), HEIC (.heic, .heif), PDF (.pdf)
+
+Las imágenes en alta resolución funcionan mejor. Los PDFs se renderizan a imágenes de página durante la compilación.
+
+## Flujo de trabajo
+
+1. Coloca imágenes en alta resolución o PDFs aquí
+2. Ejecuta `python3 scripts/generate_iiif.py` para generar mosaicos IIIF (automático en GitHub)
+3. Referencia los objetos por nombre de archivo (sin extensión) en `objects.csv`
+
+## Nombres de archivo
+
+Los nombres de archivo deben coincidir con el `object_id` / `id_objeto` en tu CSV de objetos:
+
+```
+telar-content/objects/mapa-ejemplo.jpg  →  id_objeto: mapa-ejemplo
 ```
