@@ -42,7 +42,7 @@ class Migration081to090(BaseMigration):
 
         # Phase 2: Replace template content if pristine
         print("  Phase 2: Checking template content...")
-        changes.extend(self._update_template_spreadsheets())
+        changes.extend(self._update_template_content())
 
         # Phase 3: Update .gitignore (path references)
         print("  Phase 3: Updating .gitignore...")
@@ -219,17 +219,19 @@ class Migration081to090(BaseMigration):
                 h.update(chunk)
         return h.hexdigest()
 
-    def _update_template_spreadsheets(self) -> List[str]:
+    def _update_template_content(self) -> List[str]:
         """
         Replace template content if still the v0.8.1 originals.
 
-        Two independent pristine checks:
+        Two pristine checks:
         1. CSVs (4 files): If all match, replace with v0.9.0 templates.
         2. Texts (26 files): If all match, replace demo stories/glossary
            with blank placeholders.
 
-        Each check is independent — modified CSVs don't block text
-        replacement and vice versa.
+        Text replacement is gated on CSV pristine-ness: if a user has
+        modified their CSVs (i.e. added real content), we keep the text
+        files too, since deleting old story directories could orphan
+        references in the user's customised CSVs.
         """
         changes = []
         spreadsheets = os.path.join(self.repo_root, 'telar-content', 'spreadsheets')
@@ -370,7 +372,7 @@ class Migration081to090(BaseMigration):
         """
         Update .gitignore path references from components/ to telar-content/.
 
-        Replaces comment and pattern references. Phase 4 will later overwrite
+        Replaces comment and pattern references. Phase 5 will later overwrite
         the entire file from GitHub, but this ensures correctness if the
         GitHub fetch fails.
         """
