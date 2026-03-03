@@ -191,7 +191,7 @@ errors:
   # Theme errors
   theme:
     not_found_heading: "⚠️ Your selected theme doesn't exist"
-    not_found_description: "The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>paisajes</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to one of: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, or <code>austin</code>. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the <code>_data/themes</code> folder."
+    not_found_description: "The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>."
     broken_heading: "⚠️ Your theme file is broken"
     broken: "The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file."
     system_error_heading: "⚠️ Theme system error detected"

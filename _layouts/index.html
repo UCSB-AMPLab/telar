@@ -55,7 +55,7 @@ title: Home
 
     {% if theme_file_exists %}
       {% assign theme_error_type = "malformed" %}
-    {% elsif site.data.themes['paisajes'] %}
+    {% elsif site.data.themes['trama'] %}
       {% assign theme_error_type = "not_found" %}
     {% else %}
       {% assign theme_error_type = "critical" %}
@@ -143,7 +143,7 @@ title: Home
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>⚠️ Your selected theme doesn't exist</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>paisajes</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to one of: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, or <code>austin</code>. If you are trying to add a custom theme and you don't see it listed in this message, check it is in the <code>_data/themes</code> folder.
+          The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>.
         </p>
       </div>
       {% elsif theme_error_type == "malformed" %}
@@ -261,8 +261,14 @@ title: Home
               {% elsif story_data and story_data.size > 0 %}
                 {% assign first_step = story_data[0] %}
                 {% if first_step.object %}
-                  {%- comment -%}Load thumbnail with object ID for remote/local detection{%- endcomment -%}
-                  <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ first_step.object }}" data-info-json="{{ '/iiif/objects/' | append: first_step.object | append: '/info.json' | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
+                  {%- comment -%}Load thumbnail with object ID for remote/local detection.
+                  For multi-page objects (PDFs), use the specific page's info.json.{%- endcomment -%}
+                  {% if first_step.page and first_step.page != "" %}
+                    {% assign thumb_info_path = '/iiif/objects/' | append: first_step.object | append: '/page-' | append: first_step.page | append: '/info.json' %}
+                  {% else %}
+                    {% assign thumb_info_path = '/iiif/objects/' | append: first_step.object | append: '/info.json' %}
+                  {% endif %}
+                  <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ first_step.object }}" data-info-json="{{ thumb_info_path | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
                     <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center h-100">
                       <span class="text-muted">Loading...</span>
                     </div>
@@ -427,6 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(manifest => {
           let imageServiceUrl = null;
+          let imageServiceProfile = null;
           let fallbackImageUrl = null;
 
           // IIIF Presentation API 2.1
@@ -439,6 +446,7 @@ document.addEventListener('DOMContentLoaded', function() {
               if (resource.service) {
                 const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
                 imageServiceUrl = service['@id'] || service.id;
+                imageServiceProfile = service.profile;
               }
 
               // Fallback to full image URL
@@ -456,6 +464,7 @@ document.addEventListener('DOMContentLoaded', function() {
               // Try to get image service for resizing
               if (annotationBody.service && annotationBody.service.length > 0) {
                 imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
+                imageServiceProfile = annotationBody.service[0].profile;
               }
 
               // Fallback to full image URL
@@ -465,31 +474,44 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }
 
-          let thumbnailUrl = null;
+          const isLevel0 = imageServiceProfile && (
+            imageServiceProfile === 'level0' ||
+            imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
+          );
 
-          // If we have an image service, request a 400px thumbnail
-          if (imageServiceUrl) {
-            // Remove trailing slash if present
-            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-            thumbnailUrl = `${imageServiceUrl}/full/!400,400/0/default.jpg`;
-          }
-          // Otherwise use fallback image (will be scaled by CSS)
-          else if (fallbackImageUrl) {
-            thumbnailUrl = fallbackImageUrl;
-          }
-
-          if (thumbnailUrl) {
+          function replaceStoryPlaceholder(url) {
             const img = document.createElement('img');
-            img.src = thumbnailUrl;
+            img.src = url;
             img.alt = item.closest('.story-card').querySelector('h3').textContent;
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.objectFit = 'cover';
-
             const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-            if (placeholder) {
-              placeholder.replaceWith(img);
-            }
+            if (placeholder) placeholder.replaceWith(img);
+          }
+
+          // Level 0: fetch info.json to get available sizes
+          if (imageServiceUrl && isLevel0) {
+            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
+            fetch(`${imageServiceUrl}/info.json`)
+              .then(r => r.json())
+              .then(info => {
+                const sizes = info.sizes || [];
+                const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
+                const url = largest
+                  ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
+                  : fallbackImageUrl;
+                if (url) replaceStoryPlaceholder(url);
+              })
+              .catch(() => { if (fallbackImageUrl) replaceStoryPlaceholder(fallbackImageUrl); });
+          }
+          // Level 1+: request arbitrary size
+          else if (imageServiceUrl) {
+            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
+            replaceStoryPlaceholder(`${imageServiceUrl}/full/!400,400/0/default.jpg`);
+          }
+          else if (fallbackImageUrl) {
+            replaceStoryPlaceholder(fallbackImageUrl);
           } else {
             throw new Error('No image found in manifest');
           }
@@ -565,6 +587,7 @@ featuredThumbnails.forEach(function(item) {
       .then(response => response.json())
       .then(manifest => {
         let imageServiceUrl = null;
+        let imageServiceProfile = null;
         let fallbackImageUrl = null;
 
         // IIIF Presentation API 2.1
@@ -575,6 +598,7 @@ featuredThumbnails.forEach(function(item) {
             if (resource.service) {
               const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
               imageServiceUrl = service['@id'] || service.id;
+              imageServiceProfile = service.profile;
             }
             if (!imageServiceUrl && resource['@id']) {
               fallbackImageUrl = resource['@id'];
@@ -588,6 +612,7 @@ featuredThumbnails.forEach(function(item) {
             const annotationBody = firstCanvas.items[0].items[0].body;
             if (annotationBody.service && annotationBody.service.length > 0) {
               imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
+              imageServiceProfile = annotationBody.service[0].profile;
             }
             if (!imageServiceUrl && annotationBody.id) {
               fallbackImageUrl = annotationBody.id;
@@ -595,23 +620,44 @@ featuredThumbnails.forEach(function(item) {
           }
         }
 
-        let thumbnailUrl = null;
-        if (imageServiceUrl) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          thumbnailUrl = `${imageServiceUrl}/full/!200,200/0/default.jpg`;
-        } else if (fallbackImageUrl) {
-          thumbnailUrl = fallbackImageUrl;
-        }
+        const isLevel0 = imageServiceProfile && (
+          imageServiceProfile === 'level0' ||
+          imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
+        );
 
-        if (thumbnailUrl) {
+        function replaceFeaturedImg(url) {
           const img = document.createElement('img');
-          img.src = thumbnailUrl;
+          img.src = url;
           img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
           img.style.width = '100%';
           img.style.height = '100%';
           img.style.objectFit = 'cover';
           item.innerHTML = '';
           item.appendChild(img);
+        }
+
+        // Level 0: fetch info.json to get available sizes
+        if (imageServiceUrl && isLevel0) {
+          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
+          fetch(`${imageServiceUrl}/info.json`)
+            .then(r => r.json())
+            .then(info => {
+              const sizes = info.sizes || [];
+              const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
+              const url = largest
+                ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
+                : fallbackImageUrl;
+              if (url) replaceFeaturedImg(url);
+            })
+            .catch(() => { if (fallbackImageUrl) replaceFeaturedImg(fallbackImageUrl); });
+        }
+        // Level 1+: request arbitrary size
+        else if (imageServiceUrl) {
+          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
+          replaceFeaturedImg(`${imageServiceUrl}/full/!200,200/0/default.jpg`);
+        }
+        else if (fallbackImageUrl) {
+          replaceFeaturedImg(fallbackImageUrl);
         }
       })
       .catch(error => {

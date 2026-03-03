@@ -321,6 +321,15 @@ def process_pdf_object(pdf_path, output_dir, object_id, base_url, backend):
             img.save(str(thumb_dest), 'JPEG', quality=95)
             print(f"  ✓ Copied page 1 as {object_id}.jpg")
 
+        # Create root-level info.json from page 1 for gallery thumbnails.
+        # The gallery template fetches iiif/objects/{id}/info.json — without
+        # this, PDF objects get no thumbnail on the gallery/homepage.
+        page1_info = output_dir / 'page-1' / 'info.json'
+        root_info = output_dir / 'info.json'
+        if page1_info.exists():
+            shutil.copy2(page1_info, root_info)
+            print(f"  ✓ Created root info.json (from page 1)")
+
         # Create multi-canvas manifest for the full document
         manifest = generate_multicanvas_manifest(object_id, pages_info, base_url, metadata)
         manifest_path = output_dir / 'manifest.json'

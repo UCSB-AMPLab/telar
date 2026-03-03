@@ -191,7 +191,7 @@ errors:
   # Errores de tema
   theme:
     not_found_heading: "⚠️ El tema seleccionado no existe"
-    not_found_description: "El tema <code>{{ site.telar_theme }}</code> no existe. Aplicamos el tema <code>paisajes</code> (predeterminado). Para elegir un tema diferente, actualiza <code>telar_theme</code> en <code>_config.yml</code> a uno de: <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code> o <code>austin</code>. Si estás intentando agregar un tema personalizado y no aparece en este mensaje, verifica que esté en la carpeta <code>_data/themes</code>."
+    not_found_description: "El tema <code>{{ site.telar_theme }}</code> no existe. Aplicamos el tema <code>trama</code> (predeterminado). Para elegir un tema diferente, actualiza <code>telar_theme</code> en <code>_config.yml</code> para que coincida con un archivo en tu carpeta <code>_data/themes</code>. Las opciones incluidas son <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code> y <code>austin</code>."
     broken_heading: "⚠️ Tu archivo de tema está dañado"
     broken: "El archivo del tema <code>{{ theme_name }}</code> parece estar dañado o incompleto. Aplicamos un tema de respaldo incluido. Revisa <code>_data/themes/{{ theme_name }}.yml</code> por errores de sintaxis o compáralo con un tema que funcione."
     system_error_heading: "⚠️ Se detectó un error en el sistema de temas"
