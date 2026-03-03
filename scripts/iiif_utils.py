@@ -256,6 +256,15 @@ def patch_info_json(tiles_dir, object_id, base_url):
                     'height': int(match.group(2)),
                 })
 
+    # Fallback: if no {w},{h} directories found (libvips <8.17 doesn't
+    # create them), compute a single size from the image dimensions
+    # already present in info.json.
+    if not sizes:
+        w = info.get('width')
+        h = info.get('height')
+        if w and h:
+            sizes.append({'width': w, 'height': h})
+
     if sizes:
         sizes.sort(key=lambda s: s['width'])
         info['sizes'] = sizes
@@ -284,6 +293,15 @@ def generate_full_max(processed_path, tiles_dir):
     if img.mode not in ('RGB', 'L'):
         img = img.convert('RGB')
     img.save(dest, 'JPEG', quality=95)
+
+    # Also create full/{w},{h}/0/default.jpg for Level 0 thumbnail support.
+    # Older libvips versions (<8.17) don't create this directory, but the
+    # homepage thumbnail JS constructs URLs using the {w},{h} path.
+    w, h = img.size
+    wh_dir = tiles_dir / 'full' / f'{w},{h}' / '0'
+    if not wh_dir.exists():
+        wh_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(dest, wh_dir / 'default.jpg')
 
 
 # ---------------------------------------------------------------------------
