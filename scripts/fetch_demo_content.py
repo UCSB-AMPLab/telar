@@ -20,7 +20,7 @@ The csv_to_json.py build script (telar package) merges demo content
 into the JSON data alongside the user's real content, marking demo
 items with a _demo flag so the site can style them differently.
 
-Version: v0.8.1-beta
+Version: v0.9.0-beta
 """
 
 import json

@@ -11,7 +11,7 @@ This file exists for backward compatibility: existing imports like
 `from csv_to_json import process_images` continue to work, and the
 script remains callable as `python3 scripts/csv_to_json.py`.
 
-Version: v0.7.0-beta
+Version: v0.9.0-beta
 """
 
 # Re-export full public API from telar package for backward compatibility

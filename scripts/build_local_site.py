@@ -24,7 +24,7 @@ Each step can be skipped with flags (--skip-fetch, --skip-iiif,
 The default behaviour is to run all steps and start a local Jekyll
 server on port 4001.
 
-Version: v0.7.0-beta
+Version: v0.9.0-beta
 
 Usage:
     python3 scripts/build_local_site.py              # Build and serve on port 4001

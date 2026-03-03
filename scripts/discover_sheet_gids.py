@@ -19,7 +19,7 @@ confirm it works. The result is a mapping of tab names to GIDs that
 fetch_google_sheets.py uses to download each tab as a CSV file. It can
 also output environment variables for GitHub Actions workflows.
 
-Version: v0.7.0-beta
+Version: v0.9.0-beta
 
 Usage:
     python scripts/discover_sheet_gids.py <SHARED_URL> <PUBLISHED_URL>

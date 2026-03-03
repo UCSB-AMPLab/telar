@@ -2,6 +2,30 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.9.0-beta] - 2026-03-03
+
+Faster builds, simpler setup, and multi-page document support.
+
+### Added
+
+- **libvips IIIF tile generation**: 28x faster tile generation using libvips as the preferred backend (`vips dzsave --layout iiif3`). Falls back automatically to the Python `iiif` library if the `vips` CLI is not available. GitHub Actions workflow installs `libvips-tools` automatically
+
+- **Tify viewer**: Replaced UniversalViewer with Tify (v0.35.0) across all viewer contexts. Tify uses fewer DOM nodes, provides a Promise-based readiness API, and exposes the OpenSeadragon viewer through a documented public property. All existing viewport coordinates remain compatible
+
+- **PDF document support**: PDF files placed in `telar-content/objects/` are rendered into multi-page IIIF tile pyramids with per-page single-canvas manifests. Requires PyMuPDF (`pip install pymupdf`)
+
+- **Multi-page IIIF support**: Story steps can reference specific pages of multi-page objects using a new `page` column in the story CSV. The coordinate picker on object pages detects multi-page objects, shows pagination controls, and includes the page number in copied coordinates
+
+- **Custom metadata fields**: Extra columns in `objects.csv` beyond the standard fields are now passed through to object pages and rendered in the metadata section. Labels check language keys first, then fall back to the column name with underscores replaced by spaces
+
+- **Trama theme**: New default theme featuring Telar's new visual identity, by Adelaida Ávila. Terracotta links and buttons, lavender layer backgrounds, Space Grotesk headings, Roboto Condensed body text. The Paisajes theme remains available and existing sites keep their configured theme
+
+### Changed
+
+- **Content folder restructure**: `components/` renamed to `telar-content/`, with `images/` renamed to `objects/` (now holds images and PDFs) and `structures/` renamed to `spreadsheets/`. The `telar-` prefix makes the user content directory clearly identifiable. Migration script handles the rename automatically
+
+- **Single Google Sheets URL**: Simplified from requiring both a shared URL and a published URL to using only the published URL. Users no longer need to "Share with link" -- only "Publish to web". If `shared_url` is still present in `_config.yml`, it is silently ignored
+
 ## [0.8.1-beta] - 2026-02-26
 
 Onboarding and demo content release with documentation restructure, template simplification, and Spanish-language spreadsheet support.
