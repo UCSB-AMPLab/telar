@@ -29,7 +29,7 @@ name: Build and Deploy Telar Site
 # images or objects.csv), it restores tiles from the GitHub Actions cache
 # instead of regenerating them, which saves significant build time.
 #
-# Version: v0.8.2-beta
+# Version: v0.9.0-beta
 
 on:
   push:
@@ -206,10 +206,12 @@ jobs:
       - name: Copy generated IIIF tiles to cache directory
         if: steps.detect-changes.outputs.needs_iiif == 'true'
         run: |
-          if [ -d "_site/iiif/objects" ]; then
+          if [ -d "_site/iiif/objects" ] && [ "$(ls -A _site/iiif/objects 2>/dev/null)" ]; then
             echo "✓ Copying IIIF tiles to cache directory for future builds"
             mkdir -p cached-iiif
             cp -r _site/iiif/objects/* cached-iiif/
+          else
+            echo "No IIIF tiles to cache (directory empty or missing)"
           fi
 
       - name: Save IIIF tiles to cache
