@@ -52,9 +52,9 @@ class Migration091to092(BaseMigration):
             'scripts/iiif_utils.py': 'Fix sizes array scanning, add 96px thumbnail',
             'scripts/generate_iiif.py': 'Updated version header',
             'scripts/process_pdf.py': 'Updated version header',
-            '.github/workflows/telar-tests.yml': 'Skip on user sites',
-            '.github/workflows/build.yml': 'Updated version header',
             'CHANGELOG.md': 'Added v0.9.2-beta changelog entry',
+            # .github/workflows/ files cannot be pushed by the GitHub Actions
+            # token (requires 'workflows' permission). Listed in manual steps.
         }
 
         for file_path, description in framework_files.items():
