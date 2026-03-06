@@ -2,7 +2,7 @@
  * Telar - Digital Storytelling Framework
  * Main JavaScript file
  *
- * @version v0.6.2-beta
+ * @version v0.9.1-beta
  */
 
 // Wait for DOM to be ready

@@ -22,7 +22,7 @@
  * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
  * modal and must be explicitly dismissed.
  *
- * @version v0.7.0-beta
+ * @version v0.9.1-beta
  */
 
 import { state } from './state.js';

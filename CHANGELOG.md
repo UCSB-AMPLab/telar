@@ -2,6 +2,20 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.9.1-beta] - 2026-03-05
+
+LaTeX math rendering and a file extension bug fix. Thanks to Jaydon Schuler!
+
+### Added
+
+- **LaTeX math rendering (KaTeX)**: Automatic per-page LaTeX detection and rendering using KaTeX 0.16.21. Supports inline math (`$...$`), display math (`$$...$$`), and environments (`\begin{align}`, `\begin{equation}`, etc.). Detection uses smart heuristics to avoid false positives (e.g. `$50` does not trigger math rendering). LaTeX works in story panels, object descriptions, glossary definitions, and custom pages. Sites without LaTeX content have zero overhead -- KaTeX is only loaded on pages that need it
+
+- **Encrypted story LaTeX support**: Stories protected with encryption now support LaTeX. KaTeX loads dynamically after decryption if the story content contains math notation
+
+### Fixed
+
+- **Case-insensitive file extension matching**: Objects with uppercase extensions (e.g. `image.JPG`, `photo.PNG`) no longer trigger false "file missing" warnings during the build or on the site. Extension comparison now uses case-insensitive matching when scanning the objects directory
+
 ## [0.9.0-beta] - 2026-03-03
 
 Faster builds, simpler setup, and multi-page document support.

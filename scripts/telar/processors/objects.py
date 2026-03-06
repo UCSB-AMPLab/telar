@@ -44,7 +44,7 @@ objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v0.8.0-beta
+Version: v0.9.1-beta
 """
 
 import re

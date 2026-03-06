@@ -40,7 +40,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v0.7.0-beta
+Version: v0.9.1-beta
 """
 
 import re

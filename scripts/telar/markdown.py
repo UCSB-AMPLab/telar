@@ -24,7 +24,7 @@ as horizontal rules), and then runs the same pipeline. The markdown
 library's `nl2br` extension is enabled so that single line breaks in
 the spreadsheet cell produce `<br>` tags in the output.
 
-Version: v0.7.0-beta
+Version: v0.9.1-beta
 """
 
 import re

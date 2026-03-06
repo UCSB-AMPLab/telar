@@ -29,7 +29,7 @@ equivalents) is treated as a story. After all CSVs are converted, demo
 content is loaded and merged if available. Protected stories (v0.8.0+)
 are then encrypted using the story_key from _config.yml.
 
-Version: v0.8.0-beta
+Version: v0.9.1-beta
 """
 
 import os

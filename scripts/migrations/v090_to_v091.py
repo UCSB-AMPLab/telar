@@ -87,6 +87,8 @@ class Migration090to091(BaseMigration):
             'assets/js/story-unlock.js': 'Post-decryption KaTeX loading for encrypted stories',
             'assets/js/telar-story.js': 'Rebuilt JS bundle (includes panels.js LaTeX changes)',
             'assets/js/telar-story.js.map': 'Updated source map',
+            'README.md': 'Updated version badge',
+            'CHANGELOG.md': 'Added v0.9.1-beta changelog entry',
         }
 
         for file_path, description in framework_files.items():

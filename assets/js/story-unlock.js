@@ -8,7 +8,7 @@
  * Encryption uses AES-256-GCM with PBKDF2 key derivation (100,000 iterations),
  * matching the Python encryption in scripts/telar/encryption.py.
  *
- * @version v0.8.0-beta
+ * @version v0.9.1-beta
  */
 
 // PBKDF2 iterations — must match Python encryption
