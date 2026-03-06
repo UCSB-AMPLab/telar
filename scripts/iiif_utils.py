@@ -241,29 +241,38 @@ def patch_info_json(tiles_dir, object_id, base_url):
     # Set correct id URL
     info['id'] = f"{base_url}/iiif/objects/{object_id}"
 
-    # Populate sizes array from full/ directory
+    # Populate sizes array from full/ directory.
+    # libvips generates both "w,h" and "w," (width-only) directories;
+    # we need to scan for both patterns so the sizes array is complete.
     full_dir = tiles_dir / 'full'
+    img_w = info.get('width', 0)
+    img_h = info.get('height', 0)
     sizes = []
     if full_dir.exists():
         for entry in full_dir.iterdir():
             if not entry.is_dir() or entry.name == 'max':
                 continue
-            # Parse directory name: "w,h"
+            # "w,h" — both dimensions explicit
             match = re.match(r'^(\d+),(\d+)$', entry.name)
             if match:
                 sizes.append({
                     'width': int(match.group(1)),
                     'height': int(match.group(2)),
                 })
+                continue
+            # "w," — width-only, compute height from aspect ratio
+            match = re.match(r'^(\d+),$', entry.name)
+            if match and img_w and img_h:
+                sw = int(match.group(1))
+                sh = int(round(img_h * sw / img_w))
+                sizes.append({'width': sw, 'height': sh})
 
-    # Fallback: if no {w},{h} directories found (libvips <8.17 doesn't
+    # Fallback: if no thumbnail directories found (libvips <8.17 doesn't
     # create them), compute a single size from the image dimensions
     # already present in info.json.
     if not sizes:
-        w = info.get('width')
-        h = info.get('height')
-        if w and h:
-            sizes.append({'width': w, 'height': h})
+        if img_w and img_h:
+            sizes.append({'width': img_w, 'height': img_h})
 
     if sizes:
         sizes.sort(key=lambda s: s['width'])
@@ -302,6 +311,23 @@ def generate_full_max(processed_path, tiles_dir):
     if not wh_dir.exists():
         wh_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(dest, wh_dir / 'default.jpg')
+
+    # Generate width-only thumbnails for sizes that IIIF viewers request
+    # but that don't exist in the static Level 0 tile pyramid. TIFY v0.35
+    # always requests full/96,/0/default.jpg for its page thumbnail
+    # regardless of the service profile level, causing 404s on static
+    # tiles that break rendering on Windows browsers.
+    VIEWER_THUMB_WIDTHS = [96]
+    for tw in VIEWER_THUMB_WIDTHS:
+        if tw >= w:
+            continue
+        th = int(round(h * tw / w))
+        thumb_dir = tiles_dir / 'full' / f'{tw},' / '0'
+        if not thumb_dir.exists():
+            thumb_dir.mkdir(parents=True, exist_ok=True)
+            thumb = img.resize((tw, th), Image.LANCZOS)
+            thumb.save(thumb_dir / 'default.jpg', 'JPEG', quality=85)
+
 
 
 # ---------------------------------------------------------------------------
