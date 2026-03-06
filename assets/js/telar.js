@@ -224,6 +224,11 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
         contentElement.innerHTML = glossaryContent.innerHTML;
         // Initialize glossary links within the loaded content (enables glossary-to-glossary linking)
         initializeGlossaryLinks(contentElement);
+
+        // Re-render LaTeX in fetched glossary content
+        if (window.telarRenderLatex) {
+          window.telarRenderLatex(contentElement);
+        }
       } else {
         throw new Error('Glossary content not found');
       }

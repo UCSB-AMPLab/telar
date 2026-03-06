@@ -1,0 +1,56 @@
+<!--
+  KaTeX Include
+  Loads KaTeX CSS, JS, auto-render, and mhchem from jsDelivr CDN.
+  Provides window.telarRenderLatex() for rendering LaTeX in dynamically
+  injected content (story panels, glossary definitions).
+
+  Version: v0.9.1-beta
+-->
+
+<!-- KaTeX CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+
+<!-- KaTeX JS -->
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+
+<!-- KaTeX auto-render extension -->
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+
+<!-- mhchem extension for chemical formulas -->
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js"></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    // Render all LaTeX on page load
+    var katexDelimiters = [
+      { left: "$$", right: "$$", display: true },
+      { left: "$", right: "$", display: false },
+      { left: "\\(", right: "\\)", display: false },
+      { left: "\\[", right: "\\]", display: true },
+      { left: "\\begin{align}", right: "\\end{align}", display: true },
+      { left: "\\begin{align*}", right: "\\end{align*}", display: true },
+      { left: "\\begin{cases}", right: "\\end{cases}", display: true },
+      { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
+      { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
+      { left: "\\begin{equation}", right: "\\end{equation}", display: true },
+      { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
+    ];
+
+    renderMathInElement(document.body, {
+      delimiters: katexDelimiters,
+      throwOnError: false,
+      trust: true
+    });
+
+    // Global function for re-rendering dynamic content (panels, glossary fetch)
+    window.telarRenderLatex = function(element) {
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(element, {
+          delimiters: katexDelimiters,
+          throwOnError: false,
+          trust: true
+        });
+      }
+    };
+  });
+</script>

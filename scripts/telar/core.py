@@ -95,14 +95,15 @@ def csv_to_json(csv_path, json_path, process_func=None):
         # Convert to JSON
         data = df.to_dict('records')
 
-        # If dataframe has metadata (e.g., viewer warnings), prepend as first element
-        if hasattr(df, 'attrs') and 'viewer_warnings' in df.attrs:
-            viewer_warnings = df.attrs['viewer_warnings']
-            if viewer_warnings:  # Only add if there are warnings
-                metadata = {
-                    '_metadata': True,
-                    'viewer_warnings': viewer_warnings
-                }
+        # If dataframe has metadata (e.g., viewer warnings, LaTeX flag), prepend as first element
+        if hasattr(df, 'attrs') and ('viewer_warnings' in df.attrs or 'has_latex' in df.attrs):
+            metadata = {'_metadata': True}
+            viewer_warnings = df.attrs.get('viewer_warnings')
+            if viewer_warnings:
+                metadata['viewer_warnings'] = viewer_warnings
+            if df.attrs.get('has_latex'):
+                metadata['has_latex'] = True
+            if len(metadata) > 1:  # Only add if there's actual metadata beyond the flag
                 data.insert(0, metadata)
 
         # Write JSON file

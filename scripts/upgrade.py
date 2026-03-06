@@ -55,10 +55,11 @@ from migrations.v063_to_v070 import Migration063to070
 from migrations.v070_to_v080 import Migration070to080
 from migrations.v080_to_v081 import Migration080to081
 from migrations.v081_to_v090 import Migration081to090
+from migrations.v090_to_v091 import Migration090to091
 
 
 # Latest version
-LATEST_VERSION = "0.9.0-beta"
+LATEST_VERSION = "0.9.1-beta"
 
 # All available migrations in order
 MIGRATIONS = [
@@ -79,6 +80,7 @@ MIGRATIONS = [
     Migration070to080,
     Migration080to081,
     Migration081to090,
+    Migration090to091,
 ]
 
 

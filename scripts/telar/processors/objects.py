@@ -605,15 +605,16 @@ def process_objects(df, christmas_tree=False):
             continue
 
         # No external IIIF manifest - check for local image file
-        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf']
+        valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf'}
         has_local_image = False
+        objects_dir = Path('telar-content/objects')
 
-        for ext in valid_extensions:
-            local_image_path = Path(f'telar-content/objects/{object_id}{ext}')
-            if local_image_path.exists():
-                has_local_image = True
-                print(f"  [INFO] Object {object_id} uses local image: {local_image_path}")
-                break
+        if objects_dir.exists():
+            for f in objects_dir.iterdir():
+                if f.stem == object_id and f.suffix.lower() in valid_extensions:
+                    has_local_image = True
+                    print(f"  [INFO] Object {object_id} uses local image: {f}")
+                    break
 
         # Warn if object has neither external manifest nor local image
         if not has_local_image:

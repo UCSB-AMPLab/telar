@@ -105,6 +105,11 @@ export function openPanel(panelType, contentId) {
       window.Telar.initializeGlossaryLinks(contentElement);
     }
 
+    // Re-render LaTeX in dynamically loaded panel content
+    if (window.telarRenderLatex) {
+      window.telarRenderLatex(contentElement);
+    }
+
     // Update panel stack
     if (panelType === 'layer1') {
       state.panelStack = [{ type: panelType, id: contentId }];
