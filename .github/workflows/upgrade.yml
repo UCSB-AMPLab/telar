@@ -20,7 +20,7 @@ name: Upgrade Telar
 # merging (for example, updating custom content that the script cannot
 # migrate automatically).
 #
-# Version: v0.7.0-beta
+# Version: v0.9.2-beta
 
 on:
   workflow_dispatch:

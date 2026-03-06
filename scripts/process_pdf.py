@@ -42,7 +42,7 @@ This script is designed to be called from generate_iiif.py when it
 detects a .pdf source file, but it can also be run standalone for
 testing.
 
-Version: v0.9.0-beta
+Version: v0.9.2-beta
 """
 
 import json

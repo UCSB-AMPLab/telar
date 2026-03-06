@@ -34,7 +34,7 @@ Tile generation backends:
   - iiif library (fallback): Pure Python, no system dependencies.
     Install: pip install iiif
 
-Version: v0.9.0-beta
+Version: v0.9.2-beta
 """
 
 import os

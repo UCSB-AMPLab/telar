@@ -20,7 +20,7 @@ without duplicating it.
 None of these functions are meant to be run directly. They are
 imported by the two entry-point scripts.
 
-Version: v0.9.0-beta
+Version: v0.9.2-beta
 """
 
 import json
