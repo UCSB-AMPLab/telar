@@ -22,7 +22,7 @@
  * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
  * modal and must be explicitly dismissed.
  *
- * @version v0.7.0-beta
+ * @version v0.9.1-beta
  */
 
 import { state } from './state.js';
@@ -103,6 +103,11 @@ export function openPanel(panelType, contentId) {
     // Re-initialise glossary links in dynamically loaded content
     if (window.Telar && window.Telar.initializeGlossaryLinks) {
       window.Telar.initializeGlossaryLinks(contentElement);
+    }
+
+    // Re-render LaTeX in dynamically loaded panel content
+    if (window.telarRenderLatex) {
+      window.telarRenderLatex(contentElement);
     }
 
     // Update panel stack

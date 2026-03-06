@@ -40,7 +40,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v0.7.0-beta
+Version: v0.9.1-beta
 """
 
 import re
@@ -53,6 +53,7 @@ from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.csv_utils import get_source_url
+from telar.latex import has_latex
 
 
 def process_story(df, christmas_tree=False):
@@ -174,15 +175,16 @@ def process_story(df, christmas_tree=False):
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
                 # Check for local image in telar-content/objects/
-                valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf']
+                valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf'}
                 has_local_image = False
+                objects_dir = Path('telar-content/objects')
 
-                for ext in valid_extensions:
-                    local_image_path = Path(f'telar-content/objects/{actual_object_id}{ext}')
-                    if local_image_path.exists():
-                        has_local_image = True
-                        print(f"  [INFO] Object {actual_object_id} uses local image: {local_image_path}")
-                        break
+                if objects_dir.exists():
+                    for f in objects_dir.iterdir():
+                        if f.stem == actual_object_id and f.suffix.lower() in valid_extensions:
+                            has_local_image = True
+                            print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
+                            break
 
                 # Only warn if object has neither external manifest nor local image
                 if not has_local_image:
@@ -310,6 +312,20 @@ def process_story(df, christmas_tree=False):
 
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings
+
+    # Check for LaTeX content across all steps
+    latex_detected = False
+    for idx, row in df.iterrows():
+        for col in df.columns:
+            if col.endswith('_text'):
+                text = str(row.get(col, ''))
+                if text and has_latex(text):
+                    latex_detected = True
+                    break
+        if latex_detected:
+            break
+
+    df.attrs['has_latex'] = latex_detected
 
     # Christmas Tree Mode: Inject fake warnings for testing
     if christmas_tree:

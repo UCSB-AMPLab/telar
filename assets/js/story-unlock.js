@@ -8,7 +8,7 @@
  * Encryption uses AES-256-GCM with PBKDF2 key derivation (100,000 iterations),
  * matching the Python encryption in scripts/telar/encryption.py.
  *
- * @version v0.8.0-beta
+ * @version v0.9.1-beta
  */
 
 // PBKDF2 iterations — must match Python encryption
@@ -178,6 +178,66 @@ function hideUnlockOverlay() {
 }
 
 /**
+ * Load KaTeX dynamically if the decrypted story has LaTeX content.
+ * Mirrors the KaTeX loading logic in story.html but runs post-decryption.
+ * @param {Array} steps - Decrypted steps array
+ */
+function loadKaTeXIfNeeded(steps) {
+  const meta = steps[0];
+  if (!meta || !meta._metadata || !meta.has_latex) return;
+
+  // Load KaTeX CSS
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css';
+  document.head.appendChild(link);
+
+  // Load KaTeX scripts sequentially
+  const scripts = [
+    'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js'
+  ];
+
+  function loadNext(i) {
+    if (i >= scripts.length) {
+      const katexDelimiters = [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true },
+        { left: "\\begin{align}", right: "\\end{align}", display: true },
+        { left: "\\begin{align*}", right: "\\end{align*}", display: true },
+        { left: "\\begin{cases}", right: "\\end{cases}", display: true },
+        { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
+        { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
+        { left: "\\begin{equation}", right: "\\end{equation}", display: true },
+        { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
+      ];
+      window.telarRenderLatex = function(element) {
+        if (typeof renderMathInElement === 'function') {
+          renderMathInElement(element, {
+            delimiters: katexDelimiters,
+            throwOnError: false,
+            trust: true
+          });
+        }
+      };
+      // Render LaTeX in step text already in the DOM
+      document.querySelectorAll('.story-step').forEach(function(el) {
+        window.telarRenderLatex(el);
+      });
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = scripts[i];
+    s.onload = function() { loadNext(i + 1); };
+    document.head.appendChild(s);
+  }
+  loadNext(0);
+}
+
+/**
  * Simple markdown to HTML conversion for step content.
  * Handles basic formatting: bold, italic, links, paragraphs.
  * @param {string} text - Markdown text
@@ -318,6 +378,9 @@ async function attemptUnlock(key) {
     // Render the decrypted steps into the DOM
     renderDecryptedSteps(decryptedSteps);
 
+    // Load KaTeX if the decrypted story has LaTeX content
+    loadKaTeXIfNeeded(decryptedSteps);
+
     hideUnlockOverlay();
 
     // Trigger story initialization
@@ -392,6 +455,9 @@ async function initializeStoryUnlock() {
 
     // Render steps from cache
     renderDecryptedSteps(steps);
+
+    // Load KaTeX if the cached story has LaTeX content
+    loadKaTeXIfNeeded(steps);
     return;
   }
 

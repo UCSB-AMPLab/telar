@@ -232,6 +232,69 @@
     window.Tify = Tify;
   </script>
 
+  <!-- KaTeX for LaTeX rendering (loaded dynamically if story has LaTeX) -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // Check after storyData is available
+      setTimeout(function() {
+        if (window.storyData && window.storyData.steps) {
+          var meta = window.storyData.steps[0];
+          if (meta && meta._metadata && meta.has_latex) {
+            // Load KaTeX CSS
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css';
+            document.head.appendChild(link);
+
+            // Load KaTeX scripts sequentially
+            var scripts = [
+              'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js',
+              'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js',
+              'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js'
+            ];
+
+            function loadNext(i) {
+              if (i >= scripts.length) {
+                var katexDelimiters = [
+                  { left: "$$", right: "$$", display: true },
+                  { left: "$", right: "$", display: false },
+                  { left: "\\(", right: "\\)", display: false },
+                  { left: "\\[", right: "\\]", display: true },
+                  { left: "\\begin{align}", right: "\\end{align}", display: true },
+                  { left: "\\begin{align*}", right: "\\end{align*}", display: true },
+                  { left: "\\begin{cases}", right: "\\end{cases}", display: true },
+                  { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
+                  { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
+                  { left: "\\begin{equation}", right: "\\end{equation}", display: true },
+                  { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
+                ];
+                window.telarRenderLatex = function(element) {
+                  if (typeof renderMathInElement === 'function') {
+                    renderMathInElement(element, {
+                      delimiters: katexDelimiters,
+                      throwOnError: false,
+                      trust: true
+                    });
+                  }
+                };
+                // Render LaTeX in step text already in the DOM
+                document.querySelectorAll('.story-step').forEach(function(el) {
+                  window.telarRenderLatex(el);
+                });
+                return;
+              }
+              var s = document.createElement('script');
+              s.src = scripts[i];
+              s.onload = function() { loadNext(i + 1); };
+              document.head.appendChild(s);
+            }
+            loadNext(0);
+          }
+        }
+      }, 0);
+    });
+  </script>
+
   <!-- Telar Core -->
   <script src="{{ '/assets/js/telar.js' | relative_url }}"></script>
 

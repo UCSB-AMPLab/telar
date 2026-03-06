@@ -27,7 +27,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v0.9.0-beta
+Version: v0.9.1-beta
 """
 
 import json
@@ -45,6 +45,7 @@ from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
+from telar.latex import has_latex
 
 # Fields already handled explicitly in generate_objects() frontmatter.
 # Any key NOT in this set is treated as a custom field and written to extra_metadata.
@@ -144,10 +145,15 @@ def generate_objects():
             for key, value in extra.items():
                 content += f'  {key}: "{_yaml_escape(value)}"\n'
 
+        # Check description for LaTeX content
+        description = obj.get('description', '')
+        if description and has_latex(description):
+            content += "has_latex: true\n"
+
         content += f"""layout: object
 ---
 
-{obj.get('description', '')}
+{description}
 """
 
         with open(filepath, 'w') as f:
@@ -227,6 +233,11 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         for warning in warnings_list:
             print(f"  Warning: {warning}")
 
+        # Check definition for LaTeX content
+        latex_flag = ""
+        if has_latex(processed):
+            latex_flag = "\nhas_latex: true"
+
         # Build related_terms frontmatter
         related_str = ''
         if related_terms:
@@ -236,7 +247,7 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         filepath = glossary_dir / f"{term_id}.md"
         output_content = f"""---
 term_id: {term_id}
-title: "{title}"{related_str}
+title: "{title}"{related_str}{latex_flag}
 layout: glossary
 ---
 
@@ -300,10 +311,15 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
         for warning in warnings_list:
             print(f"  Warning: {warning}")
 
+        # Check definition for LaTeX content
+        latex_flag = ""
+        if has_latex(processed):
+            latex_flag = "\nhas_latex: true"
+
         # Write to collection with layout added
         output_content = f"""---
 {frontmatter_text}
-layout: glossary
+layout: glossary{latex_flag}
 ---
 
 {processed}

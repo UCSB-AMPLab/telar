@@ -29,6 +29,10 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
 
+  {% if page.latex or page.has_latex or page.layout == "user-page" %}
+    {% include katex.html %}
+  {% endif %}
+
   {% seo %}
 </head>
 <body>
