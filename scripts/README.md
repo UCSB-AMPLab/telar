@@ -183,6 +183,18 @@ The Colonial Period in the Americas began with...
 - `title` - Term name
 - `related_terms` - Comma-separated list (optional)
 
+## JavaScript Bundling
+
+The story viewer JavaScript is developed as modular files in `assets/js/telar-story/` and bundled into a single file for production. After modifying any file in that directory, rebuild the bundle:
+
+```bash
+npx esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap
+```
+
+This produces `assets/js/telar-story.js` (the bundled file Jekyll serves) and a source map. Both files should be committed.
+
+**Note:** If you skip this step after editing the modular sources, the site will serve the old bundle and your changes will not take effect.
+
 ## Workflow
 
 Complete data processing workflow:
@@ -199,7 +211,10 @@ python scripts/generate_collections.py
 # 5. Generate IIIF tiles for any new images
 python scripts/generate_iiif.py
 
-# 6. Build Jekyll site
+# 6. Bundle JavaScript (only if you modified files in assets/js/telar-story/)
+npx esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap
+
+# 7. Build Jekyll site
 bundle exec jekyll build
 ```
 
