@@ -278,6 +278,17 @@ def patch_info_json(tiles_dir, object_id, base_url):
         sizes.sort(key=lambda s: s['width'])
         info['sizes'] = sizes
 
+    # Ensure scaleFactors is never empty — OpenSeadragon (inside Tify)
+    # crashes with RangeError when it encounters an empty array. This
+    # happens for images smaller than the tile size (512px), where libvips
+    # produces no downscale levels.
+    tiles = info.get('tiles', [])
+    for tile in tiles:
+        if not tile.get('scaleFactors'):
+            tile['scaleFactors'] = [1]
+    if tiles:
+        info['tiles'] = tiles
+
     # Add extraFormats and extraQualities for spec compliance
     info['extraFormats'] = ['jpg']
     info['extraQualities'] = ['default']
