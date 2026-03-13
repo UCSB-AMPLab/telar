@@ -20,7 +20,7 @@ without duplicating it.
 None of these functions are meant to be run directly. They are
 imported by the two entry-point scripts.
 
-Version: v0.9.2-beta
+Version: v0.9.3-beta
 """
 
 import json
@@ -268,11 +268,24 @@ def patch_info_json(tiles_dir, object_id, base_url):
                 sizes.append({'width': sw, 'height': sh})
 
     # Fallback: if no thumbnail directories found (libvips <8.17 doesn't
-    # create them), compute a single size from the image dimensions
-    # already present in info.json.
+    # create them), compute sizes from the scaleFactors in the tiles spec.
+    # Each scale factor gets a correctly scaled size entry so that
+    # OpenSeadragon's levelSizes array has accurate level dimensions.
+    # A single full-res entry would coincidentally match maxLevel and
+    # cause OSD to use wrong dimensions for edge tile calculations.
     if not sizes:
         if img_w and img_h:
-            sizes.append({'width': img_w, 'height': img_h})
+            scale_factors = []
+            for tile in info.get('tiles', []):
+                scale_factors.extend(tile.get('scaleFactors', []))
+            if scale_factors:
+                for sf in sorted(scale_factors):
+                    sizes.append({
+                        'width': -(-img_w // sf),  # ceil division
+                        'height': -(-img_h // sf),
+                    })
+            else:
+                sizes.append({'width': img_w, 'height': img_h})
 
     if sizes:
         sizes.sort(key=lambda s: s['width'])
