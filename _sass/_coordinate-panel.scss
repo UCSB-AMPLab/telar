@@ -1,0 +1,198 @@
+/**
+ * Coordinate Panel
+ *
+ * Styles for the coordinate finder tool on object pages. The panel background
+ * uses the theme's button colour (--color-button-bg) and a JS luminance check
+ * adds .coord-dark or .coord-light to adapt text and field colours.
+ *
+ * @version v0.9.3-beta
+ */
+
+/* Panel container */
+.coordinate-panel {
+  background-color: var(--color-button-bg);
+  border-radius: 0;
+  position: relative;
+}
+
+.coordinate-panel-body {
+  padding-right: 3rem;
+}
+
+.coordinate-panel-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.coordinate-panel-row {
+  padding-top: 1rem;
+}
+
+.coordinate-panel-instructions {
+  padding-left: 2rem;
+}
+
+.coordinate-panel-instructions p {
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+}
+
+.coordinate-panel-heading {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.875rem;
+}
+
+.coordinate-panel-values {
+  padding-top: 2rem;
+}
+
+.coordinate-panel-values-inner {
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+/* Coordinate labels and fields */
+.coord-label {
+  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.coord-field {
+  position: relative;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hidden by default — JS sets display: flex for multi-page objects */
+.coord-page-row {
+  display: none;
+}
+
+.coord-copy-btn {
+  position: absolute;
+  top: 50%;
+  right: 0.25rem;
+  transform: translateY(-50%);
+  border: none;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  background: transparent;
+}
+
+/* "Identify coordinates" button — sits outside the panel, uses theme colour directly */
+.btn-developer {
+  background: var(--color-button-bg);
+  color: var(--color-button-text);
+  border: 1px solid var(--color-button-bg);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-developer:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-developer i {
+  margin-right: 0.5rem;
+}
+
+/* Copy all buttons */
+.btn-copy {
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-copy:hover {
+  transform: translateY(-1px);
+}
+
+/* -------------------------------------------------------
+ * Dark background variant (luminance <= 0.179)
+ * Light text, semi-transparent overlays
+ * ------------------------------------------------------- */
+.coord-dark {
+  color: #fff;
+}
+
+.coord-dark .coordinate-panel-close {
+  filter: invert(1);
+}
+
+.coord-dark .coord-field {
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.coord-dark .coord-field code {
+  color: #fff;
+}
+
+.coord-dark .coord-copy-btn {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.coord-dark .coord-copy-btn:hover {
+  color: #fff;
+}
+
+.coord-dark .btn-copy {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.coord-dark .btn-copy:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* -------------------------------------------------------
+ * Light background variant (luminance > 0.179)
+ * Dark text, semi-transparent overlays
+ * ------------------------------------------------------- */
+.coord-light {
+  color: #2c3e50;
+}
+
+.coord-light .coord-field {
+  background-color: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.coord-light .coord-field code {
+  color: #2c3e50;
+}
+
+.coord-light .coord-copy-btn {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.coord-light .coord-copy-btn:hover {
+  color: #2c3e50;
+}
+
+.coord-light .btn-copy {
+  background: rgba(0, 0, 0, 0.08);
+  color: #2c3e50;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.coord-light .btn-copy:hover {
+  background: rgba(0, 0, 0, 0.15);
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
