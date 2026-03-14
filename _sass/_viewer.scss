@@ -125,7 +125,7 @@
   background: none !important;
 }
 
-#object-viewer.multipage .tify-page-select-button {
+#object-viewer.multipage .tify-header-button-group.-page-select .tify-dropdown-button {
   border-radius: 50px !important;
   border: 1px solid #ddd !important;
   background: #f8f8f8 !important;
@@ -141,7 +141,7 @@
   overflow: visible !important;
 }
 
-#object-viewer.multipage .tify-page-select-button::after {
+#object-viewer.multipage .tify-header-button-group.-page-select .tify-dropdown-button::after {
   content: "\25BE";
   position: absolute;
   right: 0.5rem;
