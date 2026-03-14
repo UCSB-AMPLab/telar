@@ -54,6 +54,7 @@ COLUMN_NAME_MAPPING = {
     # x, y, zoom are the same in both languages
     'pagina': 'page',
     'página': 'page',
+    'page': 'page',  # normalize casing (Google Sheets may use 'Page')
 
     # English column backward compatibility (layer1_file -> layer1_content)
     'layer1_file': 'layer1_content',
