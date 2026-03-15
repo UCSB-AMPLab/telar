@@ -57,9 +57,12 @@ class Migration092to093(BaseMigration):
 
         framework_files = {
             # IIIF fixes
-            'scripts/iiif_utils.py': 'Fix empty scaleFactors and edge tile sizes',
+            'scripts/iiif_utils.py': 'Fix scaleFactors, edge tiles, thumbnail generation order',
             # Object page
             '_layouts/object.html': 'Coordinate panel restyle, i18n, multi-page instructions',
+            # Homepage and gallery thumbnails
+            '_layouts/index.html': 'Smart thumbnail size selection for IIIF sizes array',
+            '_layouts/objects-index.html': 'Smart thumbnail size selection for objects gallery',
             '_sass/_coordinate-panel.scss': 'New coordinate panel SCSS partial',
             '_sass/_viewer.scss': 'Portrait aspect ratio, page selector truncation fix',
             'assets/css/telar.scss': 'Add coordinate-panel import',
