@@ -163,6 +163,7 @@ export function createViewerCard(objectId, zIndex, x, y, zoom, page) {
 
   const viewerCard = {
     objectId,
+    page: page || undefined,
     element: cardElement,
     tifyInstance,
     osdViewer: null,
@@ -224,6 +225,17 @@ export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom, page) {
   const existing = state.viewerCards.find(vc => vc.objectId === objectId);
 
   if (existing) {
+    // If the page changed, destroy the old card and create a new one
+    // with the correct per-page manifest URL
+    const existingPage = existing.page;
+    const requestedPage = page || undefined;
+    if (existingPage !== requestedPage) {
+      console.log(`Page changed for ${objectId}: ${existingPage} → ${requestedPage}, recreating viewer card`);
+      destroyViewerCard(existing);
+      state.viewerCards = state.viewerCards.filter(vc => vc !== existing);
+      return createViewerCard(objectId, zIndex, x, y, zoom, page);
+    }
+
     console.log(`Reusing existing viewer card for ${objectId}`);
     existing.element.style.zIndex = zIndex;
     existing.zIndex = zIndex;

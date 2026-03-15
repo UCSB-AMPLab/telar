@@ -25,7 +25,8 @@
 
 #object-viewer {
   width: 100%;
-  height: 600px;
+  aspect-ratio: 4 / 5;
+  background: #000;
 }
 
 /* Black viewer background — targets Tify internals (same pattern as Zasqua) */
@@ -124,7 +125,7 @@
   background: none !important;
 }
 
-#object-viewer.multipage .tify-page-select-button {
+#object-viewer.multipage .tify-header-button-group.-page-select .tify-dropdown-button {
   border-radius: 50px !important;
   border: 1px solid #ddd !important;
   background: #f8f8f8 !important;
@@ -136,9 +137,11 @@
   padding: 0 1.8rem 0 0.6rem !important;
   position: relative !important;
   cursor: pointer !important;
+  max-width: none !important;
+  overflow: visible !important;
 }
 
-#object-viewer.multipage .tify-page-select-button::after {
+#object-viewer.multipage .tify-header-button-group.-page-select .tify-dropdown-button::after {
   content: "\25BE";
   position: absolute;
   right: 0.5rem;

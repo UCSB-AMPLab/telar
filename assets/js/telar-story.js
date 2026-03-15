@@ -155,6 +155,7 @@
     });
     const viewerCard = {
       objectId,
+      page: page || void 0,
       element: cardElement,
       tifyInstance,
       osdViewer: null,
@@ -191,6 +192,14 @@
     console.log(`Current viewerCards: ${state.viewerCards.map((vc) => vc.objectId).join(", ")}`);
     const existing = state.viewerCards.find((vc) => vc.objectId === objectId);
     if (existing) {
+      const existingPage = existing.page;
+      const requestedPage = page || void 0;
+      if (existingPage !== requestedPage) {
+        console.log(`Page changed for ${objectId}: ${existingPage} \u2192 ${requestedPage}, recreating viewer card`);
+        destroyViewerCard(existing);
+        state.viewerCards = state.viewerCards.filter((vc) => vc !== existing);
+        return createViewerCard(objectId, zIndex, x, y, zoom, page);
+      }
       console.log(`Reusing existing viewer card for ${objectId}`);
       existing.element.style.zIndex = zIndex;
       existing.zIndex = zIndex;
@@ -702,8 +711,9 @@
     const zoom = parseFloat(newStep.dataset.zoom);
     const page = newStep.dataset.page ? parseInt(newStep.dataset.page, 10) : void 0;
     const isLeavingIntro = oldIndex === 0 && newIndex > 0;
-    if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || isLeavingIntro)) {
-      console.log(`Switching to new object: ${objectId}${isLeavingIntro ? " (leaving intro)" : ""}`);
+    const pageChanged = state.currentViewerCard && state.currentViewerCard.page !== (page || void 0);
+    if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || isLeavingIntro || pageChanged)) {
+      console.log(`Switching to new object: ${objectId}${isLeavingIntro ? " (leaving intro)" : ""}${pageChanged ? ` (page changed to ${page})` : ""}`);
       switchToObject(objectId, newIndex, x, y, zoom, newStep, direction, page);
       state.currentObject = objectId;
     } else {
@@ -816,8 +826,9 @@
     const y = parseFloat(newStep.dataset.y);
     const zoom = parseFloat(newStep.dataset.zoom);
     const page = newStep.dataset.page ? parseInt(newStep.dataset.page, 10) : void 0;
-    if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId)) {
-      console.log(`Switching to object: ${objectId}`);
+    const mobilePageChanged = state.currentViewerCard && state.currentViewerCard.page !== (page || void 0);
+    if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || mobilePageChanged)) {
+      console.log(`Switching to object: ${objectId}${mobilePageChanged ? ` (page changed to ${page})` : ""}`);
       switchToObjectMobile(objectId, newIndex, x, y, zoom, page);
       state.currentObject = objectId;
     } else if (state.currentViewerCard && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {

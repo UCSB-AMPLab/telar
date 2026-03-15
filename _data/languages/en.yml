@@ -59,6 +59,7 @@ object:
     copy_page_tooltip: "Copy page number"
     instructions_p1: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling."
     instructions_p2: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once."
+    instructions_p2_multi: "Once you identify a location make a note of the X, Y, Zoom, and Page values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all four values at once."
     copy_x_tooltip: "Copy X coordinate"
     copy_y_tooltip: "Copy Y coordinate"
     copy_zoom_tooltip: "Copy Zoom level"

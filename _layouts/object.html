@@ -7,45 +7,6 @@ layout: default
 <!-- Bootstrap Icons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
-<style>
-  /* Coordinator tools button styling */
-  .btn-developer {
-    background: #c8d8e8 !important;
-    color: #2c3e50 !important;
-    border: 1px solid #b0c8d8 !important;
-    font-weight: 600;
-    transition: all 0.2s ease;
-  }
-
-  .btn-developer:hover {
-    background: #2c3e50 !important;
-    color: #fff !important;
-    border-color: #2c3e50 !important;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(44, 62, 80, 0.15);
-  }
-
-  .btn-developer i {
-    margin-right: 0.5rem;
-  }
-
-  /* Copy button styling */
-  .btn-copy {
-    background: #c8d8e8;
-    color: #2c3e50;
-    border: 1px solid #b0c8d8;
-    font-weight: 600;
-    transition: all 0.2s ease;
-  }
-
-  .btn-copy:hover {
-    background: #b0c8d8;
-    color: #2c3e50;
-    border-color: #98b8c8;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(44, 62, 80, 0.15);
-  }
-</style>
 
 <div class="container my-5">
   <div class="row">
@@ -66,7 +27,7 @@ layout: default
       </div>
       {% endif %}
 
-      <div id="object-viewer" style="width: 100%; height: 600px; background: #000;"></div>
+      <div id="object-viewer"></div>
 
       <!-- Coordinate Tools Button -->
       {% if page.object_id %}
@@ -79,72 +40,75 @@ layout: default
 
         <!-- Collapsible Coordinate Panel -->
         <div class="collapse" id="coordinatePanel">
-          <div class="card" style="background-color: #2c3e50; color: #c8d8e8; border-radius: 0; position: relative;">
-            <div class="card-body" style="padding-right: 3rem;">
+          <div class="card coordinate-panel">
+            <div class="card-body coordinate-panel-body">
               <!-- Close Button -->
-              <button type="button" class="btn-close btn-close-white" data-bs-toggle="collapse" data-bs-target="#coordinatePanel" style="position: absolute; top: 0.5rem; right: 0.5rem;"></button>
+              <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#coordinatePanel"></button>
 
-              <div class="row" style="padding-top: 1rem;">
+              <div class="row coordinate-panel-row">
                 <!-- Instructions -->
                 <div class="col-md-6">
-                  <div style="padding-left: 2rem;">
-                    <h6 style="color: #c8d8e8; font-weight: 600; margin-bottom: 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.875rem;">Instructions</h6>
-                    <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0.5rem;">
-                      Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling.
+                  <div class="coordinate-panel-instructions">
+                    <h6 class="coordinate-panel-heading">{{ lang.object.coordinates.heading | default: "Instructions" }}</h6>
+                    <p>
+                      {{ lang.object.coordinates.instructions_p1 | default: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling." }}
                     </p>
-                    <p style="color: #c8d8e8; line-height: 1.6; margin-bottom: 0;">
-                      Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once.
+                    <p class="mb-0 coord-instructions-single">
+                      {{ lang.object.coordinates.instructions_p2 | default: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once." }}
+                    </p>
+                    <p class="mb-0 coord-instructions-multi" style="display: none;">
+                      {{ lang.object.coordinates.instructions_p2_multi | default: "Once you identify a location make a note of the X, Y, Zoom, and Page values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all four values at once." }}
                     </p>
                   </div>
                 </div>
 
                 <!-- Current Coordinates Table and Buttons -->
                 <div class="col-md-6">
-                  <div style="padding-top: 2rem;">
-                    <div style="max-width: 280px; margin: 0 auto;">
+                  <div class="coordinate-panel-values">
+                    <div class="coordinate-panel-values-inner">
                       <dl class="row mb-0">
-                        <dt class="col-sm-6 coord-page-row" style="display: none; color: #c8d8e8; text-align: right; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">{{ lang.object.coordinates.page_label | default: "Page" }}</dt>
-                        <dd class="col-sm-6 coord-page-row" style="display: none; position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; align-items: center; justify-content: center;">
-                          <code id="coord-page" style="color: #c8d8e8;">1</code>
-                          <button class="btn btn-sm" id="copy-page" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="{{ lang.object.coordinates.copy_page_tooltip | default: 'Copy page number' }}">
+                        <dt class="col-sm-6 coord-page-row coord-label">{{ lang.object.coordinates.page_label | default: "Page" }}</dt>
+                        <dd class="col-sm-6 coord-page-row coord-field">
+                          <code id="coord-page">1</code>
+                          <button class="btn btn-sm coord-copy-btn" id="copy-page" title="{{ lang.object.coordinates.copy_page_tooltip | default: 'Copy page number' }}">
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </dd>
 
-                        <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">X</dt>
-                        <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
-                          <code id="coord-x" style="color: #c8d8e8;">0.500</code>
-                          <button class="btn btn-sm" id="copy-x" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="Copy X coordinate">
+                        <dt class="col-sm-6 coord-label">X</dt>
+                        <dd class="col-sm-6 coord-field">
+                          <code id="coord-x">0.500</code>
+                          <button class="btn btn-sm coord-copy-btn" id="copy-x" title="Copy X coordinate">
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </dd>
 
-                        <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">Y</dt>
-                        <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
-                          <code id="coord-y" style="color: #c8d8e8;">0.500</code>
-                          <button class="btn btn-sm" id="copy-y" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="Copy Y coordinate">
+                        <dt class="col-sm-6 coord-label">Y</dt>
+                        <dd class="col-sm-6 coord-field">
+                          <code id="coord-y">0.500</code>
+                          <button class="btn btn-sm coord-copy-btn" id="copy-y" title="Copy Y coordinate">
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </dd>
 
-                        <dt class="col-sm-6" style="color: #c8d8e8; text-align: right; display: flex; align-items: center; justify-content: flex-end; margin-bottom: 0.5rem;">Zoom</dt>
-                        <dd class="col-sm-6" style="position: relative; color: #c8d8e8; background-color: #1a252f; border: 1px solid #445566; padding: 0.25rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;">
-                          <code id="coord-zoom" style="color: #c8d8e8;">1.0</code>
-                          <button class="btn btn-sm" id="copy-zoom" style="position: absolute; top: 50%; right: 0.25rem; transform: translateY(-50%); background-color: #1a252f; color: #c8d8e8; border: none; padding: 0.125rem 0.25rem; font-size: 0.75rem;" title="Copy Zoom level">
+                        <dt class="col-sm-6 coord-label">Zoom</dt>
+                        <dd class="col-sm-6 coord-field">
+                          <code id="coord-zoom">1.0</code>
+                          <button class="btn btn-sm coord-copy-btn" id="copy-zoom" title="Copy Zoom level">
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </dd>
 
                         <!-- Copy Button Rows -->
                         <dt class="col-sm-6"></dt>
-                        <dd class="col-sm-6" style="margin-bottom: 0.5rem;">
+                        <dd class="col-sm-6 mb-2">
                           <button class="btn btn-sm btn-copy w-100" id="copy-coords-sheets">
                             <i class="bi bi-clipboard"></i> {{ lang.object.coordinates.copy_sheets }}
                           </button>
                         </dd>
 
                         <dt class="col-sm-6"></dt>
-                        <dd class="col-sm-6" style="margin-bottom: 0;">
+                        <dd class="col-sm-6 mb-0">
                           <button class="btn btn-sm btn-copy w-100" id="copy-coords-csv">
                             <i class="bi bi-clipboard"></i> {{ lang.object.coordinates.copy_csv }}
                           </button>
@@ -279,6 +243,24 @@ layout: default
   };
 
   document.addEventListener('DOMContentLoaded', async function() {
+    // Coordinate panel theme colouring — detect luminance of theme colour
+    const panel = document.querySelector('.coordinate-panel');
+    if (panel) {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
+      if (bg) {
+        // Parse hex colour to RGB
+        const hex = bg.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16) / 255;
+        const g = parseInt(hex.substring(2, 4), 16) / 255;
+        const b = parseInt(hex.substring(4, 6), 16) / 255;
+        // WCAG relative luminance
+        const lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
+                   + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
+                   + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
+        panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
+      }
+    }
+
     {% assign external_source = page.source_url | default: page.iiif_manifest %}
     {% if external_source and external_source != "" %}
     const manifestUrl = '{{ external_source }}';
@@ -320,6 +302,10 @@ layout: default
         pageRows.forEach(function(el) {
           el.style.display = 'flex';
         });
+        var singleInstr = document.querySelector('.coord-instructions-single');
+        var multiInstr = document.querySelector('.coord-instructions-multi');
+        if (singleInstr) singleInstr.style.display = 'none';
+        if (multiInstr) multiInstr.style.display = 'block';
         console.log('Multi-page manifest detected:', canvases.length, 'pages');
       }
     } catch (err) {
@@ -429,7 +415,7 @@ layout: default
       const zoom = document.getElementById('coord-zoom').textContent;
       const pageEl = document.getElementById('coord-page');
       const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
-      const text = isMulti ? `${pageEl.textContent},${x},${y},${zoom}` : `${x},${y},${zoom}`;
+      const text = isMulti ? `${x},${y},${zoom},${pageEl.textContent}` : `${x},${y},${zoom}`;
 
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-csv');
@@ -448,7 +434,7 @@ layout: default
       const zoom = document.getElementById('coord-zoom').textContent;
       const pageEl = document.getElementById('coord-page');
       const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
-      const text = isMulti ? `${pageEl.textContent}\t${x}\t${y}\t${zoom}` : `${x}\t${y}\t${zoom}`;
+      const text = isMulti ? `${x}\t${y}\t${zoom}\t${pageEl.textContent}` : `${x}\t${y}\t${zoom}`;
 
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-sheets');
