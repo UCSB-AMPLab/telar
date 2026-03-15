@@ -49,12 +49,15 @@ layout: default
                 <!-- Instructions -->
                 <div class="col-md-6">
                   <div class="coordinate-panel-instructions">
-                    <h6 class="coordinate-panel-heading">Instructions</h6>
+                    <h6 class="coordinate-panel-heading">{{ lang.object.coordinates.heading | default: "Instructions" }}</h6>
                     <p>
-                      Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling.
+                      {{ lang.object.coordinates.instructions_p1 | default: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling." }}
                     </p>
-                    <p class="mb-0">
-                      Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once.
+                    <p class="mb-0 coord-instructions-single">
+                      {{ lang.object.coordinates.instructions_p2 | default: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once." }}
+                    </p>
+                    <p class="mb-0 coord-instructions-multi" style="display: none;">
+                      {{ lang.object.coordinates.instructions_p2_multi | default: "Once you identify a location make a note of the X, Y, Zoom, and Page values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all four values at once." }}
                     </p>
                   </div>
                 </div>
@@ -299,6 +302,10 @@ layout: default
         pageRows.forEach(function(el) {
           el.style.display = 'flex';
         });
+        var singleInstr = document.querySelector('.coord-instructions-single');
+        var multiInstr = document.querySelector('.coord-instructions-multi');
+        if (singleInstr) singleInstr.style.display = 'none';
+        if (multiInstr) multiInstr.style.display = 'block';
         console.log('Multi-page manifest detected:', canvases.length, 'pages');
       }
     } catch (err) {

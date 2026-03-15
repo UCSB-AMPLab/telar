@@ -137,8 +137,9 @@ export function goToStep(newIndex, direction = 'forward') {
   // Determine if we need to switch objects or just pan/zoom
   const isLeavingIntro = (oldIndex === 0 && newIndex > 0);
 
-  if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || isLeavingIntro)) {
-    console.log(`Switching to new object: ${objectId}${isLeavingIntro ? ' (leaving intro)' : ''}`);
+  const pageChanged = state.currentViewerCard && state.currentViewerCard.page !== (page || undefined);
+  if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || isLeavingIntro || pageChanged)) {
+    console.log(`Switching to new object: ${objectId}${isLeavingIntro ? ' (leaving intro)' : ''}${pageChanged ? ` (page changed to ${page})` : ''}`);
     switchToObject(objectId, newIndex, x, y, zoom, newStep, direction, page);
     state.currentObject = objectId;
   } else {
@@ -327,8 +328,9 @@ function goToMobileStep(newIndex) {
   const zoom = parseFloat(newStep.dataset.zoom);
   const page = newStep.dataset.page ? parseInt(newStep.dataset.page, 10) : undefined;
 
-  if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId)) {
-    console.log(`Switching to object: ${objectId}`);
+  const mobilePageChanged = state.currentViewerCard && state.currentViewerCard.page !== (page || undefined);
+  if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || mobilePageChanged)) {
+    console.log(`Switching to object: ${objectId}${mobilePageChanged ? ` (page changed to ${page})` : ''}`);
     switchToObjectMobile(objectId, newIndex, x, y, zoom, page);
     state.currentObject = objectId;
   } else if (state.currentViewerCard && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {

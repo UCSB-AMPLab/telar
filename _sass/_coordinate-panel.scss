@@ -125,6 +125,10 @@
  * ------------------------------------------------------- */
 .coord-dark {
   color: #fff;
+
+  .coordinate-panel-heading {
+    color: #fff;
+  }
 }
 
 .coord-dark .coordinate-panel-close {
@@ -166,6 +170,10 @@
  * ------------------------------------------------------- */
 .coord-light {
   color: #2c3e50;
+
+  .coordinate-panel-heading {
+    color: #2c3e50;
+  }
 }
 
 .coord-light .coord-field {
