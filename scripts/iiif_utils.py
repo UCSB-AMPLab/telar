@@ -219,9 +219,10 @@ def generate_tiles_libvips(processed_path, tiles_dir, object_id, base_url):
     if vips_props.exists():
         vips_props.unlink()
 
-    # Post-process: patch info.json and generate full/max image
-    patch_info_json(tiles_dir, object_id, base_url)
+    # Post-process: generate full/max image first (creates full/ directories
+    # that patch_info_json will scan), then patch info.json with correct sizes.
     generate_full_max(processed_path, tiles_dir)
+    patch_info_json(tiles_dir, object_id, base_url)
 
 
 def patch_info_json(tiles_dir, object_id, base_url):
@@ -335,6 +336,29 @@ def generate_full_max(processed_path, tiles_dir):
     if not wh_dir.exists():
         wh_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(dest, wh_dir / 'default.jpg')
+
+    # Generate full/{w},{h}/ thumbnails for each scaleFactor level.
+    # patch_info_json (which runs after this) scans full/ to build the
+    # sizes array.  Every size it reports must have a corresponding file,
+    # otherwise the homepage thumbnail JS will hit a 404.
+    info_path = tiles_dir / 'info.json'
+    if info_path.exists():
+        import json as _json
+        with open(info_path) as f:
+            info = _json.load(f)
+        scale_factors = []
+        for tile in info.get('tiles', []):
+            scale_factors.extend(tile.get('scaleFactors', []))
+        for sf in scale_factors:
+            if sf == 1:
+                continue  # full-res already created above
+            sw = -(-w // sf)  # ceil division
+            sh = -(-h // sf)
+            sf_dir = tiles_dir / 'full' / f'{sw},{sh}' / '0'
+            if not sf_dir.exists():
+                sf_dir.mkdir(parents=True, exist_ok=True)
+                thumb = img.resize((sw, sh), Image.LANCZOS)
+                thumb.save(sf_dir / 'default.jpg', 'JPEG', quality=85)
 
     # Create full/{w},{h}/ counterparts for any width-only directories
     # that libvips generated. libvips creates full/{w},/ directories but
