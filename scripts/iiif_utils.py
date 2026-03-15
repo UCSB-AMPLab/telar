@@ -336,6 +336,25 @@ def generate_full_max(processed_path, tiles_dir):
         wh_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(dest, wh_dir / 'default.jpg')
 
+    # Create full/{w},{h}/ counterparts for any width-only directories
+    # that libvips generated. libvips creates full/{w},/ directories but
+    # the homepage thumbnail JS constructs URLs as full/{w},{h}/, causing
+    # 404s. Copy the width-only image to the explicit {w},{h} path.
+    full_dir = tiles_dir / 'full'
+    if full_dir.exists():
+        for entry in full_dir.iterdir():
+            if not entry.is_dir():
+                continue
+            match = re.match(r'^(\d+),$', entry.name)
+            if match:
+                sw = int(match.group(1))
+                sh = int(round(h * sw / w))
+                wh_path = full_dir / f'{sw},{sh}' / '0'
+                src_file = entry / '0' / 'default.jpg'
+                if src_file.exists() and not wh_path.exists():
+                    wh_path.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_file, wh_path / 'default.jpg')
+
     # Generate width-only thumbnails for sizes that IIIF viewers request
     # but that don't exist in the static Level 0 tile pyramid. TIFY v0.35
     # always requests full/96,/0/default.jpg for its page thumbnail
