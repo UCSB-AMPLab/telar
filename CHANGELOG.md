@@ -2,6 +2,38 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.9.3-beta] - 2026-03-14
+
+IIIF bug fixes, multi-page story improvements, and coordinate panel restyle.
+
+### Fixed
+
+- **IIIF crash for small images**: Images smaller than 512px (the tile size) produced an empty `scaleFactors` array in `info.json`, crashing OpenSeadragon/Tify with a `RangeError`. Now defaults to `[1]`
+
+- **IIIF edge tile 404s**: Images larger than 1024px showed 404 errors for edge tiles. The `sizes` array had a single full-resolution entry that caused OpenSeadragon to miscalculate edge tile dimensions
+
+- **IIIF thumbnail generation**: Thumbnails for all scaleFactor levels are now pre-rendered during IIIF generation, and width-only directories from libvips get `{w},{h}` counterparts. Fixes broken homepage and gallery thumbnails
+
+- **Story page switching for multi-page objects**: Navigating between story steps that reference different pages of the same object (e.g. different PDF pages) now correctly loads the new page instead of staying on the original
+
+- **Coordinate finder column order**: Multi-page coordinate copy buttons now output `x,y,zoom,page` to match the spreadsheet column order (was `page,x,y,zoom`)
+
+- **Page column case normalisation**: The `Page` column from Google Sheets (capital P) is now normalised to `page` (lowercase), fixing PDF page-specific manifest loading in stories
+
+- **Page selector truncation**: Fixed Tify 0.35 page selector text being cut off by targeting the renamed `.tify-dropdown-button` class
+
+- **Coordinate panel heading colour**: The panel heading is now explicitly coloured in dark/light variants, overriding the global heading colour rule that made it unreadable on dark theme backgrounds
+
+### Changed
+
+- **Object viewer orientation**: Changed from landscape (fixed 600px height) to portrait (4:5 aspect ratio) on object pages
+
+- **Coordinate panel styling**: Replaced 50+ inline styles with a new SCSS partial (`_coordinate-panel.scss`) using theme-aware colours via CSS custom properties and WCAG luminance detection
+
+- **Coordinate panel internationalisation**: Instructions now use language keys instead of hardcoded English, with a multi-page variant that mentions the Page value
+
+- **Thumbnail size selection**: Homepage and objects gallery now pick the smallest IIIF size >= 400px wide for thumbnails, instead of blindly using the smallest available size
+
 ## [0.9.2-beta] - 2026-03-06
 
 IIIF tile rendering fix and workflow cleanup. Thanks to Ashley Vazquez for reporting the Windows rendering issue.
