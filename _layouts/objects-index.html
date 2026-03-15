@@ -296,6 +296,20 @@ layout: default
 
 <script>
 /**
+ * Pick a thumbnail size from the IIIF sizes array.
+ * Returns the smallest size >= minWidth, or the largest available.
+ */
+function pickThumbnailSize(sizes, minWidth) {
+  if (!sizes || sizes.length === 0) return null;
+  minWidth = minWidth || 400;
+  var sorted = sizes.slice().sort(function(a, b) { return a.width - b.width; });
+  for (var i = 0; i < sorted.length; i++) {
+    if (sorted[i].width >= minWidth) return sorted[i];
+  }
+  return sorted[sorted.length - 1];
+}
+
+/**
  * Load thumbnails from IIIF manifests and info.json
  */
 document.addEventListener('DOMContentLoaded', function() {
@@ -309,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(info => {
         // Get the largest available size from sizes array (first element)
         const sizes = info.sizes || [];
-        let thumbnailSize = sizes[0]; // Get largest size (first in array)
+        let thumbnailSize = pickThumbnailSize(sizes);
 
         if (thumbnailSize) {
           const baseUrl = info.id || info['@id'];

@@ -400,6 +400,20 @@ title: Home
 window.objectsData = {{ site.data.objects | jsonify }};
 
 /**
+ * Pick a thumbnail size from the IIIF sizes array.
+ * Returns the smallest size >= minWidth, or the largest available.
+ */
+function pickThumbnailSize(sizes, minWidth) {
+  if (!sizes || sizes.length === 0) return null;
+  minWidth = minWidth || 400;
+  var sorted = sizes.slice().sort(function(a, b) { return a.width - b.width; });
+  for (var i = 0; i < sorted.length; i++) {
+    if (sorted[i].width >= minWidth) return sorted[i];
+  }
+  return sorted[sorted.length - 1];
+}
+
+/**
  * Load story thumbnails from IIIF (remote manifests or local info.json)
  */
 document.addEventListener('DOMContentLoaded', function() {
@@ -529,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(info => {
           const sizes = info.sizes || [];
-          let thumbnailSize = sizes[0];
+          let thumbnailSize = pickThumbnailSize(sizes);
 
           if (thumbnailSize) {
             const baseUrl = info.id || info['@id'];
