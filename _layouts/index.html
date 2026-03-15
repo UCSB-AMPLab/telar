@@ -684,7 +684,7 @@ featuredThumbnails.forEach(function(item) {
       .then(response => response.json())
       .then(info => {
         const sizes = info.sizes || [];
-        let thumbnailSize = sizes[0];
+        let thumbnailSize = pickThumbnailSize(sizes);
 
         if (thumbnailSize) {
           const baseUrl = info.id || info['@id'];
