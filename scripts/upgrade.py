@@ -21,7 +21,7 @@ UPGRADE_SUMMARY.md file listing every automated change made and any
 manual steps the user still needs to complete. The --dry-run flag
 previews what would happen without making changes.
 
-Version: v0.9.2-beta
+Version: v0.9.4-beta
 
 Usage:
     python scripts/upgrade.py              # Normal upgrade
@@ -58,10 +58,11 @@ from migrations.v081_to_v090 import Migration081to090
 from migrations.v090_to_v091 import Migration090to091
 from migrations.v091_to_v092 import Migration091to092
 from migrations.v092_to_v093 import Migration092to093
+from migrations.v093_to_v094 import Migration093to094
 
 
 # Latest version
-LATEST_VERSION = "0.9.3-beta"
+LATEST_VERSION = "0.9.4-beta"
 
 # All available migrations in order
 MIGRATIONS = [
@@ -85,6 +86,7 @@ MIGRATIONS = [
     Migration090to091,
     Migration091to092,
     Migration092to093,
+    Migration093to094,
 ]
 
 

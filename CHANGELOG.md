@@ -2,6 +2,14 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [0.9.4-beta] - 2026-03-18
+
+PDF dependency fix.
+
+### Fixed
+
+- **PDF IIIF tile generation in CI**: PyMuPDF was not listed in `requirements.txt`, so CI skipped IIIF tile generation for PDF objects entirely. PDF objects now get tiles generated correctly during builds
+
 ## [0.9.3-beta] - 2026-03-14
 
 IIIF bug fixes, multi-page story improvements, and coordinate panel restyle.
