@@ -8,14 +8,12 @@ name: Test Telar Scripts
 # 2. JavaScript unit tests — coordinate maths, manifest URL resolution,
 #    content detection predicates, and state structure.
 #
-# On push or pull request to main, all test suites run automatically. When
-# triggered manually via workflow_dispatch, you can choose which suites to run.
+# On pull request to main, all test suites run automatically. When triggered
+# manually via workflow_dispatch, you can choose which suites to run.
 #
 # Version: v0.9.2-beta
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
