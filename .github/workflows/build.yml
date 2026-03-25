@@ -16,20 +16,25 @@ name: Build and Deploy Telar Site
 #      telar-content/texts/ into Jekyll collection files
 #   5. Run search.py to generate search-data.json with facet counts for the
 #      browse-and-search UI on the objects page
-#   6. Bundle the JavaScript source modules (assets/js/telar-story/) into a
+#   6. Process audio objects — generate peak data and clip files for audio
+#      cards (with smart caching — audio is only regenerated when audio files
+#      or objects.csv change)
+#   7. Bundle the JavaScript source modules (assets/js/telar-story/) into a
 #      single file using esbuild
-#   7. Build the Jekyll site
-#   8. Generate IIIF deep-zoom image tiles for self-hosted exhibition objects
+#   8. Build the Jekyll site
+#   9. Generate IIIF deep-zoom image tiles for self-hosted exhibition objects
 #      (with smart caching — tiles are only regenerated when source images or
 #      objects.csv change)
-#   9. Deploy the built site to GitHub Pages
+#  10. Deploy the built site to GitHub Pages
 #
-# The IIIF tile generation includes a change-detection step that compares the
-# current commit against the previous one. If only content files changed (not
-# images or objects.csv), it restores tiles from the GitHub Actions cache
-# instead of regenerating them, which saves significant build time.
+# Both the IIIF tile generation and the audio processing include change-detection
+# steps that compare the current commit against the previous one. If only content
+# files changed (not images/audio or objects.csv), the build restores data from
+# the GitHub Actions cache instead of regenerating, which saves significant
+# build time. Sites without audio objects skip audio tool installation and
+# processing entirely — zero friction for image-only sites.
 #
-# Version: v0.9.0-beta
+# Version: v1.0.0-beta
 
 on:
   push:
@@ -38,6 +43,10 @@ on:
     inputs:
       force_iiif:
         description: 'Force IIIF tile regeneration'
+        type: boolean
+        default: true
+      force_audio:
+        description: 'Force audio regeneration'
         type: boolean
         default: true
 
@@ -67,6 +76,18 @@ jobs:
 
       - name: Install libvips (for fast IIIF tile generation)
         run: sudo apt-get install -y libvips-tools
+
+      - name: Install audio processing tools (audiowaveform + ffmpeg)
+        run: |
+          # Only install if audio objects exist (D-04: zero friction for image-only sites)
+          if ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
+            echo "Audio objects detected - installing audiowaveform and ffmpeg"
+            sudo add-apt-repository -y ppa:chris-needham/ppa
+            sudo apt-get update -q
+            sudo apt-get install -y audiowaveform ffmpeg
+          else
+            echo "No audio objects found - skipping audio tool installation"
+          fi
 
       - name: Install Python dependencies
         run: |
@@ -106,6 +127,86 @@ jobs:
       - name: Generate search data
         run: |
           python scripts/telar/search.py
+
+      - name: Restore audio data from cache
+        id: cache-audio
+        uses: actions/cache/restore@v5
+        with:
+          path: cached-audio/
+          key: audio-data-${{ hashFiles('telar-content/objects/*.mp3', 'telar-content/objects/*.ogg', 'telar-content/objects/*.m4a', 'telar-content/spreadsheets/objects.csv') }}
+
+      - name: Detect if audio regeneration is needed
+        id: detect-audio-changes
+        run: |
+          NEEDS_AUDIO="true"
+
+          # Check if any audio objects exist first (D-03/D-04)
+          if ! ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
+            echo "No audio objects found - skipping audio processing"
+            NEEDS_AUDIO="false"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+
+              if echo "$CHANGED_FILES" | grep -qE '^telar-content/spreadsheets/objects\.csv$'; then
+                echo "objects.csv changed - audio regeneration needed"
+                NEEDS_AUDIO="true"
+              elif echo "$CHANGED_FILES" | grep -qE '^telar-content/objects/.*\.(mp3|ogg|m4a)$'; then
+                echo "Audio files changed - regeneration needed"
+                NEEDS_AUDIO="true"
+              else
+                echo "No audio-related changes - skipping audio regeneration"
+                NEEDS_AUDIO="false"
+              fi
+            else
+              echo "First commit - running full audio processing"
+              NEEDS_AUDIO="true"
+            fi
+          else
+            echo "Manual trigger - using input parameter (force_audio=${{ inputs.force_audio }})"
+            NEEDS_AUDIO="${{ inputs.force_audio }}"
+          fi
+
+          echo "needs_audio=$NEEDS_AUDIO" >> $GITHUB_OUTPUT
+          echo "Audio regeneration: $NEEDS_AUDIO"
+
+      - name: Process audio objects (peaks + clips)
+        if: steps.detect-audio-changes.outputs.needs_audio == 'true'
+        run: |
+          python scripts/process_audio.py \
+            --objects-dir telar-content/objects \
+            --data-dir _data \
+            --output-dir assets/audio
+
+      - name: Copy audio data to cache directory
+        if: steps.detect-audio-changes.outputs.needs_audio == 'true'
+        run: |
+          if [ -d "assets/audio" ] && [ "$(ls -A assets/audio/peaks 2>/dev/null)" ]; then
+            echo "Copying audio data to cache directory for future builds"
+            mkdir -p cached-audio
+            cp -r assets/audio/* cached-audio/
+          else
+            echo "No audio data to cache"
+          fi
+
+      - name: Save audio data to cache
+        if: steps.detect-audio-changes.outputs.needs_audio == 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: cached-audio/
+          key: audio-data-${{ hashFiles('telar-content/objects/*.mp3', 'telar-content/objects/*.ogg', 'telar-content/objects/*.m4a', 'telar-content/spreadsheets/objects.csv') }}
+
+      - name: Restore audio data from cache (when skipping regeneration)
+        if: steps.detect-audio-changes.outputs.needs_audio == 'false'
+        run: |
+          if [ -d "cached-audio" ] && [ "$(ls -A cached-audio)" ]; then
+            echo "Restoring audio data from cache"
+            mkdir -p assets/audio
+            cp -r cached-audio/* assets/audio/
+            echo "Audio data restored successfully"
+          else
+            echo "No cached audio data found (expected for sites without audio objects)"
+          fi
 
       - name: Build Jekyll site
         run: |
