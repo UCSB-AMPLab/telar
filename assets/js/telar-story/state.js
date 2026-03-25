@@ -12,19 +12,20 @@
  * unrelated parts of the code. Every other module imports `state` and
  * reads or writes its fields directly.
  *
- * Constants (thresholds, cooldowns, caps) are exported separately so they
- * cannot be accidentally overwritten.
+ * Constants (cooldowns, caps) are exported separately so they cannot be
+ * accidentally overwritten.
  *
- * @version v0.9.0-beta
+ * Scroll engine model:
+ *   Scroll state is a continuous float position derived from Lenis's
+ *   animatedScroll value. `scrollPosition` replaces the old discrete
+ *   `scrollPosition` is a continuous float (0.0 – stepCount-1). `scrollProgress` is the fractional part within
+ *   the current step (0.0–1.0). `isSnapping` tracks in-flight snap
+ *   animations from the lenis/snap plugin.
+ *
+ * @version v1.0.0-beta
  */
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-/** Minimum time (ms) between step changes to prevent rapid navigation. */
-export const STEP_COOLDOWN = 600;
-
-/** Maximum scroll delta (px) per wheel event – caps trackpad acceleration. */
-export const MAX_SCROLL_DELTA = 200;
 
 /** Minimum time (ms) between mobile/embed button taps. */
 export const MOBILE_NAV_COOLDOWN = 400;
@@ -42,12 +43,22 @@ export const state = {
   steps: [],
   /** Index of the current desktop step (-1 = none). */
   currentIndex: -1,
-  /** Accumulated scroll distance (px) toward the next threshold. */
-  scrollAccumulator: 0,
   /** Object ID currently displayed in the viewer. */
   currentObject: null,
-  /** Timestamp (ms) of the last step change – used for cooldown. */
-  lastStepChangeTime: 0,
+
+  // ── Scroll engine ─────────────────────────────────────────────────────────
+  /** Continuous float position (e.g. 2.3 = step 2, 30% progress). */
+  scrollPosition: 0,
+  /** Fractional progress within the current step (0.0–1.0). */
+  scrollProgress: 0,
+  /** Whether a snap animation is currently in flight. */
+  isSnapping: false,
+  /** Set true during scroll-driven activateCard calls so card-pool skips the 4s OSD animation. */
+  scrollDriven: false,
+  /** Lenis instance reference — used by panels.js to stop/start scroll. */
+  lenis: null,
+  /** Snap plugin instance reference. */
+  snap: null,
 
   // ── Viewer cards ─────────────────────────────────────────────────────────
   /** The viewer card object currently visible on screen. */
@@ -69,17 +80,17 @@ export const state = {
   /** Whether the user dismissed the credits badge this session. */
   creditsDismissed: false,
 
-  // ── Touch (iPad/tablet swipe navigation) ─────────────────────────────────
-  /** Y coordinate where the current touch started. */
-  touchStartY: 0,
-  /** Y coordinate where the current touch ended. */
-  touchEndY: 0,
+  // ── Autoplay policy ──────────────────────────────────────────────────────
+  /** Set true on first play overlay tap; enables autoplay for all subsequent media cards. */
+  hasUserInteracted: false,
 
   // ── Mobile / embed button navigation ─────────────────────────────────────
   /** Whether the viewport is below the mobile breakpoint (768 px). */
   isMobileViewport: false,
   /** Index of the current step in mobile/embed button mode. */
   currentMobileStep: 0,
+  /** Whether mobile navigation is showing the intro card (before step 0). */
+  mobileInIntro: false,
   /** References to the prev/next button DOM elements. */
   mobileNavButtons: null,
   /** Whether mobile navigation is in its cooldown period. */
@@ -89,16 +100,30 @@ export const state = {
   /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
   manifestLoadTimes: [],
 
-  // ── Thresholds (computed in main.js from window.innerHeight) ─────────────
-  /** Scroll distance (px) required to trigger a step change (50 vh). */
-  scrollThreshold: 0,
-  /** Swipe distance (px) required to trigger a step change (20 vh). */
-  touchThreshold: 0,
+  // ── Card pool ────────────────────────────────────────────────────────────
+  /** @type {Object[]} Pool of active card instances. */
+  cardPool: [],
+  /** Map of sceneIndex -> viewer plate element (one plate per scene). */
+  viewerPlates: {},
+  /** Map of stepIndex -> text card element. */
+  textCards: {},
+  /** Current object run tracking (for peek stack positioning). */
+  currentObjectRun: { objectId: null, runPosition: 0 },
+
+  // ── Scene maps (populated at initCardPool time) ───────────────────────────
+  /** Map of stepIndex -> sceneIndex. Populated by buildSceneMaps at init. */
+  stepToScene: {},
+  /** Map of sceneIndex -> objectId. */
+  sceneToObject: {},
+  /** Map of sceneIndex -> first stepIndex in that scene. */
+  sceneFirstStep: {},
+  /** Total number of scenes in the story. */
+  totalScenes: 0,
 
   // ── Viewer preloading config (set from telarConfig in main.js) ───────────
   config: {
-    /** Maximum Tify instances kept in memory. */
-    maxViewerCards: 10,
+    /** Maximum Tify instances kept in memory (per-scene pool cap). */
+    maxViewerCards: 8,
     /** Steps to preload ahead of the current position. */
     preloadSteps: 6,
     /** Show loading shimmer when story has >= this many unique viewers. */

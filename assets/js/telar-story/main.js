@@ -13,16 +13,13 @@
  * - window.storyData: the current story's step data, object references,
  *   and first object identifier.
  *
- * After reading configuration, the module computes viewport-dependent
- * thresholds (scroll distance and swipe distance required to trigger a step
- * change) and then initialises the subsystems: object index, manifest
- * prefetching, first viewer card, navigation, panels, scroll lock, and
- * credits.
- *
  * Navigation mode is chosen automatically based on how the page is being
- * viewed. Embed mode (inside an iframe, detected by embed.js) and mobile
- * viewports (narrower than 768 px) both use button navigation. Desktop
- * viewports use scroll-based navigation with keyboard and touch support.
+ * viewed:
+ * - Embed mode (inside an iframe, detected by embed.js): button navigation.
+ * - Mobile viewport (< 768 px): button navigation.
+ * - iOS Safari: button navigation (Lenis momentum scroll is unreliable
+ *   on iOS; fluid scroll is deferred to button-only).
+ * - Desktop (non-iOS): Lenis-powered scroll engine.
  *
  * For protected stories (v0.8.0+), initialization waits until the story is
  * unlocked via story-unlock.js. The unlock module fires a 'telar:story-unlocked'
@@ -31,25 +28,20 @@
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v0.8.0-beta
+ * @version v1.0.0-beta
  */
 
 import { state } from './state.js';
 import {
   buildObjectsIndex,
-  initializeFirstViewer,
   prefetchStoryManifests,
   initializeCredits,
-  switchToObject,
-  animateViewerToPosition,
   getManifestUrl,
-  createViewerCard,
-  getOrCreateViewerCard,
 } from './viewer.js';
-import {
-  initializeStepController,
-  initializeButtonNavigation,
-} from './navigation.js';
+import { initCardPool, activateCard } from './card-pool.js';
+import './video-card.js';
+import { initializeButtonNavigation } from './navigation.js';
+import { initScrollEngine, getScrollEngineState } from './scroll-engine.js';
 import {
   initializePanels,
   initializeScrollLock,
@@ -72,27 +64,42 @@ function initializeStory() {
   state.config.loadingThreshold = viewerConfig.loading_threshold || 5;
   state.config.minReadyViewers = Math.min(viewerConfig.min_ready_viewers || 3, state.config.preloadSteps);
 
-  // Compute viewport-dependent thresholds
-  state.scrollThreshold = window.innerHeight * 0.5;  // 50vh
-  state.touchThreshold = window.innerHeight * 0.2;   // 20vh
-
   buildObjectsIndex();
 
   // Prefetch manifests in background (async, does not block)
   prefetchStoryManifests();
 
-  initializeFirstViewer();
+  // Read card-stack config and initialize card pool (creates all DOM elements)
+  const cardConfig = {
+    peekHeight: window.telarConfig?.cardPeekHeight ?? 1,
+    messiness: window.telarConfig?.cardMessiness ?? 20,
+  };
+  initCardPool(window.storyData, cardConfig);
 
   // Choose navigation mode
   state.isMobileViewport = window.innerWidth < 768;
   const isEmbedMode = window.telarEmbed?.enabled || false;
 
+  // D-16: iOS Safari uses button-only navigation — no fluid scroll
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
   if (isEmbedMode) {
     initializeButtonNavigation('embed');
+    // Also init scroll engine so button nav can use advanceToStep (COMPAT-03).
+    // In iframes, wheel events are unreliable; the primary input is button
+    // presses via advanceToStep → lenis.scrollTo(). The scroll surface
+    // provides the DOM overflow Lenis needs for scrollTo() to work.
+    const stepCount = (window.storyData?.steps || []).filter(s => !s._metadata).length;
+    initScrollEngine(stepCount);
   } else if (state.isMobileViewport) {
     initializeButtonNavigation('mobile');
+  } else if (isIOS) {
+    // iOS desktop (iPad) — use button nav, Lenis momentum scroll is unreliable
+    initializeButtonNavigation('mobile');
   } else {
-    initializeStepController();
+    // Lenis-powered continuous scroll engine
+    const stepCount = (window.storyData?.steps || []).filter(s => !s._metadata).length;
+    initScrollEngine(stepCount);
   }
 
   initializePanels();
@@ -117,11 +124,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
 window.TelarStory = {
   state,
-  switchToObject,
-  animateViewerToPosition,
+  activateCard,
   openPanel,
   getManifestUrl,
   closeAllPanels,
-  createViewerCard,
-  getOrCreateViewerCard,
+  getScrollEngineState,
 };
