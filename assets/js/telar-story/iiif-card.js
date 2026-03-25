@@ -308,7 +308,7 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
 
   const objectIdA = stepA.object || stepA.objectId || '';
   const objectIdB = stepB.object || stepB.objectId || '';
-  if (objectIdA !== objectIdB) return; // D-13: different object, freeze
+  if (objectIdA !== objectIdB) return; // different object, freeze
 
   const xA = parseFloat(stepA.x), yA = parseFloat(stepA.y), zA = parseFloat(stepA.zoom);
   const xB = parseFloat(stepB.x), yB = parseFloat(stepB.y), zB = parseFloat(stepB.zoom);

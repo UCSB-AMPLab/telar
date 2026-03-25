@@ -2,9 +2,9 @@
  * Tests for Telar Story – Card Type Detection
  *
  * Verifies detectCardType returns the correct card type based on step data.
- * IIIF is the default for Phase 1 backward compatibility (COMPAT-02).
+ * IIIF is the default for backward compatibility.
  *
- * @version v0.10.0-beta
+ * @version v1.0.0-beta
  */
 
 import { describe, it, expect } from 'vitest';
@@ -28,7 +28,7 @@ describe('detectCardType', () => {
   });
 });
 
-describe('video URL detection (VID-06)', () => {
+describe('video URL detection', () => {
   // YouTube variants
   it("returns 'youtube' for youtube.com/watch URL", () => {
     expect(detectCardType({ objectId: 'vid1', source_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' })).toBe('youtube');
@@ -83,7 +83,7 @@ describe('video URL detection (VID-06)', () => {
   });
 });
 
-describe('audio file extension detection (AUD-07)', () => {
+describe('audio file extension detection', () => {
   it("returns 'audio' for file_path ending in .mp3", () => {
     expect(detectCardType({ objectId: 'audio-1', file_path: 'objects/interview.mp3' })).toBe('audio');
   });

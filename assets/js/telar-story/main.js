@@ -80,12 +80,12 @@ function initializeStory() {
   state.isMobileViewport = window.innerWidth < 768;
   const isEmbedMode = window.telarEmbed?.enabled || false;
 
-  // D-16: iOS Safari uses button-only navigation — no fluid scroll
+  // iOS Safari uses button-only navigation — no fluid scroll
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   if (isEmbedMode) {
     initializeButtonNavigation('embed');
-    // Also init scroll engine so button nav can use advanceToStep (COMPAT-03).
+    // Also init scroll engine so button nav can use advanceToStep.
     // In iframes, wheel events are unreliable; the primary input is button
     // presses via advanceToStep → lenis.scrollTo(). The scroll surface
     // provides the DOM overflow Lenis needs for scrollTo() to work.

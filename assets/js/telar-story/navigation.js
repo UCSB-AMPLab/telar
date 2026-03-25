@@ -343,7 +343,7 @@ function goToMobileStep(newIndex) {
 
   updateMobileButtonStates();
 
-  // D-14/COMPAT-03/COMPAT-04: If Lenis is available, use animated scroll
+  // If Lenis is available, use animated scroll
   // transition through the scroll engine. Otherwise fall back to direct
   // activateCard with CSS transition (mobile/iOS without Lenis).
   if (state.lenis) {
@@ -375,13 +375,13 @@ function updateMobileButtonStates() {
  * panels. Escape closes the current panel. Space advances (Shift+Space goes
  * back).
  *
- * D-15: Auto-repeat key events are ignored — each physical key press advances
+ * Auto-repeat key events are ignored — each physical key press advances
  * exactly one step.
  *
  * @param {KeyboardEvent} e
  */
 function handleKeyboard(e) {
-  // D-15: Ignore auto-repeat key events — each key press = one step only
+  // Ignore auto-repeat key events — each key press = one step only
   if (e.repeat) return;
 
   switch (e.key) {

@@ -431,7 +431,7 @@ def process_objects(df, christmas_tree=False):
             try:
                 # Fetch manifest directly with GET (follows redirects automatically)
                 req = urllib.request.Request(manifest_url)
-                req.add_header('User-Agent', 'Telar/0.4.0-beta (IIIF validator)')
+                req.add_header('User-Agent', 'Telar/1.0.0-beta (IIIF validator)')
 
                 with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
                     content_type = response.headers.get('Content-Type', '')

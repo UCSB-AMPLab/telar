@@ -239,7 +239,8 @@ function getPanelContent(panelType, contentId) {
  * may need the base path prepended. Media fields add an image element.
  *
  * @param {{ text?: string, media?: string }} panelData
- * @param {string} [objectId] - Object ID for dynamic alt text lookup * @returns {string} Formatted HTML.
+ * @param {string} [objectId] - Object ID for dynamic alt text lookup
+ * @returns {string} Formatted HTML.
  */
 function formatPanelContent(panelData, objectId) {
   if (!panelData) return '<p>No content available.</p>';

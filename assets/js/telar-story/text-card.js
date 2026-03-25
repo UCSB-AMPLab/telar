@@ -192,7 +192,7 @@ export function deactivateTextCard(cardEl, direction, viewportH) {
   cardEl.classList.remove('is-active');
 
   if (direction === 'backward') {
-    // Slide away below — D-19
+    // Slide away below
     cardEl.style.transform = _buildOffscreenTransform(messiness);
     // is-stacked is not added on backward — card is returning to hidden state
   } else {
@@ -217,7 +217,7 @@ function _buildOffscreenTransform(messiness) {
  * Build the transform for an active (visible) card.
  *
  * On mobile, the rotation magnitude is halved (max ±0.75deg instead of
- * ±1.5deg) per D-10 — the card metaphor is present but not distracting
+ * ±1.5deg) — the card metaphor is present but not distracting
  * at full-width bottom-anchored layout.
  *
  * @param {{ rot: number, offX: number, offY: number }} messiness

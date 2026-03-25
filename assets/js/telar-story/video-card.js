@@ -438,7 +438,7 @@ function _showVideoPlayOverlay(plateEl) {
   plateEl.appendChild(overlayEl);
 
   overlayBtn.addEventListener('click', () => {
-    state.hasUserInteracted = true; // D-05: unlock all subsequent media
+    state.hasUserInteracted = true; // unlock all subsequent media
     overlayEl.style.display = 'none';
     // Resume video playback
     const wrapper = _getWrapperForPlate(plateEl);
@@ -468,7 +468,7 @@ export function activateVideoCard(plateEl, sceneIndex) {
   _applyVideoLayout(plateEl);
 
   const isEmbed = document.body.classList.contains('embed-mode');
-  // D-02/D-03/D-04: Autoplay policy — always manual on mobile and embed
+  // Autoplay policy — always manual on mobile and embed
   if (state.isMobileViewport || isEmbed) {
     if (!state.hasUserInteracted) {
       _showVideoPlayOverlay(plateEl);

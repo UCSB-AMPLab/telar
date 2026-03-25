@@ -17,8 +17,8 @@
  *
  * Scroll engine model:
  *   Scroll state is a continuous float position derived from Lenis's
- *   animatedScroll value. `scrollPosition` replaces the old discrete
- *   `scrollPosition` is a continuous float (0.0 – stepCount-1). `scrollProgress` is the fractional part within
+ *   animatedScroll value. `scrollPosition` is a continuous float
+ *   (0.0 – stepCount-1). `scrollProgress` is the fractional part within
  *   the current step (0.0–1.0). `isSnapping` tracks in-flight snap
  *   animations from the lenis/snap plugin.
  *

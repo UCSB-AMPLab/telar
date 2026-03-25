@@ -10,7 +10,7 @@ The tests here ensure backward compatibility (e.g., legacy iiif_manifest
 column support) and correct handling of edge cases (empty values, malformed
 HTML, Unicode content).
 
-Version: v0.10.0-beta
+Version: v1.0.0-beta
 """
 
 import sys

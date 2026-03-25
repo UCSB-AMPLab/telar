@@ -338,7 +338,7 @@ layout: default
         {% endif %}
       </dl>
 
-      {% comment %}Video-specific metadata per D-02{% endcomment %}
+      {% comment %}Video-specific metadata{% endcomment %}
       {% if object_media_type == 'Video' %}
         {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
           {% assign provider_name = 'YouTube' %}
@@ -371,7 +371,7 @@ layout: default
         </dl>
       {% endif %}
 
-      {% comment %}Audio-specific metadata per D-07{% endcomment %}
+      {% comment %}Audio-specific metadata{% endcomment %}
       {% if object_media_type == 'Audio' %}
         <dl class="row mt-3 border-top pt-3">
           {% if page.audio_format %}
@@ -865,7 +865,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (peaksResp.ok) peaksData = await peaksResp.json();
   } catch (e) { /* no pre-computed peaks, WaveSurfer will decode */ }
 
-  // Create WaveSurfer instance — interact: true per D-06
+  // Create WaveSurfer instance — interact: true for clip region selection
   const wsOptions = {
     container: '#audio-waveform',
     url: audioUrl,

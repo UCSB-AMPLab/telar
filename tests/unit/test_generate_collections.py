@@ -1,11 +1,11 @@
 """
 Unit Tests for generate_collections.py
 
-Tests focus on the media_type detection logic (v0.10.0) and the
+Tests focus on the media_type detection logic and the
 source_url injection for video objects. The generate_objects()
 function is integration-tested via the media_type detection helper.
 
-Version: v0.10.0-beta
+Version: v1.0.0-beta
 """
 
 import sys
@@ -209,7 +209,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
 
 
 class TestKnownObjectFieldsUpdated:
-    """KNOWN_OBJECT_FIELDS must include the new v0.10.0 fields."""
+    """KNOWN_OBJECT_FIELDS must include the new v1.0.0-beta fields."""
 
     def test_media_type_in_known_fields(self):
         from generate_collections import KNOWN_OBJECT_FIELDS

@@ -1869,7 +1869,7 @@
     });
     const viewerCard = {
       sceneIndex,
-      // scene this card belongs to (per D-01)
+      // scene this card belongs to
       objectId,
       page: page || void 0,
       element: plateEl,

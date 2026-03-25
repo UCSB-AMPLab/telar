@@ -233,7 +233,7 @@ export function getSharedAudioContext() {
  *
  * @param {HTMLElement} plateEl - The viewer plate element
  * @param {string} audioUrl - URL to the audio file
- * @param {string} peaksUrl - URL to the Telar peaks JSON (may 404 — D-26 fallback)
+ * @param {string} peaksUrl - URL to the Telar peaks JSON (may 404 — falls back to client-side decode)
  * @param {Object} options
  * @param {number} [options.clipStart=0]
  * @param {number} [options.clipEnd] - If set, enforce clip boundary via timeupdate
@@ -344,7 +344,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           activateAudioCard(plateEl, wrapper.sceneIndex);
         }
 
-        // Highlight clip region after waveform is ready (AUD-03)
+        // Highlight clip region after waveform is ready
         if (clipStart !== undefined && clipEnd) {
           ws.on("ready", () => {
             regionsPlugin.addRegion({
@@ -497,7 +497,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
 
           // Overlay click: set hasUserInteracted, resume AudioContext and play
           overlayBtn.addEventListener("click", () => {
-            state.hasUserInteracted = true; // D-05: unlock all subsequent media
+            state.hasUserInteracted = true; // unlock all subsequent media
             const ctx = getSharedAudioContext();
             if (ctx.state === "suspended") {
               ctx.resume().then(() => ws.play());
@@ -547,7 +547,7 @@ export function activateAudioCard(plateEl, sceneIndex) {
     // ws may still be initialising — ignore
   }
 
-  // D-02/D-03/D-04/D-05: Unified autoplay policy
+  // Unified autoplay policy
   // Mobile and embed: always manual play with overlay shown
   if (state.isMobileViewport || wrapper.isEmbed) {
     _showPlayOverlay(plateEl);

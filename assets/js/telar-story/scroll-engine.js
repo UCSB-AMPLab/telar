@@ -177,7 +177,7 @@ function registerSnapPoints(count) {
 }
 
 /**
- * Programmatically navigate to a step (button/keyboard nav — COMPAT-03/04).
+ * Programmatically navigate to a step (button/keyboard nav).
  *
  * Uses lenis.scrollTo so the same physics engine drives the animation.
  * Does NOT add is-scrubbing so CSS transitions play at full duration.
@@ -364,7 +364,8 @@ export function updateScrollPosition(position) {
   setCardProgress(stepIndex, progress);
   lerpIiifPosition(stepIndex, progress, window.storyData?.steps || []);
 
-  // Integer boundary crossings — activateCard  // Mark as scroll-driven so activateCard skips the 4s OSD spring animation
+  // Integer boundary crossings — activateCard
+  // Mark as scroll-driven so activateCard skips the 4s OSD spring animation
   // (lerpIiifPosition already positioned the viewer correctly each frame).
   // Skip during keyboard nav — keyboardNav() already activated the card
   // and the scroll position hasn't caught up yet.

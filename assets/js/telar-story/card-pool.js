@@ -221,7 +221,7 @@ export function computeCardTop(viewportH, cardH, runPosition, peekHeightPx) {
 // ── Accessibility helpers ─────────────────────────────────────────────────────
 
 /**
- * Build an accessible label for a viewer plate using the D-04 fallback chain.
+ * Build an accessible label for a viewer plate using the fallback chain.
  *
  * Priority: step alt_text > object alt_text > object title > object_id > type-aware generic.
  * Type-aware generics: IIIF → "Image viewer", video → "Video player", audio → "Audio player".
@@ -343,14 +343,14 @@ export function initCardPool(storyData, config) {
   // with its own z-index band, even if the object was seen before.
   _zPlan = computeZIndexPlan(steps);
 
-  // Build scene maps (per D-01: walk steps, identify scene boundaries)
+  // Build scene maps (walk steps, identify scene boundaries)
   _buildSceneMaps(steps);
 
   // Audio object manifest: maps object_id → file extension (e.g. 'mp3')
   // Injected by story.html as window.audioObjects from _data/audio_objects.json
   const audioObjects = storyData?.audioObjects || window.audioObjects || {};
 
-  // Create viewer plates (one per scene, per D-01)
+  // Create viewer plates (one per scene)
   for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
     const firstStepIdx = state.sceneFirstStep[sceneIdx];
     const objectId = state.sceneToObject[sceneIdx];
@@ -370,7 +370,7 @@ export function initCardPool(storyData, config) {
     plate.dataset.scene = String(sceneIdx);
     plate.dataset.cardType = sceneCardType;
     plate.style.zIndex = _zPlan.plateZ[firstStepIdx];
-    // Accessible label for viewer plate — D-04 fallback chain, D-10
+    // Accessible label for viewer plate
     plate.setAttribute('role', 'img');
     plate.setAttribute('aria-label', _buildAriaLabel(objectId, firstStep.alt_text, sceneCardType));
     plate.style.transform = 'translateY(100%)';
@@ -560,7 +560,7 @@ export function activateCard(index, direction) {
   const isModeChange = prevMode !== null && currentMode !== prevMode;
   const isObjectChange = objectId !== prevObjectId;
 
-  // D-43: mode change on same object treated as object change
+  // mode change on same object treated as object change
   const needsNewViewer = isObjectChange || isModeChange;
 
   if (direction === 'forward') {
@@ -753,7 +753,7 @@ export function setCardProgress(stepIndex, progress) {
   const cardStack = document.querySelector('.card-stack');
   if (!cardStack || !cardStack.classList.contains('is-scrubbing')) return;
 
-  // D-09: next card slides from translateY(100vh) to its final position
+  // next card slides from translateY(100vh) to its final position
   // Retrieve the messiness for this card
   const rot  = parseFloat(nextCard.dataset.messinessRot  || 0);
   const offX = parseFloat(nextCard.dataset.messinessOffX || 0);
@@ -922,7 +922,7 @@ function _initTifyInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, pag
   });
 
   const viewerCard = {
-    sceneIndex,    // scene this card belongs to (per D-01)
+    sceneIndex,    // scene this card belongs to
     objectId,
     page: page || undefined,
     element: plateEl,

@@ -1,10 +1,12 @@
 /**
  * Tests for text-card.js — isFullObjectMode
  *
- * Verifies the zoom-aware layout detection logic per D-42:
+ * Verifies the zoom-aware layout detection logic:
  *   - zoom undefined / blank / null / <= 1.0 → full-object mode
  *   - zoom > 1.0 with coordinates → detail mode
  *   - no coordinates at all → full-object mode
+ *
+ * @version v1.0.0-beta
  */
 
 import { describe, it, expect } from 'vitest';

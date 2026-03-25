@@ -1,5 +1,5 @@
 /**
- * Tests for Telar Story – Keyboard Navigation (COMPAT-05)
+ * Tests for Telar Story – Keyboard Navigation
  *
  * Tests handleKeyboard behaviour by dispatching synthetic KeyboardEvent
  * objects on the document after calling initKeyboardNavigation(). Verifies

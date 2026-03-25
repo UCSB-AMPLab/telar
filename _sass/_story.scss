@@ -5,8 +5,7 @@
  * the entire viewport as backgrounds; text cards float over them on the left.
  * All transitions are pure CSS slide animations — no fading, no opacity changes.
  *
- * Replaces the split-column layout (narrative-column + viewer-column) from
- * v0.9.x with the card-stack architecture introduced in v0.10.0.
+ * Card-stack architecture introduced in v1.0.0-beta.
  *
  * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
@@ -159,7 +158,7 @@
   left: 41%;
   width: 59%;
   transform: translateY(-50%);
-  pointer-events: none; // D-14: display-only
+  pointer-events: none; // display-only
   z-index: 1; // above telar weave pattern (CSS background)
 }
 
@@ -334,18 +333,18 @@
   justify-content: center;
   pointer-events: auto;
   transform: translateY(100vh);          // offscreen below by default
-  transition: transform 0.5s ease-out;   // D-17
+  transition: transform 0.5s ease-out;
   // Base shadow — cards always look like cards, not flat divs
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 6px 24px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
 
   // Active card — stronger shadow
   &.is-active {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 30px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.12);  // D-07
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 30px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
   }
 
   // Peeked/stacked card — lighter shadow
   &.is-stacked {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.08);  // D-08
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
   }
 
   .step-question {
@@ -678,7 +677,7 @@
     transition: transform 0.4s ease-out;  // Slightly faster than desktop 0.5s
   }
 
-  // D-11: Per-card-type height — video/audio need less space for controls
+  // Per-card-type height — video/audio need less space for controls
   .viewer-plate[data-card-type="youtube"] + .text-card,
   .viewer-plate[data-card-type="vimeo"] + .text-card,
   .viewer-plate[data-card-type="google-drive"] + .text-card,

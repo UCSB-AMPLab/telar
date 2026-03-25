@@ -9,8 +9,8 @@
  *
  * In embed mode, navigation uses buttons (like mobile) rather than scroll
  * detection, because scroll events inside iframes are unreliable across
- * different host pages. The layout stays desktop-style (split screen) but
- * steps use static positioning with show/hide logic instead of the absolute
+ * different host pages. The layout stays desktop-style but steps use static
+ * positioning with show/hide logic instead of the absolute
  * positioning and transforms used in desktop scroll mode.
  *
  * @version v1.0.0-beta

@@ -5,7 +5,7 @@
  * This is a contract test, not a logic test — it catches accidental
  * deletions or renames of state keys that would break dependent modules.
  *
- * Updated for v0.10.0-beta Phase 2: scroll accumulator fields removed,
+ * Updated for v1.0.0-beta: scroll accumulator fields removed,
  * Lenis scroll engine fields added.
  *
  * @version v1.0.0-beta
@@ -16,7 +16,7 @@ import { state, MOBILE_NAV_COOLDOWN } from '../../assets/js/telar-story/state.js
 
 describe('state', () => {
   it('has expected initial structure and constants', () => {
-    // Constants — STEP_COOLDOWN and MAX_SCROLL_DELTA removed in Phase 2
+    // Constants — STEP_COOLDOWN and MAX_SCROLL_DELTA removed in v1.0.0-beta
     expect(MOBILE_NAV_COOLDOWN).toBe(400);
 
     // Navigation group
@@ -24,7 +24,7 @@ describe('state', () => {
     expect(state.currentIndex).toBe(-1);
     expect(state.currentObject).toBeNull();
 
-    // Scroll engine group (Phase 2 — replaces scrollAccumulator)
+    // Scroll engine group (replaces scrollAccumulator)
     expect(state.scrollPosition).toBe(0);
     expect(state.scrollProgress).toBe(0);
     expect(state.isSnapping).toBe(false);

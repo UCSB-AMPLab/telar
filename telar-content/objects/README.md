@@ -2,7 +2,7 @@
 
 **[Versión en español abajo](#objetos)** | **[English version](#objects)**
 
-This folder contains the source files for your Telar objects — images and PDFs displayed via the IIIF protocol.
+This folder contains the source files for your Telar objects — images, PDFs, and audio recordings.
 
 ## Supported formats
 
