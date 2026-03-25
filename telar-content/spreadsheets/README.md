@@ -25,7 +25,7 @@ Steps 2–3 happen automatically on GitHub.
 
 ## Story CSV columns
 
-`step`, `object`, `x`, `y`, `zoom`, `page`, `question`, `answer`, `layer1_button`, `layer1_content`, `layer2_button`, `layer2_content`
+`step`, `object`, `x`, `y`, `zoom`, `page`, `question`, `answer`, `layer1_button`, `layer1_content`, `layer2_button`, `layer2_content`, `clip_start`, `clip_end`, `loop`, `alt_text`
 
 Markdown files referenced in content columns should be stored in `telar-content/texts/stories/`.
 
@@ -59,6 +59,6 @@ Los pasos 2–3 se ejecutan automáticamente en GitHub.
 
 ## Columnas del CSV de historias
 
-`paso`, `objeto`, `x`, `y`, `zoom`, `página`, `pregunta`, `respuesta`, `boton_capa1`, `contenido_capa1`, `boton_capa2`, `contenido_capa2`
+`paso`, `objeto`, `x`, `y`, `zoom`, `página`, `pregunta`, `respuesta`, `boton_capa1`, `contenido_capa1`, `boton_capa2`, `contenido_capa2`, `inicio_clip`, `fin_clip`, `bucle`, `texto_alt`
 
 Los archivos markdown referenciados en las columnas de contenido deben estar en `telar-content/texts/stories/`.

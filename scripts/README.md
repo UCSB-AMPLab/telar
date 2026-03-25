@@ -201,21 +201,30 @@ Complete data processing workflow:
 
 ```bash
 # 1. Edit content in telar-content/texts/
-# 2. Update structure in CSV files (_data/*.csv)
+# 2. Update structure in CSV files (telar-content/spreadsheets/*.csv)
 # 3. Convert CSV to JSON (embeds markdown content)
-python scripts/csv_to_json.py
+python3 scripts/csv_to_json.py
 
 # 4. Generate Jekyll collection files
-python scripts/generate_collections.py
+python3 scripts/generate_collections.py
 
-# 5. Generate IIIF tiles for any new images
-python scripts/generate_iiif.py
+# 5. Process audio objects (skip if no audio files)
+python3 scripts/process_audio.py
 
-# 6. Bundle JavaScript (only if you modified files in assets/js/telar-story/)
+# 6. Generate IIIF tiles for any new images
+python3 scripts/generate_iiif.py
+
+# 7. Bundle JavaScript (only if you modified files in assets/js/telar-story/)
 npx esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap
 
-# 7. Build Jekyll site
+# 8. Build Jekyll site
 bundle exec jekyll build
+```
+
+Or use the build script which runs all steps automatically:
+
+```bash
+python3 scripts/build_local_site.py
 ```
 
 ## GitHub Actions Integration

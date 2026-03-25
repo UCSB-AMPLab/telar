@@ -8,7 +8,7 @@ This directory contains all the **source content** for your Telar site — objec
 
 ### objects/
 
-High-resolution images and PDF documents displayed using IIIF (International Image Interoperability Framework). Supported formats: JPG, PNG, TIFF, WebP, HEIC, PDF. See [objects/README.md](objects/README.md) for details.
+High-resolution images, PDF documents, and audio recordings. Images and PDFs are displayed using IIIF; audio files are rendered as waveforms. Supported formats: JPG, PNG, TIFF, WebP, HEIC, PDF, MP3, OGG, M4A. See [objects/README.md](objects/README.md) for details.
 
 ### spreadsheets/
 
@@ -20,10 +20,11 @@ Markdown files containing narrative text for story panels, glossary definitions,
 
 ## Workflow
 
-1. **Add content** — Place images/PDFs in `objects/`, text in `texts/`, update CSVs in `spreadsheets/`
+1. **Add content** — Place images, PDFs, or audio in `objects/`, text in `texts/`, update CSVs in `spreadsheets/`
 2. **Process** — Run `python3 scripts/csv_to_json.py`
 3. **Generate tiles** — Run `python3 scripts/generate_iiif.py`
-4. **Build** — Run `bundle exec jekyll build`
+4. **Process audio** — Run `python3 scripts/process_audio.py` (only if you have audio objects)
+5. **Build** — Run `bundle exec jekyll build`
 
 On GitHub, steps 2–4 happen automatically via GitHub Actions.
 
@@ -45,7 +46,7 @@ Esta carpeta contiene todo el **contenido fuente** de tu sitio Telar — objetos
 
 ### objects/
 
-Imágenes en alta resolución y documentos PDF que se muestran mediante IIIF (International Image Interoperability Framework). Formatos compatibles: JPG, PNG, TIFF, WebP, HEIC, PDF. Consulta [objects/README.md](objects/README.md) para más detalles.
+Imágenes en alta resolución, documentos PDF y grabaciones de audio. Las imágenes y PDFs se muestran mediante IIIF; los archivos de audio se visualizan como ondas. Formatos compatibles: JPG, PNG, TIFF, WebP, HEIC, PDF, MP3, OGG, M4A. Consulta [objects/README.md](objects/README.md) para más detalles.
 
 ### spreadsheets/
 
@@ -57,10 +58,11 @@ Archivos markdown con texto narrativo para los paneles de historias, definicione
 
 ## Flujo de trabajo
 
-1. **Agrega contenido** — Coloca imágenes/PDFs en `objects/`, texto en `texts/`, actualiza los CSVs en `spreadsheets/`
+1. **Agrega contenido** — Coloca imágenes, PDFs o audio en `objects/`, texto en `texts/`, actualiza los CSVs en `spreadsheets/`
 2. **Procesa** — Ejecuta `python3 scripts/csv_to_json.py`
 3. **Genera mosaicos** — Ejecuta `python3 scripts/generate_iiif.py`
-4. **Compila** — Ejecuta `bundle exec jekyll build`
+4. **Procesa audio** — Ejecuta `python3 scripts/process_audio.py` (solo si tienes objetos de audio)
+5. **Compila** — Ejecuta `bundle exec jekyll build`
 
 En GitHub, los pasos 2–4 se ejecutan automáticamente mediante GitHub Actions.
 

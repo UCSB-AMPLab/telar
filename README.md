@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-0.9.4--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-1.0.0--beta-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **[Versión en español abajo](#español)** | **[English version](#telar)**
 
@@ -12,7 +12,7 @@ A minimal-computing framework for creating layered IIIF visual narratives for di
 
 ---
 
-> **⚠️ Beta Release - v0.9.4-beta**
+> **⚠️ Beta Release - v1.0.0-beta**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[telar.org/docs](https://telar.org/docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/3-upgrading/) for instructions.
@@ -27,13 +27,15 @@ We gratefully acknowledge the support of the [Caribbean Digital Scholarship Coll
 
 ## Key Features
 
+- **Multimedia storytelling**: Weave IIIF images, YouTube/Vimeo video, and audio recordings into fluid visual narratives with per-step clip control
+- **Fluid scroll**: Continuous scroll on desktop with magnetic waypoints, smooth IIIF viewport interpolation, and card-stack transitions. Button navigation on mobile and in embeds
 - **IIIF integration**: Support for both local images (auto-generated tiles) and external IIIF resources with automatic metadata extraction
-- **Scrollytelling**: Discrete step-based scrolling with support for multiple IIIF objects in a single story - each object preloaded in its own viewer card
 - **Interactive widgets**: Carousel, tabs, and accordion components for rich content presentation
 - **Layered panels**: Progressive disclosure with three content layers plus glossary auto-linking
 - **Multilingual UI**: Complete interface support for English and Spanish
-- **Objects gallery**: Browsable object grid with detail pages
-- **Minimal computing**: Plain text, static generation, GitHub Pages hosting
+- **Objects gallery**: Browsable object grid with type filtering (Image/Video/Audio), media thumbnails, and detail pages with clip pickers
+- **Accessibility**: Alt text support across all media types with automatic fallback chains
+- **Minimal computing**: Plain text, static generation, zero-dependency hosting on GitHub Pages
 
 ---
 
@@ -98,8 +100,11 @@ Telar is developed by Adelaida Ávila, Juan Cobo Betancourt, Natalie Cobo, Santi
 Telar is built with:
 - [Jekyll](https://jekyllrb.com/) - Static site generator
 - [Tify](https://tify.rocks/) - IIIF viewer
+- [Lenis](https://lenis.darkroom.engineering/) - Smooth scroll engine
+- [WaveSurfer.js](https://wavesurfer.xyz/) - Audio waveform rendering
 - [Bootstrap 5](https://getbootstrap.com/) - CSS framework
 - [libvips](https://www.libvips.org/) - IIIF tile generator
+- [esbuild](https://esbuild.github.io/) - JavaScript bundler
 
 It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspired by:
 - [Wax](https://minicomp.github.io/wax/) - Minimal computing for digital exhibitions
@@ -116,7 +121,7 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 
 # Español
 
-![Versión](https://img.shields.io/badge/versi%C3%B3n-0.9.4--beta-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-1.0.0--beta-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
 
 **[Versión en español](#español)** | **[English version above](#telar)**
 
@@ -128,7 +133,7 @@ Un marco de computación mínima para crear narrativas visuales con capas de tex
 
 ---
 
-> **⚠️ Versión Beta - v0.9.4-beta**
+> **⚠️ Versión Beta - v1.0.0-beta**
 > Esta es una versión beta para pruebas y retroalimentación. Para documentación detallada, visita **[telar.org/guia](https://telar.org/guia)**.
 
 > **Advertencia:** Si estás actualizando desde v0.3.4 o anterior, consulta la [Guía de Actualización de Telar](https://telar.org/guia/flujos-de-trabajo/actualizacion/) para obtener instrucciones.
@@ -143,13 +148,15 @@ Agradecemos el apoyo del [Caribbean Digital Scholarship Collective](https://cdsc
 
 ## Características principales
 
+- **Narrativa multimedia**: Combina imágenes IIIF, videos de YouTube/Vimeo y grabaciones de audio en narrativas visuales fluidas con control de clips por paso
+- **Desplazamiento fluido**: Desplazamiento continuo en escritorio con puntos magnéticos, interpolación suave del visor IIIF y transiciones de tarjetas apiladas. Navegación por botones en móvil y en modo embebido
 - **Integración IIIF**: Soporte para imágenes locales con teselas (*tiles*) generadas automáticamente y recursos IIIF externos con extracción automática de metadatos
-- **Scrollytelling**: Desplazamiento basado en pasos discretos con soporte para múltiples objetos IIIF en una sola historia - cada objeto precargado en su propia tarjeta de visualización
 - **Widgets interactivos**: Componentes de carrusel, pestañas y acordeón para presentar contenido de forma más rica
 - **Paneles en capas**: Despliegue progresivo con tres capas de contenido más enlace automático del glosario
 - **Interfaz multilingüe**: Soporte completo de interfaz para inglés y español
-- **Galería de objetos**: Cuadrícula navegable de objetos con páginas de detalle
-- **Computación mínima**: Texto plano, generación estática, alojamiento en GitHub Pages
+- **Galería de objetos**: Cuadrícula navegable con filtro por tipo (Imagen/Video/Audio), miniaturas por tipo de medio y páginas de detalle con selectores de clips
+- **Accesibilidad**: Texto alternativo en todos los tipos de medio con cadena de respaldo automática
+- **Computación mínima**: Texto plano, generación estática, alojamiento sin dependencias externas en GitHub Pages
 
 ---
 
@@ -214,8 +221,11 @@ Telar es desarrollado por Adelaida Ávila, Juan Cobo Betancourt, Natalie Cobo, S
 Telar está construido con:
 - [Jekyll](https://jekyllrb.com/) - Generador de sitios estáticos
 - [Tify](https://tify.rocks/) - Visor IIIF
+- [Lenis](https://lenis.darkroom.engineering/) - Motor de desplazamiento fluido
+- [WaveSurfer.js](https://wavesurfer.xyz/) - Visualización de ondas de audio
 - [Bootstrap 5](https://getbootstrap.com/) - Marco CSS
 - [libvips](https://www.libvips.org/) - Generador de teselas IIIF
+- [esbuild](https://esbuild.github.io/) - Empaquetador de JavaScript
 
 Está basado en [Paisajes Coloniales](https://paisajescoloniales.com/), e inspirado por:
 - [Wax](https://minicomp.github.io/wax/) - Computación mínima para exhibiciones digitales
