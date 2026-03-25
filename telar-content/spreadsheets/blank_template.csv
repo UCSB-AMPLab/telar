@@ -1,5 +1,5 @@
-step,object,x,y,zoom,page,question,answer,layer1_button,layer1_content,layer2_button,layer2_content
-#,object_id from the objects tab,horizontal position 0-1 (0.5 = center),vertical position 0-1 (0.5 = center),(1.0 = full image),for multi-page items,Heading for this step,Brief 1-2 sentence text,"Optional button text (default: ""Learn more"")","Panel content: write text here, paste markdown, or enter path to .md file (e.g. your-story/file.md)","Optional second button text (default: ""Go deeper"")","Second panel: write text here, paste markdown, or enter path to .md file"
-1,telar-placeholder,0.353,0.379,6.7,,question,answer,,,,
-2,telar-placeholder,0.531,0.413,6.7,,,,,,,
-3,telar-placeholder,0.49,0.455,2.7,,,,,,,
+step,object,page,x,y,zoom,clip_start,clip_end,loop,alt_text,question,answer,layer1_button,layer1_content,layer2_button,layer2_content
+#,object_id from the objects tab,for multi-page items,horizontal position 0-1 (0.5 = center),vertical position 0-1 (0.5 = center),(1.0 = full image),"Start time for video/audio clips, e.g. ""1:30"" (m:ss) or ""90"" (seconds)",End time for video/audio clips,yes to loop the clip,"Describe what is visible in this zoomed view for screen readers. If empty, the object's image description is used.",Heading for this step,Brief 1-2 sentence text,"Optional button text (default: ""Learn more"")","Panel content: write text here, paste markdown, or enter path to .md file (e.g. your-story/file.md)","Optional second button text (default: ""Go deeper"")","Second panel: write text here, paste markdown, or enter path to .md file"
+1,telar-placeholder,,,,,,,,,question,answer,,,,
+2,telar-placeholder,,,,,,,,,question,answer,,,,
+3,telar-placeholder,,,,,,,,,question,answer,,,,
