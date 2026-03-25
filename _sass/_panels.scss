@@ -9,8 +9,14 @@
  * and content elements that appear inside panels: footnotes, blockquotes,
  * hyperlinks, images, and glossary inline links.
  *
- * @version v0.9.0-beta
+ * @version v1.0.0-beta
  */
+
+/* Panel stacking — z-index 9910 sits above all scene cards (100–9899)
+   and UI chrome (9900) but below the share modal (9950). */
+.offcanvas {
+  z-index: 9910;
+}
 
 /* Panels - Theme-aware trigger buttons */
 .panel-trigger {
@@ -42,6 +48,9 @@
   width: 65% !important;
   max-width: 800px;
   background: var(--color-panel-layer1-bg);
+  backdrop-filter: blur(8px);
+  border-left: none;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
 }
 
 #panel-layer1 .offcanvas-header {
@@ -62,7 +71,7 @@
   color: var(--color-panel-layer1-text);
   font-family: var(--font-headings);
   font-size: 2rem;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 /* Layer 2 Panel - Dark purple background, narrower than layer1 */
@@ -70,6 +79,9 @@
   width: 55% !important;
   max-width: 750px;
   background: var(--color-panel-layer2-bg);
+  backdrop-filter: blur(8px);
+  border-left: none;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
 }
 
 #panel-layer2 .offcanvas-header {
@@ -90,7 +102,7 @@
   color: var(--color-panel-layer2-text);
   font-family: var(--font-headings);
   font-size: 2rem;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 #panel-layer2 .offcanvas-body h2,
@@ -161,26 +173,44 @@
   opacity: 1;
 }
 
+/* Back buttons — pill style, adapted to panel background */
 #panel-layer1-back,
 #panel-layer2-back {
-  background: rgba(255,255,255,0.2);
-  color: #ffffff;
-  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  border: none;
   padding: 0.5rem 1rem;
   border-radius: 20px;
+  transition: all 0.3s ease;
 }
 
 #panel-layer1-back:hover,
 #panel-layer2-back:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.35);
   color: #ffffff;
+}
+
+#panel-glossary-back {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+#panel-glossary-back:hover {
+  background: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.9);
 }
 
 /* Glossary Panel - Cream/beige background */
 #panel-glossary {
-  width: 45% !important;
+  width: 50% !important;
   max-width: 700px;
   background: var(--color-panel-glossary-bg);
+  border-left: none;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
 }
 
 #panel-glossary .offcanvas-header {
@@ -201,7 +231,7 @@
   color: var(--color-panel-glossary-text);
   font-family: var(--font-headings);
   font-size: 2rem;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 #panel-glossary .btn-close {
@@ -237,7 +267,6 @@
   max-width: 550px;
 }
 
-/* Glossary back button uses default Bootstrap outline-secondary styling */
 
 /* Glossary Inline Links (in story panel content) */
 .glossary-inline-link {
@@ -423,6 +452,22 @@
   font-weight: 400;
 }
 
+/* Narrow desktop — widen panels so stacked content isn't truncated */
+@media (min-width: 769px) and (max-width: 1200px) {
+  #panel-layer1 {
+    width: 80% !important;
+    max-width: none;
+  }
+  #panel-layer2 {
+    width: 75% !important;
+    max-width: none;
+  }
+  #panel-glossary {
+    width: 70% !important;
+    max-width: none;
+  }
+}
+
 /* Mobile Responsive - Panel System */
 @media (max-width: 768px) {
   /* Panel System - full width bottom sheets */
@@ -489,7 +534,7 @@
     max-height: 76vh !important;
     width: 98vw !important;
     max-width: 98vw !important;
-    z-index: 1050;
+    z-index: 9910;
   }
 
   /* Layer 2 - "Learn More" panels */
@@ -499,7 +544,7 @@
     max-height: 76vh !important;
     width: 96vw !important;
     max-width: 96vw !important;
-    z-index: 1051;
+    z-index: 9911;
   }
 
   /* Glossary */

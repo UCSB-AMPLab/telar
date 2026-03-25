@@ -8,7 +8,7 @@ interface.
 
 The main entry point is `generate_search_data()`, which extracts the fields
 needed for Lunr.js text search (title, creator, period, subjects, description,
-object_type) and builds facet counts for the filter sidebar. Facets are
+medium) and builds facet counts for the filter sidebar. Facets are
 pre-computed here — rather than in the browser — so the filter UI can show
 "Maps (3)" or "Unknown (5)" without scanning all objects on every page load.
 
@@ -28,13 +28,35 @@ but for most sites this is imperceptible (<100ms).
 config setting. When disabled, no search data is generated and any existing
 `search-data.json` is removed — the gallery falls back to its simple grid view.
 
-Version: v0.8.0-beta
+Version: v1.0.0-beta
 """
 
 import json
 from pathlib import Path
 
 import yaml
+
+
+# Video URL patterns for media type detection (matches generate_collections.py)
+_VIDEO_URL_PATTERNS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
+_AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
+
+
+def _detect_media_type(source_url, object_id):
+    """Detect media type from source URL and object files on disk.
+
+    Duplicates the logic in generate_collections.detect_media_type() to avoid
+    circular imports (generate_collections imports from telar).
+    """
+    url = (source_url or '').strip()
+    if any(pat in url for pat in _VIDEO_URL_PATTERNS):
+        return 'Video'
+    objects_dir = Path('telar-content/objects')
+    if objects_dir.exists():
+        for ext in _AUDIO_EXTENSIONS:
+            if (objects_dir / f'{object_id}{ext}').exists():
+                return 'Audio'
+    return 'Image'
 
 
 def load_config():
@@ -60,24 +82,31 @@ def build_facets(objects):
 
     Returns dict with counts per category:
     {
-        "object_type": {"Map": 3, "Document": 2},
+        "medium": {"Map": 3, "Document": 2},
         "creator": {"Unknown": 5, "Smith": 2},
         "subjects": {"colonial": 4, "cartography": 2},
         "period": {"18th century": 3, "1650-1700": 2}
     }
     """
     facets = {
-        'object_type': {},
+        'media_type': {},
+        'medium': {},
         'creator': {},
         'subjects': {},
         'period': {}
     }
 
     for obj in objects:
-        # Object type
-        obj_type = str(obj.get('object_type', '')).strip()
+        # Media type (auto-detected: Image/Video/Audio)
+        # Derive from source_url and object_id since objects.json doesn't store media_type
+        media_type = _detect_media_type(obj.get('source_url', ''), obj.get('object_id', ''))
+        if media_type:
+            facets['media_type'][media_type] = facets['media_type'].get(media_type, 0) + 1
+
+        # Medium/Genre (v0.10.0: renamed from object_type)
+        obj_type = str(obj.get('medium', '')).strip()
         if obj_type:
-            facets['object_type'][obj_type] = facets['object_type'].get(obj_type, 0) + 1
+            facets['medium'][obj_type] = facets['medium'].get(obj_type, 0) + 1
 
         # Creator
         creator = str(obj.get('creator', '')).strip()
@@ -153,7 +182,8 @@ def generate_search_data(objects_path='_data/objects.json', output_path='search-
             'creator': obj.get('creator', ''),
             'period': obj.get('period', ''),
             'description': obj.get('description', ''),
-            'object_type': obj.get('object_type', ''),
+            'media_type': _detect_media_type(obj.get('source_url', ''), obj.get('object_id', '')),
+            'medium': obj.get('medium', ''),
             'subjects': obj.get('subjects', ''),
             'year': obj.get('year', ''),
             # Include for display in results

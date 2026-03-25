@@ -22,7 +22,7 @@
  * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
  * modal and must be explicitly dismissed.
  *
- * @version v0.9.1-beta
+ * @version v1.0.0-beta
  */
 
 import { state } from './state.js';
@@ -33,18 +33,18 @@ import { getBasePath, fixImageUrls } from './utils.js';
 /**
  * Set up click handlers for panel trigger buttons and back buttons.
  *
- * Layer 1 triggers are static elements with [data-panel="layer1"].
- * Layer 2 triggers are dynamic (added inside Layer 1 content), so they use
- * event delegation on the document.
+ * Both layer 1 and layer 2 triggers use event delegation on the document
+ * so that buttons created dynamically by card-pool.js are handled correctly.
  */
 export function initializePanels() {
-  // Layer 1 triggers
-  document.querySelectorAll('[data-panel="layer1"]').forEach(trigger => {
-    trigger.addEventListener('click', function () {
-      const stepNumber = this.dataset.step;
+  // Layer 1 triggers (delegated — text card buttons are created dynamically by card-pool.js)
+  document.addEventListener('click', function (e) {
+    const trigger = e.target.closest('[data-panel="layer1"]');
+    if (trigger) {
+      const stepNumber = trigger.dataset.step;
       state.panelStack = [];
       openPanel('layer1', stepNumber);
-    });
+    }
   });
 
   // Layer 2 triggers (delegated)
@@ -200,7 +200,7 @@ function getPanelContent(panelType, contentId) {
     let html = formatPanelContent({
       text: step.layer1_text,
       media: step.layer1_media,
-    });
+    }, step.object);
 
     // Add Layer 2 button if content exists
     if ((step.layer2_title && step.layer2_title.trim() !== '') || (step.layer2_text && step.layer2_text.trim() !== '')) {
@@ -219,7 +219,7 @@ function getPanelContent(panelType, contentId) {
       html: formatPanelContent({
         text: step.layer2_text,
         media: step.layer2_media,
-      }),
+      }, step.object),
       demo: step.layer2_demo || false,
     };
   } else if (panelType === 'glossary') {
@@ -239,9 +239,10 @@ function getPanelContent(panelType, contentId) {
  * may need the base path prepended. Media fields add an image element.
  *
  * @param {{ text?: string, media?: string }} panelData
+ * @param {string} [objectId] - Object ID for dynamic alt text lookup
  * @returns {string} Formatted HTML.
  */
-function formatPanelContent(panelData) {
+function formatPanelContent(panelData, objectId) {
   if (!panelData) return '<p>No content available.</p>';
 
   let html = '';
@@ -256,7 +257,11 @@ function formatPanelContent(panelData) {
     if (mediaUrl.startsWith('/') && !mediaUrl.startsWith('//')) {
       mediaUrl = basePath + mediaUrl;
     }
-    html += `<img src="${mediaUrl}" alt="Panel image" class="img-fluid">`;
+    // Dynamic alt text from object data
+    const objectsData = window.objectsData || [];
+    const panelObj = objectId ? (objectsData.find(o => o.object_id === objectId) || {}) : {};
+    const panelAlt = panelObj.alt_text || panelObj.title || objectId || 'Panel image';
+    html += `<img src="${mediaUrl}" alt="${panelAlt}" class="img-fluid">`;
   }
 
   return html;
@@ -295,18 +300,19 @@ export function stepHasLayer2Content(step) {
  *
  * Creates a subtle backdrop element and registers a click handler on the
  * story container to close the topmost panel when the user clicks outside it.
+ *
+ * The old split-column layout toggled overflow on .narrative-column; that
+ * element is gone in the card-stack layout. The backdrop and click-outside
+ * listener are wired unconditionally.
  */
 export function initializeScrollLock() {
-  const narrativeColumn = document.querySelector('.narrative-column');
-  if (!narrativeColumn) return;
-
   const backdrop = document.createElement('div');
   backdrop.id = 'panel-backdrop';
   backdrop.style.cssText = `
     position: fixed;
     inset: -50px;
     background: rgba(0, 0, 0, 0.025);
-    z-index: 1040;
+    z-index: 9900;
     display: none;
     pointer-events: none;
   `;
@@ -328,30 +334,31 @@ export function initializeScrollLock() {
 
 /**
  * Activate scroll lock — blocks step navigation and shows backdrop.
+ *
+ * Also stops Lenis so wheel events do not cause scroll position changes
+ * while a panel is open. Safe to call when Lenis is not initialised
+ * (mobile/iOS/embed) — optional chaining skips the call silently.
  */
 export function activateScrollLock() {
   state.scrollLockActive = true;
+  if (state.lenis) state.lenis.stop();
   const backdrop = document.getElementById('panel-backdrop');
   if (backdrop) {
     backdrop.style.display = 'block';
-  }
-  const narrativeColumn = document.querySelector('.narrative-column');
-  if (narrativeColumn) {
-    narrativeColumn.style.overflow = 'hidden';
   }
 }
 
 /**
  * Deactivate scroll lock — allows step navigation and hides backdrop.
+ *
+ * Also resumes Lenis after a panel closes. Safe to call when Lenis is
+ * not initialised (mobile/iOS/embed).
  */
 export function deactivateScrollLock() {
   state.scrollLockActive = false;
+  if (state.lenis) state.lenis.start();
   const backdrop = document.getElementById('panel-backdrop');
   if (backdrop) {
     backdrop.style.display = 'none';
-  }
-  const narrativeColumn = document.querySelector('.narrative-column');
-  if (narrativeColumn) {
-    narrativeColumn.style.overflow = '';
   }
 }

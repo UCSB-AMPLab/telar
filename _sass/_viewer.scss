@@ -12,7 +12,7 @@
  * .multipage class is added by JavaScript when a multi-canvas manifest is
  * detected.
  *
- * @version v0.9.0-beta
+ * @version v1.0.0-beta
  */
 
 @use 'mixins' as *;
@@ -25,16 +25,59 @@
 
 #object-viewer {
   width: 100%;
-  aspect-ratio: 4 / 5;
-  background: #000;
+  border-radius: 4px;
+  position: relative;
 }
 
-/* Black viewer background — targets Tify internals (same pattern as Zasqua) */
+/* Image object page: 1:1 square, white weave background, inset shadow */
+#object-viewer.viewer-image {
+  aspect-ratio: 1 / 1;
+  max-height: 80vh;
+  overflow: hidden;
+  background: #fff url('../img/background-gris.svg') repeat;
+  background-size: 20px auto;
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.12), inset 0 -2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Multipage image objects: allow Tify header to overflow the rounded corners */
+#object-viewer.viewer-image.multipage {
+  overflow: visible;
+}
+
+/* Drop shadow on the IIIF image canvas (matches story plates) */
+#object-viewer.viewer-image .openseadragon-canvas canvas {
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.35));
+}
+
+/* Video object page: no fixed aspect ratio, transparent background */
+#object-viewer.viewer-video {
+  background: transparent;
+}
+
+/* Vimeo max-height constraint for extreme aspect ratios */
+#object-viewer.viewer-video iframe {
+  max-height: 80vh;
+}
+
+/* Audio object page: landscape strip, accent-tinted background set by JS */
+#object-viewer.viewer-audio {
+  aspect-ratio: 3 / 2;
+  max-height: 80vh;
+  min-height: 80px;
+  overflow: hidden;
+  /* background and background-image set inline by JS (accent-tinted + weave pattern) */
+}
+
+/* Story viewer: black Tify internals (same pattern as Zasqua) */
 .viewer-instance .tify-scan,
-.viewer-instance .openseadragon-container,
+.viewer-instance .openseadragon-container {
+  background: #000 !important;
+}
+
+/* Object page: transparent Tify internals so the weave pattern shows through */
 #object-viewer .tify-scan,
 #object-viewer .openseadragon-container {
-  background: #000 !important;
+  background: transparent !important;
 }
 
 /* Tify - Clean Story Viewer Display */
@@ -146,4 +189,65 @@
   position: absolute;
   right: 0.5rem;
   font-size: 0.7rem;
+}
+
+/* Audio object page: frosted glass controls (matches story .audio-btn) */
+.audio-object-controls {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  bottom: 12px;
+  right: 12px;
+}
+
+.audio-object-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.15s ease, transform 0.15s ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.85);
+    transform: scale(1.08);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
+  }
+}
+
+/* Audio object page: overlaid time display */
+.audio-object-time {
+  position: absolute;
+  z-index: 10;
+  bottom: 16px;
+  left: 12px;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 3px 8px;
+  border-radius: 4px;
 }

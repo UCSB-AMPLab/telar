@@ -44,7 +44,7 @@ objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v0.9.1-beta
+Version: v1.0.0-beta
 """
 
 import re
@@ -62,6 +62,28 @@ import yaml
 
 from telar.config import get_lang_string, load_site_language
 from telar.csv_utils import get_source_url
+
+
+# Video URL patterns for media type detection (matches generate_collections.py)
+_VIDEO_URL_PATTERNS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
+_AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
+
+
+def _detect_media_type(source_url, object_id):
+    """Detect media type from source URL and object files on disk.
+
+    Duplicates the logic in generate_collections.detect_media_type() to avoid
+    circular imports (generate_collections imports from telar).
+    """
+    url = (source_url or '').strip()
+    if any(pat in url for pat in _VIDEO_URL_PATTERNS):
+        return 'Video'
+    objects_dir = Path('telar-content/objects')
+    if objects_dir.exists():
+        for ext in _AUDIO_EXTENSIONS:
+            if (objects_dir / f'{object_id}{ext}').exists():
+                return 'Audio'
+    return 'Image'
 from telar.iiif_metadata import (
     detect_iiif_version, extract_language_map_value, strip_html_tags,
     clean_metadata_value, find_metadata_field, extract_credit,
@@ -251,6 +273,13 @@ def process_objects(df, christmas_tree=False):
         df['iiif_manifest'] = ''
     # If both exist, keep both (user is mid-transition)
 
+    # Alt text fallback: use title if alt_text is empty
+    if 'alt_text' not in df.columns:
+        df['alt_text'] = ''
+    for idx, row in df.iterrows():
+        if not str(row.get('alt_text', '')).strip():
+            df.at[idx, 'alt_text'] = str(row.get('title', '')).strip()
+
     # Inject Christmas Tree test errors if flag is enabled
     if christmas_tree:
         df = inject_christmas_tree_errors(df)
@@ -361,6 +390,24 @@ def process_objects(df, christmas_tree=False):
             if not manifest_url:
                 continue
 
+            # Media-type-aware validation: video/audio objects don't use IIIF
+            obj_media_type = _detect_media_type(manifest_url, object_id)
+            if obj_media_type == 'Video':
+                # Validate video source URL — check it's a recognised host
+                video_hosts = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
+                recognised = any(host in manifest_url for host in video_hosts)
+                if recognised:
+                    host = next(h for h in video_hosts if h in manifest_url)
+                    print(f"  [INFO] Video object {object_id} uses {host}")
+                else:
+                    msg = f"Video object {object_id} uses unrecognised video host: {manifest_url}"
+                    print(f"  [WARN] {msg}")
+                    warnings.append(msg)
+                continue
+            if obj_media_type == 'Audio':
+                print(f"  [INFO] Audio object {object_id} — source URL is not an IIIF manifest, skipping IIIF validation")
+                continue
+
             # Check if it's a valid URL
             parsed = urlparse(manifest_url)
             if not parsed.scheme in ['http', 'https']:
@@ -384,7 +431,7 @@ def process_objects(df, christmas_tree=False):
             try:
                 # Fetch manifest directly with GET (follows redirects automatically)
                 req = urllib.request.Request(manifest_url)
-                req.add_header('User-Agent', 'Telar/0.4.0-beta (IIIF validator)')
+                req.add_header('User-Agent', 'Telar/1.0.0-beta (IIIF validator)')
 
                 with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
                     content_type = response.headers.get('Content-Type', '')
@@ -491,8 +538,8 @@ def process_objects(df, christmas_tree=False):
                                     site_language
                                 )
 
-                                # Object type (classification for filtering)
-                                extracted['object_type'] = find_metadata_field(
+                                # Medium/Genre (v0.10.0: renamed from object_type; classification for filtering)
+                                extracted['medium'] = find_metadata_field(
                                     metadata_array,
                                     ['Type', 'Object Type', 'Resource Type', 'Format'],
                                     version,
@@ -517,7 +564,7 @@ def process_objects(df, christmas_tree=False):
                                 # Update dataframe with extracted values
                                 # Core fields that can be auto-populated from IIIF
                                 iiif_fields = ['title', 'description', 'creator', 'period', 'source', 'credit',
-                                               'year', 'object_type', 'subjects']
+                                               'year', 'medium', 'subjects']
                                 for field in iiif_fields:
                                     if field in row_dict:
                                         df.at[idx, field] = row_dict[field]
@@ -602,6 +649,36 @@ def process_objects(df, christmas_tree=False):
 
         # Skip if already has a valid source URL
         if source_url:
+            continue
+
+        # Audio objects need audio files, not images — validate accordingly
+        obj_media_type = _detect_media_type('', object_id)
+        if obj_media_type == 'Audio':
+            # Find which audio extension matches
+            audio_extensions = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
+            audio_dir = Path('telar-content/objects')
+            audio_found = None
+            if audio_dir.exists():
+                for ext in audio_extensions:
+                    audio_path = audio_dir / f'{object_id}{ext}'
+                    if audio_path.exists():
+                        audio_found = audio_path
+                        break
+            if audio_found:
+                print(f"  [INFO] Object {object_id} uses local audio: {audio_found}")
+                # Check for peaks JSON (optional but recommended)
+                peaks_path = Path(f'assets/audio/peaks/{object_id}.json')
+                if not peaks_path.exists():
+                    print(f"  [INFO] No peaks file for audio object {object_id} — WaveSurfer will decode on the fly")
+            else:
+                error_msg = get_lang_string('errors.object_warnings.image_missing', object_id=object_id)
+                # Override with audio-specific message
+                error_msg = f"No audio file found for object '{object_id}'. Add an audio file (.mp3, .ogg, or .m4a) to telar-content/objects/{object_id}.mp3"
+                df.at[idx, 'object_warning'] = error_msg
+                df.at[idx, 'object_warning_short'] = 'Audio file missing'
+                msg = f"Object {object_id} has no audio file in telar-content/objects/"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
             continue
 
         # No external IIIF manifest - check for local image file

@@ -2,13 +2,13 @@
 
 **[Versión en español abajo](#objetos)** | **[English version](#objects)**
 
-This folder contains the source files for your Telar objects — images and PDFs displayed via the IIIF protocol.
+This folder contains the source files for your Telar objects — images, PDFs, and audio recordings.
 
 ## Supported formats
 
-JPEG (.jpg, .jpeg), TIFF (.tif, .tiff), PNG (.png), WebP (.webp), HEIC (.heic, .heif), PDF (.pdf)
+JPEG (.jpg, .jpeg), TIFF (.tif, .tiff), PNG (.png), WebP (.webp), HEIC (.heic, .heif), PDF (.pdf), MP3 (.mp3), OGG (.ogg), M4A (.m4a)
 
-High-resolution images work best. PDFs are rendered to page images at build time.
+High-resolution images work best. PDFs are rendered to page images at build time. Audio files are processed into peak data for waveform rendering.
 
 ## Workflow
 
@@ -35,9 +35,9 @@ Esta carpeta contiene los archivos fuente de tus objetos Telar — imágenes y P
 
 ## Formatos compatibles
 
-JPEG (.jpg, .jpeg), TIFF (.tif, .tiff), PNG (.png), WebP (.webp), HEIC (.heic, .heif), PDF (.pdf)
+JPEG (.jpg, .jpeg), TIFF (.tif, .tiff), PNG (.png), WebP (.webp), HEIC (.heic, .heif), PDF (.pdf), MP3 (.mp3), OGG (.ogg), M4A (.m4a)
 
-Las imágenes en alta resolución funcionan mejor. Los PDFs se renderizan a imágenes de página durante la compilación.
+Las imágenes en alta resolución funcionan mejor. Los PDFs se renderizan a imágenes de página durante la compilación. Los archivos de audio se procesan para generar datos de picos (*peaks*) para la visualización de ondas.
 
 ## Flujo de trabajo
 

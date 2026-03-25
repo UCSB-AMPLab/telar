@@ -25,11 +25,15 @@ checks for Christmas Tree Mode in `_config.yml`, then converts the three
 CSV types in order: project setup, objects, and story files. Story files
 are discovered dynamically — every CSV in `telar-content/spreadsheets/` that
 is not a system file (`project.csv`, `objects.csv`, or their Spanish
-equivalents) is treated as a story. After all CSVs are converted, demo
-content is loaded and merged if available. Protected stories (v0.8.0+)
-are then encrypted using the story_key from _config.yml.
+equivalents) is treated as a story. The `--story` flag narrows this to a
+single CSV by stem name, which speeds up iteration when working on one
+story at a time. After all CSVs are converted, demo content is loaded and
+merged if available. Protected stories are then encrypted using the
+story_key from _config.yml. Finally, `generate_search_data()` builds the
+Lunr.js search index and facet counts that power the gallery's
+browse-and-search interface.
 
-Version: v0.9.1-beta
+Version: v1.0.0-beta
 """
 
 import os
@@ -218,6 +222,18 @@ def _encrypt_protected_stories(data_dir):
 
 def main():
     """Main conversion process."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Convert Telar CSV files to JSON for Jekyll'
+    )
+    parser.add_argument(
+        '--story',
+        default=None,
+        help='Story ID (CSV stem) to process; skips all other story CSVs (system CSVs always processed)'
+    )
+    args = parser.parse_args()
+
     # Fetch demo content FIRST (before any CSV processing)
     fetch_demo_content_if_enabled()
 
@@ -294,6 +310,9 @@ def main():
     if christmas_tree_mode:
         for csv_file in structures_dir.glob('*.csv'):
             if csv_file.name not in system_csvs:
+                # --story flag: skip all story CSVs except the requested one
+                if args.story and csv_file.stem != args.story:
+                    continue
                 json_filename = csv_file.stem + '.json'
                 json_file = data_dir / json_filename
                 csv_to_json(
@@ -304,6 +323,9 @@ def main():
     else:
         for csv_file in structures_dir.glob('*.csv'):
             if csv_file.name not in system_csvs:
+                # --story flag: skip all story CSVs except the requested one
+                if args.story and csv_file.stem != args.story:
+                    continue
                 json_filename = csv_file.stem + '.json'
                 json_file = data_dir / json_filename
                 csv_to_json(

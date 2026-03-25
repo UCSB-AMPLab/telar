@@ -5,12 +5,9 @@
  * navigation modes, chosen automatically based on viewport size and embed
  * status:
  *
- * - Desktop scroll: On viewports 768 px and wider (not embedded), the user
- *   scrolls with a mouse wheel or trackpad. A custom scroll accumulator
- *   collects scroll distance until it crosses a threshold (50 % of viewport
- *   height), then advances or retreats one step. A cooldown prevents rapid
- *   changes during the step transition animation. iPad and tablet users in
- *   this viewport range navigate by swiping vertically.
+ * - Desktop scroll: On viewports 768 px and wider (not embedded,
+ *   not iOS), the scroll engine (scroll-engine.js) drives navigation via
+ *   Lenis smooth scroll. Keyboard input is handled by initKeyboardNavigation.
  *
  * - Mobile buttons: On viewports narrower than 768 px, previous/next buttons
  *   appear at the bottom of the screen. Each tap advances one step with a
@@ -28,18 +25,13 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v0.7.0-beta
+ * @version v1.0.0-beta
  */
 
-import { state, STEP_COOLDOWN, MAX_SCROLL_DELTA, MOBILE_NAV_COOLDOWN } from './state.js';
-import {
-  switchToObject,
-  switchToObjectMobile,
-  animateViewerToPosition,
-  preloadNearbyViewers,
-  initializeLoadingShimmer,
-  showViewerSkeletonState,
-} from './viewer.js';
+import { state, MOBILE_NAV_COOLDOWN } from './state.js';
+import { activateCard } from './card-pool.js';
+import { advanceToStep, keyboardNav } from './scroll-engine.js';
+import { initializeLoadingShimmer, showViewerSkeletonState } from './viewer.js';
 import {
   openPanel,
   closeTopPanel,
@@ -47,128 +39,73 @@ import {
   stepHasLayer2Content,
 } from './panels.js';
 
-// ── Desktop scroll navigation ────────────────────────────────────────────────
+// ── Keyboard navigation ────────────────────────────────────────────────────────
 
 /**
- * Set up desktop scroll-based navigation.
+ * Register keyboard event listener for step and panel navigation.
  *
- * Assigns z-index stacking to steps, activates the first step, and registers
- * event listeners for keyboard, wheel, and touch input.
+ * Called by scroll-engine.js after Lenis is initialised. Arrow keys navigate
+ * between steps via snap.next()/snap.previous() in desktop mode, or fall back
+ * to nextStep/prevStep in mobile/embed mode. Panel keys open/close layers.
+ * Escape closes panels.
  */
-export function initializeStepController() {
-  state.steps = Array.from(document.querySelectorAll('.story-step'));
-
-  initializeLoadingShimmer();
-
-  state.steps.forEach((step, index) => {
-    step.style.zIndex = index + 1;
-    step.dataset.stepIndex = index;
-  });
-
-  if (state.steps.length > 0) {
-    goToStep(0, 'forward');
-  }
-
+export function initKeyboardNavigation() {
   document.addEventListener('keydown', handleKeyboard);
-  window.addEventListener('wheel', handleScroll, { passive: false });
-  window.addEventListener('touchstart', handleTouchStart, { passive: true });
-  window.addEventListener('touchend', handleTouchEnd, { passive: true });
-
-  console.log(`Step controller initialized with ${state.steps.length} steps`);
 }
 
 /**
- * Navigate to a specific step (desktop).
+ * Navigate to a specific step.
  *
- * Handles intro slide transitions, direction-aware CSS class changes,
- * object switching or pan/zoom animation, and viewer preloading.
+ * Delegates all visual transitions to the card pool (activateCard), which
+ * handles viewer plate switching, text card sliding, and preloading based
+ * on whether the object has changed and whether the zoom mode changed.
  *
  * @param {number} newIndex - Target step index.
  * @param {string} [direction='forward'] - 'forward' or 'backward'.
  */
 export function goToStep(newIndex, direction = 'forward') {
-  if (newIndex < 0) {
-    console.log(`Cannot go to step ${newIndex}: already at first step (0)`);
-    return;
-  }
-  if (newIndex >= state.steps.length) {
-    console.log(`Cannot go to step ${newIndex}: already at last step (${state.steps.length - 1})`);
-    return;
-  }
-
-  const oldIndex = state.currentIndex;
-  const newStep = state.steps[newIndex];
-  const oldStep = oldIndex >= 0 ? state.steps[oldIndex] : null;
-
-  console.log(`goToStep: ${oldIndex} → ${newIndex} (${direction})`);
-
-  state.lastStepChangeTime = Date.now();
-
-  // Intro slide transitions
-  if (oldIndex === 0 && newIndex > 0) {
-    const intro = state.steps[0];
-    if (intro.classList.contains('story-intro')) {
-      intro.style.transform = 'translateY(-100%)';
-      intro.style.zIndex = '0';
-    }
-  } else if (newIndex === 0 && oldIndex > 0) {
-    const intro = state.steps[0];
-    if (intro.classList.contains('story-intro')) {
-      intro.style.zIndex = '100'; // Above other steps (1-11) but below fixed buttons (1040)
-      intro.style.transform = 'translateY(0)';
-    }
-    state.currentViewerCard = null;
-    state.currentObject = null;
-  }
-
-  // Deactivate old step when going backward
-  if (direction === 'backward' && oldStep && oldIndex !== 0) {
-    oldStep.classList.remove('is-active');
-  }
+  // Allow -1 for intro restoration on backward navigation
+  if (newIndex < -1 || newIndex >= state.steps.length) return;
 
   state.currentIndex = newIndex;
 
-  const objectId = newStep.dataset.object;
-  const x = parseFloat(newStep.dataset.x);
-  const y = parseFloat(newStep.dataset.y);
-  const zoom = parseFloat(newStep.dataset.zoom);
-  const page = newStep.dataset.page ? parseInt(newStep.dataset.page, 10) : undefined;
-
-  // Determine if we need to switch objects or just pan/zoom
-  const isLeavingIntro = (oldIndex === 0 && newIndex > 0);
-
-  const pageChanged = state.currentViewerCard && state.currentViewerCard.page !== (page || undefined);
-  if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || isLeavingIntro || pageChanged)) {
-    console.log(`Switching to new object: ${objectId}${isLeavingIntro ? ' (leaving intro)' : ''}${pageChanged ? ` (page changed to ${page})` : ''}`);
-    switchToObject(objectId, newIndex, x, y, zoom, newStep, direction, page);
-    state.currentObject = objectId;
-  } else {
-    console.log(`Same object, activating text and animating viewer`);
-
-    if (direction === 'forward' && state.currentViewerCard) {
-      state.currentViewerCard.element.classList.remove('card-below');
-      state.currentViewerCard.element.classList.add('card-active');
+  if (newIndex === -1) {
+    // Restore the intro card (backward from step 0)
+    const intro = document.querySelector('.story-intro');
+    if (intro) {
+      intro.style.transition = 'transform 0.5s ease-out';
+      intro.style.transform = 'translateY(0)';
     }
-
-    if (direction === 'forward') {
-      newStep.offsetHeight;
-      requestAnimationFrame(() => {
-        newStep.classList.add('is-active');
-      });
+    // Slide step 0's text card back down
+    const firstCard = state.textCards?.[0];
+    if (firstCard) {
+      firstCard.classList.remove('is-active', 'is-stacked');
+      const rot  = parseFloat(firstCard.dataset.messinessRot  || 0);
+      const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
+      const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
+      firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
     }
-
-    if (state.currentViewerCard && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
-      if (state.currentViewerCard.isReady) {
-        animateViewerToPosition(state.currentViewerCard, x, y, zoom);
-      } else {
-        console.warn('Viewer not ready, queueing zoom');
-        state.currentViewerCard.pendingZoom = { x, y, zoom, snap: false };
-      }
+    // Slide first viewer plate back down
+    const firstObject = window.storyData?.firstObject;
+    if (firstObject && state.viewerPlates?.[firstObject]) {
+      const plate = state.viewerPlates[firstObject];
+      plate.style.transform = 'translateY(100%)';
+      plate.classList.remove('is-active');
     }
+    // Reset object run tracking
+    state.currentObjectRun = { objectId: null, runPosition: 0 };
+    // Hide step counter and credit overlay on intro
+    updateViewerInfo(-1);
+    const creditBadge = document.getElementById('object-credits-badge');
+    if (creditBadge) creditBadge.classList.add('d-none');
+    return;
   }
 
+  // Card pool handles all visual transitions, viewer switching, and preloading
+  activateCard(newIndex, direction);
+
+  // Panel trigger data update
   updateViewerInfo(newIndex);
-  preloadNearbyViewers(newIndex, 3, 2);
 }
 
 /**
@@ -261,8 +198,12 @@ export function initializeButtonNavigation(mode) {
  * Navigate to the next step (mobile/embed).
  */
 function goToNextMobileStep() {
+  // From intro state → step 0
+  if (state.mobileInIntro) {
+    _dismissMobileIntro();
+    return;
+  }
   if (state.currentMobileStep >= state.steps.length - 1) {
-    console.log('Already at last step');
     return;
   }
   goToMobileStep(state.currentMobileStep + 1);
@@ -272,18 +213,96 @@ function goToNextMobileStep() {
  * Navigate to the previous step (mobile/embed).
  */
 function goToPreviousMobileStep() {
-  if (state.currentMobileStep <= 0) {
-    console.log('Already at first step');
+  if (state.mobileInIntro) {
+    return;
+  }
+  // From step 0 → intro state
+  if (state.currentMobileStep === 0) {
+    _restoreMobileIntro();
     return;
   }
   goToMobileStep(state.currentMobileStep - 1);
 }
 
 /**
+ * Restore the intro card on mobile (backward from step 0).
+ *
+ * Mirrors the desktop goToStep(-1) handler: slides the first viewer plate
+ * off-screen, restores the intro card, and hides the step counter.
+ */
+function _restoreMobileIntro() {
+  if (state.mobileNavigationCooldown) return;
+
+  state.mobileNavigationCooldown = true;
+  setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
+
+  state.mobileInIntro = true;
+
+  // Show intro card
+  const intro = document.querySelector('.story-intro');
+  if (intro) {
+    intro.style.transition = 'transform 0.5s ease-out';
+    intro.style.transform = 'translateY(0)';
+  }
+
+  // Slide step 0's text card off-screen
+  const firstCard = state.textCards?.[0];
+  if (firstCard) {
+    firstCard.classList.remove('is-active', 'is-stacked');
+    const rot  = parseFloat(firstCard.dataset.messinessRot  || 0);
+    const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
+    const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
+    firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+  }
+
+  // Slide first viewer plate off-screen
+  const firstPlate = state.viewerPlates?.[0];
+  if (firstPlate) {
+    firstPlate.style.transform = 'translateY(100%)';
+    firstPlate.classList.remove('is-active');
+  }
+
+  // Reset object run tracking
+  state.currentObjectRun = { objectId: null, runPosition: 0 };
+
+  // Hide step counter and credits
+  updateViewerInfo(-1);
+  const creditBadge = document.getElementById('object-credits-badge');
+  if (creditBadge) creditBadge.classList.add('d-none');
+
+  updateMobileButtonStates();
+}
+
+/**
+ * Dismiss the intro card and show step 0 (forward from intro).
+ */
+function _dismissMobileIntro() {
+  if (state.mobileNavigationCooldown) return;
+
+  state.mobileNavigationCooldown = true;
+  setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
+
+  state.mobileInIntro = false;
+
+  // Hide intro card
+  const intro = document.querySelector('.story-intro');
+  if (intro) {
+    intro.style.transition = 'transform 0.5s ease-out';
+    intro.style.transform = 'translateY(-100%)';
+  }
+
+  // Activate step 0
+  state.currentMobileStep = 0;
+  activateCard(0, 'forward');
+  updateViewerInfo(0);
+  updateMobileButtonStates();
+}
+
+/**
  * Navigate to a specific step (mobile/embed).
  *
  * Handles cooldown, skeleton loading states, step class toggling,
- * object switching or pan/zoom, and preloading.
+ * and card pool activation.
  *
  * @param {number} newIndex - Target step index.
  */
@@ -313,7 +332,9 @@ function goToMobileStep(newIndex) {
     state.mobileNavigationCooldown = false;
   }, MOBILE_NAV_COOLDOWN);
 
-  console.log(`Mobile navigation: ${state.currentMobileStep} → ${newIndex}`);
+  const direction = newIndex > state.currentMobileStep ? 'forward' : 'backward';
+
+  console.log(`Mobile navigation: ${state.currentMobileStep} → ${newIndex} (${direction})`);
 
   // Swap step visibility
   state.steps[state.currentMobileStep].classList.remove('mobile-active');
@@ -322,27 +343,16 @@ function goToMobileStep(newIndex) {
 
   updateMobileButtonStates();
 
-  // Handle viewer updates
-  const x = parseFloat(newStep.dataset.x);
-  const y = parseFloat(newStep.dataset.y);
-  const zoom = parseFloat(newStep.dataset.zoom);
-  const page = newStep.dataset.page ? parseInt(newStep.dataset.page, 10) : undefined;
-
-  const mobilePageChanged = state.currentViewerCard && state.currentViewerCard.page !== (page || undefined);
-  if (objectId && (!state.currentViewerCard || state.currentViewerCard.objectId !== objectId || mobilePageChanged)) {
-    console.log(`Switching to object: ${objectId}${mobilePageChanged ? ` (page changed to ${page})` : ''}`);
-    switchToObjectMobile(objectId, newIndex, x, y, zoom, page);
-    state.currentObject = objectId;
-  } else if (state.currentViewerCard && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
-    if (state.currentViewerCard.isReady) {
-      animateViewerToPosition(state.currentViewerCard, x, y, zoom);
-    } else {
-      state.currentViewerCard.pendingZoom = { x, y, zoom, snap: false };
-    }
+  // If Lenis is available, use animated scroll
+  // transition through the scroll engine. Otherwise fall back to direct
+  // activateCard with CSS transition (mobile/iOS without Lenis).
+  if (state.lenis) {
+    advanceToStep(newIndex);
+  } else {
+    activateCard(newIndex, direction);
   }
 
   updateViewerInfo(newIndex);
-  preloadNearbyViewers(newIndex, 2, 2);
 }
 
 /**
@@ -350,24 +360,40 @@ function goToMobileStep(newIndex) {
  */
 function updateMobileButtonStates() {
   if (!state.mobileNavButtons) return;
-  state.mobileNavButtons.prev.disabled = (state.currentMobileStep === 0);
+  state.mobileNavButtons.prev.disabled = !!state.mobileInIntro;
   state.mobileNavButtons.next.disabled = (state.currentMobileStep === state.steps.length - 1);
 }
 
-// ── Keyboard input ───────────────────────────────────────────────────────────
+// ── Keyboard input ─────────────────────────────────────────────────────────
 
 /**
  * Handle keyboard navigation and panel control.
  *
+ * Arrow up/down navigate steps via snap.next()/snap.previous() when the
+ * Lenis snap plugin is available (desktop), or fall back to nextStep/prevStep
+ * in mobile/embed mode (state.snap is null). Arrow left/right open/close
+ * panels. Escape closes the current panel. Space advances (Shift+Space goes
+ * back).
+ *
+ * Auto-repeat key events are ignored — each physical key press advances
+ * exactly one step.
+ *
  * @param {KeyboardEvent} e
  */
 function handleKeyboard(e) {
+  // Ignore auto-repeat key events — each key press = one step only
+  if (e.repeat) return;
+
   switch (e.key) {
     case 'ArrowDown':
     case 'PageDown':
       e.preventDefault();
       if (!state.scrollLockActive) {
-        nextStep();
+        if (state.lenis) {
+          keyboardNav('forward');
+        } else {
+          nextStep();
+        }
       }
       break;
 
@@ -375,7 +401,11 @@ function handleKeyboard(e) {
     case 'PageUp':
       e.preventDefault();
       if (!state.scrollLockActive) {
-        prevStep();
+        if (state.lenis) {
+          keyboardNav('backward');
+        } else {
+          prevStep();
+        }
       }
       break;
 
@@ -414,100 +444,16 @@ function handleKeyboard(e) {
       e.preventDefault();
       if (!state.scrollLockActive) {
         if (e.shiftKey) {
-          prevStep();
+          if (state.lenis) keyboardNav('backward'); else prevStep();
         } else {
-          nextStep();
+          if (state.lenis) keyboardNav('forward'); else nextStep();
         }
       }
       break;
   }
 }
 
-// ── Scroll input ─────────────────────────────────────────────────────────────
-
-/**
- * Handle wheel events with scroll accumulation.
- *
- * Collects scroll distance until the threshold is reached, then triggers
- * a step change. Respects panel freeze and viewer scroll isolation.
- *
- * @param {WheelEvent} e
- */
-function handleScroll(e) {
-  if (state.scrollLockActive) {
-    state.scrollAccumulator = 0;
-    return;
-  }
-
-  // Ignore wheel events from the viewer column (UV handles zoom/pan)
-  if (e.target.closest('.viewer-column')) {
-    return;
-  }
-
-  const now = Date.now();
-  const timeSinceLastChange = now - state.lastStepChangeTime;
-
-  if (timeSinceLastChange < STEP_COOLDOWN) {
-    state.scrollAccumulator *= 0.5;
-    return;
-  }
-
-  const cappedDelta = Math.max(-MAX_SCROLL_DELTA, Math.min(MAX_SCROLL_DELTA, e.deltaY));
-  state.scrollAccumulator += cappedDelta;
-
-  if (state.scrollAccumulator >= state.scrollThreshold) {
-    nextStep();
-    state.scrollAccumulator = 0;
-  } else if (state.scrollAccumulator <= -state.scrollThreshold) {
-    prevStep();
-    state.scrollAccumulator = 0;
-  }
-}
-
-// ── Touch input (iPad/tablet swipe) ──────────────────────────────────────────
-
-/**
- * Record touch start position for swipe detection.
- *
- * @param {TouchEvent} e
- */
-function handleTouchStart(e) {
-  state.touchStartY = e.touches[0].clientY;
-}
-
-/**
- * Detect swipe direction and trigger step navigation.
- *
- * Swipe up (finger moves toward top of screen) → next step.
- * Swipe down (finger moves toward bottom) → previous step.
- * Requires a minimum swipe distance of 20 % of viewport height.
- *
- * @param {TouchEvent} e
- */
-function handleTouchEnd(e) {
-  state.touchEndY = e.changedTouches[0].clientY;
-
-  const now = Date.now();
-  const timeSinceLastChange = now - state.lastStepChangeTime;
-
-  if (timeSinceLastChange < STEP_COOLDOWN) {
-    return;
-  }
-
-  if (state.scrollLockActive) {
-    return;
-  }
-
-  const swipeDistance = state.touchEndY - state.touchStartY;
-
-  if (swipeDistance < -state.touchThreshold) {
-    nextStep();
-  } else if (swipeDistance > state.touchThreshold) {
-    prevStep();
-  }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Get the current step's number from its data attribute.
@@ -536,12 +482,22 @@ function getCurrentStepData() {
 /**
  * Update the step number display in the viewer info overlay.
  *
- * @param {number} stepNumber - The step number to display.
+ * @param {number} stepIndex - The step index to display.
  */
-function updateViewerInfo(stepNumber) {
+export function updateViewerInfo(stepIndex) {
+  const counter = document.getElementById('step-counter');
   const infoElement = document.getElementById('current-object-title');
-  if (infoElement) {
-    const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
-    infoElement.textContent = stepTemplate.replace("{{ number }}", stepNumber);
+  if (!counter || !infoElement) return;
+
+  // Hide on intro (index -1), show on all story steps
+  if (stepIndex < 0) {
+    counter.classList.add('d-none');
+    return;
   }
+  counter.classList.remove('d-none');
+
+  const total = (window.storyData?.steps || []).filter(s => !s._metadata).length;
+  const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
+  const display = stepTemplate.replace("{{ number }}", stepIndex + 1);
+  infoElement.textContent = total > 0 ? `${display} / ${total}` : display;
 }

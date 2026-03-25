@@ -11,7 +11,7 @@
  * (outside of panels) follow the same colour convention as Layer 1 panels,
  * using Layer 2 colours for contrast.
  *
- * @version v0.9.0-beta
+ * @version v1.0.0-beta
  */
 
 @use 'mixins' as *;
@@ -278,6 +278,47 @@
 .collection-item h3 {
   font-size: 1.2rem;
   margin-top: 1rem;
+}
+
+// Video/audio gallery thumbnails
+.video-thumbnail,
+.audio-thumbnail {
+  height: 250px;
+  background: var(--color-button-bg, #883C36);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-type-icon {
+  color: var(--color-button-text, #fff);
+  width: 72px;
+  height: 72px;
+}
+
+// Smaller icons for featured objects grid and story cards
+.featured-objects-grid .video-thumbnail,
+.featured-objects-grid .audio-thumbnail {
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+}
+
+.featured-objects-grid .media-type-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.story-card .video-thumbnail,
+.story-card .audio-thumbnail {
+  height: auto;
+  border-radius: 0;
+}
+
+.story-card .media-type-icon {
+  width: 48px;
+  height: 48px;
 }
 
 /* Glossary Index */

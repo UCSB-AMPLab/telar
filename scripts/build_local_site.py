@@ -7,7 +7,7 @@ computer. The same pipeline also runs as a GitHub Actions workflow —
 this script and the workflow are two equally valid ways to build a
 Telar site.
 
-The build pipeline has six steps, each handled by a separate script
+The build pipeline has seven steps, each handled by a separate script
 or tool:
 
 1. Fetch Google Sheets data as CSV files (fetch_google_sheets.py)
@@ -15,16 +15,18 @@ or tool:
    links, and demo content (csv_to_json.py / telar package)
 3. Generate Jekyll collection markdown files from JSON
    (generate_collections.py)
-4. Generate IIIF image tiles for self-hosted objects (generate_iiif.py)
-5. Bundle JavaScript modules into story.js (esbuild)
-6. Build or serve the Jekyll site
+4. Process audio objects — generate peak data and clip files for audio
+   cards (process_audio.py)
+5. Generate IIIF image tiles for self-hosted objects (generate_iiif.py)
+6. Bundle JavaScript modules into story.js (esbuild)
+7. Build or serve the Jekyll site
 
 Each step can be skipped with flags (--skip-fetch, --skip-iiif,
---build-only) for faster iteration when only some data has changed.
-The default behaviour is to run all steps and start a local Jekyll
-server on port 4001.
+--skip-audio, --build-only) for faster iteration when only some data
+has changed. The default behaviour is to run all steps and start a
+local Jekyll server on port 4001.
 
-Version: v0.9.0-beta
+Version: v1.0.0-beta
 
 Usage:
     python3 scripts/build_local_site.py              # Build and serve on port 4001
@@ -32,6 +34,7 @@ Usage:
     python3 scripts/build_local_site.py --build-only # Build without serving
     python3 scripts/build_local_site.py --skip-iiif  # Skip IIIF tile generation
     python3 scripts/build_local_site.py --skip-fetch # Skip Google Sheets fetch
+    python3 scripts/build_local_site.py --skip-audio # Skip audio processing
 """
 
 import argparse
@@ -76,6 +79,7 @@ def main():
     parser.add_argument('--port', type=int, default=4001, help='Port for Jekyll server (default: 4001)')
     parser.add_argument('--skip-iiif', action='store_true', help='Skip IIIF tile generation')
     parser.add_argument('--skip-fetch', action='store_true', help='Skip Google Sheets fetch')
+    parser.add_argument('--skip-audio', action='store_true', help='Skip audio processing')
     args = parser.parse_args()
 
     # Serve by default unless --build-only is specified
@@ -100,28 +104,47 @@ def main():
             if gs_enabled:
                 run_command(
                     'python3 scripts/fetch_google_sheets.py',
-                    'Step 1/6: Fetching data from Google Sheets'
+                    'Step 1/7: Fetching data from Google Sheets'
                 )
             else:
-                print("\n✓ Step 1/6: Google Sheets disabled - using existing CSV files")
+                print("\n✓ Step 1/7: Google Sheets disabled - using existing CSV files")
         else:
-            print("\n⚠ Step 1/6: No _config.yml found - skipping Google Sheets fetch")
+            print("\n⚠ Step 1/7: No _config.yml found - skipping Google Sheets fetch")
     else:
-        print("\n✓ Step 1/6: Skipping Google Sheets fetch (--skip-fetch)")
+        print("\n✓ Step 1/7: Skipping Google Sheets fetch (--skip-fetch)")
 
     # Step 2: Convert CSV to JSON
     run_command(
         'python3 scripts/csv_to_json.py',
-        'Step 2/6: Converting CSV to JSON'
+        'Step 2/7: Converting CSV to JSON'
     )
 
     # Step 3: Generate Jekyll collections
     run_command(
         'python3 scripts/generate_collections.py',
-        'Step 3/6: Generating Jekyll collections'
+        'Step 3/7: Generating Jekyll collections'
     )
 
-    # Step 4: Generate IIIF tiles (unless skipped)
+    # Step 4: Process audio objects (unless skipped)
+    if not args.skip_audio:
+        # Check if any audio files exist (skip gracefully if none)
+        audio_extensions = ('.mp3', '.ogg', '.m4a')
+        objects_dir = Path('telar-content/objects')
+        has_audio = objects_dir.exists() and any(
+            f for f in objects_dir.iterdir()
+            if f.suffix.lower() in audio_extensions
+        )
+        if has_audio:
+            run_command(
+                'python3 scripts/process_audio.py --objects-dir telar-content/objects --data-dir _data --output-dir assets/audio',
+                'Step 4/7: Processing audio objects (peaks + clips)'
+            )
+        else:
+            print("\n✓ Step 4/7: No audio objects found - skipping audio processing")
+    else:
+        print("\n✓ Step 4/7: Skipping audio processing (--skip-audio)")
+
+    # Step 5: Generate IIIF tiles (unless skipped)
     if not args.skip_iiif:
         base_url = f"http://127.0.0.1:{args.port}"
 
@@ -136,21 +159,21 @@ def main():
 
         run_command(
             f'python3 scripts/generate_iiif.py --base-url {base_url}',
-            f'Step 4/6: Generating IIIF tiles (base URL: {base_url})'
+            f'Step 5/7: Generating IIIF tiles (base URL: {base_url})'
         )
     else:
-        print("\n✓ Step 4/6: Skipping IIIF generation (--skip-iiif)")
+        print("\n✓ Step 5/7: Skipping IIIF generation (--skip-iiif)")
 
-    # Step 5: Build JavaScript bundle
+    # Step 6: Build JavaScript bundle
     run_command(
         'npm run build:js',
-        'Step 5/6: Building JavaScript bundle'
+        'Step 6/7: Building JavaScript bundle'
     )
 
-    # Step 6: Build or serve Jekyll
+    # Step 7: Build or serve Jekyll
     if serve:
         print("\n" + "="*60)
-        print(f"  Step 6/6: Starting Jekyll server on port {args.port}")
+        print(f"  Step 7/7: Starting Jekyll server on port {args.port}")
         print("="*60)
         print(f"\n  Site will be available at: http://127.0.0.1:{args.port}/telar/")
         print("  Press Ctrl+C to stop the server\n")
@@ -164,7 +187,7 @@ def main():
     else:
         run_command(
             'bundle exec jekyll build',
-            'Step 6/6: Building Jekyll site'
+            'Step 7/7: Building Jekyll site'
         )
         print("\n" + "="*60)
         print("  Build complete! Site is in _site/")

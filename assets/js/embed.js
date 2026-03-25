@@ -2,7 +2,7 @@
  * Telar Embed Mode
  * Handles iframe embedding for Canvas LMS and other platforms
  *
- * @version v0.5.0-beta
+ * @version v1.0.0-beta
  */
 
 (function() {
@@ -54,12 +54,12 @@
     banner.className = 'telar-embed-banner';
     banner.innerHTML = `
       <span class="telar-embed-banner-text">
-        <span class="material-symbols-outlined">open_in_new</span>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
         <span>${bannerText}</span>
         <a href="${fullSiteUrl}" class="telar-embed-banner-link" target="_blank" rel="noopener noreferrer">${embedStrings.link}</a>
       </span>
       <button class="telar-embed-banner-close" aria-label="Close" title="Close">
-        <span class="material-symbols-outlined">close</span>
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
       </button>
     `;
 

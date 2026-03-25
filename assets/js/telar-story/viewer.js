@@ -1,44 +1,70 @@
 /**
- * Telar Story – Viewer Card Management
+ * Telar Story – Object Data and Viewer Services
  *
- * This module manages the IIIF viewer cards that display exhibition objects
- * alongside story steps. Each object gets its own viewer card — a container
- * element that the script creates and adds to the page at runtime, holding
- * a Tify instance inside it. The cards are not part of the HTML template
- * because the number needed depends on the story's content.
+ * This module provides the data layer and supporting services that IIIF
+ * viewer plates need but that are not part of the plate lifecycle itself.
+ * It sits between the raw data injected by Jekyll (window.objectsData,
+ * window.storyData) and the card-pool module that orchestrates the visual
+ * card stack.
  *
- * Tify instances are expensive: each one fetches an IIIF manifest over the
- * network, initialises OpenSeadragon (the image viewer library inside Tify),
- * and allocates GPU memory for rendering high-resolution tiles. Creating all
- * viewers at page load would exhaust memory on mobile devices and delay the
- * page becoming responsive.
+ * Object index — `buildObjectsIndex()` walks the objects array that Jekyll
+ * injects at page load and builds a hash map keyed by object_id. Every
+ * other module that needs object metadata (manifest URLs, credits, card
+ * type detection) looks it up here via state.objectsIndex rather than
+ * scanning the array each time.
  *
- * To solve this, the module uses a card pool with a configurable maximum
- * (default 10 cards). When the user navigates to a step that needs an object
- * we have already loaded, we reuse the existing card. When we need a new card
- * and the pool is full, we destroy the oldest one — the card least likely to
- * be needed soon. This gives the illusion of instant switching for recently
- * visited objects while keeping memory bounded.
+ * Manifest URLs — `getManifestUrl()` resolves an object's IIIF manifest.
+ * Objects can be external (the source_url or iiif_manifest field from the
+ * objects spreadsheet points to a remote IIIF server) or self-hosted (the
+ * user placed image files in components/objects/ and the build-time script
+ * generated static Level 0 tiles). For self-hosted objects, the function
+ * builds a URL from the site's base path. Multi-page objects (PDFs) get a
+ * per-page manifest URL when a page number is specified.
  *
- * Cards that are not currently visible sit off-screen with the CSS class
- * "card-below" and get promoted to "card-active" when their object is needed.
+ * Manifest prefetching — `prefetchStoryManifests()` fires off fetches for
+ * every unique object's manifest at page load, warming the browser cache
+ * so that Tify viewer instances created later do not wait on the network.
+ * It also measures connection speed: if manifests take more than a second
+ * on average, the loading threshold and minimum-ready counts are adjusted
+ * so the shimmer state stays visible longer and does not flash.
  *
- * The module also handles viewer positioning (converting normalised 0–1
- * coordinates from story step data into the values OpenSeadragon expects),
- * manifest prefetching at page load to warm the browser cache and measure
- * connection speed, loading shimmer states, and the object credits badge.
+ * Loading shimmer — `initializeLoadingShimmer()` shows a skeleton pulse
+ * on the viewer container while viewers initialise. It polls the viewer
+ * card array until enough cards report isReady, then removes the shimmer.
+ * Stories with fewer unique objects than the loading threshold skip the
+ * shimmer entirely.
  *
- * @version v0.9.0-beta
+ * Object credits badge — `initializeCredits()` wires the dismiss button
+ * on the attribution badge, and `updateObjectCredits()` swaps the badge
+ * text each time the active object changes. The badge stays hidden once
+ * the user dismisses it.
+ *
+ * Note on dead code removal (v0.10.0): this module previously contained
+ * the full viewer card lifecycle — creation, destruction, positioning,
+ * object switching, and nearby preloading. Those responsibilities moved
+ * to iiif-card.js (plate lifecycle and OSD positioning) and card-pool.js
+ * (card-stack orchestration and Tify injection) during the v1.0.0-beta
+ * rewrite. The old functions were tree-shaken from the bundle but
+ * remained in the source, which caused confusion when fixes were applied
+ * to dead code paths. They have now been removed entirely.
+ *
+ * @version v1.0.0-beta
  */
 
 import { state } from './state.js';
-import { getBasePath, calculateViewportPosition } from './utils.js';
+import { getBasePath } from './utils.js';
 
 // ── Object index ─────────────────────────────────────────────────────────────
 
 /**
  * Build a lookup index from the objects data injected by Jekyll.
- * Populates state.objectsIndex for O(1) access by object_id.
+ *
+ * Jekyll writes a global window.objectsData array containing one entry per
+ * object in the story. This function converts that array into a hash map
+ * on state.objectsIndex, keyed by object_id, so downstream code can look
+ * up any object in O(1) without scanning the array.
+ *
+ * Called once during page initialisation by main.js.
  */
 export function buildObjectsIndex() {
   const objects = window.objectsData || [];
@@ -52,9 +78,16 @@ export function buildObjectsIndex() {
 /**
  * Get the IIIF manifest URL for an object.
  *
- * Checks for an external source URL first (the source_url or iiif_manifest
- * field from the objects spreadsheet). Falls back to a locally-generated
- * manifest built from the site's base path.
+ * Resolution order:
+ *   1. External manifest — the source_url or iiif_manifest field from the
+ *      objects spreadsheet. If present and non-empty, returned as-is.
+ *   2. Local manifest — built from the site's base path and the object_id,
+ *      pointing to the static tiles generated by scripts/generate_iiif.py.
+ *
+ * For multi-page objects (PDFs), when a page number is specified, the local
+ * path points to the per-page single-canvas manifest rather than the root
+ * multi-canvas manifest. External manifests do not currently support
+ * per-page selection — page handling is deferred to the viewer.
  *
  * @param {string} objectId - The object identifier.
  * @param {number} [page] - Optional page number for multi-page objects.
@@ -79,8 +112,10 @@ export function getManifestUrl(objectId, page) {
 /**
  * Build a local IIIF manifest URL from the site's base path.
  *
- * For multi-page objects (PDFs), when a page > 1 is specified, returns
- * the per-page single-canvas manifest URL instead of the root manifest.
+ * For single-image objects, returns the root manifest.json. For multi-page
+ * objects (PDFs) with a page > 1 specified, returns the per-page manifest
+ * at page-N/manifest.json — a single-canvas manifest that the viewer can
+ * open directly without needing to navigate the full document.
  *
  * @param {string} objectId - The object identifier.
  * @param {number} [page] - Optional page number for multi-page objects.
@@ -98,451 +133,18 @@ function buildLocalInfoJsonUrl(objectId, page) {
   return manifestUrl;
 }
 
-// ── Viewer card lifecycle ────────────────────────────────────────────────────
-
-/**
- * @typedef {Object} ViewerCard
- * @property {string} objectId - The object this card displays.
- * @property {HTMLElement} element - The card's container element in the page.
- * @property {Object} tifyInstance - The Tify viewer instance.
- * @property {Object|null} osdViewer - The OpenSeadragon viewer (null until ready).
- * @property {boolean} isReady - Whether the OSD viewer has initialised.
- * @property {Object|null} pendingZoom - Queued position to apply when ready.
- * @property {number} zIndex - The card's stacking order.
- */
-
-/**
- * Create a new viewer card for an object.
- *
- * Builds a container element, initialises a Tify instance inside it, and
- * waits for the OpenSeadragon viewer to become available via Tify's ready
- * promise. Once ready, any pending zoom position is applied.
- *
- * If the card pool exceeds the configured maximum, the oldest card is
- * destroyed to free memory.
- *
- * @param {string} objectId - The object to display.
- * @param {number} zIndex - Stacking order for the card element.
- * @param {number} [x] - Normalised x position (0–1).
- * @param {number} [y] - Normalised y position (0–1).
- * @param {number} [zoom] - Zoom multiplier relative to home zoom.
- * @param {number} [page] - Optional page number for multi-page objects.
- * @returns {ViewerCard|null} The created card, or null on error.
- */
-export function createViewerCard(objectId, zIndex, x, y, zoom, page) {
-  const container = document.getElementById('viewer-cards-container');
-
-  const cardElement = document.createElement('div');
-  cardElement.className = 'viewer-card card-below';
-  cardElement.style.zIndex = zIndex;
-  cardElement.dataset.object = objectId;
-
-  const viewerId = `viewer-instance-${state.viewerCardCounter}`;
-  const viewerDiv = document.createElement('div');
-  viewerDiv.className = 'viewer-instance';
-  viewerDiv.id = viewerId;
-
-  cardElement.appendChild(viewerDiv);
-  container.appendChild(cardElement);
-
-  console.log(`Created viewer card for ${objectId} with z-index ${zIndex}, will snap to x=${x}, y=${y}, zoom=${zoom}${page ? `, page=${page}` : ''}`);
-
-  const manifestUrl = getManifestUrl(objectId, page);
-  if (!manifestUrl) {
-    console.error('Could not determine manifest URL for:', objectId);
-    return null;
-  }
-
-  // Initialise Tify
-  const tifyInstance = new window.Tify({
-    container: '#' + viewerId,
-    manifestUrl: manifestUrl,
-    panels: [],
-    urlQueryKey: false,
-  });
-
-  const viewerCard = {
-    objectId,
-    page: page || undefined,
-    element: cardElement,
-    tifyInstance,
-    osdViewer: null,
-    isReady: false,
-    pendingZoom: (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) ? { x, y, zoom, snap: true } : null,
-    zIndex,
-  };
-
-  // Wait for Tify's OpenSeadragon viewer to be ready
-  tifyInstance.ready.then(() => {
-    viewerCard.osdViewer = tifyInstance.viewer;
-    viewerCard.isReady = true;
-    console.log(`Viewer card for ${objectId} is ready`);
-
-    // Execute pending position
-    if (viewerCard.pendingZoom) {
-      if (viewerCard.pendingZoom.snap) {
-        snapViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-      } else {
-        animateViewerToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
-      }
-      viewerCard.pendingZoom = null;
-    }
-  }).catch(err => {
-    console.error(`Tify failed to initialize for ${objectId}:`, err);
-    viewerCard.isReady = true; // Allow navigation to proceed
-  });
-
-  state.viewerCards.push(viewerCard);
-  state.viewerCardCounter++;
-
-  // Enforce pool size limit
-  if (state.viewerCards.length > state.config.maxViewerCards) {
-    const oldest = state.viewerCards.shift();
-    destroyViewerCard(oldest);
-  }
-
-  return viewerCard;
-}
-
-/**
- * Get an existing viewer card for an object, or create a new one.
- *
- * If a card already exists for this object, it is reused: its z-index is
- * updated, its CSS state is reset, and it snaps to the requested position.
- *
- * @param {string} objectId - The object to display.
- * @param {number} zIndex - Stacking order.
- * @param {number} [x] - Normalised x position.
- * @param {number} [y] - Normalised y position.
- * @param {number} [zoom] - Zoom multiplier.
- * @param {number} [page] - Optional page number for multi-page objects.
- * @returns {ViewerCard|null}
- */
-export function getOrCreateViewerCard(objectId, zIndex, x, y, zoom, page) {
-  console.log(`getOrCreateViewerCard called for ${objectId}`);
-  console.log(`Current viewerCards: ${state.viewerCards.map(vc => vc.objectId).join(', ')}`);
-
-  const existing = state.viewerCards.find(vc => vc.objectId === objectId);
-
-  if (existing) {
-    // If the page changed, destroy the old card and create a new one
-    // with the correct per-page manifest URL
-    const existingPage = existing.page;
-    const requestedPage = page || undefined;
-    if (existingPage !== requestedPage) {
-      console.log(`Page changed for ${objectId}: ${existingPage} → ${requestedPage}, recreating viewer card`);
-      destroyViewerCard(existing);
-      state.viewerCards = state.viewerCards.filter(vc => vc !== existing);
-      return createViewerCard(objectId, zIndex, x, y, zoom, page);
-    }
-
-    console.log(`Reusing existing viewer card for ${objectId}`);
-    existing.element.style.zIndex = zIndex;
-    existing.zIndex = zIndex;
-
-    console.log(`Resetting viewer card state for ${objectId}`);
-    existing.element.classList.remove('card-below');
-
-    if (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
-      if (existing.isReady) {
-        snapViewerToPosition(existing, x, y, zoom);
-      } else {
-        existing.pendingZoom = { x, y, zoom, snap: true };
-      }
-    }
-
-    return existing;
-  }
-
-  console.log(`Creating new viewer card for ${objectId}`);
-  return createViewerCard(objectId, zIndex, x, y, zoom, page);
-}
-
-/**
- * Destroy a viewer card and clean up its resources.
- *
- * @param {ViewerCard} viewerCard - The card to destroy.
- */
-export function destroyViewerCard(viewerCard) {
-  console.log(`Destroying viewer card for ${viewerCard.objectId}`);
-
-  if (viewerCard.element && viewerCard.element.parentNode) {
-    viewerCard.element.parentNode.removeChild(viewerCard.element);
-  }
-
-  if (viewerCard.tifyInstance && typeof viewerCard.tifyInstance.destroy === 'function') {
-    viewerCard.tifyInstance.destroy();
-  }
-  viewerCard.tifyInstance = null;
-  viewerCard.osdViewer = null;
-}
-
-// ── First viewer ─────────────────────────────────────────────────────────────
-
-/**
- * Create and activate the first viewer card on page load.
- *
- * Reads the first object from window.storyData, creates a viewer card for it,
- * and makes it immediately visible. Also shows the credits badge for the
- * initial object.
- */
-export function initializeFirstViewer() {
-  const firstObjectId = window.storyData?.firstObject;
-
-  if (!firstObjectId) {
-    console.error('No first object specified in story data');
-    return;
-  }
-
-  console.log('Initializing first viewer for object:', firstObjectId);
-
-  const steps = window.storyData?.steps || [];
-  const firstRealStep = steps.find(step => step.object === firstObjectId);
-
-  const x = firstRealStep ? parseFloat(firstRealStep.x) : undefined;
-  const y = firstRealStep ? parseFloat(firstRealStep.y) : undefined;
-  const zoom = firstRealStep ? parseFloat(firstRealStep.zoom) : undefined;
-  const page = firstRealStep?.page ? parseInt(firstRealStep.page, 10) : undefined;
-
-  const viewerCard = createViewerCard(firstObjectId, 1, x, y, zoom, page);
-
-  if (viewerCard) {
-    state.currentViewerCard = viewerCard;
-    viewerCard.element.classList.remove('card-below');
-    viewerCard.element.classList.add('card-active');
-
-    updateObjectCredits(firstObjectId);
-  }
-}
-
-// ── Viewer positioning ───────────────────────────────────────────────────────
-
-/**
- * Animate a viewer card to a position over 4 seconds.
- *
- * Used when the user navigates to a different step that references the same
- * object — the viewer pans and zooms smoothly to the new position.
- *
- * @param {ViewerCard} viewerCard - The card to animate.
- * @param {number} x - Normalised x position (0–1).
- * @param {number} y - Normalised y position (0–1).
- * @param {number} zoom - Zoom multiplier relative to home zoom.
- */
-export function animateViewerToPosition(viewerCard, x, y, zoom) {
-  if (!viewerCard || !viewerCard.osdViewer) {
-    console.warn('Viewer card or OpenSeadragon viewer not ready for animation');
-    return;
-  }
-
-  console.log(`Animating viewer to position: x=${x}, y=${y}, zoom=${zoom} over 4 seconds`);
-
-  const osdViewer = viewerCard.osdViewer;
-  const viewport = osdViewer.viewport;
-  const { point, actualZoom } = calculateViewportPosition(viewport, x, y, zoom);
-
-  console.log(`OSD coordinates - point: ${point.x}, ${point.y}, zoom: ${actualZoom}, homeZoom: ${viewport.getHomeZoom()}`);
-
-  // Disable click-to-zoom during animation
-  osdViewer.gestureSettingsMouse.clickToZoom = false;
-  osdViewer.gestureSettingsTouch.clickToZoom = false;
-
-  // Set smooth animation parameters
-  const originalAnimationTime = osdViewer.animationTime;
-  const originalSpringStiffness = osdViewer.springStiffness;
-
-  osdViewer.animationTime = 4.0;
-  osdViewer.springStiffness = 0.8;
-
-  console.log(`Set animation time to ${osdViewer.animationTime}s, spring stiffness to ${osdViewer.springStiffness}`);
-
-  viewport.panTo(point, false);
-  viewport.zoomTo(actualZoom, point, false);
-
-  // Restore original values after animation
-  setTimeout(() => {
-    osdViewer.animationTime = originalAnimationTime;
-    osdViewer.springStiffness = originalSpringStiffness;
-  }, 4100);
-}
-
-/**
- * Snap a viewer card to a position immediately (no animation).
- *
- * Used on initial load or when switching to a different object — the viewer
- * jumps straight to the target position.
- *
- * @param {ViewerCard} viewerCard - The card to position.
- * @param {number} x - Normalised x position (0–1).
- * @param {number} y - Normalised y position (0–1).
- * @param {number} zoom - Zoom multiplier relative to home zoom.
- */
-export function snapViewerToPosition(viewerCard, x, y, zoom) {
-  if (!viewerCard || !viewerCard.osdViewer) {
-    console.warn('Viewer card or OpenSeadragon viewer not ready for snap');
-    return;
-  }
-
-  const osdViewer = viewerCard.osdViewer;
-  const viewport = osdViewer.viewport;
-  const { point, actualZoom } = calculateViewportPosition(viewport, x, y, zoom);
-
-  console.log(`Snapping to position immediately: x=${x}, y=${y}, zoom=${zoom}`);
-
-  viewport.panTo(point, true);
-  viewport.zoomTo(actualZoom, point, true);
-}
-
-/**
- * Animate a viewer card to a named region.
- *
- * @param {ViewerCard} viewerCard - The card to animate.
- * @param {string} region - Region string in "x,y,width,height" format (normalised 0–1).
- */
-export function animateViewerToRegion(viewerCard, region) {
-  if (!viewerCard || !viewerCard.osdViewer) {
-    console.warn('Viewer card or OpenSeadragon viewer not ready');
-    return;
-  }
-
-  console.log('Animating to region:', region);
-
-  const parts = region.split(',').map(parseFloat);
-  if (parts.length !== 4) {
-    console.warn('Invalid region format, expected x,y,width,height');
-    return;
-  }
-
-  const [rx, ry, width, height] = parts;
-  const rect = { x: rx, y: ry, width: width, height: height };
-
-  viewerCard.osdViewer.viewport.fitBounds(rect, true);
-}
-
-// ── Object switching ─────────────────────────────────────────────────────────
-
-/**
- * Poll a viewer card until ready (or timeout), then activate it.
- *
- * This is the shared core of switchToObject and switchToObjectMobile. It
- * handles the loading shimmer, polls the card's isReady flag, and once ready
- * (or after 5 seconds) swaps the CSS classes and updates the credits badge.
- * An optional onReady callback lets the caller perform direction-specific
- * work such as activating a text step element.
- *
- * @param {ViewerCard} newViewerCard - The card to activate.
- * @param {string} objectId - The object ID (for logging and credits).
- * @param {Object} [options]
- * @param {function} [options.onReady] - Called just before the card class swap.
- */
-function activateViewerCard(newViewerCard, objectId, options = {}) {
-  const { onReady } = options;
-
-  if (!newViewerCard.isReady) {
-    showViewerSkeletonState();
-  }
-
-  const startTime = Date.now();
-  const MAX_WAIT_TIME = 5000;
-
-  const checkReady = () => {
-    const elapsed = Date.now() - startTime;
-    const ready = newViewerCard.isReady;
-    const timedOut = elapsed >= MAX_WAIT_TIME;
-
-    if (ready || timedOut) {
-      if (timedOut && !ready) {
-        console.warn(`Viewer for ${objectId} failed to load after 5 seconds, transitioning anyway`);
-      } else {
-        console.log(`Viewer ready for ${objectId}`);
-      }
-
-      hideViewerSkeletonState();
-
-      if (onReady) {
-        onReady(newViewerCard);
-      }
-
-      // Swap viewer cards
-      if (state.currentViewerCard && state.currentViewerCard !== newViewerCard) {
-        state.currentViewerCard.element.classList.remove('card-active');
-        state.currentViewerCard.element.classList.add('card-below');
-      }
-      newViewerCard.element.classList.remove('card-below');
-      newViewerCard.element.classList.add('card-active');
-
-      state.currentViewerCard = newViewerCard;
-      updateObjectCredits(objectId);
-    } else {
-      console.log(`Viewer not ready yet, waiting... (${elapsed}ms elapsed)`);
-      setTimeout(checkReady, 100);
-    }
-  };
-
-  checkReady();
-}
-
-/**
- * Switch to a different IIIF object (desktop navigation).
- *
- * Handles direction-aware transitions: in forward mode, activates the text
- * step element and sets the card's z-index. In backward mode, just swaps
- * the viewer cards.
- *
- * @param {string} objectId - The object to switch to.
- * @param {number} stepNumber - Current step number (for z-index).
- * @param {number} x - Normalised x position.
- * @param {number} y - Normalised y position.
- * @param {number} zoom - Zoom multiplier.
- * @param {HTMLElement} stepElement - The text step element in the page.
- * @param {string} [direction='forward'] - Navigation direction.
- * @param {number} [page] - Optional page number for multi-page objects.
- */
-export function switchToObject(objectId, stepNumber, x, y, zoom, stepElement, direction = 'forward', page) {
-  console.log(`Switching to object: ${objectId} at step ${stepNumber} with position x=${x}, y=${y}, zoom=${zoom} (${direction})${page ? `, page=${page}` : ''}`);
-
-  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom, page);
-
-  activateViewerCard(newViewerCard, objectId, {
-    onReady: (card) => {
-      if (direction === 'forward') {
-        if (stepElement) {
-          stepElement.offsetHeight; // Force reflow for CSS transition
-          requestAnimationFrame(() => {
-            stepElement.classList.add('is-active');
-          });
-        }
-        card.element.style.zIndex = card.zIndex;
-      }
-    },
-  });
-}
-
-/**
- * Switch to a different IIIF object (mobile/embed navigation).
- *
- * Simplified version without direction or text step activation.
- *
- * @param {string} objectId - The object to switch to.
- * @param {number} stepNumber - Current step number.
- * @param {number} x - Normalised x position.
- * @param {number} y - Normalised y position.
- * @param {number} zoom - Zoom multiplier.
- * @param {number} [page] - Optional page number for multi-page objects.
- */
-export function switchToObjectMobile(objectId, stepNumber, x, y, zoom, page) {
-  console.log(`Mobile: Switching to object ${objectId} at step ${stepNumber}${page ? `, page=${page}` : ''}`);
-
-  const newViewerCard = getOrCreateViewerCard(objectId, stepNumber, x, y, zoom, page);
-  activateViewerCard(newViewerCard, objectId);
-}
-
-// ── Preloading ───────────────────────────────────────────────────────────────
+// ── Manifest prefetching ─────────────────────────────────────────────────────
 
 /**
  * Prefetch all story manifests at page load and measure connection speed.
  *
- * Runs in the background — does not block page initialisation. Measures
- * fetch times to adjust loading thresholds for slow connections.
+ * Iterates every unique object referenced by a [data-object] element in
+ * the page. For each object with an external manifest (iiif_manifest field),
+ * fires a fetch to warm the browser cache. Records the time each fetch
+ * takes so adjustThresholdsForConnection() can tune the loading shimmer
+ * for slow networks.
+ *
+ * Runs as a background promise — does not block page initialisation.
  */
 export async function prefetchStoryManifests() {
   const objectIds = [...new Set(
@@ -562,7 +164,7 @@ export async function prefetchStoryManifests() {
         const elapsed = performance.now() - start;
         state.manifestLoadTimes.push(elapsed);
       }
-    } catch (e) { /* silent fail - network errors handled gracefully */ }
+    } catch (e) { /* silent fail — network errors handled gracefully */ }
   }));
 
   adjustThresholdsForConnection();
@@ -571,8 +173,15 @@ export async function prefetchStoryManifests() {
 /**
  * Adjust preloading thresholds based on measured connection speed.
  *
- * Slow connections get lower thresholds (show shimmer sooner) and higher
- * ready requirements (wait for more viewers before hiding shimmer).
+ * If the average manifest fetch time exceeds 1 second, the connection is
+ * considered slow: the loading threshold drops to 1 (show shimmer for any
+ * multi-object story) and the minimum ready count rises (wait for more
+ * viewers before hiding shimmer). Moderate connections (500ms–1s) get a
+ * gentler adjustment.
+ *
+ * This prevents the shimmer from flashing on fast connections while giving
+ * slow connections enough visual feedback that the page does not appear
+ * broken during the initial load.
  */
 function adjustThresholdsForConnection() {
   if (state.manifestLoadTimes.length < 2) return;
@@ -590,11 +199,16 @@ function adjustThresholdsForConnection() {
   }
 }
 
+// ── Loading shimmer ──────────────────────────────────────────────────────────
+
 /**
  * Show loading shimmer for stories with many unique viewers.
  *
- * Checks whether the story has enough unique viewers to warrant a loading
- * state, then polls until enough viewers are ready before hiding the shimmer.
+ * Counts the unique objects in the story. If the count meets or exceeds
+ * the loading threshold (adjusted by connection speed), shows a skeleton
+ * pulse on the viewer container and polls state.viewerCards until enough
+ * report isReady. Stories below the threshold skip the shimmer entirely —
+ * their single viewer loads fast enough that a pulse would just flash.
  */
 export function initializeLoadingShimmer() {
   const uniqueViewers = new Set(
@@ -624,42 +238,11 @@ export function initializeLoadingShimmer() {
 }
 
 /**
- * Preload viewer cards for steps near the current position.
- *
- * Creates viewer cards for upcoming and previous steps so they are ready
- * when the user navigates to them. Skips objects that already have cards.
- *
- * @param {number} currentIndex - The current step index.
- * @param {number} ahead - Number of steps to preload forward.
- * @param {number} behind - Number of steps to preload backward.
- */
-export function preloadNearbyViewers(currentIndex, ahead, behind) {
-  for (let offset = -behind; offset <= ahead; offset++) {
-    if (offset === 0) continue;
-
-    const idx = currentIndex + offset;
-    if (idx < 0 || idx >= state.steps.length) continue;
-
-    const step = state.steps[idx];
-    const objectId = step.dataset.object;
-    if (!objectId) continue;
-
-    if (state.viewerCards.find(vc => vc.objectId === objectId)) continue;
-
-    const x = parseFloat(step.dataset.x);
-    const y = parseFloat(step.dataset.y);
-    const zoom = parseFloat(step.dataset.zoom);
-    const page = step.dataset.page ? parseInt(step.dataset.page, 10) : undefined;
-
-    console.log(`Preloading viewer for step ${idx}: ${objectId}`);
-    getOrCreateViewerCard(objectId, idx, x, y, zoom, page);
-  }
-}
-
-// ── Shimmer (loading skeleton) ───────────────────────────────────────────────
-
-/**
  * Show the skeleton loading shimmer on the viewer container.
+ *
+ * Adds the skeleton-loading CSS class, which applies a pulsing gradient
+ * animation over the viewer area. Used during initial load and when
+ * switching to an object whose viewer is not yet ready.
  */
 export function showViewerSkeletonState() {
   const container = document.getElementById('viewer-cards-container');
@@ -683,8 +266,12 @@ export function hideViewerSkeletonState() {
 /**
  * Set up the credits badge dismiss button.
  *
- * The credits badge shows the attribution for the current object. Once
- * dismissed, it stays hidden for the rest of the session.
+ * The credits badge sits in the bottom corner of the viewer area and shows
+ * the attribution text for the current object. Once the user clicks the
+ * dismiss button, the badge stays hidden for the rest of the session via
+ * state.creditsDismissed.
+ *
+ * Only activates if the site has showObjectCredits enabled in _config.yml.
  */
 export function initializeCredits() {
   if (!window.telarConfig?.showObjectCredits) return;
@@ -701,6 +288,12 @@ export function initializeCredits() {
 
 /**
  * Update the credits badge to show the current object's attribution.
+ *
+ * Called by card-pool.js each time the active object changes. Looks up
+ * the credit field from the object data; if present, displays it with
+ * the localised prefix (e.g. "Credit:" in English, "Crédito:" in
+ * Spanish). If the object has no credit or the user has dismissed the
+ * badge, hides it.
  *
  * @param {string} objectId - The object whose credit to display.
  */

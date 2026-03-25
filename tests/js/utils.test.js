@@ -7,7 +7,7 @@
  * window.location and document.createElement, while calculateViewportPosition
  * is pure maths with a mock viewport object.
  *
- * @version v0.7.0-beta
+ * @version v1.0.0-beta
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -102,12 +102,15 @@ function createMockViewport(homeZoom, bounds) {
 }
 
 describe('calculateViewportPosition', () => {
+  // VIEWER_INSET = 0.98 — slight zoom-out so drop shadow is visible on all sides
+  const VIEWER_INSET = 0.98;
+
   it('calculates position at origin with 1x zoom', () => {
     const viewport = createMockViewport(1.0, { x: 0, y: 0, width: 1, height: 1 });
     const result = calculateViewportPosition(viewport, 0, 0, 1);
     expect(result.point.x).toBe(0);
     expect(result.point.y).toBe(0);
-    expect(result.actualZoom).toBe(1.0);
+    expect(result.actualZoom).toBe(1.0 * VIEWER_INSET);
   });
 
   it('calculates position at centre', () => {
@@ -115,7 +118,7 @@ describe('calculateViewportPosition', () => {
     const result = calculateViewportPosition(viewport, 0.5, 0.5, 1);
     expect(result.point.x).toBe(0.5);
     expect(result.point.y).toBe(0.375);
-    expect(result.actualZoom).toBe(1.0);
+    expect(result.actualZoom).toBe(1.0 * VIEWER_INSET);
   });
 
   it('applies zoom multiplier', () => {
@@ -123,7 +126,7 @@ describe('calculateViewportPosition', () => {
     const result = calculateViewportPosition(viewport, 0.5, 0.5, 3);
     expect(result.point.x).toBe(0.5);
     expect(result.point.y).toBe(0.5);
-    expect(result.actualZoom).toBe(6.0);
+    expect(result.actualZoom).toBe(6.0 * VIEWER_INSET);
   });
 
   it('handles non-zero bounds origin', () => {
@@ -131,6 +134,6 @@ describe('calculateViewportPosition', () => {
     const result = calculateViewportPosition(viewport, 0.5, 0.5, 2);
     expect(result.point.x).toBeCloseTo(0.5);
     expect(result.point.y).toBeCloseTo(0.5);
-    expect(result.actualZoom).toBe(3.0);
+    expect(result.actualZoom).toBe(3.0 * VIEWER_INSET);
   });
 });

@@ -5,25 +5,31 @@
  * This is a contract test, not a logic test — it catches accidental
  * deletions or renames of state keys that would break dependent modules.
  *
- * @version v0.7.0-beta
+ * Updated for v1.0.0-beta: scroll accumulator fields removed,
+ * Lenis scroll engine fields added.
+ *
+ * @version v1.0.0-beta
  */
 
 import { describe, it, expect } from 'vitest';
-import { state, STEP_COOLDOWN, MAX_SCROLL_DELTA, MOBILE_NAV_COOLDOWN } from '../../assets/js/telar-story/state.js';
+import { state, MOBILE_NAV_COOLDOWN } from '../../assets/js/telar-story/state.js';
 
 describe('state', () => {
   it('has expected initial structure and constants', () => {
-    // Constants
-    expect(STEP_COOLDOWN).toBe(600);
-    expect(MAX_SCROLL_DELTA).toBe(200);
+    // Constants — STEP_COOLDOWN and MAX_SCROLL_DELTA removed in v1.0.0-beta
     expect(MOBILE_NAV_COOLDOWN).toBe(400);
 
     // Navigation group
     expect(state.steps).toEqual([]);
     expect(state.currentIndex).toBe(-1);
-    expect(state.scrollAccumulator).toBe(0);
     expect(state.currentObject).toBeNull();
-    expect(state.lastStepChangeTime).toBe(0);
+
+    // Scroll engine group (replaces scrollAccumulator)
+    expect(state.scrollPosition).toBe(0);
+    expect(state.scrollProgress).toBe(0);
+    expect(state.isSnapping).toBe(false);
+    expect(state.lenis).toBeNull();
+    expect(state.snap).toBeNull();
 
     // Viewer cards group
     expect(state.currentViewerCard).toBeNull();
@@ -37,9 +43,8 @@ describe('state', () => {
     expect(state.scrollLockActive).toBe(false);
     expect(state.creditsDismissed).toBe(false);
 
-    // Touch group
-    expect(state.touchStartY).toBe(0);
-    expect(state.touchEndY).toBe(0);
+    // Autoplay policy group
+    expect(state).toHaveProperty('hasUserInteracted', false);
 
     // Mobile/embed group
     expect(state.isMobileViewport).toBe(false);
@@ -50,16 +55,26 @@ describe('state', () => {
     // Connection speed
     expect(state.manifestLoadTimes).toEqual([]);
 
-    // Thresholds (computed at runtime, initially zero)
-    expect(state.scrollThreshold).toBe(0);
-    expect(state.touchThreshold).toBe(0);
-
-    // Config
+    // Config — maxViewerCards is 8 since the per-scene pool cap change
     expect(state.config).toEqual({
-      maxViewerCards: 10,
+      maxViewerCards: 8,
       preloadSteps: 6,
       loadingThreshold: 5,
       minReadyViewers: 3,
     });
+  });
+
+  it('does not have legacy scroll accumulator fields', () => {
+    expect(state.scrollAccumulator).toBeUndefined();
+    expect(state.scrollThreshold).toBeUndefined();
+    expect(state.lastStepChangeTime).toBeUndefined();
+    expect(state.touchStartY).toBeUndefined();
+    expect(state.touchEndY).toBeUndefined();
+  });
+
+  it('does not have legacy hold-gate fields', () => {
+    expect(state.holdGateActive).toBeUndefined();
+    expect(state.holdGateArmed).toBeUndefined();
+    expect(state.holdGateClipDuration).toBeUndefined();
   });
 });

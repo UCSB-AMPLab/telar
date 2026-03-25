@@ -68,6 +68,18 @@ object:
     copy_csv: "x, y, zoom (CSV)"
     copied: "¡Copiado!"
 
+  # Herramienta de tiempos de clip (video y audio)
+  clip_picker:
+    button: "Definir tiempos de clip"
+    heading: "Tiempos de clip"
+    instructions: "Usa este panel para definir los tiempos de inicio y fin de un clip de este video. Reproduce el video hasta la posición que quieras, luego presiona el botón de reloj junto a Inicio o Fin para capturar ese tiempo. Copia los valores en tu hoja de cálculo de estructura."
+    audio_instructions: "Usa este panel para definir los tiempos de inicio y fin de un clip de esta pista de audio. Arrastra los bordes de la región resaltada en la forma de onda de arriba para ajustar los límites. Copia los valores en tu hoja de cálculo de estructura."
+    start: "Inicio"
+    end: "Fin"
+    set_current: "Capturar tiempo actual"
+    copy_sheets: "inicio, fin (Sheets)"
+    copy_csv: "inicio, fin (CSV)"
+
   # Miniaturas de objetos
   no_image: "Sin imagen"
 

@@ -40,7 +40,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v0.9.1-beta
+Version: v1.0.0-beta
 """
 
 import re
@@ -87,6 +87,10 @@ def process_story(df, christmas_tree=False):
 
     # Clean up NaN values
     df = df.fillna('')
+
+    # Ensure alt_text column exists for backward compatibility
+    if 'alt_text' not in df.columns:
+        df['alt_text'] = ''
 
     # Remove completely empty rows
     df = df[df.astype(str).apply(lambda x: x.str.strip()).ne('').any(axis=1)]
@@ -176,6 +180,7 @@ def process_story(df, christmas_tree=False):
             if not iiif_manifest:
                 # Check for local image in telar-content/objects/
                 valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf'}
+                audio_extensions = {'.mp3', '.ogg', '.m4a'}
                 has_local_image = False
                 objects_dir = Path('telar-content/objects')
 
@@ -184,6 +189,10 @@ def process_story(df, christmas_tree=False):
                         if f.stem == actual_object_id and f.suffix.lower() in valid_extensions:
                             has_local_image = True
                             print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
+                            break
+                        if f.stem == actual_object_id and f.suffix.lower() in audio_extensions:
+                            has_local_image = True
+                            print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
                             break
 
                 # Only warn if object has neither external manifest nor local image

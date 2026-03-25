@@ -9,11 +9,11 @@
  *
  * In embed mode, navigation uses buttons (like mobile) rather than scroll
  * detection, because scroll events inside iframes are unreliable across
- * different host pages. The layout stays desktop-style (split screen) but
- * steps use static positioning with show/hide logic instead of the absolute
+ * different host pages. The layout stays desktop-style but steps use static
+ * positioning with show/hide logic instead of the absolute
  * positioning and transforms used in desktop scroll mode.
  *
- * @version v0.9.0-beta
+ * @version v1.0.0-beta
  */
 
 /* =========================================
@@ -106,7 +106,7 @@ body.embed-mode {
     left: 20% !important;
     bottom: max(8%, 1.5rem) !important;
     transform: translateX(-50%) !important;
-    z-index: 1040 !important;
+    z-index: 9900 !important;
     display: flex !important;
     flex-direction: row !important;
     gap: 0.75rem !important;
@@ -281,7 +281,7 @@ body.embed-mode {
   position: fixed;
   top: 20px;
   left: 20px;
-  z-index: 1050;
+  z-index: 9900;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid #dee2e6;
   border-radius: 0.5rem;
@@ -300,7 +300,7 @@ body.embed-mode {
   &-text {
     color: #6c757d;
 
-    .material-symbols-outlined {
+    .icon {
       display: none;
     }
 
@@ -340,8 +340,9 @@ body.embed-mode {
     flex-shrink: 0;
     margin-top: -2px;
 
-    .material-symbols-outlined {
-      font-size: 1.25rem;
+    .icon {
+      width: 1.25rem;
+      height: 1.25rem;
     }
 
     &:hover {

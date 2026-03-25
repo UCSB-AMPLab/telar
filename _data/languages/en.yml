@@ -68,6 +68,18 @@ object:
     copy_csv: "x, y, zoom (CSV)"
     copied: "Copied!"
 
+  # Clip time picker tool (video and audio)
+  clip_picker:
+    button: "Set clip times"
+    heading: "Clip Times"
+    instructions: "Use this panel to set the start and end times for a clip from this video. Play the video to the position you want, then press the clock button next to Start or End to capture that time. Copy the values into your structure spreadsheet."
+    audio_instructions: "Use this panel to set the start and end times for a clip from this audio track. Drag the edges of the highlighted region on the waveform above to adjust the boundaries. Copy the values into your structure spreadsheet."
+    start: "Start"
+    end: "End"
+    set_current: "Set to current time"
+    copy_sheets: "start, end (Sheets)"
+    copy_csv: "start, end (CSV)"
+
   # Object thumbnails
   no_image: "No image"
 
