@@ -213,13 +213,7 @@ class Migration094to100(BaseMigration):
             {
                 'description': '''**If you use GitHub Pages:**
 
-Replace your `.github/workflows/build.yml` with the latest version from the Telar repository. The new workflow adds an audio processing step that runs conditionally when audio files are detected.
-
-Steps:
-1. Go to https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml
-2. Click the "Raw" button
-3. Copy the entire file contents
-4. Replace the contents of `.github/workflows/build.yml` in your repository''',
+Replace your `.github/workflows/build.yml` with the latest version from the Telar repository. The new workflow adds an audio processing step that runs conditionally when audio files are detected. Go to https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, click "Raw", copy the entire file, and replace the contents of `.github/workflows/build.yml` in your repository.''',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -250,13 +244,7 @@ Sites without audio objects do not need these tools.''',
             {
                 'description': '''**Si usas GitHub Pages:**
 
-Reemplaza tu `.github/workflows/build.yml` con la version mas reciente del repositorio de Telar. El nuevo flujo agrega un paso de procesamiento de audio que se ejecuta condicionalmente cuando se detectan archivos de audio.
-
-Pasos:
-1. Ve a https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml
-2. Haz clic en el boton "Raw"
-3. Copia todo el contenido del archivo
-4. Reemplaza el contenido de `.github/workflows/build.yml` en tu repositorio''',
+Reemplaza tu `.github/workflows/build.yml` con la version mas reciente del repositorio de Telar. El nuevo flujo agrega un paso de procesamiento de audio que se ejecuta condicionalmente cuando se detectan archivos de audio. Ve a https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, haz clic en "Raw", copia todo el contenido del archivo y reemplaza el contenido de `.github/workflows/build.yml` en tu repositorio.''',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
