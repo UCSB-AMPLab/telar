@@ -11,7 +11,7 @@
  * formatting, viewport coordinate calculation in both animated and instant
  * positioning. Extracting them avoids the duplication.
  *
- * @version v0.7.0-beta
+ * @version v1.0.0-beta
  */
 
 /**
@@ -84,7 +84,10 @@ export function calculateViewportPosition(viewport, x, y, zoom) {
     y: imageBounds.y + (y * imageBounds.height),
   };
 
-  const actualZoom = homeZoom * zoom;
+  // Slight zoom-out so the image doesn't fill the viewer edge-to-edge,
+  // leaving room for the drop shadow to be visible on all sides.
+  const VIEWER_INSET = 0.98;
+  const actualZoom = homeZoom * zoom * VIEWER_INSET;
 
   return { point, actualZoom };
 }
