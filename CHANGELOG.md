@@ -2,6 +2,53 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [1.0.0-beta] - 2026-03-25
+
+A new milestone.
+
+This is Telar's twenty-fourth release. For the first time, Telar can weave together images, video, and audio — a major new stage that we hope will help you tell all sorts of new stories. Together with a fluid scroll engine (no more jumping!), a new card-stack architecture, and the WYSIWYG [Telar Compositor](https://compositor.telar.org), these features round out the roadmap we first sketched when we started building Telar. It finally feels like a 1.0.
+
+None of this would have happened without all of you who tested early versions, reported what was broken, and told us what you needed. Thank you.
+
+— Juan
+
+### Added
+
+- **Video support**: YouTube, Vimeo, and Google Drive videos in stories and on object pages. Clip control (start, end, loop) lets you highlight specific segments
+
+- **Audio support**: Audio files with WaveSurfer waveform visualization in stories and on object pages. Clip regions for selecting segments
+
+- **Clip time picker**: Interactive tool on object pages for setting video and audio clip boundaries. Copy start/end times directly into your spreadsheet
+
+- **Card-stack scroll architecture**: Stories now use a continuous scroll model with magnetic waypoints instead of the previous step-by-step navigation. Cards slide over previous ones, creating a fluid reading experience
+
+- **Media type detection and filtering**: Objects are automatically classified as Image, Video, or Audio. The gallery page has separate type and medium filters
+
+- **Alt text support**: New `alt_text` column in story and object spreadsheets for accessibility descriptions, with automatic fallback to object titles
+
+- **Inline Lucide SVG icons**: All icons are now self-hosted inline SVGs, replacing the Google Material Symbols and Bootstrap Icons CDN dependencies
+
+- **Audio build pipeline**: New `process_audio.py` script for clip extraction and waveform peak data generation, integrated into the local build script and GitHub Actions workflow
+
+### Changed
+
+- **Scroll system**: Replaced the discrete step accumulator with Lenis continuous scroll and magnetic snap waypoints
+
+- **Card rendering**: New per-scene card pool with z-index banding replaces the previous split-column viewer/narrative layout
+
+- **Mobile layout**: Text cards are bottom-anchored on mobile with frosted glass styling
+
+- **Object pages**: Media-type-conditional rendering — images get the IIIF viewer with coordinate panel, videos get embeds with clip picker, audio gets waveform with region-based clip picker
+
+- **Gallery**: Video and audio objects show icon placeholders. Two separate filter sections (Type and Medium/Genre)
+
+- **Viewer preloading**: `max_viewer_cards` default reduced from 10 to 8
+
+### Removed
+
+- **Google Material Symbols CDN dependency**: Replaced by inline Lucide SVGs
+- **Bootstrap Icons CDN dependency**: Replaced by inline Lucide SVGs
+
 ## [0.9.4-beta] - 2026-03-18
 
 PDF dependency fix.
