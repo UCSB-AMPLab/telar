@@ -31,7 +31,16 @@ compatibility: it checks the `source_url` column first (v0.5.0+ standard),
 then falls back to the legacy `iiif_manifest` column (v0.4.x), returning
 an empty string if neither is present.
 
-Version: v0.8.0-beta
+The mapping dictionary has grown with each release. It now covers clip
+control columns for video and audio steps (`inicio_clip` → `clip_start`,
+`fin_clip` → `clip_end`, `bucle` → `loop`), an accessibility column
+(`texto_alt` → `alt_text`), short-form layer button and content names
+(`boton1` → `layer1_button`, `contenido1` → `layer1_content`), and the
+rename of the gallery classification column from `object_type` to `medium`
+— with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
+`medio_genero`) so existing spreadsheets continue to work without changes.
+
+Version: v1.0.0-beta
 """
 
 import pandas as pd
@@ -46,11 +55,21 @@ COLUMN_NAME_MAPPING = {
     'pregunta': 'question',
     'respuesta': 'answer',
     'boton_capa1': 'layer1_button',
+    'boton1': 'layer1_button',            # short-form used in CSV templates
     'contenido_capa1': 'layer1_content',  # v0.6.3+ preferred name
+    'contenido1': 'layer1_content',       # short-form used in CSV templates
     'archivo_capa1': 'layer1_content',    # backward compatibility
     'boton_capa2': 'layer2_button',
+    'boton2': 'layer2_button',            # short-form used in CSV templates
     'contenido_capa2': 'layer2_content',  # v0.6.3+ preferred name
+    'contenido2': 'layer2_content',       # short-form used in CSV templates
     'archivo_capa2': 'layer2_content',    # backward compatibility
+    # Clip control columns (v0.10.0+)
+    'inicio_clip': 'clip_start',
+    'fin_clip': 'clip_end',
+    'bucle': 'loop',
+    # Accessibility columns (v1.0.0-beta+)
+    'texto_alt': 'alt_text',
     # x, y, zoom are the same in both languages
     'pagina': 'page',
     'página': 'page',
@@ -75,7 +94,11 @@ COLUMN_NAME_MAPPING = {
     # v0.8.0 gallery filtering columns
     'año': 'year',
     'ano': 'year',  # without tilde
-    'tipo_objeto': 'object_type',
+    # v0.10.0: object_type renamed to medium; backward compat keeps old names working
+    'tipo_objeto': 'medium',
+    'object_type': 'medium',
+    'medium_genre': 'medium',     # v1.0.0-beta: alternative English name
+    'medio_genero': 'medium',     # v1.0.0-beta: alternative Spanish name
     'temas': 'subjects',
     'materias': 'subjects',  # Dublin Core official Spanish translation
     'materia': 'subjects',
