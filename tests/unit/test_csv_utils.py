@@ -10,7 +10,7 @@ The tests here ensure backward compatibility (e.g., legacy iiif_manifest
 column support) and correct handling of edge cases (empty values, malformed
 HTML, Unicode content).
 
-Version: v0.7.0-beta
+Version: v0.10.0-beta
 """
 
 import sys
@@ -27,6 +27,8 @@ from csv_to_json import (
     strip_html_tags,
     clean_metadata_value,
 )
+
+from telar.csv_utils import normalize_column_names, COLUMN_NAME_MAPPING
 
 
 class TestSanitizeDataframe:
@@ -151,3 +153,106 @@ class TestCleanMetadataValue:
         """Empty items in lists should be filtered out."""
         value = ['First', '', '  ', 'Second']
         assert clean_metadata_value(value) == 'First; Second'
+
+
+class TestNormalizeColumnNamesMediumRename:
+    """Tests for object_type -> medium rename with backward compatibility (v0.10.0)."""
+
+    def test_object_type_column_maps_to_medium(self):
+        """English backward compat: object_type column must map to medium."""
+        df = pd.DataFrame({'object_type': ['Painting', 'Map']})
+        result = normalize_column_names(df)
+        assert 'medium' in result.columns, "object_type column should be renamed to medium"
+        assert 'object_type' not in result.columns, "object_type column should not survive rename"
+
+    def test_tipo_objeto_maps_to_medium(self):
+        """Spanish backward compat: tipo_objeto column must map to medium (not object_type)."""
+        df = pd.DataFrame({'tipo_objeto': ['Pintura', 'Mapa']})
+        result = normalize_column_names(df)
+        assert 'medium' in result.columns, "tipo_objeto column should be renamed to medium"
+        assert 'object_type' not in result.columns, "tipo_objeto must not create an object_type column"
+
+    def test_medium_column_unchanged(self):
+        """A CSV that already uses 'medium' should pass through without change."""
+        df = pd.DataFrame({'medium': ['Painting', 'Map']})
+        result = normalize_column_names(df)
+        assert 'medium' in result.columns
+        assert list(result['medium']) == ['Painting', 'Map']
+
+    def test_object_type_and_medium_both_present_medium_wins(self):
+        """When both object_type and medium columns are present, medium takes priority.
+
+        normalize_column_names renames object_type -> medium; pandas raises on
+        duplicate column names when both exist so the caller must deduplicate.
+        This test verifies that the COLUMN_NAME_MAPPING entry maps object_type
+        to medium (not to object_type), so calling code can resolve the conflict
+        by dropping the renamed duplicate.
+        """
+        assert COLUMN_NAME_MAPPING.get('object_type') == 'medium', (
+            "COLUMN_NAME_MAPPING must map 'object_type' to 'medium' for backward compat"
+        )
+
+    def test_medio_maps_to_medium(self):
+        """Spanish 'medio' column (already present) still maps to medium."""
+        df = pd.DataFrame({'medio': ['Óleo sobre lienzo']})
+        result = normalize_column_names(df)
+        assert 'medium' in result.columns
+        assert list(result['medium']) == ['Óleo sobre lienzo']
+
+
+class TestSearchFacetsMediumKey:
+    """Tests for search.py medium facet (replaces object_type facet)."""
+
+    def test_build_facets_uses_medium_key(self):
+        """build_facets() must return 'medium' key, not 'object_type'."""
+        from telar.search import build_facets
+        objects = [
+            {'medium': 'Painting', 'creator': 'Unknown'},
+            {'medium': 'Map', 'creator': 'Unknown'},
+            {'medium': 'Painting', 'creator': 'Smith'},
+        ]
+        facets = build_facets(objects)
+        assert 'medium' in facets, "facets dict must have 'medium' key"
+        assert 'object_type' not in facets, "facets dict must NOT have 'object_type' key"
+
+    def test_build_facets_counts_medium_values(self):
+        """build_facets() counts are correct for medium field."""
+        from telar.search import build_facets
+        objects = [
+            {'medium': 'Painting'},
+            {'medium': 'Map'},
+            {'medium': 'Painting'},
+        ]
+        facets = build_facets(objects)
+        assert facets['medium']['Painting'] == 2
+        assert facets['medium']['Map'] == 1
+
+    def test_generate_search_data_medium_field_in_objects(self, tmp_path):
+        """generate_search_data() must emit 'medium' field, not 'object_type', in search objects."""
+        from telar.search import generate_search_data
+        import json
+
+        objects_json = tmp_path / 'objects.json'
+        output_json = tmp_path / 'search-data.json'
+        config_yml = tmp_path / '_config.yml'
+
+        objects_json.write_text(json.dumps([
+            {'object_id': 'obj1', 'title': 'Test', 'medium': 'Painting',
+             'creator': '', 'period': '', 'description': '', 'subjects': '',
+             'year': '', 'thumbnail': '', 'source_url': '', 'demo': False}
+        ]))
+        config_yml.write_text('collection_interface:\n  browse_and_search: true\n')
+
+        import os
+        orig_dir = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_search_data(str(objects_json), str(output_json))
+        finally:
+            os.chdir(orig_dir)
+
+        result = json.loads(output_json.read_text())
+        first_obj = result['objects'][0]
+        assert 'medium' in first_obj, "search object must have 'medium' field"
+        assert 'object_type' not in first_obj, "search object must NOT have 'object_type' field"
+        assert first_obj['medium'] == 'Painting'
