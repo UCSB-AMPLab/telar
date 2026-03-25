@@ -4,9 +4,9 @@
  * This module powers the browse-and-search interface on the objects index
  * page. It loads `search-data.json` (generated at build time by Python) which
  * contains object metadata and pre-computed facet counts for the filter
- * sidebar. The facets — Type, Creator, Period, Subjects — are populated
- * dynamically with counts like "Early maps (3)" so users know what's available
- * before clicking.
+ * sidebar. The facets — Type (auto-detected media type), Medium/Genre, Creator,
+ * Period, Subjects — are populated dynamically with counts like "Early maps (3)"
+ * so users know what's available before clicking.
  *
  * Filtering works by reading data attributes on each `.collection-item` card
  * (e.g., `data-creator`, `data-period`) and showing/hiding cards based on
@@ -25,7 +25,7 @@
  * switches to that field in ascending order. DOM reordering uses appendChild
  * which maintains event listeners on the cards.
  *
- * @version v0.8.0-beta
+ * @version v1.0.0-beta
  */
 
 (function() {
@@ -35,7 +35,8 @@
   let searchData = null;
   let searchIndex = null;
   let activeFilters = {
-    object_type: [],
+    media_type: [],
+    medium: [],
     creator: [],
     period: [],
     subjects: []
@@ -142,7 +143,7 @@
       this.field('description', { boost: 2 });
       this.field('period');
       this.field('subjects');
-      this.field('object_type');
+      this.field('medium');
 
       searchData.objects.forEach(obj => {
         this.add(obj);
@@ -157,7 +158,8 @@
     if (!searchData || !searchData.facets) return;
 
     const facetMap = {
-      'object_type': 'object_type',
+      'media_type': 'media_type',
+      'medium': 'medium',
       'creator': 'creator',
       'period': 'period',
       'subjects': 'subjects'
@@ -367,7 +369,7 @@
           if (values.length === 0) continue;
 
           // Convert snake_case to camelCase for dataset access
-          // e.g., 'object_type' → 'objectType' (data-object-type → dataset.objectType)
+          // e.g., 'media_type' → 'mediaType' (data-media-type → dataset.mediaType)
           const datasetKey = filterType.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
           const itemValue = item.dataset[datasetKey] || '';
 
@@ -524,7 +526,8 @@
   function clearAllFilters() {
     // Reset state
     activeFilters = {
-      object_type: [],
+      media_type: [],
+      medium: [],
       creator: [],
       period: [],
       subjects: []

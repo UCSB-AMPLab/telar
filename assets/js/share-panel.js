@@ -1,6 +1,6 @@
 /**
  * Share Panel Functionality
- * @version v0.8.0-beta
+ * @version v1.0.0-beta
  *
  * Handles share link and embed code generation for Telar stories.
  * Redesigned with pill-style tabs and unified privacy toggle.
@@ -519,13 +519,14 @@
    */
   function showSuccessFeedback(triggerButton) {
     // Update button icon temporarily
-    const btnIcon = triggerButton.querySelector('.material-symbols-outlined');
+    const btnIcon = triggerButton.querySelector('.icon');
     if (btnIcon) {
-      const originalIcon = btnIcon.textContent;
-      btnIcon.textContent = 'check_circle';
+      const originalSvg = btnIcon.outerHTML;
+      btnIcon.outerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
 
       setTimeout(() => {
-        btnIcon.textContent = originalIcon;
+        const checkIcon = triggerButton.querySelector('.icon');
+        if (checkIcon) checkIcon.outerHTML = originalSvg;
       }, 2000);
     }
   }
