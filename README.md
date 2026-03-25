@@ -35,6 +35,7 @@ We gratefully acknowledge the support of the [Caribbean Digital Scholarship Coll
 - **Multilingual UI**: Complete interface support for English and Spanish
 - **Objects gallery**: Browsable object grid with type filtering (Image/Video/Audio), media thumbnails, and detail pages with clip pickers
 - **Accessibility**: Alt text support across all media types with automatic fallback chains
+- **Telar Compositor**: A companion web tool for managing your objects — upload images, add metadata, and push directly to your repository. Currently in development and available for early use
 - **Minimal computing**: Plain text, static generation, zero-dependency hosting on GitHub Pages
 
 ---
@@ -71,6 +72,14 @@ Plan your narrative structure before building. Sketch out your stories, identify
    - Edit `_config.yml` to set your site title and theme
    - For Google Sheets: Add your sheet URLs to the `google_sheets` section
    - View your site at `https://[username].github.io/[repository]/`
+
+---
+
+## Telar Compositor
+
+[Telar Compositor](https://compositor.telar.org) is a companion web tool that simplifies object management. Instead of manually uploading images and editing CSV files, you can use the Compositor to add objects to your site through a visual interface — it handles image upload, metadata entry, and pushes changes directly to your GitHub repository.
+
+The Compositor is currently in development and available for early use. Visit **[compositor.telar.org](https://compositor.telar.org)** to get started.
 
 ---
 
@@ -156,6 +165,7 @@ Agradecemos el apoyo del [Caribbean Digital Scholarship Collective](https://cdsc
 - **Interfaz multilingüe**: Soporte completo de interfaz para inglés y español
 - **Galería de objetos**: Cuadrícula navegable con filtro por tipo (Imagen/Video/Audio), miniaturas por tipo de medio y páginas de detalle con selectores de clips
 - **Accesibilidad**: Texto alternativo en todos los tipos de medio con cadena de respaldo automática
+- **Telar Compositor**: Herramienta web complementaria para gestionar objetos — sube imágenes, agrega metadatos y envía los cambios directamente al repositorio. Actualmente en desarrollo; ya se puede utilizar
 - **Computación mínima**: Texto plano, generación estática, alojamiento sin dependencias externas en GitHub Pages
 
 ---
@@ -192,6 +202,14 @@ Planifica tu estructura narrativa antes de construir. Esboza tus historias, iden
    - Edita `_config.yml` para establecer el título y tema de tu sitio
    - Para Google Sheets: Añade las URLs de tus hojas a la sección `google_sheets`
    - Visualiza tu sitio en `https://[usuario].github.io/[repositorio]/`
+
+---
+
+## Telar Compositor
+
+[Telar Compositor](https://compositor.telar.org) es una herramienta web complementaria que simplifica la gestión de objetos. En lugar de subir imágenes y editar archivos CSV a mano, el Compositor permite agregar objetos al sitio mediante una interfaz visual: se encarga de subir las imágenes, registrar los metadatos y enviar los cambios directamente al repositorio de GitHub.
+
+El Compositor está en desarrollo activo y ya se puede utilizar. Visita **[compositor.telar.org](https://compositor.telar.org)** para comenzar.
 
 ---
 
