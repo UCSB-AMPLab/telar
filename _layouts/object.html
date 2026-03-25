@@ -4,8 +4,8 @@ layout: default
 
 {% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
 
-<!-- Bootstrap Icons -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+{% comment %}Detect media type from frontmatter (injected by generate_collections.py){% endcomment %}
+{% assign object_media_type = page.media_type | default: 'Image' %}
 
 
 <div class="container my-5">
@@ -27,90 +27,219 @@ layout: default
       </div>
       {% endif %}
 
-      <div id="object-viewer"></div>
+      <div id="object-viewer" class="viewer-{{ object_media_type | downcase }}"
+           {% if object_media_type == 'Image' %}role="img" aria-label="{{ page.alt_text | default: page.title | default: page.object_id | default: 'Image viewer' }}"{% endif %}></div>
 
-      <!-- Coordinate Tools Button -->
-      {% if page.object_id %}
+      {% if object_media_type == 'Image' %}
+        <!-- Coordinate Tools Button -->
+        {% if page.object_id %}
+        <div class="mt-3">
+          <div id="coordinateButton">
+            <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#coordinatePanel" aria-expanded="false">
+              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg> Identify coordinates
+            </button>
+          </div>
+
+          <!-- Collapsible Coordinate Panel -->
+          <div class="collapse" id="coordinatePanel">
+            <div class="card coordinate-panel">
+              <div class="card-body coordinate-panel-body">
+                <!-- Close Button -->
+                <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#coordinatePanel"></button>
+
+                <div class="row coordinate-panel-row">
+                  <!-- Instructions -->
+                  <div class="col-md-6">
+                    <div class="coordinate-panel-instructions">
+                      <h6 class="coordinate-panel-heading">{{ lang.object.coordinates.heading | default: "Instructions" }}</h6>
+                      <p>
+                        {{ lang.object.coordinates.instructions_p1 | default: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling." }}
+                      </p>
+                      <p class="mb-0 coord-instructions-single">
+                        {{ lang.object.coordinates.instructions_p2 | default: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once." }}
+                      </p>
+                      <p class="mb-0 coord-instructions-multi" style="display: none;">
+                        {{ lang.object.coordinates.instructions_p2_multi | default: "Once you identify a location make a note of the X, Y, Zoom, and Page values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all four values at once." }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Current Coordinates Table and Buttons -->
+                  <div class="col-md-6">
+                    <div class="coordinate-panel-values">
+                      <div class="coordinate-panel-values-inner">
+                        <dl class="row mb-0">
+                          <dt class="col-sm-6 coord-page-row coord-label">{{ lang.object.coordinates.page_label | default: "Page" }}</dt>
+                          <dd class="col-sm-6 coord-page-row coord-field">
+                            <code id="coord-page">1</code>
+                            <button class="btn btn-sm coord-copy-btn" id="copy-page" title="{{ lang.object.coordinates.copy_page_tooltip | default: 'Copy page number' }}">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-6 coord-label">X</dt>
+                          <dd class="col-sm-6 coord-field">
+                            <code id="coord-x">0.500</code>
+                            <button class="btn btn-sm coord-copy-btn" id="copy-x" title="Copy X coordinate">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-6 coord-label">Y</dt>
+                          <dd class="col-sm-6 coord-field">
+                            <code id="coord-y">0.500</code>
+                            <button class="btn btn-sm coord-copy-btn" id="copy-y" title="Copy Y coordinate">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-6 coord-label">Zoom</dt>
+                          <dd class="col-sm-6 coord-field">
+                            <code id="coord-zoom">1.0</code>
+                            <button class="btn btn-sm coord-copy-btn" id="copy-zoom" title="Copy Zoom level">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+                            </button>
+                          </dd>
+
+                          <!-- Copy Button Rows -->
+                          <dt class="col-sm-6"></dt>
+                          <dd class="col-sm-6 mb-2">
+                            <button class="btn btn-sm btn-copy w-100" id="copy-coords-sheets">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.coordinates.copy_sheets }}
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-6"></dt>
+                          <dd class="col-sm-6 mb-0">
+                            <button class="btn btn-sm btn-copy w-100" id="copy-coords-csv">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.coordinates.copy_csv }}
+                            </button>
+                          </dd>
+                        </dl>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      {% endif %}
+
+      {% if object_media_type == 'Video' %}
+        {% unless page.source_url contains 'drive.google.com' %}
+        <div class="mt-3">
+          <div id="clipPickerButton">
+            <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#clipPanel" aria-expanded="false">
+              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ lang.object.clip_picker.button | default: "Set clip times" }}
+            </button>
+          </div>
+
+          <div class="collapse" id="clipPanel">
+            <div class="card clip-panel coordinate-panel">
+              <div class="card-body clip-panel-body coordinate-panel-body">
+                <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#clipPanel"></button>
+
+                <div class="row coordinate-panel-row">
+                  <div class="col-md-6">
+                    <div class="coordinate-panel-instructions">
+                      <h6 class="coordinate-panel-heading">{{ lang.object.clip_picker.heading | default: "Clip Times" }}</h6>
+                      <p>{{ lang.object.clip_picker.instructions | default: "Use this panel to identify clip start and end times for your story. Play the video to the desired position and press the Set to current time button for each." }}</p>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="coordinate-panel-values">
+                      <div class="coordinate-panel-values-inner">
+                        <dl class="row mb-0">
+                          <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.start | default: "Start" }}</dt>
+                          <dd class="col-sm-8 clip-time-field coord-field">
+                            <code id="clip-start-display">0.000</code>
+                            <button class="btn btn-sm coord-copy-btn" id="set-clip-start" title="{{ lang.object.clip_picker.set_current | default: 'Set to current time' }}" disabled>
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.end | default: "End" }}</dt>
+                          <dd class="col-sm-8 clip-time-field coord-field">
+                            <code id="clip-end-display">0.000</code>
+                            <button class="btn btn-sm coord-copy-btn" id="set-clip-end" title="{{ lang.object.clip_picker.set_current | default: 'Set to current time' }}" disabled>
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-4"></dt>
+                          <dd class="col-sm-8 mb-2">
+                            <button class="btn btn-sm btn-copy w-100" id="copy-clip-sheets">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_sheets | default: "Copy Sheets" }}
+                            </button>
+                          </dd>
+
+                          <dt class="col-sm-4"></dt>
+                          <dd class="col-sm-8 mb-0">
+                            <button class="btn btn-sm btn-copy w-100" id="copy-clip-csv">
+                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_csv | default: "Copy CSV" }}
+                            </button>
+                          </dd>
+                        </dl>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endunless %}
+      {% endif %}
+
+      {% if object_media_type == 'Audio' %}
       <div class="mt-3">
-        <div id="coordinateButton">
-          <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#coordinatePanel" aria-expanded="false">
-            <i class="bi bi-search"></i> Identify coordinates
+        <div id="clipPickerButton">
+          <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#clipPanel" aria-expanded="false">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ lang.object.clip_picker.button | default: "Set clip times" }}
           </button>
         </div>
 
-        <!-- Collapsible Coordinate Panel -->
-        <div class="collapse" id="coordinatePanel">
-          <div class="card coordinate-panel">
-            <div class="card-body coordinate-panel-body">
-              <!-- Close Button -->
-              <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#coordinatePanel"></button>
+        <div class="collapse" id="clipPanel">
+          <div class="card clip-panel coordinate-panel">
+            <div class="card-body clip-panel-body coordinate-panel-body">
+              <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#clipPanel"></button>
 
               <div class="row coordinate-panel-row">
-                <!-- Instructions -->
                 <div class="col-md-6">
                   <div class="coordinate-panel-instructions">
-                    <h6 class="coordinate-panel-heading">{{ lang.object.coordinates.heading | default: "Instructions" }}</h6>
-                    <p>
-                      {{ lang.object.coordinates.instructions_p1 | default: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling." }}
-                    </p>
-                    <p class="mb-0 coord-instructions-single">
-                      {{ lang.object.coordinates.instructions_p2 | default: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once." }}
-                    </p>
-                    <p class="mb-0 coord-instructions-multi" style="display: none;">
-                      {{ lang.object.coordinates.instructions_p2_multi | default: "Once you identify a location make a note of the X, Y, Zoom, and Page values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all four values at once." }}
-                    </p>
+                    <h6 class="coordinate-panel-heading">{{ lang.object.clip_picker.heading | default: "Clip Times" }}</h6>
+                    <p>{{ lang.object.clip_picker.audio_instructions | default: "Drag the region handles on the waveform above to set clip start and end times. The highlighted region shows the clip that will play in your story." }}</p>
                   </div>
                 </div>
 
-                <!-- Current Coordinates Table and Buttons -->
                 <div class="col-md-6">
                   <div class="coordinate-panel-values">
                     <div class="coordinate-panel-values-inner">
                       <dl class="row mb-0">
-                        <dt class="col-sm-6 coord-page-row coord-label">{{ lang.object.coordinates.page_label | default: "Page" }}</dt>
-                        <dd class="col-sm-6 coord-page-row coord-field">
-                          <code id="coord-page">1</code>
-                          <button class="btn btn-sm coord-copy-btn" id="copy-page" title="{{ lang.object.coordinates.copy_page_tooltip | default: 'Copy page number' }}">
-                            <i class="bi bi-clipboard"></i>
+                        <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.start | default: "Start" }}</dt>
+                        <dd class="col-sm-8 clip-time-field coord-field">
+                          <code id="clip-start-display">0.000</code>
+                        </dd>
+
+                        <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.end | default: "End" }}</dt>
+                        <dd class="col-sm-8 clip-time-field coord-field">
+                          <code id="clip-end-display">0.000</code>
+                        </dd>
+
+                        <dt class="col-sm-4"></dt>
+                        <dd class="col-sm-8 mb-2">
+                          <button class="btn btn-sm btn-copy w-100" id="copy-clip-sheets">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_sheets | default: "Copy Sheets" }}
                           </button>
                         </dd>
 
-                        <dt class="col-sm-6 coord-label">X</dt>
-                        <dd class="col-sm-6 coord-field">
-                          <code id="coord-x">0.500</code>
-                          <button class="btn btn-sm coord-copy-btn" id="copy-x" title="Copy X coordinate">
-                            <i class="bi bi-clipboard"></i>
-                          </button>
-                        </dd>
-
-                        <dt class="col-sm-6 coord-label">Y</dt>
-                        <dd class="col-sm-6 coord-field">
-                          <code id="coord-y">0.500</code>
-                          <button class="btn btn-sm coord-copy-btn" id="copy-y" title="Copy Y coordinate">
-                            <i class="bi bi-clipboard"></i>
-                          </button>
-                        </dd>
-
-                        <dt class="col-sm-6 coord-label">Zoom</dt>
-                        <dd class="col-sm-6 coord-field">
-                          <code id="coord-zoom">1.0</code>
-                          <button class="btn btn-sm coord-copy-btn" id="copy-zoom" title="Copy Zoom level">
-                            <i class="bi bi-clipboard"></i>
-                          </button>
-                        </dd>
-
-                        <!-- Copy Button Rows -->
-                        <dt class="col-sm-6"></dt>
-                        <dd class="col-sm-6 mb-2">
-                          <button class="btn btn-sm btn-copy w-100" id="copy-coords-sheets">
-                            <i class="bi bi-clipboard"></i> {{ lang.object.coordinates.copy_sheets }}
-                          </button>
-                        </dd>
-
-                        <dt class="col-sm-6"></dt>
-                        <dd class="col-sm-6 mb-0">
-                          <button class="btn btn-sm btn-copy w-100" id="copy-coords-csv">
-                            <i class="bi bi-clipboard"></i> {{ lang.object.coordinates.copy_csv }}
+                        <dt class="col-sm-4"></dt>
+                        <dd class="col-sm-8 mb-0">
+                          <button class="btn btn-sm btn-copy w-100" id="copy-clip-csv">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_csv | default: "Copy CSV" }}
                           </button>
                         </dd>
                       </dl>
@@ -152,7 +281,7 @@ layout: default
         <dd class="col-sm-8">{{ page.medium }}</dd>
         {% endif %}
 
-        {% if page.dimensions %}
+        {% if page.dimensions and object_media_type == 'Image' %}
         <dt class="col-sm-4">{{ lang.object.metadata.dimensions }}</dt>
         <dd class="col-sm-8">{{ page.dimensions }}</dd>
         {% endif %}
@@ -182,30 +311,83 @@ layout: default
         {% endfor %}
         {% endif %}
 
-        {% assign external_source = page.source_url | default: page.iiif_manifest %}
-        {% if external_source and external_source != "" %}
-        <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
-        <dd class="col-sm-8">
-          <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
-            <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ external_source }}</code>
-            <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ external_source }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
-              <i class="bi bi-clipboard"></i>
-            </button>
-          </div>
-        </dd>
-        {% elsif page.object_id %}
-        <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
-        <dd class="col-sm-8">
-          {% assign manifest_url = site.url | append: site.baseurl | append: '/iiif/objects/' | append: page.object_id | append: '/manifest.json' %}
-          <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
-            <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ manifest_url }}</code>
-            <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
-              <i class="bi bi-clipboard"></i>
-            </button>
-          </div>
-        </dd>
+        {% if object_media_type == 'Image' %}
+          {% assign external_source = page.source_url | default: page.iiif_manifest %}
+          {% if external_source and external_source != "" %}
+          <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
+          <dd class="col-sm-8">
+            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+              <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ external_source }}</code>
+              <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ external_source }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+              </button>
+            </div>
+          </dd>
+          {% elsif page.object_id %}
+          <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
+          <dd class="col-sm-8">
+            {% assign manifest_url = site.url | append: site.baseurl | append: '/iiif/objects/' | append: page.object_id | append: '/manifest.json' %}
+            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+              <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ manifest_url }}</code>
+              <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy manifest URL">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+              </button>
+            </div>
+          </dd>
+          {% endif %}
         {% endif %}
       </dl>
+
+      {% comment %}Video-specific metadata per D-02{% endcomment %}
+      {% if object_media_type == 'Video' %}
+        {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
+          {% assign provider_name = 'YouTube' %}
+        {% elsif page.source_url contains 'vimeo.com' %}
+          {% assign provider_name = 'Vimeo' %}
+        {% elsif page.source_url contains 'drive.google.com' %}
+          {% assign provider_name = 'Google Drive' %}
+        {% else %}
+          {% assign provider_name = 'Video' %}
+        {% endif %}
+
+        <dl class="row mt-3 border-top pt-3">
+          <dt class="col-sm-4">{{ lang.object.metadata.provider | default: "Provider" }}</dt>
+          <dd class="col-sm-8">{{ provider_name }}</dd>
+
+          <dt class="col-sm-4">{{ lang.object.metadata.source | default: "Source" }}</dt>
+          <dd class="col-sm-8"><a href="{{ page.source_url }}" target="_blank" rel="noopener">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</a></dd>
+
+          {% unless provider_name == 'Google Drive' %}
+          <dt class="col-sm-4">{{ lang.object.metadata.embed_url | default: "Embed URL" }}</dt>
+          <dd class="col-sm-8">
+            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+              <code id="embed-url-display" style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"></code>
+              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy embed URL">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+              </button>
+            </div>
+          </dd>
+          {% endunless %}
+        </dl>
+      {% endif %}
+
+      {% comment %}Audio-specific metadata per D-07{% endcomment %}
+      {% if object_media_type == 'Audio' %}
+        <dl class="row mt-3 border-top pt-3">
+          {% if page.audio_format %}
+          <dt class="col-sm-4">{{ lang.object.metadata.format | default: "Format" }}</dt>
+          <dd class="col-sm-8">{{ page.audio_format }}</dd>
+          {% endif %}
+
+          {% if page.audio_filesize %}
+          <dt class="col-sm-4">{{ lang.object.metadata.file_size | default: "File size" }}</dt>
+          <dd class="col-sm-8">{{ page.audio_filesize }}</dd>
+          {% endif %}
+
+          <dt class="col-sm-4">{{ lang.object.metadata.duration | default: "Duration" }}</dt>
+          <dd class="col-sm-8"><span id="audio-duration-display">--:--</span></dd>
+        </dl>
+      {% endif %}
 
       <!-- Long Description -->
       {% if content %}
@@ -232,6 +414,7 @@ layout: default
   </div>
 </div>
 
+{% if object_media_type == 'Image' %}
 <!-- Tify IIIF Viewer -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tify@0.35.0/dist/tify.css">
 <script type="module">
@@ -390,7 +573,496 @@ layout: default
     updateCoordinates();
   });
 </script>
+{% endif %}
 
+{% if object_media_type == 'Video' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const viewer = document.getElementById('object-viewer');
+  const sourceUrl = '{{ page.source_url }}';
+
+  {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
+    // YouTube embed
+    // Extract video ID from URL
+    let videoId = '';
+    const ytMatch = sourceUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (ytMatch) videoId = ytMatch[1];
+
+    const embedUrl = 'https://www.youtube.com/embed/' + videoId + '?enablejsapi=1';
+    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + embedUrl + '" ' +
+      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
+      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
+      'allowfullscreen ' +
+      'title="Video: {{ page.title | escape }}"></iframe>';
+
+    // Set embed URL display
+    const embedDisplay = document.getElementById('embed-url-display');
+    if (embedDisplay) embedDisplay.textContent = embedUrl;
+
+  {% elsif page.source_url contains 'vimeo.com' %}
+    // Vimeo embed
+    let vimeoId = '';
+    const vmMatch = sourceUrl.match(/vimeo\.com\/(\d+)/);
+    if (vmMatch) vimeoId = vmMatch[1];
+
+    const embedUrl = 'https://player.vimeo.com/video/' + vimeoId;
+    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + embedUrl + '" ' +
+      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
+      'allow="autoplay; fullscreen; picture-in-picture" ' +
+      'allowfullscreen ' +
+      'title="Video: {{ page.title | escape }}"></iframe>';
+
+    const embedDisplay = document.getElementById('embed-url-display');
+    if (embedDisplay) embedDisplay.textContent = embedUrl;
+
+  {% elsif page.source_url contains 'drive.google.com' %}
+    // Google Drive embed
+    let fileId = '';
+    const gdMatch = sourceUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (gdMatch) fileId = gdMatch[1];
+
+    const previewUrl = 'https://drive.google.com/file/d/' + fileId + '/preview';
+    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + previewUrl + '" ' +
+      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
+      'allow="autoplay" ' +
+      'title="Video: {{ page.title | escape }}"></iframe>';
+
+    // Google Drive: embed URL load error fallback (Pitfall 7)
+    const iframe = document.getElementById('video-player-iframe');
+    let loadTimer = setTimeout(function() {
+      viewer.innerHTML = '<div class="alert alert-warning">' +
+        '<p>{{ lang.object.errors.embed_unavailable | default: "This video could not be loaded." }} ' +
+        '<a href="' + sourceUrl + '" target="_blank" rel="noopener">{{ lang.object.errors.open_on_drive | default: "Open it on Google Drive." }}</a></p></div>';
+    }, 10000);
+    iframe.addEventListener('load', function() { clearTimeout(loadTimer); });
+  {% endif %}
+});
+</script>
+{% endif %}
+
+{% if object_media_type == 'Video' %}
+{% unless page.source_url contains 'drive.google.com' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Clip panel toggle (same pattern as coordinate panel)
+  var clipPanel = document.getElementById('clipPanel');
+  var clipButton = document.getElementById('clipPickerButton');
+  if (clipPanel && clipButton) {
+    clipPanel.addEventListener('show.bs.collapse', function() { clipButton.style.display = 'none'; });
+    clipPanel.addEventListener('hide.bs.collapse', function() { clipButton.style.display = 'block'; });
+  }
+
+  // Theme colouring for clip panel (same as coordinate panel)
+  var panel = document.querySelector('.clip-panel');
+  if (panel) {
+    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
+    if (bg) {
+      var hex = bg.replace('#', '');
+      var r = parseInt(hex.substring(0, 2), 16) / 255;
+      var g = parseInt(hex.substring(2, 4), 16) / 255;
+      var b = parseInt(hex.substring(4, 6), 16) / 255;
+      var lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
+               + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
+               + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
+      panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
+    }
+  }
+
+  // Load YouTube IFrame API for clip picker (PICK-01)
+  {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
+  var tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+
+  window.onYouTubeIframeAPIReady = function() {
+    window.ytPlayer = new YT.Player('video-player-iframe', {
+      events: {
+        onReady: function() {
+          var startBtn = document.getElementById('set-clip-start');
+          var endBtn = document.getElementById('set-clip-end');
+          if (startBtn) startBtn.disabled = false;
+          if (endBtn) endBtn.disabled = false;
+        }
+      }
+    });
+  };
+  {% elsif page.source_url contains 'vimeo.com' %}
+  // Load Vimeo player.js for clip picker
+  var vScript = document.createElement('script');
+  vScript.src = 'https://player.vimeo.com/api/player.js';
+  vScript.onload = function() {
+    var vPlayer = new Vimeo.Player('video-player-iframe');
+    vPlayer.ready().then(function() {
+      var startBtn = document.getElementById('set-clip-start');
+      var endBtn = document.getElementById('set-clip-end');
+      if (startBtn) startBtn.disabled = false;
+      if (endBtn) endBtn.disabled = false;
+    });
+    window._vimeoPlayer = vPlayer;
+
+    // Detect actual video dimensions and set aspect ratio
+    var vimeoIframe = document.getElementById('video-player-iframe');
+    Promise.all([vPlayer.getVideoWidth(), vPlayer.getVideoHeight()]).then(function(dims) {
+      if (vimeoIframe) vimeoIframe.style.aspectRatio = dims[0] + '/' + dims[1];
+    }).catch(function() {
+      if (vimeoIframe) vimeoIframe.style.aspectRatio = '16/9';
+    });
+  };
+  document.head.appendChild(vScript);
+  {% endif %}
+
+  // "Set to current time" handlers
+  function getPlayerCurrentTime() {
+    {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
+    if (window.ytPlayer) return Promise.resolve(window.ytPlayer.getCurrentTime());
+    return Promise.resolve(0);
+    {% elsif page.source_url contains 'vimeo.com' %}
+    if (window._vimeoPlayer) return window._vimeoPlayer.getCurrentTime();
+    return Promise.resolve(0);
+    {% else %}
+    return Promise.resolve(0);
+    {% endif %}
+  }
+
+  var setStartBtn = document.getElementById('set-clip-start');
+  if (setStartBtn) {
+    setStartBtn.addEventListener('click', function() {
+      getPlayerCurrentTime().then(function(time) {
+        document.getElementById('clip-start-display').textContent = time.toFixed(3);
+      });
+    });
+  }
+
+  var setEndBtn = document.getElementById('set-clip-end');
+  if (setEndBtn) {
+    setEndBtn.addEventListener('click', function() {
+      getPlayerCurrentTime().then(function(time) {
+        document.getElementById('clip-end-display').textContent = time.toFixed(3);
+      });
+    });
+  }
+
+  // Copy buttons (same pattern as coordinate panel)
+  var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
+
+  var copyClipCsv = document.getElementById('copy-clip-csv');
+  if (copyClipCsv) {
+    copyClipCsv.addEventListener('click', function() {
+      var start = document.getElementById('clip-start-display').textContent;
+      var end = document.getElementById('clip-end-display').textContent;
+      navigator.clipboard.writeText(start + ',' + end).then(function() {
+        var btn = document.getElementById('copy-clip-csv');
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      });
+    });
+  }
+
+  var copyClipSheets = document.getElementById('copy-clip-sheets');
+  if (copyClipSheets) {
+    copyClipSheets.addEventListener('click', function() {
+      var start = document.getElementById('clip-start-display').textContent;
+      var end = document.getElementById('clip-end-display').textContent;
+      navigator.clipboard.writeText(start + '	' + end).then(function() {
+        var btn = document.getElementById('copy-clip-sheets');
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      });
+    });
+  }
+});
+</script>
+{% endunless %}
+{% endif %}
+
+{% if object_media_type == 'Audio' %}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+  const viewer = document.getElementById('object-viewer');
+
+  // Build audio file URL — try common extensions
+  const objectId = '{{ page.object_id }}';
+  const baseUrl = '{{ site.baseurl }}';
+  const extensions = ['.mp3', '.ogg', '.m4a'];
+  let audioUrl = null;
+
+  for (const ext of extensions) {
+    const testUrl = baseUrl + '/telar-content/objects/' + objectId + ext;
+    try {
+      const resp = await fetch(testUrl, { method: 'HEAD' });
+      if (resp.ok) { audioUrl = testUrl; break; }
+    } catch (e) { /* continue */ }
+  }
+
+  if (!audioUrl) {
+    viewer.innerHTML = '<div class="alert alert-warning">' +
+      '{{ lang.object.errors.audio_not_found | default: "Audio file not available. Check that the file path in the object CSV is correct." }}</div>';
+    return;
+  }
+
+  // Build waveform container with overlaid controls (matches story audio plates)
+  viewer.innerHTML =
+    '<div id="audio-waveform" role="img" aria-label="Audio waveform for {{ page.title | escape }}" style="width:100%;height:100%;padding:0 3%;box-sizing:border-box;position:relative;z-index:0;"></div>' +
+    '<div class="audio-object-controls">' +
+      '<button class="audio-object-btn" id="audio-play-btn" aria-label="Play audio" type="button">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>' +
+      '</button>' +
+      '<button class="audio-object-btn" id="audio-restart-btn" aria-label="Restart from beginning" type="button">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>' +
+      '</button>' +
+      '<button class="audio-object-btn" id="audio-mute-btn" aria-label="Mute audio" type="button">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>' +
+      '</button>' +
+    '</div>' +
+    '<span class="audio-object-time" id="audio-time-display">0:00 / --:--</span>';
+
+  // Load WaveSurfer
+  const WaveSurfer = window.WaveSurfer || (await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js')).default;
+
+  // Derive theme colours (same logic as story audio-card.js deriveThemeColors)
+  const accentHex = getComputedStyle(document.documentElement).getPropertyValue('--color-link').trim() || '#883C36';
+  const barHex = getComputedStyle(document.documentElement).getPropertyValue('--color-button-text').trim() || '#ffffff';
+
+  const aR = parseInt(accentHex.slice(1, 3), 16);
+  const aG = parseInt(accentHex.slice(3, 5), 16);
+  const aB = parseInt(accentHex.slice(5, 7), 16);
+
+  // Background: accent darkened to 70%
+  const bgR = Math.round(aR * 0.7);
+  const bgG = Math.round(aG * 0.7);
+  const bgB = Math.round(aB * 0.7);
+
+  // Bar text colour
+  const bR = parseInt(barHex.slice(1, 3), 16);
+  const bG = parseInt(barHex.slice(3, 5), 16);
+  const bB = parseInt(barHex.slice(5, 7), 16);
+
+  // Unplayed bars: 25% bar colour over 75% background (opaque — WaveSurfer clip-path needs it)
+  const upR = Math.round(bgR * 0.75 + bR * 0.25);
+  const upG = Math.round(bgG * 0.75 + bG * 0.25);
+  const upB = Math.round(bgB * 0.75 + bB * 0.25);
+
+  const playedColor = barHex;
+  const unplayedColor = 'rgb(' + upR + ',' + upG + ',' + upB + ')';
+  const bgColor = 'rgb(' + bgR + ',' + bgG + ',' + bgB + ')';
+
+  // Apply accent-tinted background + telar weave pattern to viewer container
+  const patternFill = 'rgba(255,255,255,0.12)';
+  const patternSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 543 380"><path d="M542.955,145.508l-83.257,-0.001l13.365,45.375l-12.615,43.868l82.485,0l-0,10.507l-81.743,0l7.56,40.133l-7.582,38.235l81.765,1.125l-0,10.5l-82.485,0l12.742,44.25l-14.25,0l-13.875,-44.25l-12.375,0l0,44.25l-14.25,0l0,-44.25l-52.492,0l-6.75,44.25l-14.25,0l6.75,-44.25l-41.993,0l6.75,44.25l-14.25,0l-6.75,-44.25l-88.492,0l-0,44.25l-14.25,0l-0,-44.25l-59.993,0l0,44.25l-14.25,0l0,-44.25l-34.492,0l-0,44.25l-13.5,0l-0,-44.25l-70.478,0l0,-10.5l69.368,0l1.125,-1.125l-0,-78.375l-70.493,0l0,-10.5l69.368,0l0.375,-89.25l-69.743,0l0,-10.5l69.743,0l0.75,-79.5l-70.493,0l0,-10.5l69.368,0l1.162,-2.588l-0.037,-42.412l13.5,0l-0.038,42.412l1.163,2.588l33.367,0l0,-44.993l14.25,0.001l0,45l59.993,-0l-0,-45l14.25,-0l-0,45l88.492,-0l6.743,-45l14.25,-0l-6.75,45l41.992,-0l-6.742,-45l14.25,-0l6.75,45l52.492,-0l0,-45l14.25,-0l0.375,45l12.375,-0l13.493,-45l14.25,-0l-12.743,44.992l82.485,0l0,10.508l-81.742,-0l7.522,38.594l-8.272,40.905l82.507,0l0,10.5Zm-424.47,-90l-34.492,0.001l-0,79.499l34.492,0l0,-79.5Zm74.243,0.001l-59.993,-0l0,79.499l59.993,0l-0,-79.5Zm101.242,0.001l-86.992,-0l-0.75,79.499l86.992,0l-5.317,-38.625l6.067,-40.875Zm59.243,79.508l6.48,-40.23l-6.068,-38.565l-45.337,-0.622l-6.105,40.83l5.272,38.595l45.75,-0l0.008,-0.008Zm65.242,-79.507l-50.242,-0l5.842,38.632l-6.592,40.868l50.242,-0l0.75,-79.5Zm13.493,79.5l13.875,-0l9.135,-40.223l-8.385,-39.277l-13.875,-0l-0.75,79.5Zm-313.463,10.5l-34.492,-0l-0,89.25l34.492,-0l0,-89.25Zm14.25,-0l0,89.25l59.993,-0l-0,-89.25l-59.993,-0Zm162.728,89.25l6.375,-44.655l-6.503,-43.35l-1.005,-1.245l-88.117,-0l0.75,89.25l88.5,-0Zm55.5,-89.25l-41.243,-0l6.353,44.602l-6.353,44.648l41.993,-0l-7.418,-46.208l6.668,-43.042Zm66.742,-0l-52.492,-0l-6.593,43.132l7.343,46.118l52.492,-0l-0.75,-89.25Zm27.743,89.25l13.17,-44.61l-14.295,-44.64l-12.375,-0l1.125,89.25l12.375,-0Zm-326.963,10.5l-34.492,-0l-0,79.5l34.492,-0l0,-79.5Zm74.243,-0l-59.993,-0l0,79.5l59.993,-0l-0,-79.5Zm101.242,-0l-86.992,-0l-0,79.5l86.992,-0l-5.917,-40.043l5.917,-39.457Zm14.28,79.462l45.383,-0.66l6.24,-39.345l-6.615,-39.135l-44.97,-0.24l-5.79,39.42l5.745,39.96l0.007,0Zm110.205,-79.462l-50.242,-0l6.022,40.087l-6.022,39.413l50.242,-0l0,-79.5Zm14.243,79.5l13.875,-0l8.542,-40.05l-8.542,-39.45l-13.875,-0l-0,79.5Z" fill="' + patternFill + '" fill-rule="nonzero"/></svg>';
+  viewer.style.background = bgColor;
+  // Telar weave pattern removed — solid accent background only
+
+  // Keep rgb values for region colour
+  const rgb = { r: aR, g: aG, b: aB };
+
+  // Load peaks if available
+  const peaksUrl = baseUrl + '/assets/audio/peaks/' + objectId + '.json';
+  let peaksData = null;
+  try {
+    const peaksResp = await fetch(peaksUrl);
+    if (peaksResp.ok) peaksData = await peaksResp.json();
+  } catch (e) { /* no pre-computed peaks, WaveSurfer will decode */ }
+
+  // Create WaveSurfer instance — interact: true per D-06
+  const wsOptions = {
+    container: '#audio-waveform',
+    url: audioUrl,
+    interact: true,
+    waveColor: unplayedColor,
+    progressColor: playedColor,
+    cursorWidth: 0,
+    barWidth: 3,
+    barGap: 2,
+    barRadius: 2,
+    barHeight: 0.6,
+    normalize: true,
+    height: 'auto',
+  };
+
+  if (peaksData && peaksData.peaks) {
+    wsOptions.peaks = peaksData.peaks;
+  }
+
+  const ws = WaveSurfer.create(wsOptions);
+
+  // Store reference for clip picker (Plan 04)
+  window._objectPageWaveSurfer = ws;
+
+  // Play/pause
+  const playBtn = document.getElementById('audio-play-btn');
+  const playIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>';
+  const pauseIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg>';
+  const volumeOnIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>';
+  const volumeOffIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
+
+  playBtn.addEventListener('click', function() {
+    ws.playPause();
+  });
+
+  ws.on('play', function() {
+    playBtn.innerHTML = pauseIcon;
+    playBtn.setAttribute('aria-label', 'Pause audio');
+  });
+  ws.on('pause', function() {
+    playBtn.innerHTML = playIcon;
+    playBtn.setAttribute('aria-label', 'Play audio');
+  });
+
+  // Restart button — plays from clip region start, stops at region end
+  var audioReady = false;
+  ws.on('ready', function() { audioReady = true; });
+
+  const restartBtn = document.getElementById('audio-restart-btn');
+  restartBtn.addEventListener('click', function() {
+    if (!audioReady) return;
+    const region = window._clipRegion;
+    const start = region ? region.start : 0;
+    ws.setTime(start);
+    ws.play();
+  });
+
+  // Stop playback at clip region end boundary
+  ws.on('timeupdate', function(t) {
+    if (!audioReady) return;
+    const region = window._clipRegion;
+    if (region && region.end < ws.getDuration() && t >= region.end && ws.isPlaying()) {
+      ws.pause();
+    }
+  });
+
+  // Mute button
+  const muteBtn = document.getElementById('audio-mute-btn');
+  muteBtn.addEventListener('click', function() {
+    const nowMuted = !ws.getMuted();
+    ws.setMuted(nowMuted);
+    muteBtn.innerHTML = nowMuted ? volumeOffIcon : volumeOnIcon;
+    muteBtn.setAttribute('aria-label', nowMuted ? 'Unmute audio' : 'Mute audio');
+  });
+
+  // Time display
+  const timeDisplay = document.getElementById('audio-time-display');
+  function formatTime(secs) {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  ws.on('ready', function() {
+    const dur = ws.getDuration();
+    timeDisplay.textContent = '0:00 / ' + formatTime(dur);
+    // Update sidebar duration display
+    const durDisplay = document.getElementById('audio-duration-display');
+    if (durDisplay) durDisplay.textContent = formatTime(dur);
+  });
+
+  ws.on('timeupdate', function(currentTime) {
+    const dur = ws.getDuration();
+    timeDisplay.textContent = formatTime(currentTime) + ' / ' + formatTime(dur);
+  });
+
+  // WaveSurfer Regions plugin for clip picker (PICK-02)
+  const RegionsPlugin = (await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.esm.js')).default;
+  const regionsPlugin = ws.registerPlugin(RegionsPlugin.create());
+
+  // After ready, add a default region covering the full duration
+  ws.on('ready', function() {
+    const dur = ws.getDuration();
+    const region = regionsPlugin.addRegion({
+      start: 0,
+      end: dur,
+      color: 'rgba(255, 255, 255, 0.08)',
+      drag: true,
+      resize: true,
+    });
+
+    // Initialise clip time display
+    var startDisp = document.getElementById('clip-start-display');
+    var endDisp = document.getElementById('clip-end-display');
+    if (startDisp) startDisp.textContent = region.start.toFixed(3);
+    if (endDisp) endDisp.textContent = region.end.toFixed(3);
+
+    region.on('update-end', function() {
+      if (startDisp) startDisp.textContent = region.start.toFixed(3);
+      if (endDisp) endDisp.textContent = region.end.toFixed(3);
+    });
+
+    // Store region reference for external access
+    window._clipRegion = region;
+
+    // Ensure region drag handles are visible
+    const regionEl = region.element;
+    if (regionEl) {
+      regionEl.style.borderLeft = '3px solid rgba(255, 255, 255, 0.8)';
+      regionEl.style.borderRight = '3px solid rgba(255, 255, 255, 0.8)';
+      regionEl.style.cursor = 'move';
+    }
+  });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Audio clip panel toggle
+  var clipPanel = document.getElementById('clipPanel');
+  var clipButton = document.getElementById('clipPickerButton');
+  if (clipPanel && clipButton) {
+    clipPanel.addEventListener('show.bs.collapse', function() { clipButton.style.display = 'none'; });
+    clipPanel.addEventListener('hide.bs.collapse', function() { clipButton.style.display = 'block'; });
+  }
+
+  // Theme colouring for audio clip panel
+  var panel = document.querySelector('.clip-panel');
+  if (panel) {
+    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
+    if (bg) {
+      var hex = bg.replace('#', '');
+      var r = parseInt(hex.substring(0, 2), 16) / 255;
+      var g = parseInt(hex.substring(2, 4), 16) / 255;
+      var b = parseInt(hex.substring(4, 6), 16) / 255;
+      var lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
+               + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
+               + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
+      panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
+    }
+  }
+
+  // Copy buttons
+  var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
+
+  var copyClipCsv = document.getElementById('copy-clip-csv');
+  if (copyClipCsv) {
+    copyClipCsv.addEventListener('click', function() {
+      var start = document.getElementById('clip-start-display').textContent;
+      var end = document.getElementById('clip-end-display').textContent;
+      navigator.clipboard.writeText(start + ',' + end).then(function() {
+        var btn = document.getElementById('copy-clip-csv');
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      });
+    });
+  }
+
+  var copyClipSheets = document.getElementById('copy-clip-sheets');
+  if (copyClipSheets) {
+    copyClipSheets.addEventListener('click', function() {
+      var start = document.getElementById('clip-start-display').textContent;
+      var end = document.getElementById('clip-end-display').textContent;
+      navigator.clipboard.writeText(start + '	' + end).then(function() {
+        var btn = document.getElementById('copy-clip-sheets');
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      });
+    });
+  }
+});
+</script>
+{% endif %}
+
+{% if object_media_type == 'Image' %}
 <!-- Copy button functionality and panel visibility -->
 <script>
   document.addEventListener('DOMContentLoaded', function() {
@@ -420,7 +1092,7 @@ layout: default
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-csv');
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> ' + window.telarCoordLang.copied;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
         setTimeout(function() {
           btn.innerHTML = originalHTML;
         }, 2000);
@@ -439,7 +1111,7 @@ layout: default
       navigator.clipboard.writeText(text).then(function() {
         const btn = document.getElementById('copy-coords-sheets');
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> ' + window.telarCoordLang.copied;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
         setTimeout(function() {
           btn.innerHTML = originalHTML;
         }, 2000);
@@ -455,7 +1127,7 @@ layout: default
         navigator.clipboard.writeText(manifestUrl).then(function() {
           const btn = document.getElementById('copy-manifest');
           const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
           setTimeout(function() {
             btn.innerHTML = originalHTML;
           }, 2000);
@@ -473,7 +1145,7 @@ layout: default
         navigator.clipboard.writeText(x).then(function() {
           const btn = document.getElementById('copy-x');
           const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
           setTimeout(function() {
             btn.innerHTML = originalHTML;
           }, 2000);
@@ -488,7 +1160,7 @@ layout: default
         navigator.clipboard.writeText(y).then(function() {
           const btn = document.getElementById('copy-y');
           const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
           setTimeout(function() {
             btn.innerHTML = originalHTML;
           }, 2000);
@@ -503,7 +1175,7 @@ layout: default
         navigator.clipboard.writeText(zoom).then(function() {
           const btn = document.getElementById('copy-zoom');
           const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
           setTimeout(function() {
             btn.innerHTML = originalHTML;
           }, 2000);
@@ -518,7 +1190,7 @@ layout: default
         navigator.clipboard.writeText(page).then(function() {
           const btn = document.getElementById('copy-page');
           const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
           setTimeout(function() {
             btn.innerHTML = originalHTML;
           }, 2000);
@@ -527,3 +1199,23 @@ layout: default
     }
   });
 </script>
+{% endif %}
+
+{% if object_media_type == 'Video' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const copyEmbedBtn = document.getElementById('copy-embed-url');
+  if (copyEmbedBtn) {
+    copyEmbedBtn.addEventListener('click', function() {
+      const url = document.getElementById('embed-url-display').textContent;
+      navigator.clipboard.writeText(url).then(function() {
+        const btn = copyEmbedBtn;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      });
+    });
+  }
+});
+</script>
+{% endif %}
