@@ -127,7 +127,7 @@ def main():
 
     # Step 4: Process audio objects (unless skipped)
     if not args.skip_audio:
-        # Check if any audio files exist (D-03: skip gracefully if none)
+        # Check if any audio files exist (skip gracefully if none)
         audio_extensions = ('.mp3', '.ogg', '.m4a')
         objects_dir = Path('telar-content/objects')
         has_audio = objects_dir.exists() and any(

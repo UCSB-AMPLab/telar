@@ -79,7 +79,7 @@ jobs:
 
       - name: Install audio processing tools (audiowaveform + ffmpeg)
         run: |
-          # Only install if audio objects exist (D-04: zero friction for image-only sites)
+          # Only install if audio objects exist (zero friction for image-only sites)
           if ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
             echo "Audio objects detected - installing audiowaveform and ffmpeg"
             sudo add-apt-repository -y ppa:chris-needham/ppa
@@ -140,7 +140,7 @@ jobs:
         run: |
           NEEDS_AUDIO="true"
 
-          # Check if any audio objects exist first (D-03/D-04)
+          # Check if any audio objects exist first
           if ! ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
             echo "No audio objects found - skipping audio processing"
             NEEDS_AUDIO="false"

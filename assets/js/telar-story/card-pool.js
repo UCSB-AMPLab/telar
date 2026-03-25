@@ -525,13 +525,13 @@ function buildTextCardContent(step) {
 
 /**
  * Activate the card at the given step index, orchestrating context-sensitive
- * stacking per NAV-03 and NAV-04.
+ * stacking based on whether the object changed.
  *
- * Object change or mode change → NAV-03:
+ * Object change or mode change:
  *   New viewer plate slides up + text card slides up, covering everything
  *   from the previous object.
  *
- * Same object, same mode → NAV-04:
+ * Same object, same mode:
  *   Only a new text card slides up; the IIIF viewer stays visible and does
  *   not reload. If viewer is ready, animate to the new step's position.
  *
@@ -565,7 +565,7 @@ export function activateCard(index, direction) {
 
   if (direction === 'forward') {
     if (needsNewViewer) {
-      // NAV-03: Full card — new viewer plate + new text card
+      // Full card — new viewer plate + new text card
       _activateNewViewerPlate(objectId, index, prevObjectId, step, direction);
 
       // Reset the object run tracker
@@ -580,7 +580,7 @@ export function activateCard(index, direction) {
       updateObjectCredits(objectId);
 
     } else {
-      // NAV-04: Text-only on same object
+      // Text-only on same object
       state.currentObjectRun.runPosition = poolEntry.runPosition;
 
       // Deactivate previous text card (becomes stacked)
@@ -719,7 +719,7 @@ export function activateCard(index, direction) {
     _plateForStep.setAttribute('aria-label', _buildAriaLabel(objectId, _stepAlt, _cType));
   }
 
-  // Preload ahead (NAV-07)
+  // Preload ahead
   preloadAhead(index, _config.preloadSteps, 2);
 
   // Full-object mode detection kept for mode-change → new viewer logic

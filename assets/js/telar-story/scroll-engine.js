@@ -125,7 +125,7 @@ export function initScrollEngine(stepCount) {
   // Register snap points: 0 = intro, 1..stepCount = content steps
   registerSnapPoints(totalPositions);
 
-  // Wire scrub mode toggle (RQ-4 / Pattern 4)
+  // Wire scrub mode toggle
   // virtual-scroll fires on raw wheel/touch input before Lenis smoothing
   let scrubEndTimer;
   lenis.on('virtual-scroll', () => {

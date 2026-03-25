@@ -153,7 +153,7 @@ def check_audio_dependencies():
     Check that audiowaveform and ffmpeg are installed and accessible.
 
     Exits with a clear error message if either tool is missing, naming the
-    tool and providing install instructions (D-25, D-28).
+    tool and providing install instructions.
 
     Raises:
         SystemExit: If audiowaveform or ffmpeg is not found.

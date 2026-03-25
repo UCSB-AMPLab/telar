@@ -1,5 +1,5 @@
 /**
- * Tests for lerpIiifPosition — IIIF per-frame scroll interpolation (NAV-05)
+ * Tests for lerpIiifPosition — IIIF per-frame scroll interpolation
  *
  * Tests the pure interpolation maths: same-object lerp, different-object skip,
  * boundary guards (progress < 0.001, missing stepB, NaN coordinates, not-ready

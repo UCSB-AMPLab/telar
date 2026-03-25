@@ -290,7 +290,7 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
  * with immediate=true, so OSD does not add its own spring animation on top
  * of the per-frame updates.
  *
- * Different-object pairs are skipped entirely (D-13: the viewer freezes at
+ * Different-object pairs are skipped entirely (the viewer freezes at
  * its last position while the new plate slides in on top). Progress values
  * below 0.001 are also skipped — at exact integer positions the viewer is
  * already at the correct coordinates and does not need interpolation.

@@ -431,7 +431,7 @@ function _showVideoPlayOverlay(plateEl) {
   const overlayBtn = document.createElement('button');
   overlayBtn.setAttribute('aria-label', `Play ${_vAlt}`);
   overlayBtn.type = 'button';
-  // Frosted glass pill variant (UI-SPEC Variant B)
+  // Frosted glass pill variant
   overlayBtn.style.cssText = 'min-height:44px;padding:0.5rem 1.25rem;border-radius:20px;background:rgba(255,255,255,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;color:#333;font-family:var(--font-body);font-size:0.9rem;';
   overlayBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-link)" xmlns="http://www.w3.org/2000/svg"><polygon points="5,3 19,12 5,21"/></svg><span>Play</span>';
   overlayEl.appendChild(overlayBtn);

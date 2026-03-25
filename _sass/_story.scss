@@ -54,7 +54,7 @@
 
 // ── Viewer Plate ──────────────────────────────────────────────────────────────
 
-// Full-viewport IIIF viewer background. One per unique object. (D-21 to D-24)
+// Full-viewport IIIF viewer background. One per unique object.
 .viewer-plate {
   position: absolute;
   inset: 0;
@@ -318,16 +318,16 @@
 
 // ── Text Card ─────────────────────────────────────────────────────────────────
 
-// Floating card over the viewer. Left-aligned at 4%, 42% wide. (D-02 to D-14)
+// Floating card over the viewer. Left-aligned at 4%, 42% wide.
 .text-card {
   position: absolute;
-  left: 3%;          // D-02
-  width: 37%;        // D-02
+  left: 3%;
+  width: 37%;
   // height set by JS: viewportH * 0.85
-  // top set by JS: centred + peek offset (D-04, D-09)
+  // top set by JS: centred + peek offset
   background: #fff;
-  border-radius: 3px;    // D-06
-  border: none;          // D-06
+  border-radius: 3px;
+  border: none;
   padding: 1.5rem 2rem;
   display: flex;
   flex-direction: column;
@@ -393,7 +393,7 @@
 
 // ── Story Intro ───────────────────────────────────────────────────────────────
 
-// Full-viewport intro with floating card. z-index:0, covered by first viewer plate. (D-30 to D-35)
+// Full-viewport intro with floating card. z-index:0, covered by first viewer plate.
 .story-intro {
   position: absolute;
   inset: 0;
@@ -482,7 +482,7 @@
 
 // ── Back to Home Button ───────────────────────────────────────────────────────
 
-// Fixed above the card-stack. High z-index to float above all cards. (D-28 note: body-level sibling)
+// Fixed above the card-stack. High z-index to float above all cards.
 .btn-home {
   position: fixed !important;
   top: 0.75rem !important;
@@ -573,7 +573,7 @@
 // ── Mobile Navigation Buttons ─────────────────────────────────────────────────
 
 // Button-only navigation for viewports < 768px and embed mode.
-// Fixed to the right side, centred vertically over the full viewport. (D-28 note: body-level)
+// Fixed to the right side, centred vertically over the full viewport.
 
 @media (max-width: 768px) {
   .mobile-nav {
@@ -666,7 +666,7 @@
     max-width: calc(100vw - 5rem);
   }
 
-  // ── Mobile text card: full-width bottom-anchored card (D-08/D-09/D-10) ─────
+  // ── Mobile text card: full-width bottom-anchored card ──────────────────────
   .text-card {
     left: 1rem;
     width: calc(100% - 2rem);
