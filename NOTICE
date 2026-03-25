@@ -33,8 +33,41 @@ Copyright (c) 2011-2024 The Bootstrap Authors
 License: MIT
 Source: https://getbootstrap.com/
 
-Bootstrap Icons
----------------
-Copyright (c) 2019-2024 The Bootstrap Authors
+Lenis
+-----
+Copyright (c) Studio Freight
 License: MIT
-Source: https://icons.getbootstrap.com/
+Source: https://github.com/darkroomengineering/lenis
+Bundled into telar-story.js via esbuild.
+
+Lenis is a smooth scroll library that provides a virtual scroll model
+with consistent physics across browsers. Telar bundles it into a single
+JavaScript file — no CDN dependency, no external requests.
+
+WaveSurfer.js
+-------------
+Copyright (c) katspaugh
+License: BSD 3-Clause
+Source: https://github.com/katspaugh/wavesurfer.js
+Loaded via CDN: https://unpkg.com/wavesurfer.js@7/
+
+WaveSurfer is an audio waveform rendering library. Telar loads it from
+a CDN only on pages that contain audio objects.
+
+Vimeo Player.js
+---------------
+Copyright (c) Vimeo
+License: MIT
+Source: https://github.com/vimeo/player.js
+Loaded via CDN: https://player.vimeo.com/api/player.js
+
+The Vimeo Player API is loaded on pages that embed Vimeo videos.
+
+Lucide Icons
+------------
+Copyright (c) Lucide Contributors
+License: ISC
+Source: https://github.com/lucide-icons/lucide
+
+Telar uses a subset of Lucide icons as inline SVGs in telar-icons.js.
+The icons are embedded directly in the source code — no CDN dependency.
