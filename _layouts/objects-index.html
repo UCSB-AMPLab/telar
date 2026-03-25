@@ -113,10 +113,21 @@ layout: default
         <div class="objects-filters-content" id="objects-filters-content">
           <h3 class="objects-filter-heading">{{ lang.objects.filter_by | default: "Filter by" }}</h3>
 
-          {% comment %}Type filter{% endcomment %}
-          <div class="objects-filter-section" data-filter="object_type">
+          {% comment %}Media type filter (auto-detected: Image/Video/Audio){% endcomment %}
+          <div class="objects-filter-section" data-filter="media_type">
             <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
-              <span>{{ lang.objects.type | default: "Type" }}</span>
+              <span>{{ lang.objects.media_type | default: "Type" }}</span>
+              <span class="objects-filter-indicator">+</span>
+            </button>
+            <div class="objects-filter-options">
+              {% comment %}Options populated by JavaScript{% endcomment %}
+            </div>
+          </div>
+
+          {% comment %}Medium/Genre filter (user-authored, was "Type"/object_type){% endcomment %}
+          <div class="objects-filter-section" data-filter="medium">
+            <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
+              <span>{{ lang.objects.medium | default: "Medium/Genre" }}</span>
               <span class="objects-filter-indicator">+</span>
             </button>
             <div class="objects-filter-options">
@@ -193,17 +204,27 @@ layout: default
     {% assign demo_objects = site.objects | where_exp: "obj", "obj.demo == true" | sort: "title" %}
     {% assign sorted_objects = non_demo_objects | concat: demo_objects %}
     {% for object in sorted_objects %}
-    <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}" data-object-id="{{ object.object_id }}"{% if browse_and_search %} data-object-type="{{ object.object_type }}" data-creator="{{ object.creator }}" data-period="{{ object.period }}" data-subjects="{{ object.subjects }}" data-year="{{ object.year }}" data-title="{{ object.title }}" data-description="{{ object.description }}"{% endif %}>
+    <a href="{{ object.url | relative_url }}" class="collection-item{% if object.demo %} demo-object{% endif %}" data-object-id="{{ object.object_id }}"{% if browse_and_search %} data-media-type="{{ object.media_type | default: 'Image' }}" data-medium="{{ object.medium | default: object.object_type }}" data-creator="{{ object.creator }}" data-period="{{ object.period }}" data-subjects="{{ object.subjects }}" data-year="{{ object.year }}" data-title="{{ object.title }}" data-description="{{ object.description }}"{% endif %}>
       {% if object.demo %}
       <span class="demo-badge">{{ lang.demo.badge }}</span>
       {% endif %}
       <div class="collection-item-image" {% if object.iiif_manifest and object.iiif_manifest != "" %}data-iiif-manifest="{{ object.iiif_manifest }}"{% endif %}>
-        {% if object.thumbnail and object.thumbnail != "" %}
+        {% if object.media_type == 'Video' %}
+        {%- comment -%}Video thumbnail: play icon on neutral background{%- endcomment -%}
+        <div class="video-thumbnail" aria-label="Video">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </div>
+        {% elsif object.media_type == 'Audio' %}
+        {%- comment -%}Audio thumbnail: speaker icon on neutral background{%- endcomment -%}
+        <div class="audio-thumbnail" aria-label="Audio">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </div>
+        {% elsif object.thumbnail and object.thumbnail != "" %}
         {%- comment -%}Use explicit thumbnail if provided{%- endcomment -%}
-        <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}">
+        <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
         {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
         {%- comment -%}For IIIF Image API, use standard thumbnail pattern{%- endcomment -%}
-        <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.title }}" class="iiif-thumbnail">
+        <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
         {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
         {%- comment -%}For IIIF manifests, JavaScript will load thumbnail{%- endcomment -%}
         <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
@@ -246,10 +267,18 @@ layout: default
       <span class="demo-badge">{{ lang.demo.badge }}</span>
       {% endif %}
       <div class="collection-item-image" {% if object.iiif_manifest and object.iiif_manifest != "" %}data-iiif-manifest="{{ object.iiif_manifest }}"{% endif %}>
-        {% if object.thumbnail and object.thumbnail != "" %}
-        <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}">
+        {% if object.media_type == 'Video' %}
+        <div class="video-thumbnail" aria-label="Video">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </div>
+        {% elsif object.media_type == 'Audio' %}
+        <div class="audio-thumbnail" aria-label="Audio">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </div>
+        {% elsif object.thumbnail and object.thumbnail != "" %}
+        <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
         {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
-        <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.title }}" class="iiif-thumbnail">
+        <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
         {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
         <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
           <span class="text-muted">Loading...</span>
@@ -310,9 +339,42 @@ function pickThumbnailSize(sizes, minWidth) {
 }
 
 /**
+ * Upgrade IIIF Image API thumbnail URLs to a larger size.
+ * Detects URLs with /full/{size}/0/default.{ext} pattern and replaces
+ * the size segment with !600,600 for sharper gallery thumbnails.
+ */
+function upgradeIIIFThumbnailUrl(url) {
+  // Match IIIF Image API pattern: .../full/{size}/0/default.{ext}
+  // The size segment may contain backslash-escaped ! (e.g. Rumsey \!96,96)
+  // or double slashes from stripped backslashes. Handle all variants.
+  var match = url.match(/^(.*\/full\/)[\\\/]*([^/]+)(\/0\/default\.\w+)$/);
+  if (match) {
+    return match[1] + '!600,600' + match[3];
+  }
+  return url;
+}
+
+/**
  * Load thumbnails from IIIF manifests and info.json
  */
 document.addEventListener('DOMContentLoaded', function() {
+  // Upgrade explicit IIIF thumbnail URLs to larger sizes (with fallback for Level 0 servers)
+  var iiifThumbs = document.querySelectorAll('img.iiif-thumbnail');
+  iiifThumbs.forEach(function(img) {
+    var originalSrc = img.src;
+    var upgradedSrc = upgradeIIIFThumbnailUrl(originalSrc);
+    if (upgradedSrc !== originalSrc) {
+      img.dataset.originalSrc = originalSrc;
+      img.onerror = function() {
+        if (this.dataset.originalSrc) {
+          this.src = this.dataset.originalSrc;
+          delete this.dataset.originalSrc;
+          this.onerror = null;
+        }
+      };
+      img.src = upgradedSrc;
+    }
+  });
   // Handle local IIIF thumbnails from info.json
   const localItems = document.querySelectorAll('.local-iiif-thumbnail[data-info-json]');
   localItems.forEach(function(item) {

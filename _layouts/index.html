@@ -259,22 +259,59 @@ title: Home
                   </svg>
                 </div>
               {% elsif story_data and story_data.size > 0 %}
-                {% assign first_step = story_data[0] %}
-                {% if first_step.object %}
-                  {%- comment -%}Load thumbnail with object ID for remote/local detection.
-                  For multi-page objects (PDFs), use the specific page's info.json.{%- endcomment -%}
-                  {% if first_step.page and first_step.page != "" %}
-                    {% assign thumb_info_path = '/iiif/objects/' | append: first_step.object | append: '/page-' | append: first_step.page | append: '/info.json' %}
-                  {% else %}
-                    {% assign thumb_info_path = '/iiif/objects/' | append: first_step.object | append: '/info.json' %}
+                {%- comment -%}Find best thumbnail object: prefer first Image, fall back to first video/audio{%- endcomment -%}
+                {% assign thumb_obj = nil %}
+                {% assign thumb_step = nil %}
+                {% assign fallback_obj = nil %}
+                {% assign fallback_step = nil %}
+                {% for step in story_data %}
+                  {% if step.object and step.object != "" %}
+                    {% assign step_obj = site.objects | where: "object_id", step.object | first %}
+                    {% if step_obj %}
+                      {% if step_obj.media_type == 'Image' or step_obj.media_type == nil or step_obj.media_type == "" %}
+                        {% unless thumb_obj %}
+                          {% assign thumb_obj = step_obj %}
+                          {% assign thumb_step = step %}
+                        {% endunless %}
+                      {% else %}
+                        {% unless fallback_obj %}
+                          {% assign fallback_obj = step_obj %}
+                          {% assign fallback_step = step %}
+                        {% endunless %}
+                      {% endif %}
+                    {% endif %}
                   {% endif %}
-                  <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ first_step.object }}" data-info-json="{{ thumb_info_path | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
-                    <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center h-100">
-                      <span class="text-muted">Loading...</span>
+                {% endfor %}
+                {%- comment -%}Use image object if found, otherwise fall back to video/audio{%- endcomment -%}
+                {% unless thumb_obj %}
+                  {% assign thumb_obj = fallback_obj %}
+                  {% assign thumb_step = fallback_step %}
+                {% endunless %}
+
+                {% if thumb_obj %}
+                  {% if thumb_obj.media_type == 'Video' %}
+                    <div class="card-img-top video-thumbnail" aria-label="Video" style="aspect-ratio: 1;">
+                      <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     </div>
-                  </div>
+                  {% elsif thumb_obj.media_type == 'Audio' %}
+                    <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
+                      <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                    </div>
+                  {% else %}
+                    {%- comment -%}Image object — load via IIIF thumbnail{%- endcomment -%}
+                    {% if thumb_step.page and thumb_step.page != "" %}
+                      {% assign thumb_info_path = '/iiif/objects/' | append: thumb_obj.object_id | append: '/page-' | append: thumb_step.page | append: '/info.json' %}
+                    {% else %}
+                      {% assign thumb_info_path = '/iiif/objects/' | append: thumb_obj.object_id | append: '/info.json' %}
+                    {% endif %}
+                    <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ thumb_obj.object_id }}" data-info-json="{{ thumb_info_path | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
+                      <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center h-100">
+                        <span class="text-muted">Loading...</span>
+                      </div>
+                    </div>
+                  {% endif %}
                 {% else %}
-                  {%- comment -%}Fallback placeholder if no object{%- endcomment -%}
+                  {%- comment -%}Fallback placeholder if no object found{%- endcomment -%}
                   <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center" style="aspect-ratio: 1;">
                     <span class="text-white">{{ story.story_number }}</span>
                   </div>
@@ -353,8 +390,16 @@ title: Home
         {% for object in featured_objects %}
         <a href="{{ object.url | relative_url }}" class="collection-item">
           <div class="collection-thumbnail">
-            {% if object.thumbnail and object.thumbnail != "" %}
-              <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}" loading="lazy">
+            {% if object.media_type == 'Video' %}
+              <div class="video-thumbnail" aria-label="Video">
+                <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              </div>
+            {% elsif object.media_type == 'Audio' %}
+              <div class="audio-thumbnail" aria-label="Audio">
+                <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              </div>
+            {% elsif object.thumbnail and object.thumbnail != "" %}
+              <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}" loading="lazy" class="iiif-thumbnail">
             {% else %}
               <div class="featured-iiif-thumbnail" data-object-id="{{ object.object_id }}" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}">
                 <span class="thumbnail-placeholder">{{ object.title | truncate: 15 }}</span>
@@ -414,9 +459,43 @@ function pickThumbnailSize(sizes, minWidth) {
 }
 
 /**
+ * Upgrade IIIF Image API thumbnail URLs to a larger size.
+ * Detects URLs with /full/{size}/0/default.{ext} pattern and replaces
+ * the size segment with !600,600 for sharper thumbnails.
+ */
+function upgradeIIIFThumbnailUrl(url) {
+  // Match IIIF Image API pattern: .../full/{size}/0/default.{ext}
+  // The size segment may contain backslash-escaped ! (e.g. Rumsey \!96,96)
+  // or double slashes from stripped backslashes. Handle all variants.
+  var match = url.match(/^(.*\/full\/)[\\\/]*([^/]+)(\/0\/default\.\w+)$/);
+  if (match) {
+    return match[1] + '!600,600' + match[3];
+  }
+  return url;
+}
+
+/**
  * Load story thumbnails from IIIF (remote manifests or local info.json)
  */
 document.addEventListener('DOMContentLoaded', function() {
+  // Upgrade explicit IIIF thumbnail URLs to larger sizes (with fallback for Level 0 servers)
+  var iiifThumbs = document.querySelectorAll('img.iiif-thumbnail');
+  iiifThumbs.forEach(function(img) {
+    var originalSrc = img.src;
+    var upgradedSrc = upgradeIIIFThumbnailUrl(originalSrc);
+    if (upgradedSrc !== originalSrc) {
+      img.dataset.originalSrc = originalSrc;
+      img.onerror = function() {
+        if (this.dataset.originalSrc) {
+          this.src = this.dataset.originalSrc;
+          delete this.dataset.originalSrc;
+          this.onerror = null;
+        }
+      };
+      img.src = upgradedSrc;
+    }
+  });
+
   const storyThumbnails = document.querySelectorAll('.story-iiif-thumbnail[data-object-id]');
 
   storyThumbnails.forEach(function(item) {
@@ -429,7 +508,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // First check if object has explicit thumbnail URL (best for level0 IIIF, also works as override)
     if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
       const img = document.createElement('img');
-      img.src = objectData.thumbnail;
+      img.src = upgradeIIIFThumbnailUrl(objectData.thumbnail);
       img.alt = item.closest('.story-card').querySelector('h3').textContent;
       img.style.width = '100%';
       img.style.height = '100%';
@@ -587,7 +666,7 @@ featuredThumbnails.forEach(function(item) {
   // Check for explicit thumbnail first
   if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
     const img = document.createElement('img');
-    img.src = objectData.thumbnail;
+    img.src = upgradeIIIFThumbnailUrl(objectData.thumbnail);
     img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
     img.style.width = '100%';
     img.style.height = '100%';
