@@ -1,6 +1,7 @@
 <!--
   Story Step Component
-  Used to render individual story steps with data attributes for Scrollama
+  Data element for step navigation. Visual cards are created by card-pool.js at runtime.
+  Z-index is now computed by card-pool.js using the banding scheme — not set inline (D-26).
 -->
 
 <div class="story-step"
@@ -11,7 +12,10 @@
      data-zoom="{{ include.zoom }}"
      data-region="{{ include.region }}"
      {% if include.page %}data-page="{{ include.page }}"{% endif %}
-     style="z-index: {{ include.step_number }}">
+     {% if include.clip_start %}data-clip-start="{{ include.clip_start }}"{% endif %}
+     {% if include.clip_end %}data-clip-end="{{ include.clip_end }}"{% endif %}
+     {% if include.loop %}data-loop="{{ include.loop }}"{% endif %}
+     {% if include.alt_text %}data-alt="{{ include.alt_text }}"{% endif %}>
 
   <!-- Main content wrapper -->
   <div class="step-content">
