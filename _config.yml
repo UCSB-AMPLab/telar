@@ -3,7 +3,7 @@
 
 # Site Settings
 title: "Telar"
-description: "Telar (Spanish for 'loom') is a static site generator built on Jekyll that weaves together IIIF images, text, and layered contextual information into interactive digital narrative exhibitions. <a href='https://github.com/UCSB-AMPLab/telar'>Telar</a> is a project of <a href='https://neogranadina.org'>Neogranadina</a> and the Archives, Memory, and Preservation Labs at <a href='https://ampl.clair.ucsb.edu/'>UC Santa Barbara</a> and <a href='https://liberalarts.utexas.edu/history/'>UT Austin</a>."
+description: "Telar (Spanish for 'loom') is a static site generator built on Jekyll that weaves together IIIF images, text, and layered contextual information into interactive digital narrative exhibitions. <a href='https://github.com/UCSB-AMPLab/telar'>Telar</a> is a project of <a href='https://neogranadina.org'>Neogranadina</a>, the <a href='https://ampl.clair.ucsb.edu/'>UCSB Archives, Memory, and Preservation Lab</a>, and the <a href='https://liberalarts.utexas.edu/history/'>UT Archives, Mapping, and Pedagogy Lab</a>."
 url: "https://ampl.clair.ucsb.edu"
 baseurl: "/telar"
 author: ""
