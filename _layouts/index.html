@@ -508,7 +508,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // First check if object has explicit thumbnail URL (best for level0 IIIF, also works as override)
     if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
       const img = document.createElement('img');
-      img.src = upgradeIIIFThumbnailUrl(objectData.thumbnail);
+      const originalUrl = objectData.thumbnail;
+      const upgradedUrl = upgradeIIIFThumbnailUrl(originalUrl);
+      img.src = upgradedUrl;
+      // Fall back to original size if upgraded URL fails (level0 servers)
+      if (upgradedUrl !== originalUrl) {
+        img.onerror = function() {
+          this.src = originalUrl;
+          this.onerror = null;
+        };
+      }
       img.alt = item.closest('.story-card').querySelector('h3').textContent;
       img.style.width = '100%';
       img.style.height = '100%';
@@ -666,7 +675,16 @@ featuredThumbnails.forEach(function(item) {
   // Check for explicit thumbnail first
   if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
     const img = document.createElement('img');
-    img.src = upgradeIIIFThumbnailUrl(objectData.thumbnail);
+    const originalUrl = objectData.thumbnail;
+    const upgradedUrl = upgradeIIIFThumbnailUrl(originalUrl);
+    img.src = upgradedUrl;
+    // Fall back to original size if upgraded URL fails (level0 servers)
+    if (upgradedUrl !== originalUrl) {
+      img.onerror = function() {
+        this.src = originalUrl;
+        this.onerror = null;
+      };
+    }
     img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
     img.style.width = '100%';
     img.style.height = '100%';
