@@ -37,7 +37,7 @@ pairs from a text block, used by the carousel parser.
 and renders it with the parsed widget data. If the template fails, it
 returns an error `<div>` instead of crashing the build.
 
-Version: v0.7.0-beta
+Version: v1.1.0
 """
 
 import re
@@ -295,6 +295,39 @@ def parse_accordion_widget(content, file_path, warnings_list):
     return {'panels': sections}
 
 
+def parse_bibliography_widget(content, file_path, warnings_list):
+    """Parse bibliography widget content.
+
+    Expected format:
+    :::bibliography
+    Author, A. (2020). *Title of work*. Publisher.
+
+    Author, B. (2019). Title with [link](url). Journal, 1(2), 3-4.
+    :::
+
+    Each blank-line-separated block becomes one entry with hanging indent.
+
+    Returns:
+        dict: Parsed bibliography data with 'entries' list
+    """
+    entries = []
+    for block in content.split('\n\n'):
+        block = block.strip()
+        if not block:
+            continue
+        html = markdown.markdown(block, extensions=['extra', 'nl2br'])
+        entries.append({'content_html': html})
+
+    if not entries:
+        warnings_list.append({
+            'type': 'widget',
+            'widget_type': 'bibliography',
+            'message': 'Bibliography block contains no entries'
+        })
+
+    return {'entries': entries}
+
+
 def render_widget_html(widget_type, widget_data, widget_id):
     """
     Render widget HTML using Jinja2 template.
@@ -352,7 +385,8 @@ def process_widgets(text, file_path, warnings_list):
         widget_parsers = {
             'carousel': parse_carousel_widget,
             'tabs': parse_tabs_widget,
-            'accordion': parse_accordion_widget
+            'accordion': parse_accordion_widget,
+            'bibliography': parse_bibliography_widget
         }
 
         if widget_type not in widget_parsers:
