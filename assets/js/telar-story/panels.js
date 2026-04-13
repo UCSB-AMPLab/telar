@@ -22,11 +22,12 @@
  * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
  * modal and must be explicitly dismissed.
  *
- * @version v1.0.0-beta
+ * @version v1.1.0
  */
 
 import { state } from './state.js';
 import { getBasePath, fixImageUrls } from './utils.js';
+import { writeHash, writeHashWithGlossary } from './deep-link.js';
 
 // ── Panel open / close ───────────────────────────────────────────────────────
 
@@ -105,6 +106,19 @@ export function openPanel(panelType, contentId) {
       window.Telar.initializeGlossaryLinks(contentElement);
     }
 
+    // Assign deep-link running numbers to glossary links
+    const glossaryLinks = contentElement.querySelectorAll('.glossary-link');
+    glossaryLinks.forEach((el, i) => {
+      el.dataset.deepLinkN = i + 1;
+    });
+
+    // Update hash when a glossary link is clicked
+    glossaryLinks.forEach((el) => {
+      el.addEventListener('click', () => {
+        writeHashWithGlossary(parseInt(el.dataset.deepLinkN, 10));
+      });
+    });
+
     // Re-render LaTeX in dynamically loaded panel content
     if (window.telarRenderLatex) {
       window.telarRenderLatex(contentElement);
@@ -122,6 +136,7 @@ export function openPanel(panelType, contentId) {
 
     state.isPanelOpen = true;
     activateScrollLock();
+    writeHash();
   }
 }
 
@@ -143,6 +158,17 @@ export function closePanel(panelType) {
   if (bsOffcanvas) {
     bsOffcanvas.hide();
   }
+
+  // Write hash immediately on close action — URL reverts to step-only (or
+  // the panel below) without waiting for the Bootstrap animation (350ms).
+  // panelStack is updated by the caller (closeTopPanel/closeAllPanels) so
+  // we read the stack after filtering out the closing panel for hash building.
+  const stackAfterClose = state.panelStack.filter(p => p.type !== panelType);
+  // Temporarily set panelStack to reflect post-close state for writeHash
+  const savedStack = state.panelStack;
+  state.panelStack = stackAfterClose;
+  writeHash();
+  state.panelStack = savedStack;
 
   // Wait for Bootstrap animation before checking panel state
   setTimeout(() => {
@@ -177,7 +203,9 @@ export function closeAllPanels() {
     }
   });
 
+  state.panelStack = [];
   state.isPanelOpen = false;
+  writeHash();
   deactivateScrollLock();
 }
 
