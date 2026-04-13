@@ -28,7 +28,7 @@
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v1.0.0-beta
+ * @version v1.1.0
  */
 
 import { state } from './state.js';

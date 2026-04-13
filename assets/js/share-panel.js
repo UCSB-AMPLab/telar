@@ -1,6 +1,6 @@
 /**
  * Share Panel Functionality
- * @version v1.0.0-beta
+ * @version v1.1.0
  *
  * Handles share link and embed code generation for Telar stories.
  * Redesigned with pill-style tabs and unified privacy toggle.
