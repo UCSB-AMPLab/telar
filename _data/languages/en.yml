@@ -115,6 +115,7 @@ pages:
   objects_intro_all_collection: "There are {count} objects in the collection. Have a look at them below."
   objects_intro_sample_stories: "There are {count} objects featured in the stories. Have a look at {sample} of them below."
   objects_intro_sample_collection: "There are {count} objects in the collection. Have a look at {sample} of them below."
+  collection_mode_heading: "Explore the collection"
 
 # Objects browse and search (v0.8.0)
 objects:
@@ -274,6 +275,7 @@ share:
   # Pill-style tabs
   tab_this_story: "this story"
   tab_a_single_story: "a single story"
+  tab_this_view: "this view"
   tab_this_whole_site: "this whole site"
 
   # Section headings
@@ -294,6 +296,7 @@ share:
 
   # Help text
   help_story_link_story: "Copy a direct link to this story to share by email, social media, or messaging apps."
+  help_view_link: "Copy a link to this exact point in the story — the step and panel you're currently viewing."
   help_site_link: "Copy a link to the site homepage, where visitors can browse all stories."
   help_embed_story: "Embed this story in another website or LMS."
 

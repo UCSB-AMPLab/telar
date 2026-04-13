@@ -1420,14 +1420,16 @@
     let scene = -1;
     let runPos = 0;
     let currentObjectId = null;
+    let titleCounter = 0;
     const plateZ = {};
     const textCardZ = {};
     for (let i = 0; i < steps.length; i++) {
       const objectId = steps[i].object || steps[i].objectId || "";
-      if (objectId !== currentObjectId) {
+      const effectiveId = objectId === "" ? "__title_" + titleCounter++ + "__" : objectId;
+      if (effectiveId !== currentObjectId) {
         scene++;
         runPos = 0;
-        currentObjectId = objectId;
+        currentObjectId = effectiveId;
       }
       const bandBase = (scene + 1) * 100;
       plateZ[i] = bandBase;
@@ -1471,14 +1473,16 @@
   function _buildSceneMaps(steps) {
     let scene = -1;
     let currentObjectId = null;
+    let titleCounter = 0;
     state.stepToScene = {};
     state.sceneToObject = {};
     state.sceneFirstStep = {};
     for (let i = 0; i < steps.length; i++) {
       const objectId = steps[i].object || steps[i].objectId || "";
-      if (objectId !== currentObjectId) {
+      const effectiveId = objectId === "" ? "__title_" + titleCounter++ + "__" : objectId;
+      if (effectiveId !== currentObjectId) {
         scene++;
-        currentObjectId = objectId;
+        currentObjectId = effectiveId;
         state.sceneToObject[scene] = objectId;
         state.sceneFirstStep[scene] = i;
       }
@@ -1508,10 +1512,13 @@
     const cardH = viewportH * 0.8;
     _zPlan = computeZIndexPlan(steps);
     _buildSceneMaps(steps);
+    state.titleCards = {};
+    state.activeTitleCardIndex = null;
     const audioObjects = storyData?.audioObjects || window.audioObjects || {};
     for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
       const firstStepIdx = state.sceneFirstStep[sceneIdx];
       const objectId = state.sceneToObject[sceneIdx];
+      if (!objectId) continue;
       const firstStep = steps[firstStepIdx] || {};
       const objectData = state.objectsIndex[objectId] || {};
       const audioExt = audioObjects[objectId];
@@ -1552,11 +1559,26 @@
       const step = steps[stepIdx];
       const objectId = step.object || step.objectId || "";
       const objectData = state.objectsIndex[objectId] || {};
+      const audioExt2 = audioObjects[objectId];
       const cardType = detectCardType({
         objectId,
         cardType: step.cardType,
-        source_url: objectData.source_url || objectData.iiif_manifest || ""
+        source_url: objectData.source_url || objectData.iiif_manifest || "",
+        file_path: audioExt2 ? `objects/${objectId}.${audioExt2}` : ""
       });
+      if (!objectId) {
+        const zIndex = _zPlan.textCardZ[stepIdx];
+        const titleCard = document.createElement("div");
+        titleCard.className = "title-card";
+        titleCard.dataset.stepIndex = String(stepIdx);
+        titleCard.dataset.cardType = "title";
+        titleCard.style.zIndex = zIndex;
+        titleCard.style.transform = "translateY(100vh)";
+        titleCard.innerHTML = _buildTitleCardContent(step);
+        cardStack.appendChild(titleCard);
+        state.titleCards[stepIdx] = titleCard;
+        continue;
+      }
       if (cardType === "text-only" || objectId) {
         if (!Object.hasOwn(objectRunPosition, objectId)) {
           objectRunPosition[objectId] = 0;
@@ -1640,7 +1662,21 @@
     ${layerButtons ? `<div class="step-actions">${layerButtons}</div>` : ""}
   `;
   }
+  function _buildTitleCardContent(step) {
+    const heading = step.question || "";
+    const body = step.answer || "";
+    return `
+    <div class="title-card-inner">
+      <h2 class="title-card-heading">${heading}</h2>
+      ${body ? '<p class="title-card-body">' + body + "</p>" : ""}
+    </div>
+  `;
+  }
   function activateCard(index2, direction) {
+    if (state.titleCards?.[index2]) {
+      _activateTitleCardStep(index2, direction);
+      return;
+    }
     const card = state.textCards[index2];
     if (!card) return;
     const poolEntry = state.cardPool.find((c) => c.stepIndex === index2);
@@ -1659,6 +1695,14 @@
         _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
         state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
         _deactivatePreviousTextCard(index2, direction);
+        if (state.activeTitleCardIndex != null) {
+          const prevTitle = state.titleCards[state.activeTitleCardIndex];
+          if (prevTitle) {
+            prevTitle.classList.remove("is-active");
+            prevTitle.classList.add("is-stacked");
+          }
+          state.activeTitleCardIndex = null;
+        }
         _activateTextCard(card);
         updateObjectCredits(objectId);
       } else {
@@ -1725,6 +1769,15 @@
         }
         state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
         _deactivatePreviousTextCard(index2, direction);
+        if (state.activeTitleCardIndex != null) {
+          const prevTitle = state.titleCards[state.activeTitleCardIndex];
+          if (prevTitle) {
+            prevTitle.classList.remove("is-active");
+            prevTitle.style.transform = "translateY(100vh)";
+            prevTitle.classList.remove("is-stacked");
+          }
+          state.activeTitleCardIndex = null;
+        }
         _activateTextCard(card);
         updateObjectCredits(objectId);
       } else {
@@ -1760,7 +1813,7 @@
   function setCardProgress(stepIndex, progress) {
     if (progress < 1e-3) return;
     const nextIndex = stepIndex + 1;
-    const nextCard = state.textCards[nextIndex];
+    const nextCard = state.textCards[nextIndex] || state.titleCards?.[nextIndex];
     if (!nextCard) return;
     const cardStack = document.querySelector(".card-stack");
     if (!cardStack || !cardStack.classList.contains("is-scrubbing")) return;
@@ -1775,11 +1828,19 @@
     const nextObjectId = nextStep2.object || nextStep2.objectId || "";
     const currentObjectId = currentStep.object || currentStep.objectId || "";
     if (nextObjectId !== currentObjectId) {
-      const nextSceneIndex = getSceneIndex(nextIndex);
-      const nextPlate = nextSceneIndex >= 0 ? state.viewerPlates[nextSceneIndex] : null;
-      if (nextPlate) {
-        const plateTranslateY = (1 - progress) * 100;
-        nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
+      if (nextObjectId === "") {
+        const currentSceneIndex = getSceneIndex(stepIndex);
+        const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
+        if (currentPlate) {
+          currentPlate.style.transform = `translateY(-${progress * 100}%)`;
+        }
+      } else {
+        const nextSceneIndex = getSceneIndex(nextIndex);
+        const nextPlate = nextSceneIndex >= 0 ? state.viewerPlates[nextSceneIndex] : null;
+        if (nextPlate) {
+          const plateTranslateY = (1 - progress) * 100;
+          nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
+        }
       }
     }
   }
@@ -2023,6 +2084,48 @@
     cardEl.classList.add("is-active");
     cardEl.style.transform = buildTransform(messiness, "translateY(0)");
   }
+  function _activateTitleCardStep(index2, direction) {
+    const titleCard = state.titleCards[index2];
+    if (!titleCard) return;
+    if (state.activeTitleCardIndex != null && state.activeTitleCardIndex !== index2) {
+      const prevTitle = state.titleCards[state.activeTitleCardIndex];
+      if (prevTitle) {
+        prevTitle.classList.remove("is-active");
+        if (direction === "backward") {
+          prevTitle.style.transform = "translateY(100vh)";
+          prevTitle.classList.remove("is-stacked");
+        } else {
+          prevTitle.classList.add("is-stacked");
+        }
+      }
+    }
+    _deactivatePreviousTextCard(index2, direction);
+    const departingStepIndex = direction === "backward" ? index2 + 1 : index2 - 1;
+    const departingSceneIndex = departingStepIndex >= 0 ? getSceneIndex(departingStepIndex) : -1;
+    const departingPlate = departingSceneIndex >= 0 ? state.viewerPlates[departingSceneIndex] : null;
+    if (departingPlate) {
+      if (direction === "backward") {
+        departingPlate.style.transition = "none";
+        departingPlate.style.transform = "translateY(100%)";
+        void departingPlate.offsetHeight;
+        departingPlate.style.transition = "";
+      }
+      if (departingPlate.classList.contains("video-plate")) {
+        deactivateVideoCard(departingPlate);
+      } else if (departingPlate.classList.contains("audio-plate")) {
+        deactivateAudioCard(departingPlate);
+      } else {
+        departingPlate.classList.remove("is-active");
+      }
+    }
+    titleCard.classList.remove("is-stacked");
+    titleCard.classList.add("is-active");
+    titleCard.style.transform = "translateY(0)";
+    state.activeTitleCardIndex = index2;
+    state.currentObjectRun = { objectId: "", runPosition: 0 };
+    updateObjectCredits("");
+    preloadAhead(index2, _config.preloadSteps, 2);
+  }
   function _animateViewerToStep(objectId, step, stepIndex) {
     const x = parseFloat(step.x);
     const y = parseFloat(step.y);
@@ -2183,7 +2286,7 @@
   }
 
   // node_modules/lenis/dist/lenis.mjs
-  var version = "1.3.20";
+  var version = "1.3.21";
   function clamp(min, input, max) {
     return Math.max(min, Math.min(input, max));
   }
@@ -2629,7 +2732,7 @@
       else this.internalStart();
     }
     onTransitionEnd = (event) => {
-      if (event.propertyName.includes("overflow")) this.checkOverflow();
+      if (event.propertyName?.includes("overflow") && event.target === this.rootElement) this.checkOverflow();
     };
     setScroll(scroll) {
       if (this.isHorizontal) this.options.wrapper.scrollTo({
@@ -3423,195 +3526,6 @@
     }
   };
 
-  // assets/js/telar-story/scroll-engine.js
-  var lenis;
-  var snap;
-  var snapRemovers = [];
-  var rafId;
-  var dwellTimer;
-  var totalPositions = 0;
-  var keyboardNavInFlight = false;
-  function initScrollEngine(stepCount) {
-    const surface = document.querySelector(".scroll-surface");
-    const cardStack = document.querySelector(".card-stack");
-    if (!surface || !cardStack) {
-      console.error("scroll-engine: .scroll-surface or .card-stack not found in DOM");
-      return;
-    }
-    state.steps = Array.from(document.querySelectorAll(".story-step"));
-    history.scrollRestoration = "manual";
-    totalPositions = stepCount + 1;
-    surface.style.height = `${totalPositions * window.innerHeight}px`;
-    lenis = new Lenis({
-      lerp: 0.06,
-      // lower = heavier, more contemplative feel
-      smoothWheel: true,
-      wheelMultiplier: 0.5,
-      // scroll sensitivity
-      autoRaf: false,
-      // we drive the rAF loop manually
-      prevent: (node) => node.closest(".panel") !== null
-      // scroll anywhere except inside open panels
-    });
-    snap = new Snap(lenis, {
-      type: "lock",
-      velocityThreshold: 0.5,
-      debounce: 150,
-      distanceThreshold: "20%",
-      lerp: 0.08,
-      onSnapStart: () => {
-        state.isSnapping = true;
-      },
-      onSnapComplete: () => {
-        state.isSnapping = false;
-        lenis.stop();
-        dwellTimer = setTimeout(() => {
-          lenis.start();
-          dwellTimer = null;
-        }, 500);
-      }
-    });
-    registerSnapPoints(totalPositions);
-    let scrubEndTimer;
-    lenis.on("virtual-scroll", () => {
-      cardStack.classList.add("is-scrubbing");
-      clearTimeout(scrubEndTimer);
-      scrubEndTimer = setTimeout(() => cardStack.classList.remove("is-scrubbing"), 100);
-    });
-    lenis.on("scroll", (l) => {
-      const position = l.animatedScroll / window.innerHeight;
-      updateScrollPosition(position);
-    });
-    rafId = requestAnimationFrame(function raf(time) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    });
-    window.addEventListener("resize", () => {
-      surface.style.height = `${totalPositions * window.innerHeight}px`;
-      lenis.resize();
-      registerSnapPoints(totalPositions);
-    });
-    state.lenis = lenis;
-    state.snap = snap;
-    initKeyboardNavigation();
-    initializeLoadingShimmer();
-  }
-  function registerSnapPoints(count) {
-    snapRemovers.forEach((fn) => fn());
-    snapRemovers = [];
-    for (let i = 0; i < count; i++) {
-      snapRemovers.push(snap.add(i * window.innerHeight));
-    }
-  }
-  function advanceToStep(targetIndex) {
-    if (targetIndex < 0 || targetIndex >= state.steps.length) return;
-    const lenisInstance = state.lenis || lenis;
-    if (!lenisInstance) return;
-    const targetPx = (targetIndex + 1) * window.innerHeight;
-    lenisInstance.scrollTo(targetPx, {
-      duration: 0.5,
-      easing: (t) => 1 - Math.pow(1 - t, 3)
-      // ease-out cubic
-    });
-  }
-  function keyboardNav(direction) {
-    if (!lenis) return;
-    if (dwellTimer) {
-      clearTimeout(dwellTimer);
-      dwellTimer = null;
-      lenis.start();
-    }
-    const vh = window.innerHeight;
-    const position = lenis.animatedScroll / vh;
-    const isExact = Math.abs(position - Math.round(position)) < 0.01;
-    const rounded = Math.round(position);
-    let target;
-    if (direction === "forward") {
-      target = isExact ? rounded + 1 : Math.ceil(position);
-    } else {
-      target = isExact ? rounded - 1 : Math.floor(position);
-    }
-    target = Math.max(0, Math.min(target, totalPositions - 1));
-    if (target === rounded && isExact) return;
-    if (direction === "backward") {
-      const contentStepIndex = Math.floor(Math.max(0, position - 1));
-      const scrubCard = state.textCards?.[contentStepIndex + 1];
-      if (scrubCard && !scrubCard.classList.contains("is-active")) {
-        const rot = parseFloat(scrubCard.dataset.messinessRot || 0);
-        const offX = parseFloat(scrubCard.dataset.messinessOffX || 0);
-        const offY = parseFloat(scrubCard.dataset.messinessOffY || 0);
-        scrubCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-      }
-    }
-    if (snap) snap.currentSnapIndex = target;
-    const targetStep = target - 1;
-    if (targetStep >= 0 && targetStep !== state.currentIndex) {
-      state.scrollDriven = true;
-      activateCard(targetStep, direction);
-      state.scrollDriven = false;
-      state.currentIndex = targetStep;
-      updateViewerInfo(targetStep);
-    }
-    keyboardNavInFlight = true;
-    lenis.scrollTo(target * vh, {
-      force: true,
-      duration: 0.8,
-      easing: (t) => 1 - Math.pow(1 - t, 3),
-      // ease-out cubic
-      onComplete: () => {
-        keyboardNavInFlight = false;
-      }
-    });
-  }
-  function getScrollEngineState() {
-    return {
-      lenis,
-      snap,
-      position: state.scrollPosition,
-      progress: state.scrollProgress
-    };
-  }
-  function updateScrollPosition(position) {
-    const contentPos = position - 1;
-    const maxContent = state.steps.length - 1;
-    state.scrollPosition = position;
-    if (position < 1) {
-      state.scrollProgress = 0;
-      if (state.currentIndex >= 0) {
-        goToStep(-1, "backward");
-      }
-      const progress2 = position;
-      const firstCard = state.textCards?.[0];
-      if (firstCard) {
-        const rot = parseFloat(firstCard.dataset.messinessRot || 0);
-        const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-        const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-        const translateY = (1 - progress2) * 100;
-        firstCard.style.transform = `translateY(${translateY}vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-      }
-      const firstPlate = state.viewerPlates?.[0];
-      if (firstPlate) {
-        const plateTranslateY = (1 - progress2) * 100;
-        firstPlate.style.transform = `translateY(${plateTranslateY}%)`;
-      }
-      return;
-    }
-    const clamped = Math.min(maxContent, contentPos);
-    const stepIndex = Math.floor(clamped);
-    const progress = clamped - stepIndex;
-    state.scrollProgress = progress;
-    setCardProgress(stepIndex, progress);
-    lerpIiifPosition(stepIndex, progress, window.storyData?.steps || []);
-    if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
-      const direction = stepIndex > state.currentIndex ? "forward" : "backward";
-      state.scrollDriven = true;
-      activateCard(stepIndex, direction);
-      state.scrollDriven = false;
-      state.currentIndex = stepIndex;
-      updateViewerInfo(stepIndex);
-    }
-  }
-
   // assets/js/telar-story/panels.js
   function initializePanels() {
     document.addEventListener("click", function(e) {
@@ -3662,6 +3576,15 @@
       if (window.Telar && window.Telar.initializeGlossaryLinks) {
         window.Telar.initializeGlossaryLinks(contentElement);
       }
+      const glossaryLinks = contentElement.querySelectorAll(".glossary-link");
+      glossaryLinks.forEach((el, i) => {
+        el.dataset.deepLinkN = i + 1;
+      });
+      glossaryLinks.forEach((el) => {
+        el.addEventListener("click", () => {
+          writeHashWithGlossary(parseInt(el.dataset.deepLinkN, 10));
+        });
+      });
       if (window.telarRenderLatex) {
         window.telarRenderLatex(contentElement);
       }
@@ -3674,6 +3597,7 @@
       bsOffcanvas.show();
       state.isPanelOpen = true;
       activateScrollLock();
+      writeHash();
     }
   }
   function closePanel(panelType) {
@@ -3684,6 +3608,11 @@
     if (bsOffcanvas) {
       bsOffcanvas.hide();
     }
+    const stackAfterClose = state.panelStack.filter((p) => p.type !== panelType);
+    const savedStack = state.panelStack;
+    state.panelStack = stackAfterClose;
+    writeHash();
+    state.panelStack = savedStack;
     setTimeout(() => {
       const anyPanelOpen = document.querySelector(".offcanvas.show");
       if (!anyPanelOpen) {
@@ -3707,7 +3636,9 @@
         bsOffcanvas.hide();
       }
     });
+    state.panelStack = [];
     state.isPanelOpen = false;
+    writeHash();
     deactivateScrollLock();
   }
   function getPanelContent(panelType, contentId) {
@@ -3807,6 +3738,302 @@
     const backdrop = document.getElementById("panel-backdrop");
     if (backdrop) {
       backdrop.style.display = "none";
+    }
+  }
+
+  // assets/js/telar-story/deep-link.js
+  var _isScrollDrivenHashUpdate = false;
+  var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g|ps)(\d+))?)?$/;
+  function parseFragment(hash) {
+    if (!hash || hash === "#") return null;
+    const m = FRAGMENT_RE.exec(hash);
+    if (!m) return null;
+    return {
+      step: parseInt(m[1], 10),
+      // 1-based step number
+      layer: m[2] ? parseInt(m[2], 10) : null,
+      subType: m[3] || null,
+      // 'g' or 'ps'
+      subN: m[4] ? parseInt(m[4], 10) : null
+    };
+  }
+  function writeHash() {
+    _writeHashFragment(null, null);
+  }
+  function writeHashWithGlossary(n) {
+    _writeHashFragment("g", n);
+  }
+  function _writeHashFragment(subType, subN) {
+    const idx = state.currentIndex;
+    let hash = "";
+    if (idx >= 0) {
+      hash = `#s${idx + 1}`;
+      if (state.panelStack.length > 0) {
+        for (let i = state.panelStack.length - 1; i >= 0; i--) {
+          const layerMatch = state.panelStack[i].type.match(/^layer(\d+)$/);
+          if (layerMatch) {
+            hash += `l${layerMatch[1]}`;
+            if (subType !== null && subN !== null) {
+              hash += `${subType}${subN}`;
+            }
+            break;
+          }
+        }
+      }
+    }
+    _isScrollDrivenHashUpdate = true;
+    if (hash) {
+      history.replaceState(null, "", hash);
+    } else {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    Promise.resolve().then(() => {
+      _isScrollDrivenHashUpdate = false;
+    });
+  }
+  function applyDeepLinkOnLoad() {
+    const parsed = parseFragment(window.location.hash);
+    if (!parsed) return;
+    const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
+    if (targetIndex < 0) return;
+    if (state.lenis) {
+      const targetPx = (targetIndex + 1) * window.innerHeight;
+      state.lenis.stop();
+      document.documentElement.scrollTop = targetPx;
+      state.lenis.animatedScroll = targetPx;
+      state.lenis.targetScroll = targetPx;
+      activateCard(targetIndex, "forward");
+      state.currentIndex = targetIndex;
+      state.scrollPosition = targetIndex + 1;
+      requestAnimationFrame(() => {
+        state.lenis.start();
+      });
+    } else {
+      state.currentMobileStep = targetIndex;
+      state.mobileInIntro = false;
+      activateCard(targetIndex, "forward");
+      state.steps.forEach((step, i) => {
+        if (i === targetIndex) {
+          step.classList.add("mobile-active");
+        } else {
+          step.classList.remove("mobile-active");
+        }
+      });
+    }
+    if (parsed.layer !== null) {
+      const stepNumber = state.steps[targetIndex]?.dataset?.step;
+      if (stepNumber) {
+        setTimeout(() => {
+          openPanel("layer" + parsed.layer, stepNumber);
+        }, 100);
+      }
+    }
+    if (parsed.layer !== null && parsed.subType === "g" && parsed.subN !== null) {
+      const stepNumber = state.steps[targetIndex]?.dataset?.step;
+      if (stepNumber) {
+        setTimeout(() => {
+          const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
+          if (panelContent) {
+            const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
+            if (target) target.click();
+          }
+        }, 300);
+      }
+    }
+  }
+
+  // assets/js/telar-story/scroll-engine.js
+  var lenis;
+  var snap;
+  var snapRemovers = [];
+  var rafId;
+  var dwellTimer;
+  var totalPositions = 0;
+  var keyboardNavInFlight = false;
+  function initScrollEngine(stepCount) {
+    const surface = document.querySelector(".scroll-surface");
+    const cardStack = document.querySelector(".card-stack");
+    if (!surface || !cardStack) {
+      console.error("scroll-engine: .scroll-surface or .card-stack not found in DOM");
+      return;
+    }
+    state.steps = Array.from(document.querySelectorAll(".story-step"));
+    history.scrollRestoration = "manual";
+    totalPositions = stepCount + 1;
+    surface.style.height = `${totalPositions * window.innerHeight}px`;
+    lenis = new Lenis({
+      lerp: 0.06,
+      // lower = heavier, more contemplative feel
+      smoothWheel: true,
+      wheelMultiplier: 0.5,
+      // scroll sensitivity
+      autoRaf: false,
+      // we drive the rAF loop manually
+      prevent: (node) => node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null
+      // let wheel events pass through inside open panels
+    });
+    snap = new Snap(lenis, {
+      type: "lock",
+      velocityThreshold: 0.5,
+      debounce: 150,
+      distanceThreshold: "20%",
+      lerp: 0.08,
+      onSnapStart: () => {
+        state.isSnapping = true;
+      },
+      onSnapComplete: () => {
+        state.isSnapping = false;
+        const finalPosition = lenis.animatedScroll / window.innerHeight;
+        updateScrollPosition(finalPosition);
+        writeHash();
+        lenis.stop();
+        dwellTimer = setTimeout(() => {
+          if (!state.isPanelOpen) {
+            lenis.start();
+          }
+          dwellTimer = null;
+        }, 500);
+      }
+    });
+    registerSnapPoints(totalPositions);
+    let scrubEndTimer;
+    lenis.on("virtual-scroll", () => {
+      cardStack.classList.add("is-scrubbing");
+      clearTimeout(scrubEndTimer);
+      scrubEndTimer = setTimeout(() => cardStack.classList.remove("is-scrubbing"), 100);
+    });
+    lenis.on("scroll", (l) => {
+      const position = l.animatedScroll / window.innerHeight;
+      updateScrollPosition(position);
+    });
+    rafId = requestAnimationFrame(function raf(time) {
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    });
+    window.addEventListener("resize", () => {
+      surface.style.height = `${totalPositions * window.innerHeight}px`;
+      lenis.resize();
+      registerSnapPoints(totalPositions);
+    });
+    state.lenis = lenis;
+    state.snap = snap;
+    initKeyboardNavigation();
+    initializeLoadingShimmer();
+  }
+  function registerSnapPoints(count) {
+    snapRemovers.forEach((fn) => fn());
+    snapRemovers = [];
+    for (let i = 0; i < count; i++) {
+      snapRemovers.push(snap.add(i * window.innerHeight));
+    }
+  }
+  function advanceToStep(targetIndex) {
+    if (targetIndex < 0 || targetIndex >= state.steps.length) return;
+    const lenisInstance = state.lenis || lenis;
+    if (!lenisInstance) return;
+    const targetPx = (targetIndex + 1) * window.innerHeight;
+    lenisInstance.scrollTo(targetPx, {
+      duration: 0.5,
+      easing: (t) => 1 - Math.pow(1 - t, 3)
+      // ease-out cubic
+    });
+  }
+  function keyboardNav(direction) {
+    if (!lenis) return;
+    if (dwellTimer) {
+      clearTimeout(dwellTimer);
+      dwellTimer = null;
+      lenis.start();
+    }
+    const vh = window.innerHeight;
+    const position = lenis.animatedScroll / vh;
+    const isExact = Math.abs(position - Math.round(position)) < 0.01;
+    const rounded = Math.round(position);
+    let target;
+    if (direction === "forward") {
+      target = isExact ? rounded + 1 : Math.ceil(position);
+    } else {
+      target = isExact ? rounded - 1 : Math.floor(position);
+    }
+    target = Math.max(0, Math.min(target, totalPositions - 1));
+    if (target === rounded && isExact) return;
+    if (direction === "backward") {
+      const contentStepIndex = Math.floor(Math.max(0, position - 1));
+      const scrubCard = state.textCards?.[contentStepIndex + 1];
+      if (scrubCard && !scrubCard.classList.contains("is-active")) {
+        const rot = parseFloat(scrubCard.dataset.messinessRot || 0);
+        const offX = parseFloat(scrubCard.dataset.messinessOffX || 0);
+        const offY = parseFloat(scrubCard.dataset.messinessOffY || 0);
+        scrubCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+      }
+    }
+    if (snap) snap.currentSnapIndex = target;
+    const targetStep = target - 1;
+    if (targetStep >= 0 && targetStep !== state.currentIndex) {
+      state.scrollDriven = true;
+      activateCard(targetStep, direction);
+      state.scrollDriven = false;
+      state.currentIndex = targetStep;
+      updateViewerInfo(targetStep);
+    }
+    keyboardNavInFlight = true;
+    lenis.scrollTo(target * vh, {
+      force: true,
+      duration: 0.8,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+      // ease-out cubic
+      onComplete: () => {
+        keyboardNavInFlight = false;
+        writeHash();
+      }
+    });
+  }
+  function getScrollEngineState() {
+    return {
+      lenis,
+      snap,
+      position: state.scrollPosition,
+      progress: state.scrollProgress
+    };
+  }
+  function updateScrollPosition(position) {
+    const contentPos = position - 1;
+    const maxContent = state.steps.length - 1;
+    state.scrollPosition = position;
+    if (position < 1) {
+      state.scrollProgress = 0;
+      if (state.currentIndex >= 0 && !keyboardNavInFlight) {
+        goToStep(-1, "backward");
+      }
+      const progress2 = position;
+      const firstCard = state.textCards?.[0];
+      if (firstCard) {
+        const rot = parseFloat(firstCard.dataset.messinessRot || 0);
+        const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
+        const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
+        const translateY = (1 - progress2) * 100;
+        firstCard.style.transform = `translateY(${translateY}vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+      }
+      const firstPlate = state.viewerPlates?.[0];
+      if (firstPlate) {
+        const plateTranslateY = (1 - progress2) * 100;
+        firstPlate.style.transform = `translateY(${plateTranslateY}%)`;
+      }
+      return;
+    }
+    const clamped = Math.min(maxContent, contentPos);
+    const stepIndex = Math.floor(clamped);
+    const progress = clamped - stepIndex;
+    state.scrollProgress = progress;
+    setCardProgress(stepIndex, progress);
+    lerpIiifPosition(stepIndex, progress, window.storyData?.steps || []);
+    if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
+      const direction = stepIndex > state.currentIndex ? "forward" : "backward";
+      state.scrollDriven = true;
+      activateCard(stepIndex, direction);
+      state.scrollDriven = false;
+      state.currentIndex = stepIndex;
+      updateViewerInfo(stepIndex);
     }
   }
 
@@ -3989,6 +4216,7 @@
       activateCard(newIndex, direction);
     }
     updateViewerInfo(newIndex);
+    writeHash();
   }
   function updateMobileButtonStates() {
     if (!state.mobileNavButtons) return;
@@ -3996,10 +4224,14 @@
     state.mobileNavButtons.next.disabled = state.currentMobileStep === state.steps.length - 1;
   }
   function handleKeyboard(e) {
-    if (e.repeat) return;
+    if (e.repeat && !state.isPanelOpen) return;
     switch (e.key) {
       case "ArrowDown":
       case "PageDown":
+        if (state.isPanelOpen) {
+          scrollOpenPanel(40);
+          break;
+        }
         e.preventDefault();
         if (!state.scrollLockActive) {
           if (state.lenis) {
@@ -4011,6 +4243,10 @@
         break;
       case "ArrowUp":
       case "PageUp":
+        if (state.isPanelOpen) {
+          scrollOpenPanel(-40);
+          break;
+        }
         e.preventDefault();
         if (!state.scrollLockActive) {
           if (state.lenis) {
@@ -4049,6 +4285,11 @@
         }
         break;
       case " ":
+        if (state.isPanelOpen) {
+          scrollOpenPanel(e.shiftKey ? -100 : 100);
+          e.preventDefault();
+          break;
+        }
         e.preventDefault();
         if (!state.scrollLockActive) {
           if (e.shiftKey) {
@@ -4061,6 +4302,13 @@
         }
         break;
     }
+  }
+  function scrollOpenPanel(delta) {
+    const top = state.panelStack[state.panelStack.length - 1];
+    if (!top) return;
+    const panel = document.getElementById(`panel-${top.type}`);
+    const body = panel?.querySelector(".offcanvas-body");
+    if (body) body.scrollBy({ top: delta, behavior: "smooth" });
   }
   function getCurrentStepNumber() {
     if (state.currentIndex < 0 || state.currentIndex >= state.steps.length) {
@@ -4119,6 +4367,7 @@
       initScrollEngine(stepCount);
     }
     initializePanels();
+    applyDeepLinkOnLoad();
     initializeScrollLock();
     initializeCredits();
   }

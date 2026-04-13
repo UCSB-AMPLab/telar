@@ -36,13 +36,14 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.0.0-beta
+ * @version v1.1.0
  */
 
 import Lenis from 'lenis';
 import Snap from 'lenis/snap';
 import { state } from './state.js';
 import { activateCard, setCardProgress } from './card-pool.js';
+import { writeHash } from './deep-link.js';
 import { goToStep, updateViewerInfo } from './navigation.js';
 import { initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
@@ -100,7 +101,7 @@ export function initScrollEngine(stepCount) {
     smoothWheel: true,
     wheelMultiplier: 0.5,    // scroll sensitivity
     autoRaf: false,          // we drive the rAF loop manually
-    prevent: (node) => node.closest('.panel') !== null,  // scroll anywhere except inside open panels
+    prevent: (node) => node.closest('.offcanvas') !== null || node.closest('[data-telar-panel]') !== null,  // let wheel events pass through inside open panels
   });
 
   // Create Snap plugin with lock mode — directional snapping (forward on
@@ -117,8 +118,19 @@ export function initScrollEngine(stepCount) {
     },
     onSnapComplete: () => {
       state.isSnapping = false;
+      // Force a final position update — the last scroll callback may have
+      // fired just before the snap landed (e.g. position 0.99 instead of
+      // 1.0), so state.currentIndex would not yet reflect the snapped step.
+      const finalPosition = lenis.animatedScroll / window.innerHeight;
+      updateScrollPosition(finalPosition);
+      writeHash();
       lenis.stop();
-      dwellTimer = setTimeout(() => { lenis.start(); dwellTimer = null; }, 500);
+      dwellTimer = setTimeout(() => {
+        if (!state.isPanelOpen) {
+          lenis.start();
+        }
+        dwellTimer = null;
+      }, 500);
     },
   });
 
@@ -285,7 +297,10 @@ export function keyboardNav(direction) {
     force: true,
     duration: 0.8,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
-    onComplete: () => { keyboardNavInFlight = false; },
+    onComplete: () => {
+      keyboardNavInFlight = false;
+      writeHash();
+    },
   });
 }
 
@@ -330,8 +345,9 @@ export function updateScrollPosition(position) {
   if (position < 1) {
     state.scrollProgress = 0;
 
-    // Crossed from content back to intro
-    if (state.currentIndex >= 0) {
+    // Crossed from content back to intro — but not during a keyboard-triggered
+    // scroll animation, which passes through the intro zone on its way to step 1
+    if (state.currentIndex >= 0 && !keyboardNavInFlight) {
       goToStep(-1, 'backward');
     }
 

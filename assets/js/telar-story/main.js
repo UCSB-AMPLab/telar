@@ -48,6 +48,7 @@ import {
   openPanel,
   closeAllPanels,
 } from './panels.js';
+import { applyDeepLinkOnLoad } from './deep-link.js';
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
@@ -103,6 +104,7 @@ function initializeStory() {
   }
 
   initializePanels();
+  applyDeepLinkOnLoad();
   initializeScrollLock();
   initializeCredits();
 }

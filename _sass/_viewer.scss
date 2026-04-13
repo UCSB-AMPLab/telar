@@ -75,6 +75,7 @@
 }
 
 /* Object page: transparent Tify internals so the weave pattern shows through */
+#object-viewer .tify,
 #object-viewer .tify-scan,
 #object-viewer .openseadragon-container {
   background: transparent !important;

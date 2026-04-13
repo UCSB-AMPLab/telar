@@ -115,6 +115,7 @@ pages:
   objects_intro_all_collection: "Hay {count} objetos en la colección. Míralos a continuación."
   objects_intro_sample_stories: "Hay {count} objetos presentes en las historias. Mira {sample} de ellos a continuación."
   objects_intro_sample_collection: "Hay {count} objetos en la colección. Mira {sample} de ellos a continuación."
+  collection_mode_heading: "Explora la colección"
 
 # Objects browse and search (v0.8.0)
 objects:
@@ -274,6 +275,7 @@ share:
   # Pestañas estilo píldora
   tab_this_story: "esta historia"
   tab_a_single_story: "una historia"
+  tab_this_view: "esta vista"
   tab_this_whole_site: "todo el sitio"
 
   # Encabezados de sección
@@ -294,6 +296,7 @@ share:
 
   # Texto de ayuda
   help_story_link_story: "Copia un enlace directo a esta historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
+  help_view_link: "Copia un enlace a este punto exacto de la historia — el paso y el panel que estás viendo."
   help_site_link: "Copia un enlace a la página inicial del sitio, donde las personas pueden explorar todas las historias."
   help_embed_story: "Inserta esta historia en otro sitio web o LMS."
 

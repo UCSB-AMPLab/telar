@@ -47,7 +47,7 @@
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.0.0-beta
+ * @version v1.1.0
  */
 
 import { state } from './state.js';
@@ -129,15 +129,17 @@ export function computeZIndexPlan(steps) {
   let scene = -1;
   let runPos = 0;
   let currentObjectId = null;
+  let titleCounter = 0;
   const plateZ = {};
   const textCardZ = {};
 
   for (let i = 0; i < steps.length; i++) {
     const objectId = steps[i].object || steps[i].objectId || '';
-    if (objectId !== currentObjectId) {
+    const effectiveId = objectId === '' ? '__title_' + (titleCounter++) + '__' : objectId;
+    if (effectiveId !== currentObjectId) {
       scene++;
       runPos = 0;
-      currentObjectId = objectId;
+      currentObjectId = effectiveId;
     }
     const bandBase = (scene + 1) * 100;
     plateZ[i] = bandBase;
@@ -265,6 +267,7 @@ let _zPlan = { viewerPlateZ: {}, textCardZ: {} };
 export function _buildSceneMaps(steps) {
   let scene = -1;
   let currentObjectId = null;
+  let titleCounter = 0;
 
   state.stepToScene = {};
   state.sceneToObject = {};
@@ -272,10 +275,11 @@ export function _buildSceneMaps(steps) {
 
   for (let i = 0; i < steps.length; i++) {
     const objectId = steps[i].object || steps[i].objectId || '';
-    if (objectId !== currentObjectId) {
+    const effectiveId = objectId === '' ? '__title_' + (titleCounter++) + '__' : objectId;
+    if (effectiveId !== currentObjectId) {
       scene++;
-      currentObjectId = objectId;
-      state.sceneToObject[scene] = objectId;
+      currentObjectId = effectiveId;
+      state.sceneToObject[scene] = objectId;  // store real empty string, not sentinel
       state.sceneFirstStep[scene] = i;
     }
     state.stepToScene[i] = scene;
@@ -346,6 +350,10 @@ export function initCardPool(storyData, config) {
   // Build scene maps (walk steps, identify scene boundaries)
   _buildSceneMaps(steps);
 
+  // Initialise title card state maps
+  state.titleCards = {};
+  state.activeTitleCardIndex = null;
+
   // Audio object manifest: maps object_id → file extension (e.g. 'mp3')
   // Injected by story.html as window.audioObjects from _data/audio_objects.json
   const audioObjects = storyData?.audioObjects || window.audioObjects || {};
@@ -354,6 +362,7 @@ export function initCardPool(storyData, config) {
   for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
     const firstStepIdx = state.sceneFirstStep[sceneIdx];
     const objectId = state.sceneToObject[sceneIdx];
+    if (!objectId) continue;  // Title card scene — no viewer plate
     const firstStep = steps[firstStepIdx] || {};
     const objectData = state.objectsIndex[objectId] || {};
     const audioExt = audioObjects[objectId];
@@ -406,11 +415,28 @@ export function initCardPool(storyData, config) {
     const step = steps[stepIdx];
     const objectId = step.object || step.objectId || '';
     const objectData = state.objectsIndex[objectId] || {};
+    const audioExt2 = audioObjects[objectId];
     const cardType = detectCardType({
       objectId,
       cardType: step.cardType,
       source_url: objectData.source_url || objectData.iiif_manifest || '',
+      file_path: audioExt2 ? `objects/${objectId}.${audioExt2}` : '',
     });
+
+    if (!objectId) {
+      // Title card — full-viewport, no messiness, no viewer plate
+      const zIndex = _zPlan.textCardZ[stepIdx];
+      const titleCard = document.createElement('div');
+      titleCard.className = 'title-card';
+      titleCard.dataset.stepIndex = String(stepIdx);
+      titleCard.dataset.cardType = 'title';
+      titleCard.style.zIndex = zIndex;
+      titleCard.style.transform = 'translateY(100vh)';
+      titleCard.innerHTML = _buildTitleCardContent(step);
+      cardStack.appendChild(titleCard);
+      state.titleCards[stepIdx] = titleCard;
+      continue;  // skip text card creation for this step
+    }
 
     if (cardType === 'text-only' || objectId) {
       // Track run position within this object's sequence
@@ -521,6 +547,23 @@ function buildTextCardContent(step) {
   `;
 }
 
+/**
+ * Build the inner HTML for a title card from step data.
+ *
+ * @param {Object} step - Step data object
+ * @returns {string} HTML string
+ */
+function _buildTitleCardContent(step) {
+  const heading = step.question || '';
+  const body    = step.answer   || '';
+  return `
+    <div class="title-card-inner">
+      <h2 class="title-card-heading">${heading}</h2>
+      ${body ? '<p class="title-card-body">' + body + '</p>' : ''}
+    </div>
+  `;
+}
+
 // ── Context-sensitive card activation ────────────────────────────────────────
 
 /**
@@ -543,6 +586,12 @@ function buildTextCardContent(step) {
  * @param {'forward'|'backward'} direction
  */
 export function activateCard(index, direction) {
+  // Title card path — no viewer plate, no text card, no IIIF
+  if (state.titleCards?.[index]) {
+    _activateTitleCardStep(index, direction);
+    return;
+  }
+
   const card = state.textCards[index];
   if (!card) return;
 
@@ -573,6 +622,16 @@ export function activateCard(index, direction) {
 
       // Deactivate previous text card (keep stacked, not slide away)
       _deactivatePreviousTextCard(index, direction);
+
+      // Deactivate active title card if transitioning from title → content (forward)
+      if (state.activeTitleCardIndex != null) {
+        const prevTitle = state.titleCards[state.activeTitleCardIndex];
+        if (prevTitle) {
+          prevTitle.classList.remove('is-active');
+          prevTitle.classList.add('is-stacked');
+        }
+        state.activeTitleCardIndex = null;
+      }
 
       // Activate new text card
       _activateTextCard(card);
@@ -675,6 +734,17 @@ export function activateCard(index, direction) {
       // Slide current text card back down
       _deactivatePreviousTextCard(index, direction);
 
+      // Deactivate active title card if transitioning from title → content (backward)
+      if (state.activeTitleCardIndex != null) {
+        const prevTitle = state.titleCards[state.activeTitleCardIndex];
+        if (prevTitle) {
+          prevTitle.classList.remove('is-active');
+          prevTitle.style.transform = 'translateY(100vh)';
+          prevTitle.classList.remove('is-stacked');
+        }
+        state.activeTitleCardIndex = null;
+      }
+
       // Restore this step's text card to active
       _activateTextCard(card);
 
@@ -746,7 +816,7 @@ export function setCardProgress(stepIndex, progress) {
   if (progress < 0.001) return; // At exact integer, no scrub needed
 
   const nextIndex = stepIndex + 1;
-  const nextCard = state.textCards[nextIndex];
+  const nextCard = state.textCards[nextIndex] || state.titleCards?.[nextIndex];
   if (!nextCard) return;
 
   // Only apply per-frame transforms during scrub mode
@@ -771,12 +841,21 @@ export function setCardProgress(stepIndex, progress) {
   const currentObjectId = currentStep.object || currentStep.objectId || '';
 
   if (nextObjectId !== currentObjectId) {
-    // Object change — slide next viewer plate proportionally too
-    const nextSceneIndex = getSceneIndex(nextIndex);
-    const nextPlate = nextSceneIndex >= 0 ? state.viewerPlates[nextSceneIndex] : null;
-    if (nextPlate) {
-      const plateTranslateY = (1 - progress) * 100; // %
-      nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
+    if (nextObjectId === '') {
+      // Next step is a title card — scrub current plate away downward
+      const currentSceneIndex = getSceneIndex(stepIndex);
+      const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
+      if (currentPlate) {
+        currentPlate.style.transform = `translateY(-${progress * 100}%)`;
+      }
+    } else {
+      // Normal object change — slide next viewer plate proportionally
+      const nextSceneIndex = getSceneIndex(nextIndex);
+      const nextPlate = nextSceneIndex >= 0 ? state.viewerPlates[nextSceneIndex] : null;
+      if (nextPlate) {
+        const plateTranslateY = (1 - progress) * 100; // %
+        nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
+      }
     }
   }
 }
@@ -1146,6 +1225,70 @@ function _activateTextCard(cardEl) {
   cardEl.classList.remove('is-stacked');
   cardEl.classList.add('is-active');
   cardEl.style.transform = buildTransform(messiness, 'translateY(0)');
+}
+
+/**
+ * Activate a title card step — slide it up from below (forward) or restore it
+ * (backward), hide the credits bar, and update activeTitleCardIndex.
+ *
+ * @param {number} index - Step index of the title card
+ * @param {'forward'|'backward'} direction
+ */
+function _activateTitleCardStep(index, direction) {
+  const titleCard = state.titleCards[index];
+  if (!titleCard) return;
+
+  // Deactivate any previously active title card
+  if (state.activeTitleCardIndex != null && state.activeTitleCardIndex !== index) {
+    const prevTitle = state.titleCards[state.activeTitleCardIndex];
+    if (prevTitle) {
+      prevTitle.classList.remove('is-active');
+      if (direction === 'backward') {
+        prevTitle.style.transform = 'translateY(100vh)';
+        prevTitle.classList.remove('is-stacked');
+      } else {
+        prevTitle.classList.add('is-stacked');
+      }
+    }
+  }
+
+  // Deactivate any previously active text card (content step → title card transition)
+  _deactivatePreviousTextCard(index, direction);
+
+  // Deactivate the departing content scene's viewer plate so the title card
+  // is fully visible and any playing video/audio is stopped.
+  const departingStepIndex = direction === 'backward' ? index + 1 : index - 1;
+  const departingSceneIndex = departingStepIndex >= 0 ? getSceneIndex(departingStepIndex) : -1;
+  const departingPlate = departingSceneIndex >= 0 ? state.viewerPlates[departingSceneIndex] : null;
+  if (departingPlate) {
+    if (direction === 'backward') {
+      departingPlate.style.transition = 'none';
+      departingPlate.style.transform = 'translateY(100%)';
+      void departingPlate.offsetHeight;
+      departingPlate.style.transition = '';
+    }
+    if (departingPlate.classList.contains('video-plate')) {
+      deactivateVideoCard(departingPlate);
+    } else if (departingPlate.classList.contains('audio-plate')) {
+      deactivateAudioCard(departingPlate);
+    } else {
+      departingPlate.classList.remove('is-active');
+    }
+  }
+
+  // Activate this title card
+  titleCard.classList.remove('is-stacked');
+  titleCard.classList.add('is-active');
+  titleCard.style.transform = 'translateY(0)';
+
+  state.activeTitleCardIndex = index;
+  state.currentObjectRun = { objectId: '', runPosition: 0 };
+
+  // Hide credits bar — no object to attribute
+  updateObjectCredits('');
+
+  // Preload ahead (title card scenes have no viewer to init, preloadAhead guards internally)
+  preloadAhead(index, _config.preloadSteps, 2);
 }
 
 /**

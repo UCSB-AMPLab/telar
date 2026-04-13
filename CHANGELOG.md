@@ -2,6 +2,40 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [1.1.0] - 2026-04-12
+
+Structural and navigational features for richer storytelling.
+
+### Added
+
+- **Deep linking**: Share URLs that point to a specific step in a story, optionally with a panel layer open. The URL fragment updates silently as the reader scrolls, and shared links open directly at the right position
+
+- **Title cards**: Chapter heading cards that appear between story steps. Mark a step row with an empty object to create a title card — it displays styled heading text without a media viewer and participates fully in scroll, keyboard, and button navigation
+
+- **Collection mode**: Set `collection_mode: true` in `_config.yml` to flip the homepage to a collection-first layout with large object thumbnails and stories below. Default mode is unchanged
+
+- **Bibliography styling**: Use the `:::bibliography` widget block in panel markdown content to format references with hanging indent (first line flush, subsequent lines indented)
+
+- **Share panel "this view" tab**: The share panel now includes a tab that copies the current URL with the reader's exact position
+
+### Fixed
+
+- **Panel scroll**: Wheel events inside open panels are no longer intercepted by the scroll engine. Users can scroll panel content freely without the story advancing
+
+- **Keyboard navigation in panels**: Arrow keys, Page Up/Down, and Spacebar now scroll panel content when a panel is open, instead of navigating story steps
+
+- **Video/audio not paused on title cards**: Media players now properly deactivate when scrolling from a video or audio card into a title card, in both directions
+
+- **IIIF viewer background on object pages**: The Telar weave pattern now shows correctly behind the IIIF viewer on object pages, instead of Tify's default grey dot grid
+
+- **Audio object detection**: Audio objects are now correctly detected even without the `audiowaveform` system dependency, via a new audio manifest generated during the CSV-to-JSON pipeline
+
+- **ArrowRight on first step**: Fixed an issue where pressing ArrowRight immediately after arriving at step 1 from the intro could fail because the scroll animation briefly reset the step index
+
+### Changed
+
+- **Panel DOM attributes**: All panels now carry a `data-telar-panel` attribute for consistent selector targeting
+
 ## [1.0.0-beta] - 2026-03-25
 
 A new milestone.
