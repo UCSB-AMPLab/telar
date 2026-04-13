@@ -149,7 +149,8 @@
 /* Widgets - constrain to same width as text */
 .offcanvas-body .telar-widget-accordion,
 .offcanvas-body .telar-widget-carousel,
-.offcanvas-body .telar-widget-tabs {
+.offcanvas-body .telar-widget-tabs,
+.offcanvas-body .telar-widget-bibliography {
   max-width: 650px;
   margin-left: auto;
   margin-right: auto;
@@ -157,7 +158,8 @@
 
 #panel-layer2 .offcanvas-body .telar-widget-accordion,
 #panel-layer2 .offcanvas-body .telar-widget-carousel,
-#panel-layer2 .offcanvas-body .telar-widget-tabs {
+#panel-layer2 .offcanvas-body .telar-widget-tabs,
+#panel-layer2 .offcanvas-body .telar-widget-bibliography {
   max-width: 600px;
 }
 
@@ -263,7 +265,8 @@
 
 #panel-glossary .offcanvas-body .telar-widget-accordion,
 #panel-glossary .offcanvas-body .telar-widget-carousel,
-#panel-glossary .offcanvas-body .telar-widget-tabs {
+#panel-glossary .offcanvas-body .telar-widget-tabs,
+#panel-glossary .offcanvas-body .telar-widget-bibliography {
   max-width: 550px;
 }
 

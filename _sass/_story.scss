@@ -49,6 +49,10 @@
   &.is-scrubbing .text-card {
     transition: none;
   }
+
+  &.is-scrubbing .title-card {
+    transition: none;
+  }
 }
 
 // ── Viewer Plate ──────────────────────────────────────────────────────────────
@@ -476,6 +480,51 @@
   .alert {
     text-align: left;
     font-size: 0.9rem;
+  }
+}
+
+// ── Title cards ───────────────────────────────────────────────────────────────
+// Full-viewport chapter heading dividers, visually identical to the story
+// intro card. Each title card is its own scene in the card pool.
+
+.title-card {
+  position: absolute;
+  inset: 0;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(100vh);
+  transition: transform 0.5s ease-out;
+
+  .title-card-inner {
+    text-align: center;
+    max-width: 550px;
+    width: 90%;
+    padding: 2.5rem 3rem;
+  }
+
+  .title-card-heading {
+    font-family: var(--font-headings);
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+
+  .title-card-body {
+    font-size: 1.1rem;
+    color: #5a6c7d;
+    line-height: 1.6;
+  }
+
+  &.is-active {
+    transform: translateY(0);
+  }
+
+  &.is-stacked {
+    transform: translateY(0);
   }
 }
 

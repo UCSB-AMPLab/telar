@@ -33,7 +33,7 @@ story_key from _config.yml. Finally, `generate_search_data()` builds the
 Lunr.js search index and facet counts that power the gallery's
 browse-and-search interface.
 
-Version: v1.0.0-beta
+Version: v1.1.0
 """
 
 import os
@@ -220,6 +220,54 @@ def _encrypt_protected_stories(data_dir):
             print(f"  ❌ Failed to encrypt {story_json.name}: {e}")
 
 
+AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
+
+
+def _generate_audio_manifest(data_dir):
+    """Generate _data/audio_objects.json from objects.json and local audio files.
+
+    Scans telar-content/objects/ for audio files matching object IDs in
+    objects.json, then writes a simple {object_id: extension} manifest.
+    This manifest is consumed by story.html to inject window.audioObjects,
+    which the JS card-type detector needs to distinguish audio objects from
+    IIIF objects.
+
+    Runs as part of the normal csv_to_json pipeline — no external tools
+    required (unlike process_audio.py which needs audiowaveform for peak
+    generation).
+    """
+    objects_json = data_dir / 'objects.json'
+    if not objects_json.exists():
+        return
+
+    with open(objects_json, 'r', encoding='utf-8') as f:
+        objects = json.load(f)
+
+    objects_dir = Path('telar-content/objects')
+    if not objects_dir.exists():
+        return
+
+    manifest = {}
+    for obj in objects:
+        object_id = obj.get('object_id', '').strip()
+        if not object_id:
+            continue
+        for ext in AUDIO_EXTENSIONS:
+            if (objects_dir / f'{object_id}{ext}').exists():
+                manifest[object_id] = ext.lstrip('.')
+                break
+
+    manifest_path = data_dir / 'audio_objects.json'
+    if manifest:
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest, f, indent=2)
+        print(f"  [INFO] Audio manifest: {len(manifest)} audio object(s) → {manifest_path}")
+    elif manifest_path.exists():
+        # No audio objects — remove stale manifest
+        manifest_path.unlink()
+        print(f"  [INFO] No audio objects found — removed stale {manifest_path}")
+
+
 def main():
     """Main conversion process."""
     import argparse
@@ -299,6 +347,12 @@ def main():
             '_data/objects.json',
             process_objects
         )
+
+    # Generate audio_objects.json manifest for client-side audio detection.
+    # Maps object_id → file extension (e.g. {"cusb-cyl11337d": "mp3"}).
+    # Without this file, story.html cannot inject window.audioObjects and
+    # the JS card-type detector falls through to IIIF for audio objects.
+    _generate_audio_manifest(data_dir)
 
     # Generate search data for gallery filtering (if enabled in config)
     generate_search_data()
