@@ -11,6 +11,7 @@ email: ""
 telar_theme: "trama" # Options: trama, paisajes, neogranadina, santa-barbara, austin, or custom
 logo: ""
 telar_language: "en" # Options: "en" (English), "es" (Español)
+collection_mode: false # Set to true to show objects first with large thumbnails and stories below with small thumbnails (collection-first homepage)
 
 # Story Interface Settings
 story_interface:
@@ -115,8 +116,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "1.0.0-beta"
-  release_date: "2026-03-25"
+  version: "1.1.0"
+  release_date: "2026-04-12"
 
 # Plugins
 plugins:
