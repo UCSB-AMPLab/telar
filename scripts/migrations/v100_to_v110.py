@@ -141,9 +141,9 @@ class Migration100to110(BaseMigration):
             changes.append("Note: collection_mode already present in _config.yml, skipped")
             return changes
 
-        # Insert collection_mode after telar_language line
+        # Insert collection_mode after telar_language line (value may be quoted or unquoted)
         new_content, count = re.subn(
-            r'(telar_language:\s*"[^"]*"[^\n]*\n)',
+            r'(telar_language:\s*[^\n]*\n)',
             r'\1collection_mode: false # Set to true to show objects first with large thumbnails and stories below with small thumbnails (collection-first homepage)\n',
             content,
             count=1
