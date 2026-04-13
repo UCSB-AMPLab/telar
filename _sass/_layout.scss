@@ -11,7 +11,7 @@
  * (outside of panels) follow the same colour convention as Layer 1 panels,
  * using Layer 2 colours for contrast.
  *
- * @version v1.0.0-beta
+ * @version v1.1.0-beta
  */
 
 @use 'mixins' as *;
@@ -1167,4 +1167,67 @@
   margin: 0;
   color: #666;
   font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   Collection Mode — v1.1.0
+   When site.collection_mode is true, the homepage
+   reorders: objects lead with large .story-card treatment (reusing existing
+   .story-card rules verbatim — no new CSS needed for the top grid), and
+   stories drop into a small .featured-objects-grid.collection-mode-stories
+   grid below. These rules add only the tweaks needed to host stories
+   (which have a longer byline than object metadata) inside that small grid.
+   ========================================================================== */
+
+.featured-objects-grid.collection-mode-stories {
+  /* Reuse the auto-fill minmax(167px, 170px) grid from the base rule. */
+
+  .collection-item {
+    position: relative; /* anchor for .demo-badge on demo stories */
+  }
+
+  .collection-item.demo-story {
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 8px;
+  }
+
+  .collection-item .demo-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    background: rgba(108, 117, 125, 0.85);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    z-index: 2;
+  }
+
+  .collection-item .story-protected-thumbnail {
+    aspect-ratio: 1;
+    width: 100%;
+    background: var(--color-primary, #555);
+  }
+
+  .collection-item .story-thumbnail-placeholder {
+    aspect-ratio: 1;
+    width: 100%;
+  }
+
+  .collection-title {
+    /* Slightly larger than default collection-title to give story titles breathing room */
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .collection-meta {
+    /* Story bylines can be longer than object period/creator — allow two lines before truncating */
+    font-size: 0.75rem;
+    color: #666;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }

@@ -225,6 +225,192 @@ title: Home
   {% assign story_show_on_homepage = site.story_interface.show_on_homepage | default: true %}
   {% assign collection_show_link = site.collection_interface.show_link_on_homepage | default: true %}
 
+  {%- comment -%}
+    Collection mode (v1.1.0): when site.collection_mode is true,
+    the homepage leads with a large objects grid (up to 8, sourced from is_featured_sample
+    with a fallback to the first 8 objects) and places stories below in a small grid.
+    Falls back to default mode if there are no objects to show (D-19) or if skip_collections
+    is true (D-15). Flag lives at the top level of _config.yml (Site Settings block).
+  {%- endcomment -%}
+  {% assign collection_mode_flag = site.collection_mode | default: false %}
+  {% assign collection_mode_active = false %}
+  {% if collection_mode_flag and skip_collections == false and site.objects.size > 0 %}
+    {% assign collection_mode_active = true %}
+  {% endif %}
+
+  {%- comment -%}Compute the curated large-grid object list (collection mode only){%- endcomment -%}
+  {% assign collection_featured = site.objects | where: "is_featured_sample", true %}
+  {% if collection_featured.size == 0 %}
+    {%- comment -%}Empty-featured fallback — use first 8 objects in default sort order{%- endcomment -%}
+    {% assign collection_featured = site.objects %}
+  {% endif %}
+  {% assign collection_featured = collection_featured | slice: 0, 8 %}
+
+  {% if collection_mode_active %}
+    {%- comment -%}
+      COLLECTION MODE LAYOUT (v1.1.0)
+      Overrides story_interface.show_on_homepage (D-13) and
+      collection_interface.show_link_on_homepage / show_sample_on_homepage (D-14).
+    {%- endcomment -%}
+
+    <!-- Large Objects Grid (collection mode, top) -->
+    <div class="row">
+      <div class="col-lg-11 mx-auto">
+        <h2 class="mb-4">{{ lang.pages.collection_mode_heading | default: "Explore the collection" }}</h2>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-5">
+          {% for object in collection_featured %}
+          <div class="col">
+            <a href="{{ object.url | relative_url }}" class="story-card text-decoration-none">
+              <div class="card h-100 border-0 shadow-sm">
+                {% if object.media_type == 'Video' %}
+                  <div class="card-img-top video-thumbnail" aria-label="Video" style="aspect-ratio: 1;">
+                    <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                  </div>
+                {% elsif object.media_type == 'Audio' %}
+                  <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
+                    <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  </div>
+                {% else %}
+                  {%- comment -%}
+                    All image objects route through .story-iiif-thumbnail so the existing
+                    client-side IIIF loader handles the priority chain:
+                      1. explicit object.thumbnail (upgraded via upgradeIIIFThumbnailUrl)
+                      2. remote IIIF manifest (fetched, parsed, sized for level0/level1+)
+                      3. local info.json for locally-generated tiles
+                    Do NOT add a raw <img src="{{ object.thumbnail }}"> branch here — it
+                    bypasses the upgrade/derive chain and produces tiny or broken thumbnails
+                    for IIIF-backed objects whose CSV thumbnails use !96,96 or similar.
+                  {%- endcomment -%}
+                  <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ object.object_id }}" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
+                    <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center h-100">
+                      <span class="text-muted">Loading...</span>
+                    </div>
+                  </div>
+                {% endif %}
+                <div class="card-body">
+                  <h3>{{ object.title }}</h3>
+                  {% if object.period and object.period != "" %}
+                  <p class="story-card-byline">{{ object.period }}</p>
+                  {% elsif object.creator and object.creator != "" %}
+                  <p class="story-card-byline">{{ object.creator }}</p>
+                  {% endif %}
+                </div>
+              </div>
+            </a>
+          </div>
+          {% endfor %}
+        </div>
+        <a href="{{ '/objects/' | relative_url }}" class="btn btn-primary mt-4">{{ lang.buttons.view_objects | default: "View all objects" }}</a>
+      </div>
+    </div>
+
+    <!-- Small Stories Grid (collection mode, bottom) -->
+    {%- comment -%}D-13: collection mode overrides story_interface.show_on_homepage. D-17: suppress entirely if no stories.{%- endcomment -%}
+    {% unless skip_stories %}
+    {% if site.stories.size > 0 %}
+    <div class="row mt-5">
+      <div class="col-lg-11 mx-auto">
+        <h3 class="mb-4">{{ lang.pages.stories_heading | default: "Explore the stories" }}</h3>
+        {% assign sorted_stories = site.stories | sort: "sort_order" %}
+        <div class="featured-objects-grid collection-mode-stories">
+          {% for story in sorted_stories %}
+          {% assign story_data = site.data[story.data_file] %}
+          {% assign is_encrypted = false %}
+          {% if story_data.encrypted %}{% assign is_encrypted = true %}{% endif %}
+          <a href="{{ story.url | relative_url }}" class="collection-item{% if story.demo %} demo-story{% endif %}">
+            <div class="collection-thumbnail">
+              {% if story.demo %}
+              <span class="demo-badge">{{ lang.demo.badge }}</span>
+              {% endif %}
+              {% if is_encrypted %}
+                <div class="story-protected-thumbnail d-flex align-items-center justify-content-center">
+                  <svg viewBox="0 0 48 72" fill="none" xmlns="http://www.w3.org/2000/svg" class="protected-keyhole">
+                    <circle cx="24" cy="20" r="16" fill="#fff"/>
+                    <path d="M17 32L10 68H38L31 32H17Z" fill="#fff"/>
+                  </svg>
+                </div>
+              {% elsif story_data and story_data.size > 0 %}
+                {%- comment -%}Reuse the thumbnail discovery loop from the default stories section{%- endcomment -%}
+                {% assign thumb_obj = nil %}
+                {% assign thumb_step = nil %}
+                {% assign fallback_obj = nil %}
+                {% assign fallback_step = nil %}
+                {% for step in story_data %}
+                  {% if step.object and step.object != "" %}
+                    {% assign step_obj = site.objects | where: "object_id", step.object | first %}
+                    {% if step_obj %}
+                      {% if step_obj.media_type == 'Image' or step_obj.media_type == nil or step_obj.media_type == "" %}
+                        {% unless thumb_obj %}
+                          {% assign thumb_obj = step_obj %}
+                          {% assign thumb_step = step %}
+                        {% endunless %}
+                      {% else %}
+                        {% unless fallback_obj %}
+                          {% assign fallback_obj = step_obj %}
+                          {% assign fallback_step = step %}
+                        {% endunless %}
+                      {% endif %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+                {% unless thumb_obj %}
+                  {% assign thumb_obj = fallback_obj %}
+                  {% assign thumb_step = fallback_step %}
+                {% endunless %}
+                {% if thumb_obj %}
+                  {% if thumb_obj.media_type == 'Video' %}
+                    <div class="video-thumbnail" aria-label="Video">
+                      <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                    </div>
+                  {% elsif thumb_obj.media_type == 'Audio' %}
+                    <div class="audio-thumbnail" aria-label="Audio">
+                      <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                    </div>
+                  {% else %}
+                    {% if thumb_step.page and thumb_step.page != "" %}
+                      {% assign thumb_info_path = '/iiif/objects/' | append: thumb_obj.object_id | append: '/page-' | append: thumb_step.page | append: '/info.json' %}
+                    {% else %}
+                      {% assign thumb_info_path = '/iiif/objects/' | append: thumb_obj.object_id | append: '/info.json' %}
+                    {% endif %}
+                    <div class="featured-iiif-thumbnail" data-object-id="{{ thumb_obj.object_id }}" data-info-json="{{ thumb_info_path | relative_url }}">
+                      <span class="thumbnail-placeholder">{{ story.title | truncate: 15 }}</span>
+                    </div>
+                  {% endif %}
+                {% else %}
+                  <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center">
+                    <span class="text-white">{{ story.story_number }}</span>
+                  </div>
+                {% endif %}
+              {% else %}
+                <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center">
+                  <span class="text-white">{{ story.story_number }}</span>
+                </div>
+              {% endif %}
+            </div>
+            <div class="collection-info">
+              <h4 class="collection-title">{{ story.title }}</h4>
+              {% if is_encrypted %}
+              <p class="collection-meta">{{ lang.unlock.card_description | default: "Protected — key required" }}</p>
+              {% elsif story.byline %}
+              <p class="collection-meta">{{ story.byline | markdownify | strip_html | strip }}</p>
+              {% endif %}
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% endunless %}
+
+  {% else %}
+    {%- comment -%}
+      DEFAULT MODE: preserve the existing stories-first layout exactly as it was.
+      This branch is entered whenever collection_mode is false/absent, or when
+      collection_mode is true but skip_collections fires (D-15) or there are no
+      objects to show (D-19).
+    {%- endcomment -%}
+
   <!-- Stories List (hidden when skip_stories enabled or show_on_homepage: false) -->
   {% unless skip_stories or story_show_on_homepage == false %}
   <div class="row">
@@ -425,6 +611,8 @@ title: Home
   </div>
   {% endif %}
   {% endunless %}
+
+  {% endif %}
 </div>
 
 <script id="telar-stories-data" type="application/json">
