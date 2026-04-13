@@ -25,12 +25,13 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.0.0-beta
+ * @version v1.1.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
 import { activateCard } from './card-pool.js';
 import { advanceToStep, keyboardNav } from './scroll-engine.js';
+import { writeHash } from './deep-link.js';
 import { initializeLoadingShimmer, showViewerSkeletonState } from './viewer.js';
 import {
   openPanel,
@@ -353,6 +354,7 @@ function goToMobileStep(newIndex) {
   }
 
   updateViewerInfo(newIndex);
+  writeHash();
 }
 
 /**
@@ -381,12 +383,17 @@ function updateMobileButtonStates() {
  * @param {KeyboardEvent} e
  */
 function handleKeyboard(e) {
-  // Ignore auto-repeat key events — each key press = one step only
-  if (e.repeat) return;
+  // Ignore auto-repeat key events for story navigation — each key press = one
+  // step only. Allow repeats when a panel is open so held arrow keys scroll.
+  if (e.repeat && !state.isPanelOpen) return;
 
   switch (e.key) {
     case 'ArrowDown':
     case 'PageDown':
+      if (state.isPanelOpen) {
+        scrollOpenPanel(40);
+        break;
+      }
       e.preventDefault();
       if (!state.scrollLockActive) {
         if (state.lenis) {
@@ -399,6 +406,10 @@ function handleKeyboard(e) {
 
     case 'ArrowUp':
     case 'PageUp':
+      if (state.isPanelOpen) {
+        scrollOpenPanel(-40);
+        break;
+      }
       e.preventDefault();
       if (!state.scrollLockActive) {
         if (state.lenis) {
@@ -441,6 +452,11 @@ function handleKeyboard(e) {
       break;
 
     case ' ':
+      if (state.isPanelOpen) {
+        scrollOpenPanel(e.shiftKey ? -100 : 100);
+        e.preventDefault();
+        break;
+      }
       e.preventDefault();
       if (!state.scrollLockActive) {
         if (e.shiftKey) {
@@ -454,6 +470,24 @@ function handleKeyboard(e) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Scroll the topmost open panel's body by a given pixel delta.
+ *
+ * The Bootstrap Offcanvas root receives focus (tabindex="-1") but the
+ * scrollable area is .offcanvas-body inside it. Native arrow keys on
+ * the focused root don't propagate to the child, so we scroll it
+ * programmatically.
+ *
+ * @param {number} delta - Pixels to scroll (positive = down, negative = up).
+ */
+function scrollOpenPanel(delta) {
+  const top = state.panelStack[state.panelStack.length - 1];
+  if (!top) return;
+  const panel = document.getElementById(`panel-${top.type}`);
+  const body = panel?.querySelector('.offcanvas-body');
+  if (body) body.scrollBy({ top: delta, behavior: 'smooth' });
+}
 
 /**
  * Get the current step's number from its data attribute.
