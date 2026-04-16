@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "from_version": "1.1.0",
+  "to_version": "1.2.0",
+  "description": "Story Structure & UX — section card TOC, ordinal removal, Back to Start button",
+  "operations": [
+    {
+      "type": "csv_add_column",
+      "file_glob": "**/project.csv",
+      "column": { "en": "show_sections", "es": "mostrar_secciones" },
+      "default": "",
+      "after": { "en": "private", "es": "privada" }
+    }
+  ],
+  "manual_steps": {
+    "en": [
+      {
+        "description": "**New features available after upgrade:**\n\n- **Section card table of contents**: Add `show_sections: yes` to a story row in project.csv to display a navigable TOC on its title card, linking to each section card in the story. Section cards are steps with an empty object column.\n\n- **Back to Start button**: Stories now show a \"Back to Start\" button once readers scroll past the title card. On the title card, the button shows \"Back to Home\" and links to the homepage.\n\n- **Ordinal numbers removed**: Story cards no longer display auto-generated numbers. The homepage uses the first letter of each story title instead.\n\n- **Deep link fix**: Deep links to layer 2 panels (e.g. `#s3l2`) now correctly open layer 1 underneath.",
+        "doc_url": "https://telar.org/docs"
+      }
+    ],
+    "es": [
+      {
+        "description": "**Nuevas funciones disponibles tras la actualización:**\n\n- **Tabla de contenidos en tarjeta de título**: Agrega `mostrar_secciones: si` a una fila de historia en project.csv para mostrar una tabla de contenidos navegable en su tarjeta de título, con enlaces a cada tarjeta de sección. Las tarjetas de sección son pasos con la columna de objeto vacía.\n\n- **Botón de volver al comienzo**: Las historias ahora muestran un botón \"Comienzo\" una vez que se avanza más allá de la tarjeta de título. En la tarjeta de título, el botón muestra \"Volver al inicio\" y enlaza a la página principal.\n\n- **Números ordinales eliminados**: Las tarjetas de historia ya no muestran números generados automáticamente. La página de inicio usa la primera letra del título de cada historia.\n\n- **Corrección de enlaces directos**: Los enlaces directos a paneles de nivel 2 (ej. `#s3l2`) ahora abren correctamente el nivel 1 debajo.",
+        "doc_url": "https://telar.org/guia"
+      }
+    ]
+  }
+}
