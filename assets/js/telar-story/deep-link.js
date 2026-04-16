@@ -223,30 +223,38 @@ export function applyDeepLinkOnLoad() {
     });
   }
 
-  // Panel state (D-10): apply after step position, with delay for card render
+  // Panel state (D-10): apply after step position, with delay for card render.
+  // Open parent layers underneath the target: layer2 needs layer1 open first,
+  // and glossary sub-links need their parent layer open underneath.
   if (parsed.layer !== null) {
     const stepNumber = state.steps[targetIndex]?.dataset?.step;
     if (stepNumber) {
-      setTimeout(() => {
-        openPanel('layer' + parsed.layer, stepNumber);
-      }, 100);
-    }
-  }
+      let delay = 100;
 
-  // Glossary sub-link activation: after the panel opens, find the
-  // glossary link with the matching running number and click it to open the
-  // glossary entry. Best-effort — if the panel content hasn't loaded in time
-  // the click target won't exist and the sub-link is silently skipped.
-  if (parsed.layer !== null && parsed.subType === 'g' && parsed.subN !== null) {
-    const stepNumber = state.steps[targetIndex]?.dataset?.step;
-    if (stepNumber) {
-      setTimeout(() => {
-        const panelContent = document.getElementById('panel-layer' + parsed.layer + '-content');
-        if (panelContent) {
-          const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
-          if (target) target.click();
-        }
-      }, 300); // 200ms after the panel open setTimeout (100ms above)
+      // Open layer1 first if the target is layer2 or deeper
+      if (parsed.layer >= 2) {
+        setTimeout(() => { openPanel('layer1', stepNumber); }, delay);
+        delay += 200;
+      }
+
+      // Open the target layer
+      setTimeout(() => { openPanel('layer' + parsed.layer, stepNumber); }, delay);
+      delay += 200;
+
+      // Glossary sub-link activation: after the panel opens, find the
+      // glossary link with the matching running number and click it to open
+      // the glossary entry. Best-effort — if the panel content hasn't loaded
+      // in time the click target won't exist and the sub-link is silently
+      // skipped.
+      if (parsed.subType === 'g' && parsed.subN !== null) {
+        setTimeout(() => {
+          const panelContent = document.getElementById('panel-layer' + parsed.layer + '-content');
+          if (panelContent) {
+            const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
+            if (target) target.click();
+          }
+        }, delay);
+      }
     }
   }
 

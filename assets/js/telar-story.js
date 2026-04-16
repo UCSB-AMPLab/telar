@@ -3823,21 +3823,26 @@
     if (parsed.layer !== null) {
       const stepNumber = state.steps[targetIndex]?.dataset?.step;
       if (stepNumber) {
+        let delay = 100;
+        if (parsed.layer >= 2) {
+          setTimeout(() => {
+            openPanel("layer1", stepNumber);
+          }, delay);
+          delay += 200;
+        }
         setTimeout(() => {
           openPanel("layer" + parsed.layer, stepNumber);
-        }, 100);
-      }
-    }
-    if (parsed.layer !== null && parsed.subType === "g" && parsed.subN !== null) {
-      const stepNumber = state.steps[targetIndex]?.dataset?.step;
-      if (stepNumber) {
-        setTimeout(() => {
-          const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
-          if (panelContent) {
-            const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
-            if (target) target.click();
-          }
-        }, 300);
+        }, delay);
+        delay += 200;
+        if (parsed.subType === "g" && parsed.subN !== null) {
+          setTimeout(() => {
+            const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
+            if (panelContent) {
+              const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
+              if (target) target.click();
+            }
+          }, delay);
+        }
       }
     }
   }
