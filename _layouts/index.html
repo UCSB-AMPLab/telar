@@ -378,12 +378,12 @@ title: Home
                   {% endif %}
                 {% else %}
                   <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center">
-                    <span class="text-white">{{ story.story_number }}</span>
+                    <span class="text-white">{{ story.title | truncate: 1, "" }}</span>
                   </div>
                 {% endif %}
               {% else %}
                 <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center">
-                  <span class="text-white">{{ story.story_number }}</span>
+                  <span class="text-white">{{ story.title | truncate: 1, "" }}</span>
                 </div>
               {% endif %}
             </div>
@@ -499,13 +499,13 @@ title: Home
                 {% else %}
                   {%- comment -%}Fallback placeholder if no object found{%- endcomment -%}
                   <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center" style="aspect-ratio: 1;">
-                    <span class="text-white">{{ story.story_number }}</span>
+                    <span class="text-white">{{ story.title | truncate: 1, "" }}</span>
                   </div>
                 {% endif %}
               {% else %}
                 {%- comment -%}Fallback placeholder if no data file{%- endcomment -%}
                 <div class="story-thumbnail-placeholder bg-secondary d-flex align-items-center justify-content-center" style="aspect-ratio: 1;">
-                  <span class="text-white">{{ story.story_number }}</span>
+                  <span class="text-white">{{ story.title | truncate: 1, "" }}</span>
                 </div>
               {% endif %}
 

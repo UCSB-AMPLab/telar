@@ -543,9 +543,8 @@ def generate_stories():
         # Use identifier for filename (no additional prefix)
         filepath = stories_dir / f"{identifier}.md"
 
-        # Build frontmatter (story_number remains numeric for display)
+        # Build frontmatter
         frontmatter = f"""---
-story_number: "{story_num}"
 title: "{story_title}"
 """
         if story_subtitle:
