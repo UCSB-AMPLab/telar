@@ -2,6 +2,28 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [1.2.0] - 2026-04-16
+
+Story structure and UX improvements.
+
+### Added
+
+- **Section card table of contents**: Stories with `show_sections: yes` in project.csv display a navigable TOC on the title card, listing every section card as a clickable link. The title card uses the layer 2 panel background color when TOC is enabled. Add `mostrar_secciones: si` for Spanish-language sites
+
+- **Back to Start button**: The "Back to Home" button in the top-left corner now switches to "Back to Start" once readers scroll past the title card. Clicking it returns to the title card. On mobile, the button shows a contextual icon (home or up-arrow)
+
+- **In-story navigation**: New `navigateToStep()` and `navigateToIntro()` functions allow jumping between steps from within the story, used by the TOC links and the Back to Start button
+
+- **Migration manifest**: Each release now includes a machine-readable `migration.json` describing content transforms, attached as a GitHub Release asset. The Telar Compositor uses these manifests to upgrade sites through its web interface
+
+### Changed
+
+- **Story card placeholders**: Homepage thumbnails now show the first letter of the story title instead of an auto-generated ordinal number. Related story links on object pages show the title only
+
+### Fixed
+
+- **Deep link parent panel stacking**: Deep links to layer 2 panels (e.g. `#s3l2`) now correctly open layer 1 underneath, so all parent panels are visible when arriving via a shared link
+
 ## [1.1.0] - 2026-04-12
 
 Structural and navigational features for richer storytelling.
