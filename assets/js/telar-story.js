@@ -3791,6 +3791,66 @@
       _isScrollDrivenHashUpdate = false;
     });
   }
+  function navigateToIntro() {
+    if (state.viewerPlates) {
+      for (const key of Object.keys(state.viewerPlates)) {
+        const plate = state.viewerPlates[key];
+        if (plate) plate.classList.remove("is-active");
+      }
+    }
+    if (state.lenis) {
+      state.lenis.stop();
+      document.documentElement.scrollTop = 0;
+      state.lenis.animatedScroll = 0;
+      state.lenis.targetScroll = 0;
+      state.currentIndex = -1;
+      state.scrollPosition = 0;
+      requestAnimationFrame(() => {
+        state.lenis.start();
+      });
+    } else {
+      state.currentMobileStep = -1;
+      state.mobileInIntro = true;
+      state.steps.forEach((step) => step.classList.remove("mobile-active"));
+    }
+    goToStep(-1, "backward");
+    writeHash();
+  }
+  function navigateToStep(stepNumber) {
+    const targetIndex = stepNumber - 1;
+    if (targetIndex < 0 || targetIndex >= state.steps.length) return;
+    if (state.viewerPlates) {
+      for (const key of Object.keys(state.viewerPlates)) {
+        const plate = state.viewerPlates[key];
+        if (plate) plate.classList.remove("is-active");
+      }
+    }
+    if (state.lenis) {
+      const targetPx = (targetIndex + 1) * window.innerHeight;
+      state.lenis.stop();
+      document.documentElement.scrollTop = targetPx;
+      state.lenis.animatedScroll = targetPx;
+      state.lenis.targetScroll = targetPx;
+      activateCard(targetIndex, "forward");
+      state.currentIndex = targetIndex;
+      state.scrollPosition = targetIndex + 1;
+      requestAnimationFrame(() => {
+        state.lenis.start();
+      });
+    } else {
+      state.currentMobileStep = targetIndex;
+      state.mobileInIntro = false;
+      activateCard(targetIndex, "forward");
+      state.steps.forEach((step, i) => {
+        if (i === targetIndex) {
+          step.classList.add("mobile-active");
+        } else {
+          step.classList.remove("mobile-active");
+        }
+      });
+    }
+    writeHash();
+  }
   function applyDeepLinkOnLoad() {
     const parsed = parseFragment(window.location.hash);
     if (!parsed) return;
@@ -3980,6 +4040,7 @@
       state.scrollDriven = false;
       state.currentIndex = targetStep;
       updateViewerInfo(targetStep);
+      if (state.onStepChange) state.onStepChange(targetStep);
     }
     keyboardNavInFlight = true;
     lenis.scrollTo(target * vh, {
@@ -4039,6 +4100,7 @@
       state.scrollDriven = false;
       state.currentIndex = stepIndex;
       updateViewerInfo(stepIndex);
+      if (state.onStepChange) state.onStepChange(stepIndex);
     }
   }
 
@@ -4073,10 +4135,12 @@
       updateViewerInfo(-1);
       const creditBadge = document.getElementById("object-credits-badge");
       if (creditBadge) creditBadge.classList.add("d-none");
+      if (state.onStepChange) state.onStepChange(-1);
       return;
     }
     activateCard(newIndex, direction);
     updateViewerInfo(newIndex);
+    if (state.onStepChange) state.onStepChange(newIndex);
   }
   function nextStep() {
     goToStep(state.currentIndex + 1, "forward");
@@ -4373,6 +4437,40 @@
     }
     initializePanels();
     applyDeepLinkOnLoad();
+    const btnNav = document.getElementById("btn-nav-back");
+    if (btnNav) {
+      btnNav.classList.add("is-home");
+      const homeUrl = btnNav.dataset.homeUrl;
+      const homeText = btnNav.dataset.homeText;
+      const startText = btnNav.dataset.startText;
+      const textEl = btnNav.querySelector(".btn-nav-text");
+      state.onStepChange = (index2) => {
+        if (index2 < 0) {
+          btnNav.classList.remove("is-start");
+          btnNav.classList.add("is-home");
+          btnNav.href = homeUrl;
+          if (textEl) textEl.textContent = homeText;
+        } else {
+          btnNav.classList.remove("is-home");
+          btnNav.classList.add("is-start");
+          btnNav.removeAttribute("href");
+          if (textEl) textEl.textContent = startText;
+        }
+      };
+      btnNav.addEventListener("click", (e) => {
+        if (btnNav.classList.contains("is-start")) {
+          e.preventDefault();
+          navigateToIntro();
+        }
+      });
+    }
+    document.querySelectorAll(".intro-toc-link[data-target-step]").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const step = parseInt(link.dataset.targetStep, 10);
+        if (step) navigateToStep(step);
+      });
+    });
     initializeScrollLock();
     initializeCredits();
   }

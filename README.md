@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-1.1.0-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **[Versión en español abajo](#español)** | **[English version](#telar)**
 
@@ -12,7 +12,7 @@ A minimal-computing framework for creating layered IIIF visual narratives for di
 
 ---
 
-> **⚠️ Beta Release - v1.1.0**
+> **⚠️ Beta Release - v1.2.0**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[telar.org/docs](https://telar.org/docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/3-upgrading/) for instructions.
@@ -31,6 +31,7 @@ We gratefully acknowledge the support of the [Caribbean Digital Scholarship Coll
 - **Fluid scroll**: Continuous scroll on desktop with magnetic waypoints, smooth IIIF viewport interpolation, and card-stack transitions. Button navigation on mobile and in embeds
 - **Deep linking**: Share URLs that point to a specific step in a story, optionally with a panel layer open. URLs update silently as the reader scrolls
 - **Title cards**: Chapter heading cards for section breaks within stories, participating fully in scroll and keyboard navigation
+- **Section navigation**: Optional table of contents on title cards and a Back to Start button for in-story navigation between sections
 - **Collection mode**: Flip the homepage to a collection-first layout with a single config flag, keeping stories accessible below
 - **IIIF integration**: Support for both local images (auto-generated tiles) and external IIIF resources with automatic metadata extraction
 - **Interactive widgets**: Carousel, tabs, accordion, and bibliography components for rich content presentation
@@ -133,7 +134,7 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 
 # Español
 
-![Versión](https://img.shields.io/badge/versi%C3%B3n-1.1.0-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-1.2.0-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
 
 **[Versión en español](#español)** | **[English version above](#telar)**
 
@@ -145,7 +146,7 @@ Un marco de computación mínima para crear narrativas visuales con capas de tex
 
 ---
 
-> **⚠️ Versión Beta - v1.1.0**
+> **⚠️ Versión Beta - v1.2.0**
 > Esta es una versión beta para pruebas y retroalimentación. Para documentación detallada, visita **[telar.org/guia](https://telar.org/guia)**.
 
 > **Advertencia:** Si estás actualizando desde v0.3.4 o anterior, consulta la [Guía de Actualización de Telar](https://telar.org/guia/flujos-de-trabajo/actualizacion/) para obtener instrucciones.
@@ -164,6 +165,7 @@ Agradecemos el apoyo del [Caribbean Digital Scholarship Collective](https://cdsc
 - **Desplazamiento fluido**: Desplazamiento continuo en escritorio con puntos magnéticos, interpolación suave del visor IIIF y transiciones de tarjetas apiladas. Navegación por botones en móvil y en modo embebido
 - **Enlaces directos**: URLs que apuntan a un paso específico de una historia, opcionalmente con un panel abierto. Las URLs se actualizan de forma silenciosa mientras se desplaza por la historia
 - **Tarjetas de título**: Tarjetas de encabezado para marcar secciones dentro de las historias, con participación completa en la navegación por desplazamiento y teclado
+- **Navegación por secciones**: Tabla de contenidos opcional en las tarjetas de título y un botón de volver al comienzo para navegar entre secciones dentro de la historia
 - **Modo colección**: La página de inicio se puede cambiar a un diseño que prioriza la colección con un solo ajuste en la configuración, manteniendo las historias accesibles debajo
 - **Integración IIIF**: Soporte para imágenes locales con teselas (*tiles*) generadas automáticamente y recursos IIIF externos con extracción automática de metadatos
 - **Widgets interactivos**: Componentes de carrusel, pestañas, acordeón y bibliografía para presentar contenido enriquecido

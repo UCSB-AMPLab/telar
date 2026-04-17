@@ -27,7 +27,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.0.0-beta
+Version: v1.2.0
 """
 
 import argparse
@@ -543,9 +543,8 @@ def generate_stories():
         # Use identifier for filename (no additional prefix)
         filepath = stories_dir / f"{identifier}.md"
 
-        # Build frontmatter (story_number remains numeric for display)
+        # Build frontmatter
         frontmatter = f"""---
-story_number: "{story_num}"
 title: "{story_title}"
 """
         if story_subtitle:
@@ -557,6 +556,9 @@ title: "{story_title}"
 
         if is_demo:
             frontmatter += f'demo: true\n'
+
+        if story.get('show_sections'):
+            frontmatter += f'show_sections: true\n'
 
         frontmatter += f'sort_order: {sort_order}\n'
 

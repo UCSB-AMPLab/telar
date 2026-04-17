@@ -28,7 +28,7 @@
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v1.1.0
+ * @version v1.2.0
  */
 
 import { state } from './state.js';
@@ -48,7 +48,7 @@ import {
   openPanel,
   closeAllPanels,
 } from './panels.js';
-import { applyDeepLinkOnLoad } from './deep-link.js';
+import { applyDeepLinkOnLoad, navigateToStep, navigateToIntro, writeHash } from './deep-link.js';
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
@@ -105,6 +105,51 @@ function initializeStory() {
 
   initializePanels();
   applyDeepLinkOnLoad();
+
+  // Wire up nav button (Back to Home on intro, Back to Start elsewhere)
+  const btnNav = document.getElementById('btn-nav-back');
+  if (btnNav) {
+    btnNav.classList.add('is-home');
+    const homeUrl = btnNav.dataset.homeUrl;
+    const homeText = btnNav.dataset.homeText;
+    const startText = btnNav.dataset.startText;
+    const textEl = btnNav.querySelector('.btn-nav-text');
+
+    // Switch button mode based on current step
+    state.onStepChange = (index) => {
+      if (index < 0) {
+        // On intro — show Back to Home
+        btnNav.classList.remove('is-start');
+        btnNav.classList.add('is-home');
+        btnNav.href = homeUrl;
+        if (textEl) textEl.textContent = homeText;
+      } else {
+        // Past intro — show Back to Start
+        btnNav.classList.remove('is-home');
+        btnNav.classList.add('is-start');
+        btnNav.removeAttribute('href');
+        if (textEl) textEl.textContent = startText;
+      }
+    };
+
+    btnNav.addEventListener('click', (e) => {
+      if (btnNav.classList.contains('is-start')) {
+        e.preventDefault();
+        navigateToIntro();
+      }
+      // is-home mode: default <a> link behaviour navigates to home
+    });
+  }
+
+  // Wire up TOC section links on the intro card
+  document.querySelectorAll('.intro-toc-link[data-target-step]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const step = parseInt(link.dataset.targetStep, 10);
+      if (step) navigateToStep(step);
+    });
+  });
+
   initializeScrollLock();
   initializeCredits();
 }

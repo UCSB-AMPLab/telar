@@ -404,7 +404,7 @@ layout: default
         <ul class="list-unstyled">
           {% for story in related_stories %}
           <li class="mb-2">
-            <a href="{{ story.url | relative_url }}">{{ story.story_number }}. {{ story.title }}</a>
+            <a href="{{ story.url | relative_url }}">{{ story.title }}</a>
           </li>
           {% endfor %}
         </ul>

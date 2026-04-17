@@ -14,6 +14,7 @@ navigation:
 buttons:
   back: "← Atrás"
   back_to_home: "← Volver al inicio"
+  back_to_start: "↑ Comienzo"
   back_to_collection: "← Volver a la colección"
   back_to_glossary: "← Volver al glosario"
   learn_more: "Saber más"
@@ -92,6 +93,7 @@ demo:
 story:
   demo_label: "Contenido de demostración"
   step_number: "Paso {{ number }}"
+  sections_heading: "Secciones"
   scroll_hint: "Presiona ↓ o desplázate para empezar"
   scroll_hint_mobile: "Utiliza los botones de las flechas para desplazarte"
   config_issues_heading: "Los siguientes pasos tienen problemas de contenido o configuración:"

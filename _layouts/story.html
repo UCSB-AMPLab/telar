@@ -97,11 +97,12 @@
   {% seo %}
 </head>
 <body class="story-page">
-  <!-- Fixed Back to Home Button (hidden in embed mode) -->
+  <!-- Fixed navigation button: Back to Home on intro, Back to Start elsewhere -->
   <nav aria-label="Site navigation">
-    <a href="{{ '/' | relative_url }}" class="btn-home">
-      <svg class="btn-home-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      <span class="btn-home-text">{{ lang.buttons.back_to_home }}</span>
+    <a href="{{ '/' | relative_url }}" class="btn-nav-back" id="btn-nav-back" data-home-url="{{ '/' | relative_url }}" data-home-text="{{ lang.buttons.back_to_home }}" data-start-text="{{ lang.buttons.back_to_start | default: 'Back to Start' }}">
+      <svg class="btn-nav-icon btn-nav-icon--home" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <svg class="btn-nav-icon btn-nav-icon--start" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+      <span class="btn-nav-text">{{ lang.buttons.back_to_home }}</span>
     </a>
   </nav>
 
@@ -113,15 +114,12 @@
     <div class="card-stack">
 
       <!-- Intro (z-index: 0 — covered by first viewer plate which is z-index 100) -->
-      <div class="story-intro" data-step="0" data-step-index="0" style="z-index: 0;">
+      <div class="story-intro{% if page.show_sections %} story-intro--toc{% endif %}" data-step="0" data-step-index="0" style="z-index: 0;">
         <div class="intro-vignette"></div>
         <div class="intro-floating-card">
           {% if page.demo %}
           <p class="intro-demo-label">{{ lang.story.demo_label }}</p>
           {% endif %}
-          {% unless page.demo %}
-          {% if page.story_number %}<h1 class="intro-title">{{ page.story_number }}.</h1>{% endif %}
-          {% endunless %}
           <h1 class="intro-title">{{ page.title }}</h1>
           {% if page.subtitle %}
           <h2 class="intro-subtitle">{{ page.subtitle }}</h2>
@@ -131,6 +129,29 @@
           {% endif %}
           {% if page.description %}
           <p class="intro-description">{{ page.description }}</p>
+          {% endif %}
+
+          {% if page.show_sections and page.data_file %}
+            {% assign data_name = page.data_file %}
+            {% assign story_steps = site.data[data_name] %}
+            {% assign section_cards = "" | split: "" %}
+            {% for s in story_steps %}
+              {% if s._metadata %}{% continue %}{% endif %}
+              {% assign obj = s.object | default: "" %}
+              {% if obj == "" and s.question %}
+                {% assign section_cards = section_cards | push: s %}
+              {% endif %}
+            {% endfor %}
+            {% if section_cards.size > 0 %}
+            <nav class="intro-toc" aria-label="Sections">
+              <p class="intro-toc-heading">{{ lang.story.sections_heading | default: "Sections" }}</p>
+              <ul>
+                {% for sc in section_cards %}
+                <li><a href="#s{{ sc.step }}" class="intro-toc-link" data-target-step="{{ sc.step }}">{{ sc.question }}</a></li>
+                {% endfor %}
+              </ul>
+            </nav>
+            {% endif %}
           {% endif %}
 
           {% if page.data_file %}

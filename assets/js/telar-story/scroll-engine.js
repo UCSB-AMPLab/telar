@@ -36,7 +36,7 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.1.0
+ * @version v1.2.0
  */
 
 import Lenis from 'lenis';
@@ -285,6 +285,7 @@ export function keyboardNav(direction) {
     state.scrollDriven = false;
     state.currentIndex = targetStep;
     updateViewerInfo(targetStep);
+    if (state.onStepChange) state.onStepChange(targetStep);
   }
 
   // Suppress the activateCard guard in updateScrollPosition while Lenis
@@ -392,5 +393,6 @@ export function updateScrollPosition(position) {
     state.scrollDriven = false;
     state.currentIndex = stepIndex;
     updateViewerInfo(stepIndex);
+    if (state.onStepChange) state.onStepChange(stepIndex);
   }
 }

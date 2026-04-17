@@ -25,7 +25,7 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.1.0
+ * @version v1.2.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
@@ -99,6 +99,7 @@ export function goToStep(newIndex, direction = 'forward') {
     updateViewerInfo(-1);
     const creditBadge = document.getElementById('object-credits-badge');
     if (creditBadge) creditBadge.classList.add('d-none');
+    if (state.onStepChange) state.onStepChange(-1);
     return;
   }
 
@@ -107,6 +108,7 @@ export function goToStep(newIndex, direction = 'forward') {
 
   // Panel trigger data update
   updateViewerInfo(newIndex);
+  if (state.onStepChange) state.onStepChange(newIndex);
 }
 
 /**

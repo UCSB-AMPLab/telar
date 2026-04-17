@@ -10,7 +10,7 @@
  * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
  *
- * @version v1.1.0
+ * @version v1.2.0
  */
 
 // ── Story Viewport ────────────────────────────────────────────────────────────
@@ -483,6 +483,78 @@
   }
 }
 
+// ── TOC-enabled title card ────────────────────────────────────────────────────
+// When show_sections is enabled, the intro card uses the layer 2 panel colour.
+
+.story-intro--toc {
+  background: var(--color-panel-layer2-bg);
+  padding-top: 100px;
+
+  .intro-floating-card {
+    .intro-title {
+      color: var(--color-panel-layer2-text);
+    }
+
+    .intro-subtitle,
+    .intro-byline,
+    .intro-description {
+      color: var(--color-panel-layer2-text);
+      opacity: 0.85;
+    }
+
+    .intro-demo-label {
+      color: var(--color-panel-layer2-text);
+      opacity: 0.7;
+    }
+
+    .intro-hint {
+      color: var(--color-panel-layer2-text);
+      opacity: 0.5;
+    }
+  }
+}
+
+.intro-toc {
+  margin-top: 3.5rem;
+  text-align: center;
+
+  .intro-toc-heading {
+    font-family: var(--font-headings);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--color-panel-layer2-text);
+    opacity: 0.5;
+    margin-bottom: 0.75rem;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  li {
+    margin-bottom: 0.4rem;
+  }
+
+  .intro-toc-link {
+    color: var(--color-panel-layer2-text);
+    text-decoration: none;
+    font-family: var(--font-headings);
+    font-size: 1.05rem;
+    font-weight: 500;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+
+    &:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+  }
+}
+
 // ── Title cards ───────────────────────────────────────────────────────────────
 // Full-viewport chapter heading dividers, visually identical to the story
 // intro card. Each title card is its own scene in the card pool.
@@ -531,22 +603,25 @@
 // ── Back to Home Button ───────────────────────────────────────────────────────
 
 // Fixed above the card-stack. High z-index to float above all cards.
-.btn-home {
+.btn-nav-back {
   position: fixed !important;
   top: 0.75rem !important;
   left: 0.75rem !important;
   text-decoration: none;
   color: rgba(0, 0, 0, 0.7);
   padding: 0.5rem 1rem;
+  min-width: 9rem;
+  justify-content: center;
   border: none;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(4px);
-  transition: all 0.3s ease;
+  transition: background 0.3s ease, color 0.3s ease;
   z-index: 9900 !important;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  cursor: pointer;
 
   &:hover {
     background: rgba(255, 255, 255, 0.85);
@@ -554,10 +629,8 @@
   }
 }
 
-// Home button icon — hidden on desktop
-.btn-home-icon {
-  display: none;
-}
+// Icons hidden on desktop — text only
+.btn-nav-icon { display: none; }
 
 // ── Step Counter ─────────────────────────────────────────────────────────────
 
@@ -663,8 +736,8 @@
     }
   }
 
-  // Mobile home button — icon-only circular button
-  .btn-home {
+  // Mobile nav button — icon-only circular button
+  .btn-nav-back {
     min-height: 44px;
     min-width: 44px;
     width: 44px;
@@ -682,11 +755,15 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
 
-  .btn-home-text {
+  .btn-nav-text {
     display: none;
   }
 
-  .btn-home-icon {
+  .btn-nav-icon {
+    display: none;
+  }
+  .btn-nav-back.is-home .btn-nav-icon--home,
+  .btn-nav-back.is-start .btn-nav-icon--start {
     display: block !important;
     font-size: 1.5rem;
   }
