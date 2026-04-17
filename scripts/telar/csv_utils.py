@@ -40,7 +40,7 @@ rename of the gallery classification column from `object_type` to `medium`
 — with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
 `medio_genero`) so existing spreadsheets continue to work without changes.
 
-Version: v1.0.0-beta
+Version: v1.2.0
 """
 
 import pandas as pd
@@ -115,6 +115,7 @@ COLUMN_NAME_MAPPING = {
     'private': 'protected',
     'privada': 'protected',
     'protegida': 'protected',
+    'mostrar_secciones': 'show_sections',
 
     # Glossary columns (Spanish -> English)
     'id_termino': 'term_id',
@@ -222,7 +223,7 @@ def is_header_row(row_values):
                         'byline', 'object_id', 'description', 'source_url', 'creator',
                         'period', 'medium', 'dimensions', 'location', 'source', 'credit',
                         'thumbnail', 'year', 'object_type', 'subjects', 'featured',
-                        'protected'])
+                        'protected', 'show_sections'])
 
     # Count how many cells match known column names
     matches = 0

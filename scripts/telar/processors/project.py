@@ -27,7 +27,7 @@ The function returns a pandas DataFrame wrapping a single dictionary with
 a `stories` key, which `csv_to_json()` in the core module serialises to
 `_data/project.json`.
 
-Version: v0.8.0-beta
+Version: v1.2.0
 """
 
 import re
@@ -99,6 +99,11 @@ def process_project_setup(df):
         # Add protected flag if set to yes/true/sí/si (v0.8.0+)
         if pd.notna(protected) and str(protected).strip().lower() in ('yes', 'true', 'sí', 'si'):
             story_entry['protected'] = True
+
+        # Add show_sections flag if set to yes/true/sí/si (v1.2.0+)
+        show_sections = row.get('show_sections', '')
+        if pd.notna(show_sections) and str(show_sections).strip().lower() in ('yes', 'true', 'sí', 'si'):
+            story_entry['show_sections'] = True
 
         stories_list.append(story_entry)
 
