@@ -26,4 +26,4 @@ pillow-heif>=0.13.0
 pytest>=8.0.0
 pytest-cov>=4.0.0
 playwright>=1.40.0
-pytest-playwright>=0.4.0
+pytest-playwright>=0.7.2
