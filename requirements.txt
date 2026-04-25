@@ -20,7 +20,7 @@ Pillow>=10.0.0
 PyMuPDF>=1.24.0
 
 # HEIC/HEIF support (iPhone photos)
-pillow-heif>=0.13.0
+pillow-heif>=1.3.0
 
 # Testing (development only)
 pytest>=8.0.0
