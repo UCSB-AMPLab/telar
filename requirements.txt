@@ -11,7 +11,7 @@ jinja2>=3.1.0
 cryptography>=41.0.0
 
 # IIIF tile generation
-iiif>=1.0.0
+iiif>=1.0.10
 
 # Image processing
 Pillow>=10.0.0
