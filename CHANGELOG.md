@@ -2,6 +2,16 @@
 
 All notable changes to Telar will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `CITATION.cff` with author and ORCID metadata for academic citation.
+
+### Changed
+
+- Expanded `package.json` metadata (`version`, `description`, `license`, `author`, `contributors`, `homepage`, `repository`, `bugs`) for clarity in the npm/GitHub ecosystem.
+
 ## [1.2.0] - 2026-04-16
 
 Story structure and UX improvements.

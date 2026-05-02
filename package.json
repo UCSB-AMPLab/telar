@@ -1,6 +1,24 @@
 {
   "name": "telar",
+  "version": "1.2.0",
+  "description": "A minimal-computing framework for creating layered IIIF visual narratives.",
   "private": true,
+  "license": "MIT",
+  "author": "The Telar authors",
+  "contributors": [
+    "Adelaida Ávila",
+    "Juan Cobo Betancourt",
+    "Natalie Cobo",
+    "Santiago Muñoz"
+  ],
+  "homepage": "https://telar.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UCSB-AMPLab/telar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/UCSB-AMPLab/telar/issues"
+  },
   "scripts": {
     "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap",
     "test:js": "vitest run",
