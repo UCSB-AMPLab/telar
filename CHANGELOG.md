@@ -4,13 +4,22 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.1-beta] - 2026-05-08
+
+Patch release with a demo content fetch fix and project metadata additions.
+
+### Fixed
+
+- **Demo content fetch tolerates v-prefixed `telar.version`**: `scripts/fetch_demo_content.py` previously raised `ValueError` internally when `_config.yml` had a v-prefixed version string (e.g. `version: "v1.2.0"`) and silently built sites with no demo content. An earlier version of the Telar Compositor's upgrade flow wrote v-prefixed strings into some sites; the compositor was fixed, but historical bad values persisted in upgraded sites. The fetcher now strips a leading `v` (or `V`) when reading the version and again as defence-in-depth when parsing entries from the remote `versions.json` index. A new warning surfaces in the build log if a site version cannot be parsed for any other reason. Sites with stale v-prefixed values continue to work; the value can optionally be cleaned up to a bare numeric version
+
 ### Added
 
-- `CITATION.cff` with author and ORCID metadata for academic citation.
+- **`CITATION.cff`** with author and ORCID metadata for academic citation
+- **Migration script `v120_to_v121.py`** and matching `migration.json` manifest for the demo content fetch fix
 
 ### Changed
 
-- Expanded `package.json` metadata (`version`, `description`, `license`, `author`, `contributors`, `homepage`, `repository`, `bugs`) for clarity in the npm/GitHub ecosystem.
+- **Expanded `package.json` metadata** (`version`, `description`, `license`, `author`, `contributors`, `homepage`, `repository`, `bugs`) for clarity in the npm/GitHub ecosystem
 
 ## [1.2.0] - 2026-04-16
 
