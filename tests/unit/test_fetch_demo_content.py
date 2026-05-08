@@ -11,7 +11,7 @@ compositor bug is fixed, but bad values persist in sites upgraded before
 the fix landed. The framework must therefore tolerate a leading `v` so
 those sites are not silently broken.
 
-Version: v1.0.0-beta
+Version: v1.2.1-beta
 """
 
 import os

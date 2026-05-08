@@ -21,7 +21,7 @@ UPGRADE_SUMMARY.md file listing every automated change made and any
 manual steps the user still needs to complete. The --dry-run flag
 previews what would happen without making changes.
 
-Version: v1.2.0
+Version: v1.2.1
 
 Usage:
     python scripts/upgrade.py              # Normal upgrade
