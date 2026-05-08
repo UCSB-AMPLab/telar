@@ -20,7 +20,7 @@ The csv_to_json.py build script (telar package) merges demo content
 into the JSON data alongside the user's real content, marking demo
 items with a _demo flag so the site can style them differently.
 
-Version: v0.9.0-beta
+Version: v1.2.1-beta
 """
 
 import json
@@ -75,6 +75,12 @@ def load_config():
         version = telar.get('version', '0.6.0')
         # Remove -beta, -alpha suffixes for version matching
         version = version.split('-')[0]
+        # Strip leading v/V — historical Compositor upgrade flows wrote
+        # v-prefixed values into _config.yml. Normalise here so all
+        # downstream consumers (URLs, log lines, version comparison) see a
+        # bare numeric version. parse_version applies the same lenience as
+        # defence-in-depth against entries in the remote versions.json.
+        version = version.lstrip('vV')
 
         # Get language
         language = config.get('telar_language', 'en')
@@ -150,12 +156,17 @@ def find_best_version(site_version, available_versions):
         None: If no compatible version exists
     """
     def parse_version(v):
+        # Tolerate a leading "v" or "V" — historical Compositor upgrade flows
+        # wrote v-prefixed strings into _config.yml, and some bundle indexes
+        # may list versions either way. Strip before splitting on dots.
+        v = v.lstrip('vV')
         parts = v.split('.')
         return tuple(int(p) for p in parts)
 
     try:
         site_v = parse_version(site_version)
     except (ValueError, AttributeError):
+        print(f"Warning: could not parse site version '{site_version}' from _config.yml")
         return None
 
     candidates = []
