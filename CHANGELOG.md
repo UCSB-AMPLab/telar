@@ -18,6 +18,8 @@ i18n hygiene plus a new sister-file localization convention. Wires up Telar's ex
 
 - **Empty-state messages pointed at the wrong content directory**: empty-state guidance previously told users to add story/object/glossary files to `_stories/`, `_objects/`, or `_glossary/`. Those directories are auto-generated; the canonical user-content paths are under `telar-content/spreadsheets/` and `telar-content/texts/glossary/`. The lang values had the correct paths; wiring them up fixed both the i18n bug and the misleading guidance
 
+- **Migration script language detection for Spanish sites**: `BaseMigration._detect_language()` was looking for `telar_language` nested under the `telar:` block in `_config.yml`, but the key has always been a top-level key. Every Spanish-language site fell through to the English default for migration manual steps. The base class now reads the correct top-level key, so Spanish sites now get the Spanish-language manual steps in `UPGRADE_SUMMARY.md` and (in v1.3.0 specifically) the conditional `acerca.md` creation guard sees the correct language
+
 ### Added
 
 - **Sister-file localization for user pages** (`telar-content/texts/pages/`): `scripts/generate_collections.py` now detects markdown files with frontmatter `localized_for: <canonical>.md` and `language: <code>`. When `site.telar_language` matches the sister's `language`, the build uses the sister's content but writes output under the canonical filename — so `/about/` resolves to the right language without URL duplication. The v1.3.0 template ships with `acerca.md` as the Spanish sister of `about.md`; users can add siblings for other languages following the same convention
