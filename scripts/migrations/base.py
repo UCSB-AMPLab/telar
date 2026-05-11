@@ -293,7 +293,7 @@ class BaseMigration(ABC):
         """
         Detect site language from _config.yml.
 
-        Reads telar.telar_language setting (added in v0.6.0).
+        Reads the top-level telar_language setting (added in v0.6.0).
         Useful for providing bilingual migration messages and summaries.
 
         Returns:
@@ -306,8 +306,13 @@ class BaseMigration(ABC):
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
 
-            # Get telar_language setting (added in v0.6.0)
-            lang = config.get('telar', {}).get('telar_language', 'en')
+            # telar_language is a top-level _config.yml key. The legacy
+            # nested form (telar.telar_language) was checked here before
+            # but never matched any real site config — kept as a fallback
+            # only in case a user manually moved the key.
+            lang = config.get('telar_language')
+            if lang is None:
+                lang = config.get('telar', {}).get('telar_language', 'en')
 
             # Normalize to 'en' or 'es'
             return 'es' if lang.lower().startswith('es') else 'en'
