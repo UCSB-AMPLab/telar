@@ -1,17 +1,18 @@
 """
 Unit Tests for generate_collections.py
 
-Tests focus on the media_type detection logic and the
-source_url injection for video objects. The generate_objects()
-function is integration-tested via the media_type detection helper.
+Tests focus on the media_type detection logic, source_url injection
+for video objects, and (v1.3.0) sister-file localization in
+generate_pages().
 
-Version: v1.0.0-beta
+Version: v1.3.0-beta
 """
 
 import sys
 import os
 import json
 import pytest
+import shutil
 from pathlib import Path
 
 # Add scripts directory to path for imports
@@ -226,3 +227,151 @@ class TestKnownObjectFieldsUpdated:
     def test_audio_format_in_known_fields(self):
         from generate_collections import KNOWN_OBJECT_FIELDS
         assert 'audio_format' in KNOWN_OBJECT_FIELDS
+
+
+class TestGeneratePagesLocalization:
+    """v1.3.0: generate_pages() picks the sister file matching telar_language.
+
+    Convention: a sister file has frontmatter `localized_for: <canonical>.md`
+    and `language: <code>`. When the active language matches the sister's
+    language, the sister's content is used; output is always written under
+    the canonical filename so the URL is stable across languages.
+    """
+
+    @pytest.fixture
+    def isolated_pages_env(self, tmp_path, monkeypatch):
+        """Build an isolated pages source/output environment under tmp_path.
+
+        Returns (source_dir, output_dir). Changes cwd to tmp_path so the
+        relative paths used inside generate_pages() resolve into the fixture.
+        """
+        source_dir = tmp_path / 'telar-content' / 'texts' / 'pages'
+        source_dir.mkdir(parents=True)
+        output_dir = tmp_path / '_jekyll-files' / '_pages'
+        # Provide an empty glossary CSV so load_glossary_terms() returns []
+        (tmp_path / 'telar-content' / 'spreadsheets').mkdir(parents=True)
+        (tmp_path / 'telar-content' / 'texts' / 'glossary').mkdir(parents=True)
+        monkeypatch.chdir(tmp_path)
+        return source_dir, output_dir
+
+    def _write_page(self, path, frontmatter, body):
+        path.write_text(f"---\n{frontmatter.strip()}\n---\n\n{body.strip()}\n", encoding='utf-8')
+
+    def test_canonical_only_uses_canonical(self, isolated_pages_env):
+        """No sister file: canonical is used regardless of telar_language."""
+        from generate_collections import generate_pages
+        source_dir, output_dir = isolated_pages_env
+
+        self._write_page(source_dir / 'about.md', 'title: About', '# About Telar\nEnglish content.')
+
+        generate_pages(telar_language='es')  # no es sister exists
+
+        out = (output_dir / 'about.md').read_text(encoding='utf-8')
+        assert '<h1>About Telar</h1>' in out
+        assert 'English content' in out
+
+    def test_es_active_picks_sister(self, isolated_pages_env):
+        """telar_language='es' + acerca.md sister: sister content wins, output is about.md."""
+        from generate_collections import generate_pages
+        source_dir, output_dir = isolated_pages_env
+
+        self._write_page(source_dir / 'about.md', 'title: About', '# About Telar\nEnglish content.')
+        self._write_page(
+            source_dir / 'acerca.md',
+            'title: Acerca de Telar\nlocalized_for: about.md\nlanguage: es',
+            '# Acerca de Telar\nContenido en español.'
+        )
+
+        generate_pages(telar_language='es')
+
+        # Output is under canonical filename
+        out_path = output_dir / 'about.md'
+        assert out_path.exists()
+        # No separate acerca.md output (sister doesn't get its own URL)
+        assert not (output_dir / 'acerca.md').exists()
+        # Body is the Spanish one
+        out = out_path.read_text(encoding='utf-8')
+        assert '<h1>Acerca de Telar</h1>' in out
+        assert 'Contenido en español' in out
+        # Frontmatter is the sister's frontmatter (so the title localizes too)
+        assert 'title: Acerca de Telar' in out
+        assert 'language: es' in out
+
+    def test_en_active_with_es_sister_uses_canonical(self, isolated_pages_env):
+        """telar_language='en' + an es sister exists: canonical is still used; sister is skipped."""
+        from generate_collections import generate_pages
+        source_dir, output_dir = isolated_pages_env
+
+        self._write_page(source_dir / 'about.md', 'title: About', '# About Telar\nEnglish content.')
+        self._write_page(
+            source_dir / 'acerca.md',
+            'title: Acerca de Telar\nlocalized_for: about.md\nlanguage: es',
+            '# Acerca de Telar\nContenido en español.'
+        )
+
+        generate_pages(telar_language='en')
+
+        out_path = output_dir / 'about.md'
+        assert out_path.exists()
+        assert not (output_dir / 'acerca.md').exists()
+        out = out_path.read_text(encoding='utf-8')
+        assert '<h1>About Telar</h1>' in out
+        assert 'English content' in out
+
+    def test_sister_for_other_language_is_ignored(self, isolated_pages_env):
+        """telar_language='es' + only fr sister: canonical is used (no es sister to pick)."""
+        from generate_collections import generate_pages
+        source_dir, output_dir = isolated_pages_env
+
+        self._write_page(source_dir / 'about.md', 'title: About', '# About Telar\nEnglish content.')
+        self._write_page(
+            source_dir / 'a-propos.md',
+            'title: À propos\nlocalized_for: about.md\nlanguage: fr',
+            '# À propos\nContenu français.'
+        )
+
+        generate_pages(telar_language='es')
+
+        out = (output_dir / 'about.md').read_text(encoding='utf-8')
+        assert '<h1>About Telar</h1>' in out  # falls back to canonical EN
+        assert 'À propos' not in out
+        assert not (output_dir / 'a-propos.md').exists()
+
+    def test_sister_without_language_is_skipped_with_warning(self, isolated_pages_env, capsys):
+        """A file with localized_for but no language: skip with warning."""
+        from generate_collections import generate_pages
+        source_dir, output_dir = isolated_pages_env
+
+        self._write_page(source_dir / 'about.md', 'title: About', '# About Telar\nEN.')
+        self._write_page(
+            source_dir / 'broken.md',
+            'title: Broken\nlocalized_for: about.md',  # no language
+            '# Broken\nNo language code.'
+        )
+
+        generate_pages(telar_language='es')
+
+        captured = capsys.readouterr()
+        assert 'broken.md' in captured.out
+        assert 'language' in captured.out.lower()
+        # Canonical still produced (sister-without-language ignored, no es sister
+        # available)
+        assert (output_dir / 'about.md').exists()
+        assert not (output_dir / 'broken.md').exists()
+
+    def test_default_language_is_en(self, isolated_pages_env):
+        """generate_pages() with no telar_language argument defaults to 'en'."""
+        from generate_collections import generate_pages
+        source_dir, output_dir = isolated_pages_env
+
+        self._write_page(source_dir / 'about.md', 'title: About', '# About Telar\nEN.')
+        self._write_page(
+            source_dir / 'acerca.md',
+            'title: Acerca\nlocalized_for: about.md\nlanguage: es',
+            '# Acerca\nES.'
+        )
+
+        generate_pages()  # no argument
+
+        out = (output_dir / 'about.md').read_text(encoding='utf-8')
+        assert '<h1>About Telar</h1>' in out  # EN content because default is 'en'
