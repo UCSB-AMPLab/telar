@@ -310,7 +310,7 @@ title: Home
     {% if site.stories.size > 0 %}
     <div class="row mt-5">
       <div class="col-lg-11 mx-auto">
-        <h3 class="mb-4">{{ lang.pages.stories_heading | default: "Explore the stories" }}</h3>
+        <h3 class="mb-4">{{ page.stories_heading | default: lang.pages.stories_heading | default: "Explore the stories" }}</h3>
         {% assign sorted_stories = site.stories | sort: "sort_order" %}
         <div class="featured-objects-grid collection-mode-stories">
           {% for story in sorted_stories %}
@@ -415,7 +415,7 @@ title: Home
   {% unless skip_stories or story_show_on_homepage == false %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
-      <h2 class="mb-4">{{ page.stories_heading | default: "Explore the stories" }}</h2>
+      <h2 class="mb-4">{{ page.stories_heading | default: lang.pages.stories_heading | default: "Explore the stories" }}</h2>
       {% if page.stories_intro and page.stories_intro != "" %}
       <p class="lead mb-4">{{ page.stories_intro }}</p>
       {% endif %}
@@ -524,7 +524,7 @@ title: Home
       </div>
       {% else %}
       <div class="alert alert-info">
-        <p class="mb-0">No stories available yet. Create story files in the <code>_stories/</code> directory to get started.</p>
+        <p class="mb-0">{{ lang.empty_states.no_stories }}</p>
       </div>
       {% endif %}
     </div>
@@ -536,7 +536,7 @@ title: Home
   {% if site.objects.size > 0 %}
   <div class="row mt-5">
     <div class="col-lg-11 mx-auto">
-      <h3 class="mb-4">{{ page.objects_heading | default: "See the objects behind the stories" }}</h3>
+      <h3 class="mb-4">{{ page.objects_heading | default: lang.pages.objects_heading | default: "See the objects behind the stories" }}</h3>
       {% assign featured_objects = site.objects | where: "is_featured_sample", true %}
       {% assign show_featured = false %}
       {% if site.collection_interface.show_sample_on_homepage == true and featured_objects.size > 0 %}
@@ -629,6 +629,11 @@ title: Home
 </script>
 
 <script>
+// Localized strings injected from _data/languages/<telar_language>.yml
+const TelarI18n = {
+  thumbnailLoadError: {{ lang.empty_states.thumbnail_load_error | jsonify }}
+};
+
 // Pass objects data for manifest lookup
 window.objectsData = {{ site.data.objects | jsonify }};
 
@@ -810,7 +815,7 @@ document.addEventListener('DOMContentLoaded', function() {
           console.error('Error loading remote IIIF manifest:', objectData.iiif_manifest, error);
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
           if (placeholder) {
-            placeholder.innerHTML = '<span class="text-danger">Failed to load</span>';
+            placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
           }
         });
     } else {
@@ -842,7 +847,7 @@ document.addEventListener('DOMContentLoaded', function() {
           console.error('Error loading local IIIF info.json:', localInfoUrl, error);
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
           if (placeholder) {
-            placeholder.innerHTML = '<span class="text-danger">Failed to load</span>';
+            placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
           }
         });
     }

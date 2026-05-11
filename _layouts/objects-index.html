@@ -41,8 +41,8 @@ layout: default
   <div class="row mb-4">
     <div class="col-12">
       <div class="alert alert-warning" role="alert" style="max-width: 800px;">
-        <strong>⚠️ Configuration Issues Detected</strong>
-        <p class="mb-2 mt-2"><small>The following objects have configuration issues:</small></p>
+        <strong>{{ lang.errors.config_issues_heading }}</strong>
+        <p class="mb-2 mt-2"><small>{{ lang.errors.objects_config_issues }}</small></p>
         <ul class="mb-2" style="font-size: 0.9rem;">
         {% assign shown_warnings = "" | split: "" %}
         {% for object in objects_with_warnings %}
@@ -74,7 +74,7 @@ layout: default
           </li>
         {% endfor %}
         </ul>
-        <p class="mb-0"><small>These objects will fail to load in the viewer.</small></p>
+        <p class="mb-0"><small>{{ lang.errors.objects_will_fail }}</small></p>
       </div>
     </div>
   </div>
@@ -239,7 +239,7 @@ layout: default
         </div>
         {% else %}
         <div class="placeholder-image bg-secondary d-flex align-items-center justify-content-center" style="height: 250px;">
-          <span class="text-white">No image</span>
+          <span class="text-white">{{ lang.errors.no_image }}</span>
         </div>
         {% endif %}
       </div>
@@ -291,7 +291,7 @@ layout: default
         </div>
         {% else %}
         <div class="placeholder-image bg-secondary d-flex align-items-center justify-content-center" style="height: 250px;">
-          <span class="text-white">No image</span>
+          <span class="text-white">{{ lang.errors.no_image }}</span>
         </div>
         {% endif %}
       </div>
@@ -315,7 +315,7 @@ layout: default
   <div class="row">
     <div class="col-12">
       <div class="alert alert-info">
-        <p class="mb-0">No objects in the collection yet. Add object files to the <code>_objects/</code> directory to populate the collection.</p>
+        <p class="mb-0">{{ lang.empty_states.no_objects }}</p>
       </div>
     </div>
   </div>
@@ -324,6 +324,12 @@ layout: default
 </div>
 
 <script>
+// Localized strings injected from _data/languages/<telar_language>.yml
+const TelarI18n = {
+  thumbnailLoadError: {{ lang.empty_states.thumbnail_load_error | jsonify }},
+  noImage: {{ lang.errors.no_image | jsonify }}
+};
+
 /**
  * Pick a thumbnail size from the IIIF sizes array.
  * Returns the smallest size >= minWidth, or the largest available.
@@ -406,7 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error loading IIIF info.json:', infoUrl, error);
         const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
         if (placeholder) {
-          placeholder.innerHTML = '<span class="text-danger">Failed to load</span>';
+          placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
         }
       });
   });
@@ -528,7 +534,7 @@ document.addEventListener('DOMContentLoaded', function() {
           console.warn('No image found in manifest:', manifestUrl);
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
           if (placeholder) {
-            placeholder.innerHTML = '<span class="text-muted">No image</span>';
+            placeholder.innerHTML = '<span class="text-muted">' + TelarI18n.noImage + '</span>';
           }
         }
       })
@@ -537,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show error placeholder
         const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
         if (placeholder) {
-          placeholder.innerHTML = '<span class="text-danger">Failed to load</span>';
+          placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
         }
       });
   });
