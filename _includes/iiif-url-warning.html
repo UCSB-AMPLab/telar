@@ -1,68 +1,77 @@
 {%- comment -%}
 IIIF URL Mismatch Warning
-Detects when viewing site URL doesn't match IIIF manifest URLs and provides helpful guidance
+Detects when viewing site URL doesn't match IIIF manifest URLs and provides helpful guidance.
+All user-facing strings come from lang.errors.iiif_mismatch in _data/languages/<telar_language>.yml.
 {%- endcomment -%}
+{% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
+{% assign iiif_lang = lang.errors.iiif_mismatch %}
 
 <div id="iiif-url-warning" class="alert alert-warning telar-alert" role="alert" style="display: none;">
-  <strong>⚠️ Your images aren't loading correctly</strong>
-  <p>Your images can't display because there's a mismatch between where you're viewing the site and where the image tiles are configured to load from.</p>
+  <strong>{{ iiif_lang.heading }}</strong>
+  <p>{{ iiif_lang.description }}</p>
 
-  <p class="mb-2"><strong>What's happening:</strong></p>
+  <p class="mb-2"><strong>{{ iiif_lang.whats_happening }}</strong></p>
   <ul class="mb-3">
-    <li>You're viewing the site at: <strong id="current-url"></strong></li>
-    <li>But image tiles are configured for: <strong id="manifest-url"></strong></li>
+    <li>{{ iiif_lang.viewing_at }} <strong id="current-url"></strong></li>
+    <li>{{ iiif_lang.configured_for }} <strong id="manifest-url"></strong></li>
   </ul>
 
-  <p class="mb-2"><strong id="affected-images-heading">Affected images:</strong></p>
+  <p class="mb-2"><strong id="affected-images-heading">{{ iiif_lang.affected_images }}</strong></p>
   <ul class="mb-3" id="affected-images">
     <!-- JavaScript will populate this list -->
   </ul>
 
   <!-- Production scenario (90% of users) -->
   <div id="production-fix-instructions" style="display: none;">
-    <p class="mb-2"><strong>Here are some common causes for errors like this:</strong></p>
+    <p class="mb-2"><strong>{{ iiif_lang.common_causes }}</strong></p>
     <ul class="mb-3">
-      <li>Your site settings are incorrect. The <code>url</code> or <code>baseurl</code> in <code>_config.yml</code> doesn't match where your site is actually published</li>
-      <li>You recently moved your site to a new URL but haven't updated the configuration</li>
-      <li>You're viewing a preview or staging environment that uses a different URL than what's configured</li>
+      <li>{{ iiif_lang.cause_incorrect_settings }}</li>
+      <li>{{ iiif_lang.cause_moved_url }}</li>
+      <li>{{ iiif_lang.cause_preview_env }}</li>
     </ul>
 
-    <p class="mb-2"><strong>To fix this, update your site configuration:</strong></p>
+    <p class="mb-2"><strong>{{ iiif_lang.fix_heading }}</strong></p>
     <ol class="mb-3">
-      <li>Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> match your actual site URL
+      <li>{{ iiif_lang.fix_check_config }}
         <ul>
-          <li>Your site is at: <strong id="production-current-url"></strong></li>
-          <li>Your config should be: <code id="production-config-suggestion"></code></li>
+          <li>{{ iiif_lang.fix_your_site_at }} <strong id="production-current-url"></strong></li>
+          <li>{{ iiif_lang.fix_config_should_be }} <code id="production-config-suggestion"></code></li>
         </ul>
       </li>
-      <li>Commit and push your changes to GitHub</li>
-      <li>GitHub Actions will automatically regenerate the image tiles with the correct URL</li>
+      <li>{{ iiif_lang.fix_commit_push }}</li>
+      <li>{{ iiif_lang.fix_auto_regenerate }}</li>
     </ol>
 
-    <p class="mb-2"><small>If you're running this site locally for development, you can also regenerate tiles with:</small></p>
+    <p class="mb-2"><small>{{ iiif_lang.fix_local_option }}</small></p>
     <pre class="bg-light p-2 rounded"><code id="production-local-command"></code></pre>
   </div>
 
   <!-- Local development scenario (10% of users) -->
   <div id="local-fix-instructions" style="display: none;">
-    <p class="mb-2"><strong>Here are some common causes for errors like this:</strong></p>
+    <p class="mb-2"><strong>{{ iiif_lang.common_causes }}</strong></p>
     <ul class="mb-3">
-      <li>You're running the site on your own computer, but the image tiles were generated for your production URL</li>
-      <li>You're testing locally after a GitHub Actions build</li>
+      <li>{{ iiif_lang.local_cause_1 }}</li>
+      <li>{{ iiif_lang.local_cause_2 }}</li>
     </ul>
 
-    <p class="mb-2"><strong>To fix this for local development, regenerate your image tiles for localhost:</strong></p>
+    <p class="mb-2"><strong>{{ iiif_lang.local_fix_heading }}</strong></p>
     <pre class="bg-light p-2 rounded mb-3"><code id="local-command"></code></pre>
 
-    <p class="mb-2"><strong>Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:</strong></p>
+    <p class="mb-2"><strong>{{ iiif_lang.local_alternative }}</strong></p>
     <ol class="mb-0">
-      <li>Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> are correct for production</li>
-      <li>Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)</li>
+      <li>{{ iiif_lang.local_fix_check_config }}</li>
+      <li>{{ iiif_lang.local_fix_run_with_note }}</li>
     </ol>
   </div>
 </div>
 
 <script>
+// Localized strings injected from _data/languages/<telar_language>.yml
+const TelarI18nIIIF = {
+  affectedImagesSingular: {{ iiif_lang.affected_images_count_singular | jsonify }},
+  affectedImagesPlural: {{ iiif_lang.affected_images_count_plural | jsonify }}
+};
+
 (function() {
   // Check for IIIF URL mismatch
   async function checkIIIFUrlMismatch() {
@@ -134,9 +143,13 @@ Detects when viewing site URL doesn't match IIIF manifest URLs and provides help
         document.getElementById('current-url').textContent = currentSiteUrl;
         document.getElementById('manifest-url').textContent = manifestBaseUrl;
 
-        // Update affected images heading with count
+        // Update affected images heading with localized singular/plural template
         const heading = document.getElementById('affected-images-heading');
-        heading.textContent = `The following ${affectedObjects.length} image${affectedObjects.length > 1 ? 's are' : ' is'} affected:`;
+        const count = affectedObjects.length;
+        const template = count === 1
+          ? TelarI18nIIIF.affectedImagesSingular
+          : TelarI18nIIIF.affectedImagesPlural;
+        heading.textContent = template.replace('__COUNT__', count);
 
         // Populate affected images list
         const affectedList = document.getElementById('affected-images');
