@@ -1,17 +1,19 @@
 ---
 layout: index
 title: Home
-stories_heading: "Explore the stories"
-objects_heading: "See the objects behind the stories"
-objects_intro: "Browse {count} objects featured in the stories."
 ---
 
-## Welcome to the Telar Demo Site
-This site showcases the features and **capabilities** of Telar (v.[{{ site.telar.version }}](https://github.com/UCSB-AMPLab/telar/releases/tag/v{{ site.telar.version }})). Build your own visual narrative exhibition by visiting:
+{% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
+<!--
+  EN: Default welcome content for this page comes from your language
+  pack (lang.index_page.welcome in _data/languages/<telar_language>.yml).
+  To replace it with your own, delete the line that follows and write
+  your welcome content here in markdown.
 
-- Our **[GitHub repository](https://github.com/UCSB-AMPLab/telar)**, where you can copy the template to create your own project
-- The **[documentation site](https://telar.org/docs)**, where you can find guides and tutorials
+  ES: El contenido de bienvenida predeterminado de esta página viene
+  del paquete de idioma (lang.index_page.welcome en _data/languages/<telar_language>.yml).
+  Para reemplazarlo con el tuyo, borra la línea que sigue y escribe
+  tu contenido de bienvenida aquí en markdown.
+-->
 
-No installation is required: you can manage your content with Google Sheets and publish it for free on GitHub Pages.
-
-***Note:** To remove or replace this message, edit the `index.md` file in your repository.*
+{{ lang.index_page.welcome | markdownify }}
