@@ -108,7 +108,6 @@ embed_banner:
 
 # Encabezados de página y texto introductorio
 pages:
-  home_title: "Inicio"
   stories_heading: "Explora las historias"
   objects_heading: "Explora los objetos detrás de las historias"
   objects_count: "Explora {count} objetos presentes en las historias."
@@ -118,6 +117,24 @@ pages:
   objects_intro_sample_stories: "Hay {count} objetos presentes en las historias. Mira {sample} de ellos a continuación."
   objects_intro_sample_collection: "Hay {count} objetos en la colección. Mira {sample} de ellos a continuación."
   collection_mode_heading: "Explora la colección"
+  glossary_intro: "Términos y conceptos clave que aparecen en estas historias."
+
+# Default content for the homepage welcome (rendered by index.md via markdownify)
+index_page:
+  welcome: |
+    ## Bienvenidos a Telar
+
+    Telar es una herramienta para crear exhibiciones narrativas y publicar colecciones digitales. Combina imágenes IIIF, video, audio y texto en sitios interactivos con desplazamiento fluido, alojados gratis en GitHub Pages.
+
+    Tres formas de empezar:
+
+    - **Sin código:** configura y gestiona tu sitio desde una interfaz visual con el **[Telar Compositor](https://compositor.telar.org)**
+    - **Asistida:** copia la **[plantilla de GitHub](https://github.com/UCSB-AMPLab/telar)** y edita tu contenido en Google Sheets
+    - **Manual:** clona la plantilla y edita los archivos CSV y markdown localmente
+
+    En la **[documentación](https://telar.org/docs)** hay guías para cada ruta.
+
+    *Para reemplazar esta bienvenida, edita `index.md` en tu repositorio.*
 
 # Objects browse and search (v0.8.0)
 objects:
@@ -195,6 +212,8 @@ errors:
     local_cause_2: "Estás probando localmente después de un <em>build</em> de GitHub Actions."
     local_fix_heading: "Para desarrollo local, regenera las teselas (<em>tiles</em>) con la URL de localhost:"
     local_alternative: "Si la configuración del sitio está mal, primero actualiza <code>_config.yml</code> y luego regenera."
+    local_fix_check_config: "Verifica que <code>url</code> y <code>baseurl</code> en <code>_config.yml</code> estén correctos para producción"
+    local_fix_run_with_note: "Ejecuta <code>python3 scripts/generate_iiif.py</code> (usará tu configuración actualizada)"
     local_regenerate_note: "(usará tu configuración actualizada)"
 
   # Errores de configuración de Google Sheets
