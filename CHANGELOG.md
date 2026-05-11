@@ -4,6 +4,44 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0-beta] - 2026-05-10
+
+i18n hygiene plus a new sister-file localization convention. Wires up Telar's existing language packs in places that previously hardcoded English, introduces a sister-file convention for localizing user pages, and refreshes the demo content to reflect current capabilities (multimedia, Telar Compositor, dual storytelling/collections framing).
+
+### Fixed
+
+- **Homepage headings rendered in English for Spanish users**: `_layouts/index.html` now resolves the stories and objects headings via `page.X | default: lang.pages.X | default: "<English literal>"`. Previously the layout dropped straight to the English literal when no `page.*` override was set, and the template's `index.md` shipped with English page-overrides that shadowed the i18n for every existing user with `telar_language: es`
+
+- **Empty-state messages and IIIF URL warning hardcoded in English**: `_layouts/index.html`, `_layouts/objects-index.html`, `_layouts/glossary-index.html`, and `_includes/iiif-url-warning.html` now reference `lang.empty_states.*` and `lang.errors.iiif_mismatch.*` keys that were already defined in both language files but never used. Spanish-language sites now show empty-state guidance and the IIIF mismatch troubleshooting modal in Spanish
+
+- **JS thumbnail fallback strings hardcoded in English**: `_layouts/index.html` and `_layouts/objects-index.html` now inject `TelarI18n` and `TelarI18nIIIF` constants from the lang values, so the "Failed to load" and "No image" placeholders displayed when a thumbnail fails appear in the site's active language
+
+- **Empty-state messages pointed at the wrong content directory**: empty-state guidance previously told users to add story/object/glossary files to `_stories/`, `_objects/`, or `_glossary/`. Those directories are auto-generated; the canonical user-content paths are under `telar-content/spreadsheets/` and `telar-content/texts/glossary/`. The lang values had the correct paths; wiring them up fixed both the i18n bug and the misleading guidance
+
+### Added
+
+- **Sister-file localization for user pages** (`telar-content/texts/pages/`): `scripts/generate_collections.py` now detects markdown files with frontmatter `localized_for: <canonical>.md` and `language: <code>`. When `site.telar_language` matches the sister's `language`, the build uses the sister's content but writes output under the canonical filename — so `/about/` resolves to the right language without URL duplication. The v1.3.0 template ships with `acerca.md` as the Spanish sister of `about.md`; users can add siblings for other languages following the same convention
+
+- **`lang.index_page.welcome`** key carrying the homepage welcome content as a multi-line markdown block scalar in both EN and ES. The default `index.md` body now renders `{{ lang.index_page.welcome | markdownify }}` with a bilingual EN/ES override comment explaining how site owners replace it with their own content
+
+- **`lang.pages.glossary_intro`** key for the glossary page intro sentence, paired with EN and ES values. `pages/glossary.md` body now references this key
+
+- **`lang.errors.iiif_mismatch.local_fix_check_config`** and **`local_fix_run_with_note`**: two missing keys completing the IIIF URL warning's local-development fallback section
+
+- **Migration script `v121_to_v130.py` and matching `migration.json` manifest**: conditional content cleanup that removes the three stale `index.md` frontmatter keys and replaces user-content bodies (welcome, glossary, objects, about) with the v1.3.0 lang-key templates only when a SHA-256 hash check confirms the file is byte-for-byte identical to the v1.2.1 default. Any user customisation preserves the file untouched. For sites with `telar_language: es` whose `about.md` is unchanged from the v1.2.1 default, the migration also creates `acerca.md` automatically so the site immediately renders Spanish content at `/about/`. Sites with a customised `about.md` skip this — otherwise the new sister file would shadow the customisation
+
+### Changed
+
+- **Default content of welcome and about pages refreshed** to reflect current Telar capabilities. Both now name both Telar modes (digital storytelling and publishing small digital collections), name multimedia coverage (IIIF images, video, audio, narrative text, contextual layers), present the three setup paths (Telar Compositor, GitHub template + Sheets, hands-on local), and link to the Telar Compositor. Previous content described Telar as it was around v0.7 (single-mode storytelling, GitHub template only, no audio/video, no Compositor)
+
+- **`pages/glossary.md`, `pages/objects.md`, `index.md`** rewritten to render via lang keys rather than hardcoded English. Each file carries a bilingual EN/ES HTML override comment explaining how to replace the default with custom content. The pattern uses `{% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}` at the top of the page (the layout's own `lang` assignment isn't visible to the page body, which Jekyll renders before wrapping in the layout)
+
+- **`telar-content/texts/pages/about.md`** rewritten with the refreshed copy plus a sentence in the Customize alert documenting the sister-file convention for site owners adding additional languages
+
+### Removed
+
+- **Stale `lang.pages.home_title` key** from both `en.yml` and `es.yml`. Defined since v1.0.0-beta but never referenced from any layout, include, or script
+
 ## [1.2.1-beta] - 2026-05-08
 
 Patch release with a demo content fetch fix and project metadata additions.

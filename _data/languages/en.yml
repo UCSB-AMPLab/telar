@@ -108,7 +108,6 @@ embed_banner:
 
 # Page headings and intro text
 pages:
-  home_title: "Home"
   stories_heading: "Explore the stories"
   objects_heading: "See the objects behind the stories"
   objects_count: "Browse {count} objects featured in the stories."
@@ -118,6 +117,24 @@ pages:
   objects_intro_sample_stories: "There are {count} objects featured in the stories. Have a look at {sample} of them below."
   objects_intro_sample_collection: "There are {count} objects in the collection. Have a look at {sample} of them below."
   collection_mode_heading: "Explore the collection"
+  glossary_intro: "Key terms and concepts used in these stories."
+
+# Default content for the homepage welcome (rendered by index.md via markdownify)
+index_page:
+  welcome: |
+    ## Welcome to the Telar demo site
+
+    Telar lets you build scroll-driven narrative exhibitions and browsable digital collections — weaving IIIF images, video, audio, narrative text, and contextual layers into interactive sites you host free on GitHub Pages.
+
+    Three ways to build your own:
+
+    - **No-code:** set up and manage your site through a visual interface with the **[Telar Compositor](https://compositor.telar.org)**
+    - **Guided:** copy the **[GitHub template](https://github.com/UCSB-AMPLab/telar)** and edit your content in Google Sheets
+    - **Hands-on:** clone the template and edit CSV and markdown files locally
+
+    See the **[full documentation](https://telar.org/docs)** for guides on each path.
+
+    *To replace this welcome with your own, edit `index.md` in your repository.*
 
 # Objects browse and search (v0.8.0)
 objects:
@@ -195,6 +212,8 @@ errors:
     local_cause_2: "You're testing locally after a GitHub Actions build"
     local_fix_heading: "To fix this for local development, regenerate your image tiles for localhost:"
     local_alternative: "Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:"
+    local_fix_check_config: "Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> are correct for production"
+    local_fix_run_with_note: "Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)"
     local_regenerate_note: "(it will use your updated settings)"
 
   # Google Sheets configuration errors

@@ -27,7 +27,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.2.0
+Version: v1.3.0-beta
 """
 
 import argparse
@@ -576,11 +576,44 @@ data_file: {identifier}
         demo_label = " [DEMO]" if is_demo else ""
         print(f"✓ Generated {filepath}{demo_label}")
 
-def generate_pages():
+FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
+
+
+def _parse_page_frontmatter(source_file):
+    """Parse a page markdown file. Returns (frontmatter_text, frontmatter_dict, body) or None on error."""
+    with open(source_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    match = FRONTMATTER_PATTERN.match(content)
+    if not match:
+        print(f"❌ Error: No frontmatter found in {source_file}")
+        print("  Pages must have YAML frontmatter (--- at start and end)")
+        return None
+
+    frontmatter_text = match.group(1)
+    body = match.group(2).strip()
+
+    try:
+        frontmatter_dict = yaml.safe_load(frontmatter_text) or {}
+    except yaml.YAMLError as e:
+        print(f"❌ Error: Invalid YAML frontmatter in {source_file}: {e}")
+        return None
+
+    return frontmatter_text, frontmatter_dict, body
+
+
+def generate_pages(telar_language='en'):
     """Generate processed page files from user markdown sources.
 
     Reads from telar-content/texts/pages/*.md, processes widgets and glossary links,
     and outputs to _jekyll-files/_pages/ for the pages collection.
+
+    Localization: a sister file with frontmatter `localized_for: <canonical>.md`
+    and `language: <code>` is treated as the localized version of <canonical>.md.
+    When `telar_language` matches the sister's `language`, the sister is used
+    in place of the canonical file but is output under the canonical filename
+    (so the URL is the same in both languages). Sister files for other
+    languages are skipped.
     """
     source_dir = Path('telar-content/texts/pages')
     output_dir = Path('_jekyll-files/_pages')
@@ -600,24 +633,41 @@ def generate_pages():
     # Load glossary terms for link processing
     glossary_terms = load_glossary_terms()
 
-    # Process each markdown file
+    # Pass 1: separate canonical pages from localized sisters and build a sister map
+    canonicals = []  # list of source files
+    sisters = {}     # {canonical_filename: {language: source_file}}
+
     for source_file in source_dir.glob('*.md'):
-        filename = source_file.name
-
-        with open(source_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Parse frontmatter and body
-        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
-        match = re.match(frontmatter_pattern, content, re.DOTALL)
-
-        if not match:
-            print(f"❌ Error: No frontmatter found in {source_file}")
-            print("  Pages must have YAML frontmatter (--- at start and end)")
+        parsed = _parse_page_frontmatter(source_file)
+        if parsed is None:
             continue
+        _, fm, _ = parsed
+        if fm.get('localized_for'):
+            canonical = fm['localized_for']
+            lang = fm.get('language')
+            if not lang:
+                print(f"  Warning: {source_file.name} has localized_for but no language; skipping")
+                continue
+            sisters.setdefault(canonical, {})[lang] = source_file
+        else:
+            canonicals.append(source_file)
 
-        frontmatter_text = match.group(1)
-        body = match.group(2).strip()
+    # Pass 2: for each canonical page, pick the active-language source and process
+    for canonical_file in canonicals:
+        canonical_filename = canonical_file.name
+
+        # If a sister exists for the active language, use it; else use canonical
+        active_sister = sisters.get(canonical_filename, {}).get(telar_language)
+        if active_sister is not None:
+            source_file = active_sister
+            print(f"  Using {source_file.name} for {canonical_filename} (telar_language={telar_language})")
+        else:
+            source_file = canonical_file
+
+        parsed = _parse_page_frontmatter(source_file)
+        if parsed is None:
+            continue
+        frontmatter_text, _, body = parsed
 
         # Process body through the same pipeline as story layers
         warnings_list = []
@@ -641,8 +691,9 @@ def generate_pages():
         for warning in warnings_list:
             print(f"  Warning: {warning}")
 
-        # Write processed file to output directory
-        output_file = output_dir / filename
+        # Write processed file to output directory under the canonical filename,
+        # so the URL is stable across languages
+        output_file = output_dir / canonical_filename
 
         output_content = f"""---
 {frontmatter_text}
@@ -658,15 +709,13 @@ def generate_pages():
 
 
 def load_config():
-    """Load _config.yml and return development-features settings"""
+    """Load _config.yml and return the full config dict (empty dict if missing)."""
     config_path = Path('_config.yml')
     if not config_path.exists():
         return {}
 
     with open(config_path, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-
-    return config.get('development-features', {})
+        return yaml.safe_load(f) or {}
 
 
 def main():
@@ -689,8 +738,10 @@ def main():
     print("Generating Jekyll collection files...")
     print("-" * 50)
 
-    # Load development feature flags
-    dev_features = load_config()
+    # Load site config; extract development feature flags and active language
+    config = load_config()
+    dev_features = config.get('development-features', {}) or {}
+    telar_language = config.get('telar_language', 'en') or 'en'
 
     # Support both old names (hide_*) and new names (skip_*), new takes precedence
     # CLI flags also apply (union of CLI and config flags)
@@ -735,8 +786,9 @@ def main():
         generate_stories()
     print()
 
-    # Always generate pages
-    generate_pages()
+    # Always generate pages (passes active language so localized sister files
+    # like acerca.md/about.md can be selected at build time)
+    generate_pages(telar_language=telar_language)
 
     print("-" * 50)
     print("Generation complete!")

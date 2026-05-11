@@ -32,7 +32,7 @@ layout: default
       </div>
       {% else %}
       <div class="alert alert-info">
-        <p class="mb-0">No glossary terms available yet. Add glossary files to the <code>_glossary/</code> directory to populate the glossary.</p>
+        <p class="mb-0">{{ lang.empty_states.no_glossary }}</p>
       </div>
       {% endif %}
     </div>
