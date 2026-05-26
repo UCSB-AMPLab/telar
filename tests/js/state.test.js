@@ -8,7 +8,7 @@
  * Updated for v1.0.0-beta: scroll accumulator fields removed,
  * Lenis scroll engine fields added.
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
 
 import { describe, it, expect } from 'vitest';
@@ -46,8 +46,13 @@ describe('state', () => {
     // Autoplay policy group
     expect(state).toHaveProperty('hasUserInteracted', false);
 
-    // Mobile/embed group
-    expect(state.isMobileViewport).toBe(false);
+    // Layout mode & embed group
+    expect(state.layoutMode).toBe('horizontal');
+    expect(state.isEmbed).toBe(false);
+    expect(state.cardOverlayRect).toBeNull();
+    expect(state).not.toHaveProperty('isMobileViewport');  // layout-mode contract
+
+    // Mobile button navigation group
     expect(state.currentMobileStep).toBe(0);
     expect(state.mobileNavButtons).toBeNull();
     expect(state.mobileNavigationCooldown).toBe(false);

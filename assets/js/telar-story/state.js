@@ -22,7 +22,7 @@
  *   the current step (0.0–1.0). `isSnapping` tracks in-flight snap
  *   animations from the lenis/snap plugin.
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -84,9 +84,15 @@ export const state = {
   /** Set true on first play overlay tap; enables autoplay for all subsequent media cards. */
   hasUserInteracted: false,
 
-  // ── Mobile / embed button navigation ─────────────────────────────────────
-  /** Whether the viewport is below the mobile breakpoint (768 px). */
-  isMobileViewport: false,
+  // ── Layout mode & embed ──────────────────────────────────────────────────
+  /** @type {'horizontal' | 'vertical'} Layout mode. Updated by layout-mode.js on every resize/orientationchange. */
+  layoutMode: 'horizontal',
+  /** Page-level boolean, set once at boot from window.telarEmbed.enabled. Orthogonal to layoutMode. */
+  isEmbed: false,
+  /** @type {DOMRect | null} Active text card's getBoundingClientRect; null when no active text card (title card, full-object mode). Populated by card-pool.js on activation + layout-mode.js on layoutchange. */
+  cardOverlayRect: null,
+
+  // ── Mobile button navigation ─────────────────────────────────────────────
   /** Index of the current step in mobile/embed button mode. */
   currentMobileStep: 0,
   /** Whether mobile navigation is showing the intro card (before step 0). */
@@ -122,7 +128,7 @@ export const state = {
 
   // ── Viewer preloading config (set from telarConfig in main.js) ───────────
   config: {
-    /** Maximum Tify instances kept in memory (per-scene pool cap). */
+    /** Maximum IIIF wrapper instances kept in memory (per-scene pool cap). */
     maxViewerCards: 8,
     /** Steps to preload ahead of the current position. */
     preloadSteps: 6,
