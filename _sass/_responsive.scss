@@ -1,0 +1,241 @@
+/**
+ * Responsive Foundations
+ *
+ * Single source of truth for breakpoints, card geometry, density tiers,
+ * audio/video scaling factors, and reduced-motion overrides. Declare values
+ * here as Sass variables, mirror every value to a CSS custom property on
+ * :root so JS can read them via getComputedStyle(), and expose the
+ * vertical-layout mixin so partials can wrap @media queries without
+ * duplicating the breakpoint literals.
+ *
+ * Consumers: import this partial as `@use 'responsive' as *` (namespace-free)
+ * so that $vars and @mixin vertical-layout are available unqualified.
+ *
+ * @version v1.4.0
+ */
+
+// Layer order declaration — documentation duplicate of the HTML-level
+// declaration in _layouts/story.html and _layouts/default.html.
+// Both must be identical. Browsers use the first-seen ordering; the HTML
+// <style>@layer ...;</style> block fires before telar.css loads, so the
+// HTML declaration wins. Including it here too makes the ordering intent
+// legible to editors reading the SCSS without opening a layout file.
+@layer reset, third-party, telar-base, telar-bootstrap-overrides, telar-components, telar-overrides;
+
+// ── Layout breakpoints ────────────────────────────────────────────────────────
+// --telar-vertical-min-width: 1024px; --telar-vertical-min-aspect: 0.75
+$telar-vertical-min-width:   1024px;
+$telar-vertical-min-aspect:  0.75;
+
+// ── Card geometry ─────────────────────────────────────────────────────────────
+// Values sourced from _story.scss:335-338 (side card left/width) and the
+// existing mobile media query geometry.
+$telar-card-side-left:               3%;
+$telar-card-side-width:              37%;
+$telar-card-mobile-bottom:           max(1rem, env(safe-area-inset-bottom));
+$telar-card-mobile-max-height:       40vh;
+$telar-card-mobile-max-height-media: 35vh;
+$telar-card-landscape-max-height:    480px;  // viewport-height threshold below which the text card becomes a side card (landscape phones); read by card-pool.js via the mirrored custom property so JS and CSS share one source
+
+// ── Density tiers ─────────────────────────────────────────────────────────────
+$telar-density-min-vh:      600px;
+$telar-density-max-vh:      900px;
+$telar-density-mini:        0.7;
+$telar-density-comfortable: 1;
+
+// ── Audio/video scaling factors ──────────────────────────────────────────────
+// Values must match the JS literals exactly so any future migration to read
+// these from the custom properties is a mechanical substitution.
+$telar-audio-height-mobile:  0.35;  // audio-card.js:330,545 — window.innerHeight * 0.35
+$telar-audio-height-resize:  0.5;   // audio-card.js:829     — window.innerHeight * 0.5
+$telar-video-pad-factor:     0.025; // video-card.js:139,214 — Math.min(W,H) * 0.025
+$telar-video-card-frac-side: 0.35;  // video-card.js:142     — cardFracSide
+$telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
+
+// ── :root CSS custom property mirror ─────────────────────────────────────────
+// Every Sass variable above is mirrored here so both compile-time Sass and
+// runtime JS (via getComputedStyle(document.documentElement)) can derive
+// values from one source. Property names follow --telar-{variable-name}.
+:root {
+  // Layout breakpoints
+  --telar-vertical-min-width:           #{$telar-vertical-min-width};
+  --telar-vertical-min-aspect:          #{$telar-vertical-min-aspect};
+
+  // Card geometry
+  --telar-card-side-left:               #{$telar-card-side-left};
+  --telar-card-side-width:              #{$telar-card-side-width};
+  --telar-card-mobile-bottom:           #{$telar-card-mobile-bottom};
+  --telar-card-mobile-max-height:       #{$telar-card-mobile-max-height};
+  --telar-card-mobile-max-height-media: #{$telar-card-mobile-max-height-media};
+  --telar-card-landscape-max-height:    #{$telar-card-landscape-max-height};
+
+  // Density tiers
+  --telar-density-min-vh:      #{$telar-density-min-vh};
+  --telar-density-max-vh:      #{$telar-density-max-vh};
+  --telar-density-mini:        #{$telar-density-mini};
+  --telar-density-comfortable: #{$telar-density-comfortable};
+
+  // Audio/video scaling factors
+  --telar-audio-height-mobile:  #{$telar-audio-height-mobile};
+  --telar-audio-height-resize:  #{$telar-audio-height-resize};
+  --telar-video-pad-factor:     #{$telar-video-pad-factor};
+  --telar-video-card-frac-side: #{$telar-video-card-frac-side};
+  --telar-video-stack-max-h:    #{$telar-video-stack-max-h};
+}
+
+// ── @mixin vertical-layout ───────────────────────────────────────────────────
+// Wraps rules in the two-clause media query that defines "vertical layout
+// mode": narrow width (phone portrait) OR tall-and-narrow aspect ratio
+// (phone landscape / small tablet). Consumers call @include vertical-layout
+// without namespace because telar.scss loads this partial as `@use 'responsive'
+// as *`. The aspect-ratio clause uses 3/4 = 0.75, matching
+// $telar-vertical-min-aspect.
+@mixin vertical-layout {
+  @media (max-width: $telar-vertical-min-width),
+         (max-aspect-ratio: #{$telar-vertical-min-aspect}) {
+    @content;
+  }
+}
+
+// ── Reduced-motion overrides ──────────────────────────────────────────────────
+// Strict interpretation of prefers-reduced-motion: reduce:
+// snap ALL CSS transitions to 0s. !important is required here because JS sets
+// transform/transition inline on these elements (card slides, panel transitions)
+// and cascade layer ordering cannot beat inline styles.
+//
+// Each comment identifies the inline style being fought.
+@media (prefers-reduced-motion: reduce) {
+  // Card-slide transitions — _story.scss:66, 350, 418
+  // fights JS-set transform inline style on sliding card plates
+  .viewer-plate,
+  .text-card,
+  .intro-vignette {
+    transition: none !important; // fights JS-set transform inline style
+  }
+
+  // Panel transitions — _panels.scss:35, 186, 201, 523
+  // fights JS-set transform/translate inline style on panel open/close
+  .offcanvas,
+  [data-telar-panel],
+  .telar-panel-overlay {
+    transition: none !important; // fights JS-set transform inline style
+  }
+}
+
+// ── Height-density consolidation ──────────────────────────────────────────────
+// Replaces the nine height-tier blocks that existed across _story.scss,
+// _layout.scss, and _panels.scss (three blocks × three files = 9 blocks total).
+//
+// Uses the Tier-3 (most aggressive) values from those blocks. One step
+// rather than three progressive tiers loses the intermediate gradations —
+// a minor trade-off; clamp()-based fluid scaling could restore them later.
+//
+// Breakpoint: max-height: 600px (NOT the former max-width AND max-height form).
+// Dropping the width clause covers:
+//   • Small portrait phones (iPhone SE, 375×667 — 667h > 600h but still
+//     reasonably small; the 700px former Tier-1 covered this).
+//     Note: iPhone SE at 667h is NOT triggered by 600px. The consolidation
+//     intentionally accepts this: only devices at or below 600px trigger
+//     (very small Androids + landscape phones), matching the former Tier-3.
+//   • Landscape phones (iPhone Pro Max landscape = 430h; all modern landscape
+//     phones are ≤ 600h) — the former max-width clause excluded landscape
+//     phones wider than 768px; this block correctly includes them.
+//
+// This block is UNLAYERED — matches the reduced-motion block precedent above.
+// Unlayered CSS beats any @layer rule (including telar-components), so these
+// Tier-3 density reductions win over layered desktop rules without !important.
+// The selectors are identical to those in the deleted blocks — no broader scope.
+//
+// .text-card sizing is intentionally absent: the @container (max-width: ...)
+// rules in _story.scss (inside @layer telar-components) own that now.
+@media (max-height: #{$telar-density-min-vh}) {
+  // ── From _layout.scss (page-content, collection, navbar) ─────────────────
+  .page-content {
+    font-size: 0.875rem;
+  }
+
+  .page-content h1 {
+    margin-bottom: 1rem;
+  }
+
+  .page-content h2 {
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .page-content p {
+    margin-bottom: 1rem;
+  }
+
+  .collection-grid {
+    gap: 1.25rem;
+    padding: 1.25rem 0;
+  }
+
+  .collection-item img {
+    height: 175px;
+  }
+
+  .collection-item h3 {
+    font-size: 0.9rem;
+    margin-top: 0.7rem;
+  }
+
+  .navbar-brand {
+    font-size: 1.125rem;
+  }
+
+  // ── From _story.scss (panel-trigger, mobile-nav) ──────────────────────────
+  .panel-trigger {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.9rem;
+  }
+
+  .mobile-nav button {
+    width: 45px;
+    height: 45px;
+  }
+
+  // ── From _panels.scss (offcanvas-body + inner selectors) ─────────────────
+  #panel-layer1 .offcanvas-body,
+  #panel-layer2 .offcanvas-body,
+  #panel-glossary .offcanvas-body {
+    padding: 1.3rem;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  #panel-layer1 .offcanvas-body .offcanvas-title,
+  #panel-layer2 .offcanvas-body .offcanvas-title,
+  #panel-glossary .offcanvas-body .offcanvas-title {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+  }
+
+  #panel-layer1 .offcanvas-body blockquote,
+  #panel-layer2 .offcanvas-body blockquote,
+  #panel-glossary .offcanvas-body blockquote {
+    margin: 1rem 0;
+    padding: 0.7rem 1rem;
+  }
+
+  #panel-layer1 .offcanvas-body hr,
+  #panel-layer2 .offcanvas-body hr,
+  #panel-glossary .offcanvas-body hr {
+    margin: 1.75rem 0 1rem 0;
+  }
+
+  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
+  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
+    font-size: 0.7rem;
+    margin-bottom: 0.5rem;
+  }
+
+  #panel-layer1 .offcanvas-body img,
+  #panel-layer2 .offcanvas-body img,
+  #panel-glossary .offcanvas-body img {
+    max-width: 100%;
+    margin: 0.7rem auto;
+  }
+}
