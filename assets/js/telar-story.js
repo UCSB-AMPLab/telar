@@ -43,9 +43,14 @@
     // ── Autoplay policy ──────────────────────────────────────────────────────
     /** Set true on first play overlay tap; enables autoplay for all subsequent media cards. */
     hasUserInteracted: false,
-    // ── Mobile / embed button navigation ─────────────────────────────────────
-    /** Whether the viewport is below the mobile breakpoint (768 px). */
-    isMobileViewport: false,
+    // ── Layout mode & embed ──────────────────────────────────────────────────
+    /** @type {'horizontal' | 'vertical'} Layout mode. Updated by layout-mode.js on every resize/orientationchange. */
+    layoutMode: "horizontal",
+    /** Page-level boolean, set once at boot from window.telarEmbed.enabled. Orthogonal to layoutMode. */
+    isEmbed: false,
+    /** @type {DOMRect | null} Active text card's getBoundingClientRect; null when no active text card (title card, full-object mode). Populated by card-pool.js on activation + layout-mode.js on layoutchange. */
+    cardOverlayRect: null,
+    // ── Mobile button navigation ─────────────────────────────────────────────
     /** Index of the current step in mobile/embed button mode. */
     currentMobileStep: 0,
     /** Whether mobile navigation is showing the intro card (before step 0). */
@@ -77,7 +82,7 @@
     totalScenes: 0,
     // ── Viewer preloading config (set from telarConfig in main.js) ───────────
     config: {
-      /** Maximum Tify instances kept in memory (per-scene pool cap). */
+      /** Maximum IIIF wrapper instances kept in memory (per-scene pool cap). */
       maxViewerCards: 8,
       /** Steps to preload ahead of the current position. */
       preloadSteps: 6,
@@ -87,6 +92,89 @@
       minReadyViewers: 3
     }
   };
+
+  // assets/js/telar-story/layout-mode.js
+  var layoutChangeSubs = /* @__PURE__ */ new Set();
+  var viewportResizeSubs = /* @__PURE__ */ new Set();
+  var _cachedMode = null;
+  var _breakpoints = null;
+  var _modeMql = null;
+  var _resizeTimer = null;
+  var DEBOUNCE_MS = 100;
+  var _initialized = false;
+  function _readBreakpoints() {
+    const cs = getComputedStyle(document.documentElement);
+    const minW = parseFloat(cs.getPropertyValue("--telar-vertical-min-width").trim()) || 1024;
+    const minA = parseFloat(cs.getPropertyValue("--telar-vertical-min-aspect").trim()) || 0.75;
+    return { verticalMinWidth: minW, verticalMinAspect: minA };
+  }
+  function _evaluateMode() {
+    return _modeMql.matches ? "vertical" : "horizontal";
+  }
+  function _dispatchLayoutChange() {
+    const next = _evaluateMode();
+    const prev = _cachedMode;
+    _cachedMode = next;
+    if (prev !== null && prev !== next) {
+      const viewport = { w: window.innerWidth, h: window.innerHeight };
+      for (const cb of layoutChangeSubs) {
+        try {
+          cb({ from: prev, to: next, viewport, isEmbed: state.isEmbed });
+        } catch (e) {
+          console.error("[layout-mode] onLayoutChange handler threw:", e);
+        }
+      }
+    }
+  }
+  function _dispatchViewportResize() {
+    const viewport = { w: window.innerWidth, h: window.innerHeight };
+    for (const cb of viewportResizeSubs) {
+      try {
+        cb({ viewport });
+      } catch (e) {
+        console.error("[layout-mode] onViewportResize handler threw:", e);
+      }
+    }
+  }
+  function _onResize() {
+    if (_resizeTimer) clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(_dispatchViewportResize, DEBOUNCE_MS);
+  }
+  function _onOrientationChange() {
+    if (_resizeTimer) clearTimeout(_resizeTimer);
+    _dispatchLayoutChange();
+    _dispatchViewportResize();
+  }
+  function _initOnce() {
+    if (_initialized) return;
+    _initialized = true;
+    _breakpoints = _readBreakpoints();
+    const { verticalMinWidth: minW, verticalMinAspect: minA } = _breakpoints;
+    _modeMql = window.matchMedia(`(max-width: ${minW}px), (max-aspect-ratio: ${minA})`);
+    _cachedMode = _evaluateMode();
+    _modeMql.addEventListener("change", _dispatchLayoutChange);
+    window.addEventListener("resize", _onResize, { passive: true });
+    window.addEventListener("orientationchange", _onOrientationChange, { passive: true });
+  }
+  function getLayoutMode() {
+    _initOnce();
+    return _cachedMode;
+  }
+  function onLayoutChange(cb) {
+    _initOnce();
+    layoutChangeSubs.add(cb);
+    return () => layoutChangeSubs.delete(cb);
+  }
+  function onViewportResize(cb) {
+    _initOnce();
+    viewportResizeSubs.add(cb);
+    return () => viewportResizeSubs.delete(cb);
+  }
+  function isLandscapeSideCard() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--telar-card-landscape-max-height");
+    const maxH = parseFloat(raw) || 480;
+    return window.matchMedia(`(max-height: ${maxH}px)`).matches;
+  }
 
   // assets/js/telar-story/utils.js
   function getBasePath() {
@@ -107,17 +195,6 @@
       }
     });
     return tempDiv.innerHTML;
-  }
-  function calculateViewportPosition(viewport, x, y, zoom) {
-    const homeZoom = viewport.getHomeZoom();
-    const imageBounds = viewport.getHomeBounds();
-    const point = {
-      x: imageBounds.x + x * imageBounds.width,
-      y: imageBounds.y + y * imageBounds.height
-    };
-    const VIEWER_INSET = 0.98;
-    const actualZoom = homeZoom * zoom * VIEWER_INSET;
-    return { point, actualZoom };
   }
 
   // assets/js/telar-story/viewer.js
@@ -143,11 +220,9 @@
     const basePath = getBasePath();
     if (page) {
       const manifestUrl2 = `${window.location.origin}${basePath}/iiif/objects/${objectId}/page-${page}/manifest.json`;
-      console.log("Building local IIIF page manifest URL:", manifestUrl2);
       return manifestUrl2;
     }
     const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/manifest.json`;
-    console.log("Building local IIIF manifest URL:", manifestUrl);
     return manifestUrl;
   }
   async function prefetchStoryManifests() {
@@ -175,27 +250,22 @@
     if (avgTime > 1e3) {
       state.config.loadingThreshold = 1;
       state.config.minReadyViewers = Math.min(6, state.config.preloadSteps);
-      console.log(`Slow connection detected (${Math.round(avgTime)}ms avg), adjusting thresholds`);
     } else if (avgTime > 500) {
       state.config.loadingThreshold = Math.max(3, state.config.loadingThreshold - 2);
       state.config.minReadyViewers = Math.min(state.config.minReadyViewers + 1, state.config.preloadSteps);
-      console.log(`Moderate connection detected (${Math.round(avgTime)}ms avg), adjusting thresholds`);
     }
   }
   function initializeLoadingShimmer() {
     const uniqueViewers = new Set(
       state.steps.map((step) => step.dataset.object).filter(Boolean)
     ).size;
-    console.log(`Story has ${uniqueViewers} unique viewers (threshold: ${state.config.loadingThreshold})`);
     if (uniqueViewers >= state.config.loadingThreshold) {
       showViewerSkeletonState();
-      console.log(`Showing initial load shimmer (${uniqueViewers} >= ${state.config.loadingThreshold})`);
       const checkReadyViewers = () => {
         const readyCount = state.viewerCards.filter((v) => v.isReady).length;
         const targetReady = Math.min(state.config.minReadyViewers, uniqueViewers);
         if (readyCount >= targetReady) {
           hideViewerSkeletonState();
-          console.log(`Hiding shimmer: ${readyCount} viewers ready (target: ${targetReady})`);
         } else {
           setTimeout(checkReadyViewers, 200);
         }
@@ -264,48 +334,652 @@
     return match ? match[1] : null;
   }
 
+  // assets/js/telar-story/iiif-manifest.js
+  function extractAllPages(manifest) {
+    const v3Pages = extractV3Pages(manifest);
+    if (v3Pages.length > 0) return v3Pages;
+    const v2Pages = extractV2Pages(manifest);
+    if (v2Pages.length > 0) return v2Pages;
+    return [];
+  }
+  function extractV3Pages(manifest) {
+    const pages = [];
+    try {
+      const items = manifest.items;
+      if (!items) return pages;
+      for (const canvas of items) {
+        const annoPages = canvas.items;
+        if (!annoPages?.[0]) continue;
+        const annos = annoPages[0].items;
+        if (!annos?.[0]) continue;
+        const body = annos[0].body;
+        if (!body) continue;
+        const service = body.service;
+        if (service?.[0]?.id) {
+          pages.push({ tileSource: service[0].id + "/info.json" });
+          continue;
+        }
+        if (body.id && typeof body.id === "string" && body.type === "Image") {
+          const infoUrl = deriveInfoJsonFromImageUrl(body.id);
+          if (infoUrl) {
+            pages.push({ tileSource: infoUrl });
+            continue;
+          }
+          pages.push({ tileSource: body.id });
+        }
+      }
+    } catch {
+    }
+    return pages;
+  }
+  function extractV2Pages(manifest) {
+    const pages = [];
+    try {
+      const sequences = manifest.sequences;
+      if (!sequences?.[0]) return pages;
+      const canvases = sequences[0].canvases;
+      if (!canvases) return pages;
+      for (const canvas of canvases) {
+        const images = canvas.images;
+        if (!images?.[0]) continue;
+        const resource = images[0].resource;
+        if (!resource) continue;
+        const service = resource.service;
+        if (service?.["@id"]) {
+          pages.push({ tileSource: service["@id"] + "/info.json" });
+          continue;
+        }
+        if (resource["@id"] && typeof resource["@id"] === "string") {
+          pages.push({ tileSource: resource["@id"] });
+        }
+      }
+    } catch {
+    }
+    return pages;
+  }
+  function deriveInfoJsonFromImageUrl(url) {
+    const match = url.match(/^(.+\/iiif\/\d+\/[^/]+)\/[^/]+\/[^/]+\/[^/]+\/[^/]+$/);
+    if (match) return match[1] + "/info.json";
+    return null;
+  }
+
+  // assets/js/telar-story/test-hook.js
+  function testEnabled() {
+    if (typeof window === "undefined") return false;
+    if (window.__TELAR_TEST_HOOK__ === true) return true;
+    try {
+      return /[?&]telartest=1(?:&|$)/.test(window.location.search);
+    } catch {
+      return false;
+    }
+  }
+  var registry = [];
+  var installed = false;
+  function registerTestViewer(wrapper) {
+    if (!testEnabled() || !wrapper) return;
+    if (!registry.includes(wrapper)) registry.push(wrapper);
+    installTestHook();
+  }
+  function unregisterTestViewer(wrapper) {
+    const i = registry.indexOf(wrapper);
+    if (i >= 0) registry.splice(i, 1);
+  }
+  function visibleArea(el) {
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = Math.max(0, Math.min(vw, r.right) - Math.max(0, r.left));
+    const h = Math.max(0, Math.min(vh, r.bottom) - Math.max(0, r.top));
+    return w * h;
+  }
+  function getActiveViewer() {
+    const live = registry.filter(
+      (w) => w && w.viewer && !w._destroyed && w.containerEl && document.contains(w.containerEl)
+    );
+    if (live.length === 0) return null;
+    const plateOf = (w) => w.containerEl.closest(".viewer-plate");
+    const zOf = (w) => {
+      const p = plateOf(w);
+      const z = p ? parseInt(getComputedStyle(p).zIndex, 10) : NaN;
+      return Number.isNaN(z) ? -Infinity : z;
+    };
+    const isActive = (w) => !!plateOf(w)?.classList.contains("is-active");
+    const pool = live.some(isActive) ? live.filter(isActive) : live;
+    pool.sort(
+      (a, b) => zOf(b) - zOf(a) || visibleArea(b.containerEl) - visibleArea(a.containerEl)
+    );
+    return pool[0];
+  }
+  function isSettled() {
+    const w = getActiveViewer();
+    if (!w || !w.viewer) return false;
+    const vp = w.viewer.viewport;
+    const zc = vp.getZoom(true), zt = vp.getZoom(false);
+    const cc = vp.getCenter(true), ct = vp.getCenter(false);
+    return Math.abs(zc - zt) < 1e-4 && Math.abs(cc.x - ct.x) < 1e-4 && Math.abs(cc.y - ct.y) < 1e-4;
+  }
+  function measure(nx, ny) {
+    const w = getActiveViewer();
+    if (!w) return { error: "no-active-viewer" };
+    const v = w.viewer;
+    const OSD = window.OpenSeadragon;
+    if (!OSD || !v.world || v.world.getItemCount() === 0) return { error: "world-empty" };
+    const item = v.world.getItemAt(0);
+    const cs = item.getContentSize();
+    const vp = v.viewport;
+    const rect = w.containerEl.getBoundingClientRect();
+    const elPt = vp.imageToViewerElementCoordinates(new OSD.Point(nx * cs.x, ny * cs.y));
+    const focalScreenPx = { x: rect.left + elPt.x, y: rect.top + elPt.y };
+    const visImg = vp.viewportToImageRectangle(vp.getBounds(true));
+    const homeZoom = vp.getHomeZoom();
+    const zoom = vp.getZoom(true);
+    const cor = state.cardOverlayRect;
+    return {
+      ok: true,
+      input: { nx, ny },
+      viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+      imageSize: { w: cs.x, h: cs.y, aspect: cs.x / cs.y },
+      homeZoom,
+      zoom,
+      effectiveNzoom: zoom / homeZoom,
+      // what the runtime actually rendered, vs authored
+      osdConfig: {
+        visibilityRatio: v.visibilityRatio,
+        constrainDuringPan: v.constrainDuringPan,
+        minZoomImageRatio: v.minZoomImageRatio,
+        homeFillsViewer: v.homeFillsViewer
+      },
+      viewerRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
+      focalScreenPx,
+      focalInViewerPx: { x: elPt.x, y: elPt.y },
+      visibleImageRect: { x: visImg.x, y: visImg.y, w: visImg.width, h: visImg.height },
+      cardOverlayRect: cor ? { x: cor.x, y: cor.y, w: cor.width, h: cor.height } : null,
+      layoutMode: state.layoutMode ?? null,
+      activeTitleCardIndex: state.activeTitleCardIndex ?? null
+    };
+  }
+  var DEFAULT_SWEEP_STEPS = [
+    { step: 1, x: 0.5, y: 0.5, zoom: 1 },
+    { step: 2, x: 0.477, y: 0.125, zoom: 8.9 },
+    { step: 3, x: 0.486, y: 0.277, zoom: 10 },
+    { step: 4, x: 0.504, y: 0.415, zoom: 2.9 },
+    { step: 5, x: 0.478, y: 0.883, zoom: 10 },
+    { step: 6, x: 0.5, y: 0.5, zoom: 1 },
+    { step: 19, x: 0.516, y: 0.974, zoom: 10 },
+    { step: 20, x: 0.5, y: 0.5, zoom: 1 }
+  ];
+  async function settleAndMeasure(nx, ny, timeoutMs = 9e3) {
+    const start = Date.now();
+    let streak = 0, lastKey = null;
+    while (Date.now() - start < timeoutMs) {
+      const st = state;
+      if (isSettled() && !(st && st.isSnapping)) {
+        const m = measure(nx, ny);
+        if (m && m.ok) {
+          const key = `${Math.round(m.focalScreenPx.x)},${Math.round(m.focalScreenPx.y)},${m.zoom.toFixed(3)}`;
+          if (key === lastKey) streak++;
+          else {
+            lastKey = key;
+            streak = 0;
+          }
+          if (streak >= 3) return m;
+        }
+      } else {
+        streak = 0;
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return measure(nx, ny);
+  }
+  async function runSweep(steps) {
+    const nav = window.TelarStory && window.TelarStory.navigateToStep;
+    const out = [];
+    for (const s of steps) {
+      if (nav) nav(s.step);
+      await new Promise((r) => setTimeout(r, 450));
+      const m = await settleAndMeasure(s.x, s.y);
+      out.push({ step: s.step, authored: s, m });
+    }
+    return out;
+  }
+  function maybeAutoCollect() {
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch {
+      return;
+    }
+    if (!params.has("collect")) return;
+    const url = params.get("collect") || "http://127.0.0.1:8899/collect";
+    const label = params.get("label") || "device";
+    const steps = window.__TELAR_SWEEP_STEPS__ || DEFAULT_SWEEP_STEPS;
+    runSweep(steps).then((results) => {
+      const payload = {
+        label,
+        ua: navigator.userAgent,
+        viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+        results
+      };
+      try {
+        navigator.sendBeacon(url, new Blob([JSON.stringify(payload)], { type: "text/plain" }));
+      } catch (e) {
+        fetch(url, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) }).catch(() => {
+        });
+      }
+    });
+  }
+  function installTestHook() {
+    if (installed || !testEnabled()) return;
+    installed = true;
+    window.__telarTestHook__ = {
+      version: "v1.4.0",
+      registry,
+      getActiveViewer,
+      isSettled,
+      /** Primary API: exact rendered position + footprint of a focal point. */
+      getFocalScreenPosition: measure,
+      measure,
+      /** Convenience: measure a list of `{nx, ny}` (or `{x, y}`) points in one call. */
+      measurePoints(points) {
+        return points.map((p) => measure(Number(p.nx ?? p.x), Number(p.ny ?? p.y)));
+      },
+      runSweep,
+      settleAndMeasure
+    };
+    setTimeout(maybeAutoCollect, 800);
+  }
+
+  // assets/js/telar-story/iiif-viewer.js
+  var IiifViewer = class _IiifViewer {
+    /**
+     * @param {IiifViewerOptions} options
+     */
+    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false }) {
+      if (!window.OpenSeadragon) {
+        throw new Error("IiifViewer: window.OpenSeadragon not loaded \u2014 vendor <script> ordering issue?");
+      }
+      this.containerEl = typeof container === "string" ? document.querySelector(container) : container;
+      if (!this.containerEl) {
+        throw new Error(`IiifViewer: container ${container} not found`);
+      }
+      this.manifestUrl = manifestUrl;
+      this.startPage = startPage;
+      this.showChrome = showChrome;
+      this.allowZoomGestures = allowZoomGestures;
+      this.pages = [];
+      this.currentPage = startPage;
+      this.viewer = null;
+      this._destroyed = false;
+      this._chromeEl = null;
+      this._pageTransitioning = false;
+      this.ready = this._init();
+    }
+    /**
+     * Fetch the manifest, parse pages, and instantiate OpenSeadragon with
+     * Tify-faithful options. Resolves `this.ready` on success; rejects (and
+     * appends `.telar-iiif-error` to the container) on any failure.
+     */
+    async _init() {
+      try {
+        const res = await fetch(this.manifestUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const manifest = await res.json();
+        this.pages = extractAllPages(manifest);
+        if (this.pages.length === 0) throw new Error("No pages extracted from manifest");
+        this.currentPage = Math.max(0, Math.min(this.startPage, this.pages.length - 1));
+        const gestureSettingsMouse = this.allowZoomGestures ? {} : { scrollToZoom: false };
+        this.viewer = new window.OpenSeadragon({
+          element: this.containerEl,
+          tileSources: this.pages[this.currentPage].tileSource,
+          animationTime: 0.4,
+          drawer: "canvas",
+          immediateRender: true,
+          placeholderFillStyle: "grey",
+          preserveImageSizeOnResize: true,
+          preserveViewport: true,
+          showNavigationControl: false,
+          showZoomControl: false,
+          visibilityRatio: 0.2,
+          gestureSettingsMouse
+        });
+        if (!this.allowZoomGestures) {
+          this.viewer.innerTracker.scrollHandler = false;
+          this.viewer.gestureSettingsMouse.clickToZoom = false;
+        }
+        await new Promise((resolve, reject) => {
+          const onFirstOpen = () => {
+            this.viewer.removeHandler("open", onFirstOpen);
+            this.viewer.removeHandler("open-failed", onOpenFailed);
+            requestAnimationFrame(resolve);
+          };
+          const onOpenFailed = (event) => {
+            this.viewer.removeHandler("open", onFirstOpen);
+            this.viewer.removeHandler("open-failed", onOpenFailed);
+            reject(new Error("OSD open-failed: " + (event?.message || "unknown")));
+          };
+          this.viewer.addHandler("open", onFirstOpen);
+          this.viewer.addHandler("open-failed", onOpenFailed);
+        });
+        this.viewer.addHandler("open", () => {
+          this._pageTransitioning = false;
+          this._updateChrome();
+        });
+        if (this.showChrome && this.pages.length > 1) {
+          this._injectChrome();
+        }
+        registerTestViewer(this);
+      } catch (err) {
+        console.error("IiifViewer: failed to initialise", err);
+        this._injectErrorUI();
+        throw err;
+      }
+    }
+    /**
+     * Open a different page of the manifest. Silent no-op when destroyed,
+     * out of range, or already on the requested page.
+     *
+     * @param {number} n - 0-indexed page number.
+     */
+    setPage(n) {
+      if (this._destroyed) return;
+      if (n === this.currentPage || n < 0 || n >= this.pages.length) return;
+      this.currentPage = n;
+      this._pageTransitioning = true;
+      this.viewer.open(this.pages[n].tileSource);
+      this._updateChrome();
+    }
+    /**
+     * Tear down the viewer and remove injected chrome.
+     *
+     * Idempotent — second and later calls return early via the `_destroyed`
+     * flag. The viewer uses the Canvas2D drawer, so there is no
+     * WebGL context to release before teardown (OpenSeadragon issue #2693
+     * applies only to the WebGL drawer); this simply calls `viewer.destroy()`.
+     */
+    destroy() {
+      if (this._destroyed) return;
+      this._destroyed = true;
+      unregisterTestViewer(this);
+      if (this.viewer) {
+        this.viewer.destroy();
+        this.viewer = null;
+      }
+      if (this._chromeEl) {
+        this._chromeEl.remove();
+        this._chromeEl = null;
+      }
+    }
+    // ── Chrome ─────────────────────────────────────────────────────────────────
+    // Bootstrap Icons chevron paths (16×16, viewBox 0 0 16 16). Inlined so the
+    // wrapper has no SVG-loading dependency; static path data only — no user
+    // input ever reaches these strings.
+    static _CHEVRON_LEFT = "M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z";
+    static _CHEVRON_RIGHT = "M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z";
+    /**
+     * Substitute the wrapper's %{current} and %{total} placeholders in a
+     * lang-key aria template. Returns '' when the template is missing so
+     * a partially-localised installation does not write `undefined` into
+     * an aria-label.
+     *
+     * @param {string|undefined} template
+     * @param {number} current
+     * @param {number} total
+     * @returns {string}
+     */
+    _formatAriaLabel(template, current, total) {
+      if (!template) return "";
+      return template.replace("%{current}", String(current)).replace("%{total}", String(total));
+    }
+    /**
+     * Build the `<svg><path/></svg>` chevron used by prev / next buttons.
+     * createElementNS keeps the SVG in the SVG namespace; setAttribute
+     * carries no XSS risk because the `d` value is a class-level constant.
+     */
+    _makeChevronSvg(pathData) {
+      const NS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("xmlns", NS);
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("fill", "currentColor");
+      svg.setAttribute("aria-hidden", "true");
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", pathData);
+      svg.appendChild(path);
+      return svg;
+    }
+    /**
+     * Inject the prev / page-input / next pagination pills into the
+     * container. Telar-namespaced class names only (no Bootstrap utility
+     * classes). The pills float over the OSD canvas; positional
+     * styling lives in `_sass/_viewer.scss`.
+     */
+    _injectChrome() {
+      const lang = window.telarViewerLang ?? {};
+      const total = this.pages.length;
+      const current1 = this.currentPage + 1;
+      const wrap = document.createElement("div");
+      wrap.className = "telar-iiif-pagination";
+      const prevBtn = document.createElement("button");
+      prevBtn.type = "button";
+      prevBtn.className = "prev-btn";
+      prevBtn.setAttribute("aria-label", lang.prev_page ?? "Previous page");
+      prevBtn.appendChild(this._makeChevronSvg(_IiifViewer._CHEVRON_LEFT));
+      prevBtn.disabled = this.currentPage === 0;
+      prevBtn.addEventListener("click", () => {
+        if (this.currentPage > 0) this.setPage(this.currentPage - 1);
+      });
+      const labelEl = document.createElement("label");
+      labelEl.className = "visually-hidden";
+      labelEl.textContent = lang.page_input_label ?? "Page number";
+      const inputId = `telar-iiif-page-${Math.random().toString(36).slice(2, 8)}`;
+      labelEl.setAttribute("for", inputId);
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "page-input";
+      input.id = inputId;
+      input.min = "1";
+      input.max = String(total);
+      input.value = String(current1);
+      input.setAttribute(
+        "aria-label",
+        this._formatAriaLabel(lang.page_input_aria, current1, total)
+      );
+      input.addEventListener("change", (e) => {
+        const parsed = parseInt(e.target.value, 10);
+        if (Number.isNaN(parsed)) {
+          input.value = String(this.currentPage + 1);
+          return;
+        }
+        const clamped = Math.max(1, Math.min(parsed, this.pages.length));
+        this.setPage(clamped - 1);
+      });
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.className = "next-btn";
+      nextBtn.setAttribute("aria-label", lang.next_page ?? "Next page");
+      nextBtn.appendChild(this._makeChevronSvg(_IiifViewer._CHEVRON_RIGHT));
+      nextBtn.disabled = this.currentPage === total - 1;
+      nextBtn.addEventListener("click", () => {
+        if (this.currentPage < this.pages.length - 1) this.setPage(this.currentPage + 1);
+      });
+      wrap.append(prevBtn, labelEl, input, nextBtn);
+      this.containerEl.append(wrap);
+      this._chromeEl = wrap;
+    }
+    /**
+     * Reflect `currentPage` and `_pageTransitioning` back into the
+     * injected chrome (input value, aria-label, prev/next disabled).
+     * No-op when chrome has not been injected (`showChrome` false or
+     * single-page manifest).
+     */
+    _updateChrome() {
+      if (!this._chromeEl) return;
+      const lang = window.telarViewerLang ?? {};
+      const total = this.pages.length;
+      const current1 = this.currentPage + 1;
+      const input = this._chromeEl.querySelector(".page-input");
+      if (input) {
+        input.value = String(current1);
+        input.setAttribute(
+          "aria-label",
+          this._formatAriaLabel(lang.page_input_aria, current1, total)
+        );
+      }
+      const prevBtn = this._chromeEl.querySelector(".prev-btn");
+      if (prevBtn) prevBtn.disabled = this.currentPage === 0 || this._pageTransitioning;
+      const nextBtn = this._chromeEl.querySelector(".next-btn");
+      if (nextBtn) nextBtn.disabled = this.currentPage === total - 1 || this._pageTransitioning;
+    }
+    // ── Error UI ───────────────────────────────────────────────────────────────
+    /**
+     * Append `.telar-iiif-error` to the container when manifest fetch or
+     * OSD instantiation fails. Uses `textContent` for every string and
+     * never assembles HTML strings; reads localised text from
+     * `window.telarViewerLang` with inline English fallbacks so the wrapper
+     * degrades gracefully if the lang injection is missing.
+     */
+    _injectErrorUI() {
+      const div = document.createElement("div");
+      div.className = "telar-iiif-error";
+      div.setAttribute("role", "alert");
+      div.setAttribute("aria-live", "polite");
+      const lang = window.telarViewerLang ?? {};
+      const strong = document.createElement("strong");
+      strong.textContent = lang.image_unavailable_title ?? "Image unavailable";
+      const p = document.createElement("p");
+      p.textContent = lang.image_unavailable_detail ?? "The IIIF image could not be loaded.";
+      div.append(strong, p);
+      this.containerEl.append(div);
+    }
+  };
+
   // assets/js/telar-story/iiif-card.js
+  function _isSane(imageW, imageH, viewportW, viewportH, x, y, zoom) {
+    const fin = (v) => typeof v === "number" && Number.isFinite(v);
+    if (!fin(imageW) || imageW <= 0) return false;
+    if (!fin(imageH) || imageH <= 0) return false;
+    if (!fin(viewportW) || viewportW <= 0) return false;
+    if (!fin(viewportH) || viewportH <= 0) return false;
+    if (!fin(x) || x < 0 || x > 1) return false;
+    if (!fin(y) || y < 0 || y > 1) return false;
+    if (!fin(zoom) || zoom <= 0) return false;
+    return true;
+  }
+  var _CSS_HORIZ_CARD_LEFT = 3 / 100;
+  var _CSS_HORIZ_CARD_WIDTH = 37 / 100;
+  var _CSS_VERT_CARD_H_VH = 40 / 100;
+  var _CSS_VERT_CARD_TOP_FRAC = 1 - _CSS_VERT_CARD_H_VH;
+  function _defaultCardBox(placement, viewportW, viewportH) {
+    if (placement === "horizontal") {
+      return {
+        x: viewportW * _CSS_HORIZ_CARD_LEFT,
+        y: 0,
+        w: viewportW * _CSS_HORIZ_CARD_WIDTH,
+        h: viewportH
+      };
+    }
+    return {
+      x: 0,
+      y: viewportH * _CSS_VERT_CARD_TOP_FRAC,
+      w: viewportW,
+      h: viewportH * _CSS_VERT_CARD_H_VH
+    };
+  }
+  function _deriveCardPlacement(cardBox, viewportW, viewportH) {
+    if (!cardBox) {
+      if (isLandscapeSideCard()) return "horizontal";
+      return state.layoutMode === "vertical" ? "vertical" : "horizontal";
+    }
+    if (cardBox.x + cardBox.w < viewportW * 0.6) return "horizontal";
+    return "vertical";
+  }
+  var AUTHORING_ASPECT = 1.053;
+  var FOCAL_DIAMETER_FRAC = 0.9;
+  function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode) {
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    if (!_isSane(imageW, imageH, viewportW, viewportH, x, y, zoom)) {
+      return null;
+    }
+    const box = cardBox !== null && cardBox !== void 0 ? cardBox : _defaultCardBox(placementMode, viewportW, viewportH);
+    let region;
+    if (placementMode === "horizontal") {
+      const visX = box.x + box.w;
+      region = { x: visX, y: 0, w: viewportW - visX, h: viewportH };
+    } else {
+      region = { x: 0, y: 0, w: viewportW, h: box.y };
+    }
+    const imageAspect = imageW / imageH;
+    const homeZoomAuth = imageAspect / AUTHORING_ASPECT;
+    const frameWidthImg = imageW / (homeZoomAuth * zoom);
+    const diameterImg = FOCAL_DIAMETER_FRAC * frameWidthImg;
+    const focalImg = { x: x * imageW, y: y * imageH };
+    return { focalImg, diameterImg, region, imageW, imageH };
+  }
+  function _clampFocalPx(region, edges, ideal) {
+    const loX = region.x + region.w - edges.eRight;
+    const hiX = region.x + edges.eLeft;
+    const loY = region.y + region.h - edges.eBottom;
+    const hiY = region.y + edges.eTop;
+    return {
+      x: loX <= hiX ? Math.max(loX, Math.min(hiX, ideal.x)) : ideal.x,
+      y: loY <= hiY ? Math.max(loY, Math.min(hiY, ideal.y)) : ideal.y
+    };
+  }
+  function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
+    const v = viewerCard.osdViewer;
+    const av = viewerCard.osdWrapper;
+    const source = v.world.getItemAt(0)?.source;
+    if (!source?.width || !source?.height) return false;
+    const imgW = source.width;
+    const imgH = source.height;
+    if (state.activeTitleCardIndex != null) return false;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const r = state.cardOverlayRect;
+    const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+    const placementMode = _deriveCardPlacement(cardBox, viewportW, viewportH);
+    const target = computeFocalTarget(x, y, zoom, imgW, imgH, cardBox, placementMode);
+    if (!target) return false;
+    const { focalImg, diameterImg, region } = target;
+    const vp = v.viewport;
+    const OSD = window.OpenSeadragon;
+    const rect = av.containerEl.getBoundingClientRect();
+    const s_tgt = Math.min(region.w, region.h) / diameterImg;
+    const s_cap = Math.min(rect.width / imgW, rect.height / imgH);
+    const s = Math.max(s_tgt, s_cap);
+    const CB = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
+    const edges = {
+      eLeft: focalImg.x * s,
+      eRight: (imgW - focalImg.x) * s,
+      eTop: focalImg.y * s,
+      eBottom: (imgH - focalImg.y) * s
+    };
+    const F = _clampFocalPx(region, edges, CB);
+    const visW = rect.width / s;
+    const visH = rect.height / s;
+    const topLeft = { x: focalImg.x - F.x / s, y: focalImg.y - F.y / s };
+    const targetVp = vp.imageToViewportRectangle(
+      new OSD.Rect(topLeft.x, topLeft.y, visW, visH)
+    );
+    vp.fitBounds(targetVp, immediate);
+    return true;
+  }
   function deactivateIiifCard(viewerCard, direction) {
     if (!viewerCard || !viewerCard.element) return;
     viewerCard.element.classList.remove("is-active");
     if (direction === "backward") {
       viewerCard.element.style.transform = "translateY(100%)";
     }
-    console.log(`deactivateIiifCard: ${viewerCard.objectId} (${direction})`);
-  }
-  function _compensateForCardOverlay(viewport, point, actualZoom) {
-    if (state.isMobileViewport) {
-      const CARD_FRAC_MOBILE = 0.4;
-      const viewportWidth2 = 1 / actualZoom;
-      const aspectRatio = window.innerHeight / window.innerWidth;
-      const viewportHeight = viewportWidth2 * aspectRatio;
-      const shiftY = CARD_FRAC_MOBILE / 2 * viewportHeight;
-      const visibleFraction = 1 - CARD_FRAC_MOBILE;
-      return {
-        point: { x: point.x, y: point.y + shiftY },
-        actualZoom: actualZoom * visibleFraction
-      };
-    }
-    const viewportWidth = 1 / actualZoom;
-    const CARD_FRAC = 0.39;
-    const shiftX = CARD_FRAC / 2 * viewportWidth;
-    return {
-      point: { x: point.x - shiftX, y: point.y },
-      actualZoom
-    };
   }
   function snapIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
       console.warn("snapIiifToPosition: viewer not ready for snap");
       return;
     }
-    const osdViewer = viewerCard.osdViewer;
-    const viewport = osdViewer.viewport;
-    let { point, actualZoom } = calculateViewportPosition(viewport, x, y, zoom);
-    ({ point, actualZoom } = _compensateForCardOverlay(viewport, point, actualZoom));
-    console.log(`snapIiifToPosition: ${viewerCard.objectId} x=${x} y=${y} zoom=${zoom}`);
-    viewport.panTo(point, true);
-    viewport.zoomTo(actualZoom, point, true);
+    _applyFocalTarget(viewerCard, x, y, zoom, true);
   }
   function animateIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
@@ -313,18 +987,14 @@
       return;
     }
     const osdViewer = viewerCard.osdViewer;
-    const viewport = osdViewer.viewport;
-    let { point, actualZoom } = calculateViewportPosition(viewport, x, y, zoom);
-    ({ point, actualZoom } = _compensateForCardOverlay(viewport, point, actualZoom));
-    console.log(`animateIiifToPosition: ${viewerCard.objectId} x=${x} y=${y} zoom=${zoom} over 4s`);
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     osdViewer.gestureSettingsMouse.clickToZoom = false;
     osdViewer.gestureSettingsTouch.clickToZoom = false;
     const originalAnimationTime = osdViewer.animationTime;
     const originalSpringStiffness = osdViewer.springStiffness;
     osdViewer.animationTime = 4;
     osdViewer.springStiffness = 0.8;
-    viewport.panTo(point, false);
-    viewport.zoomTo(actualZoom, point, false);
+    _applyFocalTarget(viewerCard, x, y, zoom, prefersReduced);
     setTimeout(() => {
       osdViewer.animationTime = originalAnimationTime;
       osdViewer.springStiffness = originalSpringStiffness;
@@ -351,6 +1021,34 @@
     if (!viewerCard || !viewerCard.isReady) return;
     snapIiifToPosition(viewerCard, x, y, zoom);
   }
+  function _reSnapActiveViewer() {
+    const viewerCard = state.viewerCards.find(
+      (vc) => vc.element && vc.element.classList.contains("is-active")
+    );
+    if (!viewerCard || !viewerCard.isReady) return;
+    const activeTextCard = document.querySelector(".text-card.is-active");
+    if (!activeTextCard) return;
+    const stepIndex = parseInt(activeTextCard.dataset.stepIndex, 10);
+    if (isNaN(stepIndex)) return;
+    const steps = (window.storyData?.steps || []).filter((s) => !s._metadata);
+    const step = steps[stepIndex];
+    if (!step) return;
+    const x = parseFloat(step.x);
+    const y = parseFloat(step.y);
+    const zoom = parseFloat(step.zoom);
+    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
+    snapIiifToPosition(viewerCard, x, y, zoom);
+  }
+  onViewportResize(() => {
+    _reSnapActiveViewer();
+  });
+  onLayoutChange(() => {
+    requestAnimationFrame(() => {
+      const activeCard = document.querySelector(".text-card.is-active");
+      state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
+      _reSnapActiveViewer();
+    });
+  });
 
   // assets/js/telar-story/text-card.js
   function isFullObjectMode(stepData) {
@@ -365,6 +1063,10 @@
   }
 
   // assets/js/telar-story/video-card.js
+  var _cs = getComputedStyle(document.documentElement);
+  var videoPadFactor = parseFloat(_cs.getPropertyValue("--telar-video-pad-factor").trim()) || 0.025;
+  var videoStackMaxH = parseFloat(_cs.getPropertyValue("--telar-video-stack-max-h").trim()) || 0.58;
+  var videoCardFracSide = parseFloat(_cs.getPropertyValue("--telar-video-card-frac-side").trim()) || 0.35;
   var _videoPlayers = [];
   var MAX_VIDEO_PLAYERS = 3;
   function loadYouTubeAPI() {
@@ -403,11 +1105,11 @@
     return window._vimeoApiPromise;
   }
   function computeVideoLayout(W, H, aspectRatio) {
-    if (W < 768) {
+    if (state.layoutMode === "vertical") {
       return _computeStackedLayout(W, H, aspectRatio);
     }
-    const pad = Math.max(8, Math.round(Math.min(W, H) * 0.025));
-    const cardFracSide = 0.35;
+    const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
+    const cardFracSide = videoCardFracSide;
     const sideCardW = Math.round(W * cardFracSide);
     const sideVideoMaxW = W - sideCardW - pad * 3;
     const sideVideoMaxH = H - pad * 2;
@@ -419,7 +1121,7 @@
     }
     const sideVideoArea = sideVidW * sideVidH;
     const stackVideoMaxW = W - pad * 2;
-    const stackVideoMaxH = H * 0.58;
+    const stackVideoMaxH = H * videoStackMaxH;
     let stackVidW = stackVideoMaxW;
     let stackVidH = stackVidW / aspectRatio;
     if (stackVidH > stackVideoMaxH) {
@@ -468,9 +1170,9 @@
     };
   }
   function _computeStackedLayout(W, H, aspectRatio) {
-    const pad = Math.max(8, Math.round(Math.min(W, H) * 0.025));
+    const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
     const stackVideoMaxW = W - pad * 2;
-    const stackVideoMaxH = H * 0.58;
+    const stackVideoMaxH = H * videoStackMaxH;
     let stackVidW = stackVideoMaxW;
     let stackVidH = stackVidW / aspectRatio;
     if (stackVidH > stackVideoMaxH) {
@@ -622,8 +1324,7 @@
     plateEl.style.transform = "translateY(0)";
     plateEl.classList.add("is-active");
     _applyVideoLayout(plateEl);
-    const isEmbed = document.body.classList.contains("embed-mode");
-    if (state.isMobileViewport || isEmbed) {
+    if (state.layoutMode === "vertical" || state.isEmbed) {
       if (!state.hasUserInteracted) {
         _showVideoPlayOverlay(plateEl);
         return;
@@ -902,19 +1603,18 @@
       videoEl.style.height = `${layout.video.height}px`;
     }
   }
-  var _resizeDebounceTimer = null;
-  window.addEventListener("resize", () => {
-    if (_resizeDebounceTimer) clearTimeout(_resizeDebounceTimer);
-    _resizeDebounceTimer = setTimeout(() => {
-      for (const wrapper of _videoPlayers) {
-        if (wrapper.element && wrapper.element.classList.contains("is-active")) {
-          _applyVideoLayout(wrapper.element);
-        }
+  onViewportResize(() => {
+    for (const wrapper of _videoPlayers) {
+      if (wrapper.element && wrapper.element.classList.contains("is-active")) {
+        _applyVideoLayout(wrapper.element);
       }
-    }, 100);
+    }
   });
 
   // assets/js/telar-story/audio-card.js
+  var _cs2 = getComputedStyle(document.documentElement);
+  var audioHeightMobile = parseFloat(_cs2.getPropertyValue("--telar-audio-height-mobile").trim()) || 0.35;
+  var audioHeightResize = parseFloat(_cs2.getPropertyValue("--telar-audio-height-resize").trim()) || 0.5;
   var _audioPlayers = [];
   var MAX_AUDIO_PLAYERS = 3;
   var _sharedAudioContext = null;
@@ -1062,7 +1762,7 @@
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * 0.35),
+          height: Math.round(window.innerHeight * audioHeightMobile),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -1223,10 +1923,10 @@
     const wrapper = _getAudioWrapperForPlate(plateEl);
     if (!wrapper || !wrapper.ws) return;
     try {
-      wrapper.ws.setOptions({ height: Math.round(window.innerHeight * 0.35) });
+      wrapper.ws.setOptions({ height: Math.round(window.innerHeight * audioHeightMobile) });
     } catch (e) {
     }
-    if (state.isMobileViewport || wrapper.isEmbed) {
+    if (state.layoutMode === "vertical" || state.isEmbed) {
       _showPlayOverlay(plateEl);
       return;
     }
@@ -1391,20 +2091,16 @@
 <p>This audio file could not be loaded. Continue scrolling to read the story.</p>`;
     plateEl.appendChild(alertEl);
   }
-  var _audioResizeTimer = null;
-  window.addEventListener("resize", () => {
-    if (_audioResizeTimer) clearTimeout(_audioResizeTimer);
-    _audioResizeTimer = setTimeout(() => {
-      const newHeight = Math.round(window.innerHeight * 0.5);
-      for (const wrapper of _audioPlayers) {
-        if (wrapper.element && wrapper.element.classList.contains("is-active") && wrapper.ws) {
-          try {
-            wrapper.ws.setOptions({ height: newHeight });
-          } catch (e) {
-          }
+  onViewportResize(({ viewport }) => {
+    const newHeight = Math.round(viewport.h * audioHeightResize);
+    for (const wrapper of _audioPlayers) {
+      if (wrapper.element && wrapper.element.classList.contains("is-active") && wrapper.ws) {
+        try {
+          wrapper.ws.setOptions({ height: newHeight });
+        } catch (e) {
         }
       }
-    }, 100);
+    }
   });
 
   // assets/js/telar-story/card-pool.js
@@ -1495,6 +2191,28 @@
   }
   function buildTransform(messiness, baseTranslate) {
     return `${baseTranslate} rotate(${messiness.rot}deg) translate(${messiness.offX}px, ${messiness.offY}px)`;
+  }
+  function _recomputeCardGeometry(viewportW, viewportH) {
+    const peekHeight = _config.peekHeight ?? 1;
+    const landscapeSideCard = isLandscapeSideCard();
+    const cards = document.querySelectorAll(".text-card");
+    for (const card of cards) {
+      const runPos = parseInt(card.dataset.runPosition, 10) || 0;
+      if (landscapeSideCard) {
+        card.style.height = "";
+        const cardH = card.offsetHeight;
+        const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+        card.style.setProperty("top", `${topPx}px`, "important");
+      } else if (getLayoutMode() === "vertical") {
+        card.style.removeProperty("top");
+        card.style.height = `${viewportH * 0.8}px`;
+      } else {
+        const cardH = viewportH * 0.8;
+        const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+        card.style.setProperty("top", `${topPx}px`, "important");
+        card.style.height = `${cardH}px`;
+      }
+    }
   }
   function initCardPool(storyData, config) {
     const cardStack = document.querySelector(".card-stack");
@@ -1639,10 +2357,17 @@
           const y = parseFloat(firstStep.y);
           const zoom = parseFloat(firstStep.zoom);
           const page = firstStep.page ? parseInt(firstStep.page, 10) : void 0;
-          _initTifyInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
+          _initOsdInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
         }
       }
     }
+    onViewportResize(({ viewport }) => {
+      _recomputeCardGeometry(viewport.w, viewport.h);
+    });
+    onLayoutChange(({ viewport }) => {
+      _recomputeCardGeometry(viewport.w, viewport.h);
+    });
+    _recomputeCardGeometry(window.innerWidth, window.innerHeight);
   }
   function buildTextCardContent(step) {
     const question = step.question || "";
@@ -1898,17 +2623,17 @@
       activateVideoCard(newPlate, sceneIndex);
     } else if (!viewerCard) {
       const zIndex = _zPlan.plateZ[stepIndex];
-      _initTifyInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
+      _initOsdInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
     } else if (viewerCard.isReady && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
       snapIiifToPosition(viewerCard, x, y, zoom);
     } else if (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
       viewerCard.pendingZoom = { x, y, zoom, snap: true };
     }
   }
-  function _initTifyInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
+  function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
     const manifestUrl = getManifestUrl(objectId, page);
     if (!manifestUrl) {
-      console.error("_initTifyInPlate: no manifest URL for", objectId);
+      console.error("_initOsdInPlate: no manifest URL for", objectId);
       return;
     }
     plateEl.dataset.loading = "true";
@@ -1922,11 +2647,12 @@
     } else {
       viewerDiv.id = viewerId;
     }
-    const tifyInstance = new window.Tify({
+    const startPage = page && page > 1 ? page - 1 : 0;
+    const osdWrapper = new IiifViewer({
       container: "#" + viewerId,
       manifestUrl,
-      panels: [],
-      urlQueryKey: false
+      startPage,
+      showChrome: false
     });
     const viewerCard = {
       sceneIndex,
@@ -1934,27 +2660,48 @@
       objectId,
       page: page || void 0,
       element: plateEl,
-      tifyInstance,
+      osdWrapper,
       osdViewer: null,
       isReady: false,
       pendingZoom: !isNaN(x) && !isNaN(y) && !isNaN(zoom) ? { x, y, zoom, snap: true } : null,
       zIndex
     };
-    tifyInstance.ready.then(() => {
-      viewerCard.osdViewer = tifyInstance.viewer;
+    osdWrapper.ready.then(() => {
+      viewerCard.osdViewer = osdWrapper.viewer;
       viewerCard.isReady = true;
       delete plateEl.dataset.loading;
-      tifyInstance.viewer.gestureSettingsMouse.scrollToZoom = false;
+      osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
       if (viewerCard.pendingZoom) {
-        if (viewerCard.pendingZoom.snap) {
-          snapIiifToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
+        const pz = viewerCard.pendingZoom;
+        if (pz.snap) {
+          snapIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
         } else {
-          animateIiifToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
+          animateIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
         }
+        requestAnimationFrame(() => {
+          const pzAfter = viewerCard.pendingZoom;
+          if (pzAfter && viewerCard.osdViewer) {
+            const vp = viewerCard.osdViewer.viewport;
+            const homeZoom = vp.getHomeZoom();
+            const curZoom = vp.getZoom(true);
+            const TOL = 0.05;
+            const authoredIsZoomed = pzAfter.zoom > 1.1;
+            const droppedToHome = Math.abs(curZoom - homeZoom) < homeZoom * TOL;
+            if (authoredIsZoomed && droppedToHome) {
+              if (pzAfter.snap) {
+                snapIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
+              } else {
+                animateIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
+              }
+            }
+          }
+          viewerCard.pendingZoom = null;
+        });
+      } else {
         viewerCard.pendingZoom = null;
       }
     }).catch((err) => {
-      console.error(`_initTifyInPlate: Tify failed for ${objectId}:`, err);
+      console.error(`_initOsdInPlate: IiifViewer failed for ${objectId}:`, err);
       viewerCard.isReady = true;
       delete plateEl.dataset.loading;
     });
@@ -1972,23 +2719,14 @@
         }
       }
       const evicted = state.viewerCards.splice(farthestIdx, 1)[0];
-      _evictTifyInstance(evicted);
+      _evictOsdInstance(evicted);
     }
   }
-  function _evictTifyInstance(viewerCard) {
-    if (viewerCard.osdViewer) {
-      const canvas = viewerCard.osdViewer.drawer?.canvas;
-      if (canvas) {
-        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-        if (gl) {
-          gl.getExtension("WEBGL_lose_context")?.loseContext();
-        }
-      }
+  function _evictOsdInstance(viewerCard) {
+    if (viewerCard.osdWrapper && typeof viewerCard.osdWrapper.destroy === "function") {
+      viewerCard.osdWrapper.destroy();
     }
-    if (viewerCard.tifyInstance && typeof viewerCard.tifyInstance.destroy === "function") {
-      viewerCard.tifyInstance.destroy();
-    }
-    viewerCard.tifyInstance = null;
+    viewerCard.osdWrapper = null;
     viewerCard.osdViewer = null;
     viewerCard.isReady = false;
     const viewerInstance = viewerCard.element.querySelector(".viewer-instance");
@@ -2083,6 +2821,18 @@
     cardEl.classList.remove("is-stacked");
     cardEl.classList.add("is-active");
     cardEl.style.transform = buildTransform(messiness, "translateY(0)");
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const isScrubbing = document.querySelector(".card-stack")?.classList.contains("is-scrubbing");
+    if (prefersReduced || isScrubbing) {
+      state.cardOverlayRect = cardEl.getBoundingClientRect();
+      return;
+    }
+    const onSettled = (ev) => {
+      if (ev.target !== cardEl || ev.propertyName !== "transform") return;
+      cardEl.removeEventListener("transitionend", onSettled);
+      state.cardOverlayRect = cardEl.getBoundingClientRect();
+    };
+    cardEl.addEventListener("transitionend", onSettled);
   }
   function _activateTitleCardStep(index2, direction) {
     const titleCard = state.titleCards[index2];
@@ -2123,6 +2873,7 @@
     titleCard.style.transform = "translateY(0)";
     state.activeTitleCardIndex = index2;
     state.currentObjectRun = { objectId: "", runPosition: 0 };
+    state.cardOverlayRect = null;
     updateObjectCredits("");
     preloadAhead(index2, _config.preloadSteps, 2);
   }
@@ -2156,12 +2907,10 @@
       const zIndex = _zPlan.plateZ[firstStepIdx];
       if (plate.classList.contains("audio-plate")) {
         if (!plate.querySelector(".waveform-container")) {
-          console.log(`preloadAhead (audio): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
           _initAudioInPlate(plate, objectId, targetScene, zIndex);
         }
       } else if (plate.classList.contains("video-plate")) {
         if (!plate.querySelector(".video-iframe, iframe")) {
-          console.log(`preloadAhead (video): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
           _initVideoInPlate(plate, objectId, targetScene, zIndex);
         }
       } else {
@@ -2170,8 +2919,7 @@
         const y = parseFloat(step.y);
         const zoom = parseFloat(step.zoom);
         const page = step.page ? parseInt(step.page, 10) : void 0;
-        console.log(`preloadAhead: scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
-        _initTifyInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
+        _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
         _prefetchTilesForScene(targetScene);
       }
     }
@@ -2193,12 +2941,10 @@
       const zIndex = _zPlan.plateZ[firstStepIdx];
       if (plate.classList.contains("audio-plate")) {
         if (!plate.querySelector(".waveform-container")) {
-          console.log(`preloadAhead (audio): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
           _initAudioInPlate(plate, objectId, targetScene, zIndex);
         }
       } else if (plate.classList.contains("video-plate")) {
         if (!plate.querySelector(".video-iframe, iframe")) {
-          console.log(`preloadAhead (video): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
           _initVideoInPlate(plate, objectId, targetScene, zIndex);
         }
       } else {
@@ -2207,8 +2953,7 @@
         const y = parseFloat(step.y);
         const zoom = parseFloat(step.zoom);
         const page = step.page ? parseInt(step.page, 10) : void 0;
-        console.log(`preloadAhead: scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
-        _initTifyInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
+        _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
         _prefetchTilesForScene(targetScene);
       }
     }
@@ -2245,17 +2990,30 @@
     const imageH = info.height;
     const tileSize = info.tiles?.[0]?.width || 512;
     const scaleFactors = info.tiles?.[0]?.scaleFactors || [1];
-    const centreX = x * imageW;
-    const centreY = y * imageH;
     const vpW = window.innerWidth;
     const vpH = window.innerHeight;
-    const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
-    const visibleW = vpW * pixelsPerViewportPx;
-    const visibleH = vpH * pixelsPerViewportPx;
-    const left = Math.max(0, centreX - visibleW / 2);
-    const top = Math.max(0, centreY - visibleH / 2);
-    const right = Math.min(imageW, centreX + visibleW / 2);
-    const bottom = Math.min(imageH, centreY + visibleH / 2);
+    const r = state.cardOverlayRect;
+    const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+    const placementMode = _deriveCardPlacement(cardBox, vpW, vpH);
+    const target = computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
+    let centreX, centreY, halfW, halfH;
+    if (target) {
+      centreX = target.focalImg.x;
+      centreY = target.focalImg.y;
+      halfW = target.diameterImg / 2;
+      halfH = target.diameterImg / 2;
+    } else {
+      const vpH2 = window.innerHeight;
+      centreX = x * imageW;
+      centreY = y * imageH;
+      const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
+      halfW = vpW * pixelsPerViewportPx / 2;
+      halfH = vpH2 * pixelsPerViewportPx / 2;
+    }
+    const left = Math.max(0, centreX - halfW);
+    const top = Math.max(0, centreY - halfH);
+    const right = Math.min(imageW, centreX + halfW);
+    const bottom = Math.min(imageH, centreY + halfH);
     let scaleFactor = scaleFactors[0] || 1;
     for (const sf of scaleFactors) {
       const effectiveTile2 = tileSize * sf;
@@ -2286,7 +3044,7 @@
   }
 
   // node_modules/lenis/dist/lenis.mjs
-  var version = "1.3.21";
+  var version = "1.3.20";
   function clamp(min, input, max) {
     return Math.max(min, Math.min(input, max));
   }
@@ -2732,7 +3490,7 @@
       else this.internalStart();
     }
     onTransitionEnd = (event) => {
-      if (event.propertyName?.includes("overflow") && event.target === this.rootElement) this.checkOverflow();
+      if (event.propertyName.includes("overflow")) this.checkOverflow();
     };
     setScroll(scroll) {
       if (this.isHorizontal) this.options.wrapper.scrollTo({
@@ -3827,16 +4585,11 @@
     }
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * window.innerHeight;
-      state.lenis.stop();
-      document.documentElement.scrollTop = targetPx;
-      state.lenis.animatedScroll = targetPx;
-      state.lenis.targetScroll = targetPx;
+      state.lenis.scrollTo(targetPx, { immediate: true, force: true });
+      if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       activateCard(targetIndex, "forward");
       state.currentIndex = targetIndex;
       state.scrollPosition = targetIndex + 1;
-      requestAnimationFrame(() => {
-        state.lenis.start();
-      });
     } else {
       state.currentMobileStep = targetIndex;
       state.mobileInIntro = false;
@@ -3858,16 +4611,11 @@
     if (targetIndex < 0) return;
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * window.innerHeight;
-      state.lenis.stop();
-      document.documentElement.scrollTop = targetPx;
-      state.lenis.animatedScroll = targetPx;
-      state.lenis.targetScroll = targetPx;
+      state.lenis.scrollTo(targetPx, { immediate: true, force: true });
+      if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       activateCard(targetIndex, "forward");
       state.currentIndex = targetIndex;
       state.scrollPosition = targetIndex + 1;
-      requestAnimationFrame(() => {
-        state.lenis.start();
-      });
     } else {
       state.currentMobileStep = targetIndex;
       state.mobileInIntro = false;
@@ -3926,10 +4674,11 @@
     history.scrollRestoration = "manual";
     totalPositions = stepCount + 1;
     surface.style.height = `${totalPositions * window.innerHeight}px`;
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     lenis = new Lenis({
       lerp: 0.06,
       // lower = heavier, more contemplative feel
-      smoothWheel: true,
+      smoothWheel: !prefersReduced,
       wheelMultiplier: 0.5,
       // scroll sensitivity
       autoRaf: false,
@@ -3975,8 +4724,8 @@
       lenis.raf(time);
       rafId = requestAnimationFrame(raf);
     });
-    window.addEventListener("resize", () => {
-      surface.style.height = `${totalPositions * window.innerHeight}px`;
+    onViewportResize(({ viewport }) => {
+      surface.style.height = `${totalPositions * viewport.h}px`;
       lenis.resize();
       registerSnapPoints(totalPositions);
     });
@@ -4168,8 +4917,7 @@
     document.body.appendChild(navContainer);
     return { container: navContainer, prev: prevButton, next: nextButton };
   }
-  function initializeButtonNavigation(mode) {
-    console.log(`Initializing ${mode} button navigation`);
+  function initializeButtonNavigation() {
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     initializeLoadingShimmer();
     state.steps.forEach((step) => {
@@ -4185,7 +4933,6 @@
     buttons.prev.addEventListener("click", goToPreviousMobileStep);
     buttons.next.addEventListener("click", goToNextMobileStep);
     updateMobileButtonStates();
-    console.log(`${mode.charAt(0).toUpperCase() + mode.slice(1)} navigation initialized with ${state.steps.length} steps`);
   }
   function goToNextMobileStep() {
     if (state.mobileInIntro) {
@@ -4260,7 +5007,6 @@
       return;
     }
     if (state.mobileNavigationCooldown) {
-      console.log("Mobile navigation on cooldown, ignoring tap");
       return;
     }
     const newStep = state.steps[newIndex];
@@ -4274,7 +5020,6 @@
       state.mobileNavigationCooldown = false;
     }, MOBILE_NAV_COOLDOWN);
     const direction = newIndex > state.currentMobileStep ? "forward" : "backward";
-    console.log(`Mobile navigation: ${state.currentMobileStep} \u2192 ${newIndex} (${direction})`);
     state.steps[state.currentMobileStep].classList.remove("mobile-active");
     state.steps[newIndex].classList.add("mobile-active");
     state.currentMobileStep = newIndex;
@@ -4407,6 +5152,9 @@
   }
 
   // assets/js/telar-story/main.js
+  if (typeof window !== "undefined") {
+    window.IiifViewer = IiifViewer;
+  }
   function initializeStory() {
     const viewerConfig = window.telarConfig?.viewer_preloading || {};
     state.config.maxViewerCards = Math.min(viewerConfig.max_viewer_cards || 10, 15);
@@ -4420,17 +5168,22 @@
       messiness: window.telarConfig?.cardMessiness ?? 20
     };
     initCardPool(window.storyData, cardConfig);
-    state.isMobileViewport = window.innerWidth < 768;
-    const isEmbedMode = window.telarEmbed?.enabled || false;
+    state.isEmbed = window.telarEmbed?.enabled || false;
+    state.layoutMode = getLayoutMode();
+    onLayoutChange(({ to }) => {
+      state.layoutMode = to;
+      const activeCard = document.querySelector(".text-card.is-active");
+      state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
+    });
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isEmbedMode) {
-      initializeButtonNavigation("embed");
+    if (state.isEmbed) {
+      initializeButtonNavigation();
       const stepCount = (window.storyData?.steps || []).filter((s) => !s._metadata).length;
       initScrollEngine(stepCount);
-    } else if (state.isMobileViewport) {
-      initializeButtonNavigation("mobile");
+    } else if (state.layoutMode === "vertical") {
+      initializeButtonNavigation();
     } else if (isIOS) {
-      initializeButtonNavigation("mobile");
+      initializeButtonNavigation();
     } else {
       const stepCount = (window.storyData?.steps || []).filter((s) => !s._metadata).length;
       initScrollEngine(stepCount);
@@ -4489,7 +5242,8 @@
     openPanel,
     getManifestUrl,
     closeAllPanels,
-    getScrollEngineState
+    getScrollEngineState,
+    navigateToStep
   };
 })();
 //# sourceMappingURL=telar-story.js.map
