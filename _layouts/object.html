@@ -415,14 +415,37 @@ layout: default
 </div>
 
 {% if object_media_type == 'Image' %}
-<!-- Tify IIIF Viewer -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tify@0.35.0/dist/tify.css">
+<!-- IIIF viewer (OpenSeadragon — vendored, see assets/vendor/) -->
+<script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
 <script type="module">
-  import Tify from 'https://cdn.jsdelivr.net/npm/tify@0.35.0/dist/tify.js';
+  // Object pages don't load the full telar-story.js bundle (which is
+  // story-only), so we import the wrapper directly from its ESM source.
+  // Jekyll publishes assets/js/telar-story/*.js alongside the bundled
+  // output, so the browser can fetch this path at runtime. This mirrors
+  // the prior Tify-CDN-module pattern this block replaces.
+  import { IiifViewer } from '{{ "/assets/js/telar-story/iiif-viewer.js" | relative_url }}';
 
   // Expose language strings to JavaScript
   window.telarCoordLang = {
     copied: "{{ lang.object.coordinates.copied }}"
+  };
+
+  /*
+    Expose IIIF viewer lang strings to JavaScript (used by iiif-viewer.js's
+    pagination chrome + error UI). Same bilingual viewer-lang exposure as
+    in _layouts/story.html; details there.
+
+    Expone los textos del visor IIIF a JavaScript (usados por la paginación
+    y la interfaz de error de iiif-viewer.js). Misma exposición bilingüe
+    que en _layouts/story.html; ver detalles allí.
+  */
+  window.telarViewerLang = {
+    prev_page: "{{ lang.object.viewer.prev_page }}",
+    next_page: "{{ lang.object.viewer.next_page }}",
+    page_input_label: "{{ lang.object.viewer.page_input_label }}",
+    page_input_aria: "{{ lang.object.viewer.page_input_aria }}",
+    image_unavailable_title: {{ lang.object.viewer.image_unavailable_title | jsonify }},
+    image_unavailable_detail: {{ lang.object.viewer.image_unavailable_detail | jsonify }}
   };
 
   document.addEventListener('DOMContentLoaded', async function() {
@@ -454,69 +477,59 @@ layout: default
     return;
     {% endif %}
 
-    console.log('Loading IIIF resource with Tify:', manifestUrl);
-
-    // Initialize Tify with IIIF manifest
-    const tify = new Tify({
+    // Initialise the IIIF wrapper. showChrome:true gives multi-page
+    // manifests the prev / page-input / next pills the reader needs;
+    // single-page manifests render no chrome regardless.
+    // allowZoomGestures:true restores OSD's native scroll-to-zoom and
+    // click-to-zoom on this standalone page (story plates leave them
+    // disabled because Lenis owns the wheel there; the object viewer
+    // has no Lenis to fight).
+    const wrapper = new IiifViewer({
       container: '#object-viewer',
       manifestUrl: manifestUrl,
-      panels: [],
-      urlQueryKey: false,
+      showChrome: true,
+      allowZoomGestures: true,
     });
 
-    // Wait for Tify's OpenSeadragon viewer to be ready
+    // Wait for the wrapper to initialise (manifest fetch + parse + OSD spin-up).
     try {
-      await tify.ready;
+      await wrapper.ready;
     } catch (err) {
-      console.error('Tify failed to initialize:', err);
+      console.error('IiifViewer failed to initialise:', err);
       return;
     }
 
-    // Detect multi-page manifest
-    let isMultiPage = false;
-    try {
-      const resp = await fetch(manifestUrl);
-      const manifest = await resp.json();
-      const canvases = manifest.items || (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) || [];
-      isMultiPage = canvases.length > 1;
-      if (isMultiPage) {
-        document.getElementById('object-viewer').classList.add('multipage');
-        const pageRows = document.querySelectorAll('.coord-page-row');
-        pageRows.forEach(function(el) {
-          el.style.display = 'flex';
-        });
-        var singleInstr = document.querySelector('.coord-instructions-single');
-        var multiInstr = document.querySelector('.coord-instructions-multi');
-        if (singleInstr) singleInstr.style.display = 'none';
-        if (multiInstr) multiInstr.style.display = 'block';
-        console.log('Multi-page manifest detected:', canvases.length, 'pages');
-      }
-    } catch (err) {
-      console.log('Could not determine page count:', err);
+    // Multi-page detection now reads from the wrapper's parsed page list,
+    // so no second manifest fetch is needed (the wrapper already did it).
+    const isMultiPage = wrapper.pages.length > 1;
+    if (isMultiPage) {
+      document.getElementById('object-viewer').classList.add('multipage');
+      const pageRows = document.querySelectorAll('.coord-page-row');
+      pageRows.forEach(function(el) {
+        el.style.display = 'flex';
+      });
+      var singleInstr = document.querySelector('.coord-instructions-single');
+      var multiInstr = document.querySelector('.coord-instructions-multi');
+      if (singleInstr) singleInstr.style.display = 'none';
+      if (multiInstr) multiInstr.style.display = 'block';
     }
 
-    // Access OpenSeadragon viewer directly via Tify's public API
-    const osdViewer = tify.viewer;
-    console.log('Got OSD viewer reference, world items:', osdViewer.world.getItemCount());
+    // Access the OSD instance directly via the wrapper's public API.
+    const osdViewer = wrapper.viewer;
 
     // If no items loaded yet, set up viewport for when image loads
     if (osdViewer.world.getItemCount() === 0) {
-      console.log('No items loaded yet - setting up viewport for when image loads');
-
       osdViewer.addHandler('open', function() {
-        console.log('OSD open event - forcing goHome()');
         setTimeout(function() {
           osdViewer.viewport.goHome(true);
         }, 100);
       });
     } else {
-      console.log('Items already loaded, forcing goHome()');
       osdViewer.viewport.goHome(true);
     }
 
     // Listen for 'add-item' event to reset after tiles load
     osdViewer.world.addHandler('add-item', function() {
-      console.log('Image loaded (add-item event), resetting to home position');
       setTimeout(function() {
         osdViewer.viewport.goHome(true);
       }, 50);
@@ -552,7 +565,7 @@ layout: default
 
         // Update page number for multi-page objects
         if (isMultiPage) {
-          const page = (tify.options && tify.options.pages && tify.options.pages.length > 0) ? tify.options.pages[0] : 1;
+          const page = wrapper.currentPage + 1;
           document.getElementById('coord-page').textContent = page;
         }
       } catch (error) {

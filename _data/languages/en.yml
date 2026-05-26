@@ -49,6 +49,14 @@ object:
     exit_fullscreen: "Exit fullscreen"
     thumbnails: "Thumbnails"
     page: "Page"
+    # Pagination chrome for multi-page IIIF objects
+    prev_page: "Previous page"
+    next_page: "Next page"
+    page_input_label: "Page number"
+    page_input_aria: "Page %{current} of %{total}"
+    # Error UI when manifest fetch fails
+    image_unavailable_title: "Image unavailable"
+    image_unavailable_detail: "The IIIF image could not be loaded."
 
   # Coordinate identification tool
   coordinates:
