@@ -8,24 +8,18 @@ This software is licensed under the MIT License. See LICENSE for details.
 Third-Party Software Notices
 ============================
 
-Tify IIIF Viewer
-----------------
-Copyright (c) Göttingen State and University Library (SUB Göttingen)
-License: GNU Affero General Public License v3.0 (AGPL-3.0)
-Source: https://github.com/tify-iiif-viewer/tify
-Loaded via CDN: https://cdn.jsdelivr.net/npm/tify@0.35.0/
-
-Tify is a slim and mobile-friendly IIIF document viewer built with Vue.js.
-Telar loads Tify unmodified from a public CDN. The AGPL-3.0 license text
-is available at https://www.gnu.org/licenses/agpl-3.0.html and in the
-Tify source repository linked above.
-
 OpenSeadragon
 -------------
 Copyright (c) OpenSeadragon contributors
 License: BSD 3-Clause
 Source: https://openseadragon.github.io/
-Bundled within Tify.
+Version: 6.0.2
+
+OpenSeadragon is a web-based viewer for high-resolution zoomable images.
+Telar uses it as its IIIF image viewer; it replaced the Tify viewer (and
+its Vue dependency) in v1.4.0. The minified build is vendored at
+assets/vendor/openseadragon.min.js and loaded via a <script> tag — no
+CDN dependency, no external requests.
 
 Bootstrap
 ---------

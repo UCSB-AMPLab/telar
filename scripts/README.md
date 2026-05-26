@@ -99,7 +99,7 @@ python scripts/generate_iiif.py --base-url https://mysite.github.io/project
 
 2. **Manifest Creation**: Wraps tiles in IIIF Presentation API v3 manifest
    - Adds metadata from `_data/objects.json`
-   - Compatible with Tify
+   - Compatible with OpenSeadragon
    - Outputs `manifest.json`
 
 3. **Object Linking**: Reference in your CSV/JSON:
