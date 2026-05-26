@@ -9,7 +9,7 @@
  *   - advanceToStep: guard for out-of-range indices
  *   - initScrollEngine: Lenis constructor options, snap configuration
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -277,6 +277,20 @@ describe('initScrollEngine', () => {
     state.snap = null;
 
     vi.stubGlobal('requestAnimationFrame', vi.fn());
+
+    // Stub window.matchMedia — jsdom does not implement it.
+    // Default: prefers-reduced-motion does NOT match (standard user).
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+
     try {
       Object.defineProperty(history, 'scrollRestoration', {
         writable: true,
@@ -327,21 +341,31 @@ describe('initScrollEngine', () => {
     expect(surface.style.height).toBe(`${4 * window.innerHeight}px`);
   });
 
-  it('uses prevent option that guards .panel descendants', () => {
+  it('uses prevent option that guards open-panel descendants', () => {
     initScrollEngine(3);
     // Get the prevent fn from the Lenis constructor call
     const opts = mocks.lenisConstructorArgs[0];
     expect(typeof opts.prevent).toBe('function');
 
-    // Node inside a panel — should be prevented
-    const panel = document.createElement('div');
-    panel.className = 'panel';
-    const inner = document.createElement('div');
-    panel.appendChild(inner);
-    document.body.appendChild(panel);
-    expect(opts.prevent(inner)).toBe(true);
+    // Node inside a Bootstrap offcanvas panel — should be prevented
+    // (matches the runtime selectors in scroll-engine.js: `.offcanvas` and
+    // `[data-telar-panel]`, the real panel markup from _includes/panels.html).
+    const offcanvas = document.createElement('div');
+    offcanvas.className = 'offcanvas';
+    const offcanvasInner = document.createElement('div');
+    offcanvas.appendChild(offcanvasInner);
+    document.body.appendChild(offcanvas);
+    expect(opts.prevent(offcanvasInner)).toBe(true);
 
-    // Node outside panel — should NOT be prevented
+    // Node inside a [data-telar-panel] element — should also be prevented
+    const telarPanel = document.createElement('div');
+    telarPanel.setAttribute('data-telar-panel', '');
+    const panelInner = document.createElement('div');
+    telarPanel.appendChild(panelInner);
+    document.body.appendChild(telarPanel);
+    expect(opts.prevent(panelInner)).toBe(true);
+
+    // Node outside any panel — should NOT be prevented
     const regular = document.createElement('div');
     document.body.appendChild(regular);
     expect(opts.prevent(regular)).toBe(false);

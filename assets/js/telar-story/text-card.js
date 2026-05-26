@@ -20,7 +20,7 @@
  * bottom of the screen at full width with a capped height, rather than
  * floating at the left edge.
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
 
 import { state } from './state.js';
@@ -91,7 +91,7 @@ export function createTextCard(stepData, stepIndex, topPx, cardH, zIndex, messin
   card.className = 'text-card';
   card.dataset.stepIndex = stepIndex;
   card.style.zIndex = zIndex;
-  if (!state.isMobileViewport) {
+  if (state.layoutMode !== 'vertical') {
     card.style.top = `${topPx}px`;
   }
   card.style.height = `${cardH}px`;
@@ -224,7 +224,7 @@ function _buildOffscreenTransform(messiness) {
  * @returns {string}
  */
 function _buildActiveTransform(messiness) {
-  const rot = state.isMobileViewport ? messiness.rot * 0.5 : messiness.rot;
+  const rot = state.layoutMode === 'vertical' ? messiness.rot * 0.5 : messiness.rot;
   return `translateY(0) rotate(${rot}deg) translate(${messiness.offX}px, ${messiness.offY}px)`;
 }
 

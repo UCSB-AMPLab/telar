@@ -41,10 +41,16 @@
  * slower but still functional. Audio load errors inject a .telar-alert
  * notification into the card area.
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
 
 import { state } from './state.js';
+import { onViewportResize } from './layout-mode.js';
+
+// ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
+const _cs = getComputedStyle(document.documentElement);
+const audioHeightMobile = parseFloat(_cs.getPropertyValue('--telar-audio-height-mobile').trim()) || 0.35;
+const audioHeightResize = parseFloat(_cs.getPropertyValue('--telar-audio-height-resize').trim()) || 0.5;
 
 // ── Module-level player pool ──────────────────────────────────────────────────
 
@@ -206,7 +212,7 @@ export function buildAudioControlsHTML() {
  * Get (or lazy-create) the shared AudioContext singleton.
  *
  * Browsers cap AudioContext instances (~6). Sharing one instance across
- * all WaveSurfer players prevents that limit from being hit (Pitfall 2).
+ * all WaveSurfer players prevents that limit from being hit.
  * Handles Safari's webkitAudioContext fallback.
  *
  * @returns {AudioContext}
@@ -327,7 +333,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * 0.35),
+          height: Math.round(window.innerHeight * audioHeightMobile),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -357,7 +363,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           });
         }
 
-        // Clip boundary enforcement via timeupdate (Pitfall 5 — not 'finish' event)
+        // Clip boundary enforcement via timeupdate (not the 'finish' event)
         ws.on("timeupdate", (currentTime) => {
           // Call onTimeUpdate at 1-second granularity for aria-live (Accessibility)
           const elapsedSecond = Math.floor(currentTime);
@@ -540,16 +546,16 @@ export function activateAudioCard(plateEl, sceneIndex) {
   const wrapper = _getAudioWrapperForPlate(plateEl);
   if (!wrapper || !wrapper.ws) return;
 
-  // Re-render waveform to match current viewport (Pitfall 4)
+  // Re-render waveform to match current viewport
   try {
-    wrapper.ws.setOptions({ height: Math.round(window.innerHeight * 0.35) });
+    wrapper.ws.setOptions({ height: Math.round(window.innerHeight * audioHeightMobile) });
   } catch (e) {
     // ws may still be initialising — ignore
   }
 
   // Unified autoplay policy
-  // Mobile and embed: always manual play with overlay shown
-  if (state.isMobileViewport || wrapper.isEmbed) {
+  // Vertical layout and embed: always manual play with overlay shown
+  if (state.layoutMode === 'vertical' || state.isEmbed) {
     _showPlayOverlay(plateEl);
     return;
   }
@@ -819,26 +825,21 @@ function _injectAudioError(plateEl) {
   plateEl.appendChild(alertEl);
 }
 
-// ── Resize handler ────────────────────────────────────────────────────────────
+// ── Viewport-resize subscription ─────────────────────────────────────────────
 
-let _audioResizeTimer = null;
-
-window.addEventListener("resize", () => {
-  if (_audioResizeTimer) clearTimeout(_audioResizeTimer);
-  _audioResizeTimer = setTimeout(() => {
-    const newHeight = Math.round(window.innerHeight * 0.5);
-    for (const wrapper of _audioPlayers) {
-      if (
-        wrapper.element &&
-        wrapper.element.classList.contains("is-active") &&
-        wrapper.ws
-      ) {
-        try {
-          wrapper.ws.setOptions({ height: newHeight });
-        } catch (e) {
-          // Ignore resize errors
-        }
+onViewportResize(({ viewport }) => {
+  const newHeight = Math.round(viewport.h * audioHeightResize);
+  for (const wrapper of _audioPlayers) {
+    if (
+      wrapper.element &&
+      wrapper.element.classList.contains("is-active") &&
+      wrapper.ws
+    ) {
+      try {
+        wrapper.ws.setOptions({ height: newHeight });
+      } catch (e) {
+        // Ignore resize errors
       }
     }
-  }, 100);
+  }
 });

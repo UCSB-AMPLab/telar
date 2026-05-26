@@ -36,12 +36,13 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.2.0
+ * @version v1.4.0
  */
 
 import Lenis from 'lenis';
 import Snap from 'lenis/snap';
 import { state } from './state.js';
+import { onViewportResize } from './layout-mode.js';
 import { activateCard, setCardProgress } from './card-pool.js';
 import { writeHash } from './deep-link.js';
 import { goToStep, updateViewerInfo } from './navigation.js';
@@ -96,9 +97,11 @@ export function initScrollEngine(stepCount) {
   surface.style.height = `${totalPositions * window.innerHeight}px`;
 
   // Create Lenis instance — owns scroll physics
+  // Reduced-motion users: skip Lenis smooth-wheel interpolation; snap to native scroll.
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   lenis = new Lenis({
     lerp: 0.06,              // lower = heavier, more contemplative feel
-    smoothWheel: true,
+    smoothWheel: !prefersReduced,
     wheelMultiplier: 0.5,    // scroll sensitivity
     autoRaf: false,          // we drive the rAF loop manually
     prevent: (node) => node.closest('.offcanvas') !== null || node.closest('[data-telar-panel]') !== null,  // let wheel events pass through inside open panels
@@ -158,9 +161,9 @@ export function initScrollEngine(stepCount) {
     rafId = requestAnimationFrame(raf);
   });
 
-  // Resize handler: recalculate heights and snap points
-  window.addEventListener('resize', () => {
-    surface.style.height = `${totalPositions * window.innerHeight}px`;
+  // Viewport-resize subscription: recalculate heights and snap points
+  onViewportResize(({ viewport }) => {
+    surface.style.height = `${totalPositions * viewport.h}px`;
     lenis.resize();
     registerSnapPoints(totalPositions);
   });
