@@ -394,11 +394,14 @@
   }
 }
 
-/* Theme-aware button colors */
+/* Theme-aware button colors. The `!important` on `color` is deliberate: these
+   buttons render as `<a class="btn btn-primary">`, and the unlayered link color
+   otherwise wins over this layered rule (cascade layers lose to unlayered
+   styles), leaving theme-coloured text on the theme-coloured button. */
 .btn-primary {
   background-color: var(--color-button-bg);
   border-color: var(--color-button-bg);
-  color: var(--color-button-text);
+  color: var(--color-button-text) !important;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -406,7 +409,7 @@
     background-color: var(--color-button-bg);
     border-color: var(--color-button-bg);
     opacity: 0.9;
-    color: var(--color-button-text);
+    color: var(--color-button-text) !important;
   }
 }
 
@@ -415,7 +418,7 @@
   background-color: var(--color-button-bg);
   border-color: var(--color-button-bg);
   opacity: 0.9;
-  color: var(--color-button-text);
+  color: var(--color-button-text) !important;
 }
 
 /* Telar Alert Standardization */
