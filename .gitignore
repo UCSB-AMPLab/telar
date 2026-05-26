@@ -8,6 +8,9 @@ _site/
 *.gem
 .bundle
 vendor/
+# Re-include the static-asset vendor tree (third-party JS bundles
+# vendored per the minimal-computing principle — see assets/vendor/README.md)
+!assets/vendor/
 
 # Node
 node_modules/
@@ -28,6 +31,9 @@ Thumbs.db
 
 # Build artifacts
 *.log
+# Stale bundled story output (gitignored to prevent recommit; the active bundle is telar-story.js)
+telar-story*.bundle.js
+telar-story-bundle.js
 
 # Generated JSON files (from telar-content/spreadsheets/*.csv by csv_to_json.py)
 # Source of truth is the CSV files - JSON is regenerated on every build
