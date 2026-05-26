@@ -22,7 +22,7 @@ For more information, visit the [Telar GitHub repository](https://github.com/UCS
 Telar is built with:
 
 - [Jekyll](https://jekyllrb.com/) — Static site generator
-- [Tify](https://tify.rocks/) — IIIF viewer
+- [OpenSeadragon](https://openseadragon.github.io/) — IIIF viewer
 - [Bootstrap 5](https://getbootstrap.com/) — CSS framework
 - [libvips](https://www.libvips.org/) — IIIF tile generator
 

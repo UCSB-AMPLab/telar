@@ -421,8 +421,7 @@ layout: default
   // Object pages don't load the full telar-story.js bundle (which is
   // story-only), so we import the wrapper directly from its ESM source.
   // Jekyll publishes assets/js/telar-story/*.js alongside the bundled
-  // output, so the browser can fetch this path at runtime. This mirrors
-  // the prior Tify-CDN-module pattern this block replaces.
+  // output, so the browser can fetch this path at runtime.
   import { IiifViewer } from '{{ "/assets/js/telar-story/iiif-viewer.js" | relative_url }}';
 
   // Expose language strings to JavaScript
