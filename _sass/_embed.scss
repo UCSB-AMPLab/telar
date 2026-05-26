@@ -13,8 +13,10 @@
  * positioning with show/hide logic instead of the absolute
  * positioning and transforms used in desktop scroll mode.
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
+
+@layer telar-components {
 
 /* =========================================
    EMBED MODE
@@ -24,22 +26,22 @@
 body.embed-mode {
   /* Hide home button */
   .btn-home {
-    display: none !important;
+    display: none;
   }
 
   /* Hide share button */
   .share-button {
-    display: none !important;
+    display: none;
   }
 
   /* Hide viewer overlay (contains "Loading..." text) */
   .viewer-overlay {
-    display: none !important;
+    display: none;
   }
 
   /* Show embed banner */
   .telar-embed-banner {
-    display: flex !important;
+    display: flex;
   }
 
   /* Maximize content area */
@@ -49,7 +51,7 @@ body.embed-mode {
 
   /* Always show navigation buttons in embed mode (like mobile) */
   .story-navigation {
-    display: block !important;
+    display: block;
   }
 
   /* Show mobile hint in embed mode (hide desktop hint) */
@@ -83,6 +85,13 @@ body.embed-mode {
     transition: none;
   }
 
+  /* dvh override — eliminates iOS Safari URL-bar jump in embed mode. */
+  @supports (height: 100dvh) {
+    .story-step {
+      height: 100dvh;
+    }
+  }
+
   /* Show only the active step with desktop flex layout */
   .story-step.mobile-active {
     display: flex;
@@ -102,47 +111,53 @@ body.embed-mode {
   /* Show mobile navigation buttons in embed mode (even on desktop viewports) */
   /* Positioned over narrative panel, horizontally centered, with dynamic bottom spacing */
   .mobile-nav {
-    position: fixed !important;
-    left: 20% !important;
-    bottom: max(8%, 1.5rem) !important;
-    transform: translateX(-50%) !important;
-    z-index: 9900 !important;
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 0.75rem !important;
+    position: fixed;
+    left: 20%;
+    bottom: max(8%, 1.5rem);
+    transform: translateX(-50%);
+    z-index: 9900;
+    display: flex;
+    flex-direction: row;
+    gap: 0.75rem;
   }
 
   .mobile-nav button {
-    width: 66px !important;
-    height: 66px !important;
-    border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.95) !important;
-    border: 2px solid rgba(0, 0, 0, 0.1) !important;
-    color: #333 !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .mobile-nav button:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 1) !important;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
+  @media (hover: hover) and (pointer: fine) {
+    .mobile-nav button:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 1);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    }
   }
 
-  .mobile-nav .mobile-prev:hover:not(:disabled) {
-    transform: scale(1.1) translateY(-4px) !important;
+  @media (hover: hover) and (pointer: fine) {
+    .mobile-nav .mobile-prev:hover:not(:disabled) {
+      transform: scale(1.1) translateY(-4px);
+    }
   }
 
-  .mobile-nav .mobile-next:hover:not(:disabled) {
-    transform: scale(1.1) translateY(4px) !important;
+  @media (hover: hover) and (pointer: fine) {
+    .mobile-nav .mobile-next:hover:not(:disabled) {
+      transform: scale(1.1) translateY(4px);
+    }
   }
 
   .mobile-nav button:disabled {
-    opacity: 0.3 !important;
-    cursor: not-allowed !important;
+    opacity: 0.3;
+    cursor: not-allowed;
   }
 
   /**
@@ -153,102 +168,102 @@ body.embed-mode {
   /* Narrow viewports (< 900px width) */
   @media (max-width: 900px) {
     .story-step {
-      padding: 1.5rem !important;
+      padding: 1.5rem;
     }
 
     .story-intro .intro-title {
-      font-size: 2.75rem !important;
-      line-height: 1.2 !important;
+      font-size: 2.75rem;
+      line-height: 1.2;
     }
 
     .story-intro .intro-byline {
-      font-size: 0.95rem !important;
+      font-size: 0.95rem;
     }
 
     .story-intro .intro-description {
-      font-size: 1rem !important;
-      line-height: 1.6 !important;
+      font-size: 1rem;
+      line-height: 1.6;
     }
 
     .story-step .step-content {
-      font-size: 1rem !important;
-      line-height: 1.7 !important;
+      font-size: 1rem;
+      line-height: 1.7;
     }
 
     .story-step h2 {
-      font-size: 1.65rem !important;
+      font-size: 1.65rem;
     }
   }
 
   /* Medium-short viewports (< 650px height) */
   @media (max-height: 650px) {
     .story-step {
-      padding: 1.5rem !important;
+      padding: 1.5rem;
     }
 
     .story-intro .intro-title {
-      font-size: 2.5rem !important;
-      line-height: 1.2 !important;
-      margin-bottom: 0.75rem !important;
+      font-size: 2.5rem;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
     }
 
     .story-intro .intro-byline {
-      font-size: 0.95rem !important;
-      margin-bottom: 0.75rem !important;
+      font-size: 0.95rem;
+      margin-bottom: 0.75rem;
     }
 
     .story-intro .intro-description {
-      font-size: 1rem !important;
-      line-height: 1.5 !important;
-      margin-bottom: 0.75rem !important;
+      font-size: 1rem;
+      line-height: 1.5;
+      margin-bottom: 0.75rem;
     }
 
     .story-step .step-content {
-      font-size: 1rem !important;
-      line-height: 1.6 !important;
+      font-size: 1rem;
+      line-height: 1.6;
     }
 
     .story-step h2 {
-      font-size: 1.5rem !important;
-      margin-bottom: 0.75rem !important;
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
     }
   }
 
   /* Very short viewports (< 500px height) */
   @media (max-height: 500px) {
     .story-step {
-      padding: 1rem !important;
+      padding: 1rem;
     }
 
     .story-intro .intro-title {
-      font-size: 2rem !important;
-      line-height: 1.1 !important;
-      margin-bottom: 0.5rem !important;
+      font-size: 2rem;
+      line-height: 1.1;
+      margin-bottom: 0.5rem;
     }
 
     .story-intro .intro-byline {
-      font-size: 0.875rem !important;
-      margin-bottom: 0.5rem !important;
+      font-size: 0.875rem;
+      margin-bottom: 0.5rem;
     }
 
     .story-intro .intro-description {
-      font-size: 0.95rem !important;
-      line-height: 1.4 !important;
-      margin-bottom: 0.5rem !important;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      margin-bottom: 0.5rem;
     }
 
     .story-step .step-content {
-      font-size: 0.95rem !important;
-      line-height: 1.5 !important;
+      font-size: 0.95rem;
+      line-height: 1.5;
     }
 
     .story-step h2 {
-      font-size: 1.25rem !important;
-      margin-bottom: 0.5rem !important;
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
     }
 
     .story-step p {
-      margin-bottom: 0.75rem !important;
+      margin-bottom: 0.75rem;
     }
   }
 }
@@ -257,22 +272,26 @@ body.embed-mode {
 /* This media query is at root level to ensure proper source order over desktop embed rules */
 @media (max-width: 768px) {
   body.embed-mode .mobile-nav {
-    right: 1rem !important;
-    left: auto !important;
-    bottom: 50% !important;
-    transform: translateY(50%) !important;
-    flex-direction: column !important;
+    right: 1rem;
+    left: auto;
+    bottom: 50%;
+    transform: translateY(50%);
+    flex-direction: column;
   }
 
-  body.embed-mode .mobile-nav button:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 1) !important;
-    transform: scale(1.05) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  @media (hover: hover) and (pointer: fine) {
+    body.embed-mode .mobile-nav button:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 1);
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
   }
 
-  body.embed-mode .mobile-nav .mobile-prev:hover:not(:disabled),
-  body.embed-mode .mobile-nav .mobile-next:hover:not(:disabled) {
-    transform: scale(1.05) !important;
+  @media (hover: hover) and (pointer: fine) {
+    body.embed-mode .mobile-nav .mobile-prev:hover:not(:disabled),
+    body.embed-mode .mobile-nav .mobile-next:hover:not(:disabled) {
+      transform: scale(1.05);
+    }
   }
 }
 
@@ -308,8 +327,10 @@ body.embed-mode {
       color: var(--color-link);
       text-decoration: none;
 
-      &:hover {
-        text-decoration: underline;
+      @media (hover: hover) and (pointer: fine) {
+        &:hover {
+          text-decoration: underline;
+        }
       }
     }
   }
@@ -345,8 +366,10 @@ body.embed-mode {
       height: 1.25rem;
     }
 
-    &:hover {
-      color: #6c757d;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        color: #6c757d;
+      }
     }
   }
 }
@@ -355,3 +378,5 @@ body.embed-mode {
 body:not(.embed-mode) .telar-embed-banner {
   display: none;
 }
+
+} // end @layer telar-components

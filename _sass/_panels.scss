@@ -9,8 +9,12 @@
  * and content elements that appear inside panels: footnotes, blockquotes,
  * hyperlinks, images, and glossary inline links.
  *
- * @version v1.1.0
+ * @version v1.4.0
  */
+
+@use 'responsive' as *;
+
+@layer telar-components {
 
 /* Panel stacking — z-index 9910 sits above all scene cards (100–9899)
    and UI chrome (9900) but below the share modal (9950). */
@@ -35,17 +39,19 @@
   transition: all 0.3s ease;
 }
 
-.panel-trigger:hover {
-  background: var(--color-button-bg);
-  color: var(--color-button-text);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  opacity: 0.9;
+@media (hover: hover) and (pointer: fine) {
+  .panel-trigger:hover {
+    background: var(--color-button-bg);
+    color: var(--color-button-text);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    opacity: 0.9;
+  }
 }
 
 /* Layer 1 Panel - Light blue background, wide coverage */
 #panel-layer1 {
-  width: 65% !important;
+  width: 65%;
   max-width: 800px;
   background: var(--color-panel-layer1-bg);
   backdrop-filter: blur(8px);
@@ -76,7 +82,7 @@
 
 /* Layer 2 Panel - Dark purple background, narrower than layer1 */
 #panel-layer2 {
-  width: 55% !important;
+  width: 55%;
   max-width: 750px;
   background: var(--color-panel-layer2-bg);
   backdrop-filter: blur(8px);
@@ -170,9 +176,11 @@
   opacity: 0.7;
 }
 
-#panel-layer1 .btn-close:hover,
-#panel-layer2 .btn-close:hover {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  #panel-layer1 .btn-close:hover,
+  #panel-layer2 .btn-close:hover {
+    opacity: 1;
+  }
 }
 
 /* Back buttons — pill style, adapted to panel background */
@@ -186,10 +194,12 @@
   transition: all 0.3s ease;
 }
 
-#panel-layer1-back:hover,
-#panel-layer2-back:hover {
-  background: rgba(255, 255, 255, 0.35);
-  color: #ffffff;
+@media (hover: hover) and (pointer: fine) {
+  #panel-layer1-back:hover,
+  #panel-layer2-back:hover {
+    background: rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+  }
 }
 
 #panel-glossary-back {
@@ -201,14 +211,16 @@
   transition: all 0.3s ease;
 }
 
-#panel-glossary-back:hover {
-  background: rgba(0, 0, 0, 0.15);
-  color: rgba(0, 0, 0, 0.9);
+@media (hover: hover) and (pointer: fine) {
+  #panel-glossary-back:hover {
+    background: rgba(0, 0, 0, 0.15);
+    color: rgba(0, 0, 0, 0.9);
+  }
 }
 
 /* Glossary Panel - Cream/beige background */
 #panel-glossary {
-  width: 50% !important;
+  width: 50%;
   max-width: 700px;
   background: var(--color-panel-glossary-bg);
   border-left: none;
@@ -241,8 +253,10 @@
   opacity: 0.7;
 }
 
-#panel-glossary .btn-close:hover {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  #panel-glossary .btn-close:hover {
+    opacity: 1;
+  }
 }
 
 /* Glossary panel - narrower text for better proportions */
@@ -283,10 +297,12 @@
   transition: opacity 0.2s ease;
 }
 
-.glossary-inline-link:hover {
-  opacity: 0.85;
-  text-decoration: none;
-  color: var(--color-panel-glossary-text);
+@media (hover: hover) and (pointer: fine) {
+  .glossary-inline-link:hover {
+    opacity: 0.85;
+    text-decoration: none;
+    color: var(--color-panel-glossary-text);
+  }
 }
 
 /* Glossary Link Error Indicator (nonexistent terms) */
@@ -316,9 +332,11 @@
   color: var(--color-link);
 }
 
-#panel-layer1 .offcanvas-body a[href^="#_ftn"]:hover {
-  color: #1a252f;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  #panel-layer1 .offcanvas-body a[href^="#_ftn"]:hover {
+    color: #1a252f;
+    text-decoration: underline;
+  }
 }
 
 /* Layer 2 (dark purple) footnote references */
@@ -326,9 +344,11 @@
   color: var(--color-link);
 }
 
-#panel-layer2 .offcanvas-body a[href^="#_ftn"]:hover {
-  color: #C5DBE8;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  #panel-layer2 .offcanvas-body a[href^="#_ftn"]:hover {
+    color: #C5DBE8;
+    text-decoration: underline;
+  }
 }
 
 /* Horizontal rule separator before footnotes */
@@ -364,9 +384,11 @@
   color: var(--color-link);
 }
 
-#panel-layer1 .offcanvas-body a[href^="#_ftnref"]:hover {
-  color: var(--color-primary);
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  #panel-layer1 .offcanvas-body a[href^="#_ftnref"]:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+  }
 }
 
 /* Layer 2 footnote numbers */
@@ -374,9 +396,11 @@
   color: var(--color-link);
 }
 
-#panel-layer2 .offcanvas-body a[href^="#_ftnref"]:hover {
-  color: #E8DCC4;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  #panel-layer2 .offcanvas-body a[href^="#_ftnref"]:hover {
+    color: #E8DCC4;
+    text-decoration: underline;
+  }
 }
 
 /* Blockquote Styling */
@@ -417,8 +441,10 @@
   text-decoration: underline;
 }
 
-.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):hover {
-  opacity: 0.8;
+@media (hover: hover) and (pointer: fine) {
+  .offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):hover {
+    opacity: 0.8;
+  }
 }
 
 /* Panel Images - centered with max-height */
@@ -458,44 +484,64 @@
 /* Narrow desktop — widen panels so stacked content isn't truncated */
 @media (min-width: 769px) and (max-width: 1200px) {
   #panel-layer1 {
-    width: 80% !important;
+    width: 80%;
     max-width: none;
   }
   #panel-layer2 {
-    width: 75% !important;
+    width: 75%;
     max-width: none;
   }
   #panel-glossary {
-    width: 70% !important;
+    width: 70%;
     max-width: none;
   }
 }
 
 /* Mobile Responsive - Panel System */
-@media (max-width: 768px) {
+@include vertical-layout {
   /* Panel System - full width bottom sheets */
   /* Layer 1 Panel - most content, tallest panel */
   #panel-layer1 {
-    width: 100% !important;
-    height: 65vh !important;
-    max-width: 100% !important;
-    max-height: 65vh !important;
+    width: 100%;
+    height: 65vh;
+    max-width: 100%;
+    max-height: 65vh;
   }
 
   /* Layer 2 Panel - medium content */
   #panel-layer2 {
-    width: 100% !important;
-    height: 60vh !important;
-    max-width: 100% !important;
-    max-height: 60vh !important;
+    width: 100%;
+    height: 60vh;
+    max-width: 100%;
+    max-height: 60vh;
   }
 
   /* Glossary Panel - brief definitions, shortest panel */
   #panel-glossary {
-    width: 100% !important;
-    height: 55vh !important;
-    max-width: 100% !important;
-    max-height: 55vh !important;
+    width: 100%;
+    height: 55vh;
+    max-width: 100%;
+    max-height: 55vh;
+  }
+
+  /* dvh overrides for mobile panel heights — consolidated into a single
+     @supports block for readability. The vh values above are the fallbacks
+     for Firefox 97-100 and Chrome 99-107. */
+  @supports (height: 100dvh) {
+    #panel-layer1 {
+      height: 65dvh;
+      max-height: 65dvh;
+    }
+
+    #panel-layer2 {
+      height: 60dvh;
+      max-height: 60dvh;
+    }
+
+    #panel-glossary {
+      height: 55dvh;
+      max-height: 55dvh;
+    }
   }
 
   /* Touch Target Optimization - 44x44px minimum for accessibility */
@@ -516,12 +562,12 @@
 
   /* Mobile Offcanvas Panel Positioning - Option 2B (Right-Slide with Fixed Size & Top/Bottom Gaps) */
   .offcanvas-end {
-    position: fixed !important;
-    right: 0 !important;
-    left: auto !important;
+    position: fixed;
+    right: 0;
+    left: auto;
     box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.3);
     transition: transform 300ms ease-out;
-    border-radius: 0 !important; // No rounded corners
+    border-radius: 0; // No rounded corners
 
     // Slide in from right
     transform: translateX(100%);
@@ -532,32 +578,32 @@
 
   /* Layer 1 - "Go Deeper" panels */
   #panel-layer1.offcanvas-end {
-    top: 12vh !important;
-    height: 76vh !important;
-    max-height: 76vh !important;
-    width: 98vw !important;
-    max-width: 98vw !important;
+    top: 12vh;
+    height: 76vh;
+    max-height: 76vh;
+    width: 98vw;
+    max-width: 98vw;
     z-index: 9910;
   }
 
   /* Layer 2 - "Learn More" panels */
   #panel-layer2.offcanvas-end {
-    top: 10vh !important;
-    height: 76vh !important;
-    max-height: 76vh !important;
-    width: 96vw !important;
-    max-width: 96vw !important;
+    top: 10vh;
+    height: 76vh;
+    max-height: 76vh;
+    width: 96vw;
+    max-width: 96vw;
     z-index: 9911;
   }
 
   /* Glossary */
   #panel-glossary.offcanvas-end {
-    top: 8vh !important;
-    height: 76vh !important;
-    max-height: 76vh !important;
-    left: 6vw !important;
-    width: 94vw !important;
-    max-width: 94vw !important;
+    top: 8vh;
+    height: 76vh;
+    max-height: 76vh;
+    left: 6vw;
+    width: 94vw;
+    max-width: 94vw;
   }
 
   .offcanvas-body {
@@ -568,7 +614,7 @@
   #panel-layer1-back,
   #panel-layer2-back,
   #panel-glossary-back {
-    display: none !important;
+    display: none;
   }
 
   /* Center close button when Back button is hidden */
@@ -578,30 +624,30 @@
 
   /* Unified panel scrolling - header transparent, buttons float over content */
   .offcanvas {
-    display: flex !important;
-    flex-direction: column !important;
+    display: flex;
+    flex-direction: column;
   }
 
   .offcanvas-header {
-    position: absolute !important;
+    position: absolute;
     top: 0;
     right: 0;
     left: 0;
     z-index: 10;
-    background: transparent !important;
-    border: none !important;
-    padding: 1rem !important;
-    padding-top: max(1rem, env(safe-area-inset-top)) !important;
-    min-height: auto !important;
+    background: transparent;
+    border: none;
+    padding: 1rem;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    min-height: auto;
   }
 
   .offcanvas-body {
-    flex: 1 1 auto !important;
-    overflow-y: auto !important;
-    position: static !important;
-    padding: 1.5rem !important;
-    padding-top: 1.5rem !important;
-    padding-bottom: max(1.5rem, env(safe-area-inset-bottom)) !important;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    position: static;
+    padding: 1.5rem;
+    padding-top: 1.5rem;
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
   }
 
   /* Title is now inside body - add top margin to clear floating close button */
@@ -617,8 +663,8 @@
     border: 2px solid rgba(0, 0, 0, 0.1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     /* Remove white filter on mobile - show dark X like arrows/home */
-    filter: none !important;
-    opacity: 1 !important;
+    filter: none;
+    opacity: 1;
   }
 
   /* Back button gets same treatment on desktop */
@@ -635,138 +681,4 @@
   }
 }
 
-/* ============================================================================
-   HEIGHT-BASED RESPONSIVE: PANEL ADJUSTMENTS
-   Progressive reductions for phones with limited vertical space.
-   ============================================================================ */
-
-/* Tier 1: Small Mobile - phones with 700px or less height */
-@media (max-width: 768px) and (max-height: 700px) {
-  /* Offcanvas panels - 10-15% reduction */
-  #panel-layer1 .offcanvas-body,
-  #panel-layer2 .offcanvas-body,
-  #panel-glossary .offcanvas-body {
-    padding: 1.75rem !important;
-    font-size: 1rem;
-    line-height: 1.5;
-  }
-
-  #panel-layer1 .offcanvas-body .offcanvas-title,
-  #panel-layer2 .offcanvas-body .offcanvas-title,
-  #panel-glossary .offcanvas-body .offcanvas-title {
-    font-size: 1.75rem;
-    margin-bottom: 1.3rem;
-  }
-
-  #panel-layer1 .offcanvas-body blockquote,
-  #panel-layer2 .offcanvas-body blockquote,
-  #panel-glossary .offcanvas-body blockquote {
-    margin: 1.3rem 0;
-    padding: 0.9rem 1.3rem;
-  }
-
-  #panel-layer1 .offcanvas-body hr,
-  #panel-layer2 .offcanvas-body hr,
-  #panel-glossary .offcanvas-body hr {
-    margin: 2.2rem 0 1.3rem 0;
-  }
-
-  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
-  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
-  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
-    font-size: 0.85rem;
-    margin-bottom: 0.65rem;
-  }
-}
-
-/* Tier 2: Tiny Mobile - phones with 667px or less height (iPhone SE, etc.) */
-@media (max-width: 768px) and (max-height: 667px) {
-  /* Offcanvas panels - 20-25% reduction */
-  #panel-layer1 .offcanvas-body,
-  #panel-layer2 .offcanvas-body,
-  #panel-glossary .offcanvas-body {
-    padding: 1.5rem !important;
-    font-size: 0.95rem;
-    line-height: 1.4;
-  }
-
-  #panel-layer1 .offcanvas-body .offcanvas-title,
-  #panel-layer2 .offcanvas-body .offcanvas-title,
-  #panel-glossary .offcanvas-body .offcanvas-title {
-    font-size: 1.6rem;
-    margin-bottom: 1.2rem;
-  }
-
-  #panel-layer1 .offcanvas-body blockquote,
-  #panel-layer2 .offcanvas-body blockquote,
-  #panel-glossary .offcanvas-body blockquote {
-    margin: 1.2rem 0;
-    padding: 0.8rem 1.2rem;
-  }
-
-  #panel-layer1 .offcanvas-body hr,
-  #panel-layer2 .offcanvas-body hr,
-  #panel-glossary .offcanvas-body hr {
-    margin: 2rem 0 1.2rem 0;
-  }
-
-  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
-  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
-  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
-    font-size: 0.75rem;
-    margin-bottom: 0.6rem;
-  }
-
-  #panel-layer1 .offcanvas-body img,
-  #panel-layer2 .offcanvas-body img,
-  #panel-glossary .offcanvas-body img {
-    max-width: 100%;
-    margin: 0.8rem auto;
-  }
-}
-
-/* Tier 3: Micro Mobile - very small Android phones with 600px or less height */
-@media (max-width: 768px) and (max-height: 600px) {
-  /* Offcanvas panels - 30-35% reduction */
-  #panel-layer1 .offcanvas-body,
-  #panel-layer2 .offcanvas-body,
-  #panel-glossary .offcanvas-body {
-    padding: 1.3rem !important;
-    font-size: 0.9rem;
-    line-height: 1.35;
-  }
-
-  #panel-layer1 .offcanvas-body .offcanvas-title,
-  #panel-layer2 .offcanvas-body .offcanvas-title,
-  #panel-glossary .offcanvas-body .offcanvas-title {
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-  }
-
-  #panel-layer1 .offcanvas-body blockquote,
-  #panel-layer2 .offcanvas-body blockquote,
-  #panel-glossary .offcanvas-body blockquote {
-    margin: 1rem 0;
-    padding: 0.7rem 1rem;
-  }
-
-  #panel-layer1 .offcanvas-body hr,
-  #panel-layer2 .offcanvas-body hr,
-  #panel-glossary .offcanvas-body hr {
-    margin: 1.75rem 0 1rem 0;
-  }
-
-  #panel-layer1 .offcanvas-body p:has(a[href^="#_ftnref"]),
-  #panel-layer2 .offcanvas-body p:has(a[href^="#_ftnref"]),
-  #panel-glossary .offcanvas-body p:has(a[href^="#_ftnref"]) {
-    font-size: 0.7rem;
-    margin-bottom: 0.5rem;
-  }
-
-  #panel-layer1 .offcanvas-body img,
-  #panel-layer2 .offcanvas-body img,
-  #panel-glossary .offcanvas-body img {
-    max-width: 100%;
-    margin: 0.7rem auto;
-  }
-}
+} // end @layer telar-components
