@@ -6,7 +6,7 @@
  * story, object, glossary). Font families and colours come from CSS custom
  * properties set by the theme system in the main stylesheet.
  *
- * @version v0.9.0-beta
+ * @version v1.4.0
  */
 
 /* Body */
@@ -35,8 +35,10 @@ a {
   text-decoration: underline;
 }
 
-a:hover {
-  opacity: 0.8;
+@media (hover: hover) and (pointer: fine) {
+  a:hover {
+    opacity: 0.8;
+  }
 }
 
 /* Display headings - ensure proper word wrapping on mobile */

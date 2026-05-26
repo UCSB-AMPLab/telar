@@ -24,7 +24,7 @@ Para más información, visita el [repositorio de Telar en GitHub](https://githu
 Telar está construido con:
 
 - [Jekyll](https://jekyllrb.com/) — generador de sitios estáticos
-- [Tify](https://tify.rocks/) — visor IIIF
+- [OpenSeadragon](https://openseadragon.github.io/) — visor IIIF
 - [Bootstrap 5](https://getbootstrap.com/) — marco CSS
 - [libvips](https://www.libvips.org/) — generador de teselas IIIF
 

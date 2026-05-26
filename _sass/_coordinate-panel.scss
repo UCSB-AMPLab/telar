@@ -5,7 +5,7 @@
  * uses the theme's button colour (--color-button-bg) and a JS luminance check
  * adds .coord-dark or .coord-light to adapt text and field colours.
  *
- * @version v0.9.3-beta
+ * @version v1.4.0
  */
 
 /* Panel container */
@@ -99,10 +99,12 @@
   transition: all 0.2s ease;
 }
 
-.btn-developer:hover {
-  opacity: 0.85;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .btn-developer:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .btn-developer i {
@@ -115,8 +117,10 @@
   transition: all 0.2s ease;
 }
 
-.btn-copy:hover {
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .btn-copy:hover {
+    transform: translateY(-1px);
+  }
 }
 
 /* -------------------------------------------------------
@@ -148,8 +152,10 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-.coord-dark .coord-copy-btn:hover {
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .coord-dark .coord-copy-btn:hover {
+    color: #fff;
+  }
 }
 
 .coord-dark .btn-copy {
@@ -158,10 +164,12 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.coord-dark .btn-copy:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .coord-dark .btn-copy:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
 }
 
 /* -------------------------------------------------------
@@ -189,8 +197,10 @@
   color: rgba(0, 0, 0, 0.5);
 }
 
-.coord-light .coord-copy-btn:hover {
-  color: #2c3e50;
+@media (hover: hover) and (pointer: fine) {
+  .coord-light .coord-copy-btn:hover {
+    color: #2c3e50;
+  }
 }
 
 .coord-light .btn-copy {
@@ -199,8 +209,10 @@
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
-.coord-light .btn-copy:hover {
-  background: rgba(0, 0, 0, 0.15);
-  border-color: rgba(0, 0, 0, 0.25);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .coord-light .btn-copy:hover {
+    background: rgba(0, 0, 0, 0.15);
+    border-color: rgba(0, 0, 0, 0.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
 }

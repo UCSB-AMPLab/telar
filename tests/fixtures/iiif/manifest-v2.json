@@ -1,0 +1,64 @@
+{
+  "@context": "http://iiif.io/api/presentation/2/context.json",
+  "@id": "https://example.invalid/iiif/2/manifest-v2/manifest.json",
+  "@type": "sc:Manifest",
+  "label": "Telar test fixture — IIIF Presentation API v2 (two canvases)",
+  "sequences": [
+    {
+      "@id": "https://example.invalid/iiif/2/manifest-v2/sequence/normal",
+      "@type": "sc:Sequence",
+      "canvases": [
+        {
+          "@id": "https://example.invalid/iiif/2/manifest-v2/canvas/c1",
+          "@type": "sc:Canvas",
+          "label": "Canvas 1 — service @id branch",
+          "height": 1000,
+          "width": 800,
+          "images": [
+            {
+              "@id": "https://example.invalid/iiif/2/manifest-v2/canvas/c1/anno",
+              "@type": "oa:Annotation",
+              "motivation": "sc:painting",
+              "on": "https://example.invalid/iiif/2/manifest-v2/canvas/c1",
+              "resource": {
+                "@id": "https://example.invalid/iiif/2/canvas-1/full/full/0/default.jpg",
+                "@type": "dctypes:Image",
+                "format": "image/jpeg",
+                "service": {
+                  "@context": "http://iiif.io/api/image/2/context.json",
+                  "@id": "https://example.invalid/iiif/2/canvas-1",
+                  "profile": "http://iiif.io/api/image/2/level2.json"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "@id": "https://example.invalid/iiif/2/manifest-v2/canvas/c2",
+          "@type": "sc:Canvas",
+          "label": "Canvas 2 — service @id branch (second page)",
+          "height": 1000,
+          "width": 800,
+          "images": [
+            {
+              "@id": "https://example.invalid/iiif/2/manifest-v2/canvas/c2/anno",
+              "@type": "oa:Annotation",
+              "motivation": "sc:painting",
+              "on": "https://example.invalid/iiif/2/manifest-v2/canvas/c2",
+              "resource": {
+                "@id": "https://example.invalid/iiif/2/canvas-2/full/full/0/default.jpg",
+                "@type": "dctypes:Image",
+                "format": "image/jpeg",
+                "service": {
+                  "@context": "http://iiif.io/api/image/2/context.json",
+                  "@id": "https://example.invalid/iiif/2/canvas-2",
+                  "profile": "http://iiif.io/api/image/2/level2.json"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

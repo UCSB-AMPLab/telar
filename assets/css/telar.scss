@@ -9,6 +9,7 @@
   {% assign theme = site.data.defaults.themes.trama %}
 {% endunless %}
 
+@use 'responsive' as *;
 @use 'typography';
 @use 'layout';
 @use 'story';
@@ -34,7 +35,7 @@
  * embed, and share (highest specificity, most specific). This order matches
  * the original monolithic stylesheet so that overrides work the same way.
  *
- * @version v0.9.0-beta
+ * @version v1.4.0
  */
 
 /* CSS Variables with hardcoded trama defaults as ultimate fallback */

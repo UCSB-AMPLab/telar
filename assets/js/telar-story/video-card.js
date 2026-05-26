@@ -5,7 +5,7 @@
  * steps. Telar supports three video providers — YouTube, Vimeo, and
  * Google Drive — each with its own player API and embed mechanism.
  * Video cards follow the same DOM-at-init, visibility-via-transforms
- * pattern as IIIF cards but use iframe embeds instead of Tify viewers.
+ * pattern as IIIF cards but use iframe embeds instead of IIIF viewers.
  *
  * Layout — when a video step activates, the module calculates the optimal
  * arrangement by comparing how many pixels the video would occupy in a
@@ -37,10 +37,17 @@
  * Google Drive embeds have no player API, so they receive no clip control
  * or autoplay detection.
  *
- * @version v1.0.0-beta
+ * @version v1.4.0
  */
 
 import { state } from './state.js';
+import { onViewportResize } from './layout-mode.js';
+
+// ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
+const _cs = getComputedStyle(document.documentElement);
+const videoPadFactor    = parseFloat(_cs.getPropertyValue('--telar-video-pad-factor').trim())    || 0.025;
+const videoStackMaxH    = parseFloat(_cs.getPropertyValue('--telar-video-stack-max-h').trim())   || 0.58;
+const videoCardFracSide = parseFloat(_cs.getPropertyValue('--telar-video-card-frac-side').trim()) || 0.35;
 
 // ── Module-level player pool ──────────────────────────────────────────────────
 
@@ -123,7 +130,7 @@ export function loadVimeoAPI() {
  *   - Side-by-side: card left (35% of W), video right in remaining space.
  *   - Stacked: video top (max 58% of H), card below.
  *   The candidate that gives the video more rendered pixels wins.
- *   Mobile override: W < 768 always returns stacked.
+ *   Mobile override: W < --telar-vertical-min-width always returns stacked.
  *
  * @param {number} W - Viewport width in px
  * @param {number} H - Viewport height in px
@@ -131,15 +138,16 @@ export function loadVimeoAPI() {
  * @returns {{ mode: 'side-by-side'|'stacked', video: {left,top,width,height}, card: {left,top,width,height}, padding: number }}
  */
 export function computeVideoLayout(W, H, aspectRatio) {
-  // Mobile override: always stacked
-  if (W < 768) {
+  // Layout mode is determined by state.layoutMode (set by layout-mode.js at boot and on
+  // every resize/orientationchange). On vertical layouts, always use stacked.
+  if (state.layoutMode === 'vertical') {
     return _computeStackedLayout(W, H, aspectRatio);
   }
 
-  const pad = Math.max(8, Math.round(Math.min(W, H) * 0.025));
+  const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
 
   // ── Side-by-side candidate ──
-  const cardFracSide = 0.35;
+  const cardFracSide = videoCardFracSide;
   const sideCardW = Math.round(W * cardFracSide);
   const sideVideoMaxW = W - sideCardW - pad * 3;
   const sideVideoMaxH = H - pad * 2;
@@ -153,7 +161,7 @@ export function computeVideoLayout(W, H, aspectRatio) {
 
   // ── Stacked candidate ──
   const stackVideoMaxW = W - pad * 2;
-  const stackVideoMaxH = H * 0.58;
+  const stackVideoMaxH = H * videoStackMaxH;
   let stackVidW = stackVideoMaxW;
   let stackVidH = stackVidW / aspectRatio;
   if (stackVidH > stackVideoMaxH) {
@@ -211,9 +219,9 @@ function _buildStackedResult(W, H, pad, stackVidW, stackVidH) {
 
 /** Compute stacked layout for mobile. */
 function _computeStackedLayout(W, H, aspectRatio) {
-  const pad = Math.max(8, Math.round(Math.min(W, H) * 0.025));
+  const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
   const stackVideoMaxW = W - pad * 2;
-  const stackVideoMaxH = H * 0.58;
+  const stackVideoMaxH = H * videoStackMaxH;
   let stackVidW = stackVideoMaxW;
   let stackVidH = stackVidW / aspectRatio;
   if (stackVidH > stackVideoMaxH) {
@@ -467,9 +475,8 @@ export function activateVideoCard(plateEl, sceneIndex) {
   // Apply auto-layout
   _applyVideoLayout(plateEl);
 
-  const isEmbed = document.body.classList.contains('embed-mode');
-  // Autoplay policy — always manual on mobile and embed
-  if (state.isMobileViewport || isEmbed) {
+  // Autoplay policy — always manual on vertical layout and embed
+  if (state.layoutMode === 'vertical' || state.isEmbed) {
     if (!state.hasUserInteracted) {
       _showVideoPlayOverlay(plateEl);
       return;
@@ -863,18 +870,13 @@ function _applyVideoLayout(plateEl) {
   }
 }
 
-// ── Resize handler ────────────────────────────────────────────────────────────
+// ── Viewport-resize subscription ─────────────────────────────────────────────
 
-let _resizeDebounceTimer = null;
-
-window.addEventListener('resize', () => {
-  if (_resizeDebounceTimer) clearTimeout(_resizeDebounceTimer);
-  _resizeDebounceTimer = setTimeout(() => {
-    // Recompute layout for all active video plates
-    for (const wrapper of _videoPlayers) {
-      if (wrapper.element && wrapper.element.classList.contains('is-active')) {
-        _applyVideoLayout(wrapper.element);
-      }
+onViewportResize(() => {
+  // Recompute layout for all active video plates
+  for (const wrapper of _videoPlayers) {
+    if (wrapper.element && wrapper.element.classList.contains('is-active')) {
+      _applyVideoLayout(wrapper.element);
     }
-  }, 100);
+  }
 });

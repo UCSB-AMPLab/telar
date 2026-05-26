@@ -49,6 +49,14 @@ object:
     exit_fullscreen: "Cerrar pantalla completa"
     thumbnails: "Miniaturas"
     page: "Página"
+    # Paginación para objetos IIIF de varias páginas
+    prev_page: "Página anterior"
+    next_page: "Página siguiente"
+    page_input_label: "Número de página"
+    page_input_aria: "Página %{current} de %{total}"
+    # Interfaz de error cuando falla la carga del manifiesto
+    image_unavailable_title: "Imagen no disponible"
+    image_unavailable_detail: "No se pudo cargar la imagen IIIF."
 
   # Herramienta de identificación de coordenadas
   coordinates:

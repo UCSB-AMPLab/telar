@@ -25,7 +25,7 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.2.0
+ * @version v1.4.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
@@ -164,13 +164,9 @@ function createNavigationButtons() {
  * Set up button-based navigation for mobile or embed mode.
  *
  * Both modes use identical logic — previous/next buttons at the bottom of
- * the screen. The mode parameter is only used in log messages.
- *
- * @param {string} mode - 'mobile' or 'embed' (for logging).
+ * the screen.
  */
-export function initializeButtonNavigation(mode) {
-  console.log(`Initializing ${mode} button navigation`);
-
+export function initializeButtonNavigation() {
   state.steps = Array.from(document.querySelectorAll('.story-step'));
 
   initializeLoadingShimmer();
@@ -193,8 +189,6 @@ export function initializeButtonNavigation(mode) {
   buttons.next.addEventListener('click', goToNextMobileStep);
 
   updateMobileButtonStates();
-
-  console.log(`${mode.charAt(0).toUpperCase() + mode.slice(1)} navigation initialized with ${state.steps.length} steps`);
 }
 
 /**
@@ -316,7 +310,6 @@ function goToMobileStep(newIndex) {
 
   // Cooldown to prevent rapid tapping
   if (state.mobileNavigationCooldown) {
-    console.log('Mobile navigation on cooldown, ignoring tap');
     return;
   }
 
@@ -336,8 +329,6 @@ function goToMobileStep(newIndex) {
   }, MOBILE_NAV_COOLDOWN);
 
   const direction = newIndex > state.currentMobileStep ? 'forward' : 'backward';
-
-  console.log(`Mobile navigation: ${state.currentMobileStep} → ${newIndex} (${direction})`);
 
   // Swap step visibility
   state.steps[state.currentMobileStep].classList.remove('mobile-active');

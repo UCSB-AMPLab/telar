@@ -3,8 +3,8 @@
  *
  * Tests getManifestUrl and buildObjectsIndex, which handle IIIF manifest
  * URL resolution and object data indexing. These functions depend on
- * state.objectsIndex and window globals but do not require Tify
- * or real DOM elements.
+ * state.objectsIndex and window globals but do not require a live viewer
+ * instance or real DOM elements.
  *
  * @version v0.9.0-beta
  */
