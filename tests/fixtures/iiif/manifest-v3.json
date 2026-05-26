@@ -1,0 +1,67 @@
+{
+  "@context": "http://iiif.io/api/presentation/3/context.json",
+  "id": "https://example.invalid/iiif/3/manifest-v3/manifest.json",
+  "type": "Manifest",
+  "label": { "en": ["Telar test fixture — IIIF Presentation API v3 (two canvases)"] },
+  "items": [
+    {
+      "id": "https://example.invalid/iiif/3/manifest-v3/canvas/c1",
+      "type": "Canvas",
+      "label": { "en": ["Canvas 1 — body.service[0].id branch"] },
+      "height": 1000,
+      "width": 800,
+      "items": [
+        {
+          "id": "https://example.invalid/iiif/3/manifest-v3/canvas/c1/page",
+          "type": "AnnotationPage",
+          "items": [
+            {
+              "id": "https://example.invalid/iiif/3/manifest-v3/canvas/c1/anno",
+              "type": "Annotation",
+              "motivation": "painting",
+              "target": "https://example.invalid/iiif/3/manifest-v3/canvas/c1",
+              "body": {
+                "id": "https://example.invalid/iiif/3/canvas-1/full/max/0/default.jpg",
+                "type": "Image",
+                "format": "image/jpeg",
+                "service": [
+                  {
+                    "id": "https://example.invalid/iiif/3/canvas-1",
+                    "type": "ImageService3",
+                    "profile": "level2"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://example.invalid/iiif/3/manifest-v3/canvas/c2",
+      "type": "Canvas",
+      "label": { "en": ["Canvas 2 — body.id derive-from-Image-URL branch"] },
+      "height": 1000,
+      "width": 800,
+      "items": [
+        {
+          "id": "https://example.invalid/iiif/3/manifest-v3/canvas/c2/page",
+          "type": "AnnotationPage",
+          "items": [
+            {
+              "id": "https://example.invalid/iiif/3/manifest-v3/canvas/c2/anno",
+              "type": "Annotation",
+              "motivation": "painting",
+              "target": "https://example.invalid/iiif/3/manifest-v3/canvas/c2",
+              "body": {
+                "id": "https://example.invalid/iiif/3/canvas-2/full/max/0/default.jpg",
+                "type": "Image",
+                "format": "image/jpeg"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
