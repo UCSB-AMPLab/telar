@@ -29,12 +29,12 @@
  * vice versa on the same object) is treated as an object change.
  *
  * Preloading — after each step change, the module looks ahead and
- * initialises Tify viewers, video players, or audio players for upcoming
+ * initialises IIIF viewers, video players, or audio players for upcoming
  * scenes. It counts by scene distance, not step offset, so a long
  * sequence of steps on the same object does not waste preload slots.
  * When the pool exceeds its cap (default 8), the instance farthest by
  * scene distance from the current position is evicted. IIIF tiles for
- * scenes beyond the Tify preload range are also prefetched as image
+ * scenes beyond the OSD preload range are also prefetched as image
  * link hints.
  *
  * Accessibility — every viewer plate receives an aria-label built from
@@ -47,7 +47,7 @@
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.1.0
+ * @version v1.4.0
  */
 
 import { state } from './state.js';
@@ -55,12 +55,16 @@ import { detectCardType } from './card-type.js';
 import { extractVideoId } from './card-type.js';
 import { getManifestUrl, updateObjectCredits } from './viewer.js';
 import { getBasePath } from './utils.js';
+import { IiifViewer } from './iiif-viewer.js';
 import {
   deactivateIiifCard,
   destroyIiifCard,
   animateIiifToPosition,
   snapIiifToPosition,
+  computeFocalTarget,
+  _deriveCardPlacement,
 } from './iiif-card.js';
+import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
 import {
   createTextCard,
   activateTextCard,
@@ -313,6 +317,63 @@ function buildTransform(messiness, baseTranslate) {
   return `${baseTranslate} rotate(${messiness.rot}deg) translate(${messiness.offX}px, ${messiness.offY}px)`;
 }
 
+// ── Geometry recompute on resize / layout change ─────────────────────────────
+
+/**
+ * Recompute the inline top and height of all currently-rendered text cards.
+ *
+ * Called by onViewportResize and onLayoutChange subscriptions so card geometry
+ * stays correct after desktop window resize, device rotation, or layout-mode
+ * flip. Iterates `.text-card` DOM nodes (iterating the DOM is the reliable
+ * source of all active cards regardless of state.textCards population order).
+ * Applies computeCardTop with runPosition=0 for all cards
+ * (the same initial value used at initCardPool time) and uses
+ * style.setProperty('top', ..., 'important') so the inline value wins the
+ * cascade over the `top: auto !important` in the landscape side-card rule.
+ *
+ * @param {number} viewportW - Current viewport width in px
+ * @param {number} viewportH - Current viewport height in px
+ */
+function _recomputeCardGeometry(viewportW, viewportH) {
+  const peekHeight = _config.peekHeight ?? 1;
+  const landscapeSideCard = isLandscapeSideCard();
+
+  const cards = document.querySelectorAll('.text-card');
+  for (const card of cards) {
+    const runPos = parseInt(card.dataset.runPosition, 10) || 0;
+
+    if (landscapeSideCard) {
+      // Landscape phone: the CSS rule sets `height: auto !important`, so the card
+      // is sized to its content. Clear any stale inline height, measure the real
+      // rendered height, and centre by THAT — the portrait `viewportH * 0.80`
+      // model oversizes the card and jams it against the top on a short landscape
+      // viewport. Inline !important top beats the
+      // landscape rule's `top: auto !important`.
+      card.style.height = '';
+      const cardH = card.offsetHeight;
+      const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+      card.style.setProperty('top', `${topPx}px`, 'important');
+    } else if (getLayoutMode() === 'vertical') {
+      // getLayoutMode() reads the live matchMedia (self-initialising), so this is
+      // correct even at the init-time call below — before layout-mode.js has
+      // written state.layoutMode (which defaults to 'horizontal' and would wrongly
+      // pick the desktop branch, jamming the portrait card at the top).
+      // Portrait mobile: the card is bottom-anchored by CSS (`top: auto !important`,
+      // `max-height: 40vh`). Remove any inline top so the CSS anchor wins — do NOT
+      // force an !important top here, or the card detaches from the bottom on resize.
+      card.style.removeProperty('top');
+      card.style.height = `${viewportH * 0.80}px`;  // capped by the CSS max-height: 40vh
+    } else {
+      // Desktop horizontal: tall side card sized to 80% of the (tall) viewport,
+      // vertically centred. No base CSS `top`, so the inline value drives placement.
+      const cardH = viewportH * 0.80;
+      const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+      card.style.setProperty('top', `${topPx}px`, 'important');
+      card.style.height = `${cardH}px`;
+    }
+  }
+}
+
 /**
  * Initialize the card pool: create all DOM elements, apply initial transforms
  * (off-screen below), and append them to .card-stack.
@@ -496,7 +557,7 @@ export function initCardPool(storyData, config) {
 
   // Preload the first scene's viewer plate behind the intro card.
   // The plate stays at translateY(100%) — it only slides up when the user
-  // scrolls to step 0. But initialising Tify now means the IIIF image is
+  // scrolls to step 0. But initialising the IIIF wrapper now means the image is
   // ready when the transition happens.
   if (steps.length > 0) {
     const firstStep = steps[0];
@@ -513,10 +574,26 @@ export function initCardPool(storyData, config) {
         const y    = parseFloat(firstStep.y);
         const zoom = parseFloat(firstStep.zoom);
         const page = firstStep.page ? parseInt(firstStep.page, 10) : undefined;
-        _initTifyInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
+        _initOsdInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
       }
     }
   }
+
+  // Subscribe to layout-mode events so card geometry stays live
+  // (no new ad-hoc resize listeners — only layout-mode.js subscriptions).
+  // Mirror the video-card.js subscription pattern.
+  onViewportResize(({ viewport }) => {
+    _recomputeCardGeometry(viewport.w, viewport.h);
+  });
+  onLayoutChange(({ viewport }) => {
+    _recomputeCardGeometry(viewport.w, viewport.h);
+  });
+
+  // Apply correct geometry once now so a fresh load gets the right placement —
+  // in particular a direct landscape deep link, where no resize/layout event
+  // fires to trigger the side-card centring. Cards are
+  // built with content above, so offsetHeight is measurable.
+  _recomputeCardGeometry(window.innerWidth, window.innerHeight);
 }
 
 /**
@@ -919,7 +996,7 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
     }
   }
 
-  // Wire up Tify/OSD if a ViewerCard exists for this scene
+  // Wire up the OSD wrapper if a ViewerCard exists for this scene
   const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
   const x    = parseFloat(step.x);
   const y    = parseFloat(step.y);
@@ -945,11 +1022,11 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
     // can position the container immediately.
     activateVideoCard(newPlate, sceneIndex);
   } else if (!viewerCard) {
-    // No Tify instance yet — the plate DOM element exists but has no viewer.
-    // Create a IIIF card that will initialise Tify inside this plate.
+    // No wrapper instance yet — the plate DOM element exists but has no viewer.
+    // Create a IIIF card that will initialise the OSD wrapper inside this plate.
     // We adopt the existing plate element rather than creating a new one.
     const zIndex = _zPlan.plateZ[stepIndex];
-    _initTifyInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
+    _initOsdInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
   } else if (viewerCard.isReady && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
     snapIiifToPosition(viewerCard, x, y, zoom);
   } else if (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
@@ -958,11 +1035,11 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
 }
 
 /**
- * Initialise a Tify viewer inside an existing plate element.
+ * Initialise an IIIF viewer inside an existing plate element.
  *
  * This is called when we need a viewer but no ViewerCard has been created
- * yet for the scene. Rather than creating a new plate, we inject Tify
- * into the plate that initCardPool already placed in the DOM.
+ * yet for the scene. Rather than creating a new plate, we inject the
+ * wrapper into the plate that initCardPool already placed in the DOM.
  *
  * @param {HTMLElement} plateEl - The existing viewer-plate element
  * @param {string} objectId
@@ -971,12 +1048,12 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
  * @param {number} x
  * @param {number} y
  * @param {number} zoom
- * @param {number|undefined} page
+ * @param {number|undefined} page - 1-indexed page for external multi-page manifests; mapped to wrapper's 0-indexed `startPage` below
  */
-function _initTifyInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
+function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
   const manifestUrl = getManifestUrl(objectId, page);
   if (!manifestUrl) {
-    console.error('_initTifyInPlate: no manifest URL for', objectId);
+    console.error('_initOsdInPlate: no manifest URL for', objectId);
     return;
   }
 
@@ -993,11 +1070,15 @@ function _initTifyInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, pag
     viewerDiv.id = viewerId;
   }
 
-  const tifyInstance = new window.Tify({
+  // External multi-page manifests now open at the requested page rather
+  // than always starting at page 1.
+  const startPage = page && page > 1 ? page - 1 : 0;
+
+  const osdWrapper = new IiifViewer({
     container: '#' + viewerId,
     manifestUrl,
-    panels: [],
-    urlQueryKey: false,
+    startPage,
+    showChrome: false,
   });
 
   const viewerCard = {
@@ -1005,32 +1086,69 @@ function _initTifyInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, pag
     objectId,
     page: page || undefined,
     element: plateEl,
-    tifyInstance,
+    osdWrapper,
     osdViewer: null,
     isReady: false,
     pendingZoom: (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) ? { x, y, zoom, snap: true } : null,
     zIndex,
   };
 
-  tifyInstance.ready.then(() => {
-    viewerCard.osdViewer = tifyInstance.viewer;
+  osdWrapper.ready.then(() => {
+    viewerCard.osdViewer = osdWrapper.viewer;
     viewerCard.isReady = true;
     delete plateEl.dataset.loading;
 
-    // Disable scroll-to-zoom so mouse wheel drives Lenis, not OSD
-    tifyInstance.viewer.gestureSettingsMouse.scrollToZoom = false;
+    // Belt-and-braces: the wrapper already sets this in _init(); keeping
+    // the line here documents the Telar invariant (wheel events belong to
+    // Lenis, not OSD) at the call site too.
+    osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
 
     if (viewerCard.pendingZoom) {
-      if (viewerCard.pendingZoom.snap) {
-        snapIiifToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
+      const pz = viewerCard.pendingZoom;
+
+      if (pz.snap) {
+        snapIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
       } else {
-        animateIiifToPosition(viewerCard, viewerCard.pendingZoom.x, viewerCard.pendingZoom.y, viewerCard.pendingZoom.zoom);
+        animateIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
       }
+
+      // Verify-and-retry (belt-and-braces on top of the rAF-deferred
+      // .ready). Even after the rAF settle, a residual race can leave
+      // the viewer at home zoom (measured: step 19, authored 10×). One frame after
+      // applying the snap, read the current OSD zoom and compare against home zoom.
+      // If they match — and the authored zoom was meaningfully > 1 — the apply
+      // was dropped; re-apply exactly once. Tolerance: 5% of homeZoom.
+      //
+      // `pendingZoom` is cleared only after the verify/retry so the values
+      // remain available for the re-apply if needed.
+      requestAnimationFrame(() => {
+        const pzAfter = viewerCard.pendingZoom; // still holds pz at this point
+        if (pzAfter && viewerCard.osdViewer) {
+          const vp       = viewerCard.osdViewer.viewport;
+          const homeZoom = vp.getHomeZoom();
+          const curZoom  = vp.getZoom(true);
+          const TOL      = 0.05; // 5% relative tolerance
+          const authoredIsZoomed = pzAfter.zoom > 1.1; // authored multiplier meaningfully above home
+          const droppedToHome    = Math.abs(curZoom - homeZoom) < homeZoom * TOL;
+
+          if (authoredIsZoomed && droppedToHome) {
+            // Home-fit overwrote the snap — re-apply the authored position once.
+            if (pzAfter.snap) {
+              snapIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
+            } else {
+              animateIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
+            }
+          }
+        }
+        viewerCard.pendingZoom = null;
+      });
+    } else {
+      // No pending zoom — nothing to verify.
       viewerCard.pendingZoom = null;
     }
 
   }).catch(err => {
-    console.error(`_initTifyInPlate: Tify failed for ${objectId}:`, err);
+    console.error(`_initOsdInPlate: IiifViewer failed for ${objectId}:`, err);
     viewerCard.isReady = true;
     delete plateEl.dataset.loading;
   });
@@ -1051,34 +1169,27 @@ function _initTifyInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, pag
       }
     }
     const evicted = state.viewerCards.splice(farthestIdx, 1)[0];
-    _evictTifyInstance(evicted);
+    _evictOsdInstance(evicted);
   }
 }
 
 /**
- * Evict a Tify instance from a plate without removing the plate DOM element.
- * Destroys Tify + WebGL context but keeps the plate div for re-entry.
+ * Evict an OSD viewer wrapper from a plate without removing the plate
+ * DOM element. Calls the wrapper's destroy() and keeps the plate div for
+ * re-entry. The viewer uses the Canvas2D drawer, so there is no WebGL
+ * context to release first (OSD #2693 applies only to the WebGL drawer).
  *
  * @param {Object} viewerCard - The ViewerCard to evict
  */
-function _evictTifyInstance(viewerCard) {
-  if (viewerCard.osdViewer) {
-    const canvas = viewerCard.osdViewer.drawer?.canvas;
-    if (canvas) {
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (gl) {
-        gl.getExtension('WEBGL_lose_context')?.loseContext();
-      }
-    }
+function _evictOsdInstance(viewerCard) {
+  if (viewerCard.osdWrapper && typeof viewerCard.osdWrapper.destroy === 'function') {
+    viewerCard.osdWrapper.destroy();
   }
-  if (viewerCard.tifyInstance && typeof viewerCard.tifyInstance.destroy === 'function') {
-    viewerCard.tifyInstance.destroy();
-  }
-  viewerCard.tifyInstance = null;
+  viewerCard.osdWrapper = null;
   viewerCard.osdViewer = null;
   viewerCard.isReady = false;
 
-  // Remove viewer-instance child so _initTifyInPlate can recreate cleanly on re-entry
+  // Remove viewer-instance child so _initOsdInPlate can recreate cleanly on re-entry
   const viewerInstance = viewerCard.element.querySelector('.viewer-instance');
   if (viewerInstance) viewerInstance.remove();
   // Note: viewerCard.element (the plate div) is NOT removed from DOM
@@ -1087,7 +1198,7 @@ function _evictTifyInstance(viewerCard) {
 /**
  * Initialise a video player inside an existing video-plate element.
  *
- * Parallel to _initTifyInPlate — called by activateCard and preloadAhead
+ * Parallel to _initOsdInPlate — called by activateCard and preloadAhead
  * for 'youtube', 'vimeo', and 'google-drive' card types. Video iframes load
  * content immediately on insertion, so player creation is deferred to here
  * (not at initCardPool time).
@@ -1168,7 +1279,7 @@ function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
     sceneIndex,
     isEmbed,
     onPlay: () => {
-      // Audio hold gate not implemented (no hold gate for audio per plan spec)
+      // Audio hold gate not implemented (audio has no hold gate)
     },
     onTimeUpdate: () => {
       // Progress update handled internally by audio-card.js
@@ -1225,6 +1336,25 @@ function _activateTextCard(cardEl) {
   cardEl.classList.remove('is-stacked');
   cardEl.classList.add('is-active');
   cardEl.style.transform = buildTransform(messiness, 'translateY(0)');
+
+  // Write final rect to state.cardOverlayRect once the slide-up transition settles.
+  // Two cases skip transitionend (it never fires when transition: none is set):
+  //   1. prefers-reduced-motion: reduce  (_sass/_responsive.scss:110-126)
+  //   2. .card-stack.is-scrubbing        (_sass/_story.scss:50-52)
+  // In both cases the imperative style write above forces an immediate layout,
+  // so getBoundingClientRect() is correct synchronously.
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isScrubbing    = document.querySelector('.card-stack')?.classList.contains('is-scrubbing');
+  if (prefersReduced || isScrubbing) {
+    state.cardOverlayRect = cardEl.getBoundingClientRect();
+    return;
+  }
+  const onSettled = (ev) => {
+    if (ev.target !== cardEl || ev.propertyName !== 'transform') return;
+    cardEl.removeEventListener('transitionend', onSettled);
+    state.cardOverlayRect = cardEl.getBoundingClientRect();
+  };
+  cardEl.addEventListener('transitionend', onSettled);
 }
 
 /**
@@ -1284,6 +1414,9 @@ function _activateTitleCardStep(index, direction) {
   state.activeTitleCardIndex = index;
   state.currentObjectRun = { objectId: '', runPosition: 0 };
 
+  // No text card active on a title step.
+  state.cardOverlayRect = null;
+
   // Hide credits bar — no object to attribute
   updateObjectCredits('');
 
@@ -1322,7 +1455,7 @@ function _animateViewerToStep(objectId, step, stepIndex) {
  * Preload viewer cards for nearby scenes.
  * Respects the maxViewerCards pool limit from state.config.
  *
- * Creates Tify instances for scenes near the current scene so they are
+ * Creates IIIF wrapper instances for scenes near the current scene so they are
  * initialised and ready when the user navigates to them.
  * Scene-based: counts distinct scenes, not step offsets, so a long
  * run of same-object steps doesn't count as multiple preload slots.
@@ -1355,13 +1488,11 @@ export function preloadAhead(currentIndex, ahead, behind) {
     if (plate.classList.contains('audio-plate')) {
       // Audio plate: preload only if no waveform container yet
       if (!plate.querySelector('.waveform-container')) {
-        console.log(`preloadAhead (audio): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
         _initAudioInPlate(plate, objectId, targetScene, zIndex);
       }
     } else if (plate.classList.contains('video-plate')) {
       // Video plate: preload only if no video iframe yet
       if (!plate.querySelector('.video-iframe, iframe')) {
-        console.log(`preloadAhead (video): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
         _initVideoInPlate(plate, objectId, targetScene, zIndex);
       }
     } else {
@@ -1373,13 +1504,12 @@ export function preloadAhead(currentIndex, ahead, behind) {
       const zoom = parseFloat(step.zoom);
       const page = step.page ? parseInt(step.page, 10) : undefined;
 
-      console.log(`preloadAhead: scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
-      _initTifyInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
+      _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
       _prefetchTilesForScene(targetScene);
     }
   }
 
-  // Tile-only prefetch for scenes beyond Tify preload range
+  // Tile-only prefetch for scenes beyond the wrapper preload range
   for (let offset = ahead + 1; offset <= ahead + 2; offset++) {
     const tileScene = currentScene + offset;
     if (tileScene >= state.totalScenes) break;
@@ -1406,13 +1536,11 @@ export function preloadAhead(currentIndex, ahead, behind) {
     if (plate.classList.contains('audio-plate')) {
       // Audio plate: preload only if no waveform container yet
       if (!plate.querySelector('.waveform-container')) {
-        console.log(`preloadAhead (audio): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
         _initAudioInPlate(plate, objectId, targetScene, zIndex);
       }
     } else if (plate.classList.contains('video-plate')) {
       // Video plate: preload only if no video iframe yet
       if (!plate.querySelector('.video-iframe, iframe')) {
-        console.log(`preloadAhead (video): scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
         _initVideoInPlate(plate, objectId, targetScene, zIndex);
       }
     } else {
@@ -1424,8 +1552,7 @@ export function preloadAhead(currentIndex, ahead, behind) {
       const zoom = parseFloat(step.zoom);
       const page = step.page ? parseInt(step.page, 10) : undefined;
 
-      console.log(`preloadAhead: scene ${targetScene} / ${objectId} (step ${firstStepIdx})`);
-      _initTifyInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
+      _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
       _prefetchTilesForScene(targetScene);
     }
   }
@@ -1447,11 +1574,11 @@ function _prefetchTilesForScene(sceneIndex) {
   const objectId = state.sceneToObject[sceneIndex];
   if (!objectId) return;
 
-  // Skip external manifests — tile URL patterns are server-specific (Pitfall 7)
+  // Skip external manifests — tile URL patterns are server-specific
   const objData = state.objectsIndex?.[objectId];
   if (objData?.iiif_manifest || objData?.source_url) return;
 
-  // Construct base URL from origin, not from info.json id field (Pitfall 6)
+  // Construct base URL from origin, not from info.json id field
   const basePath = getBasePath();
   const baseUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}`;
   const infoUrl = `${baseUrl}/info.json`;
@@ -1488,6 +1615,12 @@ function _prefetchTilesForScene(sceneIndex) {
  * determines the appropriate scale factor, enumerates the tile grid
  * covering the visible area, and returns static tile URLs.
  *
+ * Uses `computeFocalTarget` (the two-circle model)
+ * to derive the prefetch centre from the authored focal point and the
+ * inscribed-circle diameter, so prefetched tiles align with the rendered region.
+ * The authored diameterImg from the focal circle defines the prefetch
+ * width rather than the old viewport-relative estimate.
+ *
  * Caps at 9 tiles (3x3 grid) to avoid excessive prefetch requests.
  *
  * @param {string} baseUrl - Image service base URL (e.g. origin + /iiif/objects/leviathan)
@@ -1503,23 +1636,39 @@ function _computeTileUrls(baseUrl, info, x, y, zoom) {
   const tileSize = info.tiles?.[0]?.width || 512;
   const scaleFactors = info.tiles?.[0]?.scaleFactors || [1];
 
-  // Convert normalised centre to pixel coordinates
-  const centreX = x * imageW;
-  const centreY = y * imageH;
-
-  // Estimate visible pixel area from viewport and zoom
+  // Derive cardBox and placementMode via the canonical helper in iiif-card.js.
   const vpW = window.innerWidth;
   const vpH = window.innerHeight;
-  // OSD zoom: at zoom=1, the full image width fits the viewport
-  const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
-  const visibleW = vpW * pixelsPerViewportPx;
-  const visibleH = vpH * pixelsPerViewportPx;
+  const r = state.cardOverlayRect;
+  const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+  const placementMode = _deriveCardPlacement(cardBox, vpW, vpH);
 
-  // Region in pixel space
-  const left   = Math.max(0, centreX - visibleW / 2);
-  const top    = Math.max(0, centreY - visibleH / 2);
-  const right  = Math.min(imageW, centreX + visibleW / 2);
-  const bottom = Math.min(imageH, centreY + visibleH / 2);
+  // Compute the focal target using the two-circle model.
+  // focalImg is the prefetch centre in image px; diameterImg defines the prefetch width.
+  const target = computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
+  let centreX, centreY, halfW, halfH;
+
+  if (target) {
+    // Use the authored focal circle: centre = focalImg, radius = diameterImg/2
+    centreX = target.focalImg.x;
+    centreY = target.focalImg.y;
+    halfW   = target.diameterImg / 2;
+    halfH   = target.diameterImg / 2;
+  } else {
+    // Fallback: use raw authored (x, y) with a viewport-relative size estimate
+    const vpH = window.innerHeight;
+    centreX = x * imageW;
+    centreY = y * imageH;
+    const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
+    halfW = (vpW * pixelsPerViewportPx) / 2;
+    halfH = (vpH * pixelsPerViewportPx) / 2;
+  }
+
+  // Region in pixel space (clamped to image bounds)
+  const left   = Math.max(0, centreX - halfW);
+  const top    = Math.max(0, centreY - halfH);
+  const right  = Math.min(imageW, centreX + halfW);
+  const bottom = Math.min(imageH, centreY + halfH);
 
   // Choose scale factor — smallest that keeps tile count reasonable
   // Higher scale factor = lower resolution = fewer tiles
@@ -1560,3 +1709,7 @@ function _computeTileUrls(baseUrl, info, x, y, zoom) {
 
   return urls;
 }
+
+// Exported for unit testing under an alias without underscore (matches the
+// _buildSceneMaps as buildSceneMaps pattern above).
+export { _computeTileUrls as computeTileUrls };
