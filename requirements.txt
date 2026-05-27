@@ -17,7 +17,7 @@ iiif>=1.0.0
 Pillow>=10.0.0
 
 # PDF rendering (multi-page PDF objects)
-PyMuPDF>=1.24.0
+PyMuPDF>=1.27.2.3
 
 # HEIC/HEIF support (iPhone photos)
 pillow-heif>=0.13.0
