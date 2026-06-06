@@ -2,13 +2,13 @@
 # Used by GitHub Actions for data processing and IIIF generation
 
 # Data processing
-pandas>=2.0.0
+pandas>=3.0.3
 pyyaml>=6.0
-markdown>=3.0.0
+markdown>=3.10.2
 jinja2>=3.1.0
 
 # Story encryption (protected stories feature)
-cryptography>=41.0.0
+cryptography>=48.0.0
 
 # IIIF tile generation
 iiif>=1.0.10
@@ -23,7 +23,7 @@ PyMuPDF>=1.27.2.3
 pillow-heif>=1.3.0
 
 # Testing (development only)
-pytest>=8.0.0
-pytest-cov>=4.0.0
+pytest>=9.0.3
+pytest-cov>=7.1.0
 playwright>=1.40.0
 pytest-playwright>=0.8.0
