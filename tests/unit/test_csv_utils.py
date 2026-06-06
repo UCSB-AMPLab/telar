@@ -10,7 +10,7 @@ The tests here ensure backward compatibility (e.g., legacy iiif_manifest
 column support) and correct handling of edge cases (empty values, malformed
 HTML, Unicode content).
 
-Version: v1.0.0-beta
+Version: v1.5.0
 """
 
 import sys
@@ -256,3 +256,30 @@ class TestSearchFacetsMediumKey:
         assert 'medium' in first_obj, "search object must have 'medium' field"
         assert 'object_type' not in first_obj, "search object must NOT have 'object_type' field"
         assert first_obj['medium'] == 'Painting'
+
+
+class TestImageExtensionsAndStemIndex:
+    """Tests for the shared IMAGE_EXTENSIONS constant and the stem->path index."""
+
+    def test_image_extensions_includes_bmp_svg_pdf(self):
+        from telar.csv_utils import IMAGE_EXTENSIONS
+        # The historical existence-check set omitted these; the shared set must
+        # include them so .bmp/.svg/.pdf objects are not falsely flagged missing.
+        for ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif',
+                    '.tiff', '.bmp', '.svg', '.pdf'):
+            assert ext in IMAGE_EXTENSIONS
+
+    def test_build_stem_index_groups_files_by_stem(self, tmp_path):
+        from telar.csv_utils import build_stem_index
+        (tmp_path / 'photo.png').write_text('x')
+        (tmp_path / 'photo.svg').write_text('x')
+        (tmp_path / 'map.jpg').write_text('x')
+        (tmp_path / 'sub').mkdir()  # directories are ignored
+        idx = build_stem_index(tmp_path)
+        assert set(idx.keys()) == {'photo', 'map'}
+        assert {p.suffix.lower() for p in idx['photo']} == {'.png', '.svg'}
+        assert len(idx['map']) == 1
+
+    def test_build_stem_index_missing_dir_returns_empty(self, tmp_path):
+        from telar.csv_utils import build_stem_index
+        assert build_stem_index(tmp_path / 'does-not-exist') == {}

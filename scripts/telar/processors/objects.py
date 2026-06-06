@@ -26,31 +26,59 @@ steps before returning the cleaned DataFrame for JSON serialisation:
    IIIF structure (`@context`, `type`), and handles HTTP error codes
    (404, 429, 500, etc.) with localised warning messages. A previous-build
    cache (`_data/objects.json`) lets the validator skip 429 rate-limiting
-   errors for manifests that haven't changed.
+   errors for manifests that haven't changed. This step is media-aware:
+   objects classified as Video or Audio (see step 7) skip IIIF validation
+   entirely — video objects are instead checked against a list of
+   recognised hosts (YouTube, Vimeo, Google Drive), and audio objects are
+   served from local files rather than manifests.
 
 5. **IIIF metadata extraction** — when a manifest validates successfully,
-   extracts title, description, creator, period, location, and credit
-   using the functions from the iiif_metadata module, then applies the fallback
-   hierarchy (CSV values always win over IIIF values).
+   extracts title, description, creator, period, source, and credit — plus the
+   structured facets year, medium, and subjects — using the functions from the
+   iiif_metadata module, then applies the fallback hierarchy (CSV values always
+   win over IIIF values).
 
-6. **Local image fallback** — objects without an external manifest are
-   checked for a matching image file in `telar-content/objects/`. If no exact
-   match is found, `_find_similar_image_filenames()` uses fuzzy string
-   matching (via `difflib.SequenceMatcher` at 85% threshold) to suggest
-   near-matches like case differences or hyphen/underscore variations.
+6. **Local source fallback** — objects without an external manifest are
+   checked for a matching file in `telar-content/objects/`. Audio objects
+   look for an audio file (`.mp3`, `.ogg`, `.m4a`) and optionally a
+   precomputed waveform peaks file under `assets/audio/peaks/`; everything
+   else looks for a matching image. If no exact image match is found,
+   `_find_similar_image_filenames()` uses fuzzy string matching (via
+   `difflib.SequenceMatcher` at 85% threshold) to suggest near-matches like
+   case differences or hyphen/underscore variations.
+
+7. **Media-type classification** — every object is tagged with a
+   `media_type` of Video, Audio, or Image, written into `objects.json` so
+   that downstream consumers (search indexing, Liquid templates) read the
+   type directly instead of re-detecting it from disk on every build pass.
+   The persisted value comes from the canonical URL-based detector in
+   `telar.media_type`; an earlier, disk-aware local variant
+   (`_detect_media_type()`) drives the validation branching in steps 4 and 6.
+
+8. **Featured-object selection** — `_select_featured_objects()` decides
+   which objects appear in the homepage sample by setting an
+   `is_featured_sample` flag for Liquid to filter on. When the site config
+   enables the homepage sample, any objects explicitly flagged `featured`
+   win; otherwise the function draws a random sample (size from
+   `featured_count`, default 4) from the objects that validated cleanly. The
+   draw is reproducible across builds of unchanged content: the RNG is
+   seeded from a SHA-256 hash of the sorted object indices rather than the
+   process-salted built-in `hash()`, so the same content always yields the
+   same featured set.
 
 `inject_christmas_tree_errors()` is a testing helper that appends fake
 objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v1.0.0-beta
+Version: v1.5.0
 """
 
 import re
 import json
 import ssl
 import random
+import hashlib
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -61,7 +89,8 @@ import pandas as pd
 import yaml
 
 from telar.config import get_lang_string, load_site_language
-from telar.csv_utils import get_source_url
+from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index, get_source_url
+from telar.media_type import detect_media_type
 
 
 # Video URL patterns for media type detection (matches generate_collections.py)
@@ -70,10 +99,18 @@ _AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
 
 
 def _detect_media_type(source_url, object_id):
-    """Detect media type from source URL and object files on disk.
+    """Classify an object as Video, Audio, or Image, consulting the disk.
 
-    Duplicates the logic in generate_collections.detect_media_type() to avoid
-    circular imports (generate_collections imports from telar).
+    This is a local, disk-aware variant used to steer validation: it returns
+    Video for known video hosts, then probes `telar-content/objects/` for an
+    audio file matching `object_id` (so audio objects skip IIIF validation and
+    are routed to the local-file checks), and otherwise falls back to Image.
+
+    The canonical media-type detector is `telar.media_type.detect_media_type`
+    (imported in this module), which classifies purely from the source URL and
+    supplies the `media_type` value persisted into objects.json. This function
+    differs only in that it also inspects the filesystem, which the URL-based
+    detector deliberately does not.
     """
     url = (source_url or '').strip()
     if any(pat in url for pat in _VIDEO_URL_PATTERNS):
@@ -249,6 +286,12 @@ def process_objects(df, christmas_tree=False):
     # Tracking for summary
     warnings = []
 
+    # Inject Christmas Tree test errors first, before any normalisation, so the
+    # test objects flow through source_url/iiif_manifest aliasing, the alt_text
+    # fallback and object_id sanitisation identically to real objects.
+    if christmas_tree:
+        df = inject_christmas_tree_errors(df)
+
     # Drop example column if it exists
     if 'example' in df.columns:
         df = df.drop(columns=['example'])
@@ -280,19 +323,14 @@ def process_objects(df, christmas_tree=False):
         if not str(row.get('alt_text', '')).strip():
             df.at[idx, 'alt_text'] = str(row.get('title', '')).strip()
 
-    # Inject Christmas Tree test errors if flag is enabled
-    if christmas_tree:
-        df = inject_christmas_tree_errors(df)
-
     # Validate and clean object_id values
-    valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf']
     for idx, row in df.iterrows():
         object_id = str(row.get('object_id', '')).strip()
         original_id = object_id
         modified = False
 
-        # Check for file extensions and strip them
-        for ext in valid_extensions:
+        # Check for file extensions and strip them (shared canonical set)
+        for ext in IMAGE_EXTENSIONS:
             if object_id.lower().endswith(ext):
                 object_id = object_id[:-len(ext)]
                 modified = True
@@ -422,11 +460,16 @@ def process_objects(df, christmas_tree=False):
                 warnings.append(msg)
                 continue
 
-            # Try to fetch the manifest (with timeout)
-            # Create SSL context that doesn't verify certificates (avoid false positives)
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            # Try to fetch the manifest (with timeout). Verify TLS certificates
+            # so a man-in-the-middle cannot substitute the manifest metadata that
+            # gets written into the site. Use certifi's CA bundle when available
+            # (python.org macOS builds don't link the system trust store); fall
+            # back to the system default otherwise.
+            try:
+                import certifi
+                ssl_context = ssl.create_default_context(cafile=certifi.where())
+            except ImportError:
+                ssl_context = ssl.create_default_context()
 
             try:
                 # Fetch manifest directly with GET (follows redirects automatically)
@@ -530,13 +573,25 @@ def process_objects(df, christmas_tree=False):
                                             else:
                                                 extracted['source'] = str(provider_label).strip()
 
-                                # Year (structured date for filtering/timeline)
+                                # Year (structured date for filtering/timeline).
+                                # Prefer an explicit 'Year' label, then fall back
+                                # to date fields. The raw value is often prose
+                                # ("circa 1580-1600"), so pull the first 4-digit
+                                # sequence for a parseable facet value; if none is
+                                # present, keep the prose value (graceful degradation).
                                 extracted['year'] = find_metadata_field(
                                     metadata_array,
-                                    ['Date', 'Year', 'Date Created', 'Creation Date'],
+                                    ['Year', 'Date', 'Date Created', 'Creation Date'],
                                     version,
                                     site_language
                                 )
+                                if extracted['year']:
+                                    year_match = re.search(r'\d{4}', str(extracted['year']))
+                                    if year_match:
+                                        extracted['year'] = year_match.group(0)
+                                    else:
+                                        print(f"  [INFO] Year value '{extracted['year']}' has no "
+                                              f"4-digit year — leaving as-is")
 
                                 # Medium/Genre (v0.10.0: renamed from object_type; classification for filtering)
                                 extracted['medium'] = find_metadata_field(
@@ -642,7 +697,10 @@ def process_objects(df, christmas_tree=False):
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
 
-    # Validate that objects have either source URL (IIIF manifest) OR local image file
+    # Validate that objects have either source URL (IIIF manifest) OR local image file.
+    # Index telar-content/objects once so the per-object existence check is an O(1)
+    # lookup rather than an iterdir scan per object.
+    _obj_file_index = build_stem_index('telar-content/objects')
     for idx, row in df.iterrows():
         object_id = row.get('object_id', 'unknown')
         source_url = get_source_url(row)
@@ -681,17 +739,14 @@ def process_objects(df, christmas_tree=False):
                 warnings.append(msg)
             continue
 
-        # No external IIIF manifest - check for local image file
-        valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf'}
+        # No external IIIF manifest - check for local image file (O(1) index lookup,
+        # using the shared extension set so .bmp/.svg objects are no longer missed)
         has_local_image = False
-        objects_dir = Path('telar-content/objects')
-
-        if objects_dir.exists():
-            for f in objects_dir.iterdir():
-                if f.stem == object_id and f.suffix.lower() in valid_extensions:
-                    has_local_image = True
-                    print(f"  [INFO] Object {object_id} uses local image: {f}")
-                    break
+        for f in _obj_file_index.get(object_id, []):
+            if f.suffix.lower() in IMAGE_EXTENSIONS:
+                has_local_image = True
+                print(f"  [INFO] Object {object_id} uses local image: {f}")
+                break
 
         # Warn if object has neither external manifest nor local image
         if not has_local_image:
@@ -731,6 +786,14 @@ def process_objects(df, christmas_tree=False):
     # Final cleanup: ensure no NaN values in output
     # (new columns added via IIIF extraction may leave NaN for objects without IIIF)
     df = df.fillna('')
+
+    # Persist the gallery media type (Video/Audio/Image) into objects.json so
+    # search.py and templates read it directly instead of re-detecting it from
+    # disk on every build pass. Uses the shared telar.media_type leaf module.
+    df['media_type'] = [
+        detect_media_type(row.get('source_url', ''), row.get('object_id', ''))
+        for _, row in df.iterrows()
+    ]
 
     # Featured objects selection for homepage display
     # Mark objects with is_featured_sample: true for Liquid to filter
@@ -795,9 +858,16 @@ def _select_featured_objects(df):
         print("  [INFO] No valid objects available for homepage sample")
         return df
 
-    # Select up to featured_count random objects
+    # Select up to featured_count objects. Seed a local RNG from the sorted
+    # object IDs so the homepage sample is reproducible across builds of
+    # unchanged content (authors who want a fixed set use the `featured` flag).
+    # Use a stable hash (sha256) rather than the built-in hash(), which is
+    # salted per-process (PYTHONHASHSEED) and would not be reproducible.
     sample_size = min(featured_count, len(valid_objects))
-    sample_indices = random.sample(list(valid_objects.index), sample_size)
+    seed_key = '\n'.join(sorted(str(i) for i in valid_objects.index)).encode('utf-8')
+    seed = int.from_bytes(hashlib.sha256(seed_key).digest()[:8], 'big')
+    rng = random.Random(seed)
+    sample_indices = rng.sample(list(valid_objects.index), sample_size)
 
     df.loc[sample_indices, 'is_featured_sample'] = True
     print(f"  [INFO] Randomly selected {sample_size} object(s) for homepage sample")

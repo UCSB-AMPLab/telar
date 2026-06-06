@@ -40,10 +40,41 @@ rename of the gallery classification column from `object_type` to `medium`
 — with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
 `medio_genero`) so existing spreadsheets continue to work without changes.
 
-Version: v1.2.0
+Version: v1.5.0
 """
 
+from pathlib import Path
+
 import pandas as pd
+
+
+# Canonical set of local image/document extensions, shared by the objects and
+# stories processors. Single source of truth so the extension lists used for
+# reference-stripping and on-disk existence checks can no longer drift (a
+# `.bmp`/`.svg` object used to strip correctly but fail the existence check).
+IMAGE_EXTENSIONS = frozenset({
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf',
+})
+
+
+def build_stem_index(directory):
+    """Map filename stem -> list of Path objects for one directory, in a single
+    pass. Lets per-object existence checks be O(1) lookups instead of each
+    re-scanning the whole directory (the old O(objects x files) behaviour).
+
+    Args:
+        directory: Path or str of the directory to index.
+
+    Returns:
+        dict[str, list[Path]]: stem -> files with that stem (empty if dir absent).
+    """
+    index = {}
+    d = Path(directory)
+    if d.exists():
+        for f in d.iterdir():
+            if f.is_file():
+                index.setdefault(f.stem, []).append(f)
+    return index
 
 
 # Bilingual column name mapping (Spanish -> English)
@@ -133,6 +164,15 @@ def sanitize_dataframe(df):
     Remove Christmas tree emoji from all string fields in dataframe.
     This prevents accidental Christmas Tree Mode triggering from user data.
 
+    NOTE: This is NOT an HTML/XSS sanitiser. It does not encode HTML entities
+    or otherwise validate field contents. Per-template and per-sink escaping
+    (Liquid `jsonify`/`escape`, the JS `escapeHtml` helper) is the primary
+    control for HTML safety; this function only strips the one emoji that would
+    falsely trigger Christmas Tree Mode.
+
+    As a diagnostic aid it also warns (without modifying anything) when a URL
+    column carries a `javascript:` or `data:` scheme, so authors can correct it.
+
     Args:
         df: pandas DataFrame to sanitize
 
@@ -147,6 +187,20 @@ def sanitize_dataframe(df):
     for col in df.columns:
         if pd.api.types.is_string_dtype(df[col]):  # String columns (works with pandas 2.x and 3.x)
             df[col] = df[col].apply(lambda x: tree_pattern.sub('', str(x)) if pd.notna(x) else x)
+
+    # Warn-only URL-scheme check for columns that feed href/src sinks. We do not
+    # strip or rewrite the value — the author owns the fix.
+    url_columns = {'source_url', 'iiif_manifest', 'thumbnail', 'image'}
+    for col in df.columns:
+        if col.lower().strip() not in url_columns:
+            continue
+        for value in df[col]:
+            if not pd.notna(value):
+                continue
+            stripped = str(value).strip().lower()
+            if stripped.startswith('javascript:') or stripped.startswith('data:'):
+                print(f"  [WARN] Suspicious URL scheme in '{col}': {str(value).strip()!r} "
+                      f"— links/images with javascript:/data: schemes can be unsafe")
 
     return df
 
@@ -235,5 +289,8 @@ def is_header_row(row_values):
             if val_lower in valid_names:
                 matches += 1
 
-    # If 80%+ of non-empty cells are column names, it's a header row
-    return total > 0 and (matches / total) >= 0.8
+    # If 80%+ of non-empty cells are column names, it's a header row.
+    # Require at least 3 non-empty cells so a sparse first data row whose two
+    # populated cells happen to match column names (e.g. "object", "title") is
+    # not mistaken for a header and silently dropped.
+    return total >= 3 and (matches / total) >= 0.8
