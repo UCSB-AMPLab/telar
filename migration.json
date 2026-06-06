@@ -1,19 +1,27 @@
 {
   "schema_version": 1,
-  "from_version": "1.3.0",
-  "to_version": "1.4.0",
-  "description": "Responsive system overhaul and custom IIIF viewer (Tify removed) — runtime-only upgrade, no user-content changes required",
+  "from_version": "1.4.0",
+  "to_version": "1.5.0",
+  "description": "Robustness & security hardening (data pipeline, viewer runtime, standalone JS, upgrade workflow) — runtime-only upgrade, no user-content changes required",
   "operations": [],
   "manual_steps": {
     "en": [
       {
-        "description": "**No action required.** v1.4.0 is a runtime-only upgrade.\n\nYour stories, objects, and configuration keep working without any content changes. The headline improvements:\n\n- **Cross-device IIIF centering fixed** — focal points land correctly across phones, tablets, and desktops, including iPad portrait and landscape phones.\n- **Lighter and faster** — Tify (and its Vue dependency) removed; OpenSeadragon is now vendored and loaded locally, so the viewer no longer depends on a CDN.\n- **iOS Safari stability** — the URL-bar layout jump is fixed and notch safe-area clearance is added.\n\nOne note: the upgrade refreshed the framework language packs (en.yml / es.yml). If you had customised either file, re-apply your changes — the new release adds six `object.viewer.*` keys (pagination labels and error messages for the IIIF viewer) that the updated packs already include.",
+        "description": "**Recommended — update your GitHub Actions workflow files by hand.** For security, GitHub does not let the automated upgrade modify workflow files, so two v1.5.0 improvements are not applied for you:\n\n- `.github/workflows/upgrade.yml` — the upgrade process is now hardened: it downloads its tooling as a release asset, verifies it against the published checksum, and runs it in isolation. This protects your next upgrade.\n- `.github/workflows/build.yml` — the `ruby/setup-ruby` action is now pinned to a specific commit, for supply-chain safety.\n\nTo apply them, open each file on GitHub, click \"Raw\", copy the whole file, and replace the contents of the matching file in your repository:\n\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/upgrade.yml\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/build.yml\n\nIf you skip this, your site keeps building and deploying normally — these changes only harden your workflows.",
+        "doc_url": "https://github.com/UCSB-AMPLab/telar/tree/v1.5.0/.github/workflows"
+      },
+      {
+        "description": "**If you customized the language packs, re-apply your changes.** The upgrade refreshed the framework language packs (`en.yml` / `es.yml`). This release adds the protected-story sharing warnings — the messages shown when a share link or embed code includes the access key — which the updated packs already include.",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
-        "description": "**No se requiere ninguna acción.** v1.4.0 cambia solo el funcionamiento interno de Telar: tus historias, objetos y configuración siguen funcionando sin que tengas que tocar nada.\n\nLas mejoras principales:\n\n- **Centrado IIIF entre dispositivos corregido** — los puntos focales se ubican correctamente en teléfonos, tabletas y computadores, incluidos el iPad en vertical y los teléfonos en horizontal.\n- **Más liviano y rápido** — se eliminó Tify (y su dependencia de Vue); ahora OpenSeadragon viene incluido en el repositorio y se carga localmente, así que el visor ya no depende de un CDN.\n- **Estabilidad en iOS Safari** — se corrigió el salto del diseño que causaba la barra de direcciones del navegador y se añadió espacio para la muesca de la pantalla.\n\nUn detalle: la actualización reemplazó los paquetes de idioma de Telar (en.yml / es.yml). Si habías personalizado alguno de ellos, vuelve a aplicar tus cambios — esta versión agrega seis claves `object.viewer.*` (etiquetas de paginación y mensajes de error del visor IIIF) que los paquetes actualizados ya incluyen.",
+        "description": "**Recomendado: actualiza a mano tus archivos de flujo de trabajo de GitHub Actions.** Por seguridad, GitHub no deja que la actualización automática modifique los archivos de flujo de trabajo, así que dos mejoras de v1.5.0 no se aplican solas:\n\n- `.github/workflows/upgrade.yml`: el proceso de actualización ahora es más seguro — descarga sus herramientas desde el lanzamiento, las verifica con la suma de control publicada y las ejecuta de forma aislada. Así protege tu próxima actualización.\n- `.github/workflows/build.yml`: la acción `ruby/setup-ruby` ahora queda fijada a un commit específico, para mayor seguridad en la cadena de suministro.\n\nPara aplicarlas, abre cada archivo en GitHub, haz clic en «Raw» y copia todo el contenido para reemplazar el del archivo correspondiente en tu repositorio:\n\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/upgrade.yml\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/build.yml\n\nSi te saltas este paso, tu sitio se sigue construyendo y publicando con normalidad; estos cambios solo refuerzan tus flujos de trabajo.",
+        "doc_url": "https://github.com/UCSB-AMPLab/telar/tree/v1.5.0/.github/workflows"
+      },
+      {
+        "description": "**Si personalizaste los paquetes de idioma, vuelve a aplicar tus cambios.** La actualización reemplazó los paquetes de idioma de Telar (`en.yml` / `es.yml`). Esta versión suma los avisos para compartir historias protegidas —los mensajes que aparecen cuando un enlace o un código de inserción lleva la clave de acceso—, que los paquetes actualizados ya incluyen.",
         "doc_url": "https://telar.org/guia"
       }
     ]
