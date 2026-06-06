@@ -9,7 +9,7 @@
  *   - advanceToStep: guard for out-of-range indices
  *   - initScrollEngine: Lenis constructor options, snap configuration
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -114,6 +114,7 @@ vi.mock('../../assets/js/telar-story/viewer.js', () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState } from '../../assets/js/telar-story/scroll-engine.js';
+import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
 import { state } from '../../assets/js/telar-story/state.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ describe('updateScrollPosition', () => {
     resetState({ currentIndex: 0 });
     mocks.mockActivateCard.mockClear();
     mocks.mockGoToStep.mockClear();
+    lerpIiifPosition.mockClear();
   });
 
   // Position model: raw position P maps to content step P-1.
@@ -200,6 +202,27 @@ describe('updateScrollPosition', () => {
     updateScrollPosition(1.01);
     expect(mocks.mockGoToStep).not.toHaveBeenCalled();
     expect(mocks.mockActivateCard).toHaveBeenCalledWith(0, 'backward');
+  });
+
+  it('feeds lerpIiifPosition the FILTERED state.stepsData, not unfiltered window.storyData.steps', () => {
+    // stepIndex is filtered-space (drives state.stepToScene); passing the
+    // unfiltered global would mis-index on stories that carry a _metadata row.
+    resetState({ currentIndex: 2 });
+    const filtered = [
+      { object: 'fig1', x: '0.5',  y: '0.5',  zoom: '1' },
+      { object: 'fig1', x: '0.25', y: '0.35', zoom: '2.5' },
+      { object: 'fig1', x: '0.75', y: '0.3',  zoom: '3' },
+    ];
+    state.stepsData = filtered;
+    // The unfiltered global has a leading metadata row → indices are offset by 1.
+    window.storyData = { steps: [{ _metadata: true }, ...filtered] };
+
+    updateScrollPosition(3.3); // content step 2, progress 0.3
+
+    expect(lerpIiifPosition).toHaveBeenCalled();
+    const args = lerpIiifPosition.mock.calls.at(-1);
+    expect(args[2]).toBe(filtered);                       // filtered array passed through
+    expect(args[2]).not.toBe(window.storyData.steps);     // never the unfiltered global
   });
 });
 
