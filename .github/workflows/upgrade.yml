@@ -4,35 +4,40 @@ name: Upgrade Telar
 # upgrade their site. It is triggered manually from the Actions tab in GitHub
 # — the user clicks "Run workflow" and the rest is automatic.
 #
-# The workflow works by fetching the latest scripts from the main Telar
-# repository (UCSB-AMPLab/telar), then running upgrade.py — the migration
-# script that applies version-to-version changes. Each migration step knows
-# how to transform a site from one version to the next: adding new files,
-# updating configuration, modifying templates, and so on. The script walks
-# the chain from the site's current version to the latest, applying each
-# migration in sequence.
+# How it works (hardened pipeline):
+#   1. Resolve the target release tag (the latest release, or an explicit tag
+#      passed as an input).
+#   2. Download the upgrade tooling for that EXACT tag as a release asset and
+#      verify its SHA-256 against the release's published checksums.txt. If the
+#      asset is missing or the checksum does not match, the run fails closed and
+#      no code is executed. The tooling is extracted into a throwaway temp dir —
+#      the site's own scripts/ directory is never deleted or replaced wholesale,
+#      so local customisations survive.
+#   3. Run the verified upgrade.py against the checked-out site
+#      (--repo-root). Each migration installs its target-version files from the
+#      matching release tag (pinned, atomic) and the version is stamped only if
+#      every required step succeeds. If anything required fails, upgrade.py exits
+#      non-zero, this job goes red, and no upgrade branch or issue is created.
+#   4. On success, create an upgrade branch with the content changes (never the
+#      fetched tooling or CI bookkeeping files) and open an issue to review and
+#      merge.
 #
-# Rather than modifying the site's main branch directly, the workflow creates
-# a separate upgrade branch with all the changes, then opens a GitHub issue
-# with a clear summary of what changed and a link to review and merge. This
-# gives the site owner a chance to inspect the changes before they go live.
-# The issue also lists any manual steps that need to be completed after
-# merging (for example, updating custom content that the script cannot
-# migrate automatically).
-#
-# Version: v0.7.0-beta
+# Version: v1.5.0
 
 on:
   workflow_dispatch:
     inputs:
-      create_pr:
-        description: 'Create pull request with changes'
-        type: boolean
-        default: true
+      target_version:
+        description: 'Release tag to upgrade to (e.g. v1.5.0). Leave blank for the latest release.'
+        required: false
+        type: string
 
 permissions:
   contents: write
   issues: write
+
+env:
+  TELAR_REPO: UCSB-AMPLab/telar
 
 jobs:
   upgrade:
@@ -52,38 +57,107 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml pandas
 
-      - name: Fetch latest upgrade scripts
+      - name: Resolve target release
+        id: resolve
+        env:
+          # Pass the dispatch input through the environment rather than
+          # interpolating it into the script body, so a crafted value cannot
+          # inject shell commands into the steps that build URLs, branch names,
+          # and the issue body below.
+          INPUT_TAG: ${{ github.event.inputs.target_version }}
         run: |
-          echo "Fetching latest upgrade scripts from telar repository..."
-          # Remove old scripts if they exist
-          rm -rf scripts/
-          # Fetch latest scripts from telar repo
-          curl -L https://github.com/UCSB-AMPLab/telar/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 telar-main/scripts
-          echo "✓ Latest upgrade scripts fetched"
+          set -euo pipefail
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG=$(curl -fsSL "https://api.github.com/repos/${TELAR_REPO}/releases/latest" | jq -r '.tag_name')
+          fi
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "::error::Could not resolve a target release tag for ${TELAR_REPO}."
+            exit 1
+          fi
+          # Refuse anything that is not a plain version tag before it reaches a
+          # curl URL, git branch name, or commit/issue body.
+          if ! printf '%s' "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$'; then
+            echo "::error::Refusing to proceed: target tag '$TAG' is not a valid version tag (expected vX.Y.Z)."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Target release: $TAG"
+
+      - name: Fetch and verify upgrade tooling
+        id: fetch
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.resolve.outputs.tag }}"
+          TMP="$(mktemp -d)"
+          echo "tmp=$TMP" >> "$GITHUB_OUTPUT"
+
+          ASSET="telar-scripts-${TAG}.tar.gz"
+          BASE="https://github.com/${TELAR_REPO}/releases/download/${TAG}"
+
+          # Download the verified tooling tarball and its checksums. -f makes a
+          # missing asset (e.g. a release published before this mechanism) a
+          # hard, fail-closed error rather than a silent empty file.
+          echo "Downloading ${ASSET} and checksums.txt for ${TAG}..."
+          curl -fsSL -o "$TMP/$ASSET" "$BASE/$ASSET"
+          curl -fsSL -o "$TMP/checksums.txt" "$BASE/checksums.txt"
+
+          # Verify SHA-256, fail closed on any mismatch or missing entry.
+          EXPECTED=$(grep " ${ASSET}\$" "$TMP/checksums.txt" | awk '{print $1}' | head -n1)
+          if [ -z "$EXPECTED" ]; then
+            echo "::error::No checksum for ${ASSET} in checksums.txt — refusing to run unverified code."
+            exit 1
+          fi
+          ACTUAL=$(sha256sum "$TMP/$ASSET" | awk '{print $1}')
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::Checksum mismatch for ${ASSET} (expected ${EXPECTED}, got ${ACTUAL})."
+            exit 1
+          fi
+          echo "✓ Verified ${ASSET} (sha256 ${ACTUAL})"
+
+          # Extract the tooling into the temp dir ONLY. The site's working-tree
+          # scripts/ is never touched here.
+          tar -xzf "$TMP/$ASSET" -C "$TMP"
+          if [ ! -f "$TMP/scripts/upgrade.py" ]; then
+            echo "::error::Verified tarball does not contain scripts/upgrade.py."
+            exit 1
+          fi
 
       - name: Check current version and language
         id: check_version
         run: |
+          set -euo pipefail
           CURRENT_VERSION=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('telar', {}).get('version', '0.2.0-beta'))")
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "Current version: $CURRENT_VERSION"
 
           SITE_LANG=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('telar_language', 'en'))")
-          echo "site_language=$SITE_LANG" >> $GITHUB_OUTPUT
+          echo "site_language=$SITE_LANG" >> "$GITHUB_OUTPUT"
           echo "Site language: $SITE_LANG"
 
       - name: Run upgrade script
         id: upgrade
         run: |
-          python scripts/upgrade.py
+          set -euo pipefail
+          TMP="${{ steps.fetch.outputs.tmp }}"
 
+          # Run the verified tooling from the temp dir against the checked-out
+          # site. upgrade.py imports its migrations from alongside itself (the
+          # verified temp copy); migrations install framework files into the
+          # site (--repo-root), pinned to their release tag and written
+          # atomically. On any required-step failure upgrade.py exits non-zero,
+          # which (with set -e and no continue-on-error) fails this job and
+          # prevents the branch/issue steps below from running.
+          python "$TMP/scripts/upgrade.py" --repo-root "$GITHUB_WORKSPACE"
+
+          # upgrade.py writes UPGRADE_VERSION.txt only on full success.
           if [ -f UPGRADE_VERSION.txt ]; then
             VERSION=$(cat UPGRADE_VERSION.txt)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "Upgraded to version: $VERSION"
           else
-            echo "No upgrade needed or upgrade failed"
-            exit 1
+            echo "No upgrade was needed (already up to date)."
           fi
 
       # NOTE: Version update is handled by upgrade.py using text-based editing
@@ -92,7 +166,9 @@ jobs:
 
       - name: Create upgrade branch
         if: steps.upgrade.outputs.version != ''
+        id: create_branch
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -102,15 +178,20 @@ jobs:
           git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
 
           git checkout -b "$BRANCH_NAME"
-          git add .
+
+          # Stage the upgrade's content changes only. The fetched tooling lives
+          # in a temp dir outside the working tree, so it is never staged. We
+          # additionally exclude the CI bookkeeping files that upgrade.py writes
+          # into the site root so they are not committed into the fork's history.
+          git add -- . ':!UPGRADE_VERSION.txt' ':!UPGRADE_STATE.json'
+
           git commit -m "Upgrade Telar from ${{ steps.check_version.outputs.current_version }} to ${{ steps.upgrade.outputs.version }}"
           git push origin "$BRANCH_NAME"
 
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-        id: create_branch
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create upgrade issue
-        if: steps.upgrade.outputs.version != ''
+        if: steps.create_branch.outputs.branch_name != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -130,7 +211,9 @@ jobs:
           MANUAL_STEPS=$(grep -o '\*\*Manual steps:\*\* [0-9]\+' UPGRADE_SUMMARY.md | sed 's/.*\*\* \([0-9]\+\)/\1/')
 
           # Extract manual steps from UPGRADE_SUMMARY.md (if any)
-          MANUAL_STEPS_TEXT=$(sed -n '/## Manual Steps Required/,/## Resources/p' UPGRADE_SUMMARY.md | sed '1d;$d' | sed '/^Please complete these after merging:/d' | sed '/^$/d')
+          # Keep interior blank lines so multi-paragraph manual steps render as
+          # separate paragraphs in the GitHub issue (do not strip /^$/).
+          MANUAL_STEPS_TEXT=$(sed -n '/## Manual Steps Required/,/## Resources/p' UPGRADE_SUMMARY.md | sed '1d;$d' | sed '/^Please complete these after merging:/d')
 
           # Set language-specific strings
           if [ "$SITE_LANG" = "es" ]; then
@@ -273,7 +356,7 @@ jobs:
             --label "upgrade"
 
       - name: Output summary
-        if: steps.upgrade.outputs.version != ''
+        if: steps.create_branch.outputs.branch_name != ''
         run: |
           echo "## ✅ Upgrade Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
