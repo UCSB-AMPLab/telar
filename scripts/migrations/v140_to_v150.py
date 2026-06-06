@@ -262,7 +262,7 @@ If you skip this, your site keeps building and deploying normally — these chan
 - `.github/workflows/upgrade.yml`: el proceso de actualización ahora es más seguro — descarga sus herramientas desde el lanzamiento, las verifica con la suma de control publicada y las ejecuta de forma aislada. Así protege tu próxima actualización.
 - `.github/workflows/build.yml`: la acción `ruby/setup-ruby` ahora queda fijada a un commit específico, para mayor seguridad en la cadena de suministro.
 
-Para aplicarlas, abre cada archivo en GitHub, haz clic en «Raw» y copia todo el contenido para reemplazar el del archivo correspondiente en tu repositorio:
+Para aplicarlas, abre cada archivo en GitHub, haz clic en **Raw** y copia todo el contenido para reemplazar el del archivo correspondiente en tu repositorio:
 
 - https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/upgrade.yml
 - https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/build.yml
