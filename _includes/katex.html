@@ -4,7 +4,7 @@
   Provides window.telarRenderLatex() for rendering LaTeX in dynamically
   injected content (story panels, glossary definitions).
 
-  Version: v0.9.1-beta
+  Version: v1.5.0
 -->
 
 <!-- KaTeX CSS -->
@@ -39,7 +39,9 @@
     renderMathInElement(document.body, {
       delimiters: katexDelimiters,
       throwOnError: false,
-      trust: true
+      // Permit \href only for safe URL schemes. This disables \includegraphics,
+      // \html*, \url, etc. — KaTeX renders unpermitted commands as literal text.
+      trust: function (ctx) { return ctx.command === '\\href' && /^(https?:|mailto:)/.test(ctx.url); }
     });
 
     // Global function for re-rendering dynamic content (panels, glossary fetch)
@@ -48,7 +50,8 @@
         renderMathInElement(element, {
           delimiters: katexDelimiters,
           throwOnError: false,
-          trust: true
+          // Permit \href only for safe URL schemes (see note above).
+          trust: function (ctx) { return ctx.command === '\\href' && /^(https?:|mailto:)/.test(ctx.url); }
         });
       }
     };

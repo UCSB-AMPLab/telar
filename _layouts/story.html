@@ -1,3 +1,34 @@
+{%- comment -%}
+  Story layout — the standalone, full-document reading experience for a single Telar
+  story. Unlike most pages it does NOT inherit the default shell; it is its own complete
+  HTML document so it can own the scroll surface, fixed navigation, and viewer plates
+  without the site header/footer competing for the viewport.
+
+  What it renders — the document <head> (same cascade-layer + Bootstrap + theme-font setup
+  as the default layout, plus a block of inline JS that hands localized strings and config
+  flags to the client), then a <body class="story-page"> containing: a fixed back
+  navigation button, a floating share button, the scroll surface, the intro card (title,
+  subtitle, optional byline/description, optional table of contents, and any author-facing
+  configuration warnings), and a hidden `step-data` block. That hidden block is the heart of
+  the page — for each story step it emits a `story-step.html` include carrying the question,
+  answer, object reference, and viewport coordinates (x/y/zoom/page) plus clip and layer
+  metadata; card-pool.js reads these at init to build the visual scroll-driven cards. The
+  layout closes by loading OpenSeadragon, the Telar core and story bundles, and conditionally
+  the unlock overlay for protected stories.
+
+  Key context — `page.data_file` names the story's data file under `site.data`; its first
+  entry may be a `_metadata` row carrying viewer warnings and feature flags (e.g. has_latex).
+  `lang` resolves from `site.telar_language` with an English fallback and supplies every
+  user-facing string. Theme fonts derive from `site.data.themes[site.telar_theme]`.
+
+  Non-obvious behaviour — encrypted (protected) stories take a deliberately leak-free path:
+  jekyll-seo-tag is bypassed in favour of a generic description and canonical URL, the byline
+  and description are suppressed from the intro card, and the steps are NOT rendered server-side
+  (an empty container is left for story-unlock.js to populate after decryption), so authored
+  content never ships in the HTML before the reader supplies the key. KaTeX is loaded lazily,
+  only after storyData reveals the story uses LaTeX. "Christmas tree mode" is a development
+  flag that decorates warning headings.
+{%- endcomment -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,7 +143,19 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/telar.css' | relative_url }}?v={{ site.telar.version }}">
 
+  {% if is_encrypted %}
+  {%- comment -%}
+    Protected story: emit only leak-free SEO. jekyll-seo-tag would pull page.description (and any
+    excerpt) into <meta name="description"> / og:description, exposing authored content that is
+    meant to live behind the unlock gate — and gated content should not get a rich social preview.
+    The public title is already set in <title> above; here we add just a generic description and the
+    canonical URL.
+  {%- endcomment -%}
+  <meta name="description" content="{{ site.description }}">
+  <link rel="canonical" href="{{ page.url | absolute_url }}">
+  {% else %}
   {% seo %}
+  {% endif %}
 </head>
 <body class="story-page">
   <!-- Fixed navigation button: Back to Home on intro, Back to Start elsewhere -->
@@ -142,12 +185,19 @@
           {% if page.subtitle %}
           <h2 class="intro-subtitle">{{ page.subtitle }}</h2>
           {% endif %}
+          {%- comment -%}
+            For a protected (encrypted) story, the byline and description are author content that
+            should stay behind the unlock gate — only the title and subtitle are documented as public.
+            Suppress them from the intro card (and, below, from the SEO/OpenGraph meta).
+          {%- endcomment -%}
+          {% unless is_encrypted %}
           {% if page.byline %}
           <p class="intro-byline">{{ page.byline | markdownify | remove: '<p>' | remove: '</p>' }}</p>
           {% endif %}
           {% if page.description %}
           <p class="intro-description">{{ page.description }}</p>
           {% endif %}
+          {% endunless %}
 
           {% if page.show_sections and page.data_file %}
             {% assign data_name = page.data_file %}
@@ -319,7 +369,9 @@
                     renderMathInElement(element, {
                       delimiters: katexDelimiters,
                       throwOnError: false,
-                      trust: true
+                      // Permit \href only for safe URL schemes; other trust-gated
+                      // commands render as literal text.
+                      trust: function (ctx) { return ctx.command === '\\href' && /^(https?:|mailto:)/.test(ctx.url); }
                     });
                   }
                 };

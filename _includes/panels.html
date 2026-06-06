@@ -1,6 +1,24 @@
 <!--
-  Layered Panel System
-  Panels are dynamically populated from chapter data
+  Layered panel system — the sliding off-canvas surfaces that present
+  supporting content over a story without leaving the page. Three Bootstrap
+  off-canvas panels are defined here as empty shells whose bodies are filled in
+  at runtime by JavaScript: Layer 1 (the primary panel), Layer 2 (stacked on
+  top of Layer 1 for one level of drill-down), and a Glossary panel that can be
+  opened from anywhere. Each carries a localized Back button and title pulled
+  from the active language's lang.buttons / lang.panels strings; their stacking
+  order is governed by z-indexes in _panels.scss.
+
+  The inline styles size and constrain panel images — a default cap plus
+  img-sm / img-md / img-lg / img-full modifiers, all collapsed to full width on
+  narrow screens — and style the warning box shown when an image fails to load.
+
+  The script wires up that image-error handling. Because panel content is
+  injected after load, a MutationObserver watches each panel body for newly
+  added <img> elements and attaches an error handler to them (in addition to any
+  images already present). When an image 404s, handleImageError replaces it with
+  a styled notice naming the missing file path; the path is inserted as text via
+  DOM nodes rather than as HTML so a path containing markup characters can't be
+  parsed, and each image is only handled once.
 -->
 
 <!-- Layer 1 Panel (Primary - Full-width offcanvas) -->
@@ -172,8 +190,17 @@
     const src = img.getAttribute('src') || '';
     const errorDiv = document.createElement('div');
     errorDiv.className = 'img-error';
-    errorDiv.innerHTML = '<strong>Image file not found:</strong> <code>' + src + '</code><br>' +
-                         'Please add this file or update the path in the markdown.';
+    // Build the message with DOM nodes so the image path (which may contain
+    // markup characters) is shown as text rather than parsed as HTML.
+    const label = document.createElement('strong');
+    label.textContent = 'Image file not found:';
+    const code = document.createElement('code');
+    code.textContent = src;
+    errorDiv.appendChild(label);
+    errorDiv.appendChild(document.createTextNode(' '));
+    errorDiv.appendChild(code);
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createTextNode('Please add this file or update the path in the markdown.'));
 
     // Replace image with error message
     img.parentNode.replaceChild(errorDiv, img);

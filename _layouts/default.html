@@ -1,8 +1,38 @@
+{%- comment -%}
+  Default layout — the base HTML shell every ordinary page inherits from (home,
+  object pages, standalone content pages all set `layout: default`, directly or
+  through a child layout). It owns the document <head> and the shared chrome that
+  should appear site-wide.
+
+  What it renders — the full document skeleton: a <head> that wires up the CSS
+  cascade-layer order, Bootstrap 5 (loaded into the `third-party` layer so Telar's
+  own rules win by layer precedence regardless of source order), theme-driven Google
+  Fonts, the compiled Telar stylesheet, optional KaTeX, and jekyll-seo-tag meta; then
+  a <body> with the site header, the page's {{ content }} inside <main>, the footer,
+  and the shared glossary/share panels, closing with Bootstrap's JS bundle and Telar's
+  own scripts.
+
+  Key context — `site.title`/`page.title` for the <title>; `site.baseurl`, exposed to
+  client JS via a <meta> tag so scripts (e.g. objects-filter.js) can build correct
+  fetch paths under a non-empty baseurl rather than guessing from the URL; the active
+  theme under `site.data.themes[site.telar_theme]`, from which the heading/body font
+  families are derived; and `site.telar_language` (falling back to English) for the
+  language data bundle.
+
+  Non-obvious behaviour — fonts are chosen dynamically from the theme rather than
+  hard-coded, so swapping themes re-wires the Google Fonts request. KaTeX is only
+  pulled in when a page opts into LaTeX. The standalone story and object viewers do
+  NOT use this shell's full <main>/header arrangement the same way; the story layout
+  is its own self-contained document (see story.html).
+{%- endcomment -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {%- comment -%} Expose the Jekyll baseurl to client JS — objects-filter.js reads this to fetch
+  search-data.json from the correct path under a non-empty baseurl, instead of a fragile URL regex. {%- endcomment -%}
+  <meta name="baseurl" content="{{ site.baseurl }}">
   <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
 
   <!-- Bootstrap 5 CSS — loaded into the third-party layer so Telar rules win by layer order -->
