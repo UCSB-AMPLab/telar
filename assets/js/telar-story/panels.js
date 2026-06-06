@@ -22,11 +22,11 @@
  * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
  * modal and must be explicitly dismissed.
  *
- * @version v1.1.0
+ * @version v1.5.0
  */
 
 import { state } from './state.js';
-import { getBasePath, fixImageUrls } from './utils.js';
+import { getBasePath, fixImageUrls, escapeHtml } from './utils.js';
 import { writeHash, writeHashWithGlossary } from './deep-link.js';
 
 // ── Panel open / close ───────────────────────────────────────────────────────
@@ -43,6 +43,12 @@ export function initializePanels() {
     const trigger = e.target.closest('[data-panel="layer1"]');
     if (trigger) {
       const stepNumber = trigger.dataset.step;
+      // Hide any already-open panel (layer2/glossary) before rewriting the stack,
+      // so a stale offcanvas can't linger over the freshly-opened layer1.
+      document.querySelectorAll('.offcanvas.show').forEach(p => {
+        const inst = bootstrap.Offcanvas.getInstance(p);
+        if (inst) inst.hide();
+      });
       state.panelStack = [];
       openPanel('layer1', stepNumber);
     }
@@ -95,9 +101,18 @@ export function openPanel(panelType, contentId) {
 
   if (content) {
     const titleElement = document.getElementById(`${panelId}-title`);
-    const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
-    const demoBadge = content.demo ? `<span class="demo-badge-inline" style="margin-left: 0.5rem;">${demoBadgeText}</span>` : '';
-    titleElement.innerHTML = content.title + demoBadge;
+    // Author-supplied title via textContent (no HTML interpretation); demo badge
+    // appended as a built element. content.html below stays innerHTML — it is
+    // intentionally markdownified HTML.
+    titleElement.textContent = content.title;
+    if (content.demo) {
+      const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
+      const badge = document.createElement('span');
+      badge.className = 'demo-badge-inline';
+      badge.style.marginLeft = '0.5rem';
+      badge.textContent = demoBadgeText;
+      titleElement.appendChild(badge);
+    }
     const contentElement = document.getElementById(`${panelId}-content`);
     contentElement.innerHTML = content.html;
 
@@ -159,16 +174,14 @@ export function closePanel(panelType) {
     bsOffcanvas.hide();
   }
 
-  // Write hash immediately on close action — URL reverts to step-only (or
-  // the panel below) without waiting for the Bootstrap animation (350ms).
-  // panelStack is updated by the caller (closeTopPanel/closeAllPanels) so
-  // we read the stack after filtering out the closing panel for hash building.
-  const stackAfterClose = state.panelStack.filter(p => p.type !== panelType);
-  // Temporarily set panelStack to reflect post-close state for writeHash
-  const savedStack = state.panelStack;
-  state.panelStack = stackAfterClose;
+  // closePanel is the single owner of stack mutation on close: drop the closing
+  // panel from the stack, then write the hash from the updated stack. The URL
+  // reverts to step-only (or the panel below) immediately, without waiting for
+  // the Bootstrap close animation (350ms). Removing the old
+  // filter-into-savedStack-then-restore dance also makes this exception-safe —
+  // there is no temporary shared-state swap to leak if writeHash throws.
+  state.panelStack = state.panelStack.filter(p => p.type !== panelType);
   writeHash();
-  state.panelStack = savedStack;
 
   // Wait for Bootstrap animation before checking panel state
   setTimeout(() => {
@@ -186,8 +199,10 @@ export function closePanel(panelType) {
 export function closeTopPanel() {
   if (state.panelStack.length > 0) {
     const top = state.panelStack[state.panelStack.length - 1];
+    // closePanel now removes `top` from the stack itself — no separate pop
+    // (the old pop ran AFTER closePanel had already filtered for the hash,
+    // double-counting the mutation).
     closePanel(top.type);
-    state.panelStack.pop();
   }
 }
 
@@ -233,7 +248,7 @@ function getPanelContent(panelType, contentId) {
     // Add Layer 2 button if content exists
     if ((step.layer2_title && step.layer2_title.trim() !== '') || (step.layer2_text && step.layer2_text.trim() !== '')) {
       const buttonLabel = (step.layer2_button && step.layer2_button.trim() !== '') ? step.layer2_button : window.telarLang.goDeeper;
-      html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${buttonLabel} →</button></p>`;
+      html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${escapeHtml(buttonLabel)} →</button></p>`;
     }
 
     return {
@@ -289,7 +304,10 @@ function formatPanelContent(panelData, objectId) {
     const objectsData = window.objectsData || [];
     const panelObj = objectId ? (objectsData.find(o => o.object_id === objectId) || {}) : {};
     const panelAlt = panelObj.alt_text || panelObj.title || objectId || 'Panel image';
-    html += `<img src="${mediaUrl}" alt="${panelAlt}" class="img-fluid">`;
+    // Escape author-supplied attribute values so a quote in alt_text (or the
+    // media path) cannot break out of the attribute. The surrounding markup is
+    // fixed, so string assembly with escaped values is equivalent DOM output.
+    html += `<img src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(panelAlt)}" class="img-fluid">`;
   }
 
   return html;
