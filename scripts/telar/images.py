@@ -34,9 +34,10 @@ size class. It supports both local files (via Pillow) and remote URLs
 (fetched with urllib). Failures are silent — dimension detection is
 a nice-to-have, not a build blocker.
 
-Version: v0.7.0-beta
+Version: v1.5.0
 """
 
+from html import escape as html_escape
 import re
 from pathlib import Path
 import urllib.request
@@ -112,7 +113,7 @@ def process_images(text):
                     i += 1  # Skip the caption line
 
             # Build HTML
-            img_tag = f'<img src="{src}" alt="{alt}"{class_attr}>'
+            img_tag = f'<img src="{html_escape(src, quote=True)}" alt="{html_escape(alt, quote=True)}"{class_attr}>'
             if caption:
                 # Convert caption markdown to HTML (strip wrapping <p> tags)
                 caption_html = markdown.markdown(caption)

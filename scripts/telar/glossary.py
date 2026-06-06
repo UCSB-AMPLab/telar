@@ -34,9 +34,10 @@ visible error indicator with a warning emoji, and a warning is appended
 to the `warnings_list` so it appears in the build output and in the
 story's intro panel.
 
-Version: v0.8.1-beta
+Version: v1.5.0
 """
 
+import html
 import re
 from pathlib import Path
 import pandas as pd
@@ -58,8 +59,10 @@ def load_glossary_from_csv(csv_path):
     try:
         df = pd.read_csv(csv_path)
 
-        # Normalize column names (lowercase + bilingual mapping)
-        df.columns = df.columns.str.lower().str.strip()
+        # Normalize column names (bilingual mapping). normalize_column_names
+        # already lowercases internally for lookup, so pre-lowercasing here was
+        # redundant and needlessly mutated the actual header labels, diverging
+        # from every other CSV's column-casing behaviour.
         from telar.csv_utils import normalize_column_names
         df = normalize_column_names(df)
 
@@ -188,7 +191,9 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
             # handles baseurl for all deployment scenarios (GitHub Pages, subpaths, etc.)
             # Add data-demo attribute for demo terms (prefixed with demo-)
             demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
-            return f'<a href="#" class="glossary-inline-link" data-term-id="{term_id}"{demo_attr}>{display_text}</a>'
+            # Escape the author-supplied term id (attribute) and display text so a
+            # quote or angle bracket in either cannot break out of the link markup.
+            return f'<a href="#" class="glossary-inline-link" data-term-id="{html.escape(term_id, quote=True)}"{demo_attr}>{html.escape(display_text)}</a>'
         else:
             # Invalid term - create error indicator
             if warnings_list is not None:
@@ -202,6 +207,6 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
                     'layer': layer_name,
                     'message': warning_msg
                 })
-            return f'<span class="glossary-link-error" data-term-id="{term_id}">\u26a0\ufe0f [[{match.group(1)}]]</span>'
+            return f'<span class="glossary-link-error" data-term-id="{html.escape(term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(match.group(1))}]]</span>'
 
     return re.sub(pattern, replace_glossary_link, text)

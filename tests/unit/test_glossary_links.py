@@ -13,7 +13,7 @@ The syntax supports two forms:
 Invalid terms (not found in glossary) are marked with a warning indicator
 to help authors catch typos and missing definitions.
 
-Version: v0.7.0-beta
+Version: v1.5.0
 """
 
 import sys
@@ -144,3 +144,18 @@ class TestProcessGlossaryLinks:
         text = '[[colonial-period]][[viceroyalty]]'
         result = process_glossary_links(text, glossary_terms)
         assert result.count('glossary-inline-link') == 2
+
+    def test_escapes_markup_in_valid_link_display_text(self, glossary_terms):
+        """Custom display text with markup is escaped, not rendered."""
+        text = '[[colonial-period|A <b>"bold"</b> term]]'
+        result = process_glossary_links(text, glossary_terms)
+        assert 'data-term-id="colonial-period"' in result
+        assert '&lt;b&gt;' in result and '&quot;' in result
+        assert '<b>' not in result  # author markup did not break out
+
+    def test_escapes_markup_in_invalid_term_error_span(self, glossary_terms):
+        """A bogus term carrying markup is escaped in the error span."""
+        text = 'see [[a"<x>z]] here'
+        result = process_glossary_links(text, glossary_terms)
+        assert 'data-term-id="a&quot;&lt;x&gt;z"' in result
+        assert '<x>' not in result

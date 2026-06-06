@@ -27,7 +27,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.3.0-beta
+Version: v1.5.0
 """
 
 import argparse
@@ -47,6 +47,7 @@ from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
 from telar.latex import has_latex
+from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
 
 # Fields already handled explicitly in generate_objects() frontmatter.
 # Any key NOT in this set is treated as a custom field and written to extra_metadata.
@@ -61,40 +62,9 @@ KNOWN_OBJECT_FIELDS = {
 }
 
 
-# Video URL patterns for media type auto-detection
-_VIDEO_URL_PATTERNS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
-
-# Audio file extensions supported (must match audio-card.js in card runtime)
-_AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
-
-
-def detect_media_type(source_url, object_id):
-    """Auto-detect media type for gallery Type filter.
-
-    Checks source URL for known video hosts first, then looks for an audio
-    file matching the object_id in telar-content/objects/. Defaults to 'Image'.
-
-    Args:
-        source_url: The object's source_url field (may be None or empty).
-        object_id:  The object's ID, used to find matching audio files on disk.
-
-    Returns:
-        str: 'Video', 'Audio', or 'Image'.
-    """
-    url = (source_url or '').strip()
-
-    # Check for video URL patterns first
-    if any(pat in url for pat in _VIDEO_URL_PATTERNS):
-        return 'Video'
-
-    # Check for audio file in objects content directory
-    objects_content_dir = Path('telar-content/objects')
-    if objects_content_dir.exists():
-        for ext in _AUDIO_EXTENSIONS:
-            if (objects_content_dir / f'{object_id}{ext}').exists():
-                return 'Audio'
-
-    return 'Image'
+# Media-type detection (detect_media_type, VIDEO_URL_PATTERNS, AUDIO_EXTENSIONS)
+# now lives in the telar.media_type leaf module — imported above — so this file
+# and telar.search share one implementation instead of two that could diverge.
 
 
 def _yaml_escape(value):
@@ -194,7 +164,7 @@ def generate_objects():
                     pass
 
             # File size and format from disk
-            for ext in _AUDIO_EXTENSIONS:
+            for ext in AUDIO_EXTENSIONS:
                 audio_path = Path(f'telar-content/objects/{object_id}{ext}')
                 if audio_path.exists():
                     size_bytes = audio_path.stat().st_size
@@ -324,7 +294,7 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         filepath = glossary_dir / f"{term_id}.md"
         output_content = f"""---
 term_id: {term_id}
-title: "{title}"{related_str}{latex_flag}
+title: "{_yaml_escape(title)}"{related_str}{latex_flag}
 layout: glossary
 ---
 
@@ -460,7 +430,7 @@ def generate_glossary():
             # Create markdown with frontmatter
             output_content = f"""---
 term_id: {term_id}
-title: "{term.get('title', term_id)}"
+title: "{_yaml_escape(term.get('title', term_id))}"
 layout: glossary
 demo: true
 ---
@@ -543,32 +513,28 @@ def generate_stories():
         # Use identifier for filename (no additional prefix)
         filepath = stories_dir / f"{identifier}.md"
 
-        # Build frontmatter
-        frontmatter = f"""---
-title: "{story_title}"
-"""
-        if story_subtitle:
-            frontmatter += f'subtitle: "{story_subtitle}"\n'
-
+        # Build frontmatter as a dict and serialise via yaml.safe_dump so that
+        # quotes, colons, or newlines in author-supplied title/subtitle/byline
+        # cannot break out of their YAML fields. sort_keys=False keeps the
+        # human-friendly field order.
         story_byline = story.get('byline', '')
+        frontmatter_dict = {'title': story_title}
+        if story_subtitle:
+            frontmatter_dict['subtitle'] = story_subtitle
         if story_byline:
-            frontmatter += f'byline: "{story_byline}"\n'
-
+            frontmatter_dict['byline'] = story_byline
         if is_demo:
-            frontmatter += f'demo: true\n'
-
+            frontmatter_dict['demo'] = True
         if story.get('show_sections'):
-            frontmatter += f'show_sections: true\n'
+            frontmatter_dict['show_sections'] = True
+        frontmatter_dict['sort_order'] = sort_order
+        frontmatter_dict['layout'] = 'story'
+        frontmatter_dict['data_file'] = identifier
 
-        frontmatter += f'sort_order: {sort_order}\n'
-
-        frontmatter += f"""layout: story
-data_file: {identifier}
----
-
-"""
-
-        content = frontmatter
+        frontmatter_body = yaml.safe_dump(
+            frontmatter_dict, default_flow_style=False, allow_unicode=True, sort_keys=False
+        )
+        content = f"---\n{frontmatter_body}---\n\n"
 
         with open(filepath, 'w') as f:
             f.write(content)
