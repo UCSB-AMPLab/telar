@@ -1,8 +1,30 @@
 /**
- * Telar Embed Mode
- * Handles iframe embedding for Canvas LMS and other platforms
+ * Telar — embed mode.
  *
- * @version v1.0.0-beta
+ * Telar stories are often shown inside an iframe on another platform — a Canvas LMS
+ * page, a course module, a blog post — where the surrounding site chrome would be
+ * noise. This script detects that situation and trims the experience down to the
+ * story itself.
+ *
+ * Detection — a story is in embed mode when its URL carries `?embed=true`. The result
+ * is published on `window.telarEmbed` so other scripts can branch on it, and when
+ * active an `embed-mode` class is added to the body for the stylesheet to hide chrome
+ * against. The body-class work waits for the DOM if the document is still loading, and
+ * runs immediately otherwise.
+ *
+ * "View full site" banner — embedding hides the way back to the full site, so we add a
+ * small dismissible banner offering a link to it. Its wording comes from
+ * `window.telarLang` (set by the Jekyll layout) so the banner speaks the site's
+ * language; if those strings are absent — a layout that never set them — the banner is
+ * simply skipped rather than risking a broken render. The site name fills a
+ * `{site_name}` placeholder via a function replacement, so any `$`-sequences in the
+ * name are inserted literally. The full-site URL is derived from the current location
+ * by stripping everything from `/stories/` onward, falling back to the bare origin.
+ *
+ * The whole file is an IIFE so none of this leaks into the global scope beyond the
+ * single `window.telarEmbed` flag.
+ *
+ * @version v1.5.0
  */
 
 (function() {
@@ -44,10 +66,12 @@
     const fullSiteUrl = getFullSiteUrl();
 
     // Get language strings from window.telarLang (set by Jekyll in layout)
-    const embedStrings = window.telarLang.embedBanner;
+    const embedStrings = window.telarLang && window.telarLang.embedBanner;
+    if (!embedStrings) return; // layout without telarLang — no banner, no crash
 
-    // Replace {site_name} placeholder in banner text
-    const bannerText = embedStrings.text.replace('{site_name}', siteName);
+    // Replace {site_name} placeholder. Use a function replacement so $-sequences
+    // ($&, $$, $', $`) in the site name are inserted literally, not expanded.
+    const bannerText = embedStrings.text.replace('{site_name}', () => siteName);
 
     // Create banner element
     const banner = document.createElement('div');

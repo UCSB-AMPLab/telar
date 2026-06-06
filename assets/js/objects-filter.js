@@ -25,7 +25,7 @@
  * switches to that field in ascending order. DOM reordering uses appendChild
  * which maintains event listeners on the cards.
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
 
 (function() {
@@ -97,7 +97,10 @@
     if (baseUrlMeta) {
       return baseUrlMeta.getAttribute('content') || '';
     }
-    // Fallback: try to detect from current URL
+    // Fallback: derive from the current URL. This only runs if the layout did not
+    // inject <meta name="baseurl"> — warn so a missing tag is noticed rather than
+    // silently relying on the /objects/ path shape.
+    console.warn('[Telar] meta[name="baseurl"] not found; deriving the base URL from the page path.');
     const path = window.location.pathname;
     const match = path.match(/^(\/[^\/]+)?\/objects\//);
     return match ? (match[1] || '') : '';
@@ -344,11 +347,14 @@
     // Apply search first
     if (searchQuery && searchIndex) {
       try {
-        const results = searchIndex.search(searchQuery + '*');
+        // Strip leading Lunr query operators (+ - : ~ ^ *) so a query like
+        // "C++" or "+foo" isn't mis-parsed; an empty remainder means no match.
+        const safeQuery = searchQuery.replace(/^[+\-:~^*]+/, '');
+        const results = safeQuery ? searchIndex.search(safeQuery + '*') : [];
         matchingIds = new Set(results.map(r => r.ref));
       } catch (e) {
-        // Invalid search query, show all
-        matchingIds = null;
+        // Still unparseable: an honest empty result set, not "show everything"
+        matchingIds = new Set();
       }
     }
 
@@ -404,6 +410,14 @@
   function applySort() {
     const itemsArray = Array.from(elements.items);
 
+    // Extract a 3–4 digit year from a possibly-prose period string (e.g.
+    // "c. 1650", "1650-1700", "siglo XVII"). Non-numeric periods sort last in
+    // ascending order (Infinity) instead of collapsing to year 0.
+    const extractYear = (val) => {
+      const m = (val || '').match(/\d{3,4}/);
+      return m ? parseInt(m[0], 10) : Infinity;
+    };
+
     itemsArray.sort((a, b) => {
       let aVal, bVal;
 
@@ -411,8 +425,8 @@
         aVal = (a.dataset.title || '').toLowerCase();
         bVal = (b.dataset.title || '').toLowerCase();
       } else if (currentSort.field === 'year') {
-        aVal = parseInt(a.dataset.year || a.dataset.period || '0', 10) || 0;
-        bVal = parseInt(b.dataset.year || b.dataset.period || '0', 10) || 0;
+        aVal = extractYear(a.dataset.year || a.dataset.period);
+        bVal = extractYear(b.dataset.year || b.dataset.period);
       }
 
       let result;
@@ -557,7 +571,9 @@
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML;
+    // textContent -> innerHTML escapes < > &, but NOT quotes; add them so the
+    // result is also safe inside double- or single-quoted HTML attributes.
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   // Initialize on DOM ready

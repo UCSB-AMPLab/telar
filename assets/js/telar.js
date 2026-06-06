@@ -1,8 +1,34 @@
 /**
- * Telar - Digital Storytelling Framework
- * Main JavaScript file
+ * Telar — site-wide panel and glossary behaviour.
  *
- * @version v0.9.1-beta
+ * This is the small layer of interactivity that every Telar page loads,
+ * independent of the story viewer. It wires up the slide-in offcanvas panels and
+ * the glossary that those panels can host.
+ *
+ * Panel triggers — any element marked as a `.panel-trigger` opens the offcanvas
+ * panel named in its `data-panel` attribute, using Bootstrap's Offcanvas component
+ * (the same toolkit that powers the rest of the layout's modals and navigation).
+ *
+ * Glossary flow — glossary terms appear two ways: as entries on the glossary index
+ * and as inline `[[term_id]]` links woven into story prose. Rather than navigating
+ * away, clicking either kind fetches the term's own page, parses out its title and
+ * `.glossary-content`, and injects that into the shared glossary panel. The fetch is
+ * deliberate: glossary pages are real, independently linkable URLs, so the panel is
+ * just a convenient in-place view of content that also stands on its own. Because the
+ * injected content may itself contain glossary links — and may contain mathematical
+ * notation — we re-initialise glossary links and re-run LaTeX rendering on the freshly
+ * loaded fragment. Re-opening an already-open panel waits for it to finish hiding
+ * before loading the new term, so the swap reads as a clean transition.
+ *
+ * Click-outside-to-close — registered globally so the glossary panel dismisses on an
+ * outside click on any page, while clicks on panels, glossary links and triggers are
+ * left alone so they can do their own work.
+ *
+ * PanelStack — a tiny last-in-first-out record of which panels are layered (for
+ * example Layer 1 to Layer 2 to glossary), exposed on `window.Telar` alongside the
+ * link initialiser so dynamically loaded panel content can re-bind its own links.
+ *
+ * @version v1.5.0
  */
 
 // Wait for DOM to be ready
@@ -146,7 +172,7 @@ function handleGlossaryLinkClick(e) {
     if (pathParts.length >= 2) {
       basePath = '/' + pathParts.slice(0, -2).join('/');
     }
-    termUrl = basePath + '/glossary/' + termId + '/';
+    termUrl = basePath + '/glossary/' + encodeURIComponent(termId) + '/';
   }
 
   openGlossaryPanel(termUrl, termTitle, isDemo);
@@ -189,11 +215,18 @@ function openGlossaryPanel(termUrl, termTitle, isDemo = false) {
  * Load glossary term content and show panel
  */
 function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, termTitle, bsOffcanvas, isDemo = false) {
-  // Set temporary title from link text (will be replaced with actual title from page)
-  // Add demo badge if this is demo content
-  const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
-  const demoBadge = isDemo ? `<span class="demo-badge-inline" style="margin-left: 0.5rem;">${demoBadgeText}</span>` : '';
-  titleElement.innerHTML = termTitle + demoBadge;
+  // Set temporary title from link text (will be replaced with actual title from page).
+  // Use textContent for the author-supplied term title (no HTML interpretation),
+  // and append the demo badge as a built element rather than an HTML string.
+  titleElement.textContent = termTitle;
+  if (isDemo) {
+    const demoBadgeText = window.telarLang?.demoPanelBadge || 'Demo content';
+    const badge = document.createElement('span');
+    badge.className = 'demo-badge-inline';
+    badge.style.marginLeft = '0.5rem';
+    badge.textContent = demoBadgeText;
+    titleElement.appendChild(badge);
+  }
 
   // Show loading state
   contentElement.innerHTML = '<p class="text-muted">Loading...</p>';
