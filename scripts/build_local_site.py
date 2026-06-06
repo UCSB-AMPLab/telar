@@ -26,7 +26,7 @@ Each step can be skipped with flags (--skip-fetch, --skip-iiif,
 has changed. The default behaviour is to run all steps and start a
 local Jekyll server on port 4001.
 
-Version: v1.0.0-beta
+Version: v1.5.0
 
 Usage:
     python3 scripts/build_local_site.py              # Build and serve on port 4001
@@ -59,18 +59,42 @@ def run_command(cmd, description, check=True):
     return result
 
 
-def kill_running_jekyll():
-    """Kill any running Jekyll instances"""
+def run_command_list(cmd, description, check=True):
+    """Run a command given as an argument list (no shell), with status output.
+
+    Preferred over run_command when any part of the command is interpolated
+    (e.g. a base URL from config), so shell metacharacters cannot be injected.
+    """
+    print(f"\n{'='*60}")
+    print(f"  {description}")
+    print(f"{'='*60}\n")
+
+    result = subprocess.run(cmd, shell=False)
+
+    if check and result.returncode != 0:
+        print(f"\n❌ Error: {description} failed with exit code {result.returncode}")
+        sys.exit(result.returncode)
+
+    return result
+
+
+def kill_running_jekyll(port):
+    """Kill a Jekyll instance serving on the given port (this script's server).
+
+    Scoped to the port and using SIGTERM (pkill's default, not -9/SIGKILL) so an
+    unrelated `jekyll serve` on another port is left alone and the targeted
+    server can shut down cleanly.
+    """
+    pattern = f'jekyll serve.*--port {port}'
     result = subprocess.run(
-        'pgrep -f "jekyll serve"',
-        shell=True,
+        ['pgrep', '-f', pattern],
         capture_output=True,
         text=True
     )
     if result.stdout.strip():
-        print("Killing existing Jekyll instances...")
-        subprocess.run('pkill -9 -f "jekyll serve"', shell=True, stderr=subprocess.DEVNULL)
-        print("✓ Killed running Jekyll processes")
+        print(f"Killing existing Jekyll instance on port {port}...")
+        subprocess.run(['pkill', '-f', pattern], stderr=subprocess.DEVNULL)
+        print("✓ Killed running Jekyll process")
 
 
 def main():
@@ -86,7 +110,7 @@ def main():
     serve = not args.build_only
 
     # Kill any running Jekyll instances first
-    kill_running_jekyll()
+    kill_running_jekyll(args.port)
 
     print("\n" + "="*60)
     print("  Telar Local Build")
@@ -157,8 +181,8 @@ def main():
             if baseurl:
                 base_url = f"{base_url}{baseurl}"
 
-        run_command(
-            f'python3 scripts/generate_iiif.py --base-url {base_url}',
+        run_command_list(
+            ['python3', 'scripts/generate_iiif.py', '--base-url', base_url],
             f'Step 5/7: Generating IIIF tiles (base URL: {base_url})'
         )
     else:

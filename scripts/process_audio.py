@@ -40,13 +40,14 @@ installed via the platform's package manager (brew on macOS, apt on
 Linux). The CI workflow installs them conditionally when audio files are
 detected.
 
-Version: v1.0.0-beta
+Version: v1.5.0
 """
 
 import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -59,6 +60,16 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
+
+# object_id is interpolated into filesystem write paths (peaks, clips, cache),
+# so it must be a bare slug. Anything with a path separator or ".." is rejected
+# at ingest so a crafted object_id cannot write outside the audio output dirs.
+_SAFE_OBJECT_ID = re.compile(r'^[A-Za-z0-9_-]+$')
+
+
+def is_safe_object_id(object_id):
+    """Return True if object_id is a bare slug safe to use in a file path."""
+    return bool(_SAFE_OBJECT_ID.match(object_id))
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +204,13 @@ def find_audio_objects(objects_json_path, objects_dir):
     for obj in objects:
         object_id = obj.get('object_id', '').strip()
         if not object_id:
+            continue
+
+        # Guard every downstream write path (peaks/clips/cache) at the single
+        # point of ingest: a non-slug object_id is skipped, not processed.
+        if not is_safe_object_id(object_id):
+            print(f"  [WARN] Skipping object with unsafe object_id "
+                  f"(allowed: letters, digits, hyphen, underscore): {object_id!r}")
             continue
 
         for ext in AUDIO_EXTENSIONS:
