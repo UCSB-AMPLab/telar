@@ -19,7 +19,7 @@ confirm it works. The result is a mapping of tab names to GIDs that
 fetch_google_sheets.py uses to download each tab as a CSV file. It can
 also output environment variables for GitHub Actions workflows.
 
-Version: v0.9.0-beta
+Version: v1.5.0
 
 Usage:
     python scripts/discover_sheet_gids.py <SHARED_URL> <PUBLISHED_URL>
@@ -36,7 +36,29 @@ import urllib.request
 import urllib.error
 import ssl
 import argparse
+from pathlib import Path
 from html.parser import HTMLParser
+
+sys.path.insert(0, str(Path(__file__).parent))
+from pipeline_utils import capped_read, MAX_HTML_BYTES
+
+
+def verified_ssl_context():
+    """Return a TLS context that verifies certificates.
+
+    Uses certifi's CA bundle when available (python.org macOS builds do not
+    link the system certificate store, so the default context can fail to find
+    a trust root) and falls back to the system default otherwise. Mirrors the
+    verified-fetch approach in fetch_demo_content.py — we verify rather than
+    disable checking, so a man-in-the-middle cannot substitute the CSV/HTML
+    that becomes site content.
+    """
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
 
 class SheetTabParser(HTMLParser):
     """Parse published Google Sheets HTML to extract tab names and GIDs"""
@@ -94,15 +116,13 @@ def discover_gids_from_published(published_url):
     Discover tab names and GIDs by parsing the published HTML
     """
     try:
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context = verified_ssl_context()
 
         req = urllib.request.Request(published_url)
         req.add_header('User-Agent', 'Mozilla/5.0')
 
         with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
-            html = response.read().decode('utf-8', errors='ignore')
+            html = capped_read(response, MAX_HTML_BYTES).decode('utf-8', errors='ignore')
 
             # Try parsing JavaScript items.push() calls first
             # Pattern: items.push({name: "TabName", pageUrl: "...", gid: "123456"});
@@ -146,9 +166,7 @@ def test_gid(sheet_id, gid):
     """Test if a GID works by attempting to fetch CSV"""
     url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?gid={gid}&format=csv'
     try:
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context = verified_ssl_context()
 
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:

@@ -21,7 +21,7 @@ The resulting CSV files are the input for the next build step:
 csv_to_json.py (the telar package), which processes them into the JSON
 data that Jekyll uses to render the site.
 
-Version: v0.9.0-beta
+Version: v1.5.0
 
 Usage:
     python3 scripts/fetch_google_sheets.py
@@ -38,7 +38,8 @@ from pathlib import Path
 
 # Import the discover script functions
 sys.path.insert(0, str(Path(__file__).parent))
-from discover_sheet_gids import extract_published_id, discover_gids_from_published
+from discover_sheet_gids import extract_published_id, discover_gids_from_published, verified_ssl_context
+from pipeline_utils import capped_read, MAX_CSV_BYTES
 
 def read_config():
     """Read Google Sheets URLs from _config.yml"""
@@ -75,13 +76,11 @@ def fetch_csv(published_id, gid, output_path):
     url = f'https://docs.google.com/spreadsheets/d/e/{published_id}/pub?gid={gid}&single=true&output=csv'
 
     try:
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context = verified_ssl_context()
 
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
-            data = response.read().decode('utf-8')
+            data = capped_read(response, MAX_CSV_BYTES).decode('utf-8')
 
             # Check if we got HTML error instead of CSV
             if data.startswith('<!DOCTYPE') or data.startswith('<html'):
