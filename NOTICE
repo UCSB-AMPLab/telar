@@ -43,10 +43,13 @@ WaveSurfer.js
 Copyright (c) katspaugh
 License: BSD 3-Clause
 Source: https://github.com/katspaugh/wavesurfer.js
-Loaded via CDN: https://unpkg.com/wavesurfer.js@7/
+Version: 7.12.7
 
-WaveSurfer is an audio waveform rendering library. Telar loads it from
-a CDN only on pages that contain audio objects.
+WaveSurfer is an audio waveform rendering library, used only on pages
+that contain audio objects. The minified build (core plus the Regions
+plugin) is vendored at assets/vendor/wavesurfer/ and loaded by the story
+viewer with no external request; the standalone object page still loads
+it from a CDN.
 
 Vimeo Player.js
 ---------------
