@@ -21,6 +21,7 @@ class Migration093to094(BaseMigration):
 
     from_version = "0.9.3-beta"
     to_version = "0.9.4-beta"
+    _TARGET_TAG = "v0.9.4-beta"  # pin framework fetches to the release tag
     description = "Add PyMuPDF dependency for PDF object support"
 
     def check_applicable(self) -> bool:

@@ -19,6 +19,7 @@ class Migration080to081(BaseMigration):
 
     from_version = "0.8.0-beta"
     to_version = "0.8.1-beta"
+    _TARGET_TAG = "v0.8.1-beta"  # pin framework fetches to the release tag
     description = "Spanish spreadsheet support, updated demo content, glossary fallbacks"
 
     def check_applicable(self) -> bool:

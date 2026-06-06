@@ -29,10 +29,8 @@ class Migration094to100(BaseMigration):
 
     from_version = "0.9.4-beta"
     to_version = "1.0.0-beta"
+    _TARGET_TAG = "v1.0.0-beta"  # pin framework fetches to the release tag
     description = "Card-stack architecture, video/audio support, Lucide icons, scroll engine"
-
-    # Branch to fetch files from on GitHub
-    _GITHUB_BRANCH = "v1.0.0-beta"
 
     def check_applicable(self) -> bool:
         """Check if migration should run."""
@@ -140,7 +138,7 @@ class Migration094to100(BaseMigration):
         }
 
         for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path, branch=self._GITHUB_BRANCH)
+            content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
             if content:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
@@ -159,7 +157,7 @@ class Migration094to100(BaseMigration):
         }
 
         for file_path, description in language_files.items():
-            content = self._fetch_from_github(file_path, branch=self._GITHUB_BRANCH)
+            content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
             if content:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")

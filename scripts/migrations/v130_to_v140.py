@@ -8,7 +8,8 @@ stories, objects, and configuration keep working without edits.
 
 What the upgrade does:
 
-1. Framework files (fetched fresh from GitHub main). The viewer layer is
+1. Framework files (fetched from the v1.4.0 release tag, not the moving `main`
+   branch, and written atomically — all or nothing). The viewer layer is
    replaced wholesale — Tify (and its Vue dependency) is gone, swapped for a
    vendored OpenSeadragon plus a small Telar-authored wrapper. The responsive
    layer is rebuilt around CSS custom properties and cascade layers, with a new
@@ -27,7 +28,9 @@ What the upgrade does:
    naming scheme, were never referenced, and are removed from the template in
    v1.4.0; a framework re-fetch alone would not delete them.
 
-4. Version bump: telar.version 1.3.0 -> 1.4.0 in _config.yml.
+The version stamp (telar.version -> 1.4.0) is no longer written here. It is
+applied once by upgrade.py after every migration step succeeds, so a failed
+fetch can never leave the site stamped as a version it is not running.
 
 Language packs are framework-owned and fetched wholesale, per the established
 convention. A site that customised en.yml or es.yml will have those edits
@@ -39,12 +42,12 @@ Version: v1.4.0
 import os
 from typing import Dict, List
 
-from .base import BaseMigration
+from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
-# Framework files re-fetched wholesale from GitHub main. Grouped by subsystem
-# for the upgrade summary; every entry is a file that changed in v1.4.0 and is
-# part of a user site's runtime or template.
+# Framework files fetched from the v1.4.0 release tag and written atomically.
+# Grouped by subsystem for the upgrade summary; every entry is a file that
+# changed in v1.4.0 and is part of a user site's runtime or template.
 FRAMEWORK_FILES = {
     # Vendored viewer dependency (no CDN)
     'assets/vendor/openseadragon.min.js': 'Vendored OpenSeadragon 6.0.2 (replaces the Tify CDN load)',
@@ -115,15 +118,26 @@ class Migration130to140(BaseMigration):
     to_version = "1.4.0"
     description = "Responsive system overhaul and custom IIIF viewer (Tify removed); runtime-only"
 
+    # Pin framework-file fetches to the v1.4.0 release tag, not the moving
+    # `main` branch, so this migration always installs v1.4.0 files.
+    _TARGET_TAG = "v1.4.0"
+
     def check_applicable(self) -> bool:
         return True
 
-    def apply(self) -> List[str]:
-        changes: List[str] = []
+    def apply(self) -> List[ChangeRecord]:
+        changes: List[ChangeRecord] = []
 
-        # Phase 1: Update framework files from GitHub
+        # Phase 1: install framework files atomically from the pinned tag.
         print("  Phase 1: Updating framework files...")
-        changes.extend(self._update_framework_files())
+        framework_changes = self._update_framework_files()
+        changes.extend(framework_changes)
+
+        # Fail closed: if any framework file did not install, do not touch the
+        # .gitignore or remove the stale bundles. upgrade.py will see the HARD
+        # failure, leave the version unstamped, and a re-run retries cleanly.
+        if any(c.status == ChangeStatus.FAILED for c in framework_changes):
+            return changes
 
         # Phase 2: Track the vendored asset tree and ignore the stale bundles
         print("  Phase 2: Updating .gitignore...")
@@ -133,40 +147,26 @@ class Migration130to140(BaseMigration):
         print("  Phase 3: Removing stale bundle files...")
         changes.extend(self._remove_stale_bundles())
 
-        # Phase 4: Version bump
-        print("  Phase 4: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.4.0", today):
-            changes.append(f"Updated _config.yml: version 1.4.0 ({today})")
-
+        # No version bump here — upgrade.py stamps once after all steps succeed.
         return changes
 
     # ------------------------------------------------------------------ #
-    # Phase 1: framework file fetch
+    # Phase 1: framework file fetch (pinned + atomic)
     # ------------------------------------------------------------------ #
 
-    def _update_framework_files(self) -> List[str]:
-        """Fetch every changed v1.4.0 framework file from GitHub main."""
-        changes: List[str] = []
+    def _update_framework_files(self) -> List[ChangeRecord]:
+        """Install every changed v1.4.0 framework file from the pinned tag.
 
-        for file_path, description in FRAMEWORK_FILES.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} — {description}")
-            else:
-                changes.append(
-                    f"⚠️  Could not fetch {file_path} from GitHub (network or release timing). Update it manually."
-                )
-
-        return changes
+        Delegates to the staged-atomic helper: all files are fetched into
+        memory first, and nothing is written unless every fetch succeeds.
+        """
+        return self._apply_framework_files(FRAMEWORK_FILES)
 
     # ------------------------------------------------------------------ #
     # Phase 2: .gitignore
     # ------------------------------------------------------------------ #
 
-    def _update_gitignore(self) -> List[str]:
+    def _update_gitignore(self) -> List[ChangeRecord]:
         """Add the vendored-asset negation and the stale-bundle ignore patterns.
 
         The `!assets/vendor/` negation must re-include the vendored
@@ -178,23 +178,31 @@ class Migration130to140(BaseMigration):
         added = self._ensure_gitignore_entries(
             ['!assets/vendor/', 'telar-story*.bundle.js', 'telar-story-bundle.js']
         )
-        if added:
-            return ["Updated .gitignore — track assets/vendor/, ignore stale story bundles"]
-        return ["Skipped .gitignore (entries already present)"]
+        description = (
+            "Updated .gitignore — track assets/vendor/, ignore stale story bundles"
+            if added else "Skipped .gitignore (entries already present)"
+        )
+        return [ChangeRecord(description=description, status=ChangeStatus.APPLIED, severity="soft")]
 
     # ------------------------------------------------------------------ #
     # Phase 3: stale bundle cleanup
     # ------------------------------------------------------------------ #
 
-    def _remove_stale_bundles(self) -> List[str]:
+    def _remove_stale_bundles(self) -> List[ChangeRecord]:
         """Delete the two unreferenced bundle files removed in v1.4.0."""
-        changes: List[str] = []
+        changes: List[ChangeRecord] = []
         for rel_path in STALE_BUNDLE_FILES:
             if self._file_exists(rel_path):
                 os.remove(os.path.join(self.repo_root, rel_path))
-                changes.append(f"Removed stale bundle file {rel_path}")
+                changes.append(ChangeRecord(
+                    description=f"Removed stale bundle file {rel_path}",
+                    status=ChangeStatus.APPLIED, severity="soft",
+                ))
         if not changes:
-            return ["No stale bundle files to remove"]
+            return [ChangeRecord(
+                description="No stale bundle files to remove",
+                status=ChangeStatus.APPLIED, severity="soft",
+            )]
         return changes
 
     # ------------------------------------------------------------------ #

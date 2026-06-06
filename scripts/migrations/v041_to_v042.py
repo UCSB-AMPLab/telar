@@ -19,6 +19,7 @@ class Migration041to042(BaseMigration):
 
     from_version = "0.4.1-beta"
     to_version = "0.4.2-beta"
+    _TARGET_TAG = "v0.4.2-beta"  # pin framework fetches to the release tag
     description = "Smart IIIF change detection and mobile UI refinements"
 
     def check_applicable(self) -> bool:

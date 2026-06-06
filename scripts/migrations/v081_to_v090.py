@@ -26,6 +26,7 @@ class Migration081to090(BaseMigration):
 
     from_version = "0.8.1-beta"
     to_version = "0.9.0-beta"
+    _TARGET_TAG = "v0.9.0-beta"  # pin framework fetches to the release tag
     description = "Content restructure, Tify viewer, PDF support, libvips tiles, Trama theme"
 
     def check_applicable(self) -> bool:

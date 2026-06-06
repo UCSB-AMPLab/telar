@@ -18,6 +18,7 @@ class Migration060to061(BaseMigration):
 
     from_version = "0.6.0-beta"
     to_version = "0.6.1-beta"
+    _TARGET_TAG = "v0.6.1-beta"  # pin framework fetches to the release tag
     description = "Fix EXIF orientation in thumbnails, fix v0.5.0→v0.6.0 migration template pollution"
 
     def check_applicable(self) -> bool:

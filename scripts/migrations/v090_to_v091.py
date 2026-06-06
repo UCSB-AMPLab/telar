@@ -21,6 +21,7 @@ class Migration090to091(BaseMigration):
 
     from_version = "0.9.0-beta"
     to_version = "0.9.1-beta"
+    _TARGET_TAG = "v0.9.1-beta"  # pin framework fetches to the release tag
     description = "LaTeX math rendering (KaTeX), case-insensitive extension fix"
 
     def check_applicable(self) -> bool:

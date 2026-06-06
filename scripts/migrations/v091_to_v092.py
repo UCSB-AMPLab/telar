@@ -21,6 +21,7 @@ class Migration091to092(BaseMigration):
 
     from_version = "0.9.1-beta"
     to_version = "0.9.2-beta"
+    _TARGET_TAG = "v0.9.2-beta"  # pin framework fetches to the release tag
     description = "IIIF tile rendering fix, TIFY thumbnail, test workflow scoping"
 
     def check_applicable(self) -> bool:

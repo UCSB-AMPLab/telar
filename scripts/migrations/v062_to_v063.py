@@ -20,6 +20,7 @@ class Migration062to063(BaseMigration):
 
     from_version = "0.6.2-beta"
     to_version = "0.6.3-beta"
+    _TARGET_TAG = "v0.6.3-beta"  # pin framework fetches to the release tag
     description = "Inline panel content, CSV parsing fix"
 
     def check_applicable(self) -> bool:

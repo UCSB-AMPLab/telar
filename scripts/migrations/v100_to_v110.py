@@ -29,6 +29,7 @@ class Migration100to110(BaseMigration):
 
     from_version = "1.0.0-beta"
     to_version = "1.1.0"
+    _TARGET_TAG = "v1.1.0"  # pin framework fetches to the release tag
     description = "Deep linking, title cards, collection mode, bibliography styling, panel fixes"
 
     def check_applicable(self) -> bool:

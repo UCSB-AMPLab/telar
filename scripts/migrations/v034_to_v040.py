@@ -18,6 +18,7 @@ class Migration034to040(BaseMigration):
 
     from_version = "0.3.4-beta"
     to_version = "0.4.0-beta"
+    _TARGET_TAG = "v0.4.0-beta"  # pin framework fetches to the release tag
     description = "Add multilingual UI support and new features"
 
     def check_applicable(self) -> bool:

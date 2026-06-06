@@ -28,6 +28,7 @@ class Migration092to093(BaseMigration):
 
     from_version = "0.9.2-beta"
     to_version = "0.9.3-beta"
+    _TARGET_TAG = "v0.9.3-beta"  # pin framework fetches to the release tag
     description = "IIIF tile fixes, coordinate panel restyle, multi-page page switching"
 
     def check_applicable(self) -> bool:

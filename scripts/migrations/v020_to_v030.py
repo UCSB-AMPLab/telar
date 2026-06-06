@@ -20,6 +20,7 @@ class Migration020to030(BaseMigration):
 
     from_version = "0.2.0-beta"
     to_version = "0.3.0-beta"
+    _TARGET_TAG = "v0.3.0-beta"  # pin framework fetches to the release tag
     description = "Restructure project.csv and move metadata to _config.yml"
 
     def check_applicable(self) -> bool:
