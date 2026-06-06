@@ -28,7 +28,7 @@ but for most sites this is imperceptible (<100ms).
 config setting. When disabled, no search data is generated and any existing
 `search-data.json` is removed — the gallery falls back to its simple grid view.
 
-Version: v1.0.0-beta
+Version: v1.5.0
 """
 
 import json
@@ -36,27 +36,15 @@ from pathlib import Path
 
 import yaml
 
+from telar.media_type import detect_media_type
+
 
 # Video URL patterns for media type detection (matches generate_collections.py)
-_VIDEO_URL_PATTERNS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
-_AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
-
-
-def _detect_media_type(source_url, object_id):
-    """Detect media type from source URL and object files on disk.
-
-    Duplicates the logic in generate_collections.detect_media_type() to avoid
-    circular imports (generate_collections imports from telar).
-    """
-    url = (source_url or '').strip()
-    if any(pat in url for pat in _VIDEO_URL_PATTERNS):
-        return 'Video'
-    objects_dir = Path('telar-content/objects')
-    if objects_dir.exists():
-        for ext in _AUDIO_EXTENSIONS:
-            if (objects_dir / f'{object_id}{ext}').exists():
-                return 'Audio'
-    return 'Image'
+def _media_type_of(obj):
+    """Media type for an object: the persisted media_type field if present
+    (objects.py now stores it), else detect it via the shared leaf module."""
+    return obj.get('media_type') or detect_media_type(
+        obj.get('source_url', ''), obj.get('object_id', ''))
 
 
 def load_config():
@@ -98,8 +86,7 @@ def build_facets(objects):
 
     for obj in objects:
         # Media type (auto-detected: Image/Video/Audio)
-        # Derive from source_url and object_id since objects.json doesn't store media_type
-        media_type = _detect_media_type(obj.get('source_url', ''), obj.get('object_id', ''))
+        media_type = _media_type_of(obj)
         if media_type:
             facets['media_type'][media_type] = facets['media_type'].get(media_type, 0) + 1
 
@@ -182,7 +169,7 @@ def generate_search_data(objects_path='_data/objects.json', output_path='search-
             'creator': obj.get('creator', ''),
             'period': obj.get('period', ''),
             'description': obj.get('description', ''),
-            'media_type': _detect_media_type(obj.get('source_url', ''), obj.get('object_id', '')),
+            'media_type': _media_type_of(obj),
             'medium': obj.get('medium', ''),
             'subjects': obj.get('subjects', ''),
             'year': obj.get('year', ''),
