@@ -24,7 +24,25 @@ as horizontal rules), and then runs the same pipeline. The markdown
 library's `nl2br` extension is enabled so that single line breaks in
 the spreadsheet cell produce `<br>` tags in the output.
 
-Version: v0.9.1-beta
+Content trust model (raw-HTML pass-through is intentional)
+----------------------------------------------------------
+`markdown.markdown()` is called WITHOUT an HTML sanitiser, so raw HTML
+embedded in author markdown/CSV content passes straight through to the
+rendered page. This is by design: Telar is a minimal-computing static-site
+framework whose content is authored by trusted contributors (the same
+people who control the repo), and authors legitimately rely on raw HTML
+for layout the markdown syntax cannot express. Adding a sanitiser
+(bleach / nh3) would both strip that legitimate HTML and add a runtime
+dependency that cuts against the project's no-dependency ethos.
+
+This is a conscious threat-model decision: the trusted-author model.
+It holds only while content authorship is trusted.
+A multi-author deployment where untrusted users can write story content
+(e.g. a future hosted Compositor) must NOT rely on this — it should layer
+DOMPurify on the injected panel/glossary HTML in the JS runtime, where the
+untrusted boundary actually is.
+
+Version: v1.5.0
 """
 
 import re
@@ -80,7 +98,8 @@ def read_markdown_file(file_path, widget_warnings=None):
             # Protect LaTeX blocks from markdown processing
             body, latex_replacements = protect_latex(body)
 
-            # Convert markdown to HTML
+            # Convert markdown to HTML. Raw HTML passes through unsanitised by
+            # design (trusted-author model) — see the module docstring.
             html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
 
             # Restore LaTeX blocks
@@ -103,7 +122,8 @@ def read_markdown_file(file_path, widget_warnings=None):
             # Protect LaTeX blocks from markdown processing
             content_body, latex_replacements = protect_latex(content_body)
 
-            # Convert markdown to HTML
+            # Convert markdown to HTML. Raw HTML passes through unsanitised by
+            # design (trusted-author model) — see the module docstring.
             html_content = markdown.markdown(content_body, extensions=['extra', 'nl2br'])
 
             # Restore LaTeX blocks
@@ -166,7 +186,8 @@ def process_inline_content(text, widget_warnings=None):
     # Protect LaTeX blocks from markdown processing
     content, latex_replacements = protect_latex(content)
 
-    # Convert markdown to HTML (nl2br handles single line breaks)
+    # Convert markdown to HTML (nl2br handles single line breaks). Raw HTML
+    # passes through unsanitised by design — see the module docstring.
     html_content = markdown.markdown(content, extensions=['extra', 'nl2br'])
 
     # Restore LaTeX blocks
