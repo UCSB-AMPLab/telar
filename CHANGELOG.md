@@ -31,6 +31,7 @@ Robustness and security release. Runtime and tooling only — no content changes
 - **YouTube and Google Drive video sizing.** Non-16:9 videos are now sized to their true aspect (or given an intentional dark letterbox frame) instead of floating in the page background.
 - **Audio and scroll-engine lifecycle.** Resolved assorted race conditions and re-initialization issues.
 - **Theme button text.** Restored the button-text color fix (carried from a v1.4.0 hotfix that missed the v1.4.0 tag) so themed buttons no longer render with invisible text.
+- **Story step order.** Steps now render in the order of their `step` number rather than the spreadsheet's saved row order, so a story whose rows ended up out of sequence still displays correctly. Falls back safely to the saved order if step values are missing or non-numeric.
 
 ### Migration
 

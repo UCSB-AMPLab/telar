@@ -375,4 +375,22 @@ def process_story(df, christmas_tree=False):
     if warnings:
         print(f"\n  Story validation summary: {len(warnings)} warning(s)")
 
+    # Order steps by their authored `step` number so the rendered sequence
+    # follows the step values, not the spreadsheet's physical row order — a CSV
+    # exported out of order (e.g. by an external editor) would otherwise render
+    # steps in the wrong sequence. Failsafe: a stable sort keeps rows that share
+    # a step value in their original order, blank or non-numeric steps fall to
+    # the end, and any unexpected error leaves the original row order untouched
+    # rather than breaking the build.
+    if 'step' in df.columns:
+        try:
+            step_order = pd.to_numeric(df['step'], errors='coerce')
+            df = (df.assign(_step_order=step_order)
+                    .sort_values('_step_order', kind='mergesort', na_position='last')
+                    .drop(columns='_step_order')
+                    .reset_index(drop=True))
+        except Exception as e:
+            print(f"  [WARN] Could not order story steps by 'step' value; "
+                  f"using spreadsheet row order instead ({e})")
+
     return df
