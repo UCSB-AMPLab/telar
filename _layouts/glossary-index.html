@@ -2,6 +2,19 @@
 layout: default
 ---
 
+{%- comment -%}
+  Glossary index — the A-to-Z listing of every glossary term defined on the site.
+  It renders the page's own prose first, then groups the `site.glossary` collection
+  into alphabetical sections: terms are bucketed by their first letter, the letter
+  headings are sorted, and the terms within each heading are sorted by title. Each
+  entry links through to its individual glossary page (see the glossary layout),
+  carrying the term's id and url so the on-page term-panel script can open it inline
+  rather than forcing a full navigation. Demo terms are tagged with a small badge so
+  sample content is visually distinguishable from a site's real glossary. When no
+  terms exist, an informational notice stands in. User-facing strings resolve through
+  the active language file via `lang`, falling back to English.
+{%- endcomment -%}
+
 {% if site.telar_language and site.data.languages[site.telar_language] %}
   {% assign lang = site.data.languages[site.telar_language] %}
 {% else %}

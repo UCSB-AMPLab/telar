@@ -1,3 +1,14 @@
+<!--
+  Upgrade Success Alert
+
+  A one-off success banner that an author drops into index.md after running the
+  upgrade script, to confirm to themselves that the site moved to a new Telar
+  version. It reads the live version number from site.telar.version, links out to
+  the release notes and to the generated upgrade summary page, and — because it is
+  meant to be temporary — closes by telling the author exactly which line to delete
+  from index.md once they have seen it. There is no dynamic behaviour here; the
+  include simply renders static reassurance text until the author removes it.
+-->
 <div class="alert alert-success telar-alert" role="alert">
   <strong>✅ Your site upgrade was successful!</strong>
   <p class="mt-2 mb-2">

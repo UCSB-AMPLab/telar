@@ -1,3 +1,15 @@
+<!--
+  Tabs Widget
+
+  Renders a set of tabbed panels — a Bootstrap tab group — so that parallel pieces
+  of content can share one footprint and the reader switches between them. Produced
+  by Telar's widget build step, which supplies widget_id (a unique slug scoping
+  every tab's id and aria target so several tab groups never collide) and tabs (a
+  list, each with a title for the nav button and a pre-rendered content_html for the
+  pane). The pane HTML is emitted through the "safe" filter because the build step
+  has already escaped it; loop.index distinguishes the tabs, and the first tab is
+  marked active and shown by default.
+-->
 <div class="telar-widget telar-widget-tabs">
   <!-- Tab navigation -->
   <ul class="nav nav-tabs" role="tablist">
@@ -25,7 +37,7 @@
          role="tabpanel"
          aria-labelledby="tab-{{ widget_id }}-{{ loop.index }}-tab">
       <div class="tab-pane-content">
-        {{ tab.content_html }}
+        {{ tab.content_html | safe }}
       </div>
     </div>
     {% endfor %}

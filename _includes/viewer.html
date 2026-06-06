@@ -1,3 +1,23 @@
+<!--
+  Story Viewer Stage
+
+  The visual half of a story page — the area where the object being discussed is
+  shown and animated as the reader scrolls. Almost nothing here is authored
+  statically: the empty #viewer-cards-container is a stage onto which card-pool.js
+  builds, layers, and tears down individual viewer cards at runtime, one per object
+  the story brings into view, so that transitions between objects can cross-fade
+  rather than reload. This include therefore ships mostly as scaffolding plus the
+  two persistent chrome elements that float over that stage.
+
+  The first is the info overlay (top-left, desktop only) — a small dark panel whose
+  #current-object-title is rewritten by the viewer code to name whichever object is
+  currently in focus. The second is the credits badge (bottom-left), revealed and
+  populated by the viewer when an object carries attribution; its dismiss button
+  lets a reader clear it for an unobstructed view. The scoped <style> block kept
+  inline here covers only the positioning and the responsive (mobile-truncating)
+  behaviour of these two overlays; the look of the viewer cards themselves lives in
+  telar.scss, since those elements do not exist until card-pool.js creates them.
+-->
 <!-- Viewer Cards Container - cards will be dynamically created here -->
 <div id="viewer-cards-container" style="position: relative; width: 100%; height: 100%;"></div>
 

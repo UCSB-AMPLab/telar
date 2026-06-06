@@ -2,6 +2,17 @@
 layout: default
 ---
 
+{%- comment -%}
+  Page layout — the minimal wrapper for ordinary prose content (About pages, credits,
+  static informational pages). It inherits the default shell for the document head,
+  header, and footer, and adds only a centred, readable column around the page's
+  rendered Markdown.
+
+  What it renders — a single Bootstrap container holding the page's {{ content }} inside
+  an <article class="page-content">, constrained to a comfortable measure (col-lg-11,
+  centred). No story machinery, viewers, or collection grids — those live in the story,
+  object, and index layouts respectively.
+{%- endcomment -%}
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-11 mx-auto">

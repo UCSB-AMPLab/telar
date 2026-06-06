@@ -1,3 +1,18 @@
+<!--
+  Carousel Widget
+
+  Renders a swipeable slideshow of images — a Bootstrap carousel — with clickable
+  indicator dots and previous/next controls, advancing only on reader action
+  (data-bs-ride is false, so it never auto-plays). Produced by Telar's widget build
+  step, which supplies: widget_id (a unique slug scoping the carousel's id and its
+  control targets so multiple carousels coexist on a page); items (the slides, each
+  with image, alt, and optional caption and credit, the latter two rendered below
+  the image and passed through "safe" so authored markup survives); size_class (an
+  optional preset that adds a carousel-size-* modifier, ignored when "default"); and
+  base_url. Each image src is resolved at build time: absolute http(s) URLs are used
+  as given, while bare filenames are joined to {{ base_url }}/assets/images/, so the
+  same widget works for both externally hosted and site-local images.
+-->
 <div class="telar-widget telar-widget-carousel">
   <div id="carousel-{{ widget_id }}" class="carousel slide{% if size_class and size_class != 'default' %} carousel-size-{{ size_class }}{% endif %}" data-bs-ride="false">
     <!-- Indicators -->
@@ -22,10 +37,10 @@
         {% if item.caption or item.credit %}
         <div class="carousel-caption-below">
           {% if item.caption %}
-          <p class="caption-text">{{ item.caption }}</p>
+          <p class="caption-text">{{ item.caption | safe }}</p>
           {% endif %}
           {% if item.credit %}
-          <p class="caption-credit"><small>{{ item.credit }}</small></p>
+          <p class="caption-credit"><small>{{ item.credit | safe }}</small></p>
           {% endif %}
         </div>
         {% endif %}

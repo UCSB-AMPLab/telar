@@ -1,3 +1,24 @@
+{%- comment -%}
+  Site header — the top navigation bar rendered on every page. The brand on the
+  left is either the configured logo image or, when none is set, the plain site
+  title. On the right sit a Bootstrap collapse toggle (for the mobile hamburger
+  menu) and a site-level share button.
+
+  Menu source — the navigation links come from _data/navigation.yml
+  (site.data.navigation.menu). Each entry is bilingual: title_en and titulo_es
+  are chosen by site.telar_language, with each falling back to the other so a
+  link is never left blank. Entries flagged external open in a new tab.
+
+  Collections toggle — sites that don't expose an object catalogue can hide the
+  /objects/ link. This is read as skip_collections, but the older
+  hide_collections key is still honoured as an alias so existing configs keep
+  working; the /objects/ menu item is skipped whenever either is set.
+
+  Fallback menu — if navigation.yml is missing or fails to parse, a hardcoded
+  English menu (Home, Objects, Glossary, About) is rendered so the site is never
+  left without navigation. The Objects entry in that fallback also respects the
+  collections toggle.
+{%- endcomment -%}
 <header class="site-header">
   <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container">

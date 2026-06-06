@@ -2,6 +2,18 @@
 layout: default
 ---
 
+{%- comment -%}
+  Glossary term — the standalone page for a single glossary entry. It shows a "back
+  to glossary" link, the term's title (with a demo badge when the term is sample
+  content), and the term's prose definition. Two cross-reference sections follow when
+  the data supports them. "Related Terms" resolves each id listed in the page's
+  `related_terms` front matter against the glossary collection and links to the
+  matching entries. "Appears in" works the other way around: it scans `site.chapters`
+  for any chapter whose `glossary_terms` list names this term, giving readers a path
+  from a definition back into the narrative where the term is used. User-facing strings
+  resolve through the active language file via `lang`, falling back to English.
+{%- endcomment -%}
+
 {% if site.telar_language and site.data.languages[site.telar_language] %}
   {% assign lang = site.data.languages[site.telar_language] %}
 {% else %}

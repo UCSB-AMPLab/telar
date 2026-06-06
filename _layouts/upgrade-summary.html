@@ -2,6 +2,16 @@
 layout: default
 ---
 
+{%- comment -%}
+  Upgrade summary — the page shown after a site has been upgraded to a newer Telar
+  version. It opens with a success banner, then renders the page's own content,
+  which the upgrade process writes out as a markdown report of what changed. The
+  inline style exists only to give breathing room between markdown task-list
+  checkboxes and their labels, so a list of completed and pending upgrade steps
+  reads cleanly. The layout carries no logic of its own — it is purely the frame
+  around generated upgrade notes.
+{%- endcomment -%}
+
 <div class="container my-5">
   <div class="row">
     <div class="col-lg-11 mx-auto">

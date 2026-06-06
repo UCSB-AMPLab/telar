@@ -3,6 +3,37 @@ layout: default
 title: Home
 ---
 
+{%- comment -%}
+  Index layout — the site's home page, rendered inside the default shell. Its job is to
+  welcome visitors, surface any configuration problems an author needs to fix, and present
+  the site's stories and objects as browsable cards.
+
+  What it renders — a project title and tagline, optional description and free-text page
+  content, then a block of author-facing validation warnings gathered "all in one place":
+  IIIF base-URL issues, theme problems (missing, malformed, or a broken theme system, each
+  with remediation guidance and a default-theme fallback note), Google Sheets misconfiguration,
+  and per-object / per-story configuration warnings. Below the warnings it lays out the content
+  grids, then closes with a JSON island of story metadata and the client scripts that lazily
+  load thumbnails from IIIF (explicit thumbnail, remote manifest, or local info.json, in that
+  priority order) and prefetch a story's manifests on card hover.
+
+  Key context — `site.stories` and `site.objects` are the two collections shown; each story's
+  `data_file` resolves to its step data under `site.data`, whose first row may be `_metadata`
+  carrying viewer warnings, and whose `encrypted` flag swaps the card thumbnail for a keyhole.
+  `lang` (from `site.telar_language`, English fallback) supplies every string. Theme/Sheets
+  validation reads `site.telar_theme` and `site.google_sheets`.
+
+  Non-obvious behaviour — the page has two distinct layouts chosen at build time. Collection
+  mode (`site.collection_mode`, v1.1.0) leads with a large objects grid (the `is_featured_sample`
+  objects, or the first eight as a fallback) and demotes stories to a small grid below; it falls
+  back to the classic stories-first default mode when collection_mode is off, when
+  `skip_collections` fires, or when there are no objects to show. Visibility is further gated by
+  development flags (`skip_stories`/`skip_collections`, with legacy `hide_*` aliases) and by the
+  `story_interface` / `collection_interface` homepage toggles. Story-card thumbnails reuse the
+  story's first image step (falling back to its first video/audio) so the grid mirrors the
+  story's opening object.
+{%- endcomment -%}
+
 {% if site.telar_language and site.data.languages[site.telar_language] %}
   {% assign lang = site.data.languages[site.telar_language] %}
 {% else %}
@@ -229,8 +260,8 @@ title: Home
     Collection mode (v1.1.0): when site.collection_mode is true,
     the homepage leads with a large objects grid (up to 8, sourced from is_featured_sample
     with a fallback to the first 8 objects) and places stories below in a small grid.
-    Falls back to default mode if there are no objects to show (D-19) or if skip_collections
-    is true (D-15). Flag lives at the top level of _config.yml (Site Settings block).
+    Falls back to default mode if there are no objects to show or if skip_collections
+    is true. Flag lives at the top level of _config.yml (Site Settings block).
   {%- endcomment -%}
   {% assign collection_mode_flag = site.collection_mode | default: false %}
   {% assign collection_mode_active = false %}
@@ -249,8 +280,8 @@ title: Home
   {% if collection_mode_active %}
     {%- comment -%}
       COLLECTION MODE LAYOUT (v1.1.0)
-      Overrides story_interface.show_on_homepage (D-13) and
-      collection_interface.show_link_on_homepage / show_sample_on_homepage (D-14).
+      Overrides story_interface.show_on_homepage and
+      collection_interface.show_link_on_homepage / show_sample_on_homepage.
     {%- endcomment -%}
 
     <!-- Large Objects Grid (collection mode, top) -->
@@ -305,7 +336,7 @@ title: Home
     </div>
 
     <!-- Small Stories Grid (collection mode, bottom) -->
-    {%- comment -%}D-13: collection mode overrides story_interface.show_on_homepage. D-17: suppress entirely if no stories.{%- endcomment -%}
+    {%- comment -%}Collection mode overrides story_interface.show_on_homepage; suppress entirely if no stories.{%- endcomment -%}
     {% unless skip_stories %}
     {% if site.stories.size > 0 %}
     <div class="row mt-5">
@@ -407,8 +438,8 @@ title: Home
     {%- comment -%}
       DEFAULT MODE: preserve the existing stories-first layout exactly as it was.
       This branch is entered whenever collection_mode is false/absent, or when
-      collection_mode is true but skip_collections fires (D-15) or there are no
-      objects to show (D-19).
+      collection_mode is true but skip_collections fires or there are no
+      objects to show.
     {%- endcomment -%}
 
   <!-- Stories List (hidden when skip_stories enabled or show_on_homepage: false) -->
@@ -1001,6 +1032,9 @@ featuredThumbnails.forEach(function(item) {
  * When user hovers over a story card, prefetch its IIIF manifests
  * to reduce loading time when they enter the story.
  */
+// Manifests already prefetched — O(1) dedup with no selector built from the
+// (author-controlled) manifest URL, which avoids CSS-selector injection.
+const _prefetchedManifests = new Set();
 document.querySelectorAll('.story-card').forEach(function(card) {
   card.addEventListener('mouseenter', function() {
     // Find all objects used in this story by looking at its data
@@ -1016,16 +1050,14 @@ document.querySelectorAll('.story-card').forEach(function(card) {
 
     // Find object data and prefetch its manifest
     const objectData = window.objectsData.find(obj => obj.object_id === objectId);
-    if (objectData && objectData.iiif_manifest) {
-      // Create prefetch link if not already prefetched
-      const existingPrefetch = document.querySelector(`link[href="${objectData.iiif_manifest}"]`);
-      if (!existingPrefetch) {
-        const prefetchLink = document.createElement('link');
-        prefetchLink.rel = 'prefetch';
-        prefetchLink.href = objectData.iiif_manifest;
-        document.head.appendChild(prefetchLink);
-        console.log(`Prefetching manifest for ${objectId} on hover`);
-      }
+    if (objectData && objectData.iiif_manifest &&
+        !_prefetchedManifests.has(objectData.iiif_manifest)) {
+      _prefetchedManifests.add(objectData.iiif_manifest);
+      const prefetchLink = document.createElement('link');
+      prefetchLink.rel = 'prefetch';
+      prefetchLink.href = objectData.iiif_manifest;
+      document.head.appendChild(prefetchLink);
+      console.log(`Prefetching manifest for ${objectId} on hover`);
     }
   }, { once: true }); // Only prefetch once per story card
 });

@@ -1,7 +1,22 @@
 <!--
   Story Step Component
-  Data element for step navigation. Visual cards are created by card-pool.js at runtime.
-  Z-index is now computed by card-pool.js using the banding scheme — not set inline.
+
+  One step of a scrolling story — the right-hand text column (question, answer,
+  and an optional "learn more" panel trigger) paired with the data that tells the
+  viewer what to show. This include is the data element only: the visual cards
+  that animate in the viewer stage are built by card-pool.js at runtime, reading
+  the data-* attributes set here. Card z-index is computed there using the banding
+  scheme, never set inline.
+
+  Variables come from the page's step loop via include parameters: step_number
+  (the step's position) plus the camera target on the object — object_id, x, y,
+  zoom, region, and the media-specific page / clip_start / clip_end / loop / alt_text,
+  each emitted only when present. question and answer carry the prose (answer is
+  run through markdownify). viewer_warning, when set, surfaces a banner pointing
+  the author at objects.csv — shown when the named object or its IIIF manifest is
+  missing. The Layer 1 trigger renders only when the step supplies layer1_title or
+  layer1_text, labelled by layer1button (falling back to "Learn more"); the Layer 2
+  trigger is injected later by JavaScript, inside the open Layer 1 panel.
 -->
 
 <div class="story-step"
