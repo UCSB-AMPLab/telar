@@ -5,7 +5,7 @@ This module tests utility functions from the upgrade script that are used
 to organize and present migration changes to users. The categorization
 function groups changes by file type for better readability.
 
-Version: v0.7.0-beta
+Version: v1.5.0
 """
 
 import sys
@@ -149,3 +149,49 @@ class TestCategorizeChanges:
         # Should be categorized as Configuration, not Scripts
         assert 'Configuration' in result
         assert result['Configuration'][0] == '_config.yml: added new script setting'
+
+
+class TestApplyConfigVersion:
+    """Single comment-preserving config-version writer (migrations.base)."""
+
+    def _apply(self, content, version="1.5.0", date="2026-06-03"):
+        from migrations.base import apply_config_version
+        return apply_config_version(content, version, date)
+
+    def test_updates_version_and_release_date_preserving_comments(self):
+        cfg = ('telar:\n  # settings\n  version: "1.0.0"\n'
+               '  release_date: "2025-01-01"\n  name: Site\ntitle: X\n')
+        out, mod = self._apply(cfg)
+        assert mod is True
+        assert '  version: "1.5.0"' in out
+        assert '  release_date: "2026-06-03"' in out
+        assert '# settings' in out and 'name: Site' in out and 'title: X' in out
+
+    def test_single_space_indent_is_still_in_section(self):
+        # Regression for the old startswith('  ') check that exited on 1-space indent
+        cfg = 'telar:\n version: "1.0.0"\n release_date: "2025-01-01"\nother: y\n'
+        out, _ = self._apply(cfg)
+        assert ' version: "1.5.0"' in out
+        assert ' release_date: "2026-06-03"' in out
+
+    def test_inserts_release_date_when_absent(self):
+        cfg = 'telar:\n  version: "1.0.0"\n  name: Site\ntitle: X\n'
+        out, mod = self._apply(cfg)
+        assert mod is True
+        lines = out.split('\n')
+        vi = next(i for i, l in enumerate(lines) if 'version:' in l)
+        assert lines[vi + 1] == '  release_date: "2026-06-03"'
+
+    def test_no_telar_section_is_unchanged(self):
+        out, mod = self._apply('title: X\nfoo: bar\n')
+        assert mod is False and out == 'title: X\nfoo: bar\n'
+
+    def test_upgrade_wrapper_and_base_method_agree(self, tmp_path):
+        import upgrade as up
+        from migrations.v130_to_v140 import Migration130to140
+        seed = 'telar:\n  version: "1.4.0"\n  release_date: "2026-05-26"\n'
+        a = tmp_path / 'a'; a.mkdir(); (a / '_config.yml').write_text(seed)
+        b = tmp_path / 'b'; b.mkdir(); (b / '_config.yml').write_text(seed)
+        assert up._update_config_version(str(a), "1.5.0", "2026-06-03") is True
+        assert Migration130to140(str(b))._update_config_version("1.5.0", "2026-06-03") is True
+        assert (a / '_config.yml').read_text() == (b / '_config.yml').read_text()
