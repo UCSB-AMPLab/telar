@@ -343,8 +343,8 @@ share:
   height: "Alto"
 
   # Mensajes de advertencia
-  include_key_warning: "Cualquier persona con este enlace podrá ver la historia."
-  embed_key_warning: "Cualquier persona con este código podrá ver la historia."
+  include_key_warning: "Este enlace incluye la clave de acceso, así que cualquiera que lo reciba podrá abrir la historia. No lo compartas en público."
+  embed_key_warning: "Este código incluye la clave de acceso, así que cualquiera que lo copie podrá abrir la historia. Úsalo solo en sitios de confianza."
   protected_story_warning: "Esta historia está protegida. Las personas que la reciban necesitarán la clave para verla."
   protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
 
