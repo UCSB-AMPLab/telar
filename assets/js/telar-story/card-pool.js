@@ -47,14 +47,14 @@
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { state } from './state.js';
 import { detectCardType } from './card-type.js';
 import { extractVideoId } from './card-type.js';
 import { getManifestUrl, updateObjectCredits } from './viewer.js';
-import { getBasePath } from './utils.js';
+import { getBasePath, escapeHtml } from './utils.js';
 import { IiifViewer } from './iiif-viewer.js';
 import {
   deactivateIiifCard,
@@ -145,7 +145,13 @@ export function computeZIndexPlan(steps) {
       runPos = 0;
       currentObjectId = effectiveId;
     }
-    const bandBase = (scene + 1) * 100;
+    // Cap the band so stories with >98 unique scenes do not overflow into the
+    // fixed-UI / panel chrome z-index reserve. Warn once when the cap engages.
+    if (scene === 97) {
+      console.warn('[Telar] Story has more than 98 unique scenes; z-index ' +
+        'banding is clamped at 9800 and panel/UI chrome layering may overlap.');
+    }
+    const bandBase = Math.min((scene + 1) * 100, 9800);
     plateZ[i] = bandBase;
     textCardZ[i] = bandBase + 1 + runPos;
     runPos++;
@@ -257,6 +263,11 @@ function _buildAriaLabel(objectId, stepAlt, cardType) {
 let _stepsData = [];          // All step data objects
 let _config = { peekHeight: 1, messiness: 20, preloadSteps: 5 };
 let _zPlan = { viewerPlateZ: {}, textCardZ: {} };
+
+// Scenes already prefetched, so _prefetchTilesForScene runs at most once per
+// scene — preloadAhead calls it repeatedly, which would otherwise re-fetch
+// info.json and append duplicate <link rel=prefetch> nodes to <head> unbounded.
+const _prefetchedScenes = new Set();
 
 // ── Scene maps ────────────────────────────────────────────────────────────────
 
@@ -395,6 +406,11 @@ export function initCardPool(storyData, config) {
 
   // Store for use by activateCard
   _stepsData = steps;
+  // Mirror into shared state so scroll-engine can feed lerpIiifPosition the
+  // SAME filtered array its stepIndex is computed against — passing the
+  // unfiltered window.storyData.steps mismatched the index on stories with
+  // metadata rows.
+  state.stepsData = steps;
   _config = {
     peekHeight,
     messiness: messinessPercent,
@@ -603,18 +619,18 @@ export function initCardPool(storyData, config) {
  * @returns {string} HTML string
  */
 function buildTextCardContent(step) {
-  const question = step.question || '';
-  const answer   = step.answer   || '';
+  const question = escapeHtml(step.question || '');
+  const answer   = escapeHtml(step.answer   || '');
 
   const hasLayer1 = step.layer1_button && step.layer1_button.trim();
   const hasLayer2 = step.layer2_button && step.layer2_button.trim();
 
   let layerButtons = '';
   if (hasLayer1) {
-    layerButtons += `<button class="panel-trigger" data-panel="layer1" data-step="${step.step}">${step.layer1_button}</button>`;
+    layerButtons += `<button class="panel-trigger" data-panel="layer1" data-step="${step.step}">${escapeHtml(step.layer1_button)}</button>`;
   }
   if (hasLayer2) {
-    layerButtons += `<button class="panel-trigger" data-panel="layer2" data-step="${step.step}">${step.layer2_button}</button>`;
+    layerButtons += `<button class="panel-trigger" data-panel="layer2" data-step="${step.step}">${escapeHtml(step.layer2_button)}</button>`;
   }
 
   return `
@@ -729,6 +745,16 @@ export function activateCard(index, direction) {
       const sceneIndex = getSceneIndex(index);
       const plate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
 
+      // A TOC/deep-link jump hides every viewer plate before calling
+      // activateCard; this same-object branch otherwise assumes the plate is
+      // already on-screen and never re-shows it, leaving the viewer blank
+      // after a same-object jump. Re-show it here — a no-op during
+      // continuous scroll where the plate is already active.
+      if (plate && !plate.classList.contains('is-active')) {
+        plate.style.transform = 'translateY(0)';
+        plate.classList.add('is-active');
+      }
+
       if (plate && plate.classList.contains('video-plate')) {
         // Video: update clip parameters and seek to new clip start
         const clipStart = parseFloat(step.clip_start) || 0;
@@ -751,12 +777,12 @@ export function activateCard(index, direction) {
   } else {
     // Backward navigation
     if (needsNewViewer) {
-      // Per-scene plates: each scene always has its own DOM element, so
-      // currentPlate and prevPlate are always different elements (no identity
-      // collision like the old per-object model). No same-element guard needed.
-      const prevSceneIndex = prevObjectId !== null
-        ? getSceneIndex(Math.max(0, index + 1))
-        : -1;
+      // Per-scene plates: distinct scenes own distinct DOM elements. (An
+      // intra-scene mode change resolves currentPlate === prevPlate; the
+      // add-is-active-then-reveal-previous order below leaves the shared plate
+      // active, so backward mode flips on one object stay visible.)
+      // NOTE: a real backward *jump* (not yet implemented) must derive the
+      // departing scene from the actual state.currentIndex, not index + 1.
       const currentSceneIndex = getSceneIndex(index + 1);
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
       const prevPlate = state.viewerPlates[getSceneIndex(index)];
@@ -962,6 +988,20 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
 
   // Update plate z-index from the scene plan.
   newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
+
+  // Intra-scene mode change: a full-object↔detail flip within one object's run
+  // flags needsNewViewer, but the scene — and therefore the plate element — is
+  // unchanged, so prevPlate and newPlate resolve to the SAME node. The plate is
+  // already on-screen; keep it visible and return before the slide/deactivate
+  // logic below, which would otherwise add then immediately strip is-active
+  // (add at the end, remove in the prevPlate block) and blank the viewer. This
+  // surfaces on TOC/deep-link jumps and on ordinary forward scroll across
+  // a zoom-in→out step on the same object.
+  if (prevPlate && prevPlate === newPlate) {
+    newPlate.style.transform = 'translateY(0)';
+    newPlate.classList.add('is-active');
+    return;
+  }
 
   if (direction === 'forward') {
     // For scene 0: skip the reset-to-offscreen if the plate was already
@@ -1349,11 +1389,18 @@ function _activateTextCard(cardEl) {
     state.cardOverlayRect = cardEl.getBoundingClientRect();
     return;
   }
+  // Ensure at most one pending settle listener per card: rapid re-activation
+  // would otherwise stack multiple live closures until each transition ends.
+  if (cardEl._settleHandler) {
+    cardEl.removeEventListener('transitionend', cardEl._settleHandler);
+  }
   const onSettled = (ev) => {
     if (ev.target !== cardEl || ev.propertyName !== 'transform') return;
     cardEl.removeEventListener('transitionend', onSettled);
+    cardEl._settleHandler = null;
     state.cardOverlayRect = cardEl.getBoundingClientRect();
   };
+  cardEl._settleHandler = onSettled;
   cardEl.addEventListener('transitionend', onSettled);
 }
 
@@ -1571,6 +1618,11 @@ export function preloadAhead(currentIndex, ahead, behind) {
  * @param {number} sceneIndex - Scene to prefetch tiles for
  */
 function _prefetchTilesForScene(sceneIndex) {
+  // De-dup: prefetch each scene at most once (also covers the early-return
+  // cases below, so a no-object / external scene isn't re-checked every pass).
+  if (_prefetchedScenes.has(sceneIndex)) return;
+  _prefetchedScenes.add(sceneIndex);
+
   const objectId = state.sceneToObject[sceneIndex];
   if (!objectId) return;
 
