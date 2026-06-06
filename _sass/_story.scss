@@ -10,7 +10,7 @@
  * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 @use 'responsive' as *;
@@ -153,6 +153,15 @@
       width: 100%;
       height: 100%;
       border: none;
+    }
+
+    // Dark "cinematic frame" for embeds whose true aspect ratio is unknown
+    // (old YouTube videos with no maxres thumbnail; all Google Drive embeds).
+    // The region is filled and the provider's player letterboxes the video
+    // centred on black, so the black fill reads as an intentional player frame
+    // rather than a mis-sized box floating on the woven background.
+    &.video-iframe--letterbox {
+      background: #000;
     }
   }
 
