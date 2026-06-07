@@ -14,7 +14,8 @@ vendor/
 
 # Node
 node_modules/
-package-lock.json
+# package-lock.json is committed so the CI `npm ci` (build.yml / telar-tests.yml)
+# has a lockfile to install from; it is regenerated on every real build.
 
 # System
 .DS_Store
