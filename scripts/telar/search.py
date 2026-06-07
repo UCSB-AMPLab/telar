@@ -32,9 +32,22 @@ Version: v1.5.0
 """
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import yaml
+
+# search.py lives inside the telar package but is also run as a standalone
+# script from build.yml (`python scripts/telar/search.py`). In that mode Python
+# puts this file's own directory (scripts/telar/) on sys.path, which makes the
+# package's internal modules (markdown.py, images.py, …) shadow their
+# third-party namesakes and triggers circular imports. Normalise the path to
+# match how the other pipeline scripts run: scripts/ on sys.path, the package
+# directory off it. Both operations are no-ops when imported as a module.
+_pkg_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(_pkg_dir))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p) != _pkg_dir]
 
 from telar.media_type import detect_media_type
 
