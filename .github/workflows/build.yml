@@ -119,7 +119,7 @@ jobs:
 
       - name: Build JavaScript bundle
         run: |
-          npm ci
+          npm install
           npm run build:js
 
       - name: Fetch data from Google Sheets (if enabled)
