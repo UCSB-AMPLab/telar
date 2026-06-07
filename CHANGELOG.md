@@ -4,6 +4,42 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-06
+
+Robustness and security release. Runtime and tooling only — no content changes; existing stories, objects, and configuration continue to work unchanged. This release hardens the build pipeline, the story viewer, and the automatic upgrade workflow, adds defensive input handling and output escaping throughout, and removes the last third-party CDN dependency by vendoring the audio waveform library. The automatic upgrade applies everything except two manual steps (see Migration).
+
+### Security
+
+- **Output escaping throughout.** Author-supplied content (titles, alt text, captions, questions and answers, glossary terms, image attributes) is now escaped at every render sink, in both the Python build and the JavaScript runtime. Jinja2 autoescaping is enabled for widget rendering.
+- **TLS certificate verification restored** on all Google Sheets and IIIF manifest fetches (verification had been disabled).
+- **Protected (password-locked) stories.** The build now fails closed if a protected story cannot be encrypted, instead of shipping it as plaintext; PBKDF2 iterations raised from 100,000 to 210,000; encrypted stories no longer expose byline, description, or SEO metadata; the in-browser unlock cache no longer stores decrypted content.
+- **Hardened automatic upgrade workflow.** It now downloads its tooling as a checksum-verified release asset and runs it in isolation, refusing to run unverified code. The target-version input is validated and passed safely.
+- **KaTeX math rendering** is constrained to safe links only.
+- **Path-traversal guards** on object IDs and story layer filenames, and size caps on all remote reads (Sheets, demo bundle, PDFs, IIIF).
+
+### Changed
+
+- **Audio waveform library vendored.** WaveSurfer is now served from your own site instead of a CDN, so audio stories and audio object pages work offline and carry no third-party runtime dependency.
+- **Upgrade engine.** Framework files are now installed atomically (all-or-nothing with backup and restore), and migrations are chained strictly, failing closed on any error.
+- **Dependency floors raised.** Minimum versions bumped for `pandas` (3.0.3), `markdown` (3.10.2), and `cryptography` (48.0.0), plus the test tools `pytest` (9.0.3) and `pytest-cov` (7.1.0). Sites upgrading in place are unaffected — the framework fixes use the standard library — so the new floors apply to fresh installs and the project's own CI.
+
+### Fixed
+
+- **IIIF viewer plate visibility.** The image plate now stays visible when navigating between steps that share the same object, and same-object focal interpolation uses the correct step list.
+- **Story panels.** Closing a panel is handled consistently (no double-close), and opening a layer panel correctly dismisses an already-open panel.
+- **Deep links.** Panel-open timers are cancelled if the reader navigates during load, so a panel no longer pops open over a different step.
+- **YouTube and Google Drive video sizing.** Non-16:9 videos are now sized to their true aspect (or given an intentional dark letterbox frame) instead of floating in the page background.
+- **Audio and scroll-engine lifecycle.** Resolved assorted race conditions and re-initialization issues.
+- **Theme button text.** Restored the button-text color fix (carried from a v1.4.0 hotfix that missed the v1.4.0 tag) so themed buttons no longer render with invisible text.
+- **Story step order.** Steps now render in the order of their `step` number rather than the spreadsheet's saved row order, so a story whose rows ended up out of sequence still displays correctly. Falls back safely to the saved order if step values are missing or non-numeric.
+
+### Migration
+
+- The automatic upgrade applies all of the above. Two manual steps remain, listed in your `UPGRADE_SUMMARY.md` after upgrading:
+  1. Update your two GitHub Actions workflow files (`upgrade.yml`, `build.yml`) by hand — GitHub does not allow the automated upgrade to modify workflow files. Your site keeps building if you skip this; the changes only harden your workflows.
+  2. Re-apply any customizations to the language packs (`en.yml` / `es.yml`), which were refreshed with the new protected-story sharing warnings.
+- No content changes: no CSV schema, story-step, or `_config.yml` key changes.
+
 ## [1.4.0] - 2026-05-26
 
 Runtime upgrade with no content changes required. Existing stories, objects, and configuration continue to work unchanged. This release replaces the Tify viewer with a custom, self-hosted OpenSeadragon wrapper and rebuilds the responsive system around a single source of truth, fixing cross-device IIIF centering.

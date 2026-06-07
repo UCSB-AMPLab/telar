@@ -1,10 +1,29 @@
 /**
- * Share Panel Functionality
- * @version v1.1.0
+ * Telar — share panel.
  *
- * Handles share link and embed code generation for Telar stories.
- * Redesigned with pill-style tabs and unified privacy toggle.
- * Supports both story-specific and site-wide sharing contexts.
+ * Builds the share link and embed-code controls inside the `#panel-share` offcanvas.
+ * The same panel serves two contexts: a story page, where it shares the story you are
+ * reading, and the homepage, where a dropdown lets you pick which story to share. The
+ * panel detects its context once at init from the body class, layout markers, and URL.
+ *
+ * Privacy toggle — protected stories carry a decryption key. A single "Without key /
+ * With key" toggle governs both the share URL and the embed snippet at once: when on,
+ * the key is appended as `?key=` and a warning surfaces. The toggle defaults to off,
+ * and the key is only ever known here when `story-unlock.js` has published it on
+ * `window.telarStoryKey` after a successful unlock — so the privacy section stays
+ * hidden unless both the story is protected and the key is in hand.
+ *
+ * Embed code — presets (Canvas, Moodle, WordPress, and so on) seed sensible iframe
+ * width/height, which the user can then override. The generated `src` is the story URL
+ * stripped of viewer state (query and hash) with `?embed=true` added; the story title
+ * is escaped before it lands in the iframe's `title` attribute so a stray quote can't
+ * break the copied snippet.
+ *
+ * Copying uses the async Clipboard API, guarded for insecure contexts where it is
+ * absent, and swaps the button icon to a checkmark briefly as confirmation. Wrapped in
+ * an IIFE so its state and helpers stay out of the global scope.
+ *
+ * @version v1.5.0
  */
 
 (function() {
@@ -383,6 +402,15 @@
     }
   }
 
+  // Escape a value for safe inclusion in a double-quoted HTML attribute.
+  // Mirror of the canonical escapeHtml in objects-filter.js — standalone scripts
+  // can't share an import, so keep the two in sync.
+  function escapeAttr(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   /**
    * Generate embed code
    */
@@ -405,8 +433,9 @@
     // Build embed URL with ?embed=true parameter
     const embedUrl = addEmbedParameter(currentStoryUrl);
 
-    // Get story title for iframe title attribute
-    const storyTitle = getStoryTitle();
+    // Get story title for iframe title attribute (escaped for the attribute so a
+    // quote in the title can't break the copied embed snippet)
+    const storyTitle = escapeAttr(getStoryTitle());
 
     // Generate iframe code
     const iframeCode = `<iframe src="${embedUrl}"
@@ -440,7 +469,16 @@
       // Add clean embed parameter
       urlObj.searchParams.set('embed', 'true');
 
-      // Add key parameter if toggle is set to "With key" and we have a key
+      // Add key parameter if toggle is set to "With key" and we have a key.
+      //
+      // The key is included deliberately: a key-bearing URL is the intended way
+      // to share access to a protected story, and the toggle defaults to
+      // "Without key" so it is never added unless the user explicitly opts in
+      // (which surfaces embed-key-warning). Reviewed and kept as-is — this is a
+      // deliberate, documented risk: protected stories are a deterrent, not
+      // real encryption, so a shared key is not a confidentiality boundary. The
+      // user-facing warning is the mitigation — an embed pasted into a public
+      // page exposes the key in that page's source to anyone who reads it.
       if (includeKey && storyKey) {
         urlObj.searchParams.set('key', storyKey);
       }
@@ -547,6 +585,14 @@
    */
   function copyToClipboard(text, triggerButton) {
     if (!text) return;
+
+    // Insecure contexts (and older browsers) have no navigator.clipboard, so
+    // calling writeText would throw synchronously — before the .catch below
+    // could handle it. Guard that case explicitly.
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+      alert('Please manually copy the text');
+      return;
+    }
 
     navigator.clipboard.writeText(text).then(() => {
       showSuccessFeedback(triggerButton);

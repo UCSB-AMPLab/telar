@@ -25,6 +25,7 @@ class Migration043to050(BaseMigration):
 
     from_version = "0.4.3-beta"
     to_version = "0.5.0-beta"
+    _TARGET_TAG = "v0.5.0-beta"  # pin framework fetches to the release tag
     description = "Flattened image structure, share/embed UI, extended formats"
 
     def check_applicable(self) -> bool:

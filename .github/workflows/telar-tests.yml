@@ -11,7 +11,7 @@ name: Test Telar Scripts
 # On pull request to main, all test suites run automatically. When triggered
 # manually via workflow_dispatch, you can choose which suites to run.
 #
-# Version: v0.9.2-beta
+# Version: v1.5.0
 
 on:
   pull_request:
@@ -27,11 +27,17 @@ on:
         type: boolean
         default: true
 
+# Least-privilege default token: this workflow only reads the checkout to run
+# tests. Fork pull requests already receive a read-only token, but declaring it
+# explicitly keeps the guarantee independent of org/repo defaults.
+permissions:
+  contents: read
+
 jobs:
   python:
     name: Python Unit Tests
     runs-on: ubuntu-latest
-    if: ${{ (github.repository == 'UCSB-AMPLab/telar' || github.repository == 'juancobo/telar') && (github.event_name != 'workflow_dispatch' || inputs.run_python) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_python }}
 
     steps:
       - name: Checkout repository
@@ -54,7 +60,7 @@ jobs:
   javascript:
     name: JavaScript Unit Tests
     runs-on: ubuntu-latest
-    if: ${{ (github.repository == 'UCSB-AMPLab/telar' || github.repository == 'juancobo/telar') && (github.event_name != 'workflow_dispatch' || inputs.run_javascript) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_javascript }}
 
     steps:
       - name: Checkout repository
@@ -66,7 +72,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run JavaScript unit tests
         run: npm run test:js

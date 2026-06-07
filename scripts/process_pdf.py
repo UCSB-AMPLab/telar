@@ -42,7 +42,7 @@ This script is designed to be called from generate_iiif.py when it
 detects a .pdf source file, but it can also be run standalone for
 testing.
 
-Version: v0.9.2-beta
+Version: v1.5.0
 """
 
 import json
@@ -73,10 +73,20 @@ def render_pdf_pages(pdf_path, output_dir, dpi=200):
     doc = fitz.open(str(pdf_path))
     pages_info = []
 
+    MAX_SIDE_PX = 10_000  # ceiling on the longest rendered side, guards against OOM
     for page_num in range(len(doc)):
         page = doc[page_num]
         # Scale from 72 DPI (PDF default) to target DPI
         scale = dpi / 72
+        # Clamp the scale so a pathologically large MediaBox cannot render to a
+        # multi-gigapixel pixmap and exhaust memory. Only activates for genuinely
+        # oversized pages; normal archival pages are far below the ceiling.
+        page_long_side = max(page.rect.width, page.rect.height, 1)
+        max_scale = MAX_SIDE_PX / page_long_side
+        if scale > max_scale:
+            print(f"  [WARNING] Page {page_num + 1} is very large; clamping render "
+                  f"scale to keep the longest side under {MAX_SIDE_PX}px")
+            scale = max_scale
         matrix = fitz.Matrix(scale, scale)
         pixmap = page.get_pixmap(matrix=matrix)
 

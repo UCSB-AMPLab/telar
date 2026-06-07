@@ -36,7 +36,7 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import Lenis from 'lenis';
@@ -83,6 +83,13 @@ export function initScrollEngine(stepCount) {
     console.error('scroll-engine: .scroll-surface or .card-stack not found in DOM');
     return;
   }
+
+  // Idempotent re-init: cancel any prior rAF loop and pending dwell-restart
+  // timer so a second initScrollEngine() (e.g. a layout-mode switch) cannot
+  // leave a second rAF loop double-driving Lenis or an orphaned timer firing.
+  // (The dwell-restart itself is already guarded by `if (!state.isPanelOpen)`.)
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
 
   // Build steps array (navigation.js initializeStepController normally does this)
   state.steps = Array.from(document.querySelectorAll('.story-step'));
@@ -382,7 +389,10 @@ export function updateScrollPosition(position) {
 
   // Per-frame scrub updates
   setCardProgress(stepIndex, progress);
-  lerpIiifPosition(stepIndex, progress, window.storyData?.steps || []);
+  // Feed the FILTERED steps (state.stepsData) — stepIndex is a filtered-space
+  // index (it drives state.stepToScene), so the unfiltered window.storyData
+  // .steps would mis-index on stories that contain metadata rows.
+  lerpIiifPosition(stepIndex, progress, state.stepsData || []);
 
   // Integer boundary crossings — activateCard
   // Mark as scroll-driven so activateCard skips the 4s OSD spring animation

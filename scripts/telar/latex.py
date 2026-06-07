@@ -15,7 +15,7 @@ Display math ($$...$$), environments (\\begin{...}), alternative
 delimiters (\\(...\\) and \\[...\\]), and chemistry notation (\\ce{...})
 are detected unconditionally.
 
-Version: v0.9.1-beta
+Version: v1.5.0
 """
 
 import re

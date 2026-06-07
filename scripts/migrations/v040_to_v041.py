@@ -18,6 +18,7 @@ class Migration040to041(BaseMigration):
 
     from_version = "0.4.0-beta"
     to_version = "0.4.1-beta"
+    _TARGET_TAG = "v0.4.1-beta"  # pin framework fetches to the release tag
     description = "Restore mobile responsive features and add quality of life improvements"
 
     def check_applicable(self) -> bool:

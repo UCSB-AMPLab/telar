@@ -12,7 +12,7 @@
  * types (widgets, etc.) can be added here without touching the
  * card-pool or navigation modules.
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
 
 // ── Video URL patterns ────────────────────────────────────────────────────────

@@ -5,14 +5,15 @@
  * WaveSurfer lifecycle functions require browser context and are covered
  * by acceptance testing.
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   formatElapsedTime,
   deriveThemeColors,
   buildAudioControlsHTML,
+  loadWaveSurferAPI,
 } from '../../assets/js/telar-story/audio-card.js';
 
 describe('formatElapsedTime', () => {
@@ -104,5 +105,60 @@ describe('buildAudioControlsHTML', () => {
 
   it('mute button has class "audio-btn-mute"', () => {
     expect(buildAudioControlsHTML()).toContain('audio-btn-mute');
+  });
+});
+
+describe('loadWaveSurferAPI (vendored, not CDN)', () => {
+  let injected;
+
+  beforeEach(() => {
+    delete window._wsApiPromise;
+    delete window.WaveSurfer;
+    document.head.innerHTML = '';
+    // Capture every <script> appended to <head> and stop jsdom from fetching it.
+    injected = [];
+    const realAppend = document.head.appendChild.bind(document.head);
+    document.head.appendChild = (node) => {
+      if (node.tagName === 'SCRIPT') injected.push(node);
+      return realAppend(node);
+    };
+  });
+
+  afterEach(() => {
+    delete document.head.appendChild; // restore prototype method
+    delete window._wsApiPromise;
+    delete window.WaveSurfer;
+  });
+
+  it('injects the vendored core bundle, never a CDN URL', () => {
+    loadWaveSurferAPI();
+    expect(injected).toHaveLength(1);
+    expect(injected[0].src).toContain('/assets/vendor/wavesurfer/wavesurfer.min.js');
+    expect(injected[0].src).not.toContain('unpkg');
+    expect(injected[0].src).not.toContain('cdn');
+  });
+
+  it('loads the Regions plugin from vendor only after the core resolves', () => {
+    loadWaveSurferAPI();
+    // Core injected first; plugin not injected until core.onload fires.
+    expect(injected).toHaveLength(1);
+    injected[0].onload();
+    expect(injected).toHaveLength(2);
+    expect(injected[1].src).toContain('/assets/vendor/wavesurfer/plugins/regions.min.js');
+    expect(injected[1].src).not.toContain('unpkg');
+  });
+
+  it('resolves the promise once both core and plugin have loaded', async () => {
+    const p = loadWaveSurferAPI();
+    injected[0].onload();      // core ready
+    injected[1].onload();      // regions ready
+    await expect(p).resolves.toBeUndefined();
+  });
+
+  it('is a once-guard: repeat calls return the same Promise without re-injecting', () => {
+    const first = loadWaveSurferAPI();
+    const second = loadWaveSurferAPI();
+    expect(second).toBe(first);
+    expect(injected).toHaveLength(1);
   });
 });

@@ -34,7 +34,7 @@ name: Build and Deploy Telar Site
 # build time. Sites without audio objects skip audio tool installation and
 # processing entirely — zero friction for image-only sites.
 #
-# Version: v1.0.0-beta
+# Version: v1.5.0
 
 on:
   push:
@@ -62,9 +62,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          # Need HEAD~1 so the audio/IIIF change-detection diff resolves the
+          # previous commit; the default shallow checkout (depth 1) would force
+          # full regeneration on every push.
+          fetch-depth: 2
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        # Pinned to a full commit SHA, not the moving @v1 tag. ruby/setup-ruby is
+        # the only third-party action here (all others are first-party actions/*),
+        # and a major-version tag is a mutable ref its owner can re-point. Pinning
+        # the SHA means this build can only ever run the exact reviewed code.
+        # Dependabot (.github/dependabot.yml, github-actions ecosystem) raises a PR
+        # when a newer release is published. Bump the trailing comment with the SHA.
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -75,13 +86,20 @@ jobs:
           python-version: '3.11'
 
       - name: Install libvips (for fast IIIF tile generation)
-        run: sudo apt-get install -y libvips-tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libvips-tools
 
       - name: Install audio processing tools (audiowaveform + ffmpeg)
         run: |
           # Only install if audio objects exist (zero friction for image-only sites)
           if ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
             echo "Audio objects detected - installing audiowaveform and ffmpeg"
+            # audiowaveform is installed from a third-party Ubuntu PPA maintained
+            # by Chris Needham (BBC R&D). This is an unpinned external package
+            # source and an explicit trust dependency. The long-term hardening is
+            # to download a pinned audiowaveform .deb release, verify its SHA-256,
+            # and install it with dpkg instead of fetching from the live PPA.
             sudo add-apt-repository -y ppa:chris-needham/ppa
             sudo apt-get update -q
             sudo apt-get install -y audiowaveform ffmpeg
@@ -101,7 +119,7 @@ jobs:
 
       - name: Build JavaScript bundle
         run: |
-          npm install
+          npm ci
           npm run build:js
 
       - name: Fetch data from Google Sheets (if enabled)

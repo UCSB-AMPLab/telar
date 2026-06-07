@@ -1,5 +1,16 @@
+<!--
+  Bibliography Widget
+
+  Renders a simple list of references — one block per entry, in the order given.
+  Like the other widget partials it is produced by Telar's widget build step, which
+  supplies entries: a list whose items each carry a pre-rendered content_html (the
+  formatted citation). That HTML is emitted through the "safe" filter because the
+  build step has already escaped and formatted it, so authored citation markup
+  (links, emphasis) survives intact. There is no interactivity here; styling lives
+  in the stylesheet.
+-->
 <div class="telar-widget-bibliography">
   {% for entry in entries %}
-  <div class="telar-bib-entry">{{ entry.content_html }}</div>
+  <div class="telar-bib-entry">{{ entry.content_html | safe }}</div>
   {% endfor %}
 </div>

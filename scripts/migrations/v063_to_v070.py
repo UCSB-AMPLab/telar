@@ -31,6 +31,7 @@ class Migration063to070(BaseMigration):
 
     from_version = "0.6.3-beta"
     to_version = "0.7.0-beta"
+    _TARGET_TAG = "v0.7.0-beta"  # pin framework fetches to the release tag
     description = "Test infrastructure, modular code, SCSS partials, accessibility fixes"
 
     def check_applicable(self) -> bool:

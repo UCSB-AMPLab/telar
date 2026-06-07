@@ -33,7 +33,7 @@ story_key from _config.yml. Finally, `generate_search_data()` builds the
 Lunr.js search index and facet counts that power the gallery's
 browse-and-search interface.
 
-Version: v1.1.0
+Version: v1.5.0
 """
 
 import os
@@ -60,10 +60,14 @@ def csv_to_json(csv_path, json_path, process_func=None):
         csv_path: Path to input CSV file
         json_path: Path to output JSON file
         process_func: Optional function to process the dataframe before conversion
+
+    Returns:
+        bool: True if the JSON was written, False on skip (missing input) or error.
+        Callers use this to avoid running downstream steps on stale/absent output.
     """
     if not os.path.exists(csv_path):
         print(f"Warning: {csv_path} not found. Skipping.")
-        return
+        return False
 
     try:
         # Read CSV file with pandas
@@ -83,7 +87,7 @@ def csv_to_json(csv_path, json_path, process_func=None):
         if len(df) > 0:
             first_row = df.iloc[0]
             if is_header_row(first_row.values):
-                print(f"  [INFO] Detected duplicate header row - skipping row 2")
+                print(f"  [WARN] Detected duplicate header row - skipping row 2")
                 df = df.iloc[1:].reset_index(drop=True)
 
         # Normalize column names (Spanish -> English) for bilingual support
@@ -115,9 +119,11 @@ def csv_to_json(csv_path, json_path, process_func=None):
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         print(f"\u2713 Converted {csv_path} to {json_path}")
+        return True
 
     except Exception as e:
         print(f"❌ Error converting {csv_path}: {e}")
+        return False
 
 
 def find_csv_with_fallback(base_path, spanish_name):
@@ -188,18 +194,24 @@ def _encrypt_protected_stories(data_dir):
         return
 
     if not story_key:
-        print(f"  ⚠️ Found {len(protected_stories)} protected story/stories but no story_key in _config.yml")
-        print("  ⚠️ Add 'story_key: yourkey' to _config.yml to enable encryption")
-        return
+        # Fail closed: stories are flagged protected but there is no key to
+        # encrypt them. Continuing would publish them as plaintext.
+        print(f"  ❌ {len(protected_stories)} story/stories are marked protected but "
+              f"no story_key is set in _config.yml.")
+        print("     Add 'story_key: yourkey' to _config.yml, or remove the 'protected' "
+              "flag from those stories. Refusing to publish protected content as plaintext.")
+        raise SystemExit(1)
 
     print(f"Encrypting {len(protected_stories)} protected story/stories...")
 
+    failures = []
     for story_id in protected_stories:
-        # Story JSON filename matches story_id or CSV filename
+        # Story JSON filename matches the identifier generate_collections used
+        # (story_id, or the story-{number} fallback).
         story_json = data_dir / f"{story_id}.json"
 
         if not story_json.exists():
-            print(f"  ⚠️ Story JSON not found: {story_json}")
+            failures.append((story_id, f"data file not found ({story_json.name})"))
             continue
 
         try:
@@ -217,7 +229,18 @@ def _encrypt_protected_stories(data_dir):
             print(f"  🔒 Encrypted {story_json.name}")
 
         except Exception as e:
-            print(f"  ❌ Failed to encrypt {story_json.name}: {e}")
+            failures.append((story_id, f"encryption failed: {e}"))
+
+    if failures:
+        # Fail closed: any protected story we could not encrypt must not ship
+        # as plaintext. Abort the build with a clear, actionable message.
+        print("\n  ❌ Protected stories could not be encrypted — refusing to publish "
+              "them as plaintext:")
+        for sid, why in failures:
+            print(f"       - {sid}: {why}")
+        print("     Fix the story_id / data-file mismatch (or remove the 'protected' "
+              "flag), then rebuild.")
+        raise SystemExit(1)
 
 
 AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
@@ -336,26 +359,32 @@ def main():
     # Convert objects (with bilingual fallback: objects.csv or objetos.csv)
     objects_path = find_csv_with_fallback('telar-content/spreadsheets/objects', 'objetos')
     if christmas_tree_mode:
-        csv_to_json(
+        objects_ok = csv_to_json(
             objects_path,
             '_data/objects.json',
             lambda df: process_objects(df, christmas_tree=True)
         )
     else:
-        csv_to_json(
+        objects_ok = csv_to_json(
             objects_path,
             '_data/objects.json',
             process_objects
         )
 
-    # Generate audio_objects.json manifest for client-side audio detection.
-    # Maps object_id → file extension (e.g. {"cusb-cyl11337d": "mp3"}).
-    # Without this file, story.html cannot inject window.audioObjects and
-    # the JS card-type detector falls through to IIIF for audio objects.
-    _generate_audio_manifest(data_dir)
+    # The audio manifest and search index both read _data/objects.json. If the
+    # objects conversion was skipped or failed, that file is missing or stale, so
+    # skip the downstream steps rather than build them from out-of-date data.
+    if objects_ok:
+        # Generate audio_objects.json manifest for client-side audio detection.
+        # Maps object_id → file extension (e.g. {"cusb-cyl11337d": "mp3"}).
+        # Without this file, story.html cannot inject window.audioObjects and
+        # the JS card-type detector falls through to IIIF for audio objects.
+        _generate_audio_manifest(data_dir)
 
-    # Generate search data for gallery filtering (if enabled in config)
-    generate_search_data()
+        # Generate search data for gallery filtering (if enabled in config)
+        generate_search_data()
+    else:
+        print("⚠️  Skipping audio manifest and search data: objects conversion did not succeed.")
 
     # Convert story files (with optional Christmas Tree mode)
     # v0.6.0+: Process ALL CSVs except system files

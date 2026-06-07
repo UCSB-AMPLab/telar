@@ -24,6 +24,7 @@ class Migration070to080(BaseMigration):
 
     from_version = "0.7.0-beta"
     to_version = "0.8.0-beta"
+    _TARGET_TAG = "v0.8.0-beta"  # pin framework fetches to the release tag
     description = "Protected stories, glossary CSV, gallery system, featured objects"
 
     def check_applicable(self) -> bool:

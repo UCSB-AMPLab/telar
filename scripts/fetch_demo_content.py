@@ -20,10 +20,11 @@ The csv_to_json.py build script (telar package) merges demo content
 into the JSON data alongside the user's real content, marking demo
 items with a _demo flag so the site can style them differently.
 
-Version: v1.2.1-beta
+Version: v1.5.0
 """
 
 import json
+import re
 import shutil
 import ssl
 import sys
@@ -31,6 +32,8 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 import yaml
+
+from pipeline_utils import capped_read, MAX_VERSIONS_BYTES, MAX_BUNDLE_BYTES
 
 # macOS Python 3.13+ (python.org installer) does not link to the system
 # certificate store, causing HTTPS fetches to fail. Use certifi's bundle when
@@ -85,6 +88,17 @@ def load_config():
         # Get language
         language = config.get('telar_language', 'en')
 
+        # Validate language and version before they are interpolated into the
+        # demo-bundle URL, so neither can carry path-traversal sequences or
+        # unexpected characters. Unknown language falls back to 'en'; an
+        # unparseable version aborts the (optional) demo-content fetch.
+        if language not in ('en', 'es'):
+            print(f"[WARNING] Unrecognised telar_language '{language}'; defaulting to 'en'")
+            language = 'en'
+        if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+            print(f"[WARNING] Could not parse version '{version}'; skipping demo-content fetch")
+            return None
+
         return {
             'enabled': enabled,
             'version': version,
@@ -130,7 +144,7 @@ def fetch_versions_index():
 
     try:
         with urllib.request.urlopen(versions_url, timeout=10) as response:
-            data = json.loads(response.read().decode('utf-8'))
+            data = json.loads(capped_read(response, MAX_VERSIONS_BYTES).decode('utf-8'))
             return data.get('versions', [])
 
     except Exception:
@@ -160,8 +174,14 @@ def find_best_version(site_version, available_versions):
         # wrote v-prefixed strings into _config.yml, and some bundle indexes
         # may list versions either way. Strip before splitting on dots.
         v = v.lstrip('vV')
-        parts = v.split('.')
-        return tuple(int(p) for p in parts)
+        # Reject malformed entries up front so a bad versions.json row is
+        # discarded (caught below) rather than raising mid-comparison.
+        if not re.fullmatch(r'\d+(\.\d+){0,2}', v):
+            raise ValueError(f"Bad version: {v}")
+        ints = tuple(int(p) for p in v.split('.'))
+        # Pad to 3 components so a shorter remote tuple (1, 4) compares equal
+        # to (1, 4, 0) rather than sorting as older.
+        return ints + (0,) * (3 - len(ints))
 
     try:
         site_v = parse_version(site_version)
@@ -205,7 +225,7 @@ def fetch_bundle(version, language):
         print(f"Fetching bundle from {bundle_url}")
 
         with urllib.request.urlopen(bundle_url, timeout=30) as response:
-            bundle = json.loads(response.read().decode('utf-8'))
+            bundle = json.loads(capped_read(response, MAX_BUNDLE_BYTES).decode('utf-8'))
 
         meta = bundle.get('_meta', {})
         print(f"Bundle loaded:")
@@ -247,6 +267,26 @@ def save_bundle(bundle):
     Returns:
         bool: True if save succeeded, False otherwise
     """
+    # Minimal structure/size validation before persisting and merging a
+    # remotely-fetched bundle into site content.
+    REQUIRED_KEYS = {'_meta', 'objects', 'stories', 'project'}
+    missing = REQUIRED_KEYS - set(bundle.keys())
+    if missing:
+        print(f"❌ Demo bundle is missing expected keys: {missing}. Aborting.")
+        return False
+    for key in ('objects', 'stories', 'project'):
+        if not isinstance(bundle.get(key), (list, dict)):
+            print(f"❌ Demo bundle key '{key}' has unexpected type "
+                  f"{type(bundle.get(key)).__name__}. Aborting.")
+            return False
+    MAX_BUNDLE_ITEMS = 10_000
+    for key in ('objects', 'stories'):
+        val = bundle.get(key)
+        if isinstance(val, (list, dict)) and len(val) > MAX_BUNDLE_ITEMS:
+            print(f"❌ Demo bundle key '{key}' has suspiciously many entries "
+                  f"({len(val)}). Aborting.")
+            return False
+
     demo_dir = Path('_demo_content')
     bundle_path = demo_dir / 'telar-demo-bundle.json'
 

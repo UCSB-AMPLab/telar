@@ -8,7 +8,7 @@
  * All icons use Lucide (https://lucide.dev) paths at 24×24 viewBox with
  * stroke-based rendering (stroke-width=2, round caps/joins, no fill).
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
 
 // ── SVG path data ─────────────────────────────────────────────────────────────

@@ -41,16 +41,27 @@
  * slower but still functional. Audio load errors inject a .telar-alert
  * notification into the card area.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { state } from './state.js';
 import { onViewportResize } from './layout-mode.js';
+import { getBasePath } from './utils.js';
 
 // ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
 const _cs = getComputedStyle(document.documentElement);
 const audioHeightMobile = parseFloat(_cs.getPropertyValue('--telar-audio-height-mobile').trim()) || 0.35;
 const audioHeightResize = parseFloat(_cs.getPropertyValue('--telar-audio-height-resize').trim()) || 0.5;
+
+// Waveform height as a fraction of the viewport, by layout mode: vertical and
+// embed use the shorter mobile fraction, desktop the taller one. Single
+// decision point so create/activate/resize never disagree (the earlier split —
+// 0.35 on create/activate, 0.5 on resize — made the waveform jump on resize).
+function _audioHeightFraction() {
+  return (state.layoutMode === 'vertical' || state.isEmbed)
+    ? audioHeightMobile
+    : audioHeightResize;
+}
 
 // ── Module-level player pool ──────────────────────────────────────────────────
 
@@ -63,12 +74,21 @@ const MAX_AUDIO_PLAYERS = 3;
 /** Shared AudioContext singleton — created once on first use. */
 let _sharedAudioContext = null;
 
-// ── WaveSurfer CDN loader ─────────────────────────────────────────────────────
+// ── WaveSurfer vendored loader ────────────────────────────────────────────────
 
 /**
- * Load WaveSurfer v7 core + Regions plugin from CDN once, returning a
- * Promise that resolves when both scripts are available.
- * Subsequent calls return the same Promise (once-guard pattern).
+ * Load WaveSurfer v7 core + Regions plugin from the vendored bundles under
+ * `assets/vendor/wavesurfer/` once, returning a Promise that resolves when
+ * both scripts are available. Subsequent calls return the same Promise
+ * (once-guard pattern).
+ *
+ * The bundles are loaded lazily (only when an audio card first appears) via
+ * injected `<script>` tags, rather than a static layout tag, so story pages
+ * without audio never pay the download cost. Both files are UMD: the core
+ * sets `window.WaveSurfer`, the plugin sets `window.WaveSurfer.Regions`, so
+ * the core must finish before the plugin (sequential onload chain below).
+ * Vendored instead of CDN-loaded for the minimal-computing reasons in
+ * `assets/vendor/README.md` (no CDN single-point-of-failure, version pinning).
  *
  * @returns {Promise<void>}
  */
@@ -81,14 +101,14 @@ export function loadWaveSurferAPI() {
       return;
     }
 
+    const basePath = getBasePath();
     const script = document.createElement("script");
-    script.src = "https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js";
+    script.src = `${basePath}/assets/vendor/wavesurfer/wavesurfer.min.js`;
     script.async = true;
     script.onload = () => {
-      // Load Regions plugin after core resolves
+      // Load Regions plugin after core resolves (plugin augments window.WaveSurfer)
       const rScript = document.createElement("script");
-      rScript.src =
-        "https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js";
+      rScript.src = `${basePath}/assets/vendor/wavesurfer/plugins/regions.min.js`;
       rScript.async = true;
       rScript.onload = () => resolve();
       rScript.onerror = () =>
@@ -230,8 +250,8 @@ export function getSharedAudioContext() {
 /**
  * Create a WaveSurfer audio player inside the given plate element.
  *
- * Loads WaveSurfer from CDN on demand (first call), fetches pre-computed
- * peaks JSON, reads the theme colour from --color-link, creates the
+ * Loads the vendored WaveSurfer bundle on demand (first call), fetches
+ * pre-computed peaks JSON, reads the theme colour from --color-link, creates the
  * WaveSurfer instance, wires clip enforcement, controls, and callbacks.
  *
  * Returns a player wrapper pushed into the module-level _audioPlayers pool.
@@ -277,6 +297,8 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
     loop,
     isEmbed,
     _lastElapsedSecond: -1,
+    _fadeTimer: null,
+    _destroyed: false,
     destroy() {
       destroyAudioPlayer(this);
     },
@@ -287,6 +309,9 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
 
   loadWaveSurferAPI()
     .then(() => {
+      // The wrapper may have been evicted/destroyed while the vendored-bundle
+      // load was in flight; bail before constructing a WaveSurfer that nothing will clean up.
+      if (wrapper._destroyed) return;
       // Fetch peaks JSON (404 is not an error — WaveSurfer decodes client-side)
       const peaksFetch = peaksUrl
         ? fetch(peaksUrl)
@@ -295,6 +320,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
         : Promise.resolve(null);
 
       peaksFetch.then((peaksData) => {
+        if (wrapper._destroyed) return;
         // Read theme colours from CSS custom properties
         const styles = getComputedStyle(document.documentElement);
         const accentColor =
@@ -333,7 +359,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * audioHeightMobile),
+          height: Math.round(window.innerHeight * _audioHeightFraction()),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -546,9 +572,17 @@ export function activateAudioCard(plateEl, sceneIndex) {
   const wrapper = _getAudioWrapperForPlate(plateEl);
   if (!wrapper || !wrapper.ws) return;
 
+  // Cancel any in-flight crossfade-out from a recent deactivation so two fade
+  // timers don't fight over the volume, and restore full volume.
+  if (wrapper._fadeTimer) {
+    clearInterval(wrapper._fadeTimer);
+    wrapper._fadeTimer = null;
+    try { wrapper.ws.setVolume(1); } catch (e) { /* ws may be initialising */ }
+  }
+
   // Re-render waveform to match current viewport
   try {
-    wrapper.ws.setOptions({ height: Math.round(window.innerHeight * audioHeightMobile) });
+    wrapper.ws.setOptions({ height: Math.round(window.innerHeight * _audioHeightFraction()) });
   } catch (e) {
     // ws may still be initialising — ignore
   }
@@ -597,6 +631,9 @@ export function deactivateAudioCard(plateEl, fadeMs = 300) {
   let step = 0;
   const startVolume = wrapper.ws.getVolume ? wrapper.ws.getVolume() : 1;
 
+  // Store the handle on the wrapper so activateAudioCard / destroyAudioPlayer
+  // can cancel an in-flight fade (overlapping fades would fight over volume).
+  if (wrapper._fadeTimer) clearInterval(wrapper._fadeTimer);
   const timer = setInterval(() => {
     step++;
     const newVolume = startVolume * (1 - step / steps);
@@ -604,10 +641,12 @@ export function deactivateAudioCard(plateEl, fadeMs = 300) {
       wrapper.ws.setVolume(Math.max(0, newVolume));
     } catch (e) {
       clearInterval(timer);
+      wrapper._fadeTimer = null;
       return;
     }
     if (step >= steps) {
       clearInterval(timer);
+      wrapper._fadeTimer = null;
       try {
         wrapper.ws.pause();
         wrapper.ws.setVolume(1); // Reset for next activation
@@ -616,6 +655,7 @@ export function deactivateAudioCard(plateEl, fadeMs = 300) {
       }
     }
   }, 50);
+  wrapper._fadeTimer = timer;
 }
 
 /**
@@ -625,6 +665,14 @@ export function deactivateAudioCard(plateEl, fadeMs = 300) {
  */
 export function destroyAudioPlayer(wrapper) {
   if (!wrapper) return;
+
+  // Mark destroyed first so any in-flight createAudioPlayer continuation bails,
+  // and stop any running crossfade timer.
+  wrapper._destroyed = true;
+  if (wrapper._fadeTimer) {
+    clearInterval(wrapper._fadeTimer);
+    wrapper._fadeTimer = null;
+  }
 
   try {
     if (wrapper.ws) {
@@ -777,6 +825,13 @@ function _enforceAudioPoolLimit(currentScene) {
  * (splice in _enforceAudioPoolLimit already handles removal).
  */
 function _evictAudioPlayer(wrapper) {
+  // Mark destroyed + cancel any fade so an in-flight createAudioPlayer
+  // continuation bails and no crossfade timer outlives the wrapper.
+  wrapper._destroyed = true;
+  if (wrapper._fadeTimer) {
+    clearInterval(wrapper._fadeTimer);
+    wrapper._fadeTimer = null;
+  }
   try {
     if (wrapper.ws) {
       wrapper.ws.destroy();
@@ -828,7 +883,7 @@ function _injectAudioError(plateEl) {
 // ── Viewport-resize subscription ─────────────────────────────────────────────
 
 onViewportResize(({ viewport }) => {
-  const newHeight = Math.round(viewport.h * audioHeightResize);
+  const newHeight = Math.round(viewport.h * _audioHeightFraction());
   for (const wrapper of _audioPlayers) {
     if (
       wrapper.element &&

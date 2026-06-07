@@ -2,6 +2,32 @@
 layout: default
 ---
 
+{%- comment -%}
+  Objects index — the landing page for a site's collection of objects, the
+  catalogue that sits alongside the narrative chapters. It renders the page's
+  own prose content first, then a gallery of every object Jekyll has gathered
+  into the `site.objects` collection.
+
+  Two presentations are possible, chosen by the `collection_interface.browse_and_search`
+  config flag. When enabled (the default), objects appear in a filterable layout:
+  a sidebar offers a Lunr-powered text search plus faceted filters (media type,
+  medium/genre, creator, period, subjects), and a header exposes sort controls
+  and a live "showing N of M" count. The faceted options and counts are filled
+  in at runtime by objects-filter.js, which reads the `data-*` attributes stamped
+  onto each grid item. When disabled, the same objects render as a plain grid
+  with no controls.
+
+  Either way, non-demo objects sort ahead of demo objects (each group alphabetical)
+  so a real collection is never buried beneath sample content. Thumbnails follow a
+  cascade: explicit thumbnail, then IIIF Image API derivative, then a placeholder
+  that the inline script later fills by fetching info.json or a IIIF Presentation
+  manifest — Lunr (lunr.min.js) is the small client-side search index that powers
+  the search box. The template also surfaces a warning banner when any object
+  carries an `object_warning`, flagging configuration problems before they break
+  the object's own page. All user-facing strings come from the active language
+  file via `lang`, falling back to English.
+{%- endcomment -%}
+
 {% if site.telar_language and site.data.languages[site.telar_language] %}
   {% assign lang = site.data.languages[site.telar_language] %}
 {% else %}

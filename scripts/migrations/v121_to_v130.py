@@ -252,6 +252,7 @@ class Migration121to130(BaseMigration):
 
     from_version = "1.2.1"
     to_version = "1.3.0"
+    _TARGET_TAG = "v1.3.0"  # pin framework fetches to the release tag
     description = "i18n hygiene: wire existing lang keys, sister-file localization, multimedia welcome update"
 
     def check_applicable(self) -> bool:
@@ -374,8 +375,30 @@ class Migration121to130(BaseMigration):
         if not removed:
             return []
 
-        # Re-serialise frontmatter, preserving key order best-effort
-        new_frontmatter = yaml.safe_dump(frontmatter, sort_keys=False, allow_unicode=True).rstrip()
+        # Delete the matched keys line-by-line rather than re-serialising the
+        # whole block through yaml.safe_dump, which would discard comments,
+        # blank lines and key ordering. We still rely on the parsed `frontmatter`
+        # dict above to decide *which* keys to remove; only the rewrite changes.
+        removed_keys = set(removed)
+        kept_lines = []
+        skipping = False  # inside a removed key's (possibly multi-line) value
+        for line in frontmatter_text.split('\n'):
+            key_match = re.match(r'^([ \t]*)([^\s:#][^:]*):', line)
+            if key_match:
+                indent, key_name = key_match.group(1), key_match.group(2).strip()
+                if not indent and key_name in removed_keys:
+                    skipping = True
+                    continue
+                skipping = False
+                kept_lines.append(line)
+            elif skipping and (line.strip() == '' or line[:1] in (' ', '\t')):
+                # Continuation (indented or blank) line of a removed key's value
+                continue
+            else:
+                skipping = False
+                kept_lines.append(line)
+
+        new_frontmatter = '\n'.join(kept_lines).strip('\n')
         new_content = f"---\n{new_frontmatter}\n---\n\n{body.lstrip()}"
         self._write_file(rel_path, new_content)
         return [f"Removed stale frontmatter keys from {rel_path}: {', '.join(removed)} (matched v1.2.1 defaults)"]

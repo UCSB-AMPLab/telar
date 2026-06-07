@@ -24,7 +24,7 @@
  *
  * Adapted from the Telar Compositor's IIIF viewer.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { extractAllPages } from './iiif-manifest.js';
@@ -176,6 +176,14 @@ export class IiifViewer {
       // for page-change opens, not the first load. viewer.destroy() tears
       // down its own handlers, so no explicit cleanup is needed.
       this.viewer.addHandler('open', () => {
+        this._pageTransitioning = false;
+        this._updateChrome();
+      });
+      // Companion to the 'open' handler above: if a page-change tile source
+      // fails to load, 'open' never fires and _pageTransitioning would stick
+      // true, leaving the prev/next chrome disabled. Reset on failure too so
+      // pagination re-enables. viewer.destroy() tears both down.
+      this.viewer.addHandler('open-failed', () => {
         this._pageTransitioning = false;
         this._updateChrome();
       });

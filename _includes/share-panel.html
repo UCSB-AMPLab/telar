@@ -2,8 +2,25 @@
   Share Panel Modal
   Version: v1.0.0-beta (Redesigned with pill tabs)
 
-  Bootstrap Modal for sharing and embedding stories.
-  Uses pill-style tabs: "this story"/"a single story" and "this whole site"
+  The dialog that opens when a reader presses any share button. It is a single
+  Bootstrap modal (id "panel-share") whose contents adapt to where the reader
+  currently is. On a story page it offers three pill tabs — "this story" (link
+  plus embed code), "this view" (a deep link that carries the reader's current
+  scroll position as a URL fragment), and "this whole site" — while on the
+  homepage it instead offers a story picker under "a single story" alongside the
+  whole-site tab, since there is no single story in context to share.
+
+  The markup here is only the shell: every read-only field (share URLs, the embed
+  <iframe> snippet, the homepage story dropdown) starts empty and is filled in at
+  runtime by the share JavaScript, which also reacts to the embed-size presets
+  (Canvas, Moodle, WordPress, and so on) and the width/height inputs. Protected
+  stories add a "with key / without key" toggle and warning text — hidden by
+  default (d-none) and revealed by the same script only when the current story is
+  access-controlled, so that a private key is never exposed unless the reader
+  deliberately opts in.
+
+  Expected context: page.layout (to choose the story vs. homepage layout) and the
+  lang.share.* / lang.buttons.* translation strings for all labels and help text.
 -->
 
 <div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true">

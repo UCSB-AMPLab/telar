@@ -5,7 +5,7 @@ Tests focus on the media_type detection logic, source_url injection
 for video objects, and (v1.3.0) sister-file localization in
 generate_pages().
 
-Version: v1.3.0-beta
+Version: v1.5.0
 """
 
 import sys
@@ -375,3 +375,42 @@ class TestGeneratePagesLocalization:
 
         out = (output_dir / 'about.md').read_text(encoding='utf-8')
         assert '<h1>About Telar</h1>' in out  # EN content because default is 'en'
+
+
+class TestStoryFrontmatterSerialization:
+    """generate_stories() writes injection-safe YAML frontmatter."""
+
+    def test_subtitle_with_yaml_injection_is_neutralised(self, tmp_path):
+        import os, json, yaml
+        from generate_collections import generate_stories
+
+        (tmp_path / '_data').mkdir()
+        # A subtitle crafted to break out of a naive `subtitle: "..."` line.
+        evil = 'real" \ninjected_key: true\nbyline: "pwned'
+        project = [{
+            'stories': [{
+                'number': 1,
+                'title': 'My Story',
+                'subtitle': evil,
+                'story_id': 'my-story',
+            }]
+        }]
+        (tmp_path / '_data' / 'project.json').write_text(json.dumps(project), encoding='utf-8')
+        (tmp_path / '_data' / 'my-story.json').write_text('[]', encoding='utf-8')
+
+        orig = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_stories()
+            out = (tmp_path / '_jekyll-files' / '_stories' / 'my-story.md').read_text(encoding='utf-8')
+        finally:
+            os.chdir(orig)
+
+        fm = out.split('---')[1]
+        parsed = yaml.safe_load(fm)
+        # The whole evil string is a single scalar; no smuggled keys appeared.
+        assert parsed['subtitle'] == evil
+        assert 'injected_key' not in parsed
+        assert parsed.get('byline') != 'pwned'
+        assert parsed['title'] == 'My Story'
+        assert parsed['layout'] == 'story'

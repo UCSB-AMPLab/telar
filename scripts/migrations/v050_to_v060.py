@@ -24,6 +24,7 @@ class Migration050to060(BaseMigration):
 
     from_version = "0.5.0-beta"
     to_version = "0.6.0-beta"
+    _TARGET_TAG = "v0.6.0-beta"  # pin framework fetches to the release tag
     description = "Gitignore generated files, multilingual UI support, custom pages system"
 
     def check_applicable(self) -> bool:

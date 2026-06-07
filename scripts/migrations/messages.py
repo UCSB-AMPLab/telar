@@ -1,9 +1,32 @@
 """
-Bilingual messages for Telar upgrade system.
+Bilingual Messages for the Telar Upgrade System
 
-All user-facing messages in English and Spanish.
+This module deals with every user-facing string the upgrade workflow
+prints or writes, in both English and Spanish, so that `upgrade.py` and
+the individual migrations never hardcode language-specific text. A site's
+language comes from `telar_language` in `_config.yml`; the upgrade code
+reads it once and then asks this module for each string by key.
 
-Version: v0.6.0-beta
+`MESSAGES` is a two-level dictionary — `'en'` and `'es'`, each mapping a
+stable key to its translated string. Keys are grouped by where they
+surface: the upgrade console output, the fail-closed / resume flow, the
+sections and category headings of the generated `UPGRADE_SUMMARY.md`, and
+the common phrases migrations reuse. Some strings carry `{}` placeholders
+filled in at call time (a version number, a file path, a count).
+
+`get_message(lang, key, *args)` is the main entry point. It normalises an
+unknown language code to English, looks the key up in the requested
+language, falls back to the English string (and finally the raw key) when
+a translation is missing, and applies `str.format()` only when arguments
+are supplied — returning the unformatted string rather than raising if the
+placeholders and arguments do not line up.
+
+`get_file_count_suffix(lang, count)` is a small helper for the one place
+grammatical number matters in the summary: it returns the singular or
+plural of "file" in the active language so category headings read
+naturally ("1 file" / "2 files", "1 archivo" / "2 archivos").
+
+Version: v1.5.0
 """
 
 MESSAGES = {
@@ -35,6 +58,20 @@ MESSAGES = {
         'dry_run_complete': '[DRY RUN COMPLETE]',
         'dry_run_instruction': 'Run without --dry-run to apply these changes.',
         'dry_run_would_apply': '[DRY RUN] Would apply this migration',
+
+        # Fail-closed / resume console messages (v1.5.0 redesign)
+        'prev_upgrade_incomplete': 'ℹ️  A previous upgrade to {} did not complete.',
+        'prev_upgrade_rerun': '   Re-running it now. The site was left at its previous version, so this re-applies the same files from scratch.',
+        'no_tty_continue': '(No interactive terminal — continuing.)',
+        'upgrade_failed_steps': '✗ Upgrade did not complete: {} required step(s) failed.',
+        'upgrade_not_applied': '  The site was NOT upgraded and its version was left unchanged.',
+        'transient_retry': '  This is usually a transient network problem — run the upgrade again.',
+        'see_summary_failures': '  See UPGRADE_SUMMARY.md for the list of failures.',
+        'upgrade_failed_data': '✗ Upgrade did not complete: data regeneration failed.',
+        'see_summary_details': '  See UPGRADE_SUMMARY.md for details.',
+        'data_files_regenerated': '✓ Regenerated data files',
+        'chain_stops': '⚠️  Migration chain stops at {}: no registered migration continues from there toward {}.',
+        'chain_stops_note': '    This usually means the current version is unsupported or a migration is missing from the chain — review manually before proceeding.',
 
         # Phase labels (for migration console output)
         'phase': 'Phase {}',
@@ -90,31 +127,45 @@ MESSAGES = {
     'es': {
         # upgrade.py console messages
         'upgrade_title': 'Script de actualización de Telar',
-        'detecting_version': 'Detectando versión actual...',
+        'detecting_version': 'Detectando versión actual…',
         'current_version': 'Versión actual: {}',
-        'target_version': 'Versión destino: {}',
-        'already_updated': '✓ Ya estás en la última versión!',
+        'target_version': 'Versión de destino: {}',
+        'already_updated': '✓ ¡Ya estás en la última versión!',
         'no_migrations': 'No se encontraron migraciones de {} a {}',
         'unsupported_note': 'Esto podría indicar una versión no compatible o que ya estás actualizado.',
         'migrations_to_apply': 'Migraciones a aplicar: {}',
-        'applying_migrations': 'Aplicando migraciones...',
-        'updating_config': 'Actualizando _config.yml con nueva versión...',
+        'applying_migrations': 'Aplicando migraciones…',
+        'updating_config': 'Actualizando _config.yml con nueva versión…',
         'config_updated': '✓ _config.yml actualizado a versión {}',
         'config_update_warning': '⚠️  Advertencia: No se pudo actualizar la versión en _config.yml',
-        'regenerating_data': 'Regenerando archivos de datos y teselas (*tiles*) IIIF...',
+        'regenerating_data': 'Regenerando archivos de datos y teselas (*tiles*) IIIF…',
         'data_regenerated': '✓ Archivos de datos y teselas (*tiles*) IIIF regenerados',
         'data_regenerate_warning': '⚠️  Advertencia: No se pudieron regenerar archivos de datos (los scripts podrían no existir)',
         'upgrade_complete': '✓ Actualización completa.',
         'created_summary': 'Creado: UPGRADE_SUMMARY.md',
         'review_summary': 'Por favor revisa UPGRADE_SUMMARY.md para ver los pasos manuales.',
         'uncommitted_warning': '⚠️  Advertencia: Tienes cambios sin confirmar.',
-        'uncommitted_recommend': 'Se recomienda confirmar o guardar tus cambios antes de actualizar.',
+        'uncommitted_recommend': 'Se recomienda confirmar o guardar los cambios antes de actualizar.',
         'continue_anyway': '¿Continuar de todos modos? (s/N): ',
         'upgrade_cancelled': 'Actualización cancelada.',
-        'dry_run_mode': '[MODO DE PRUEBA - No se realizarán cambios]',
+        'dry_run_mode': '[MODO DE PRUEBA — No se realizarán cambios]',
         'dry_run_complete': '[PRUEBA COMPLETA]',
         'dry_run_instruction': 'Ejecuta sin --dry-run para aplicar estos cambios.',
         'dry_run_would_apply': '[PRUEBA] Se aplicaría esta migración',
+
+        # Fail-closed / resume console messages (v1.5.0 redesign)
+        'prev_upgrade_incomplete': 'ℹ️  Una actualización anterior a {} quedó incompleta.',
+        'prev_upgrade_rerun': '   Se reintentará ahora. El sitio quedó en su versión anterior, así que se vuelven a aplicar los mismos archivos desde cero.',
+        'no_tty_continue': '(No hay terminal interactiva — se continúa.)',
+        'upgrade_failed_steps': '✗ La actualización no se completó: fallaron {} paso(s) obligatorio(s).',
+        'upgrade_not_applied': '  El sitio no se actualizó y su versión quedó sin cambios.',
+        'transient_retry': '  Suele ser un problema temporal de red; vuelve a ejecutar la actualización.',
+        'see_summary_failures': '  Revisa UPGRADE_SUMMARY.md para ver la lista de fallas.',
+        'upgrade_failed_data': '✗ La actualización no se completó: falló la regeneración de los datos.',
+        'see_summary_details': '  Revisa UPGRADE_SUMMARY.md para más detalles.',
+        'data_files_regenerated': '✓ Archivos de datos regenerados',
+        'chain_stops': '⚠️  La cadena de migraciones se detiene en {}: ninguna migración registrada continúa desde ahí hacia {}.',
+        'chain_stops_note': '    Esto suele significar que la versión actual no es compatible o que falta una migración en la cadena; revísalo manualmente antes de continuar.',
 
         # Phase labels (for migration console output)
         'phase': 'Fase {}',
@@ -127,14 +178,14 @@ MESSAGES = {
         'summary_automated_changes': 'Cambios automatizados',
         'summary_manual_steps': 'Pasos manuales',
         'automated_changes_applied': 'Cambios automatizados aplicados',
-        'manual_steps_required': 'Pasos manuales requeridos',
+        'manual_steps_required': 'Pasos manuales necesarios',
         'complete_after_merge': 'Por favor completa estos pasos:',
         'no_manual_steps': 'No se requieren pasos manuales',
         'all_automated': '¡Todos los cambios han sido automatizados!',
         'resources': 'Recursos',
         'full_documentation': 'Documentación completa',
         'changelog': 'CHANGELOG',
-        'report_issues': 'Informar problemas',
+        'report_issues': 'Reportar problemas',
 
         # Category labels (for organizing changes in UPGRADE_SUMMARY.md)
         'category_configuration': 'Configuración',

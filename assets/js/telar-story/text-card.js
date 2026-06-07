@@ -24,6 +24,7 @@
  */
 
 import { state } from './state.js';
+import { escapeHtml } from './utils.js';
 
 // Note: No imports from card-pool.js to avoid circular dependency.
 // Positioning values (topPx, zIndex, messiness) are pre-computed by card-pool.js
@@ -132,13 +133,13 @@ export function createFullObjectCard(stepData, stepIndex, zIndex, messiness) {
   card.dataset.messinessOffX = messiness.offX;
   card.dataset.messinessOffY = messiness.offY;
 
-  const question = stepData.question || '';
-  const answer   = stepData.answer   || '';
+  const question = escapeHtml(stepData.question || '');
+  const answer   = escapeHtml(stepData.answer   || '');
 
   const hasLayer1 = stepData.layer1_button && stepData.layer1_button.trim();
   let layerButtonHtml = '';
   if (hasLayer1) {
-    layerButtonHtml = `<p class="mt-3"><button class="panel-trigger" data-panel="layer1" data-step="${stepData.step}">${stepData.layer1_button} →</button></p>`;
+    layerButtonHtml = `<p class="mt-3"><button class="panel-trigger" data-panel="layer1" data-step="${stepData.step}">${escapeHtml(stepData.layer1_button)} →</button></p>`;
   }
 
   card.innerHTML = `
@@ -235,8 +236,8 @@ function _buildActiveTransform(messiness) {
  * @returns {string} HTML string
  */
 function _buildTextCardContent(step) {
-  const question = step.question || '';
-  const answer   = step.answer   || '';
+  const question = escapeHtml(step.question || '');
+  const answer   = escapeHtml(step.answer   || '');
 
   const hasLayer1 = (step.layer1_button && step.layer1_button.trim()) ||
                     (step.layer1_title   && step.layer1_title.trim())  ||
@@ -248,11 +249,11 @@ function _buildTextCardContent(step) {
   let layerButtons = '';
   if (hasLayer1) {
     const label = (step.layer1_button && step.layer1_button.trim()) ? step.layer1_button : 'Learn more';
-    layerButtons += `<button class="panel-trigger" data-panel="layer1" data-step="${step.step}">${label} →</button>`;
+    layerButtons += `<button class="panel-trigger" data-panel="layer1" data-step="${step.step}">${escapeHtml(label)} →</button>`;
   }
   if (hasLayer2) {
     const label = (step.layer2_button && step.layer2_button.trim()) ? step.layer2_button : 'Learn more';
-    layerButtons += `<button class="panel-trigger" data-panel="layer2" data-step="${step.step}">${label} →</button>`;
+    layerButtons += `<button class="panel-trigger" data-panel="layer2" data-step="${step.step}">${escapeHtml(label)} →</button>`;
   }
 
   return `

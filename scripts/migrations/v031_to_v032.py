@@ -16,6 +16,7 @@ class Migration031to032(BaseMigration):
 
     from_version = "0.3.1-beta"
     to_version = "0.3.2-beta"
+    _TARGET_TAG = "v0.3.2-beta"  # pin framework fetches to the release tag
     description = "Refactor index page for easier customization"
 
     # Default index.md template for users upgrading

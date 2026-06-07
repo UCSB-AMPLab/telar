@@ -27,7 +27,7 @@ The function returns a pandas DataFrame wrapping a single dictionary with
 a `stories` key, which `csv_to_json()` in the core module serialises to
 `_data/project.json`.
 
-Version: v1.2.0
+Version: v1.5.0
 """
 
 import re
@@ -49,8 +49,9 @@ def process_project_setup(df):
     """
     stories_list = []
     seen_ids = set()  # Track duplicate story_ids
+    seen_orders = set()  # Track duplicate order numbers
 
-    for _, row in df.iterrows():
+    for row_idx, row in df.iterrows():
         order = str(row.get('order', '')).strip()
         title = row.get('title', '')
         subtitle = row.get('subtitle', '')
@@ -64,19 +65,30 @@ def process_project_setup(df):
             if pd.notna(story_id_raw):
                 story_id = str(story_id_raw).strip()
 
-        # Skip rows with empty order (placeholder rows)
-        if not order or not pd.notna(title):
+        # Skip rows with empty order or blank/whitespace-only title (placeholder rows)
+        title_str = str(title).strip() if pd.notna(title) else ''
+        if not order or not title_str:
             continue
+
+        # Warn on duplicate order numbers — two stories sharing an order would
+        # collide on the same story number / output slug
+        if order in seen_orders:
+            print(f"  Warning: Duplicate order '{order}' found in project.csv (row {row_idx})")
+        seen_orders.add(order)
 
         # Validate story_id if provided
         if story_id:
             # Check for invalid characters (must be lowercase, numbers, hyphens, underscores)
             if not re.match(r'^[a-z0-9\-_]+$', story_id):
-                print(f"  Warning: story_id '{story_id}' contains invalid characters. Use lowercase letters, numbers, hyphens, underscores only.")
+                print(f"  Warning: story_id '{story_id}' contains invalid characters (lowercase letters, numbers, hyphens, underscores only) — skipping this row so a malformed id cannot become a data-file name.")
+                continue
 
-            # Check for duplicates
+            # Check for duplicates — skip the duplicate row entirely so routing
+            # and encryption decisions stay unambiguous (one row can no longer
+            # silently shadow another)
             if story_id in seen_ids:
-                print(f"  Warning: Duplicate story_id '{story_id}' found in project.csv")
+                print(f"  Warning: Duplicate story_id '{story_id}' in project.csv (row {row_idx}) — skipping duplicate row")
+                continue
             seen_ids.add(story_id)
 
         story_entry = {

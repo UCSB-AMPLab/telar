@@ -24,6 +24,7 @@ class Migration061to062(BaseMigration):
 
     from_version = "0.6.1-beta"
     to_version = "0.6.2-beta"
+    _TARGET_TAG = None  # v0.6.2 was never tagged (0.6.1 -> 0.6.3); fetches fall back to main
     description = "Improved viewer preloading, case-insensitive matching, development features"
 
     def check_applicable(self) -> bool:

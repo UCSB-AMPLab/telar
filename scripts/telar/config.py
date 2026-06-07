@@ -20,7 +20,7 @@ code ('en', 'es', etc.) without loading the full string dictionary. This is
 used by IIIF metadata extraction to choose the preferred language when
 reading multilingual manifests.
 
-Version: v0.7.0-beta
+Version: v1.5.0
 """
 
 from pathlib import Path

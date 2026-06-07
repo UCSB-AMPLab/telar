@@ -22,7 +22,7 @@
  *   the current step (0.0–1.0). `isSnapping` tracks in-flight snap
  *   animations from the lenis/snap plugin.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -117,6 +117,13 @@ export const state = {
   currentObjectRun: { objectId: null, runPosition: 0 },
 
   // ── Scene maps (populated at initCardPool time) ───────────────────────────
+  /**
+   * Filtered step data (metadata rows removed), in the same index space as
+   * stepToScene / the card pool. Populated by initCardPool. The per-frame
+   * lerp reads this so its stepIndex (a filtered-space index) lines up with
+   * the step objects it interpolates between.
+   */
+  stepsData: [],
   /** Map of stepIndex -> sceneIndex. Populated by buildSceneMaps at init. */
   stepToScene: {},
   /** Map of sceneIndex -> objectId. */

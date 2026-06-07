@@ -26,6 +26,7 @@ class Migration110to120(BaseMigration):
 
     from_version = "1.1.0"
     to_version = "1.2.0"
+    _TARGET_TAG = "v1.2.0"  # pin framework fetches to the release tag
     description = "Section card TOC, ordinal removal, Back to Start button, deep link fixes"
 
     def check_applicable(self) -> bool:
@@ -148,7 +149,7 @@ class Migration110to120(BaseMigration):
             changes.append("Note: show_sections column already present in project.csv, skipped")
             return changes
 
-        # Detect language from header row
+        # Pick the column name in the site's configured language
         lang = self._detect_language()
 
         # Determine column name based on language

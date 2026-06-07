@@ -34,14 +34,19 @@ Tile generation backends:
   - iiif library (fallback): Pure Python, no system dependencies.
     Install: pip install iiif
 
-Version: v1.0.0-beta
+Version: v1.5.0
 """
 
 import os
 import sys
+import re
 import json
 import shutil
 from pathlib import Path
+
+# Object IDs become filesystem path components (tile dirs, rmtree targets), so
+# they must be a safe filename token. Same allowlist shape as the audio pipeline.
+_SAFE_OBJECT_ID = re.compile(r'^[A-Za-z0-9_-]+$')
 
 from iiif_utils import (
     check_dependencies, preprocess_image,
@@ -184,6 +189,12 @@ def load_objects_needing_tiles():
 
             # Skip if no object_id
             if not object_id:
+                continue
+
+            # Reject object_ids that aren't a safe filename token before they
+            # reach any tile-directory write or rmtree downstream.
+            if not _SAFE_OBJECT_ID.match(str(object_id)):
+                print(f"  [WARNING] Skipping object with unsafe object_id: {object_id!r}")
                 continue
 
             # Need tiles if source URL is empty or not a URL
@@ -344,6 +355,13 @@ def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/obj
 
         # Output directory for this object
         object_output = output_path / object_id
+
+        # Boundary guard (belt-and-suspenders): never rmtree/mkdir outside the
+        # output directory, whatever the object_id resolved to.
+        if not object_output.resolve().is_relative_to(output_path.resolve()):
+            print(f"  [WARNING] Skipping object with out-of-bounds output path: {object_id!r}")
+            print()
+            continue
 
         try:
             # Remove existing output if present

@@ -72,6 +72,13 @@
     /** Current object run tracking (for peek stack positioning). */
     currentObjectRun: { objectId: null, runPosition: 0 },
     // ── Scene maps (populated at initCardPool time) ───────────────────────────
+    /**
+     * Filtered step data (metadata rows removed), in the same index space as
+     * stepToScene / the card pool. Populated by initCardPool. The per-frame
+     * lerp reads this so its stepIndex (a filtered-space index) lines up with
+     * the step objects it interpolates between.
+     */
+    stepsData: [],
     /** Map of stepIndex -> sceneIndex. Populated by buildSceneMaps at init. */
     stepToScene: {},
     /** Map of sceneIndex -> objectId. */
@@ -177,6 +184,11 @@
   }
 
   // assets/js/telar-story/utils.js
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
   function getBasePath() {
     const pathParts = window.location.pathname.split("/").filter((p) => p);
     if (pathParts.length >= 2) {
@@ -225,23 +237,37 @@
     const manifestUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}/manifest.json`;
     return manifestUrl;
   }
+  var _PREFETCH_SKIP_HOSTS = ["youtube.com", "youtu.be", "vimeo.com", "drive.google.com"];
   async function prefetchStoryManifests() {
     const objectIds = [...new Set(
       Array.from(document.querySelectorAll("[data-object]")).map((el) => el.dataset.object).filter(Boolean)
     )];
     if (objectIds.length === 0) return;
-    await Promise.all(objectIds.map(async (id) => {
-      try {
-        const objectData = state.objectsIndex[id];
-        if (objectData?.iiif_manifest) {
+    const manifestUrls = [...new Set(
+      objectIds.map((id) => state.objectsIndex[id]).map((o) => (o && (o.source_url || o.iiif_manifest) || "").trim()).filter((url) => url && !_PREFETCH_SKIP_HOSTS.some((h) => url.includes(h)))
+    )];
+    if (manifestUrls.length === 0) {
+      adjustThresholdsForConnection();
+      return;
+    }
+    const CONCURRENCY = 3;
+    const queue = [...manifestUrls];
+    const worker = async () => {
+      while (queue.length) {
+        const url = queue.shift();
+        try {
           const start = performance.now();
-          await fetch(objectData.iiif_manifest);
-          const elapsed = performance.now() - start;
-          state.manifestLoadTimes.push(elapsed);
+          const resp = await fetch(url, { cache: "force-cache" });
+          await resp.text().catch(() => {
+          });
+          state.manifestLoadTimes.push(performance.now() - start);
+        } catch (e) {
         }
-      } catch (e) {
       }
-    }));
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker)
+    );
     adjustThresholdsForConnection();
   }
   function adjustThresholdsForConnection() {
@@ -661,6 +687,10 @@
           this.viewer.addHandler("open-failed", onOpenFailed);
         });
         this.viewer.addHandler("open", () => {
+          this._pageTransitioning = false;
+          this._updateChrome();
+        });
+        this.viewer.addHandler("open-failed", () => {
           this._pageTransitioning = false;
           this._updateChrome();
         });
@@ -1088,6 +1118,20 @@
     });
     return window._ytApiPromise;
   }
+  function detectYouTubeAspect(videoId) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        if (img.naturalWidth >= 320 && img.naturalHeight >= 180) {
+          resolve(img.naturalWidth / img.naturalHeight);
+        } else {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+    });
+  }
   function loadVimeoAPI() {
     if (window._vimeoApiPromise) return window._vimeoApiPromise;
     window._vimeoApiPromise = new Promise((resolve, reject) => {
@@ -1167,6 +1211,24 @@
       video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
       card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
       padding: cardPad
+    };
+  }
+  function computeVideoLetterboxRegion(W, H) {
+    const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
+    if (state.layoutMode === "vertical") {
+      return {
+        left: pad,
+        top: pad,
+        width: Math.round(W - pad * 2),
+        height: Math.round(H * videoStackMaxH)
+      };
+    }
+    const cardW = Math.round(W * videoCardFracSide);
+    return {
+      left: cardW + pad * 2,
+      top: pad,
+      width: Math.round(W - cardW - pad * 3),
+      height: Math.round(H - pad * 2)
     };
   }
   function _computeStackedLayout(W, H, aspectRatio) {
@@ -1389,6 +1451,15 @@
     const container = document.createElement("div");
     container.className = "video-iframe";
     plateEl.appendChild(container);
+    detectYouTubeAspect(videoId).then((aspect) => {
+      if (aspect) {
+        plateEl.dataset.aspectRatio = String(aspect);
+        delete plateEl.dataset.videoLetterbox;
+      } else {
+        plateEl.dataset.videoLetterbox = "true";
+      }
+      _applyVideoLayout(plateEl);
+    });
     const wrapper = {
       type: "youtube",
       element: plateEl,
@@ -1544,6 +1615,7 @@
     iframe.allow = "autoplay";
     iframe.allowFullscreen = true;
     iframe.style.cssText = "width:100%;height:100%;border:none;border-radius:4px";
+    plateEl.dataset.videoLetterbox = "true";
     plateEl.appendChild(iframe);
     return {
       type: "google-drive",
@@ -1592,16 +1664,26 @@
   function _applyVideoLayout(plateEl) {
     const W = window.innerWidth;
     const H = window.innerHeight;
+    const videoEl = plateEl.querySelector(".video-iframe");
+    if (!videoEl) return;
+    if (plateEl.dataset.videoLetterbox === "true") {
+      const region = computeVideoLetterboxRegion(W, H);
+      videoEl.classList.add("video-iframe--letterbox");
+      videoEl.style.position = "absolute";
+      videoEl.style.left = `${region.left}px`;
+      videoEl.style.top = `${region.top}px`;
+      videoEl.style.width = `${region.width}px`;
+      videoEl.style.height = `${region.height}px`;
+      return;
+    }
+    videoEl.classList.remove("video-iframe--letterbox");
     const aspectRatio = parseFloat(plateEl.dataset.aspectRatio) || 16 / 9;
     const layout = computeVideoLayout(W, H, aspectRatio);
-    const videoEl = plateEl.querySelector(".video-iframe");
-    if (videoEl) {
-      videoEl.style.position = "absolute";
-      videoEl.style.left = `${layout.video.left}px`;
-      videoEl.style.top = `${layout.video.top}px`;
-      videoEl.style.width = `${layout.video.width}px`;
-      videoEl.style.height = `${layout.video.height}px`;
-    }
+    videoEl.style.position = "absolute";
+    videoEl.style.left = `${layout.video.left}px`;
+    videoEl.style.top = `${layout.video.top}px`;
+    videoEl.style.width = `${layout.video.width}px`;
+    videoEl.style.height = `${layout.video.height}px`;
   }
   onViewportResize(() => {
     for (const wrapper of _videoPlayers) {
@@ -1615,6 +1697,9 @@
   var _cs2 = getComputedStyle(document.documentElement);
   var audioHeightMobile = parseFloat(_cs2.getPropertyValue("--telar-audio-height-mobile").trim()) || 0.35;
   var audioHeightResize = parseFloat(_cs2.getPropertyValue("--telar-audio-height-resize").trim()) || 0.5;
+  function _audioHeightFraction() {
+    return state.layoutMode === "vertical" || state.isEmbed ? audioHeightMobile : audioHeightResize;
+  }
   var _audioPlayers = [];
   var MAX_AUDIO_PLAYERS = 3;
   var _sharedAudioContext = null;
@@ -1625,12 +1710,13 @@
         resolve();
         return;
       }
+      const basePath = getBasePath();
       const script = document.createElement("script");
-      script.src = "https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js";
+      script.src = `${basePath}/assets/vendor/wavesurfer/wavesurfer.min.js`;
       script.async = true;
       script.onload = () => {
         const rScript = document.createElement("script");
-        rScript.src = "https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js";
+        rScript.src = `${basePath}/assets/vendor/wavesurfer/plugins/regions.min.js`;
         rScript.async = true;
         rScript.onload = () => resolve();
         rScript.onerror = () => reject(new Error("WaveSurfer Regions plugin failed to load"));
@@ -1727,6 +1813,8 @@
       loop,
       isEmbed,
       _lastElapsedSecond: -1,
+      _fadeTimer: null,
+      _destroyed: false,
       destroy() {
         destroyAudioPlayer(this);
       }
@@ -1734,8 +1822,10 @@
     _audioPlayers.push(wrapper);
     _enforceAudioPoolLimit(sceneIndex);
     loadWaveSurferAPI().then(() => {
+      if (wrapper._destroyed) return;
       const peaksFetch = peaksUrl ? fetch(peaksUrl).then((r) => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null);
       peaksFetch.then((peaksData) => {
+        if (wrapper._destroyed) return;
         const styles = getComputedStyle(document.documentElement);
         const accentColor = styles.getPropertyValue("--color-link").trim() || "#883C36";
         const barColor = styles.getPropertyValue("--color-button-text").trim() || "#ffffff";
@@ -1762,7 +1852,7 @@
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * audioHeightMobile),
+          height: Math.round(window.innerHeight * _audioHeightFraction()),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -1922,8 +2012,16 @@
     plateEl.classList.add("is-active");
     const wrapper = _getAudioWrapperForPlate(plateEl);
     if (!wrapper || !wrapper.ws) return;
+    if (wrapper._fadeTimer) {
+      clearInterval(wrapper._fadeTimer);
+      wrapper._fadeTimer = null;
+      try {
+        wrapper.ws.setVolume(1);
+      } catch (e) {
+      }
+    }
     try {
-      wrapper.ws.setOptions({ height: Math.round(window.innerHeight * audioHeightMobile) });
+      wrapper.ws.setOptions({ height: Math.round(window.innerHeight * _audioHeightFraction()) });
     } catch (e) {
     }
     if (state.layoutMode === "vertical" || state.isEmbed) {
@@ -1955,6 +2053,7 @@
     const steps = Math.ceil(fadeMs / 50);
     let step = 0;
     const startVolume = wrapper.ws.getVolume ? wrapper.ws.getVolume() : 1;
+    if (wrapper._fadeTimer) clearInterval(wrapper._fadeTimer);
     const timer = setInterval(() => {
       step++;
       const newVolume = startVolume * (1 - step / steps);
@@ -1962,10 +2061,12 @@
         wrapper.ws.setVolume(Math.max(0, newVolume));
       } catch (e) {
         clearInterval(timer);
+        wrapper._fadeTimer = null;
         return;
       }
       if (step >= steps) {
         clearInterval(timer);
+        wrapper._fadeTimer = null;
         try {
           wrapper.ws.pause();
           wrapper.ws.setVolume(1);
@@ -1973,9 +2074,15 @@
         }
       }
     }, 50);
+    wrapper._fadeTimer = timer;
   }
   function destroyAudioPlayer(wrapper) {
     if (!wrapper) return;
+    wrapper._destroyed = true;
+    if (wrapper._fadeTimer) {
+      clearInterval(wrapper._fadeTimer);
+      wrapper._fadeTimer = null;
+    }
     try {
       if (wrapper.ws) {
         wrapper.ws.destroy();
@@ -2066,6 +2173,11 @@
     }
   }
   function _evictAudioPlayer(wrapper) {
+    wrapper._destroyed = true;
+    if (wrapper._fadeTimer) {
+      clearInterval(wrapper._fadeTimer);
+      wrapper._fadeTimer = null;
+    }
     try {
       if (wrapper.ws) {
         wrapper.ws.destroy();
@@ -2092,7 +2204,7 @@
     plateEl.appendChild(alertEl);
   }
   onViewportResize(({ viewport }) => {
-    const newHeight = Math.round(viewport.h * audioHeightResize);
+    const newHeight = Math.round(viewport.h * _audioHeightFraction());
     for (const wrapper of _audioPlayers) {
       if (wrapper.element && wrapper.element.classList.contains("is-active") && wrapper.ws) {
         try {
@@ -2127,7 +2239,10 @@
         runPos = 0;
         currentObjectId = effectiveId;
       }
-      const bandBase = (scene + 1) * 100;
+      if (scene === 97) {
+        console.warn("[Telar] Story has more than 98 unique scenes; z-index banding is clamped at 9800 and panel/UI chrome layering may overlap.");
+      }
+      const bandBase = Math.min((scene + 1) * 100, 9800);
       plateZ[i] = bandBase;
       textCardZ[i] = bandBase + 1 + runPos;
       runPos++;
@@ -2166,6 +2281,7 @@
   var _stepsData = [];
   var _config = { peekHeight: 1, messiness: 20, preloadSteps: 5 };
   var _zPlan = { viewerPlateZ: {}, textCardZ: {} };
+  var _prefetchedScenes = /* @__PURE__ */ new Set();
   function _buildSceneMaps(steps) {
     let scene = -1;
     let currentObjectId = null;
@@ -2221,6 +2337,7 @@
     const peekHeight = config?.peekHeight ?? 1;
     const messinessPercent = config?.messiness ?? 20;
     _stepsData = steps;
+    state.stepsData = steps;
     _config = {
       peekHeight,
       messiness: messinessPercent,
@@ -2370,16 +2487,16 @@
     _recomputeCardGeometry(window.innerWidth, window.innerHeight);
   }
   function buildTextCardContent(step) {
-    const question = step.question || "";
-    const answer = step.answer || "";
+    const question = escapeHtml(step.question || "");
+    const answer = escapeHtml(step.answer || "");
     const hasLayer1 = step.layer1_button && step.layer1_button.trim();
     const hasLayer2 = step.layer2_button && step.layer2_button.trim();
     let layerButtons = "";
     if (hasLayer1) {
-      layerButtons += `<button class="panel-trigger" data-panel="layer1" data-step="${step.step}">${step.layer1_button}</button>`;
+      layerButtons += `<button class="panel-trigger" data-panel="layer1" data-step="${step.step}">${escapeHtml(step.layer1_button)}</button>`;
     }
     if (hasLayer2) {
-      layerButtons += `<button class="panel-trigger" data-panel="layer2" data-step="${step.step}">${step.layer2_button}</button>`;
+      layerButtons += `<button class="panel-trigger" data-panel="layer2" data-step="${step.step}">${escapeHtml(step.layer2_button)}</button>`;
     }
     return `
     <div class="step-question">${question}</div>
@@ -2436,6 +2553,10 @@
         _activateTextCard(card);
         const sceneIndex = getSceneIndex(index2);
         const plate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
+        if (plate && !plate.classList.contains("is-active")) {
+          plate.style.transform = "translateY(0)";
+          plate.classList.add("is-active");
+        }
         if (plate && plate.classList.contains("video-plate")) {
           const clipStart = parseFloat(step.clip_start) || 0;
           const clipEnd = parseFloat(step.clip_end) || 0;
@@ -2452,7 +2573,6 @@
       }
     } else {
       if (needsNewViewer) {
-        const prevSceneIndex = prevObjectId !== null ? getSceneIndex(Math.max(0, index2 + 1)) : -1;
         const currentSceneIndex = getSceneIndex(index2 + 1);
         const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
         const prevPlate = state.viewerPlates[getSceneIndex(index2)];
@@ -2576,6 +2696,11 @@
     const newPlate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
     if (!newPlate) return;
     newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
+    if (prevPlate && prevPlate === newPlate) {
+      newPlate.style.transform = "translateY(0)";
+      newPlate.classList.add("is-active");
+      return;
+    }
     if (direction === "forward") {
       if (sceneIndex === 0) {
         const currentTransform = newPlate.style.transform;
@@ -2827,11 +2952,16 @@
       state.cardOverlayRect = cardEl.getBoundingClientRect();
       return;
     }
+    if (cardEl._settleHandler) {
+      cardEl.removeEventListener("transitionend", cardEl._settleHandler);
+    }
     const onSettled = (ev) => {
       if (ev.target !== cardEl || ev.propertyName !== "transform") return;
       cardEl.removeEventListener("transitionend", onSettled);
+      cardEl._settleHandler = null;
       state.cardOverlayRect = cardEl.getBoundingClientRect();
     };
+    cardEl._settleHandler = onSettled;
     cardEl.addEventListener("transitionend", onSettled);
   }
   function _activateTitleCardStep(index2, direction) {
@@ -2959,6 +3089,8 @@
     }
   }
   function _prefetchTilesForScene(sceneIndex) {
+    if (_prefetchedScenes.has(sceneIndex)) return;
+    _prefetchedScenes.add(sceneIndex);
     const objectId = state.sceneToObject[sceneIndex];
     if (!objectId) return;
     const objData = state.objectsIndex?.[objectId];
@@ -3044,7 +3176,7 @@
   }
 
   // node_modules/lenis/dist/lenis.mjs
-  var version = "1.3.20";
+  var version = "1.3.19";
   function clamp(min, input, max) {
     return Math.max(min, Math.min(input, max));
   }
@@ -3063,15 +3195,16 @@
     from = 0;
     to = 0;
     currentTime = 0;
+    // These are instanciated in the fromTo method
     lerp;
     duration;
     easing;
     onUpdate;
     /**
-    * Advance the animation by the given delta time
-    *
-    * @param deltaTime - The time in seconds to advance the animation
-    */
+     * Advance the animation by the given delta time
+     *
+     * @param deltaTime - The time in seconds to advance the animation
+     */
     advance(deltaTime) {
       if (!this.isRunning) return;
       let completed = false;
@@ -3091,7 +3224,9 @@
         this.value = this.to;
         completed = true;
       }
-      if (completed) this.stop();
+      if (completed) {
+        this.stop();
+      }
       this.onUpdate?.(this.value, completed);
     }
     /** Stop the animation */
@@ -3099,13 +3234,13 @@
       this.isRunning = false;
     }
     /**
-    * Set up the animation from a starting value to an ending value
-    * with optional parameters for lerping, duration, easing, and onUpdate callback
-    *
-    * @param from - The starting value
-    * @param to - The ending value
-    * @param options - Options for the animation
-    */
+     * Set up the animation from a starting value to an ending value
+     * with optional parameters for lerping, duration, easing, and onUpdate callback
+     *
+     * @param from - The starting value
+     * @param to - The ending value
+     * @param options - Options for the animation
+     */
     fromTo(from, to, { lerp: lerp2, duration, easing, onStart, onUpdate }) {
       this.from = this.value = from;
       this.to = to;
@@ -3129,20 +3264,14 @@
     };
   }
   var Dimensions = class {
-    width = 0;
-    height = 0;
-    scrollHeight = 0;
-    scrollWidth = 0;
-    debouncedResize;
-    wrapperResizeObserver;
-    contentResizeObserver;
     constructor(wrapper, content, { autoResize = true, debounce: debounceValue = 250 } = {}) {
       this.wrapper = wrapper;
       this.content = content;
       if (autoResize) {
         this.debouncedResize = debounce(this.resize, debounceValue);
-        if (this.wrapper instanceof Window) window.addEventListener("resize", this.debouncedResize);
-        else {
+        if (this.wrapper instanceof Window) {
+          window.addEventListener("resize", this.debouncedResize);
+        } else {
           this.wrapperResizeObserver = new ResizeObserver(this.debouncedResize);
           this.wrapperResizeObserver.observe(this.wrapper);
         }
@@ -3151,10 +3280,20 @@
       }
       this.resize();
     }
+    width = 0;
+    height = 0;
+    scrollHeight = 0;
+    scrollWidth = 0;
+    // These are instanciated in the constructor as they need information from the options
+    debouncedResize;
+    wrapperResizeObserver;
+    contentResizeObserver;
     destroy() {
       this.wrapperResizeObserver?.disconnect();
       this.contentResizeObserver?.disconnect();
-      if (this.wrapper === window && this.debouncedResize) window.removeEventListener("resize", this.debouncedResize);
+      if (this.wrapper === window && this.debouncedResize) {
+        window.removeEventListener("resize", this.debouncedResize);
+      }
     }
     resize = () => {
       this.onWrapperResize();
@@ -3188,38 +3327,43 @@
   var Emitter = class {
     events = {};
     /**
-    * Emit an event with the given data
-    * @param event Event name
-    * @param args Data to pass to the event handlers
-    */
+     * Emit an event with the given data
+     * @param event Event name
+     * @param args Data to pass to the event handlers
+     */
     emit(event, ...args) {
       const callbacks = this.events[event] || [];
-      for (let i = 0, length = callbacks.length; i < length; i++) callbacks[i]?.(...args);
+      for (let i = 0, length = callbacks.length; i < length; i++) {
+        callbacks[i]?.(...args);
+      }
     }
     /**
-    * Add a callback to the event
-    * @param event Event name
-    * @param cb Callback function
-    * @returns Unsubscribe function
-    */
+     * Add a callback to the event
+     * @param event Event name
+     * @param cb Callback function
+     * @returns Unsubscribe function
+     */
     on(event, cb) {
-      if (this.events[event]) this.events[event].push(cb);
-      else this.events[event] = [cb];
+      if (this.events[event]) {
+        this.events[event].push(cb);
+      } else {
+        this.events[event] = [cb];
+      }
       return () => {
         this.events[event] = this.events[event]?.filter((i) => cb !== i);
       };
     }
     /**
-    * Remove a callback from the event
-    * @param event Event name
-    * @param callback Callback function
-    */
+     * Remove a callback from the event
+     * @param event Event name
+     * @param callback Callback function
+     */
     off(event, callback) {
       this.events[event] = this.events[event]?.filter((i) => callback !== i);
     }
     /**
-    * Remove all event listeners and clean up
-    */
+     * Remove all event listeners and clean up
+     */
     destroy() {
       this.events = {};
     }
@@ -3232,6 +3376,24 @@
     return 1;
   }
   var VirtualScroll = class {
+    constructor(element, options = { wheelMultiplier: 1, touchMultiplier: 1 }) {
+      this.element = element;
+      this.options = options;
+      window.addEventListener("resize", this.onWindowResize);
+      this.onWindowResize();
+      this.element.addEventListener("wheel", this.onWheel, listenerOptions);
+      this.element.addEventListener(
+        "touchstart",
+        this.onTouchStart,
+        listenerOptions
+      );
+      this.element.addEventListener(
+        "touchmove",
+        this.onTouchMove,
+        listenerOptions
+      );
+      this.element.addEventListener("touchend", this.onTouchEnd, listenerOptions);
+    }
     touchStart = {
       x: 0,
       y: 0
@@ -3245,25 +3407,12 @@
       height: 0
     };
     emitter = new Emitter();
-    constructor(element, options = {
-      wheelMultiplier: 1,
-      touchMultiplier: 1
-    }) {
-      this.element = element;
-      this.options = options;
-      window.addEventListener("resize", this.onWindowResize);
-      this.onWindowResize();
-      this.element.addEventListener("wheel", this.onWheel, listenerOptions);
-      this.element.addEventListener("touchstart", this.onTouchStart, listenerOptions);
-      this.element.addEventListener("touchmove", this.onTouchMove, listenerOptions);
-      this.element.addEventListener("touchend", this.onTouchEnd, listenerOptions);
-    }
     /**
-    * Add an event listener for the given event and callback
-    *
-    * @param event Event name
-    * @param callback Callback function
-    */
+     * Add an event listener for the given event and callback
+     *
+     * @param event Event name
+     * @param callback Callback function
+     */
     on(event, callback) {
       return this.emitter.on(event, callback);
     }
@@ -3272,15 +3421,27 @@
       this.emitter.destroy();
       window.removeEventListener("resize", this.onWindowResize);
       this.element.removeEventListener("wheel", this.onWheel, listenerOptions);
-      this.element.removeEventListener("touchstart", this.onTouchStart, listenerOptions);
-      this.element.removeEventListener("touchmove", this.onTouchMove, listenerOptions);
-      this.element.removeEventListener("touchend", this.onTouchEnd, listenerOptions);
+      this.element.removeEventListener(
+        "touchstart",
+        this.onTouchStart,
+        listenerOptions
+      );
+      this.element.removeEventListener(
+        "touchmove",
+        this.onTouchMove,
+        listenerOptions
+      );
+      this.element.removeEventListener(
+        "touchend",
+        this.onTouchEnd,
+        listenerOptions
+      );
     }
     /**
-    * Event handler for 'touchstart' event
-    *
-    * @param event Touch event
-    */
+     * Event handler for 'touchstart' event
+     *
+     * @param event Touch event
+     */
     onTouchStart = (event) => {
       const { clientX, clientY } = event.targetTouches ? event.targetTouches[0] : event;
       this.touchStart.x = clientX;
@@ -3328,11 +3489,7 @@
       deltaY *= multiplierY;
       deltaX *= this.options.wheelMultiplier;
       deltaY *= this.options.wheelMultiplier;
-      this.emitter.emit("scroll", {
-        deltaX,
-        deltaY,
-        event
-      });
+      this.emitter.emit("scroll", { deltaX, deltaY, event });
     };
     onWindowResize = () => {
       this.window = {
@@ -3344,67 +3501,115 @@
   var defaultEasing = (t) => Math.min(1, 1.001 - 2 ** (-10 * t));
   var Lenis = class {
     _isScrolling = false;
+    // true when scroll is animating
     _isStopped = false;
+    // true if user should not be able to scroll - enable/disable programmatically
     _isLocked = false;
+    // same as isStopped but enabled/disabled when scroll reaches target
     _preventNextNativeScrollEvent = false;
     _resetVelocityTimeout = null;
     _rafId = null;
     /**
-    * Whether or not the user is touching the screen
-    */
+     * Whether or not the user is touching the screen
+     */
     isTouching;
     /**
-    * The time in ms since the lenis instance was created
-    */
+     * The time in ms since the lenis instance was created
+     */
     time = 0;
     /**
-    * User data that will be forwarded through the scroll event
-    *
-    * @example
-    * lenis.scrollTo(100, {
-    *   userData: {
-    *     foo: 'bar'
-    *   }
-    * })
-    */
+     * User data that will be forwarded through the scroll event
+     *
+     * @example
+     * lenis.scrollTo(100, {
+     *   userData: {
+     *     foo: 'bar'
+     *   }
+     * })
+     */
     userData = {};
     /**
-    * The last velocity of the scroll
-    */
+     * The last velocity of the scroll
+     */
     lastVelocity = 0;
     /**
-    * The current velocity of the scroll
-    */
+     * The current velocity of the scroll
+     */
     velocity = 0;
     /**
-    * The direction of the scroll
-    */
+     * The direction of the scroll
+     */
     direction = 0;
     /**
-    * The options passed to the lenis instance
-    */
+     * The options passed to the lenis instance
+     */
     options;
     /**
-    * The target scroll value
-    */
+     * The target scroll value
+     */
     targetScroll;
     /**
-    * The animated scroll value
-    */
+     * The animated scroll value
+     */
     animatedScroll;
+    // These are instanciated here as they don't need information from the options
     animate = new Animate();
     emitter = new Emitter();
+    // These are instanciated in the constructor as they need information from the options
     dimensions;
+    // This is not private because it's used in the Snap class
     virtualScroll;
-    constructor({ wrapper = window, content = document.documentElement, eventsTarget = wrapper, smoothWheel = true, syncTouch = false, syncTouchLerp = 0.075, touchInertiaExponent = 1.7, duration, easing, lerp: lerp2 = 0.1, infinite = false, orientation = "vertical", gestureOrientation = orientation === "horizontal" ? "both" : "vertical", touchMultiplier = 1, wheelMultiplier = 1, autoResize = true, prevent, virtualScroll, overscroll = true, autoRaf = false, anchors = false, autoToggle = false, allowNestedScroll = false, __experimental__naiveDimensions = false, naiveDimensions = __experimental__naiveDimensions, stopInertiaOnNavigate = false } = {}) {
+    constructor({
+      wrapper = window,
+      content = document.documentElement,
+      eventsTarget = wrapper,
+      smoothWheel = true,
+      syncTouch = false,
+      syncTouchLerp = 0.075,
+      touchInertiaExponent = 1.7,
+      duration,
+      // in seconds
+      easing,
+      lerp: lerp2 = 0.1,
+      infinite = false,
+      orientation = "vertical",
+      // vertical, horizontal
+      gestureOrientation = orientation === "horizontal" ? "both" : "vertical",
+      // vertical, horizontal, both
+      touchMultiplier = 1,
+      wheelMultiplier = 1,
+      autoResize = true,
+      prevent,
+      virtualScroll,
+      overscroll = true,
+      autoRaf = false,
+      anchors = false,
+      autoToggle = false,
+      // https://caniuse.com/?search=transition-behavior
+      allowNestedScroll = false,
+      __experimental__naiveDimensions = false,
+      naiveDimensions = __experimental__naiveDimensions,
+      stopInertiaOnNavigate = false
+    } = {}) {
       window.lenisVersion = version;
-      if (!window.lenis) window.lenis = {};
+      if (!window.lenis) {
+        window.lenis = {};
+      }
       window.lenis.version = version;
-      if (orientation === "horizontal") window.lenis.horizontal = true;
-      if (syncTouch === true) window.lenis.touch = true;
-      if (!wrapper || wrapper === document.documentElement) wrapper = window;
-      if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
-      else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
+      if (orientation === "horizontal") {
+        window.lenis.horizontal = true;
+      }
+      if (syncTouch === true) {
+        window.lenis.touch = true;
+      }
+      if (!wrapper || wrapper === document.documentElement) {
+        wrapper = window;
+      }
+      if (typeof duration === "number" && typeof easing !== "function") {
+        easing = defaultEasing;
+      } else if (typeof easing === "function" && typeof duration !== "number") {
+        duration = 1;
+      }
       this.options = {
         wrapper,
         content,
@@ -3436,9 +3641,19 @@
       this.updateClassName();
       this.targetScroll = this.animatedScroll = this.actualScroll;
       this.options.wrapper.addEventListener("scroll", this.onNativeScroll);
-      this.options.wrapper.addEventListener("scrollend", this.onScrollEnd, { capture: true });
-      if (this.options.anchors || this.options.stopInertiaOnNavigate) this.options.wrapper.addEventListener("click", this.onClick);
-      this.options.wrapper.addEventListener("pointerdown", this.onPointerDown);
+      this.options.wrapper.addEventListener("scrollend", this.onScrollEnd, {
+        capture: true
+      });
+      if (this.options.anchors || this.options.stopInertiaOnNavigate) {
+        this.options.wrapper.addEventListener(
+          "click",
+          this.onClick
+        );
+      }
+      this.options.wrapper.addEventListener(
+        "pointerdown",
+        this.onPointerDown
+      );
       this.virtualScroll = new VirtualScroll(eventsTarget, {
         touchMultiplier,
         wheelMultiplier
@@ -3448,21 +3663,35 @@
         this.checkOverflow();
         this.rootElement.addEventListener("transitionend", this.onTransitionEnd);
       }
-      if (this.options.autoRaf) this._rafId = requestAnimationFrame(this.raf);
+      if (this.options.autoRaf) {
+        this._rafId = requestAnimationFrame(this.raf);
+      }
     }
     /**
-    * Destroy the lenis instance, remove all event listeners and clean up the class name
-    */
+     * Destroy the lenis instance, remove all event listeners and clean up the class name
+     */
     destroy() {
       this.emitter.destroy();
       this.options.wrapper.removeEventListener("scroll", this.onNativeScroll);
-      this.options.wrapper.removeEventListener("scrollend", this.onScrollEnd, { capture: true });
-      this.options.wrapper.removeEventListener("pointerdown", this.onPointerDown);
-      if (this.options.anchors || this.options.stopInertiaOnNavigate) this.options.wrapper.removeEventListener("click", this.onClick);
+      this.options.wrapper.removeEventListener("scrollend", this.onScrollEnd, {
+        capture: true
+      });
+      this.options.wrapper.removeEventListener(
+        "pointerdown",
+        this.onPointerDown
+      );
+      if (this.options.anchors || this.options.stopInertiaOnNavigate) {
+        this.options.wrapper.removeEventListener(
+          "click",
+          this.onClick
+        );
+      }
       this.virtualScroll.destroy();
       this.dimensions.destroy();
       this.cleanUpClassName();
-      if (this._rafId) cancelAnimationFrame(this._rafId);
+      if (this._rafId) {
+        cancelAnimationFrame(this._rafId);
+      }
     }
     on(event, callback) {
       return this.emitter.on(event, callback);
@@ -3472,41 +3701,58 @@
     }
     onScrollEnd = (e) => {
       if (!(e instanceof CustomEvent)) {
-        if (this.isScrolling === "smooth" || this.isScrolling === false) e.stopPropagation();
+        if (this.isScrolling === "smooth" || this.isScrolling === false) {
+          e.stopPropagation();
+        }
       }
     };
     dispatchScrollendEvent = () => {
-      this.options.wrapper.dispatchEvent(new CustomEvent("scrollend", {
-        bubbles: this.options.wrapper === window,
-        detail: { lenisScrollEnd: true }
-      }));
+      this.options.wrapper.dispatchEvent(
+        new CustomEvent("scrollend", {
+          bubbles: this.options.wrapper === window,
+          // cancelable: false,
+          detail: {
+            lenisScrollEnd: true
+          }
+        })
+      );
     };
     get overflow() {
       const property = this.isHorizontal ? "overflow-x" : "overflow-y";
       return getComputedStyle(this.rootElement)[property];
     }
     checkOverflow() {
-      if (["hidden", "clip"].includes(this.overflow)) this.internalStop();
-      else this.internalStart();
+      if (["hidden", "clip"].includes(this.overflow)) {
+        this.internalStop();
+      } else {
+        this.internalStart();
+      }
     }
     onTransitionEnd = (event) => {
-      if (event.propertyName.includes("overflow")) this.checkOverflow();
+      if (event.propertyName.includes("overflow")) {
+        this.checkOverflow();
+      }
     };
     setScroll(scroll) {
-      if (this.isHorizontal) this.options.wrapper.scrollTo({
-        left: scroll,
-        behavior: "instant"
-      });
-      else this.options.wrapper.scrollTo({
-        top: scroll,
-        behavior: "instant"
-      });
+      if (this.isHorizontal) {
+        this.options.wrapper.scrollTo({ left: scroll, behavior: "instant" });
+      } else {
+        this.options.wrapper.scrollTo({ top: scroll, behavior: "instant" });
+      }
     }
     onClick = (event) => {
-      const linkElementsUrls = event.composedPath().filter((node) => node instanceof HTMLAnchorElement && node.href).map((element) => new URL(element.href));
+      const path = event.composedPath();
+      const linkElements = path.filter(
+        (node) => node instanceof HTMLAnchorElement && node.href
+      );
+      const linkElementsUrls = linkElements.map(
+        (element) => new URL(element.href)
+      );
       const currentUrl = new URL(window.location.href);
       if (this.options.anchors) {
-        const anchorElementUrl = linkElementsUrls.find((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname === targetUrl.pathname && targetUrl.hash);
+        const anchorElementUrl = linkElementsUrls.find(
+          (targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname === targetUrl.pathname && targetUrl.hash
+        );
         if (anchorElementUrl) {
           const options = typeof this.options.anchors === "object" && this.options.anchors ? this.options.anchors : void 0;
           const target = `#${anchorElementUrl.hash.split("#")[1]}`;
@@ -3515,64 +3761,87 @@
         }
       }
       if (this.options.stopInertiaOnNavigate) {
-        if (linkElementsUrls.some((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname !== targetUrl.pathname)) {
+        const hasPageLinkElementUrl = linkElementsUrls.some(
+          (targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname !== targetUrl.pathname
+        );
+        if (hasPageLinkElementUrl) {
           this.reset();
           return;
         }
       }
     };
     onPointerDown = (event) => {
-      if (event.button === 1) this.reset();
+      if (event.button === 1) {
+        this.reset();
+      }
     };
     onVirtualScroll = (data) => {
-      if (typeof this.options.virtualScroll === "function" && this.options.virtualScroll(data) === false) return;
+      if (typeof this.options.virtualScroll === "function" && this.options.virtualScroll(data) === false)
+        return;
       const { deltaX, deltaY, event } = data;
-      this.emitter.emit("virtual-scroll", {
-        deltaX,
-        deltaY,
-        event
-      });
+      this.emitter.emit("virtual-scroll", { deltaX, deltaY, event });
       if (event.ctrlKey) return;
       if (event.lenisStopPropagation) return;
       const isTouch = event.type.includes("touch");
       const isWheel = event.type.includes("wheel");
       this.isTouching = event.type === "touchstart" || event.type === "touchmove";
       const isClickOrTap = deltaX === 0 && deltaY === 0;
-      if (this.options.syncTouch && isTouch && event.type === "touchstart" && isClickOrTap && !this.isStopped && !this.isLocked) {
+      const isTapToStop = this.options.syncTouch && isTouch && event.type === "touchstart" && isClickOrTap && !this.isStopped && !this.isLocked;
+      if (isTapToStop) {
         this.reset();
         return;
       }
       const isUnknownGesture = this.options.gestureOrientation === "vertical" && deltaY === 0 || this.options.gestureOrientation === "horizontal" && deltaX === 0;
-      if (isClickOrTap || isUnknownGesture) return;
+      if (isClickOrTap || isUnknownGesture) {
+        return;
+      }
       let composedPath = event.composedPath();
       composedPath = composedPath.slice(0, composedPath.indexOf(this.rootElement));
       const prevent = this.options.prevent;
       const gestureOrientation = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
-      if (composedPath.find((node) => node instanceof HTMLElement && (typeof prevent === "function" && prevent?.(node) || node.hasAttribute?.("data-lenis-prevent") || gestureOrientation === "vertical" && node.hasAttribute?.("data-lenis-prevent-vertical") || gestureOrientation === "horizontal" && node.hasAttribute?.("data-lenis-prevent-horizontal") || isTouch && node.hasAttribute?.("data-lenis-prevent-touch") || isWheel && node.hasAttribute?.("data-lenis-prevent-wheel") || this.options.allowNestedScroll && this.hasNestedScroll(node, {
-        deltaX,
-        deltaY
-      })))) return;
+      if (composedPath.find(
+        (node) => node instanceof HTMLElement && (typeof prevent === "function" && prevent?.(node) || node.hasAttribute?.("data-lenis-prevent") || gestureOrientation === "vertical" && node.hasAttribute?.("data-lenis-prevent-vertical") || gestureOrientation === "horizontal" && node.hasAttribute?.("data-lenis-prevent-horizontal") || isTouch && node.hasAttribute?.("data-lenis-prevent-touch") || isWheel && node.hasAttribute?.("data-lenis-prevent-wheel") || this.options.allowNestedScroll && this.hasNestedScroll(node, {
+          deltaX,
+          deltaY
+        }))
+      ))
+        return;
       if (this.isStopped || this.isLocked) {
-        if (event.cancelable) event.preventDefault();
+        if (event.cancelable) {
+          event.preventDefault();
+        }
         return;
       }
-      if (!(this.options.syncTouch && isTouch || this.options.smoothWheel && isWheel)) {
+      const isSmooth = this.options.syncTouch && isTouch || this.options.smoothWheel && isWheel;
+      if (!isSmooth) {
         this.isScrolling = "native";
         this.animate.stop();
         event.lenisStopPropagation = true;
         return;
       }
       let delta = deltaY;
-      if (this.options.gestureOrientation === "both") delta = Math.abs(deltaY) > Math.abs(deltaX) ? deltaY : deltaX;
-      else if (this.options.gestureOrientation === "horizontal") delta = deltaX;
-      if (!this.options.overscroll || this.options.infinite || this.options.wrapper !== window && this.limit > 0 && (this.animatedScroll > 0 && this.animatedScroll < this.limit || this.animatedScroll === 0 && deltaY > 0 || this.animatedScroll === this.limit && deltaY < 0)) event.lenisStopPropagation = true;
-      if (event.cancelable) event.preventDefault();
+      if (this.options.gestureOrientation === "both") {
+        delta = Math.abs(deltaY) > Math.abs(deltaX) ? deltaY : deltaX;
+      } else if (this.options.gestureOrientation === "horizontal") {
+        delta = deltaX;
+      }
+      if (!this.options.overscroll || this.options.infinite || this.options.wrapper !== window && this.limit > 0 && (this.animatedScroll > 0 && this.animatedScroll < this.limit || this.animatedScroll === 0 && deltaY > 0 || this.animatedScroll === this.limit && deltaY < 0)) {
+        event.lenisStopPropagation = true;
+      }
+      if (event.cancelable) {
+        event.preventDefault();
+      }
       const isSyncTouch = isTouch && this.options.syncTouch;
-      const hasTouchInertia = isTouch && event.type === "touchend";
-      if (hasTouchInertia) delta = Math.sign(this.velocity) * Math.abs(this.velocity) ** this.options.touchInertiaExponent;
+      const isTouchEnd = isTouch && event.type === "touchend";
+      const hasTouchInertia = isTouchEnd;
+      if (hasTouchInertia) {
+        delta = Math.sign(this.velocity) * Math.abs(this.velocity) ** this.options.touchInertiaExponent;
+      }
       this.scrollTo(this.targetScroll + delta, {
         programmatic: false,
-        ...isSyncTouch ? { lerp: hasTouchInertia ? this.options.syncTouchLerp : 1 } : {
+        ...isSyncTouch ? {
+          lerp: hasTouchInertia ? this.options.syncTouchLerp : 1
+        } : {
           lerp: this.options.lerp,
           duration: this.options.duration,
           easing: this.options.easing
@@ -3580,8 +3849,8 @@
       });
     };
     /**
-    * Force lenis to recalculate the dimensions
-    */
+     * Force lenis to recalculate the dimensions
+     */
     resize() {
       this.dimensions.resize();
       this.animatedScroll = this.targetScroll = this.actualScroll;
@@ -3604,15 +3873,21 @@
         this.animatedScroll = this.targetScroll = this.actualScroll;
         this.lastVelocity = this.velocity;
         this.velocity = this.animatedScroll - lastScroll;
-        this.direction = Math.sign(this.animatedScroll - lastScroll);
-        if (!this.isStopped) this.isScrolling = "native";
+        this.direction = Math.sign(
+          this.animatedScroll - lastScroll
+        );
+        if (!this.isStopped) {
+          this.isScrolling = "native";
+        }
         this.emit();
-        if (this.velocity !== 0) this._resetVelocityTimeout = setTimeout(() => {
-          this.lastVelocity = this.velocity;
-          this.velocity = 0;
-          this.isScrolling = false;
-          this.emit();
-        }, 400);
+        if (this.velocity !== 0) {
+          this._resetVelocityTimeout = setTimeout(() => {
+            this.lastVelocity = this.velocity;
+            this.velocity = 0;
+            this.isScrolling = false;
+            this.emit();
+          }, 400);
+        }
       }
     };
     reset() {
@@ -3623,8 +3898,8 @@
       this.animate.stop();
     }
     /**
-    * Start lenis scroll after it has been stopped
-    */
+     * Start lenis scroll after it has been stopped
+     */
     start() {
       if (!this.isStopped) return;
       if (this.options.autoToggle) {
@@ -3640,8 +3915,8 @@
       this.emit();
     }
     /**
-    * Stop lenis scroll
-    */
+     * Stop lenis scroll
+     */
     stop() {
       if (this.isStopped) return;
       if (this.options.autoToggle) {
@@ -3657,69 +3932,81 @@
       this.emit();
     }
     /**
-    * RequestAnimationFrame for lenis
-    *
-    * @param time The time in ms from an external clock like `requestAnimationFrame` or Tempus
-    */
+     * RequestAnimationFrame for lenis
+     *
+     * @param time The time in ms from an external clock like `requestAnimationFrame` or Tempus
+     */
     raf = (time) => {
       const deltaTime = time - (this.time || time);
       this.time = time;
       this.animate.advance(deltaTime * 1e-3);
-      if (this.options.autoRaf) this._rafId = requestAnimationFrame(this.raf);
+      if (this.options.autoRaf) {
+        this._rafId = requestAnimationFrame(this.raf);
+      }
     };
     /**
-    * Scroll to a target value
-    *
-    * @param target The target value to scroll to
-    * @param options The options for the scroll
-    *
-    * @example
-    * lenis.scrollTo(100, {
-    *   offset: 100,
-    *   duration: 1,
-    *   easing: (t) => 1 - Math.cos((t * Math.PI) / 2),
-    *   lerp: 0.1,
-    *   onStart: () => {
-    *     console.log('onStart')
-    *   },
-    *   onComplete: () => {
-    *     console.log('onComplete')
-    *   },
-    * })
-    */
-    scrollTo(_target, { offset = 0, immediate = false, lock = false, programmatic = true, lerp: lerp2 = programmatic ? this.options.lerp : void 0, duration = programmatic ? this.options.duration : void 0, easing = programmatic ? this.options.easing : void 0, onStart, onComplete, force = false, userData } = {}) {
+     * Scroll to a target value
+     *
+     * @param target The target value to scroll to
+     * @param options The options for the scroll
+     *
+     * @example
+     * lenis.scrollTo(100, {
+     *   offset: 100,
+     *   duration: 1,
+     *   easing: (t) => 1 - Math.cos((t * Math.PI) / 2),
+     *   lerp: 0.1,
+     *   onStart: () => {
+     *     console.log('onStart')
+     *   },
+     *   onComplete: () => {
+     *     console.log('onComplete')
+     *   },
+     * })
+     */
+    scrollTo(_target, {
+      offset = 0,
+      immediate = false,
+      lock = false,
+      programmatic = true,
+      // called from outside of the class
+      lerp: lerp2 = programmatic ? this.options.lerp : void 0,
+      duration = programmatic ? this.options.duration : void 0,
+      easing = programmatic ? this.options.easing : void 0,
+      onStart,
+      onComplete,
+      force = false,
+      // scroll even if stopped
+      userData
+    } = {}) {
       if ((this.isStopped || this.isLocked) && !force) return;
       let target = _target;
       let adjustedOffset = offset;
-      if (typeof target === "string" && [
-        "top",
-        "left",
-        "start",
-        "#"
-      ].includes(target)) target = 0;
-      else if (typeof target === "string" && [
-        "bottom",
-        "right",
-        "end"
-      ].includes(target)) target = this.limit;
-      else {
+      if (typeof target === "string" && ["top", "left", "start", "#"].includes(target)) {
+        target = 0;
+      } else if (typeof target === "string" && ["bottom", "right", "end"].includes(target)) {
+        target = this.limit;
+      } else {
         let node = null;
         if (typeof target === "string") {
           node = document.querySelector(target);
-          if (!node) if (target === "#top") target = 0;
-          else console.warn("Lenis: Target not found", target);
-        } else if (target instanceof HTMLElement && target?.nodeType) node = target;
+          if (!node) {
+            if (target === "#top") {
+              target = 0;
+            } else {
+              console.warn("Lenis: Target not found", target);
+            }
+          }
+        } else if (target instanceof HTMLElement && target?.nodeType) {
+          node = target;
+        }
         if (node) {
           if (this.options.wrapper !== window) {
             const wrapperRect = this.rootElement.getBoundingClientRect();
             adjustedOffset -= this.isHorizontal ? wrapperRect.left : wrapperRect.top;
           }
           const rect = node.getBoundingClientRect();
-          const targetStyle = getComputedStyle(node);
-          const scrollMargin = this.isHorizontal ? Number.parseFloat(targetStyle.scrollMarginLeft) : Number.parseFloat(targetStyle.scrollMarginTop);
-          const containerStyle = getComputedStyle(this.rootElement);
-          const scrollPadding = this.isHorizontal ? Number.parseFloat(containerStyle.scrollPaddingLeft) : Number.parseFloat(containerStyle.scrollPaddingTop);
-          target = (this.isHorizontal ? rect.left : rect.top) + this.animatedScroll - (Number.isNaN(scrollMargin) ? 0 : scrollMargin) - (Number.isNaN(scrollPadding) ? 0 : scrollPadding);
+          target = (this.isHorizontal ? rect.left : rect.top) + this.animatedScroll;
         }
       }
       if (typeof target !== "number") return;
@@ -3729,10 +4016,15 @@
         if (programmatic) {
           this.targetScroll = this.animatedScroll = this.scroll;
           const distance = target - this.animatedScroll;
-          if (distance > this.limit / 2) target -= this.limit;
-          else if (distance < -this.limit / 2) target += this.limit;
+          if (distance > this.limit / 2) {
+            target -= this.limit;
+          } else if (distance < -this.limit / 2) {
+            target += this.limit;
+          }
         }
-      } else target = clamp(0, target, this.limit);
+      } else {
+        target = clamp(0, target, this.limit);
+      }
       if (target === this.targetScroll) {
         onStart?.(this);
         onComplete?.(this);
@@ -3752,9 +4044,14 @@
         });
         return;
       }
-      if (!programmatic) this.targetScroll = target;
-      if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
-      else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
+      if (!programmatic) {
+        this.targetScroll = target;
+      }
+      if (typeof duration === "number" && typeof easing !== "function") {
+        easing = defaultEasing;
+      } else if (typeof easing === "function" && typeof duration !== "number") {
+        duration = 1;
+      }
       this.animate.fromTo(this.animatedScroll, target, {
         duration,
         easing,
@@ -3771,7 +4068,9 @@
           this.direction = Math.sign(this.velocity);
           this.animatedScroll = value;
           this.setScroll(this.scroll);
-          if (programmatic) this.targetScroll = value;
+          if (programmatic) {
+            this.targetScroll = value;
+          }
           if (!completed) this.emit();
           if (completed) {
             this.reset();
@@ -3810,18 +4109,18 @@
         cache.time = Date.now();
         const computedStyle = window.getComputedStyle(node);
         cache.computedStyle = computedStyle;
-        hasOverflowX = [
-          "auto",
-          "overlay",
-          "scroll"
-        ].includes(computedStyle.overflowX);
-        hasOverflowY = [
-          "auto",
-          "overlay",
-          "scroll"
-        ].includes(computedStyle.overflowY);
-        hasOverscrollBehaviorX = ["auto"].includes(computedStyle.overscrollBehaviorX);
-        hasOverscrollBehaviorY = ["auto"].includes(computedStyle.overscrollBehaviorY);
+        hasOverflowX = ["auto", "overlay", "scroll"].includes(
+          computedStyle.overflowX
+        );
+        hasOverflowY = ["auto", "overlay", "scroll"].includes(
+          computedStyle.overflowY
+        );
+        hasOverscrollBehaviorX = ["auto"].includes(
+          computedStyle.overscrollBehaviorX
+        );
+        hasOverscrollBehaviorY = ["auto"].includes(
+          computedStyle.overscrollBehaviorY
+        );
         cache.hasOverflowX = hasOverflowX;
         cache.hasOverflowY = hasOverflowY;
         if (!(hasOverflowX || hasOverflowY)) return false;
@@ -3851,7 +4150,9 @@
         hasOverscrollBehaviorX = cache.hasOverscrollBehaviorX;
         hasOverscrollBehaviorY = cache.hasOverscrollBehaviorY;
       }
-      if (!(hasOverflowX && isScrollableX || hasOverflowY && isScrollableY)) return false;
+      if (!(hasOverflowX && isScrollableX || hasOverflowY && isScrollableY)) {
+        return false;
+      }
       const orientation = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
       let scroll;
       let maxScroll;
@@ -3873,54 +4174,61 @@
         hasOverflow = hasOverflowY;
         isScrollable = isScrollableY;
         hasOverscrollBehavior = hasOverscrollBehaviorY;
-      } else return false;
-      if (!hasOverscrollBehavior && (scroll >= maxScroll || scroll <= 0)) return true;
-      return (delta > 0 ? scroll < maxScroll : scroll > 0) && hasOverflow && isScrollable;
+      } else {
+        return false;
+      }
+      if (!hasOverscrollBehavior && (scroll >= maxScroll || scroll <= 0)) {
+        return true;
+      }
+      const willScroll = delta > 0 ? scroll < maxScroll : scroll > 0;
+      return willScroll && hasOverflow && isScrollable;
     }
     /**
-    * The root element on which lenis is instanced
-    */
+     * The root element on which lenis is instanced
+     */
     get rootElement() {
       return this.options.wrapper === window ? document.documentElement : this.options.wrapper;
     }
     /**
-    * The limit which is the maximum scroll value
-    */
+     * The limit which is the maximum scroll value
+     */
     get limit() {
       if (this.options.naiveDimensions) {
-        if (this.isHorizontal) return this.rootElement.scrollWidth - this.rootElement.clientWidth;
+        if (this.isHorizontal) {
+          return this.rootElement.scrollWidth - this.rootElement.clientWidth;
+        }
         return this.rootElement.scrollHeight - this.rootElement.clientHeight;
       }
       return this.dimensions.limit[this.isHorizontal ? "x" : "y"];
     }
     /**
-    * Whether or not the scroll is horizontal
-    */
+     * Whether or not the scroll is horizontal
+     */
     get isHorizontal() {
       return this.options.orientation === "horizontal";
     }
     /**
-    * The actual scroll value
-    */
+     * The actual scroll value
+     */
     get actualScroll() {
       const wrapper = this.options.wrapper;
       return this.isHorizontal ? wrapper.scrollX ?? wrapper.scrollLeft : wrapper.scrollY ?? wrapper.scrollTop;
     }
     /**
-    * The current scroll value
-    */
+     * The current scroll value
+     */
     get scroll() {
       return this.options.infinite ? modulo(this.animatedScroll, this.limit) : this.animatedScroll;
     }
     /**
-    * The progress of the scroll relative to the limit
-    */
+     * The progress of the scroll relative to the limit
+     */
     get progress() {
       return this.limit === 0 ? 1 : this.scroll / this.limit;
     }
     /**
-    * Current scroll state
-    */
+     * Current scroll state
+     */
     get isScrolling() {
       return this._isScrolling;
     }
@@ -3931,8 +4239,8 @@
       }
     }
     /**
-    * Check if lenis is stopped
-    */
+     * Check if lenis is stopped
+     */
     get isStopped() {
       return this._isStopped;
     }
@@ -3943,8 +4251,8 @@
       }
     }
     /**
-    * Check if lenis is locked
-    */
+     * Check if lenis is locked
+     */
     get isLocked() {
       return this._isLocked;
     }
@@ -3955,14 +4263,14 @@
       }
     }
     /**
-    * Check if lenis is smooth scrolling
-    */
+     * Check if lenis is smooth scrolling
+     */
     get isSmooth() {
       return this.isScrolling === "smooth";
     }
     /**
-    * The class name applied to the wrapper element
-    */
+     * The class name applied to the wrapper element
+     */
     get className() {
       let className = "lenis";
       if (this.options.autoToggle) className += " lenis-autoToggle";
@@ -3993,54 +4301,69 @@
     };
   }
   function removeParentSticky(element) {
-    if (getComputedStyle(element).position === "sticky") {
+    const position = getComputedStyle(element).position;
+    const isSticky = position === "sticky";
+    if (isSticky) {
       element.style.setProperty("position", "static");
       element.dataset.sticky = "true";
     }
-    if (element.offsetParent) removeParentSticky(element.offsetParent);
+    if (element.offsetParent) {
+      removeParentSticky(element.offsetParent);
+    }
   }
   function addParentSticky(element) {
     if (element?.dataset?.sticky === "true") {
       element.style.removeProperty("position");
       delete element.dataset.sticky;
     }
-    if (element.offsetParent) addParentSticky(element.offsetParent);
+    if (element.offsetParent) {
+      addParentSticky(element.offsetParent);
+    }
   }
   function offsetTop(element, accumulator = 0) {
     const top = accumulator + element.offsetTop;
-    if (element.offsetParent) return offsetTop(element.offsetParent, top);
+    if (element.offsetParent) {
+      return offsetTop(element.offsetParent, top);
+    }
     return top;
   }
   function offsetLeft(element, accumulator = 0) {
     const left = accumulator + element.offsetLeft;
-    if (element.offsetParent) return offsetLeft(element.offsetParent, left);
+    if (element.offsetParent) {
+      return offsetLeft(element.offsetParent, left);
+    }
     return left;
   }
   function scrollTop(element, accumulator = 0) {
     const top = accumulator + element.scrollTop;
-    if (element.offsetParent) return scrollTop(element.offsetParent, top);
+    if (element.offsetParent) {
+      return scrollTop(element.offsetParent, top);
+    }
     return top + window.scrollY;
   }
   function scrollLeft(element, accumulator = 0) {
     const left = accumulator + element.scrollLeft;
-    if (element.offsetParent) return scrollLeft(element.offsetParent, left);
+    if (element.offsetParent) {
+      return scrollLeft(element.offsetParent, left);
+    }
     return left + window.scrollX;
   }
   var SnapElement = class {
     element;
     options;
     align;
+    // @ts-expect-error
     rect = {};
     wrapperResizeObserver;
     resizeObserver;
     debouncedWrapperResize;
-    constructor(element, { align = ["start"], ignoreSticky = true, ignoreTransform = false } = {}) {
+    constructor(element, {
+      align = ["start"],
+      ignoreSticky = true,
+      ignoreTransform = false
+    } = {}) {
       this.element = element;
-      this.options = {
-        align,
-        ignoreSticky,
-        ignoreTransform
-      };
+      this.options = { align, ignoreSticky, ignoreTransform };
       this.align = [align].flat();
       this.debouncedWrapperResize = debounce2(this.onWrapperResize, 500);
       this.wrapperResizeObserver = new ResizeObserver(this.debouncedWrapperResize);
@@ -4057,13 +4380,20 @@
       this.wrapperResizeObserver.disconnect();
       this.resizeObserver.disconnect();
     }
-    setRect({ top, left, width, height, element } = {}) {
+    setRect({
+      top,
+      left,
+      width,
+      height,
+      element
+    } = {}) {
       top = top ?? this.rect.top;
       left = left ?? this.rect.left;
       width = width ?? this.rect.width;
       height = height ?? this.rect.height;
       element = element ?? this.rect.element;
-      if (top === this.rect.top && left === this.rect.left && width === this.rect.width && height === this.rect.height && element === this.rect.element) return;
+      if (top === this.rect.top && left === this.rect.left && width === this.rect.width && height === this.rect.height && element === this.rect.element)
+        return;
       this.rect.top = top;
       this.rect.y = top;
       this.rect.width = width;
@@ -4086,19 +4416,13 @@
         left = rect.left + scrollLeft(this.element);
       }
       if (this.options.ignoreSticky) addParentSticky(this.element);
-      this.setRect({
-        top,
-        left
-      });
+      this.setRect({ top, left });
     };
     onResize = ([entry]) => {
       if (!entry?.borderBoxSize[0]) return;
       const width = entry.borderBoxSize[0].inlineSize;
       const height = entry.borderBoxSize[0].blockSize;
-      this.setRect({
-        width,
-        height
-      });
+      this.setRect({ width, height });
     };
   };
   var index = 0;
@@ -4106,19 +4430,21 @@
     return index++;
   }
   var Snap = class {
-    options;
-    elements = /* @__PURE__ */ new Map();
-    snaps = /* @__PURE__ */ new Map();
-    viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight
-    };
-    isStopped = false;
-    onSnapDebounced;
-    currentSnapIndex;
-    constructor(lenis2, { type = "proximity", lerp: lerp2, easing, duration, distanceThreshold = "50%", debounce: debounceDelay = 500, onSnapStart, onSnapComplete } = {}) {
+    constructor(lenis2, {
+      type = "proximity",
+      lerp: lerp2,
+      easing,
+      duration,
+      distanceThreshold = "50%",
+      // useless when type is "mandatory"
+      debounce: debounceDelay = 500,
+      onSnapStart,
+      onSnapComplete
+    } = {}) {
       this.lenis = lenis2;
-      if (!window.lenis) window.lenis = {};
+      if (!window.lenis) {
+        window.lenis = {};
+      }
       window.lenis.snap = true;
       this.options = {
         type,
@@ -4132,12 +4458,25 @@
       };
       this.onWindowResize();
       window.addEventListener("resize", this.onWindowResize);
-      this.onSnapDebounced = debounce2(this.onSnap, this.options.debounce);
+      this.onSnapDebounced = debounce2(
+        this.onSnap,
+        this.options.debounce
+      );
       this.lenis.on("virtual-scroll", this.onSnapDebounced);
     }
+    options;
+    elements = /* @__PURE__ */ new Map();
+    snaps = /* @__PURE__ */ new Map();
+    viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+    isStopped = false;
+    onSnapDebounced;
+    currentSnapIndex;
     /**
-    * Destroy the snap instance
-    */
+     * Destroy the snap instance
+     */
     destroy() {
       this.lenis.off("virtual-scroll", this.onSnapDebounced);
       window.removeEventListener("resize", this.onWindowResize);
@@ -4146,43 +4485,45 @@
       });
     }
     /**
-    * Start the snap after it has been stopped
-    */
+     * Start the snap after it has been stopped
+     */
     start() {
       this.isStopped = false;
     }
     /**
-    * Stop the snap
-    */
+     * Stop the snap
+     */
     stop() {
       this.isStopped = true;
     }
     /**
-    * Add a snap to the snap instance
-    *
-    * @param value The value to snap to
-    * @param userData User data that will be forwarded through the snap event
-    * @returns Unsubscribe function
-    */
+     * Add a snap to the snap instance
+     *
+     * @param value The value to snap to
+     * @param userData User data that will be forwarded through the snap event
+     * @returns Unsubscribe function
+     */
     add(value) {
       const id = uid();
       this.snaps.set(id, { value });
       return () => this.snaps.delete(id);
     }
     /**
-    * Add an element to the snap instance
-    *
-    * @param element The element to add
-    * @param options The options for the element
-    * @returns Unsubscribe function
-    */
+     * Add an element to the snap instance
+     *
+     * @param element The element to add
+     * @param options The options for the element
+     * @returns Unsubscribe function
+     */
     addElement(element, options = {}) {
       const id = uid();
       this.elements.set(id, new SnapElement(element, options));
       return () => this.elements.delete(id);
     }
     addElements(elements, options = {}) {
-      const map = [...elements].map((element) => this.addElement(element, options));
+      const map = [...elements].map(
+        (element) => this.addElement(element, options)
+      );
       return () => {
         map.forEach((remove) => {
           remove();
@@ -4199,10 +4540,16 @@
       this.elements.forEach(({ rect, align }) => {
         let value;
         align.forEach((align2) => {
-          if (align2 === "start") value = rect.top;
-          else if (align2 === "center") value = isHorizontal ? rect.left + rect.width / 2 - this.viewport.width / 2 : rect.top + rect.height / 2 - this.viewport.height / 2;
-          else if (align2 === "end") value = isHorizontal ? rect.left + rect.width - this.viewport.width : rect.top + rect.height - this.viewport.height;
-          if (typeof value === "number") snaps.push({ value: Math.ceil(value) });
+          if (align2 === "start") {
+            value = rect.top;
+          } else if (align2 === "center") {
+            value = isHorizontal ? rect.left + rect.width / 2 - this.viewport.width / 2 : rect.top + rect.height / 2 - this.viewport.height / 2;
+          } else if (align2 === "end") {
+            value = isHorizontal ? rect.left + rect.width - this.viewport.width : rect.top + rect.height - this.viewport.height;
+          }
+          if (typeof value === "number") {
+            snaps.push({ value: Math.ceil(value) });
+          }
         });
       });
       snaps = snaps.sort((a, b) => Math.abs(a.value) - Math.abs(b.value));
@@ -4245,15 +4592,20 @@
       if (this.options.type === "mandatory") return Number.POSITIVE_INFINITY;
       const { isHorizontal } = this.lenis;
       const axis = isHorizontal ? "width" : "height";
-      if (typeof this.options.distanceThreshold === "string" && this.options.distanceThreshold.endsWith("%")) distanceThreshold = Number(this.options.distanceThreshold.replace("%", "")) / 100 * this.viewport[axis];
-      else if (typeof this.options.distanceThreshold === "number") distanceThreshold = this.options.distanceThreshold;
-      else distanceThreshold = this.viewport[axis];
+      if (typeof this.options.distanceThreshold === "string" && this.options.distanceThreshold.endsWith("%")) {
+        distanceThreshold = Number(this.options.distanceThreshold.replace("%", "")) / 100 * this.viewport[axis];
+      } else if (typeof this.options.distanceThreshold === "number") {
+        distanceThreshold = this.options.distanceThreshold;
+      } else {
+        distanceThreshold = this.viewport[axis];
+      }
       return distanceThreshold;
     }
     onSnap = (e) => {
       if (this.isStopped) return;
       if (e.event.type === "touchmove") return;
-      if (this.options.type === "lock" && this.lenis.userData?.initiator === "snap") return;
+      if (this.options.type === "lock" && this.lenis.userData?.initiator === "snap")
+        return;
       let { scroll, isHorizontal } = this.lenis;
       const delta = isHorizontal ? e.deltaX : e.deltaY;
       scroll = Math.ceil(this.lenis.scroll + delta);
@@ -4263,19 +4615,26 @@
       const prevSnapIndex = snaps.findLastIndex(({ value }) => value < scroll);
       const nextSnapIndex = snaps.findIndex(({ value }) => value > scroll);
       if (this.options.type === "lock") {
-        if (delta > 0) snapIndex = nextSnapIndex;
-        else if (delta < 0) snapIndex = prevSnapIndex;
+        if (delta > 0) {
+          snapIndex = nextSnapIndex;
+        } else if (delta < 0) {
+          snapIndex = prevSnapIndex;
+        }
       } else {
         const prevSnap = snaps[prevSnapIndex];
         const distanceToPrevSnap = prevSnap ? Math.abs(scroll - prevSnap.value) : Number.POSITIVE_INFINITY;
         const nextSnap = snaps[nextSnapIndex];
-        snapIndex = distanceToPrevSnap < (nextSnap ? Math.abs(scroll - nextSnap.value) : Number.POSITIVE_INFINITY) ? prevSnapIndex : nextSnapIndex;
+        const distanceToNextSnap = nextSnap ? Math.abs(scroll - nextSnap.value) : Number.POSITIVE_INFINITY;
+        snapIndex = distanceToPrevSnap < distanceToNextSnap ? prevSnapIndex : nextSnapIndex;
       }
       if (snapIndex === void 0) return;
       if (snapIndex === -1) return;
       snapIndex = Math.max(0, Math.min(snapIndex, snaps.length - 1));
       const snap2 = snaps[snapIndex];
-      if (Math.abs(scroll - snap2.value) <= this.distanceThreshold) this.goTo(snapIndex);
+      const distance = Math.abs(scroll - snap2.value);
+      if (distance <= this.distanceThreshold) {
+        this.goTo(snapIndex);
+      }
     };
     resize() {
       this.elements.forEach((element) => {
@@ -4290,6 +4649,10 @@
       const trigger = e.target.closest('[data-panel="layer1"]');
       if (trigger) {
         const stepNumber = trigger.dataset.step;
+        document.querySelectorAll(".offcanvas.show").forEach((p) => {
+          const inst = bootstrap.Offcanvas.getInstance(p);
+          if (inst) inst.hide();
+        });
         state.panelStack = [];
         openPanel("layer1", stepNumber);
       }
@@ -4326,9 +4689,15 @@
     const content = getPanelContent(panelType, contentId);
     if (content) {
       const titleElement = document.getElementById(`${panelId}-title`);
-      const demoBadgeText = window.telarLang?.demoPanelBadge || "Demo content";
-      const demoBadge = content.demo ? `<span class="demo-badge-inline" style="margin-left: 0.5rem;">${demoBadgeText}</span>` : "";
-      titleElement.innerHTML = content.title + demoBadge;
+      titleElement.textContent = content.title;
+      if (content.demo) {
+        const demoBadgeText = window.telarLang?.demoPanelBadge || "Demo content";
+        const badge = document.createElement("span");
+        badge.className = "demo-badge-inline";
+        badge.style.marginLeft = "0.5rem";
+        badge.textContent = demoBadgeText;
+        titleElement.appendChild(badge);
+      }
       const contentElement = document.getElementById(`${panelId}-content`);
       contentElement.innerHTML = content.html;
       if (window.Telar && window.Telar.initializeGlossaryLinks) {
@@ -4366,11 +4735,8 @@
     if (bsOffcanvas) {
       bsOffcanvas.hide();
     }
-    const stackAfterClose = state.panelStack.filter((p) => p.type !== panelType);
-    const savedStack = state.panelStack;
-    state.panelStack = stackAfterClose;
+    state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
     writeHash();
-    state.panelStack = savedStack;
     setTimeout(() => {
       const anyPanelOpen = document.querySelector(".offcanvas.show");
       if (!anyPanelOpen) {
@@ -4383,7 +4749,6 @@
     if (state.panelStack.length > 0) {
       const top = state.panelStack[state.panelStack.length - 1];
       closePanel(top.type);
-      state.panelStack.pop();
     }
   }
   function closeAllPanels() {
@@ -4410,7 +4775,7 @@
       }, step.object);
       if (step.layer2_title && step.layer2_title.trim() !== "" || step.layer2_text && step.layer2_text.trim() !== "") {
         const buttonLabel = step.layer2_button && step.layer2_button.trim() !== "" ? step.layer2_button : window.telarLang.goDeeper;
-        html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${buttonLabel} \u2192</button></p>`;
+        html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${escapeHtml(buttonLabel)} \u2192</button></p>`;
       }
       return {
         title: step.layer1_title || step.layer1_button || "Layer 1",
@@ -4449,7 +4814,7 @@
       const objectsData = window.objectsData || [];
       const panelObj = objectId ? objectsData.find((o) => o.object_id === objectId) || {} : {};
       const panelAlt = panelObj.alt_text || panelObj.title || objectId || "Panel image";
-      html += `<img src="${mediaUrl}" alt="${panelAlt}" class="img-fluid">`;
+      html += `<img src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(panelAlt)}" class="img-fluid">`;
     }
     return html;
   }
@@ -4501,6 +4866,22 @@
 
   // assets/js/telar-story/deep-link.js
   var _isScrollDrivenHashUpdate = false;
+  var _deepLinkTimers = [];
+  function _cancelDeepLinkTimers() {
+    _deepLinkTimers.forEach(clearTimeout);
+    _deepLinkTimers = [];
+  }
+  function _armDeepLinkCancellation() {
+    const cancel = () => {
+      _cancelDeepLinkTimers();
+      window.removeEventListener("wheel", cancel);
+      window.removeEventListener("keydown", cancel);
+      window.removeEventListener("touchstart", cancel);
+    };
+    window.addEventListener("wheel", cancel, { passive: true });
+    window.addEventListener("keydown", cancel);
+    window.addEventListener("touchstart", cancel, { passive: true });
+  }
   var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g|ps)(\d+))?)?$/;
   function parseFragment(hash) {
     if (!hash || hash === "#") return null;
@@ -4632,25 +5013,28 @@
       const stepNumber = state.steps[targetIndex]?.dataset?.step;
       if (stepNumber) {
         let delay = 100;
+        const onTarget = () => state.lenis ? state.currentIndex === targetIndex : state.currentMobileStep === targetIndex;
         if (parsed.layer >= 2) {
-          setTimeout(() => {
-            openPanel("layer1", stepNumber);
-          }, delay);
+          _deepLinkTimers.push(setTimeout(() => {
+            if (onTarget()) openPanel("layer1", stepNumber);
+          }, delay));
           delay += 200;
         }
-        setTimeout(() => {
-          openPanel("layer" + parsed.layer, stepNumber);
-        }, delay);
+        _deepLinkTimers.push(setTimeout(() => {
+          if (onTarget()) openPanel("layer" + parsed.layer, stepNumber);
+        }, delay));
         delay += 200;
         if (parsed.subType === "g" && parsed.subN !== null) {
-          setTimeout(() => {
+          _deepLinkTimers.push(setTimeout(() => {
+            if (!onTarget()) return;
             const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
             if (panelContent) {
               const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
               if (target) target.click();
             }
-          }, delay);
+          }, delay));
         }
+        if (_deepLinkTimers.length) _armDeepLinkCancellation();
       }
     }
   }
@@ -4669,6 +5053,14 @@
     if (!surface || !cardStack) {
       console.error("scroll-engine: .scroll-surface or .card-stack not found in DOM");
       return;
+    }
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    if (dwellTimer) {
+      clearTimeout(dwellTimer);
+      dwellTimer = null;
     }
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     history.scrollRestoration = "manual";
@@ -4841,7 +5233,7 @@
     const progress = clamped - stepIndex;
     state.scrollProgress = progress;
     setCardProgress(stepIndex, progress);
-    lerpIiifPosition(stepIndex, progress, window.storyData?.steps || []);
+    lerpIiifPosition(stepIndex, progress, state.stepsData || []);
     if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
       const direction = stepIndex > state.currentIndex ? "forward" : "backward";
       state.scrollDriven = true;

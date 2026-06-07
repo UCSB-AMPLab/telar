@@ -343,8 +343,8 @@ share:
   height: "Height"
 
   # Warning messages
-  include_key_warning: "Anyone with this link will be able to view the story."
-  embed_key_warning: "Anyone with this embed will be able to view the story."
+  include_key_warning: "This link includes the access key, so anyone who has it can open the story. Don't share it publicly."
+  embed_key_warning: "This embed code includes the access key, so anyone who copies it can open the story. Only embed it on sites you trust."
   protected_story_warning: "This story is protected. Recipients will need the key to view it."
   protected_embed_warning: "This story is protected. The embed will show a lock screen until viewers enter the key."
 

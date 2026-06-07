@@ -9,7 +9,7 @@ The parsing validates required fields (image), warns about missing alt text
 for accessibility, and analyzes image aspect ratios to determine optimal
 carousel height.
 
-Version: v0.7.0-beta
+Version: v1.5.0
 """
 
 import sys
@@ -206,3 +206,41 @@ credit: Source: Museum Archives"""
         result = parse_carousel_widget(content, 'test.md', warnings)
         assert 'Time: 3:00 PM' in result['items'][0]['caption']
         assert 'Source: Museum Archives' in result['items'][0]['credit']
+
+
+class TestSanitizeCaptionHtml:
+    """Tests for sanitize_caption_html() — caption/credit allowlist."""
+
+    def _render(self, src):
+        import re as _re
+        import markdown as _md
+        from telar.widgets import sanitize_caption_html
+        html = _md.markdown(src)
+        html = _re.sub(r'^<p>(.*)</p>$', r'\1', html.strip())
+        return sanitize_caption_html(html)
+
+    def test_strips_img_with_event_handler(self):
+        """An <img onerror=…> is dropped entirely."""
+        out = self._render('<img src=x onerror=alert(1)>')
+        assert 'onerror' not in out and '<img' not in out
+
+    def test_preserves_emphasis_and_strong(self):
+        """Italic/bold markup survives sanitisation."""
+        out = self._render('*italic* and **bold**')
+        assert '<em>italic</em>' in out and '<strong>bold</strong>' in out
+
+    def test_preserves_safe_links(self):
+        """An https link keeps its href."""
+        out = self._render('[link](https://example.com)')
+        assert 'href="https://example.com"' in out
+
+    def test_drops_javascript_scheme_links(self):
+        """A javascript: link loses its href (unsafe scheme)."""
+        out = self._render('[bad](javascript:alert(1))')
+        assert 'javascript:' not in out
+
+    def test_drops_unknown_attributes_on_links(self):
+        """Only href/title survive on an anchor; class/onclick are stripped."""
+        from telar.widgets import sanitize_caption_html
+        out = sanitize_caption_html('<a href="https://x.test" onclick="alert(1)" class="z">t</a>')
+        assert 'onclick' not in out and 'class' not in out and 'href="https://x.test"' in out

@@ -6,7 +6,7 @@
  * DOM-interacting functions (initCardPool, activateCard, preloadAhead)
  * are not tested here — they require a real browser environment.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -203,6 +203,19 @@ describe('computeZIndexPlan — title cards', () => {
     expect(result.plateZ[0]).toBe(100);
     expect(result.plateZ[1]).toBe(200);
   });
+
+  it('caps z-index bands at 9800 for stories beyond 98 unique scenes', () => {
+    // 120 distinct objects → scenes 0..119; uncapped band for scene 119 would
+    // be 12000 and overflow into the fixed-UI / panel chrome reserve.
+    const steps = Array.from({ length: 120 }, (_, i) => ({ object: 'obj-' + i }));
+    const result = computeZIndexPlan(steps);
+    const maxPlate = Math.max(...Object.values(result.plateZ));
+    const maxText = Math.max(...Object.values(result.textCardZ));
+    expect(maxPlate).toBeLessThanOrEqual(9800);
+    expect(maxText).toBeLessThanOrEqual(9800 + 1); // textCard = bandBase + 1 + runPos
+    // Bands below the cap are unchanged (scene 50 → 5100).
+    expect(result.plateZ[50]).toBe(5100);
+  });
 });
 
 // ── setCardProgress — title card fallback ────────────────────────────────────
@@ -297,6 +310,62 @@ describe('cardOverlayRect — rect populated in reduced-motion synchronous branc
     // Synchronous branch: rect is set immediately (no transitionend needed)
     expect(state.cardOverlayRect).toBe(MOCK_RECT);
     expect(mockCard.getBoundingClientRect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('activateCard — same-object jump re-shows a hidden viewer plate', () => {
+  beforeEach(() => {
+    // Reduced-motion stub so _activateTextCard takes the synchronous branch.
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    state.titleCards = {};
+    state.stepToScene = { 0: 0 };
+    state.totalScenes = 1;
+    state.sceneFirstStep = { 0: 0 };
+    state.viewerCards = [];
+    state.activeTitleCardIndex = null;
+    // Same object as the target step → activateCard takes the text-only branch.
+    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    // scroll-driven so the IIIF animate path is skipped, isolating the
+    // is-active behaviour under test.
+    state.scrollDriven = true;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    state.scrollDriven = false;
+  });
+
+  function wireStep0(plate) {
+    state.viewerPlates = { 0: plate };
+    const card = document.createElement('div');
+    card.getBoundingClientRect = vi.fn().mockReturnValue(
+      { top: 0, left: 0, width: 1, height: 1, bottom: 1, right: 1 });
+    state.textCards = { 0: card };
+    state.cardPool = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: card }];
+  }
+
+  it('re-adds is-active to the scene plate that a jump had hidden', () => {
+    const plate = document.createElement('div'); // plain IIIF plate, no is-active
+    wireStep0(plate);
+
+    expect(plate.classList.contains('is-active')).toBe(false);
+    activateCard(0, 'forward'); // same-object jump after navigateToStep hid plates
+    expect(plate.classList.contains('is-active')).toBe(true);
+    expect(plate.style.transform).toMatch(/translateY\(0\)/);
+  });
+
+  it('leaves an already-active plate untouched (idempotent during normal scroll)', () => {
+    const plate = document.createElement('div');
+    plate.classList.add('is-active');
+    wireStep0(plate);
+
+    activateCard(0, 'forward');
+    expect(plate.classList.contains('is-active')).toBe(true);
   });
 });
 

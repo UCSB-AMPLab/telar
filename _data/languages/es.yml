@@ -151,10 +151,10 @@ objects:
   of: "de"
   objects: "objetos"
   clear_all: "Limpiar todo"
-  search_placeholder: "Buscar objetos..."
+  search_placeholder: "Buscar objetos…"
   clear_search: "Limpiar búsqueda"
   filter_by: "Filtrar por:"
-  loading_filters: "Cargando filtros..."
+  loading_filters: "Cargando filtros…"
   no_results: "Ningún objeto coincide con tu búsqueda"
   type: "Tipo"
   creator: "Creador"
@@ -249,7 +249,7 @@ errors:
     iiif_404: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no existe (error 404)"
     iiif_429: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 429). Error 429 significa \"Too Many Requests\": el servidor IIIF está limitando tus solicitudes porque pediste este manifiesto muchas veces durante el desarrollo o las pruebas, así que bloqueó temporalmente tus peticiones. Seguramente se resolverá en 15-30 minutos. Intenta reconstruir tu sitio después."
     iiif_403: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 403). Error 403 significa \"Forbidden\": el servidor IIIF está bloqueando el acceso al manifiesto. Usualmente requiere autenticación, tiene restricciones de IP o no es público. Contacta a la institución para confirmar que el manifiesto sea público, o usa otro recurso IIIF."
-    iiif_401: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 401). Error 401 significa \"Unauthorized\": este manifiesto requiere autenticación. Telar no soporta manifiestos IIIF que exigen autenticación, así que necesitas usar un manifiesto público."
+    iiif_401: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 401). Error 401 significa \"Unauthorized\": este manifiesto requiere autenticación. Telar no admite manifiestos IIIF que exigen autenticación, así que necesitas usar un manifiesto público."
     iiif_500: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 500). Error 500 significa \"Internal Server Error\": el servidor IIIF tiene problemas técnicos. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
     iiif_503: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 503). Error 503 significa \"Service Unavailable\": el servidor IIIF está temporalmente fuera de servicio, quizá por mantenimiento o sobrecarga. Intenta reconstruir tu sitio más tarde."
     iiif_502: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 502). Error 502 significa \"Bad Gateway\": hay un problema en la infraestructura del servidor IIIF. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
@@ -262,7 +262,7 @@ errors:
     short_404: "Error 404: manifiesto no encontrado"
     short_429: "Error 429: límite de solicitudes (intenta otra vez en 15-30 min)"
     short_403: "Error 403: acceso prohibido (requiere autenticación o IP específica)"
-    short_401: "Error 401: autenticación requerida (Telar no la soporta)"
+    short_401: "Error 401: autenticación requerida (Telar no la admite)"
     short_500: "Error 500: fallo del servidor (intenta más tarde)"
     short_503: "Error 503: servicio no disponible (intenta más tarde)"
     short_502: "Error 502: problema de conectividad (intenta más tarde)"
@@ -320,7 +320,7 @@ share:
   include_key_label: "Opción de incluir clave"
 
   # Placeholders
-  select_placeholder: "Elige una historia..."
+  select_placeholder: "Elige una historia…"
   select_story_first: "Selecciona una historia arriba"
 
   # Texto de ayuda
@@ -343,8 +343,8 @@ share:
   height: "Alto"
 
   # Mensajes de advertencia
-  include_key_warning: "Cualquier persona con este enlace podrá ver la historia."
-  embed_key_warning: "Cualquier persona con este código podrá ver la historia."
+  include_key_warning: "Este enlace incluye la clave de acceso, así que cualquiera que lo reciba podrá abrir la historia. No lo compartas en público."
+  embed_key_warning: "Este código incluye la clave de acceso, así que cualquiera que lo copie podrá abrir la historia. Úsalo solo en sitios de confianza."
   protected_story_warning: "Esta historia está protegida. Las personas que la reciban necesitarán la clave para verla."
   protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
 
@@ -362,8 +362,8 @@ share:
   share_story_heading: "Compartir esta historia"
   share_site_heading: "Compartir este sitio"
   help_story_link_homepage: "Copia un enlace directo a una historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
-  help_embed_intro_stories: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
-  help_embed_intro_homepage: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar soporta esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona una historia e indica un tamaño (usando un tamaño predefinido o indicando dimensiones específicas), luego copia el código y pégalo en tu sitio."
+  help_embed_intro_stories: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar admite esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
+  help_embed_intro_homepage: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar admite esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona una historia e indica un tamaño (usando un tamaño predefinido o indicando dimensiones específicas), luego copia el código y pégalo en tu sitio."
   help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."
   help_embed: "Copia este código y pégalo en tu sitio web, LMS o blog para insertar (*embed*) esta historia."
 

@@ -25,7 +25,7 @@
  * The _isScrollDrivenHashUpdate guard prevents feedback loops between the
  * hash writes here and any hashchange listener.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { state } from './state.js';
@@ -41,6 +41,43 @@ import { openPanel } from './panels.js';
  * to prevent the write→hashchange→navigate feedback loop.
  */
 let _isScrollDrivenHashUpdate = false;
+
+// ── Deep-link panel-open timer ladder ───────────────────────────────────────────
+
+/**
+ * Pending panel-open timers scheduled by applyDeepLinkOnLoad. The panel sequence
+ * runs as a short setTimeout ladder so the card stack can render before Bootstrap
+ * Offcanvas opens; if the reader starts navigating during that window, the
+ * deferred opens would pop panels over a now-different step. We track the timer
+ * IDs so a genuine user interaction can cancel the whole ladder.
+ */
+let _deepLinkTimers = [];
+
+/** Clear any pending deep-link panel-open timers. Safe to call when empty. */
+function _cancelDeepLinkTimers() {
+  _deepLinkTimers.forEach(clearTimeout);
+  _deepLinkTimers = [];
+}
+
+/**
+ * Cancel the deep-link timer ladder on the first genuine user interaction.
+ * Listens for wheel / keydown / touchstart — all user-initiated. We deliberately
+ * do NOT listen for the Lenis 'scroll' event: applyDeepLinkOnLoad's own
+ * immediate jump emits a 'scroll', which would self-cancel the ladder before any
+ * panel opened. The handler clears the timers and removes all three listeners.
+ * Must be armed AFTER the jump's scrollTo so it can't be tripped by the jump.
+ */
+function _armDeepLinkCancellation() {
+  const cancel = () => {
+    _cancelDeepLinkTimers();
+    window.removeEventListener('wheel', cancel);
+    window.removeEventListener('keydown', cancel);
+    window.removeEventListener('touchstart', cancel);
+  };
+  window.addEventListener('wheel', cancel, { passive: true });
+  window.addEventListener('keydown', cancel);
+  window.addEventListener('touchstart', cancel, { passive: true });
+}
 
 // ── Fragment regex ────────────────────────────────────────────────────────────
 
@@ -339,14 +376,26 @@ export function applyDeepLinkOnLoad() {
     if (stepNumber) {
       let delay = 100;
 
+      // Each deferred open also re-checks that we are still on the deep-link
+      // target before acting — a backstop that covers navigation paths the
+      // interaction listener can't (e.g. a mobile nav-button tap), and the lenis
+      // vs button mode use different position fields.
+      const onTarget = () => state.lenis
+        ? state.currentIndex === targetIndex
+        : state.currentMobileStep === targetIndex;
+
       // Open layer1 first if the target is layer2 or deeper
       if (parsed.layer >= 2) {
-        setTimeout(() => { openPanel('layer1', stepNumber); }, delay);
+        _deepLinkTimers.push(setTimeout(() => {
+          if (onTarget()) openPanel('layer1', stepNumber);
+        }, delay));
         delay += 200;
       }
 
       // Open the target layer
-      setTimeout(() => { openPanel('layer' + parsed.layer, stepNumber); }, delay);
+      _deepLinkTimers.push(setTimeout(() => {
+        if (onTarget()) openPanel('layer' + parsed.layer, stepNumber);
+      }, delay));
       delay += 200;
 
       // Glossary sub-link activation: after the panel opens, find the
@@ -355,14 +404,19 @@ export function applyDeepLinkOnLoad() {
       // in time the click target won't exist and the sub-link is silently
       // skipped.
       if (parsed.subType === 'g' && parsed.subN !== null) {
-        setTimeout(() => {
+        _deepLinkTimers.push(setTimeout(() => {
+          if (!onTarget()) return;
           const panelContent = document.getElementById('panel-layer' + parsed.layer + '-content');
           if (panelContent) {
             const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
             if (target) target.click();
           }
-        }, delay);
+        }, delay));
       }
+
+      // Arm cancellation only now that timers are scheduled — and after the
+      // jump above, so the jump's own scroll can't trip it.
+      if (_deepLinkTimers.length) _armDeepLinkCancellation();
     }
   }
 

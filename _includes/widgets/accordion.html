@@ -1,3 +1,16 @@
+<!--
+  Accordion Widget
+
+  Renders a stack of collapsible panels — a Bootstrap accordion — so that long or
+  optional supporting material can be tucked away and opened one panel at a time.
+  Unlike the page-level Liquid includes, this partial is rendered by Telar's widget
+  build step rather than by Jekyll directly, so its variables are supplied by that
+  script: widget_id (a unique slug used to scope every id/aria target, so several
+  accordions on one page never collide) and panels (a list, each with a title and a
+  pre-rendered content_html). The content arrives already converted to HTML and is
+  emitted through the "safe" filter because the build step has done the escaping;
+  loop.index distinguishes the panels. All panels start collapsed.
+-->
 <div class="telar-widget telar-widget-accordion">
   <div class="accordion" id="accordion-{{ widget_id }}">
     {% for panel in panels %}
@@ -17,7 +30,7 @@
            aria-labelledby="heading-{{ widget_id }}-{{ loop.index }}"
            data-bs-parent="#accordion-{{ widget_id }}">
         <div class="accordion-body">
-          {{ panel.content_html }}
+          {{ panel.content_html | safe }}
         </div>
       </div>
     </div>

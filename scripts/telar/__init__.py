@@ -4,7 +4,7 @@ Telar Data Processing Package
 Modular package for processing Telar story data from CSV/Google Sheets
 into JSON format for the Jekyll-based storytelling framework.
 
-Version: v0.7.0-beta
+Version: v1.5.0
 """
 
 # Public API re-exports

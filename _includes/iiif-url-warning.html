@@ -1,7 +1,28 @@
 {%- comment -%}
-IIIF URL Mismatch Warning
-Detects when viewing site URL doesn't match IIIF manifest URLs and provides helpful guidance.
-All user-facing strings come from lang.errors.iiif_mismatch in _data/languages/<telar_language>.yml.
+IIIF URL mismatch warning — a self-diagnosing banner that catches the most
+common reason locally hosted images fail to appear: the address the site is
+being viewed at no longer matches the base URL baked into its IIIF manifests
+when the tiles were generated. The markup is a hidden alert box; the embedded
+script below decides whether to reveal it.
+
+How it works — on load the script reads the current origin and baseurl, fetches
+objects.json, and keeps only objects that rely on local IIIF tiles (no external
+iiif_manifest). For each it fetches the object's manifest.json and extracts the
+base URL from the manifest's own id, then compares that (trailing slashes
+normalised) against where the page is actually being served. Any object whose
+manifest points elsewhere is collected as "affected", and if there are any the
+banner is shown listing them.
+
+Local vs production guidance — the fix differs by environment, so the script
+branches on whether the origin is localhost/127.0.0.1. Local development gets a
+ready-to-run generate_iiif.py command targeting the current URL; production gets
+the suggested url:/baseurl: _config.yml values (parsed from the live address)
+plus the regenerate-and-push workflow. Detection failures fail silently — the
+banner stays hidden rather than alarming the user over an unrelated fetch error.
+
+All user-facing strings come from lang.errors.iiif_mismatch in
+_data/languages/<telar_language>.yml; the two count templates are injected into
+the script as JSON for singular/plural affected-image messaging.
 {%- endcomment -%}
 {% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
 {% assign iiif_lang = lang.errors.iiif_mismatch %}
@@ -151,11 +172,18 @@ const TelarI18nIIIF = {
           : TelarI18nIIIF.affectedImagesPlural;
         heading.textContent = template.replace('__COUNT__', count);
 
-        // Populate affected images list
+        // Populate affected images list. Build each row with DOM nodes so an
+        // object title containing markup renders as text, not as HTML.
         const affectedList = document.getElementById('affected-images');
-        affectedList.innerHTML = affectedObjects.map(obj =>
-          `<li><strong>${obj.title}</strong> (${obj.id})</li>`
-        ).join('');
+        affectedList.replaceChildren();
+        affectedObjects.forEach(obj => {
+          const li = document.createElement('li');
+          const strong = document.createElement('strong');
+          strong.textContent = obj.title;
+          li.appendChild(strong);
+          li.appendChild(document.createTextNode(` (${obj.id})`));
+          affectedList.appendChild(li);
+        });
 
         // Show context-appropriate fix instructions
         if (isLocalDev) {

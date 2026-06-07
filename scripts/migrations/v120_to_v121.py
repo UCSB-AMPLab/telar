@@ -22,6 +22,7 @@ class Migration120to121(BaseMigration):
 
     from_version = "1.2.0"
     to_version = "1.2.1"
+    _TARGET_TAG = "v1.2.1"  # pin framework fetches to the release tag
     description = "Demo content fetch tolerates v-prefixed telar.version values"
 
     def check_applicable(self) -> bool:

@@ -2,6 +2,39 @@
 layout: default
 ---
 
+{%- comment -%}
+  Object layout — the detail page for a single collection object, rendered inside the default
+  shell. One template serves all three media types (Image, Video, Audio); the media type,
+  injected into frontmatter by generate_collections.py as `page.media_type`, switches which
+  viewer and which author-facing tools appear. This is the large (~1,280-line) object page,
+  long mostly because each media branch carries its own viewer wiring, metadata block, and
+  copy-to-clipboard scripts.
+
+  What it renders — a two-column layout: a viewer on the left and a metadata sidebar on the
+  right. The viewer branches by media type — an OpenSeadragon IIIF viewer for images (with a
+  collapsible "identify coordinates" panel that reports live x/y/zoom/page values for authors
+  building stories), an embedded YouTube/Vimeo/Google Drive iframe for video (with a clip-time
+  picker), or a vendored WaveSurfer waveform for audio (also with a clip picker). The sidebar
+  shows title, description, and a definition list of metadata (creator, period, medium,
+  dimensions, location, credit, plus any extra CSV columns surfaced via `page.extra_metadata`),
+  the IIIF manifest or provider/source/embed URLs, the object's long-form `{{ content }}`, and a
+  list of stories the object appears in.
+
+  Key context — `page.media_type` (defaults to Image) drives every branch; `page.object_id`
+  locates locally generated IIIF tiles and audio files; `page.source_url`/`page.iiif_manifest`
+  point at remote media; `lang` supplies all user-facing strings; `site.objects` is scanned to
+  find related stories. Author tooling strings live under `lang.object.coordinates` and
+  `lang.object.clip_picker`.
+
+  Non-obvious behaviour — object pages deliberately skip the full telar-story.js bundle (which
+  is story-only) and instead import the IIIF viewer wrapper directly from its ESM source, and
+  they re-enable OpenSeadragon's native scroll/click-to-zoom because there is no Lenis scroll
+  engine here to conflict with. URLs interpolated into inline scripts are jsonified and guarded
+  against `</script>` breakout, and only http(s) source URLs render as live links so a
+  javascript:/data: URL degrades to plain text. The clip pickers expose start/end times the
+  author copies into the story spreadsheet rather than playing media inline in a story.
+{%- endcomment -%}
+
 {% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
 
 {% comment %}Detect media type from frontmatter (injected by generate_collections.py){% endcomment %}
@@ -355,7 +388,14 @@ layout: default
           <dd class="col-sm-8">{{ provider_name }}</dd>
 
           <dt class="col-sm-4">{{ lang.object.metadata.source | default: "Source" }}</dt>
+          {%- comment -%} Only render a clickable link for http(s); a javascript:/data: source_url
+          (which can still pass the provider sniff above) degrades to plain text. {%- endcomment -%}
+          {% assign _src_scheme = page.source_url | slice: 0, 5 %}
+          {% if _src_scheme == 'https' or _src_scheme == 'http:' %}
           <dd class="col-sm-8"><a href="{{ page.source_url }}" target="_blank" rel="noopener">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</a></dd>
+          {% else %}
+          <dd class="col-sm-8">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</dd>
+          {% endif %}
 
           {% unless provider_name == 'Google Drive' %}
           <dt class="col-sm-4">{{ lang.object.metadata.embed_url | default: "Embed URL" }}</dt>
@@ -468,9 +508,10 @@ layout: default
 
     {% assign external_source = page.source_url | default: page.iiif_manifest %}
     {% if external_source and external_source != "" %}
-    const manifestUrl = '{{ external_source }}';
+    {%- comment -%} jsonify quotes/escapes the CSV-derived URL; replace guards against a </script> breakout {%- endcomment -%}
+    const manifestUrl = {{ external_source | jsonify | replace: '</', '<\/' }};
     {% elsif page.object_id %}
-    const manifestUrl = '{{ site.baseurl }}/iiif/objects/{{ page.object_id }}/manifest.json';
+    const manifestUrl = {{ page.object_id | prepend: '/iiif/objects/' | prepend: site.baseurl | append: '/manifest.json' | jsonify | replace: '</', '<\/' }};
     {% else %}
     console.error('No IIIF source specified');
     return;
@@ -591,7 +632,7 @@ layout: default
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const viewer = document.getElementById('object-viewer');
-  const sourceUrl = '{{ page.source_url }}';
+  const sourceUrl = {{ page.source_url | default: '' | jsonify | replace: '</', '<\/' }};
 
   {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
     // YouTube embed
@@ -639,12 +680,25 @@ document.addEventListener('DOMContentLoaded', function() {
       'allow="autoplay" ' +
       'title="Video: {{ page.title | escape }}"></iframe>';
 
-    // Google Drive: embed URL load error fallback (Pitfall 7)
+    // Google Drive: embed URL load error fallback
     const iframe = document.getElementById('video-player-iframe');
     let loadTimer = setTimeout(function() {
-      viewer.innerHTML = '<div class="alert alert-warning">' +
-        '<p>{{ lang.object.errors.embed_unavailable | default: "This video could not be loaded." }} ' +
-        '<a href="' + sourceUrl + '" target="_blank" rel="noopener">{{ lang.object.errors.open_on_drive | default: "Open it on Google Drive." }}</a></p></div>';
+      // Build the fallback with DOM nodes and only render a clickable link for
+      // http(s) URLs, so a javascript:/data: source_url cannot become a live link.
+      const warn = document.createElement('div');
+      warn.className = 'alert alert-warning';
+      const p = document.createElement('p');
+      p.textContent = {{ lang.object.errors.embed_unavailable | default: "This video could not be loaded." | jsonify }} + ' ';
+      if (/^https?:/i.test(sourceUrl)) {
+        const a = document.createElement('a');
+        a.href = sourceUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = {{ lang.object.errors.open_on_drive | default: "Open it on Google Drive." | jsonify }};
+        p.appendChild(a);
+      }
+      warn.appendChild(p);
+      viewer.replaceChildren(warn);
     }, 10000);
     iframe.addEventListener('load', function() { clearTimeout(loadTimer); });
   {% endif %}
@@ -680,7 +734,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // Load YouTube IFrame API for clip picker (PICK-01)
+  // Load YouTube IFrame API for clip picker
   {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
   var tag = document.createElement('script');
   tag.src = 'https://www.youtube.com/iframe_api';
@@ -791,12 +845,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% if object_media_type == 'Audio' %}
 <script>
+// Load the vendored WaveSurfer UMD bundle (core + Regions plugin) once, from
+// the repo's assets/vendor/ — mirrors loadWaveSurferAPI() in
+// assets/js/telar-story/audio-card.js so audio object pages work offline with
+// no CDN dependency. The UMD builds expose window.WaveSurfer and
+// window.WaveSurfer.Regions.
+function loadVendoredWaveSurfer() {
+  if (window._wsApiPromise) return window._wsApiPromise;
+  window._wsApiPromise = new Promise((resolve, reject) => {
+    const base = '{{ site.baseurl }}';
+    const core = document.createElement('script');
+    core.src = base + '/assets/vendor/wavesurfer/wavesurfer.min.js';
+    core.onload = () => {
+      const regions = document.createElement('script');
+      regions.src = base + '/assets/vendor/wavesurfer/plugins/regions.min.js';
+      regions.onload = () => resolve();
+      regions.onerror = reject;
+      document.head.appendChild(regions);
+    };
+    core.onerror = reject;
+    document.head.appendChild(core);
+  });
+  return window._wsApiPromise;
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
   const viewer = document.getElementById('object-viewer');
 
-  // Build audio file URL — try common extensions
-  const objectId = '{{ page.object_id }}';
-  const baseUrl = '{{ site.baseurl }}';
+  // Build audio file URL — try common extensions.
+  // jsonify emits a quoted, escaped JS string literal — safe even if the
+  // object_id or baseurl ever contained a quote (consistent with the IIIF init).
+  const objectId = {{ page.object_id | jsonify }};
+  const baseUrl = {{ site.baseurl | jsonify }};
   const extensions = ['.mp3', '.ogg', '.m4a'];
   let audioUrl = null;
 
@@ -830,8 +910,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     '</div>' +
     '<span class="audio-object-time" id="audio-time-display">0:00 / --:--</span>';
 
-  // Load WaveSurfer
-  const WaveSurfer = window.WaveSurfer || (await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js')).default;
+  // Load WaveSurfer from the vendored bundle (no CDN dependency)
+  await loadVendoredWaveSurfer();
+  const WaveSurfer = window.WaveSurfer;
 
   // Derive theme colours (same logic as story audio-card.js deriveThemeColors)
   const accentHex = getComputedStyle(document.documentElement).getPropertyValue('--color-link').trim() || '#883C36';
@@ -974,8 +1055,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     timeDisplay.textContent = formatTime(currentTime) + ' / ' + formatTime(dur);
   });
 
-  // WaveSurfer Regions plugin for clip picker (PICK-02)
-  const RegionsPlugin = (await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.esm.js')).default;
+  // WaveSurfer Regions plugin for the clip picker (vendored alongside core)
+  const RegionsPlugin = window.WaveSurfer.Regions;
   const regionsPlugin = ws.registerPlugin(RegionsPlugin.create());
 
   // After ready, add a default region covering the full duration

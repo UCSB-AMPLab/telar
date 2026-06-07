@@ -48,7 +48,7 @@
  * remained in the source, which caused confusion when fixes were applied
  * to dead code paths. They have now been removed entirely.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { state } from './state.js';
@@ -139,13 +139,19 @@ function buildLocalInfoJsonUrl(objectId, page) {
  * Prefetch all story manifests at page load and measure connection speed.
  *
  * Iterates every unique object referenced by a [data-object] element in
- * the page. For each object with an external manifest (iiif_manifest field),
- * fires a fetch to warm the browser cache. Records the time each fetch
- * takes so adjustThresholdsForConnection() can tune the loading shimmer
- * for slow networks.
+ * the page. For each object with an external IIIF manifest, fires a cache-warming
+ * fetch and records how long it takes so adjustThresholdsForConnection() can tune
+ * the loading shimmer for slow networks.
+ *
+ * Resolves source_url || iiif_manifest (source_url is what the Compositor writes;
+ * iiif_manifest is the legacy field) so Compositor-published stories get warmed
+ * too. Video objects (whose source_url is a media host, not a manifest) are
+ * skipped; audio objects use local files and have no external URL to warm.
  *
  * Runs as a background promise — does not block page initialisation.
  */
+const _PREFETCH_SKIP_HOSTS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com'];
+
 export async function prefetchStoryManifests() {
   const objectIds = [...new Set(
     Array.from(document.querySelectorAll('[data-object]'))
@@ -155,17 +161,37 @@ export async function prefetchStoryManifests() {
 
   if (objectIds.length === 0) return;
 
-  await Promise.all(objectIds.map(async (id) => {
-    try {
-      const objectData = state.objectsIndex[id];
-      if (objectData?.iiif_manifest) {
+  const manifestUrls = [...new Set(
+    objectIds
+      .map(id => state.objectsIndex[id])
+      .map(o => (o && (o.source_url || o.iiif_manifest) || '').trim())
+      .filter(url => url && !_PREFETCH_SKIP_HOSTS.some(h => url.includes(h)))
+  )];
+
+  if (manifestUrls.length === 0) {
+    adjustThresholdsForConnection();
+    return;
+  }
+
+  // Warm the browser cache with bounded concurrency so a multi-object story does
+  // not burst-open a connection per object. force-cache serves repeats from cache;
+  // draining the body lets the connection free promptly.
+  const CONCURRENCY = 3;
+  const queue = [...manifestUrls];
+  const worker = async () => {
+    while (queue.length) {
+      const url = queue.shift();
+      try {
         const start = performance.now();
-        await fetch(objectData.iiif_manifest);
-        const elapsed = performance.now() - start;
-        state.manifestLoadTimes.push(elapsed);
-      }
-    } catch (e) { /* silent fail — network errors handled gracefully */ }
-  }));
+        const resp = await fetch(url, { cache: 'force-cache' });
+        await resp.text().catch(() => {});
+        state.manifestLoadTimes.push(performance.now() - start);
+      } catch (e) { /* silent fail — network errors handled gracefully */ }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker)
+  );
 
   adjustThresholdsForConnection();
 }

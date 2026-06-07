@@ -7,11 +7,39 @@
  * window.location and document.createElement, while calculateViewportPosition
  * is pure maths with a mock viewport object.
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getBasePath, fixImageUrls, calculateViewportPosition } from '../../assets/js/telar-story/utils.js';
+import { getBasePath, fixImageUrls, calculateViewportPosition, escapeHtml } from '../../assets/js/telar-story/utils.js';
+
+// ── escapeHtml ───────────────────────────────────────────────────────────────
+
+describe('escapeHtml', () => {
+  it('escapes the HTML markup characters', () => {
+    expect(escapeHtml('<img src=x onerror=alert(1)>')).toBe(
+      '&lt;img src=x onerror=alert(1)&gt;'
+    );
+  });
+
+  it('escapes both quote characters so the result is attribute-safe', () => {
+    expect(escapeHtml('15" map')).toBe('15&quot; map');
+    expect(escapeHtml("d'Arc")).toBe('d&#39;Arc');
+  });
+
+  it('escapes the ampersand', () => {
+    expect(escapeHtml('Tom & Jerry')).toBe('Tom &amp; Jerry');
+  });
+
+  it('coerces null and undefined to an empty string', () => {
+    expect(escapeHtml(null)).toBe('');
+    expect(escapeHtml(undefined)).toBe('');
+  });
+
+  it('coerces non-string values to their string form', () => {
+    expect(escapeHtml(42)).toBe('42');
+  });
+});
 
 // ── getBasePath ──────────────────────────────────────────────────────────────
 

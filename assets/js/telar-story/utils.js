@@ -11,8 +11,31 @@
  * formatting, viewport coordinate calculation in both animated and instant
  * positioning. Extracting them avoids the duplication.
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
+
+/**
+ * Escape a value for safe inclusion as HTML text or inside a double-quoted
+ * (or single-quoted) HTML attribute.
+ *
+ * The value is routed through a detached element's textContent, which encodes
+ * `<`, `>`, and `&`, and the two quote characters are then escaped as well, so
+ * the result is safe both between tags and inside `"..."` / `'...'` attribute
+ * values.
+ *
+ * This is the canonical copy for the bundled story runtime. The standalone
+ * scripts that are not part of this esbuild bundle (objects-filter.js,
+ * share-panel.js, story-unlock.js) keep their own byte-compatible copies
+ * because they cannot share the import — keep the four definitions in sync.
+ *
+ * @param {*} text - The value to escape (null/undefined become an empty string).
+ * @returns {string} The escaped string.
+ */
+export function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 /**
  * Get the site's base URL path from the current page URL.

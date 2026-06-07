@@ -40,7 +40,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.0.0-beta
+Version: v1.5.0
 """
 
 import re
@@ -52,7 +52,7 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.csv_utils import get_source_url
+from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index, get_source_url
 from telar.latex import has_latex
 
 
@@ -133,8 +133,12 @@ def process_story(df, christmas_tree=False):
         # Build case-insensitive lookup map for objects
         objects_lower_map = {k.lower(): k for k in objects_data.keys()}
 
-        # Extensions to strip from object references in story CSV
-        strippable_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf']
+        # Shared canonical extension set for stripping object references.
+        strippable_extensions = IMAGE_EXTENSIONS
+
+        # Index telar-content/objects once so the per-reference local-file check
+        # is an O(1) lookup instead of an iterdir scan per story step.
+        _obj_file_index = build_stem_index('telar-content/objects')
 
         for idx, row in df.iterrows():
             object_id = str(row.get('object', '')).strip()
@@ -178,22 +182,20 @@ def process_story(df, christmas_tree=False):
 
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
-                # Check for local image in telar-content/objects/
-                valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.pdf'}
+                # Check for a local image or audio file via the one-time index
                 audio_extensions = {'.mp3', '.ogg', '.m4a'}
                 has_local_image = False
-                objects_dir = Path('telar-content/objects')
 
-                if objects_dir.exists():
-                    for f in objects_dir.iterdir():
-                        if f.stem == actual_object_id and f.suffix.lower() in valid_extensions:
-                            has_local_image = True
-                            print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
-                            break
-                        if f.stem == actual_object_id and f.suffix.lower() in audio_extensions:
-                            has_local_image = True
-                            print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
-                            break
+                for f in _obj_file_index.get(actual_object_id, []):
+                    suffix = f.suffix.lower()
+                    if suffix in IMAGE_EXTENSIONS:
+                        has_local_image = True
+                        print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
+                        break
+                    if suffix in audio_extensions:
+                        has_local_image = True
+                        print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
+                        break
 
                 # Only warn if object has neither external manifest nor local image
                 if not has_local_image:
@@ -233,9 +235,17 @@ def process_story(df, christmas_tree=False):
 
                     # Check if this looks like a file reference (.md extension)
                     if cell_value.endswith('.md'):
-                        # Try to load as markdown file
-                        file_path = f"stories/{cell_value}"
-                        content_data = read_markdown_file(file_path, widget_warnings)
+                        # Reject path-traversal in the author-controlled filename
+                        # before joining it onto stories/. A value that tries to
+                        # escape the texts directory falls through to inline
+                        # processing rather than reading an arbitrary file.
+                        if '..' in cell_value or cell_value.startswith('/') or '\\' in cell_value:
+                            print(f"  [WARN] Ignoring unsafe layer file reference '{cell_value}' "
+                                  f"(path traversal) — treating as inline content")
+                        else:
+                            # Try to load as markdown file
+                            file_path = f"stories/{cell_value}"
+                            content_data = read_markdown_file(file_path, widget_warnings)
 
                     # If not a file reference or file not found, treat as inline content
                     if content_data is None:
@@ -364,5 +374,23 @@ def process_story(df, christmas_tree=False):
     # Print summary if there were issues
     if warnings:
         print(f"\n  Story validation summary: {len(warnings)} warning(s)")
+
+    # Order steps by their authored `step` number so the rendered sequence
+    # follows the step values, not the spreadsheet's physical row order — a CSV
+    # exported out of order (e.g. by an external editor) would otherwise render
+    # steps in the wrong sequence. Failsafe: a stable sort keeps rows that share
+    # a step value in their original order, blank or non-numeric steps fall to
+    # the end, and any unexpected error leaves the original row order untouched
+    # rather than breaking the build.
+    if 'step' in df.columns:
+        try:
+            step_order = pd.to_numeric(df['step'], errors='coerce')
+            df = (df.assign(_step_order=step_order)
+                    .sort_values('_step_order', kind='mergesort', na_position='last')
+                    .drop(columns='_step_order')
+                    .reset_index(drop=True))
+        except Exception as e:
+            print(f"  [WARN] Could not order story steps by 'step' value; "
+                  f"using spreadsheet row order instead ({e})")
 
     return df

@@ -2,8 +2,8 @@
 Widget Parsing and Rendering
 
 This module deals with Telar's widget system, which lets authors embed
-interactive components — carousels, tabbed panels, and accordions —
-inside story panel content using a fenced-block syntax borrowed from
+interactive components — carousels, tabbed panels, accordions, and
+bibliographies — inside story panel content using a fenced-block syntax borrowed from
 markdown's code fence pattern: `:::widget_type ... :::`.
 
 Like image processing, widget parsing runs before the markdown library
@@ -37,18 +37,83 @@ pairs from a text block, used by the carousel parser.
 and renders it with the parsed widget data. If the template fails, it
 returns an error `<div>` instead of crashing the build.
 
-Version: v1.1.0
+Version: v1.5.0
 """
 
+import html
 import re
 import markdown
+from html.parser import HTMLParser
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from telar.images import validate_image_path, get_image_dimensions
 
 
 # Widget instance counter for unique IDs within a build
 _widget_counter = 0
+
+
+# Inline tags a caption or credit realistically needs. Everything else
+# (script, img, iframe, block elements, …) is dropped to text, and all
+# attributes except a safe href/title on links are stripped.
+_CAPTION_ALLOWED_TAGS = {'em', 'strong', 'i', 'b', 'a', 'code', 'sup', 'sub', 'br'}
+_CAPTION_ALLOWED_ATTRS = {'a': {'href', 'title'}}
+_CAPTION_SAFE_URL = re.compile(r'^(https?:|mailto:|/|\.|#)', re.IGNORECASE)
+
+
+class _CaptionSanitizer(HTMLParser):
+    """Allowlist sanitiser for markdown-rendered caption/credit HTML.
+
+    Keeps a fixed set of inline tags, drops every other tag (its text content
+    is preserved), removes all event-handler and unknown attributes, and only
+    keeps href/title on links when the URL uses a safe scheme. Stdlib only —
+    no third-party sanitiser dependency.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in _CAPTION_ALLOWED_TAGS:
+            return
+        if tag == 'br':
+            self._parts.append('<br>')
+            return
+        allowed = _CAPTION_ALLOWED_ATTRS.get(tag, set())
+        kept = []
+        for name, value in attrs:
+            if name not in allowed:
+                continue
+            if name in ('href', 'src') and not (value and _CAPTION_SAFE_URL.match(value)):
+                continue
+            kept.append((name, value))
+        attr_str = ''.join(
+            f' {name}="{html.escape(value or "", quote=True)}"' for name, value in kept
+        )
+        self._parts.append(f'<{tag}{attr_str}>')
+
+    def handle_startendtag(self, tag, attrs):
+        # Self-closing form, e.g. <br/> — treat like a start tag.
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if tag in _CAPTION_ALLOWED_TAGS and tag != 'br':
+            self._parts.append(f'</{tag}>')
+
+    def handle_data(self, data):
+        self._parts.append(html.escape(data, quote=False))
+
+    def get_html(self):
+        return ''.join(self._parts)
+
+
+def sanitize_caption_html(rendered_html):
+    """Strip unsafe tags/attributes from markdown-rendered caption/credit HTML."""
+    parser = _CaptionSanitizer()
+    parser.feed(rendered_html)
+    parser.close()
+    return parser.get_html()
 
 
 def get_widget_id():
@@ -133,13 +198,17 @@ def parse_carousel_widget(content, file_path, warnings_list):
             })
             data['alt'] = ''
 
-        # Process caption/credit through markdown (for italics, etc.)
+        # Process caption/credit through markdown (for italics, etc.), then
+        # sanitise the result so an author-supplied <script>/<img onerror>/etc.
+        # cannot reach the rendered page through these fields.
         if 'caption' in data:
             caption_html = markdown.markdown(data['caption'])
-            data['caption'] = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+            stripped = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+            data['caption'] = sanitize_caption_html(stripped)
         if 'credit' in data:
             credit_html = markdown.markdown(data['credit'])
-            data['credit'] = re.sub(r'^<p>(.*)</p>$', r'\1', credit_html.strip())
+            stripped = re.sub(r'^<p>(.*)</p>$', r'\1', credit_html.strip())
+            data['credit'] = sanitize_caption_html(stripped)
 
         items.append(data)
 
@@ -333,7 +402,7 @@ def render_widget_html(widget_type, widget_data, widget_id):
     Render widget HTML using Jinja2 template.
 
     Args:
-        widget_type: Type of widget (carousel, comparison, tabs, accordion)
+        widget_type: Type of widget (carousel, tabs, accordion, bibliography)
         widget_data: Parsed widget data
         widget_id: Unique widget ID
 
@@ -343,21 +412,29 @@ def render_widget_html(widget_type, widget_data, widget_id):
     try:
         # Load template from _includes/widgets/
         template_path = Path('_includes/widgets')
-        env = Environment(loader=FileSystemLoader(str(template_path)))
+        # Autoescape by default so raw-text fields (titles, alt text, image
+        # paths) cannot inject markup. Fields that are already rendered/sanitised
+        # HTML (content_html, and caption/credit which pass through
+        # sanitize_caption_html) are marked "| safe" in the templates.
+        env = Environment(
+            loader=FileSystemLoader(str(template_path)),
+            autoescape=select_autoescape(['html', 'xml']),
+        )
         template = env.get_template(f'{widget_type}.html')
 
         # Render with data
-        html = template.render(
+        rendered = template.render(
             widget_id=widget_id,
             base_url='{{ site.baseurl }}',  # Will be processed by Jekyll
             **widget_data
         )
 
-        return html
+        return rendered
 
     except Exception as e:
         # Return error HTML if template rendering fails
-        return f'<div class="telar-widget-error">Widget rendering error ({widget_type}): {str(e)}</div>'
+        return (f'<div class="telar-widget-error">Widget rendering error '
+                f'({html.escape(str(widget_type))}): {html.escape(str(e))}</div>')
 
 
 def process_widgets(text, file_path, warnings_list):

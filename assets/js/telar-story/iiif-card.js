@@ -40,7 +40,7 @@
  *   Per OSD issue #2693, the module calls WEBGL_lose_context.loseContext()
  *   first, then the wrapper's destroy(), then removes the DOM element.
  *
- * @version v1.4.0
+ * @version v1.5.0
  */
 
 import { state } from './state.js';
@@ -318,7 +318,7 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
   const v  = viewerCard.osdViewer;
   const av = viewerCard.osdWrapper;
 
-  // A2 guard: source dims required; leave viewer at home if unavailable
+  // Source dims required; leave viewer at home if unavailable
   const source = v.world.getItemAt(0)?.source;
   if (!source?.width || !source?.height) return false;
   const imgW = source.width;
@@ -573,7 +573,8 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
  *
  * @param {number} stepIndex - Current step index (floor of scroll position).
  * @param {number} progress - Fractional progress 0.0–1.0 toward next step.
- * @param {Array} stepsData - All step data objects from window.storyData.
+ * @param {Array} stepsData - Filtered step data (metadata rows removed), in the
+ *   same index space as stepIndex / state.stepToScene (i.e. state.stepsData).
  */
 export function lerpIiifPosition(stepIndex, progress, stepsData) {
   if (progress < 0.001) return; // At exact integer, no interpolation needed

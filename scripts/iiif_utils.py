@@ -20,7 +20,7 @@ without duplicating it.
 None of these functions are meant to be run directly. They are
 imported by the two entry-point scripts.
 
-Version: v0.9.3-beta
+Version: v1.5.0
 """
 
 import json
@@ -175,12 +175,20 @@ def preprocess_image(image_path):
             elif file_ext == '.png' and not needs_conversion:
                 print(f"  ⚠️  Converting PNG to JPEG for IIIF processing")
 
-            # Save to temporary JPEG file
+            # Save to temporary JPEG file. Record temp_path immediately so that
+            # if the save itself raises, the just-created file is still unlinked
+            # here rather than leaking (the caller's finally only unlinks a
+            # temp_path that was successfully returned).
             tf = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-            converted_img.save(tf.name, 'JPEG', quality=95)
-            processed_path = Path(tf.name)
             temp_path = tf.name
             tf.close()
+            try:
+                converted_img.save(temp_path, 'JPEG', quality=95)
+                processed_path = Path(temp_path)
+            except Exception as save_err:
+                print(f"  ⚠️  Error saving converted image: {save_err}")
+                Path(temp_path).unlink(missing_ok=True)
+                temp_path = None  # processed_path stays as the original input
     except Exception as e:
         print(f"  ⚠️  Error preprocessing image: {e}")
 

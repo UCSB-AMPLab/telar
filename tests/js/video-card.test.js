@@ -7,16 +7,58 @@
  * - buildGDriveEmbedUrl: Google Drive preview URL builder
  * - formatClipTime: M:SS time formatter for ring display
  *
- * @version v1.0.0-beta
+ * @version v1.5.0
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   computeVideoLayout,
+  computeVideoLetterboxRegion,
   buildYouTubeEmbedConfig,
   buildGDriveEmbedUrl,
   formatClipTime,
 } from '../../assets/js/telar-story/video-card.js';
+import { state } from '../../assets/js/telar-story/state.js';
+
+// ── computeVideoLetterboxRegion ───────────────────────────────────────────────
+
+describe('computeVideoLetterboxRegion (unknown-aspect dark frame)', () => {
+  afterEach(() => { delete state.layoutMode; });
+
+  it('returns the side region beside the card on a wide (landscape) layout', () => {
+    delete state.layoutMode; // non-vertical → side-by-side region
+    const r = computeVideoLetterboxRegion(1920, 1080);
+    // pad=27, cardW=round(1920*0.35)=672
+    expect(r).toEqual({ left: 726, top: 27, width: 1167, height: 1026 });
+  });
+
+  it('does not overlap the card column (left clears the card width)', () => {
+    delete state.layoutMode;
+    const W = 1920;
+    const r = computeVideoLetterboxRegion(W, 1080);
+    const cardW = Math.round(W * 0.35);
+    expect(r.left).toBeGreaterThan(cardW); // starts past the card
+    expect(r.left + r.width).toBeLessThanOrEqual(W); // stays in viewport
+  });
+
+  it('returns a full-width top region on a vertical layout', () => {
+    state.layoutMode = 'vertical';
+    const r = computeVideoLetterboxRegion(1080, 1920);
+    // pad=27, full width minus padding, height = round(1920*0.58)
+    expect(r.left).toBe(27);
+    expect(r.top).toBe(27);
+    expect(r.width).toBe(1026);
+    expect(r.height).toBe(1114);
+  });
+
+  it('always returns the four region keys', () => {
+    const r = computeVideoLetterboxRegion(1280, 720);
+    expect(r).toHaveProperty('left');
+    expect(r).toHaveProperty('top');
+    expect(r).toHaveProperty('width');
+    expect(r).toHaveProperty('height');
+  });
+});
 
 // ── computeVideoLayout ────────────────────────────────────────────────────────
 
