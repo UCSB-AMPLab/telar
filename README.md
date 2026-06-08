@@ -4,7 +4,7 @@
 
 **[Versión en español abajo](#español)** | **[English version](#telar)**
 
-A minimal-computing framework for creating layered IIIF visual narratives for digital scholarship, public exhibitions, community storytelling, and classroom projects.
+A minimal-computing framework that weaves together IIIF images, audio, video, and texts to create layered visual narratives for digital scholarship, public exhibitions, community storytelling, and classroom projects.
 
 ---
 
@@ -138,7 +138,7 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 
 **[Versión en español](#español)** | **[English version above](#telar)**
 
-Un marco de computación mínima para crear narrativas visuales con capas de texto e imágenes IIIF para humanidades digitales, exposiciones públicas y contextos educativos y comunitarios.
+Un marco de computación mínima que entreteje imágenes IIIF, audio, video y textos en narrativas visuales por capas para humanidades digitales, exposiciones públicas, narrativa comunitaria y proyectos en el salón de clase.
 
 ---
 
