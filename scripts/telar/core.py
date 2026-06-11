@@ -33,7 +33,11 @@ story_key from _config.yml. Finally, `generate_search_data()` builds the
 Lunr.js search index and facet counts that power the gallery's
 browse-and-search interface.
 
-Version: v1.5.0
+Before encrypting a protected story (v1.5.1), glossary link markup in the step
+answer is reduced to plain text, because the protected-story runtime renderer
+escapes the answer and has no glossary panel.
+
+Version: v1.5.1
 """
 
 import os
@@ -49,6 +53,7 @@ from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
 from telar.demo import load_demo_bundle, merge_demo_content, fetch_demo_content_if_enabled
 from telar.encryption import encrypt_story, get_protected_stories, get_story_key_from_config
+from telar.glossary import strip_glossary_links
 from telar.search import generate_search_data
 
 
@@ -218,6 +223,18 @@ def _encrypt_protected_stories(data_dir):
             # Read story data
             with open(story_json, 'r', encoding='utf-8') as f:
                 story_data = json.load(f)
+
+            # Reduce glossary link markup in the step answer to plain text before
+            # encrypting. Protected stories are rendered by a runtime path that
+            # HTML-escapes the answer and offers no glossary panel, so the inline
+            # <a class="glossary-inline-link"> injected by process_story would
+            # surface as escaped tag-text. Layer panel content is unaffected (it is
+            # rendered as trusted HTML at panel-open time), and the question is
+            # never glossary-processed, so only the answer needs stripping.
+            if isinstance(story_data, list):
+                for step in story_data:
+                    if isinstance(step, dict) and step.get('answer'):
+                        step['answer'] = strip_glossary_links(step['answer'])
 
             # Encrypt story
             encrypted = encrypt_story(story_data, story_key)

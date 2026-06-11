@@ -24,7 +24,10 @@ from one story CSV and performs several passes over the data:
    module; inline text is processed by `process_inline_content()`. Both
    paths run through the same pipeline: widgets first, then images, then
    markdown-to-HTML conversion. After HTML conversion, glossary links
-   (`[[term_id]]` syntax) are resolved by `process_glossary_links()`.
+   (`[[term_id]]` syntax) are resolved by `process_glossary_links()`. As of
+   v1.5.1 the step's `answer` prose is glossary-processed too (the `question`
+   is a heading and is left alone), so `[[term]]` works in the main story
+   text, not only in layer panels.
 
 3. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
@@ -40,7 +43,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.5.0
+Version: v1.5.1
 """
 
 import re
@@ -265,6 +268,29 @@ def process_story(df, christmas_tree=False):
 
             # Drop the _content/_file column as it's no longer needed in JSON
             df = df.drop(columns=[col])
+
+    # Resolve glossary [[term]] syntax in the step's answer prose. Layer panel
+    # content above is converted md->HTML before glossary processing; the answer
+    # is stored as markdown and rendered later in Liquid via `markdownify`, so the
+    # transform runs on the markdown string here — the injected inline
+    # <a class="glossary-inline-link"> passes through markdownify unchanged.
+    # Scope is the answer only: the question is the step's title/heading
+    # (<h2 class="step-question"> / <h2 class="title-card-heading">), and inline
+    # links do not belong in a heading, so [[term]] in the question is left
+    # literal. Not alt_text, button labels, or coordinates either. layer_name is
+    # None because this is step prose, not a layer panel.
+    if 'answer' in df.columns:
+        for idx, row in df.iterrows():
+            cell_value = row['answer']
+            if cell_value and str(cell_value).strip():
+                step_num = row.get('step', 'unknown')
+                df.at[idx, 'answer'] = process_glossary_links(
+                    str(cell_value),
+                    glossary_terms,
+                    glossary_warnings,
+                    step_num,
+                    None
+                )
 
     # Set default coordinates for empty values
     coordinate_columns = ['x', 'y', 'zoom']

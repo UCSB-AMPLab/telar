@@ -34,7 +34,11 @@ visible error indicator with a warning emoji, and a warning is appended
 to the `warnings_list` so it appears in the build output and in the
 story's intro panel.
 
-Version: v1.5.0
+Term matching is case-insensitive (v1.5.1): an author's `[[Term]]` resolves
+against the stored key regardless of casing, and the rendered `data-term-id`
+uses the stored key so it matches the published glossary page slug.
+
+Version: v1.5.1
 """
 
 import html
@@ -152,6 +156,46 @@ def load_glossary_terms():
     return {}
 
 
+# Matches the markup that process_glossary_links emits: a resolved inline link
+# (<a class="glossary-inline-link">…</a>) or the unresolved-term error span
+# (<span class="glossary-link-error">…</span>). The inner text is captured so it
+# can be unwrapped. Non-greedy and DOTALL; the inner text is always HTML-escaped
+# (so it can never itself contain a closing </a> / </span>), which keeps this safe.
+_GLOSSARY_MARKUP_RE = re.compile(
+    r'<a\b[^>]*\bclass="glossary-inline-link"[^>]*>(.*?)</a>'
+    r'|<span\b[^>]*\bclass="glossary-link-error"[^>]*>(.*?)</span>',
+    re.DOTALL,
+)
+
+
+def strip_glossary_links(text):
+    """Reduce glossary link markup back to its plain visible text.
+
+    `process_glossary_links` injects HTML (`<a class="glossary-inline-link">` or a
+    `glossary-link-error` span) into a string. Protected (encrypted) stories are
+    rendered at runtime by a path that HTML-escapes the step answer and has no
+    glossary panel, so that markup would surface as escaped tag-text instead of a
+    link. For those stories we drop the wrapper and keep the visible text: a
+    resolved link becomes its title, an unresolved term becomes its `⚠️ [[term]]`
+    indicator text. The captured inner text is HTML-unescaped so that the runtime's
+    own escaping pass produces correctly-escaped output (no double-escaping).
+
+    Args:
+        text: An already-glossary-processed string (HTML), or falsy.
+
+    Returns:
+        The string with glossary wrappers removed, or the input unchanged if falsy.
+    """
+    if not text:
+        return text
+
+    def unwrap(match):
+        inner = match.group(1) if match.group(1) is not None else match.group(2)
+        return html.unescape(inner)
+
+    return _GLOSSARY_MARKUP_RE.sub(unwrap, text)
+
+
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
     """
     Transform [[term]] or [[display|term]] syntax into glossary link HTML.
@@ -169,6 +213,17 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     if not text or not glossary_terms:
         return text
 
+    # Build a case-insensitive lookup that resolves an author's [[term]] (any
+    # casing) to the ACTUAL stored key. Glossary loaders store term_id verbatim
+    # — load_glossary_from_csv, load_glossary_from_markdown, and the demo bundle
+    # do not lowercase keys (e.g. the demo glossary stores 'IIIF'). Resolving to
+    # the stored key (rather than a lowercased copy) keeps the rendered
+    # data-term-id equal to the published glossary page slug, which telar.js
+    # fetches on click. Mirrors the objects_lower_map pattern in stories.py.
+    # If two keys differ only by case, the last one wins — acceptable because the
+    # glossary page system would already collide on such keys.
+    glossary_lower_map = {key.lower(): key for key in glossary_terms}
+
     # Pattern: [[display|term]] or [[term]] with flexible spacing
     # Captures: (optional_display) | (term_id)
     pattern = r'\[\[\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?\s*\]\]'
@@ -176,37 +231,50 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     def replace_glossary_link(match):
         # If pipe is present: [[term|display]], else [[term]]
         if match.group(2):  # Has pipe
-            term_id = match.group(1).strip()
+            raw_term_id = match.group(1).strip()
             display_text = match.group(2).strip()
+            has_custom_display = True
         else:  # No pipe
-            term_id = match.group(1).strip()
-            # Use glossary title as display text
-            display_text = glossary_terms.get(term_id, term_id)
+            raw_term_id = match.group(1).strip()
+            display_text = None
+            has_custom_display = False
 
-        # Check if term exists in glossary
-        if term_id in glossary_terms:
+        # Authors type whatever casing reads naturally, e.g. [[KCSB]] or
+        # [[Colonial-Period]], while the stored key may be lowercase (the common
+        # compositor case) or not (hand-authored CSV / demo bundle, e.g. 'IIIF').
+        # Match case-insensitively and resolve to the actual stored key so the
+        # title lookup succeeds and the rendered data-term-id matches the glossary
+        # page slug telar.js fetches to open the panel.
+        canonical_id = glossary_lower_map.get(raw_term_id.lower())
+
+        # Check if term exists in glossary (case-insensitive)
+        if canonical_id is not None:
+            term_id = canonical_id
+            if not has_custom_display:
+                # Use the glossary title as display text
+                display_text = glossary_terms[term_id]
             # Valid term - create glossary link
             # Note: data-term-url is intentionally omitted; JavaScript fallback in telar.js
             # constructs the URL dynamically from the current page URL, which correctly
             # handles baseurl for all deployment scenarios (GitHub Pages, subpaths, etc.)
             # Add data-demo attribute for demo terms (prefixed with demo-)
             demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
-            # Escape the author-supplied term id (attribute) and display text so a
+            # Escape the canonical term id (attribute) and display text so a
             # quote or angle bracket in either cannot break out of the link markup.
             return f'<a href="#" class="glossary-inline-link" data-term-id="{html.escape(term_id, quote=True)}"{demo_attr}>{html.escape(display_text)}</a>'
         else:
-            # Invalid term - create error indicator
+            # Invalid term - create error indicator (author's original casing preserved)
             if warnings_list is not None:
                 # Determine layer number for display
                 layer_num = layer_name[-1] if layer_name and layer_name.startswith('layer') else ''
-                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=term_id, layer_num=layer_num)
+                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=raw_term_id, layer_num=layer_num)
                 warnings_list.append({
                     'step': step_num,
                     'type': 'glossary',
-                    'term_id': term_id,
+                    'term_id': raw_term_id,
                     'layer': layer_name,
                     'message': warning_msg
                 })
-            return f'<span class="glossary-link-error" data-term-id="{html.escape(term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(match.group(1))}]]</span>'
+            return f'<span class="glossary-link-error" data-term-id="{html.escape(raw_term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(match.group(1))}]]</span>'
 
     return re.sub(pattern, replace_glossary_link, text)
