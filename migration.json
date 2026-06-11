@@ -1,27 +1,19 @@
 {
   "schema_version": 1,
-  "from_version": "1.4.0",
-  "to_version": "1.5.0",
-  "description": "Robustness & security hardening (data pipeline, viewer runtime, standalone JS, upgrade workflow) — runtime-only upgrade, no user-content changes required",
+  "from_version": "1.5.0",
+  "to_version": "1.5.1",
+  "description": "Glossary links in story step text and case-insensitive term matching; runtime-only",
   "operations": [],
   "manual_steps": {
     "en": [
       {
-        "description": "**Recommended — update your GitHub Actions workflow files by hand.** For security, GitHub does not let the automated upgrade modify workflow files, so two v1.5.0 improvements are not applied for you:\n\n- `.github/workflows/upgrade.yml` — the upgrade process is now hardened: it downloads its tooling as a release asset, verifies it against the published checksum, and runs it in isolation. This protects your next upgrade.\n- `.github/workflows/build.yml` — the `ruby/setup-ruby` action is now pinned to a specific commit, for supply-chain safety.\n\nTo apply them, open each file on GitHub, click \"Raw\", copy the whole file, and replace the contents of the matching file in your repository:\n\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/upgrade.yml\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/build.yml\n\nIf you skip this, your site keeps building and deploying normally — these changes only harden your workflows.",
-        "doc_url": "https://github.com/UCSB-AMPLab/telar/tree/v1.5.0/.github/workflows"
-      },
-      {
-        "description": "**If you customized the language packs, re-apply your changes.** The upgrade refreshed the framework language packs (`en.yml` / `es.yml`). This release adds the protected-story sharing warnings — the messages shown when a share link or embed code includes the access key — which the updated packs already include.",
+        "description": "**No action needed.** This is a runtime-only fix.\n\n- **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.\n- **If you work with your site locally:** just rebuild your site to use the updated glossary linking.",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
-        "description": "**Recomendado: actualiza a mano tus archivos de flujo de trabajo de GitHub Actions.** Por seguridad, GitHub no deja que la actualización automática modifique los archivos de flujo de trabajo, así que dos mejoras de v1.5.0 no se aplican solas:\n\n- `.github/workflows/upgrade.yml`: el proceso de actualización ahora es más seguro — descarga sus herramientas desde el lanzamiento, las verifica con la suma de control publicada y las ejecuta de forma aislada. Así protege tu próxima actualización.\n- `.github/workflows/build.yml`: la acción `ruby/setup-ruby` ahora queda fijada a un commit específico, para mayor seguridad en la cadena de suministro.\n\nPara aplicarlas, abre cada archivo en GitHub, haz clic en «Raw» y copia todo el contenido para reemplazar el del archivo correspondiente en tu repositorio:\n\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/upgrade.yml\n- https://github.com/UCSB-AMPLab/telar/blob/v1.5.0/.github/workflows/build.yml\n\nSi te saltas este paso, tu sitio se sigue construyendo y publicando con normalidad; estos cambios solo refuerzan tus flujos de trabajo.",
-        "doc_url": "https://github.com/UCSB-AMPLab/telar/tree/v1.5.0/.github/workflows"
-      },
-      {
-        "description": "**Si personalizaste los paquetes de idioma, vuelve a aplicar tus cambios.** La actualización reemplazó los paquetes de idioma de Telar (`en.yml` / `es.yml`). Esta versión suma los avisos para compartir historias protegidas —los mensajes que aparecen cuando un enlace o un código de inserción lleva la clave de acceso—, que los paquetes actualizados ya incluyen.",
+        "description": "**No se requiere ninguna acción.** Esta corrección solo afecta el funcionamiento del sitio.\n\n- **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.\n- **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los enlaces de glosario actualizados.",
         "doc_url": "https://telar.org/guia"
       }
     ]
