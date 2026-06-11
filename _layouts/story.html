@@ -229,7 +229,7 @@
               {% assign metadata = steps[0] %}
               {% if metadata.viewer_warnings.size > 0 %}
                 <div class="alert alert-warning telar-alert mt-3" role="alert" style="text-align: left;">
-                  <strong>⚠️ {{ lang.story.config_issues_heading }}</strong>
+                  <strong>{{ lang.errors.story_config_heading }}</strong>
                   <p class="mb-2 mt-2">{{ lang.story.config_issues_heading }}</p>
                   <ul class="mb-2">
                   {% for warning in metadata.viewer_warnings %}

@@ -38,7 +38,7 @@ Term matching is case-insensitive (v1.5.1): an author's `[[Term]]` resolves
 against the stored key regardless of casing, and the rendered `data-term-id`
 uses the stored key so it matches the published glossary page slug.
 
-Version: v1.5.1
+Version: v1.5.2
 """
 
 import html
@@ -265,9 +265,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         else:
             # Invalid term - create error indicator (author's original casing preserved)
             if warnings_list is not None:
-                # Determine layer number for display
-                layer_num = layer_name[-1] if layer_name and layer_name.startswith('layer') else ''
-                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=raw_term_id, layer_num=layer_num)
+                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=raw_term_id)
                 warnings_list.append({
                     'step': step_num,
                     'type': 'glossary',
