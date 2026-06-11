@@ -4,6 +4,19 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-06-10
+
+Small fix release for glossary auto-linking. The `[[term]]` syntax now works in story step texts, and glossary terms match regardless of letter case. Runtime and tooling only — no content changes and no migration. Upgrade in place or simply redeploy.
+
+### Fixed
+
+- **Glossary links in story step texts.** Writing `[[term]]` in a story step's answer text now creates a glossary link, just as it already did inside layer panels. Previously the brackets published as plain text. The question line is a heading and is intentionally left as plain text.
+- **Case-insensitive glossary terms.** `[[Term]]`, `[[term]]`, and `[[TERM]]` now all resolve to the same glossary entry, matching whatever id the glossary defines (so an acronym written `[[IIIF]]` links correctly). The link points at the glossary entry's own page regardless of how the term was typed.
+
+### Notes
+
+- In password-protected stories, a `[[term]]` in the step text shows as plain text (the term's name) rather than a clickable link. Glossary links inside layer panels still work in protected stories. (Inline glossary links in the step texts of protected stories may come in a later release.)
+
 ## [1.5.0] - 2026-06-06
 
 Robustness and security release. Runtime and tooling only — no content changes; existing stories, objects, and configuration continue to work unchanged. This release hardens the build pipeline, the story viewer, and the automatic upgrade workflow, adds defensive input handling and output escaping throughout, and removes the last third-party CDN dependency by vendoring the audio waveform library. The automatic upgrade applies everything except two manual steps (see Migration).

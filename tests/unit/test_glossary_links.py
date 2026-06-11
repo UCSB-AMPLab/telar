@@ -13,7 +13,7 @@ The syntax supports two forms:
 Invalid terms (not found in glossary) are marked with a warning indicator
 to help authors catch typos and missing definitions.
 
-Version: v1.5.0
+Version: v1.5.1
 """
 
 import sys
@@ -28,6 +28,7 @@ import csv_to_json
 csv_to_json.get_lang_string = lambda key, **kwargs: f"Term not found: {kwargs.get('term_id', 'unknown')}"
 
 from csv_to_json import process_glossary_links
+from telar.glossary import strip_glossary_links
 
 
 class TestProcessGlossaryLinks:
@@ -41,6 +42,7 @@ class TestProcessGlossaryLinks:
             'viceroyalty': 'Viceroyalty',
             'encomienda': 'Encomienda System',
             'demo-term': 'Demo Term',
+            'kcsb': 'KCSB',
         }
 
     def test_transforms_simple_term(self, glossary_terms):
@@ -152,6 +154,92 @@ class TestProcessGlossaryLinks:
         assert 'data-term-id="colonial-period"' in result
         assert '&lt;b&gt;' in result and '&quot;' in result
         assert '<b>' not in result  # author markup did not break out
+
+    def test_matches_uppercase_term_case_insensitively(self, glossary_terms):
+        """Author-typed [[KCSB]] resolves to the lowercase `kcsb` term."""
+        text = 'Listen to [[KCSB]] for details.'
+        result = process_glossary_links(text, glossary_terms)
+        assert 'glossary-inline-link' in result
+        # Canonical lowercase id is used for the data attribute, not the author's casing
+        assert 'data-term-id="kcsb"' in result
+        assert 'data-term-id="KCSB"' not in result
+        assert '>KCSB</a>' in result  # display text is the glossary title
+
+    def test_matches_mixedcase_term_case_insensitively(self, glossary_terms):
+        """Mixed-case [[Colonial-Period]] resolves to `colonial-period`."""
+        text = 'During the [[Colonial-Period]] much changed.'
+        result = process_glossary_links(text, glossary_terms)
+        assert 'data-term-id="colonial-period"' in result
+        assert '>Colonial Period</a>' in result
+
+    def test_case_insensitive_match_with_custom_display(self, glossary_terms):
+        """Mixed-case id with a pipe keeps the canonical id but custom display."""
+        text = 'The [[Colonial-Period|early era]] mattered.'
+        result = process_glossary_links(text, glossary_terms)
+        assert 'data-term-id="colonial-period"' in result
+        assert '>early era</a>' in result
+
+    def test_resolves_against_uppercase_stored_key(self):
+        """A glossary whose stored key is uppercase still resolves, using the
+        stored key (not a lowercased copy) as the display title and data-term-id.
+
+        Glossary loaders (CSV, markdown, demo bundle) store term_id verbatim, so
+        keys are not guaranteed lowercase (e.g. the demo bundle stores 'IIIF').
+        Matching must tolerate any author casing AND any stored-key casing, and
+        the rendered data-term-id must equal the stored key so it matches the
+        published glossary page slug.
+        """
+        terms = {'IIIF': 'IIIF', 'colonial-period': 'Colonial Period'}
+        # Author types lowercase; stored key is uppercase
+        result_lower = process_glossary_links('Served via [[iiif]].', terms)
+        assert 'glossary-inline-link' in result_lower
+        assert 'data-term-id="IIIF"' in result_lower
+        assert 'data-term-id="iiif"' not in result_lower
+        # Author types the same uppercase as stored
+        result_upper = process_glossary_links('Served via [[IIIF]].', terms)
+        assert 'data-term-id="IIIF"' in result_upper
+
+    def test_strip_unwraps_valid_glossary_link_to_plain_title(self, glossary_terms):
+        """strip_glossary_links reduces a glossary <a> to its plain title text.
+
+        Protected (encrypted) stories are rendered by a runtime path that escapes
+        the step answer and has no glossary panel, so the link markup would show
+        as escaped tag-text. The strip yields clean prose before encryption.
+        """
+        linked = process_glossary_links('During the [[colonial-period]] much changed.', glossary_terms)
+        assert 'glossary-inline-link' in linked  # precondition
+        stripped = strip_glossary_links(linked)
+        assert stripped == 'During the Colonial Period much changed.'
+        assert '<a' not in stripped and 'glossary-inline-link' not in stripped
+
+    def test_strip_unescapes_entities_in_title(self):
+        """The unwrapped title is HTML-unescaped so a later re-escape is correct."""
+        terms = {'amp-term': 'Black & White'}
+        linked = process_glossary_links('See [[amp-term]].', terms)
+        assert '&amp;' in linked  # the title was html-escaped inside the anchor
+        stripped = strip_glossary_links(linked)
+        assert stripped == 'See Black & White.'  # unescaped back to a literal &
+
+    def test_strip_reduces_error_span_to_literal_brackets(self, glossary_terms):
+        """An unresolved term's error span is reduced to plain text, not tag-soup."""
+        warnings = []
+        linked = process_glossary_links('See [[no-such-term]] here.', glossary_terms, warnings)
+        assert 'glossary-link-error' in linked  # precondition
+        stripped = strip_glossary_links(linked)
+        assert '<span' not in stripped
+        assert '[[no-such-term]]' in stripped
+
+    def test_strip_leaves_plain_text_unchanged(self):
+        """Text with no glossary markup passes through untouched."""
+        assert strip_glossary_links('Just plain prose.') == 'Just plain prose.'
+        assert strip_glossary_links('') == ''
+        assert strip_glossary_links(None) is None
+
+    def test_strip_handles_multiple_links(self, glossary_terms):
+        """All glossary links in a string are unwrapped."""
+        linked = process_glossary_links('The [[viceroyalty]] used the [[encomienda]].', glossary_terms)
+        stripped = strip_glossary_links(linked)
+        assert stripped == 'The Viceroyalty used the Encomienda System.'
 
     def test_escapes_markup_in_invalid_term_error_span(self, glossary_terms):
         """A bogus term carrying markup is escaped in the error span."""
