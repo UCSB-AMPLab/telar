@@ -193,6 +193,7 @@ errors:
   object_config_heading: "⚠️ Problemas de configuración de objetos detectados"
   story_config_heading: "⚠️ Problemas de configuración de historias detectados"
   story_navigate_to: "Ir a"
+  story_or: "o"
   story_see_details: "para ver más detalles."
 
   # Advertencia de discrepancia de URL IIIF
@@ -290,7 +291,7 @@ errors:
     layer_file_missing: "el archivo del panel {{ layer_num }} no se encontró"
 
     # Errores de enlaces al glosario
-    glossary_term_not_found: "En el archivo <code>{{ file_path }}</code>, se referencia el término del glosario '<strong>{{ term_id }}</strong>', pero este término no existe en <code>telar-content/texts/glossary/</code>"
+    glossary_term_not_found: "el término '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una entrada en tu hoja de cálculo del glosario o en <code>telar-content/texts/glossary/</code>."
     short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
     glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
 

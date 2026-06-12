@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
-  "from_version": "1.5.0",
-  "to_version": "1.5.1",
-  "description": "Glossary links in story step text and case-insensitive term matching; runtime-only",
+  "from_version": "1.5.1",
+  "to_version": "1.5.2",
+  "description": "Validation banner message fixes and homepage warning localisation; display-only",
   "operations": [],
   "manual_steps": {
     "en": [
       {
-        "description": "**No action needed.** This is a runtime-only fix.\n\n- **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.\n- **If you work with your site locally:** just rebuild your site to use the updated glossary linking.",
+        "description": "**No action needed.** This is a display-only fix.\n\n- **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.\n- **If you work with your site locally:** just rebuild your site to use the updated warning messages.",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
-        "description": "**No se requiere ninguna acción.** Esta corrección solo afecta el funcionamiento del sitio.\n\n- **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.\n- **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los enlaces de glosario actualizados.",
+        "description": "**No se requiere ninguna acción.** Esta corrección solo afecta los mensajes que se muestran en pantalla.\n\n- **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.\n- **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los mensajes de advertencia actualizados.",
         "doc_url": "https://telar.org/guia"
       }
     ]

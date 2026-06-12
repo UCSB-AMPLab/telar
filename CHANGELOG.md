@@ -4,6 +4,20 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-06-12
+
+Small fix release for the validation warning banners. Display only — no content changes and no manual steps. Upgrade in place or simply redeploy.
+
+### Fixed
+
+- **Glossary warning message.** When a story references a glossary term that doesn't exist, the warning showed a literal `{{ file_path }}` placeholder and pointed only to `telar-content/texts/glossary/`. It now names the missing term cleanly and points to your glossary spreadsheet as well as the markdown folder.
+- **Story banner heading shown twice.** The warning banner on a story's intro card repeated the same line as both its heading and its description; it now has a proper heading.
+- **Homepage warning banners now translated.** The "Object configuration issues detected" and "Story configuration issues detected" banners on the homepage (headings and the "Navigate to ... to see more details." line) were hardcoded in English; they now follow the site language.
+
+### Notes
+
+- The README version badge had lagged at 1.4.0 through the last two releases; it is now correct.
+
 ## [1.5.1] - 2026-06-10
 
 Small fix release for glossary auto-linking. The `[[term]]` syntax now works in story step texts, and glossary terms match regardless of letter case. Runtime and tooling only — no content changes and no migration. Upgrade in place or simply redeploy.
