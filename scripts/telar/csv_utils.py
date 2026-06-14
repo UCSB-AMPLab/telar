@@ -39,8 +39,12 @@ control columns for video and audio steps (`inicio_clip` → `clip_start`,
 rename of the gallery classification column from `object_type` to `medium`
 — with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
 `medio_genero`) so existing spreadsheets continue to work without changes.
+The most recent addition is the 3D model framing set — `acimut`/`azimut` →
+`azimuth`, `elevación` → `elevation`, `distancia` → `distance`, and
+`objetivo_x`/`objetivo_y`/`objetivo_z` → `target_x`/`target_y`/`target_z` —
+the per-step camera columns for guided 3D object stories.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 from pathlib import Path
@@ -105,6 +109,17 @@ COLUMN_NAME_MAPPING = {
     'pagina': 'page',
     'página': 'page',
     'page': 'page',  # normalize casing (Google Sheets may use 'Page')
+    # 3D camera framing columns (v1.6.0). Numeric per-step framing for model
+    # objects: azimuth/elevation in degrees, distance in metres, target_x/y/z in
+    # metres. Spanish aliases pending review.
+    'acimut': 'azimuth',
+    'azimut': 'azimuth',
+    'elevación': 'elevation',
+    'elevacion': 'elevation',
+    'distancia': 'distance',
+    'objetivo_x': 'target_x',
+    'objetivo_y': 'target_y',
+    'objetivo_z': 'target_z',
 
     # English column backward compatibility (layer1_file -> layer1_content)
     'layer1_file': 'layer1_content',
@@ -277,7 +292,10 @@ def is_header_row(row_values):
                         'byline', 'object_id', 'description', 'source_url', 'creator',
                         'period', 'medium', 'dimensions', 'location', 'source', 'credit',
                         'thumbnail', 'year', 'object_type', 'subjects', 'featured',
-                        'protected', 'show_sections'])
+                        'protected', 'show_sections',
+                        # 3D camera framing columns (v1.6.0)
+                        'azimuth', 'elevation', 'distance',
+                        'target_x', 'target_y', 'target_z'])
 
     # Count how many cells match known column names
     matches = 0

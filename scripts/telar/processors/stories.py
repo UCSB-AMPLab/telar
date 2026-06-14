@@ -30,8 +30,12 @@ from one story CSV and performs several passes over the data:
    text, not only in layer panels.
 
 3. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
-   values (0.5, 0.5, 1) so the viewer always has a valid starting
-   position.
+   values (0.5, 0.5, 1) so the 2D viewer always has a valid starting
+   position. 3D model steps instead carry six numeric framing columns —
+   `azimuth`, `elevation`, `distance` and an optional
+   `target_x`/`target_y`/`target_z` look-at point, the camera analogue of
+   `x`/`y`/`zoom`. These pass through untouched here; the model runtime
+   fills sensible per-axis defaults when a cell is blank.
 
 4. **Warning aggregation** — all warnings (missing objects, missing
    markdown files, broken glossary links, widget errors) are collected
@@ -43,7 +47,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.5.1
+Version: v1.6.0
 """
 
 import re
@@ -185,8 +189,12 @@ def process_story(df, christmas_tree=False):
 
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
-                # Check for a local image or audio file via the one-time index
+                # Check for a local image, audio, or 3D model file via the
+                # one-time index. Audio and 3D models are declared by file
+                # presence (no IIIF), so they must not trip the "no source"
+                # warning that only IIIF/image objects should raise.
                 audio_extensions = {'.mp3', '.ogg', '.m4a'}
+                model_extensions = {'.glb', '.gltf'}
                 has_local_image = False
 
                 for f in _obj_file_index.get(actual_object_id, []):
@@ -198,6 +206,10 @@ def process_story(df, christmas_tree=False):
                     if suffix in audio_extensions:
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
+                        break
+                    if suffix in model_extensions:
+                        has_local_image = True
+                        print(f"  [INFO] Object {actual_object_id} uses local 3D model: {f}")
                         break
 
                 # Only warn if object has neither external manifest nor local image

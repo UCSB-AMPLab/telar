@@ -37,7 +37,7 @@ Before encrypting a protected story (v1.5.1), glossary link markup in the step
 answer is reduced to plain text, because the protected-story runtime renderer
 escapes the answer and has no glossary panel.
 
-Version: v1.5.1
+Version: v1.6.0
 """
 
 import os
@@ -262,6 +262,8 @@ def _encrypt_protected_stories(data_dir):
 
 AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
 
+MODEL_EXTENSIONS = ('.glb', '.gltf')
+
 
 def _generate_audio_manifest(data_dir):
     """Generate _data/audio_objects.json from objects.json and local audio files.
@@ -306,6 +308,53 @@ def _generate_audio_manifest(data_dir):
         # No audio objects — remove stale manifest
         manifest_path.unlink()
         print(f"  [INFO] No audio objects found — removed stale {manifest_path}")
+
+
+def _generate_model_manifest(data_dir):
+    """Generate _data/model_objects.json from objects.json and local 3D models.
+
+    Scans telar-content/objects/ for GLB/glTF files matching object IDs in
+    objects.json, then writes a simple {object_id: extension} manifest.
+    This manifest is consumed by story.html to inject window.modelObjects,
+    which the JS card-type detector needs to distinguish 3D objects from
+    IIIF objects. Mirrors _generate_audio_manifest byte-for-byte in shape —
+    3D objects are declared the same way audio is (file presence on disk),
+    so the manifests are parallel.
+
+    Runs as part of the normal csv_to_json pipeline — no external tools
+    required (model-viewer renders uncompressed GLB client-side; no build-time
+    tiling or decoding, unlike generate_iiif.py for images).
+    """
+    objects_json = data_dir / 'objects.json'
+    if not objects_json.exists():
+        return
+
+    with open(objects_json, 'r', encoding='utf-8') as f:
+        objects = json.load(f)
+
+    objects_dir = Path('telar-content/objects')
+    if not objects_dir.exists():
+        return
+
+    manifest = {}
+    for obj in objects:
+        object_id = obj.get('object_id', '').strip()
+        if not object_id:
+            continue
+        for ext in MODEL_EXTENSIONS:
+            if (objects_dir / f'{object_id}{ext}').exists():
+                manifest[object_id] = ext.lstrip('.')
+                break
+
+    manifest_path = data_dir / 'model_objects.json'
+    if manifest:
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest, f, indent=2)
+        print(f"  [INFO] Model manifest: {len(manifest)} 3D object(s) → {manifest_path}")
+    elif manifest_path.exists():
+        # No 3D objects — remove stale manifest
+        manifest_path.unlink()
+        print(f"  [INFO] No 3D objects found — removed stale {manifest_path}")
 
 
 def main():
@@ -398,10 +447,16 @@ def main():
         # the JS card-type detector falls through to IIIF for audio objects.
         _generate_audio_manifest(data_dir)
 
+        # Generate model_objects.json manifest for client-side 3D detection.
+        # Maps object_id → file extension (e.g. {"mural-low-poly": "glb"}).
+        # Without this file, story.html cannot inject window.modelObjects and
+        # the JS card-type detector falls through to IIIF for 3D objects.
+        _generate_model_manifest(data_dir)
+
         # Generate search data for gallery filtering (if enabled in config)
         generate_search_data()
     else:
-        print("⚠️  Skipping audio manifest and search data: objects conversion did not succeed.")
+        print("⚠️  Skipping audio/model manifests and search data: objects conversion did not succeed.")
 
     # Convert story files (with optional Christmas Tree mode)
     # v0.6.0+: Process ALL CSVs except system files

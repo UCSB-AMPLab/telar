@@ -41,14 +41,15 @@ steps before returning the cleaned DataFrame for JSON serialisation:
 6. **Local source fallback** — objects without an external manifest are
    checked for a matching file in `telar-content/objects/`. Audio objects
    look for an audio file (`.mp3`, `.ogg`, `.m4a`) and optionally a
-   precomputed waveform peaks file under `assets/audio/peaks/`; everything
+   precomputed waveform peaks file under `assets/audio/peaks/`; 3D model
+   objects look for a `.glb`/`.gltf` model file; everything
    else looks for a matching image. If no exact image match is found,
    `_find_similar_image_filenames()` uses fuzzy string matching (via
    `difflib.SequenceMatcher` at 85% threshold) to suggest near-matches like
    case differences or hyphen/underscore variations.
 
 7. **Media-type classification** — every object is tagged with a
-   `media_type` of Video, Audio, or Image, written into `objects.json` so
+   `media_type` of Video, Audio, 3D Model, or Image, written into `objects.json` so
    that downstream consumers (search indexing, Liquid templates) read the
    type directly instead of re-detecting it from disk on every build pass.
    The persisted value comes from the canonical URL-based detector in
@@ -71,7 +72,7 @@ objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import re
@@ -96,15 +97,17 @@ from telar.media_type import detect_media_type
 # Video URL patterns for media type detection (matches generate_collections.py)
 _VIDEO_URL_PATTERNS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
 _AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
+_MODEL_EXTENSIONS = ['.glb', '.gltf', '.GLB', '.GLTF']
 
 
 def _detect_media_type(source_url, object_id):
-    """Classify an object as Video, Audio, or Image, consulting the disk.
+    """Classify an object as Video, Audio, Model, or Image, consulting the disk.
 
     This is a local, disk-aware variant used to steer validation: it returns
     Video for known video hosts, then probes `telar-content/objects/` for an
-    audio file matching `object_id` (so audio objects skip IIIF validation and
-    are routed to the local-file checks), and otherwise falls back to Image.
+    audio file, then a 3D model file matching `object_id` (so audio and 3D
+    objects skip IIIF validation and are routed to the local-file checks), and
+    otherwise falls back to Image.
 
     The canonical media-type detector is `telar.media_type.detect_media_type`
     (imported in this module), which classifies purely from the source URL and
@@ -120,6 +123,9 @@ def _detect_media_type(source_url, object_id):
         for ext in _AUDIO_EXTENSIONS:
             if (objects_dir / f'{object_id}{ext}').exists():
                 return 'Audio'
+        for ext in _MODEL_EXTENSIONS:
+            if (objects_dir / f'{object_id}{ext}').exists():
+                return 'Model'
     return 'Image'
 from telar.iiif_metadata import (
     detect_iiif_version, extract_language_map_value, strip_html_tags,
@@ -735,6 +741,27 @@ def process_objects(df, christmas_tree=False):
                 df.at[idx, 'object_warning'] = error_msg
                 df.at[idx, 'object_warning_short'] = 'Audio file missing'
                 msg = f"Object {object_id} has no audio file in telar-content/objects/"
+                print(f"  [WARN] {msg}")
+                warnings.append(msg)
+            continue
+
+        # 3D model objects need a .glb/.gltf file, not an image — validate accordingly
+        if obj_media_type == 'Model':
+            model_dir = Path('telar-content/objects')
+            model_found = None
+            if model_dir.exists():
+                for ext in _MODEL_EXTENSIONS:
+                    model_path = model_dir / f'{object_id}{ext}'
+                    if model_path.exists():
+                        model_found = model_path
+                        break
+            if model_found:
+                print(f"  [INFO] Object {object_id} uses local 3D model: {model_found}")
+            else:
+                error_msg = f"No 3D model file found for object '{object_id}'. Add a .glb or .gltf file to telar-content/objects/{object_id}.glb"
+                df.at[idx, 'object_warning'] = error_msg
+                df.at[idx, 'object_warning_short'] = '3D model file missing'
+                msg = f"Object {object_id} has no 3D model file in telar-content/objects/"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             continue
