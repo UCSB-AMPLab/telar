@@ -4,7 +4,7 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
-## [1.5.2] - 2026-06-12
+## [1.5.2] - 2026-06-13
 
 Small fix release for the validation warning banners. Display only — no content changes and no manual steps. Upgrade in place or simply redeploy.
 
