@@ -1,9 +1,12 @@
 # Dependabot configuration
 #
-# Monitors dependencies for security vulnerabilities and outdated versions.
-# Creates pull requests automatically when updates are available.
+# Version-update pull requests are disabled here (open-pull-requests-limit: 0).
+# Production and user sites receive dependency updates through the Telar
+# Compositor (filtered by the Telar team); version bumps are tracked and tested
+# on the development instance instead, not opened directly against this repo or
+# user repos. Security updates are NOT affected by this limit and still apply.
 #
-# Version: v0.7.0-beta
+# Version: v1.5.2
 
 version: 2
 updates:
@@ -12,6 +15,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(pip)"
 
@@ -20,6 +24,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(npm)"
 
@@ -28,6 +33,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(bundler)"
 
@@ -36,5 +42,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(actions)"
