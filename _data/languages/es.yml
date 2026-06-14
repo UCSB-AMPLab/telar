@@ -58,6 +58,17 @@ object:
     image_unavailable_title: "Imagen no disponible"
     image_unavailable_detail: "No se pudo cargar la imagen IIIF."
 
+  # Controles de navegación 3D (para lectores)
+  model_nav:
+    label: "Navegación 3D"
+    zoom_in: "Acercar"
+    zoom_out: "Alejar"
+    pan_up: "Desplazar hacia arriba"
+    pan_down: "Desplazar hacia abajo"
+    pan_left: "Desplazar hacia la izquierda"
+    pan_right: "Desplazar hacia la derecha"
+    reset_view: "Restablecer la vista"
+
   # Herramienta de identificación de coordenadas
   coordinates:
     heading: "Instrucciones"
@@ -88,6 +99,21 @@ object:
     set_current: "Capturar tiempo actual"
     copy_sheets: "inicio, fin (Sheets)"
     copy_csv: "inicio, fin (CSV)"
+
+  # Herramienta para definir la posición de la cámara 3D
+  camera_picker:
+    button: "Definir posición de cámara"
+    heading: "Posición de la cámara"
+    instructions: "Gira, desplaza y acerca o aleja el modelo de arriba hasta lograr la vista que quieras; luego copia los valores en la hoja de cálculo de estructura: las seis columnas de encuadre a la vez, o los tríos de cámara y punto de enfoque por separado."
+    camera_label: "Cámara"
+    camera_hint: "acimut°, elevación°, distancia m"
+    target_label: "Punto de enfoque"
+    target_hint: "x, y, z m"
+    copy_camera_tooltip: "Copiar acimut, elevación, distancia"
+    copy_target_tooltip: "Copiar objetivo_x, objetivo_y, objetivo_z"
+    copy_sheets: "Copiar las seis (Sheets)"
+    copy_csv: "Copiar las seis (CSV)"
+    copied: "¡Copiado!"
 
   # Miniaturas de objetos
   no_image: "Sin imagen"

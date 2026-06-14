@@ -58,6 +58,17 @@ object:
     image_unavailable_title: "Image unavailable"
     image_unavailable_detail: "The IIIF image could not be loaded."
 
+  # 3D model navigation widget (reader-facing controls)
+  model_nav:
+    label: "3D navigation"
+    zoom_in: "Zoom in"
+    zoom_out: "Zoom out"
+    pan_up: "Pan up"
+    pan_down: "Pan down"
+    pan_left: "Pan left"
+    pan_right: "Pan right"
+    reset_view: "Reset view"
+
   # Coordinate identification tool
   coordinates:
     heading: "Instructions"
@@ -88,6 +99,21 @@ object:
     set_current: "Set to current time"
     copy_sheets: "start, end (Sheets)"
     copy_csv: "start, end (CSV)"
+
+  # 3D camera-position picker tool
+  camera_picker:
+    button: "Set camera position"
+    heading: "Camera Position"
+    instructions: "Rotate, pan, and zoom the model above to the view you want, then copy the values into your structure spreadsheet — all six framing columns at once, or the camera and target triples separately."
+    camera_label: "Camera"
+    camera_hint: "azimuth°, elevation°, distance m"
+    target_label: "Target"
+    target_hint: "x, y, z m"
+    copy_camera_tooltip: "Copy azimuth, elevation, distance"
+    copy_target_tooltip: "Copy target_x, target_y, target_z"
+    copy_sheets: "Copy all six (Sheets)"
+    copy_csv: "Copy all six (CSV)"
+    copied: "Copied!"
 
   # Object thumbnails
   no_image: "No image"

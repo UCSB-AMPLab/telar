@@ -216,3 +216,59 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 }
+
+/* 3D camera picker: each label carries a units hint beneath the name (the
+   IIIF coordinate labels are single words and need none). Let the value rows
+   and copy-all buttons spread across the full right half so the panel reads as
+   two balanced columns, instead of a narrow centred cluster that strands the
+   values away from the instructions. Vertically centre the two halves. */
+.camera-panel {
+  .coordinate-panel-row {
+    align-items: center;
+  }
+
+  .coordinate-panel-values {
+    padding-top: 0;
+  }
+
+  // Right-align the value cluster so it fills the right edge of the panel
+  // (label + value box + copy button reading toward the margin) instead of
+  // floating in the middle with empty space on both sides.
+  .coordinate-panel-values-inner {
+    max-width: 380px;
+    margin: 0 0 0 auto;
+  }
+
+  dl.row > dt {
+    flex: 0 0 40%;
+    max-width: 40%;
+  }
+
+  dl.row > dd {
+    flex: 0 0 60%;
+    max-width: 60%;
+  }
+
+  .coord-label {
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    line-height: 1.25;
+
+    // Hint inherits the label's colour (white on dark, dark on light) and is
+    // simply dimmed — so the label and its units hint are one colour, not two.
+    // (Uses .coord-hint, not Bootstrap's .text-muted, whose !important grey
+    // would otherwise override the inherited colour.)
+    .coord-hint {
+      display: block;
+      color: inherit;
+      opacity: 0.7;
+      font-size: 0.72rem;
+      margin-top: 0.1rem;
+    }
+  }
+
+  .coord-field code {
+    font-size: 1rem;
+  }
+}

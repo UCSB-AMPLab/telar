@@ -7,14 +7,14 @@
  * own, so this file no longer fights a Vue UI with `!important` —
  * selector-based specificity is enough.
  *
- * Container styles cover all three media types (image / video / audio).
- * The .multipage class is added by object.html's inline script when
- * wrapper.pages.length > 1 — it currently relaxes `overflow` so the
+ * Container styles cover all four media types (image / video / audio /
+ * 3D model). The .multipage class is added by object.html's inline script
+ * when wrapper.pages.length > 1 — it currently relaxes `overflow` so the
  * wrapper's pagination chrome can extend beyond the viewer's rounded
  * corners if it overflows. The pagination + error UI rules at the
  * bottom of the file style the wrapper's injected DOM directly.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 /* Viewer Containers */
@@ -67,6 +67,111 @@
   min-height: 80px;
   overflow: hidden;
   /* background and background-image set inline by JS (accent-tinted + weave pattern) */
+}
+
+/* 3D model object page: square viewport for orbiting. Carries the same Telar
+   weave backdrop + inset shadow as the IIIF image viewer (and the 3D story
+   plate); the <model-viewer> canvas is transparent, so the weave shows around
+   the model exactly as it shows around a fitted image. */
+#object-viewer.viewer-model {
+  aspect-ratio: 1 / 1;
+  max-height: 80vh;
+  overflow: hidden;
+  background: #fff url('../img/background-gris.svg') repeat;
+  background-size: 20px auto;
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.12), inset 0 -2px 12px rgba(0, 0, 0, 0.08);
+}
+
+#object-viewer.viewer-model model-viewer {
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
+  --poster-color: transparent;
+}
+
+/* 3D navigation widget (reader-facing): a map-style cluster overlaid bottom-right
+   on the model viewer — zoom, a 4-way pan pad, and reset. Frosted glass so it
+   reads over any model; hover/focus tints toward the site's theme button colour.
+   Pan is an explicit, labelled control (works the same on touch and desktop) so
+   flat objects like murals can be scanned across, not just orbited. */
+.model-nav {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 6px 22px rgba(30, 24, 20, 0.18), 0 1px 2px rgba(30, 24, 20, 0.12);
+}
+
+.model-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #2a2724;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.08s;
+}
+
+.model-nav button:hover,
+.model-nav button:focus-visible {
+  background: color-mix(in srgb, var(--color-button-bg, #883C36) 14%, transparent);
+  color: var(--color-button-bg, #883C36);
+  outline: none;
+}
+
+.model-nav button:active { transform: scale(0.92); }
+
+.model-nav button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.model-nav-sep {
+  width: 28px;
+  height: 1px;
+  background: rgba(42, 39, 36, 0.14);
+  margin: 3px 0;
+}
+
+.model-nav-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 38px);
+  grid-template-rows: repeat(3, 30px);
+  align-items: center;
+  justify-items: center;
+}
+
+.model-nav-pad button { width: 34px; height: 28px; }
+
+.model-nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(42, 39, 36, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-nav button { transition: none; }
 }
 
 /* Object-page viewer: transparent OSD background so the weave pattern
