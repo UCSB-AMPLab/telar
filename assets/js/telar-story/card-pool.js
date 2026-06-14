@@ -29,25 +29,27 @@
  * vice versa on the same object) is treated as an object change.
  *
  * Preloading — after each step change, the module looks ahead and
- * initialises IIIF viewers, video players, or audio players for upcoming
- * scenes. It counts by scene distance, not step offset, so a long
- * sequence of steps on the same object does not waste preload slots.
- * When the pool exceeds its cap (default 8), the instance farthest by
- * scene distance from the current position is evicted. IIIF tiles for
- * scenes beyond the OSD preload range are also prefetched as image
- * link hints.
+ * initialises IIIF viewers, video players, audio players, or 3D model
+ * viewers for upcoming scenes. It counts by scene distance, not step
+ * offset, so a long sequence of steps on the same object does not waste
+ * preload slots. When the pool exceeds its cap (default 8), the instance
+ * farthest by scene distance from the current position is evicted. IIIF
+ * tiles for scenes beyond the OSD preload range are also prefetched as
+ * image link hints. 3D model plates own their own WebGL pool (model-card.js,
+ * capped lower than IIIF) and hard-destroy the <model-viewer> on eviction
+ * to release the GPU context.
  *
  * Accessibility — every viewer plate receives an aria-label built from
  * a fallback chain: step-level alt text, then object-level alt text, then
  * the object title, then the object ID, and finally a type-aware generic
- * label ("Image viewer", "Video player", or "Audio player"). The label
- * is refreshed on every step change.
+ * label ("Image viewer", "Video player", "Audio player", or "3D model
+ * viewer"). The label is refreshed on every step change.
  *
  * Exported pure functions (getObjectZBase, getSceneIndex, computeCardTop,
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -91,6 +93,32 @@ import {
   applyAudioClipEndDim,
   removeAudioClipEndDim,
 } from './audio-card.js';
+import {
+  createModelPlayer,
+  destroyModelPlayer,
+  activateModelCard,
+  deactivateModelCard,
+  updateModelCamera,
+  frameModelInRegion,
+  stepCameraStrings,
+} from './model-card.js';
+
+/**
+ * Whether a model plate still needs its <model-viewer> initialised.
+ *
+ * Checks BOTH the in-flight flag (dataset.modelInitPending, set synchronously
+ * by createModelPlayer before the async bundle load appends the element) and
+ * the element's presence. Without the pending check, two _initModelInPlate
+ * calls in the same microtask batch (e.g. preloadAhead then activate, once the
+ * bundle is cached) both see no `.model-instance` and build two <model-viewer>
+ * elements / leak a second WebGL context on one plate (the B1 race).
+ *
+ * @param {HTMLElement} plate
+ * @returns {boolean}
+ */
+function _modelPlateNeedsInit(plate) {
+  return !plate.dataset.modelInitPending && !plate.querySelector('.model-instance');
+}
 
 /** Normalise truthy loop values from CSV/JSON: "true", "TRUE", "yes", "sí", true → true */
 function _isTruthy(val) {
@@ -253,6 +281,7 @@ function _buildAriaLabel(objectId, stepAlt, cardType) {
   // Type-aware final fallback
   if (cardType === 'youtube' || cardType === 'vimeo' || cardType === 'google-drive') return 'Video player';
   if (cardType === 'audio') return 'Audio player';
+  if (cardType === 'model') return '3D model viewer';
   return 'Image viewer';
 }
 
@@ -435,6 +464,21 @@ export function initCardPool(storyData, config) {
   // Injected by story.html as window.audioObjects from _data/audio_objects.json
   const audioObjects = storyData?.audioObjects || window.audioObjects || {};
 
+  // 3D model manifest: maps object_id → file extension (e.g. 'glb')
+  // Injected by story.html as window.modelObjects from _data/model_objects.json
+  const modelObjects = storyData?.modelObjects || window.modelObjects || {};
+
+  // Build the `file_path` detectCardType uses to recognise self-hosted audio
+  // and 3D objects (both are declared by file presence, not a CSV column).
+  // An object is at most one of the two, so a single derived path is enough.
+  const _filePathFor = (objectId) => {
+    const aExt = audioObjects[objectId];
+    if (aExt) return `objects/${objectId}.${aExt}`;
+    const mExt = modelObjects[objectId];
+    if (mExt) return `objects/${objectId}.${mExt}`;
+    return '';
+  };
+
   // Create viewer plates (one per scene)
   for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
     const firstStepIdx = state.sceneFirstStep[sceneIdx];
@@ -442,12 +486,11 @@ export function initCardPool(storyData, config) {
     if (!objectId) continue;  // Title card scene — no viewer plate
     const firstStep = steps[firstStepIdx] || {};
     const objectData = state.objectsIndex[objectId] || {};
-    const audioExt = audioObjects[objectId];
     const sceneCardType = detectCardType({
       objectId,
       cardType: firstStep.cardType,
       source_url: objectData.source_url || objectData.iiif_manifest || '',
-      file_path: audioExt ? `objects/${objectId}.${audioExt}` : '',
+      file_path: _filePathFor(objectId),
     });
 
     const plate = document.createElement('div');
@@ -480,6 +523,22 @@ export function initCardPool(storyData, config) {
       if (firstStep.loop) plate.dataset.loop = firstStep.loop;
     }
 
+    // Mark 3D model plates and store the first step's authored camera. The
+    // camera dataset is the model analogue of video/audio's clip dataset —
+    // _initModelInPlate reads it so a scene re-entered after WebGL eviction
+    // restores the step's framing.
+    if (sceneCardType === 'model') {
+      plate.classList.add('model-plate');
+      plate.dataset.cardType = 'model';
+      // Build the model-viewer orbit/target strings from the first step's numeric
+      // framing columns (azimuth/elevation/distance/target_x/y/z) and persist them,
+      // the model analogue of video/audio's clip dataset — _initModelInPlate reads
+      // them so a scene re-entered after WebGL eviction restores the step's framing.
+      const firstCam = stepCameraStrings(firstStep);
+      if (firstCam.orbit) plate.dataset.cameraOrbit = firstCam.orbit;
+      if (firstCam.target) plate.dataset.cameraTarget = firstCam.target;
+    }
+
     cardStack.appendChild(plate);
 
     state.viewerPlates[sceneIdx] = plate;
@@ -492,12 +551,11 @@ export function initCardPool(storyData, config) {
     const step = steps[stepIdx];
     const objectId = step.object || step.objectId || '';
     const objectData = state.objectsIndex[objectId] || {};
-    const audioExt2 = audioObjects[objectId];
     const cardType = detectCardType({
       objectId,
       cardType: step.cardType,
       source_url: objectData.source_url || objectData.iiif_manifest || '',
-      file_path: audioExt2 ? `objects/${objectId}.${audioExt2}` : '',
+      file_path: _filePathFor(objectId),
     });
 
     if (!objectId) {
@@ -585,6 +643,8 @@ export function initCardPool(storyData, config) {
         _initVideoInPlate(plate, firstObjectId, 0, zIndex);
       } else if (plate.classList.contains('audio-plate')) {
         _initAudioInPlate(plate, firstObjectId, 0, zIndex);
+      } else if (plate.classList.contains('model-plate')) {
+        _initModelInPlate(plate, firstObjectId, 0, zIndex);
       } else {
         const x    = parseFloat(firstStep.x);
         const y    = parseFloat(firstStep.y);
@@ -767,6 +827,14 @@ export function activateCard(index, direction) {
         const clipEnd = parseFloat(step.clip_end) || 0;
         const loop = _isTruthy(step.loop);
         updateAudioClip(plate, clipStart, clipEnd || undefined, loop);
+      } else if (plate && plate.classList.contains('model-plate')) {
+        // Model, forward same-object. Passing `step` lets updateModelCamera EASE
+        // the camera to this step's framing on discrete nav (mobile tap / button)
+        // via its own rAF loop; under scroll it snaps at the boundary (the
+        // per-frame lerp already owns the in-between). Same-object only — object
+        // changes and TOC/deep-link jumps snap (no step arg passed).
+        const cam = stepCameraStrings(step);
+        updateModelCamera(plate, cam.orbit, cam.target, step);
       } else if (!state.scrollDriven) {
         // IIIF: animate to this step's position — skip if scroll-driven
         // because lerpIiifPosition already positioned the viewer each frame
@@ -805,6 +873,11 @@ export function activateCard(index, direction) {
             void currentPlate.offsetHeight;
             currentPlate.style.transition = '';
             deactivateAudioCard(currentPlate);
+          } else if (currentPlate.classList.contains('model-plate')) {
+            // Model plates animate down like IIIF (no cross-origin iframe to
+            // break the CSS transform transition), then drop the active class.
+            currentPlate.style.transform = 'translateY(100%)';
+            deactivateModelCard(currentPlate);
           } else {
             deactivateIiifCard(
               { element: currentPlate, objectId: prevObjectId },
@@ -823,11 +896,23 @@ export function activateCard(index, direction) {
           void prevPlate.offsetHeight; // force reflow
           prevPlate.style.transition = '';
           prevPlate.classList.add('is-active');
-          // Re-apply video/audio layout when returning to a media plate
+          // Re-apply video/audio/model layout when returning to a media plate
           if (prevPlate.classList.contains('video-plate')) {
             activateVideoCard(prevPlate, getSceneIndex(index));
           } else if (prevPlate.classList.contains('audio-plate')) {
             activateAudioCard(prevPlate, getSceneIndex(index));
+          } else if (prevPlate.classList.contains('model-plate')) {
+            // The <model-viewer> may have been WebGL-evicted while away —
+            // recreate it (browser HTTP-caches the GLB) and restore the
+            // step's authored camera.
+            const cam = stepCameraStrings(step);
+            if (_modelPlateNeedsInit(prevPlate)) {
+              _initModelInPlate(prevPlate, objectId, getSceneIndex(index), _zPlan.plateZ[index], cam.orbit, cam.target);
+            }
+            activateModelCard(prevPlate, getSceneIndex(index));
+            // Snap the authored camera (instant via decay=0; not gated — the
+            // boundary always lands exactly). Backward object-change re-entry.
+            updateModelCamera(prevPlate, cam.orbit, cam.target);
           }
         }
       }
@@ -876,6 +961,11 @@ export function activateCard(index, direction) {
         const clipEnd = parseFloat(step.clip_end) || 0;
         const loop = _isTruthy(step.loop);
         updateAudioClip(plate, clipStart, clipEnd || undefined, loop);
+      } else if (plate && plate.classList.contains('model-plate')) {
+        // Model, backward same-object. `step` enables the discrete-nav camera
+        // ease (rAF); scroll snaps at the boundary. Same-object only.
+        const cam = stepCameraStrings(step);
+        updateModelCamera(plate, cam.orbit, cam.target, step);
       } else if (!state.scrollDriven) {
         // IIIF: animate viewer back to this step's position — skip if scroll-driven
         _animateViewerToStep(objectId, step, index);
@@ -1000,6 +1090,16 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
   if (prevPlate && prevPlate === newPlate) {
     newPlate.style.transform = 'translateY(0)';
     newPlate.classList.add('is-active');
+    // The plate is already the correct scene, but a TOC/deep-link jump landing
+    // here still needs the target step's framing applied. Continuous forward
+    // scroll within a scene goes through activateCard's same-object branch
+    // instead, so this only fires for jumps. Model plates: snap the authored
+    // camera (instant via decay=0); the rect-settle hook re-frames the region.
+    if (newPlate.classList.contains('model-plate')) {
+      activateModelCard(newPlate, sceneIndex);
+      const cam = stepCameraStrings(step);
+      updateModelCamera(newPlate, cam.orbit, cam.target);
+    }
     return;
   }
 
@@ -1031,6 +1131,8 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
       deactivateVideoCard(prevPlate);
     } else if (prevPlate.classList.contains('audio-plate')) {
       deactivateAudioCard(prevPlate);
+    } else if (prevPlate.classList.contains('model-plate')) {
+      deactivateModelCard(prevPlate);
     } else {
       prevPlate.classList.remove('is-active');
     }
@@ -1043,8 +1145,22 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
   const zoom = parseFloat(step.zoom);
   const page = step.page ? parseInt(step.page, 10) : undefined;
 
-  // Route to audio, video, or IIIF initialisation
-  if (newPlate.classList.contains('audio-plate')) {
+  // Route to audio, video, model, or IIIF initialisation
+  if (newPlate.classList.contains('model-plate')) {
+    // Model plate: initialise the <model-viewer> if not already present, then
+    // push this step's authored camera (createModelPlayer applies it on first
+    // load; updateModelCamera covers a re-entered, already-live scene).
+    const cam = stepCameraStrings(step);
+    if (_modelPlateNeedsInit(newPlate)) {
+      const zIndex = _zPlan.plateZ[stepIndex];
+      _initModelInPlate(newPlate, objectId, sceneIndex, zIndex, cam.orbit, cam.target);
+    }
+    activateModelCard(newPlate, sceneIndex);
+    // Forward object-change: the previous (cross-object) pair froze the lerp, so
+    // set this scene's authored camera here. createModelPlayer already applied
+    // it at creation; this is the idempotent confirm for a re-entered live scene.
+    updateModelCamera(newPlate, cam.orbit, cam.target);
+  } else if (newPlate.classList.contains('audio-plate')) {
     // Audio plate: initialise player if not already present
     if (!newPlate.querySelector('.waveform-container')) {
       const zIndex = _zPlan.plateZ[stepIndex];
@@ -1334,6 +1450,52 @@ function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
 }
 
 /**
+ * Initialise a <model-viewer> inside an existing model-plate element.
+ *
+ * Parallel to _initAudioInPlate — called by activateCard and preloadAhead
+ * for 'model' card types. Resolves the GLB URL from window.modelObjects (the
+ * object_id → extension manifest) the same way audio resolves its file, and
+ * constructs the model-card wrapper, which lazily loads the vendored
+ * <model-viewer> bundle. The authored camera is read from the explicit args
+ * when provided, falling back to the plate's camera dataset (set at init from
+ * the scene's first step) so a re-entered scene restores its framing.
+ *
+ * @param {HTMLElement} plateEl - The existing model-plate element
+ * @param {string} objectId
+ * @param {number} sceneIndex - The scene this card belongs to
+ * @param {number} zIndex
+ * @param {string} [cameraOrbit] - Authored orbit for the activating step
+ * @param {string} [cameraTarget] - Authored target for the activating step
+ */
+function _initModelInPlate(plateEl, objectId, sceneIndex, zIndex, cameraOrbit, cameraTarget) {
+  const modelObjects = window.storyData?.modelObjects || window.modelObjects || {};
+  const ext = modelObjects[objectId];
+  if (!ext) {
+    console.error('_initModelInPlate: no model extension for', objectId);
+    return;
+  }
+
+  const basePath = getBasePath();
+  const primaryUrl = `${basePath}/telar-content/objects/${objectId}.${ext}`;
+  // The manifest records the real extension; the other extension is a
+  // belt-and-braces fallback the wrapper tries once if the primary errors.
+  const otherExt = ext === 'glb' ? 'gltf' : 'glb';
+  const fallbackUrl = `${basePath}/telar-content/objects/${objectId}.${otherExt}`;
+
+  const objectData = state.objectsIndex[objectId] || {};
+  const alt = objectData.alt_text || objectData.title || objectId;
+
+  plateEl.style.zIndex = zIndex;
+
+  createModelPlayer(plateEl, primaryUrl, fallbackUrl, {
+    cameraOrbit: cameraOrbit || plateEl.dataset.cameraOrbit || '',
+    cameraTarget: cameraTarget || plateEl.dataset.cameraTarget || '',
+    sceneIndex,
+    alt,
+  });
+}
+
+/**
  * Deactivate the currently active text card (the one with is-active).
  *
  * @param {number} newIndex - The step index we are moving TO (skip it)
@@ -1387,6 +1549,7 @@ function _activateTextCard(cardEl) {
   const isScrubbing    = document.querySelector('.card-stack')?.classList.contains('is-scrubbing');
   if (prefersReduced || isScrubbing) {
     state.cardOverlayRect = cardEl.getBoundingClientRect();
+    _reframeModelForStep(cardEl);
     return;
   }
   // Ensure at most one pending settle listener per card: rapid re-activation
@@ -1399,9 +1562,32 @@ function _activateTextCard(cardEl) {
     cardEl.removeEventListener('transitionend', onSettled);
     cardEl._settleHandler = null;
     state.cardOverlayRect = cardEl.getBoundingClientRect();
+    // Now the measured card rect is current — re-frame the model into the
+    // uncovered region (the model card has no per-frame framing to self-correct
+    // a stale rect, so this settle hook is what makes D2 land on first entry).
+    // animate=true: ease the box to the new region so a height-changed card
+    // doesn't snap the model at the end of the slide (matches the camera ease).
+    _reframeModelForStep(cardEl, true);
   };
   cardEl._settleHandler = onSettled;
   cardEl.addEventListener('transitionend', onSettled);
+}
+
+/**
+ * If the scene for a text card is a model plate, re-frame its <model-viewer>
+ * into the (now-measured) uncovered region. Called from the cardOverlayRect
+ * settle write so 3D framing uses the real card rect on first entry.
+ *
+ * @param {HTMLElement} cardEl - The text card whose step just activated.
+ */
+function _reframeModelForStep(cardEl, animate = false) {
+  const stepIndex = parseInt(cardEl.dataset.stepIndex, 10);
+  if (isNaN(stepIndex)) return;
+  const sceneIndex = getSceneIndex(stepIndex);
+  const plate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
+  if (plate && plate.classList.contains('model-plate')) {
+    frameModelInRegion(plate, animate);
+  }
 }
 
 /**
@@ -1448,6 +1634,8 @@ function _activateTitleCardStep(index, direction) {
       deactivateVideoCard(departingPlate);
     } else if (departingPlate.classList.contains('audio-plate')) {
       deactivateAudioCard(departingPlate);
+    } else if (departingPlate.classList.contains('model-plate')) {
+      deactivateModelCard(departingPlate);
     } else {
       departingPlate.classList.remove('is-active');
     }
@@ -1542,6 +1730,13 @@ export function preloadAhead(currentIndex, ahead, behind) {
       if (!plate.querySelector('.video-iframe, iframe')) {
         _initVideoInPlate(plate, objectId, targetScene, zIndex);
       }
+    } else if (plate.classList.contains('model-plate')) {
+      // Model plate: preload only if not already initialised. The GLB starts
+      // fetching before the reader arrives; the authored camera comes from the
+      // plate's camera dataset (set at init from the scene's first step).
+      if (_modelPlateNeedsInit(plate)) {
+        _initModelInPlate(plate, objectId, targetScene, zIndex);
+      }
     } else {
       // IIIF plate: skip if already has a ViewerCard
       if (state.viewerCards.find(vc => vc.sceneIndex === targetScene)) continue;
@@ -1589,6 +1784,13 @@ export function preloadAhead(currentIndex, ahead, behind) {
       // Video plate: preload only if no video iframe yet
       if (!plate.querySelector('.video-iframe, iframe')) {
         _initVideoInPlate(plate, objectId, targetScene, zIndex);
+      }
+    } else if (plate.classList.contains('model-plate')) {
+      // Model plate: preload only if not already initialised. The GLB starts
+      // fetching before the reader arrives; the authored camera comes from the
+      // plate's camera dataset (set at init from the scene's first step).
+      if (_modelPlateNeedsInit(plate)) {
+        _initModelInPlate(plate, objectId, targetScene, zIndex);
       }
     } else {
       // IIIF plate: skip if already has a ViewerCard

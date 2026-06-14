@@ -23,11 +23,13 @@
  * by each waypoint along the way.
  *
  * Per-frame wiring — every animation frame, the scroll callback computes
- * the current fractional position and drives two visual systems:
+ * the current fractional position and drives the visual systems:
  * setCardProgress positions the next card proportionally during the
- * scroll scrub, and lerpIiifPosition interpolates the IIIF viewer's
- * x/y/zoom coordinates between same-object step pairs. Smoothness comes
- * from Lenis's animatedScroll value, not from OpenSeadragon animations.
+ * scroll scrub, lerpIiifPosition interpolates the IIIF viewer's x/y/zoom
+ * coordinates between same-object step pairs, and lerpModelCamera does the
+ * same for a 3D object's camera orbit and target. Smoothness comes from
+ * Lenis's animatedScroll value, not from OpenSeadragon or model-viewer
+ * animations.
  *
  * Button and keyboard navigation — advanceToStep() triggers a Lenis
  * scrollTo() animation rather than jumping directly, so all navigation
@@ -36,7 +38,7 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import Lenis from 'lenis';
@@ -49,6 +51,7 @@ import { goToStep, updateViewerInfo } from './navigation.js';
 import { initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
+import { lerpModelCamera } from './model-card.js';
 
 // ── Module-level references ───────────────────────────────────────────────────
 
@@ -393,6 +396,9 @@ export function updateScrollPosition(position) {
   // index (it drives state.stepToScene), so the unfiltered window.storyData
   // .steps would mis-index on stories that contain metadata rows.
   lerpIiifPosition(stepIndex, progress, state.stepsData || []);
+  // Per-frame 3D camera interpolation — the model analogue of lerpIiifPosition.
+  // No-ops for non-model scenes and different-object pairs.
+  lerpModelCamera(stepIndex, progress, state.stepsData || []);
 
   // Integer boundary crossings — activateCard
   // Mark as scroll-driven so activateCard skips the 4s OSD spring animation

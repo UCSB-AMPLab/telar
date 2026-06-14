@@ -40,7 +40,7 @@
  *   Per OSD issue #2693, the module calls WEBGL_lose_context.loseContext()
  *   first, then the wrapper's destroy(), then removes the DOM element.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -161,6 +161,42 @@ export function _deriveCardPlacement(cardBox, viewportW, viewportH) {
   return 'vertical';
 }
 
+/**
+ * Compute the uncovered region — the screen-px area the text card does NOT
+ * cover — for a given card box and placement mode.
+ *
+ * This is the single source of truth for "where the visible content should be
+ * framed": IIIF's computeFocalTarget inscribes its focal circle in this region,
+ * and the 3D model card (model-card.js:frameModelInRegion) sizes its
+ * <model-viewer> element to it so the model centres beside/above the card
+ * instead of behind it.
+ *
+ *   - horizontal (side card): region is to the RIGHT of the card.
+ *   - vertical (bottom card):  region is ABOVE the card's top edge.
+ *
+ * A null cardBox falls back to the CSS-derived default box, so the region is
+ * sensible before the card's slide-in transition has settled
+ * state.cardOverlayRect.
+ *
+ * @param {{ x: number, y: number, w: number, h: number }|null} cardBox  Card overlay rect, screen px.
+ * @param {'horizontal'|'vertical'} placementMode  From _deriveCardPlacement.
+ * @param {number} viewportW
+ * @param {number} viewportH
+ * @returns {{ x: number, y: number, w: number, h: number }}
+ */
+export function computeUncoveredRegion(cardBox, placementMode, viewportW, viewportH) {
+  const box = (cardBox !== null && cardBox !== undefined)
+    ? cardBox
+    : _defaultCardBox(placementMode, viewportW, viewportH);
+
+  if (placementMode === 'horizontal') {
+    const visX = box.x + box.w;
+    return { x: visX, y: 0, w: viewportW - visX, h: viewportH };
+  }
+  // vertical / embed: card anchored at bottom; visible area is above card top edge
+  return { x: 0, y: 0, w: viewportW, h: box.y };
+}
+
 // ── Two-circle focal-target constants ───────────────────────────────────────
 //
 // Runtime constants for the two-circle centring model.
@@ -218,20 +254,9 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
     return null;
   }
 
-  // Resolve card geometry: null cardBox → CSS-derived default
-  const box = (cardBox !== null && cardBox !== undefined)
-    ? cardBox
-    : _defaultCardBox(placementMode, viewportW, viewportH);
-
-  // Derive the uncovered region in screen px (the area the card does not cover)
-  let region;
-  if (placementMode === 'horizontal') {
-    const visX = box.x + box.w;
-    region = { x: visX, y: 0, w: viewportW - visX, h: viewportH };
-  } else {
-    // vertical / embed: card anchored at bottom; visible area is above card top edge
-    region = { x: 0, y: 0, w: viewportW, h: box.y };
-  }
+  // Derive the uncovered region in screen px (the area the card does not cover).
+  // Shared with model-card.js so 3D framing uses the identical formula.
+  const region = computeUncoveredRegion(cardBox, placementMode, viewportW, viewportH);
 
   // ── Circle A radius derivation ──────────────────────────────────────────────
   // imageAspect   = imageW / imageH

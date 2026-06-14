@@ -344,6 +344,7 @@
   var VIMEO_RE = /vimeo\.com\/(?:video\/)?(\d+)/;
   var GDRIVE_RE = /drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/;
   var AUDIO_FILE_RE = /\.(mp3|ogg|m4a)$/i;
+  var MODEL_FILE_RE = /\.(glb|gltf)$/i;
   function detectCardType(stepData) {
     if (stepData.cardType && stepData.cardType !== "") return stepData.cardType;
     if (!stepData.objectId || stepData.objectId === "") return "text-only";
@@ -351,7 +352,9 @@
     if (YOUTUBE_RE.test(sourceUrl)) return "youtube";
     if (VIMEO_RE.test(sourceUrl)) return "vimeo";
     if (GDRIVE_RE.test(sourceUrl)) return "google-drive";
-    if (AUDIO_FILE_RE.test(stepData.file_path || "")) return "audio";
+    const filePath = stepData.file_path || "";
+    if (AUDIO_FILE_RE.test(filePath)) return "audio";
+    if (MODEL_FILE_RE.test(filePath)) return "model";
     return "iiif";
   }
   function extractVideoId(cardType, sourceUrl) {
@@ -925,6 +928,14 @@
     if (cardBox.x + cardBox.w < viewportW * 0.6) return "horizontal";
     return "vertical";
   }
+  function computeUncoveredRegion(cardBox, placementMode, viewportW, viewportH) {
+    const box = cardBox !== null && cardBox !== void 0 ? cardBox : _defaultCardBox(placementMode, viewportW, viewportH);
+    if (placementMode === "horizontal") {
+      const visX = box.x + box.w;
+      return { x: visX, y: 0, w: viewportW - visX, h: viewportH };
+    }
+    return { x: 0, y: 0, w: viewportW, h: box.y };
+  }
   var AUTHORING_ASPECT = 1.053;
   var FOCAL_DIAMETER_FRAC = 0.9;
   function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode) {
@@ -933,14 +944,7 @@
     if (!_isSane(imageW, imageH, viewportW, viewportH, x, y, zoom)) {
       return null;
     }
-    const box = cardBox !== null && cardBox !== void 0 ? cardBox : _defaultCardBox(placementMode, viewportW, viewportH);
-    let region;
-    if (placementMode === "horizontal") {
-      const visX = box.x + box.w;
-      region = { x: visX, y: 0, w: viewportW - visX, h: viewportH };
-    } else {
-      region = { x: 0, y: 0, w: viewportW, h: box.y };
-    }
+    const region = computeUncoveredRegion(cardBox, placementMode, viewportW, viewportH);
     const imageAspect = imageW / imageH;
     const homeZoomAuth = imageAspect / AUTHORING_ASPECT;
     const frameWidthImg = imageW / (homeZoomAuth * zoom);
@@ -2215,7 +2219,381 @@
     }
   });
 
+  // assets/js/telar-story/model-card.js
+  var _modelPlayers = [];
+  var MAX_MODEL_VIEWERS = 3;
+  var DEFAULT_ORBIT = "0deg 75deg auto";
+  var MODEL_CAMERA_DURATION = 600;
+  function loadModelViewerAPI() {
+    if (window._mvApiPromise) return window._mvApiPromise;
+    window._mvApiPromise = new Promise((resolve, reject) => {
+      if (window.customElements && customElements.get("model-viewer")) {
+        resolve();
+        return;
+      }
+      const basePath = getBasePath();
+      const script = document.createElement("script");
+      script.src = `${basePath}/assets/vendor/model-viewer/model-viewer-umd.min.js`;
+      script.async = true;
+      script.onload = () => {
+        customElements.whenDefined("model-viewer").then(() => resolve());
+      };
+      script.onerror = () => reject(new Error("model-viewer failed to load"));
+      document.head.appendChild(script);
+    });
+    return window._mvApiPromise;
+  }
+  function createModelPlayer(plateEl, glbUrl, gltfUrl, options = {}) {
+    const {
+      cameraOrbit,
+      cameraTarget,
+      sceneIndex = 0,
+      alt = "",
+      onLoad = () => {
+      },
+      onError = () => {
+      }
+    } = options;
+    const wrapper = {
+      type: "model",
+      element: plateEl,
+      mv: null,
+      sceneIndex,
+      cameraOrbit: cameraOrbit || DEFAULT_ORBIT,
+      cameraTarget: cameraTarget || "",
+      _triedGltf: false,
+      _destroyed: false,
+      destroy() {
+        destroyModelPlayer(this);
+      }
+    };
+    _modelPlayers.push(wrapper);
+    _enforceModelPoolLimit(sceneIndex);
+    plateEl.dataset.loading = "true";
+    plateEl.dataset.modelInitPending = "true";
+    loadModelViewerAPI().then(() => {
+      if (wrapper._destroyed) {
+        delete plateEl.dataset.modelInitPending;
+        return;
+      }
+      const mv = document.createElement("model-viewer");
+      mv.className = "model-instance";
+      mv.setAttribute("camera-orbit", wrapper.cameraOrbit);
+      if (wrapper.cameraTarget) mv.setAttribute("camera-target", wrapper.cameraTarget);
+      mv.setAttribute("interaction-prompt", "none");
+      mv.setAttribute("interpolation-decay", "0");
+      mv.setAttribute("min-camera-orbit", "auto auto 0m");
+      mv.setAttribute("loading", "eager");
+      mv.setAttribute("shadow-intensity", "0.5");
+      mv.setAttribute("exposure", "1");
+      if (alt) mv.setAttribute("alt", alt);
+      mv.style.width = "100%";
+      mv.style.height = "100%";
+      mv.addEventListener("error", () => {
+        if (wrapper._destroyed) return;
+        if (!wrapper._triedGltf && gltfUrl) {
+          wrapper._triedGltf = true;
+          mv.setAttribute("src", gltfUrl);
+        } else {
+          delete plateEl.dataset.loading;
+          _injectModelError(plateEl);
+          onError(new Error("model-viewer load error"));
+        }
+      });
+      mv.addEventListener("load", () => {
+        if (wrapper._destroyed) return;
+        delete plateEl.dataset.loading;
+        frameModelInRegion(plateEl);
+        _settle(wrapper);
+        onLoad();
+      });
+      mv.setAttribute("src", glbUrl);
+      plateEl.appendChild(mv);
+      wrapper.mv = mv;
+      delete plateEl.dataset.modelInitPending;
+      frameModelInRegion(plateEl);
+    }).catch((err) => {
+      console.error("model-card: failed to load model-viewer API", err);
+      delete plateEl.dataset.loading;
+      delete plateEl.dataset.modelInitPending;
+      _injectModelError(plateEl);
+      onError(err);
+    });
+    return wrapper;
+  }
+  function activateModelCard(plateEl, sceneIndex) {
+    plateEl.style.transform = "translateY(0)";
+    plateEl.classList.add("is-active");
+  }
+  function deactivateModelCard(plateEl) {
+    plateEl.classList.remove("is-active");
+  }
+  function updateModelCamera(plateEl, cameraOrbit, cameraTarget, step) {
+    const wrapper = _getModelWrapperForPlate(plateEl);
+    if (!wrapper) return;
+    const nextOrbit = cameraOrbit || wrapper.cameraOrbit || DEFAULT_ORBIT;
+    const nextTarget = cameraTarget || "";
+    if (nextOrbit === wrapper.cameraOrbit && nextTarget === wrapper.cameraTarget) {
+      return;
+    }
+    wrapper.cameraOrbit = nextOrbit;
+    wrapper.cameraTarget = nextTarget;
+    plateEl.dataset.cameraOrbit = nextOrbit;
+    if (nextTarget) plateEl.dataset.cameraTarget = nextTarget;
+    else delete plateEl.dataset.cameraTarget;
+    const mv = wrapper.mv;
+    if (!mv) return;
+    if (!step || state.scrollDriven || _reduceMotion() || !mv.loaded) {
+      _cancelDiscreteCameraAnim(wrapper);
+      mv.cameraOrbit = nextOrbit;
+      mv.cameraTarget = nextTarget || "auto auto auto";
+      _jumpModelCameraToGoal(mv);
+      return;
+    }
+    _animateModelCameraDiscrete(wrapper, step, nextOrbit, nextTarget || "auto auto auto");
+  }
+  function _animateModelCameraDiscrete(wrapper, step, fallbackOrbit, fallbackTarget) {
+    const mv = wrapper.mv;
+    if (!mv) return;
+    _cancelDiscreteCameraAnim(wrapper);
+    const DEG = 180 / Math.PI;
+    const fO = mv.getCameraOrbit();
+    const fT = mv.getCameraTarget();
+    const fromTh = fO.theta * DEG, fromPh = fO.phi * DEG, fromR = fO.radius;
+    const fromT = [fT.x, fT.y, fT.z];
+    const az = _num(step.azimuth), el = _num(step.elevation), dist = _num(step.distance);
+    const toTh = az == null ? fromTh : az;
+    const toPh = el == null ? fromPh : el;
+    const toR = dist == null ? fromR : dist;
+    const stepT = _stepTarget(step);
+    const toT = stepT || fromT.slice();
+    let dth = toTh - fromTh;
+    dth = ((dth + 180) % 360 + 360) % 360 - 180;
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const start = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const tick = (now) => {
+      const elapsed = now - start;
+      const p = elapsed >= MODEL_CAMERA_DURATION ? 1 : elapsed / MODEL_CAMERA_DURATION;
+      const e = ease(p);
+      const th = fromTh + dth * e;
+      const ph = fromPh + (toPh - fromPh) * e;
+      const r = fromR + (toR - fromR) * e;
+      const tx = fromT[0] + (toT[0] - fromT[0]) * e;
+      const ty = fromT[1] + (toT[1] - fromT[1]) * e;
+      const tz = fromT[2] + (toT[2] - fromT[2]) * e;
+      mv.cameraOrbit = `${th}deg ${ph}deg ${r}m`;
+      mv.cameraTarget = `${tx}m ${ty}m ${tz}m`;
+      _jumpModelCameraToGoal(mv);
+      if (p < 1) {
+        wrapper._cameraRAF = requestAnimationFrame(tick);
+      } else {
+        mv.cameraOrbit = fallbackOrbit;
+        mv.cameraTarget = fallbackTarget;
+        _jumpModelCameraToGoal(mv);
+        wrapper._cameraRAF = requestAnimationFrame(() => {
+          _jumpModelCameraToGoal(mv);
+          wrapper._cameraRAF = null;
+        });
+      }
+    };
+    wrapper._cameraRAF = requestAnimationFrame(tick);
+  }
+  function _cancelDiscreteCameraAnim(wrapper) {
+    if (wrapper && wrapper._cameraRAF) {
+      cancelAnimationFrame(wrapper._cameraRAF);
+      wrapper._cameraRAF = null;
+    }
+  }
+  function lerpModelCamera(stepIndex, progress, stepsData) {
+    if (progress < 1e-3) return;
+    const stepA = stepsData[stepIndex];
+    const stepB = stepsData[stepIndex + 1];
+    if (!stepA || !stepB) return;
+    const objectIdA = stepA.object || stepA.objectId || "";
+    const objectIdB = stepB.object || stepB.objectId || "";
+    if (objectIdA !== objectIdB) return;
+    const sceneIndex = state.stepToScene?.[stepIndex];
+    if (sceneIndex === void 0 || sceneIndex < 0) return;
+    const plate = state.viewerPlates?.[sceneIndex];
+    if (!plate || !plate.classList.contains("model-plate")) return;
+    const wrapper = _getModelWrapperForPlate(plate);
+    if (!wrapper) return;
+    _cancelDiscreteCameraAnim(wrapper);
+    const p = progress >= 0.999 ? 1 : progress;
+    const azP = _lerpPair(_num(stepA.azimuth), _num(stepB.azimuth), 0);
+    const elP = _lerpPair(_num(stepA.elevation), _num(stepB.elevation), 75);
+    const distP = _lerpPair(_num(stepA.distance), _num(stepB.distance), null);
+    let dTheta = azP.to - azP.from;
+    dTheta = ((dTheta + 180) % 360 + 360) % 360 - 180;
+    const theta = azP.from + dTheta * p;
+    const phi = elP.from + (elP.to - elP.from) * p;
+    const radiusPart = distP.from == null ? "auto" : `${distP.from + (distP.to - distP.from) * p}m`;
+    const orbitStr = `${theta}deg ${phi}deg ${radiusPart}`;
+    const mv = wrapper.mv;
+    wrapper.cameraOrbit = orbitStr;
+    if (mv) mv.cameraOrbit = orbitStr;
+    const tA = _stepTarget(stepA);
+    const tB = _stepTarget(stepB);
+    if (!tA && !tB) {
+      wrapper.cameraTarget = "";
+      if (mv) mv.cameraTarget = "auto auto auto";
+    } else {
+      let from = tA, to = tB;
+      if (!from || !to) {
+        if (mv && mv.loaded && typeof mv.getBoundingBoxCenter === "function") {
+          const c = mv.getBoundingBoxCenter();
+          const centre = [c.x, c.y, c.z];
+          from = from || centre;
+          to = to || centre;
+        } else {
+          _jumpModelCameraToGoal(mv);
+          return;
+        }
+      }
+      const tx = from[0] + (to[0] - from[0]) * p;
+      const ty = from[1] + (to[1] - from[1]) * p;
+      const tz = from[2] + (to[2] - from[2]) * p;
+      const targetStr = `${tx}m ${ty}m ${tz}m`;
+      wrapper.cameraTarget = targetStr;
+      if (mv) mv.cameraTarget = targetStr;
+    }
+    _jumpModelCameraToGoal(mv);
+  }
+  function _jumpModelCameraToGoal(mv) {
+    if (mv && typeof mv.jumpCameraToGoal === "function") mv.jumpCameraToGoal();
+  }
+  function frameModelInRegion(plateEl, animate = false) {
+    if (!plateEl) return;
+    const wrapper = _getModelWrapperForPlate(plateEl);
+    const mv = wrapper && wrapper.mv || plateEl.querySelector(".model-instance");
+    if (!mv) return;
+    const region = _computeModelRegion();
+    if (!region || region.w <= 0 || region.h <= 0) return;
+    const x = Math.round(region.x), y = Math.round(region.y);
+    const w = Math.round(region.w), h = Math.round(region.h);
+    if (mv.dataset.framed === "true" && Math.abs((parseFloat(mv.style.left) || 0) - x) < 1 && Math.abs((parseFloat(mv.style.top) || 0) - y) < 1 && Math.abs((parseFloat(mv.style.width) || 0) - w) < 1 && Math.abs((parseFloat(mv.style.height) || 0) - h) < 1) {
+      return;
+    }
+    const firstFrame = mv.dataset.framed !== "true";
+    const scrubbing = !!document.querySelector(".card-stack")?.classList.contains("is-scrubbing");
+    const ease = animate && !firstFrame && !scrubbing && !_reduceMotion();
+    mv.style.transition = ease ? ["left", "top", "width", "height"].map((p) => `${p} ${MODEL_CAMERA_DURATION}ms cubic-bezier(0,0,0.2,1)`).join(", ") : "none";
+    mv.dataset.framed = "true";
+    mv.style.position = "absolute";
+    mv.style.left = `${x}px`;
+    mv.style.top = `${y}px`;
+    mv.style.width = `${w}px`;
+    mv.style.height = `${h}px`;
+  }
+  function destroyModelPlayer(wrapper) {
+    if (!wrapper) return;
+    wrapper._destroyed = true;
+    _cancelDiscreteCameraAnim(wrapper);
+    const mv = wrapper.mv;
+    if (mv) {
+      try {
+        mv.remove();
+      } catch (e) {
+        console.warn("destroyModelPlayer: error removing element", e);
+      }
+      wrapper.mv = null;
+    }
+    const idx = _modelPlayers.indexOf(wrapper);
+    if (idx !== -1) _modelPlayers.splice(idx, 1);
+    const plateEl = wrapper.element;
+    if (plateEl) {
+      const alert = plateEl.querySelector(".telar-alert");
+      if (alert) alert.remove();
+      delete plateEl.dataset.loading;
+    }
+  }
+  function _settle(wrapper) {
+    _jumpModelCameraToGoal(wrapper && wrapper.mv);
+  }
+  function _reduceMotion() {
+    return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  function _enforceModelPoolLimit(currentScene) {
+    while (_modelPlayers.length > MAX_MODEL_VIEWERS) {
+      let farthestIdx = 0;
+      let maxDist = -1;
+      for (let i = 0; i < _modelPlayers.length; i++) {
+        const dist = Math.abs(_modelPlayers[i].sceneIndex - currentScene);
+        if (dist > maxDist) {
+          maxDist = dist;
+          farthestIdx = i;
+        }
+      }
+      const evicted = _modelPlayers[farthestIdx];
+      destroyModelPlayer(evicted);
+    }
+  }
+  function _getModelWrapperForPlate(plateEl) {
+    return _modelPlayers.find((w) => w.element === plateEl) || null;
+  }
+  function _num(v) {
+    if (v === void 0 || v === null) return null;
+    const s = String(v).trim();
+    if (s === "" || s.toLowerCase() === "nan") return null;
+    const n = parseFloat(s);
+    return Number.isNaN(n) ? null : n;
+  }
+  function _lerpPair(a, b, dflt) {
+    if (a == null && b == null) return { from: dflt, to: dflt };
+    return { from: a == null ? b : a, to: b == null ? a : b };
+  }
+  function _stepTarget(step) {
+    const x = _num(step.target_x), y = _num(step.target_y), z = _num(step.target_z);
+    if (x == null && y == null && z == null) return null;
+    return [x || 0, y || 0, z || 0];
+  }
+  function _stepToOrbitString(step) {
+    const az = _num(step.azimuth);
+    const el = _num(step.elevation);
+    const dist = _num(step.distance);
+    const a = (az == null ? 0 : az) + "deg";
+    const e = (el == null ? 75 : el) + "deg";
+    const r = dist == null ? "auto" : dist + "m";
+    return `${a} ${e} ${r}`;
+  }
+  function _stepToTargetString(step) {
+    const t = _stepTarget(step);
+    return t ? `${t[0]}m ${t[1]}m ${t[2]}m` : "";
+  }
+  function stepCameraStrings(step) {
+    return { orbit: _stepToOrbitString(step), target: _stepToTargetString(step) };
+  }
+  function _computeModelRegion() {
+    const vpW = window.innerWidth;
+    const vpH = window.innerHeight;
+    const r = state.cardOverlayRect;
+    const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+    const placement = _deriveCardPlacement(cardBox, vpW, vpH);
+    return computeUncoveredRegion(cardBox, placement, vpW, vpH);
+  }
+  function _reframeActiveModelPlate() {
+    const plates = Object.values(state.viewerPlates || {});
+    const plate = plates.find(
+      (p) => p && p.classList && p.classList.contains("model-plate") && p.classList.contains("is-active")
+    );
+    if (plate) frameModelInRegion(plate);
+  }
+  onViewportResize(() => _reframeActiveModelPlate());
+  onLayoutChange(() => requestAnimationFrame(() => _reframeActiveModelPlate()));
+  function _injectModelError(plateEl) {
+    if (plateEl.querySelector(".telar-alert")) return;
+    const alertEl = document.createElement("div");
+    alertEl.className = "alert alert-warning telar-alert";
+    alertEl.setAttribute("role", "alert");
+    alertEl.innerHTML = `<strong>3D model unavailable</strong>
+<p>This 3D model could not be loaded. Continue scrolling to read the story.</p>`;
+    plateEl.appendChild(alertEl);
+  }
+
   // assets/js/telar-story/card-pool.js
+  function _modelPlateNeedsInit(plate) {
+    return !plate.dataset.modelInitPending && !plate.querySelector(".model-instance");
+  }
   function _isTruthy(val) {
     if (val === true) return true;
     if (typeof val === "string") {
@@ -2276,6 +2654,7 @@
     if (objectId) return objectId;
     if (cardType === "youtube" || cardType === "vimeo" || cardType === "google-drive") return "Video player";
     if (cardType === "audio") return "Audio player";
+    if (cardType === "model") return "3D model viewer";
     return "Image viewer";
   }
   var _stepsData = [];
@@ -2350,18 +2729,25 @@
     state.titleCards = {};
     state.activeTitleCardIndex = null;
     const audioObjects = storyData?.audioObjects || window.audioObjects || {};
+    const modelObjects = storyData?.modelObjects || window.modelObjects || {};
+    const _filePathFor = (objectId) => {
+      const aExt = audioObjects[objectId];
+      if (aExt) return `objects/${objectId}.${aExt}`;
+      const mExt = modelObjects[objectId];
+      if (mExt) return `objects/${objectId}.${mExt}`;
+      return "";
+    };
     for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
       const firstStepIdx = state.sceneFirstStep[sceneIdx];
       const objectId = state.sceneToObject[sceneIdx];
       if (!objectId) continue;
       const firstStep = steps[firstStepIdx] || {};
       const objectData = state.objectsIndex[objectId] || {};
-      const audioExt = audioObjects[objectId];
       const sceneCardType = detectCardType({
         objectId,
         cardType: firstStep.cardType,
         source_url: objectData.source_url || objectData.iiif_manifest || "",
-        file_path: audioExt ? `objects/${objectId}.${audioExt}` : ""
+        file_path: _filePathFor(objectId)
       });
       const plate = document.createElement("div");
       plate.className = "viewer-plate";
@@ -2386,6 +2772,13 @@
         if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
         if (firstStep.loop) plate.dataset.loop = firstStep.loop;
       }
+      if (sceneCardType === "model") {
+        plate.classList.add("model-plate");
+        plate.dataset.cardType = "model";
+        const firstCam = stepCameraStrings(firstStep);
+        if (firstCam.orbit) plate.dataset.cameraOrbit = firstCam.orbit;
+        if (firstCam.target) plate.dataset.cameraTarget = firstCam.target;
+      }
       cardStack.appendChild(plate);
       state.viewerPlates[sceneIdx] = plate;
     }
@@ -2394,12 +2787,11 @@
       const step = steps[stepIdx];
       const objectId = step.object || step.objectId || "";
       const objectData = state.objectsIndex[objectId] || {};
-      const audioExt2 = audioObjects[objectId];
       const cardType = detectCardType({
         objectId,
         cardType: step.cardType,
         source_url: objectData.source_url || objectData.iiif_manifest || "",
-        file_path: audioExt2 ? `objects/${objectId}.${audioExt2}` : ""
+        file_path: _filePathFor(objectId)
       });
       if (!objectId) {
         const zIndex = _zPlan.textCardZ[stepIdx];
@@ -2469,6 +2861,8 @@
           _initVideoInPlate(plate, firstObjectId, 0, zIndex);
         } else if (plate.classList.contains("audio-plate")) {
           _initAudioInPlate(plate, firstObjectId, 0, zIndex);
+        } else if (plate.classList.contains("model-plate")) {
+          _initModelInPlate(plate, firstObjectId, 0, zIndex);
         } else {
           const x = parseFloat(firstStep.x);
           const y = parseFloat(firstStep.y);
@@ -2567,6 +2961,9 @@
           const clipEnd = parseFloat(step.clip_end) || 0;
           const loop = _isTruthy(step.loop);
           updateAudioClip(plate, clipStart, clipEnd || void 0, loop);
+        } else if (plate && plate.classList.contains("model-plate")) {
+          const cam = stepCameraStrings(step);
+          updateModelCamera(plate, cam.orbit, cam.target, step);
         } else if (!state.scrollDriven) {
           _animateViewerToStep(objectId, step, index2);
         }
@@ -2590,6 +2987,9 @@
               void currentPlate.offsetHeight;
               currentPlate.style.transition = "";
               deactivateAudioCard(currentPlate);
+            } else if (currentPlate.classList.contains("model-plate")) {
+              currentPlate.style.transform = "translateY(100%)";
+              deactivateModelCard(currentPlate);
             } else {
               deactivateIiifCard(
                 { element: currentPlate, objectId: prevObjectId },
@@ -2609,6 +3009,13 @@
               activateVideoCard(prevPlate, getSceneIndex(index2));
             } else if (prevPlate.classList.contains("audio-plate")) {
               activateAudioCard(prevPlate, getSceneIndex(index2));
+            } else if (prevPlate.classList.contains("model-plate")) {
+              const cam = stepCameraStrings(step);
+              if (_modelPlateNeedsInit(prevPlate)) {
+                _initModelInPlate(prevPlate, objectId, getSceneIndex(index2), _zPlan.plateZ[index2], cam.orbit, cam.target);
+              }
+              activateModelCard(prevPlate, getSceneIndex(index2));
+              updateModelCamera(prevPlate, cam.orbit, cam.target);
             }
           }
         }
@@ -2641,6 +3048,9 @@
           const clipEnd = parseFloat(step.clip_end) || 0;
           const loop = _isTruthy(step.loop);
           updateAudioClip(plate, clipStart, clipEnd || void 0, loop);
+        } else if (plate && plate.classList.contains("model-plate")) {
+          const cam = stepCameraStrings(step);
+          updateModelCamera(plate, cam.orbit, cam.target, step);
         } else if (!state.scrollDriven) {
           _animateViewerToStep(objectId, step, index2);
         }
@@ -2699,6 +3109,11 @@
     if (prevPlate && prevPlate === newPlate) {
       newPlate.style.transform = "translateY(0)";
       newPlate.classList.add("is-active");
+      if (newPlate.classList.contains("model-plate")) {
+        activateModelCard(newPlate, sceneIndex);
+        const cam = stepCameraStrings(step);
+        updateModelCamera(newPlate, cam.orbit, cam.target);
+      }
       return;
     }
     if (direction === "forward") {
@@ -2725,6 +3140,8 @@
         deactivateVideoCard(prevPlate);
       } else if (prevPlate.classList.contains("audio-plate")) {
         deactivateAudioCard(prevPlate);
+      } else if (prevPlate.classList.contains("model-plate")) {
+        deactivateModelCard(prevPlate);
       } else {
         prevPlate.classList.remove("is-active");
       }
@@ -2734,7 +3151,15 @@
     const y = parseFloat(step.y);
     const zoom = parseFloat(step.zoom);
     const page = step.page ? parseInt(step.page, 10) : void 0;
-    if (newPlate.classList.contains("audio-plate")) {
+    if (newPlate.classList.contains("model-plate")) {
+      const cam = stepCameraStrings(step);
+      if (_modelPlateNeedsInit(newPlate)) {
+        const zIndex = _zPlan.plateZ[stepIndex];
+        _initModelInPlate(newPlate, objectId, sceneIndex, zIndex, cam.orbit, cam.target);
+      }
+      activateModelCard(newPlate, sceneIndex);
+      updateModelCamera(newPlate, cam.orbit, cam.target);
+    } else if (newPlate.classList.contains("audio-plate")) {
       if (!newPlate.querySelector(".waveform-container")) {
         const zIndex = _zPlan.plateZ[stepIndex];
         _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
@@ -2920,6 +3345,27 @@
       }
     });
   }
+  function _initModelInPlate(plateEl, objectId, sceneIndex, zIndex, cameraOrbit, cameraTarget) {
+    const modelObjects = window.storyData?.modelObjects || window.modelObjects || {};
+    const ext = modelObjects[objectId];
+    if (!ext) {
+      console.error("_initModelInPlate: no model extension for", objectId);
+      return;
+    }
+    const basePath = getBasePath();
+    const primaryUrl = `${basePath}/telar-content/objects/${objectId}.${ext}`;
+    const otherExt = ext === "glb" ? "gltf" : "glb";
+    const fallbackUrl = `${basePath}/telar-content/objects/${objectId}.${otherExt}`;
+    const objectData = state.objectsIndex[objectId] || {};
+    const alt = objectData.alt_text || objectData.title || objectId;
+    plateEl.style.zIndex = zIndex;
+    createModelPlayer(plateEl, primaryUrl, fallbackUrl, {
+      cameraOrbit: cameraOrbit || plateEl.dataset.cameraOrbit || "",
+      cameraTarget: cameraTarget || plateEl.dataset.cameraTarget || "",
+      sceneIndex,
+      alt
+    });
+  }
   function _deactivatePreviousTextCard(newIndex, direction) {
     const prevCard = state.cardPool.find((c) => c.element.classList.contains("is-active"));
     if (!prevCard || prevCard.stepIndex === newIndex) return;
@@ -2950,6 +3396,7 @@
     const isScrubbing = document.querySelector(".card-stack")?.classList.contains("is-scrubbing");
     if (prefersReduced || isScrubbing) {
       state.cardOverlayRect = cardEl.getBoundingClientRect();
+      _reframeModelForStep(cardEl);
       return;
     }
     if (cardEl._settleHandler) {
@@ -2960,9 +3407,19 @@
       cardEl.removeEventListener("transitionend", onSettled);
       cardEl._settleHandler = null;
       state.cardOverlayRect = cardEl.getBoundingClientRect();
+      _reframeModelForStep(cardEl, true);
     };
     cardEl._settleHandler = onSettled;
     cardEl.addEventListener("transitionend", onSettled);
+  }
+  function _reframeModelForStep(cardEl, animate = false) {
+    const stepIndex = parseInt(cardEl.dataset.stepIndex, 10);
+    if (isNaN(stepIndex)) return;
+    const sceneIndex = getSceneIndex(stepIndex);
+    const plate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
+    if (plate && plate.classList.contains("model-plate")) {
+      frameModelInRegion(plate, animate);
+    }
   }
   function _activateTitleCardStep(index2, direction) {
     const titleCard = state.titleCards[index2];
@@ -2994,6 +3451,8 @@
         deactivateVideoCard(departingPlate);
       } else if (departingPlate.classList.contains("audio-plate")) {
         deactivateAudioCard(departingPlate);
+      } else if (departingPlate.classList.contains("model-plate")) {
+        deactivateModelCard(departingPlate);
       } else {
         departingPlate.classList.remove("is-active");
       }
@@ -3043,6 +3502,10 @@
         if (!plate.querySelector(".video-iframe, iframe")) {
           _initVideoInPlate(plate, objectId, targetScene, zIndex);
         }
+      } else if (plate.classList.contains("model-plate")) {
+        if (_modelPlateNeedsInit(plate)) {
+          _initModelInPlate(plate, objectId, targetScene, zIndex);
+        }
       } else {
         if (state.viewerCards.find((vc) => vc.sceneIndex === targetScene)) continue;
         const x = parseFloat(step.x);
@@ -3076,6 +3539,10 @@
       } else if (plate.classList.contains("video-plate")) {
         if (!plate.querySelector(".video-iframe, iframe")) {
           _initVideoInPlate(plate, objectId, targetScene, zIndex);
+        }
+      } else if (plate.classList.contains("model-plate")) {
+        if (_modelPlateNeedsInit(plate)) {
+          _initModelInPlate(plate, objectId, targetScene, zIndex);
         }
       } else {
         if (state.viewerCards.find((vc) => vc.sceneIndex === targetScene)) continue;
@@ -5234,6 +5701,7 @@
     state.scrollProgress = progress;
     setCardProgress(stepIndex, progress);
     lerpIiifPosition(stepIndex, progress, state.stepsData || []);
+    lerpModelCamera(stepIndex, progress, state.stepsData || []);
     if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
       const direction = stepIndex > state.currentIndex ? "forward" : "backward";
       state.scrollDriven = true;

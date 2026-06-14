@@ -117,6 +117,32 @@ describe('audio file extension detection', () => {
   });
 });
 
+describe('3D model file extension detection', () => {
+  it("returns 'model' for file_path ending in .glb", () => {
+    expect(detectCardType({ objectId: 'model-1', file_path: 'objects/mural.glb' })).toBe('model');
+  });
+
+  it("returns 'model' for file_path ending in .gltf", () => {
+    expect(detectCardType({ objectId: 'model-1', file_path: 'objects/mural.gltf' })).toBe('model');
+  });
+
+  it("returns 'model' for uppercase extension .GLB", () => {
+    expect(detectCardType({ objectId: 'model-1', file_path: 'objects/mural.GLB' })).toBe('model');
+  });
+
+  it("returns 'iiif' when file_path ends in .jpg (non-model extension)", () => {
+    expect(detectCardType({ objectId: 'img-1', file_path: 'objects/photo.jpg' })).toBe('iiif');
+  });
+
+  it("explicit cardType override still wins over model file_path detection", () => {
+    expect(detectCardType({ cardType: 'iiif', objectId: 'model-1', file_path: 'objects/mural.glb' })).toBe('iiif');
+  });
+
+  it("text-only (empty objectId) still wins over model file_path", () => {
+    expect(detectCardType({ objectId: '', file_path: 'objects/mural.glb' })).toBe('text-only');
+  });
+});
+
 describe('extractVideoId', () => {
   it("extracts YouTube video ID from youtube.com/watch URL", () => {
     expect(extractVideoId('youtube', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');

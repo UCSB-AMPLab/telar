@@ -4,15 +4,17 @@
  * Determines the card type for a given story step. Supported types:
  * 'iiif' (default when an objectId is present), 'text-only' (when no
  * objectId is present), 'youtube', 'vimeo', 'google-drive' (detected
- * from the object's source_url field), and 'audio' (detected from the
- * object's file_path field for self-hosted MP3/OGG/M4A files). An
- * explicit cardType field on the step data always wins over auto-detection.
+ * from the object's source_url field), 'audio' (detected from the
+ * object's file_path field for self-hosted MP3/OGG/M4A files), and
+ * 'model' (detected from the object's file_path field for self-hosted
+ * GLB/glTF 3D models). An explicit cardType field on the step data always
+ * wins over auto-detection.
  *
  * This module exists to isolate the type-detection logic so future card
  * types (widgets, etc.) can be added here without touching the
  * card-pool or navigation modules.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 // ── Video URL patterns ────────────────────────────────────────────────────────
@@ -24,6 +26,10 @@ const GDRIVE_RE  = /drive\.google\.com\/(?:file\/d\/|open\?id=)([A-Za-z0-9_-]+)/
 // ── Audio file extension pattern ─────────────────────────────────────────────
 
 const AUDIO_FILE_RE = /\.(mp3|ogg|m4a)$/i;
+
+// ── 3D model file extension pattern ──────────────────────────────────────────
+
+const MODEL_FILE_RE = /\.(glb|gltf)$/i;
 
 // ── Card type detection ───────────────────────────────────────────────────────
 
@@ -37,14 +43,15 @@ const AUDIO_FILE_RE = /\.(mp3|ogg|m4a)$/i;
  *   4. Check source_url against Vimeo URL pattern → 'vimeo'
  *   5. Check source_url against Google Drive URL pattern → 'google-drive'
  *   5.5. Check file_path against audio file extensions → 'audio'
+ *   5.6. Check file_path against 3D model file extensions → 'model'
  *   6. Default → 'iiif'
  *
  * @param {Object} stepData - Step data object from window.storyData.steps
  * @param {string} [stepData.cardType] - Optional explicit type override
  * @param {string} [stepData.objectId] - Object ID driving the viewer
  * @param {string} [stepData.source_url] - Source URL from the object data
- * @param {string} [stepData.file_path] - Resolved file path from the object data (audio detection)
- * @returns {'iiif'|'text-only'|'youtube'|'vimeo'|'google-drive'|'audio'|string} Detected card type
+ * @param {string} [stepData.file_path] - Resolved file path from the object data (audio/model detection)
+ * @returns {'iiif'|'text-only'|'youtube'|'vimeo'|'google-drive'|'audio'|'model'|string} Detected card type
  */
 export function detectCardType(stepData) {
   if (stepData.cardType && stepData.cardType !== '') return stepData.cardType;
@@ -55,7 +62,9 @@ export function detectCardType(stepData) {
   if (VIMEO_RE.test(sourceUrl)) return 'vimeo';
   if (GDRIVE_RE.test(sourceUrl)) return 'google-drive';
 
-  if (AUDIO_FILE_RE.test(stepData.file_path || '')) return 'audio';
+  const filePath = stepData.file_path || '';
+  if (AUDIO_FILE_RE.test(filePath)) return 'audio';
+  if (MODEL_FILE_RE.test(filePath)) return 'model';
 
   return 'iiif';
 }
