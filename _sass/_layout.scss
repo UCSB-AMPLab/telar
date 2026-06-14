@@ -293,9 +293,10 @@
   margin-top: 1rem;
 }
 
-// Video/audio gallery thumbnails
+// Video/audio/3D-model gallery thumbnails
 .video-thumbnail,
-.audio-thumbnail {
+.audio-thumbnail,
+.model-thumbnail {
   height: 250px;
   background: var(--color-button-bg, #883C36);
   border-radius: 4px;
@@ -312,7 +313,8 @@
 
 // Smaller icons for featured objects grid and story cards
 .featured-objects-grid .video-thumbnail,
-.featured-objects-grid .audio-thumbnail {
+.featured-objects-grid .audio-thumbnail,
+.featured-objects-grid .model-thumbnail {
   height: auto;
   aspect-ratio: 1;
   border-radius: 8px;
@@ -324,7 +326,8 @@
 }
 
 .story-card .video-thumbnail,
-.story-card .audio-thumbnail {
+.story-card .audio-thumbnail,
+.story-card .model-thumbnail {
   height: auto;
   border-radius: 0;
 }

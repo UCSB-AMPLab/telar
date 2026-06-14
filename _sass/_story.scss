@@ -10,7 +10,7 @@
  * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 @use 'responsive' as *;
@@ -196,6 +196,34 @@
   transform: translateY(-50%);
   pointer-events: none; // display-only
   z-index: 1; // above telar weave pattern (CSS background)
+}
+
+// ── Model (3D) plates ────────────────────────────────────────────────────────
+
+// 3D model plate: the same opaque Telar weave backdrop as IIIF / video plates.
+// <model-viewer> renders with a transparent background, so without this the
+// page (or a lower-z card) would show through wherever the model does not
+// cover the viewport — e.g. above and below a wide, short object like a mural.
+// The weave shows around the model exactly as it shows around a fitted IIIF
+// image. model-card.js fills the plate with the <model-viewer> element.
+.viewer-plate.model-plate {
+  background: #fff url('../img/background-gris.svg') repeat;
+  background-size: 20px auto;
+
+  .model-instance {
+    // Absolutely positioned: model-card.js:frameModelInRegion sizes the element
+    // to the uncovered region (the screen area the text card does not cover) so
+    // the model centres beside/above the card instead of behind it — the 3D
+    // analogue of the IIIF overlay-aware centring. `inset: 0` is only the
+    // pre-framing fallback (JS overrides left/top/width/height on append).
+    position: absolute;
+    inset: 0;
+    // Guided story playback: the camera is authored, so the reader must not be
+    // able to grab the model (the drag/wheel belongs to the Lenis scroll
+    // engine). model-card.js omits `camera-controls`; this is belt-and-braces.
+    --poster-color: transparent;
+    pointer-events: none;
+  }
 }
 
 .audio-controls {
