@@ -1,0 +1,6 @@
+step,object,x,y,zoom,page,question,answer,azimuth,elevation,distance,target_x,target_y,target_z
+1,mural-low-poly,,,,,The mural — wide,"Scene one is the mural, framed wide and straight on.",0,80,18,,,
+2,mural-low-poly,,,,,The mural — zoom in,"Still the mural: the camera zooms to the centre. Same-object steps interpolate per scroll frame.",0,90,6,0,0,0
+3,astronaut,,,,,A different object — the astronaut,"Now a genuinely different object. Across this boundary the camera freezes and the astronaut's plate slides in over the mural, at its own authored angle.",-35,80,5.5,,,
+4,astronaut,,,,,The astronaut — orbit around,"Still the astronaut: the camera orbits across to the other side. Same object again, so this interpolates per scroll frame.",45,80,5.5,,,
+5,mural-low-poly,,,,,Back to the mural,"Returning to the mural in a fresh scene — a new plate, framed from above.",0,42,17,,,

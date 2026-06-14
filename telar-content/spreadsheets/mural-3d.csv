@@ -1,0 +1,10 @@
+step,object,x,y,zoom,page,question,answer,azimuth,elevation,distance,target_x,target_y,target_z
+1,mural-low-poly,,,,,A 3D mural,"This story drives the camera across a 3D model as you scroll. We begin with a wide, straight-on view of the whole mural — it is nearly nine metres across.",0,80,18,,,
+2,mural-low-poly,,,,,Into the centre,"The camera moves straight in to a detail at the centre. model-viewer interpolates smoothly between the authored positions as the step changes.",0,90,6,0,0,0
+3,mural-low-poly,,,,,Scan to the left,"Now we pan across the surface to the left — the look-at point shifts, so a flat object can be read across, not just orbited.",0,90,6,-3,0,0
+4,mural-low-poly,,,,,Orbit around,"Here the camera swings around to the left and looks at the mural from a raking angle, so you can read the relief and depth of the mosaic.",-48,72,14,,,
+5,mural-low-poly,,,,,The other side,"And it orbits across to the opposite side — the same surface seen from the right.",48,72,14,,,
+6,mural-low-poly,,,,,From above,"The camera rises and tips down to look over the top edge of the mural.",0,42,17,,,
+7,mural-low-poly,,,,,Around the back,"The camera swings right around to look from behind the left shoulder, almost edge-on.",170,72,14,,,
+8,mural-low-poly,,,,,Across the seam,"It carries on past the back to the matching angle on the other side — taking the short way across, not the long way round the front.",-170,72,14,,,
+9,mural-low-poly,,,,,Back to the whole,"Finally the camera returns to the full, straight-on framing we started from.",0,80,18,,,

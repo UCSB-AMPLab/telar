@@ -45,7 +45,7 @@ story_key: "test"
 #    - If using GitHub Pages: GitHub Actions will automatically discover tab GIDs and fetch CSVs
 #    - If running locally: Run `python3 scripts/fetch_google_sheets.py` before building
 google_sheets:
-  enabled: true
+  enabled: false
   published_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9eeRoyQCr1j-1uDaWBm-rgZNXtn9A-mepL0I4dqDTx2-E_6gbVD-8x0DYDVhppiAzrFpd20_9cr3z/pubhtml"
 
 #

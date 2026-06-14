@@ -1,0 +1,15 @@
+step,object,x,y,zoom,page,question,answer,azimuth,elevation,distance,target_x,target_y,target_z
+1,mural-high-poly,,,,,The mural in high resolution,"The detailed scan of the mural, framed wide and straight on. Every tessera carries its own texture at this resolution.",0,82,18,,,
+2,mural-high-poly,,,,,Approach the wall,"The camera moves in toward the centre of the mural. Same-object steps interpolate per scroll frame, so the push-in is smooth.",0,87,6,0,1.45,0
+3,mural-high-poly,,,,,The serpentine band,"Close on the green band running through the centre. Individual tesserae and the grout between them are now distinct.",0,90,3,-0.15,1.45,0
+4,mural-high-poly,,,,,The heart mosaic,"In on the heart with its two figures — the cut and colour of each small tile reads clearly at this range.",0,90,1.7,-0.3,1.5,0
+5,mural-high-poly,,,,,A painted face,"Closer still, onto one of the painted portraits set into the wall. We are well past the point a flat photograph would dissolve.",0,90,1.2,0,0.98,0
+6,mural-high-poly,,,,,A photograph in the wall,"A framed photograph embedded in the mosaic — the scene inside it, and the wooden frame around it, are both legible.",0,90,1.2,0.5,1.02,0
+7,mural-high-poly,,,,,Into the tesserae,"Right down among the tiles beside the inset — single tesserae fill the frame, each with its own chipped edge and glaze.",0,90,0.95,0.45,1.18,0
+8,mural-high-poly,,,,,The lower courses,"Pulling back and dropping to the base — the red and water-blue courses near the foot of the mural.",2,93,4.5,0,0.7,0
+9,neil-armstrong,,,,,Neil Armstrong's suit,"A different object slides in over the mural — the high-resolution scan of an astronaut's suit. Across the boundary the camera freezes and the suit rises at its own authored angle.",-20,85,6,,,
+10,neil-armstrong,,,,,The helmet and visor,"In close on the helmet: the gold visor and its reflections resolve cleanly at this resolution.",-12,88,2.2,0,1.68,0.06
+11,neil-armstrong,,,,,The chest control panel,"The remote control unit on the chest — connectors, labels and webbing are all distinct.",0,90,1.7,0,1.24,0.12
+12,neil-armstrong,,,,,Gloves and waist,"Lower still, to the gloves and the waist fittings. Same object, so the camera interpolates per scroll frame.",16,90,1.8,0,0.85,0.1
+13,neil-armstrong,,,,,Around to the backpack,"Orbiting around to the life-support backpack — the camera takes the shortest path around the figure.",135,88,3.2,0,1.1,0
+14,neil-armstrong,,,,,Pull back,"Pulling back out to take in the whole suit again from the other side, ending the sequence.",40,84,6,,,
