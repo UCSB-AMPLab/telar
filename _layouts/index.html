@@ -301,6 +301,10 @@ title: Home
                   <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
                     <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                   </div>
+                {% elsif object.media_type == 'Model' %}
+                  <div class="card-img-top model-thumbnail" aria-label="3D model" style="aspect-ratio: 1;">
+                    <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+                  </div>
                 {% else %}
                   {%- comment -%}
                     All image objects route through .story-iiif-thumbnail so the existing
@@ -396,6 +400,10 @@ title: Home
                   {% elsif thumb_obj.media_type == 'Audio' %}
                     <div class="audio-thumbnail" aria-label="Audio">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                    </div>
+                  {% elsif thumb_obj.media_type == 'Model' %}
+                    <div class="model-thumbnail" aria-label="3D model">
+                      <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
                     </div>
                   {% else %}
                     {% if thumb_step.page and thumb_step.page != "" %}
@@ -514,6 +522,10 @@ title: Home
                     <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                     </div>
+                  {% elsif thumb_obj.media_type == 'Model' %}
+                    <div class="card-img-top model-thumbnail" aria-label="3D model" style="aspect-ratio: 1;">
+                      <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+                    </div>
                   {% else %}
                     {%- comment -%}Image object — load via IIIF thumbnail{%- endcomment -%}
                     {% if thumb_step.page and thumb_step.page != "" %}
@@ -617,6 +629,10 @@ title: Home
               </div>
             {% elsif object.thumbnail and object.thumbnail != "" %}
               <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.title }}" loading="lazy" class="iiif-thumbnail">
+            {% elsif object.media_type == 'Model' %}
+              <div class="model-thumbnail" aria-label="3D model">
+                <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+              </div>
             {% else %}
               <div class="featured-iiif-thumbnail" data-object-id="{{ object.object_id }}" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}">
                 <span class="thumbnail-placeholder">{{ object.title | truncate: 15 }}</span>

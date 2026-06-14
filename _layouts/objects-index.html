@@ -246,8 +246,13 @@ layout: default
           <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
         </div>
         {% elsif object.thumbnail and object.thumbnail != "" %}
-        {%- comment -%}Use explicit thumbnail if provided{%- endcomment -%}
+        {%- comment -%}Use explicit thumbnail if provided (also covers a 3D object whose author supplied a render){%- endcomment -%}
         <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
+        {% elsif object.media_type == 'Model' %}
+        {%- comment -%}3D model thumbnail: cube icon on neutral background. GLB/glTF have no auto-derivative, so without this a 3D object would fall through to the local IIIF path and fail to load a nonexistent info.json.{%- endcomment -%}
+        <div class="model-thumbnail" aria-label="3D model">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+        </div>
         {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
         {%- comment -%}For IIIF Image API, use standard thumbnail pattern{%- endcomment -%}
         <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
@@ -303,6 +308,10 @@ layout: default
         </div>
         {% elsif object.thumbnail and object.thumbnail != "" %}
         <img src="{{ object.thumbnail | relative_url }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
+        {% elsif object.media_type == 'Model' %}
+        <div class="model-thumbnail" aria-label="3D model">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+        </div>
         {% elsif object.iiif_manifest and object.iiif_manifest contains 'info.json' %}
         <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
         {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
