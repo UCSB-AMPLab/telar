@@ -14,6 +14,10 @@ Small fix release for the validation warning banners. Display only — no conten
 - **Story banner heading shown twice.** The warning banner on a story's intro card repeated the same line as both its heading and its description; it now has a proper heading.
 - **Homepage warning banners now translated.** The "Object configuration issues detected" and "Story configuration issues detected" banners on the homepage (headings and the "Navigate to ... to see more details." line) were hardcoded in English; they now follow the site language.
 
+### Dependencies
+
+- Routine dependency updates: `lenis`, `esbuild`, `vitest`, `@vimeo/player` (npm); `cryptography`, `jinja2`, `pillow-heif`, `playwright`, `pyyaml` (Python); `ruby/setup-ruby` (CI). No behavior change.
+
 ### Notes
 
 - The README version badge had lagged at 1.4.0 through the last two releases; it is now correct.
