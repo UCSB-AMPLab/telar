@@ -19,6 +19,15 @@
   trigger is injected later by JavaScript, inside the open Layer 1 panel.
 -->
 
+{%- comment -%}Resolve the language pack locally: include scope does not reliably inherit
+the parent layout's `lang` assign, so the button label and warning strings below need it
+here. English fallback keeps the strings populated if the language is unset.{%- endcomment -%}
+{% if site.telar_language and site.data.languages[site.telar_language] %}
+  {% assign lang = site.data.languages[site.telar_language] %}
+{% else %}
+  {% assign lang = site.data.languages['en'] %}
+{% endif %}
+
 <div class="story-step"
      data-step="{{ include.step_number }}"
      data-object="{{ include.object_id }}"
@@ -45,10 +54,10 @@
     <!-- Viewer Warning (if object or IIIF manifest is missing) -->
     {% if include.viewer_warning and include.viewer_warning != "" %}
     <div class="alert alert-warning telar-alert mt-3" role="alert">
-      <strong>⚠️ Image viewer unavailable</strong>
+      <strong>{{ lang.errors.image_viewer_unavailable_alt | default: "⚠️ Image viewer unavailable" }}</strong>
       <p class="mb-0 mt-2">
         {{ include.viewer_warning }}<br>
-        Please check <code>telar-content/spreadsheets/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL.
+        {{ lang.errors.check_objects_csv | default: "Please check <code>telar-content/spreadsheets/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL." }}
       </p>
     </div>
     {% endif %}
@@ -60,7 +69,7 @@
         {% if include.layer1button and include.layer1button != "" %}
           {{ include.layer1button }}
         {% else %}
-          Learn more
+          {{ lang.buttons.learn_more | default: "Learn more" }}
         {% endif %} →
       </button>
     </p>

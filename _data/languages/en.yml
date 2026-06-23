@@ -27,6 +27,9 @@ buttons:
   copy_coordinates: "Copy x,y,zoom"
   go_deeper: "Go deeper"
 
+# Generic loading placeholder (object thumbnails and other async content)
+loading: "Loading..."
+
 # Object page
 object:
   # Metadata field labels
@@ -157,6 +160,7 @@ objects:
   loading_filters: "Loading filters..."
   no_results: "No objects match your search"
   type: "Type"
+  medium: "Medium/Genre"
   creator: "Creator"
   period: "Period"
   subjects: "Subjects"
@@ -235,9 +239,9 @@ errors:
   # Theme errors
   theme:
     not_found_heading: "⚠️ Your selected theme doesn't exist"
-    not_found_description: "The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>."
+    not_found_description: "The theme <code>__THEME__</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>."
     broken_heading: "⚠️ Your theme file is broken"
-    broken: "The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file."
+    broken: "The theme <code>__THEME__</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/__THEME__.yml</code> for syntax errors or compare it to a working theme file."
     system_error_heading: "⚠️ Theme system error detected"
     system_error_description: "We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository."
 
@@ -380,3 +384,8 @@ unlock:
 # Upgrade messages
 upgrade:
   summary_message: "Your Telar site has been upgraded. Review the summary below."
+
+# Site footer credit. The __TOKEN__ placeholders are replaced in footer.html with
+# linked names (brace-free so they are safe inside a Liquid default: argument).
+footer:
+  built_with: "Built with __TELAR__ __VERSION__, a project of __NEOGRANADINA__ and __AMPL__."

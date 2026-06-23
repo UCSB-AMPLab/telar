@@ -27,6 +27,9 @@ buttons:
   copy_coordinates: "Copiar x,y,zoom"
   go_deeper: "Profundizar más"
 
+# Marcador de posición genérico de carga (miniaturas de objetos y otro contenido asíncrono)
+loading: "Cargando…"
+
 # Página de objeto
 object:
   # Etiquetas de metadatos
@@ -157,6 +160,7 @@ objects:
   loading_filters: "Cargando filtros…"
   no_results: "Ningún objeto coincide con tu búsqueda"
   type: "Tipo"
+  medium: "Medio/Género"
   creator: "Creador"
   period: "Período"
   subjects: "Materias"
@@ -235,9 +239,9 @@ errors:
   # Errores de tema
   theme:
     not_found_heading: "⚠️ El tema seleccionado no existe"
-    not_found_description: "El tema <code>{{ site.telar_theme }}</code> no existe. Aplicamos el tema <code>trama</code> (predeterminado). Para elegir un tema diferente, actualiza <code>telar_theme</code> en <code>_config.yml</code> para que coincida con un archivo en tu carpeta <code>_data/themes</code>. Las opciones incluidas son <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code> y <code>austin</code>."
+    not_found_description: "El tema <code>__THEME__</code> no existe. Aplicamos el tema <code>trama</code> (predeterminado). Para elegir un tema diferente, actualiza <code>telar_theme</code> en <code>_config.yml</code> para que coincida con un archivo en tu carpeta <code>_data/themes</code>. Las opciones incluidas son <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code> y <code>austin</code>."
     broken_heading: "⚠️ Tu archivo de tema está dañado"
-    broken: "El archivo del tema <code>{{ theme_name }}</code> parece estar dañado o incompleto. Aplicamos un tema de respaldo incluido. Revisa <code>_data/themes/{{ theme_name }}.yml</code> por errores de sintaxis o compáralo con un tema que funcione."
+    broken: "El archivo del tema <code>__THEME__</code> parece estar dañado o incompleto. Aplicamos un tema de respaldo incluido. Revisa <code>_data/themes/__THEME__.yml</code> por errores de sintaxis o compáralo con un tema que funcione."
     system_error_heading: "⚠️ Se detectó un error en el sistema de temas"
     system_error_description: "Encontramos un problema al cargar los temas. La carpeta <code>_data/themes</code> puede estar ausente o dañada. El sitio está usando estilos básicos por ahora. Verifica que tu carpeta <code>_data/themes</code> contenga archivos de tema válidos, o restáurala desde tu repositorio."
 
@@ -380,3 +384,8 @@ unlock:
 # Mensajes de actualización
 upgrade:
   summary_message: "Tu sitio Telar se actualizó. Revisa el resumen a continuación."
+
+# Crédito del pie de página. Los marcadores __TOKEN__ se reemplazan en footer.html con
+# los nombres enlazados (sin llaves, para que funcionen dentro de un argumento default: de Liquid).
+footer:
+  built_with: "Hecho con __TELAR__ __VERSION__, un proyecto de __NEOGRANADINA__ y __AMPL__."

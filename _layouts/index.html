@@ -149,16 +149,16 @@ title: Home
     <div class="col-lg-11 mx-auto">
       {% if gs_error_type == "missing_urls" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets integration is incomplete</strong>
+        <strong>{{ lang.errors.google_sheets.incomplete_heading | default: "⚠️ Your Google Sheets integration is incomplete" }}</strong>
         <p class="mb-0 mt-2">
-          Google Sheets integration is enabled but the <code>published_url</code> is missing from <code>_config.yml</code>. To get this URL: open your Google Sheet, go to File → Share → Publish to web, select "Entire document" and "Comma-separated values (.csv)", then click Publish and copy the URL.
+          {{ lang.errors.google_sheets.incomplete_description | default: 'Google Sheets integration is enabled but the <code>published_url</code> is missing from <code>_config.yml</code>. To get this URL: open your Google Sheet, go to File → Share → Publish to web, select "Entire document" and "Comma-separated values (.csv)", then click Publish and copy the URL.' }}
         </p>
       </div>
       {% elsif gs_error_type == "malformed_published" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your Google Sheets published URL is incorrect</strong>
+        <strong>{{ lang.errors.google_sheets.malformed_published_heading | default: "⚠️ Your Google Sheets published URL is incorrect" }}</strong>
         <p class="mb-0 mt-2">
-          Your Google Sheets <code>published_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/e/{PUBLISHED_ID}/pubhtml</code>. Get this URL from File → Share → Publish to web. Make sure to select "Entire document" and "Comma-separated values (.csv)", then enable "Automatically republish when changes are made" before clicking Publish.
+          {{ lang.errors.google_sheets.invalid_published | default: "Your Google Sheets <code>published_url</code> in <code>_config.yml</code> doesn't match the expected format. It should look like: <code>https://docs.google.com/spreadsheets/d/e/PUBLISHED_ID/pubhtml</code>. Get this URL from File → Share → Publish to web. Make sure to select &quot;Entire document&quot; and &quot;Comma-separated values (.csv)&quot;, then enable &quot;Automatically republish when changes are made&quot; before clicking Publish." }}
         </p>
       </div>
       {% endif %}
@@ -172,23 +172,23 @@ title: Home
     <div class="col-lg-11 mx-auto">
       {% if theme_error_type == "not_found" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your selected theme doesn't exist</strong>
+        <strong>{{ lang.errors.theme.not_found_heading | default: "⚠️ Your selected theme doesn't exist" }}</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>.
+          {{ lang.errors.theme.not_found_description | default: "The theme <code>__THEME__</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>." | replace: "__THEME__", site.telar_theme }}
         </p>
       </div>
       {% elsif theme_error_type == "malformed" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Your theme file is broken</strong>
+        <strong>{{ lang.errors.theme.broken_heading | default: "⚠️ Your theme file is broken" }}</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file.
+          {{ lang.errors.theme.broken | default: "The theme <code>__THEME__</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/__THEME__.yml</code> for syntax errors or compare it to a working theme file." | replace: "__THEME__", site.telar_theme }}
         </p>
       </div>
       {% elsif theme_error_type == "critical" %}
       <div class="alert alert-warning telar-alert" role="alert">
-        <strong>⚠️ Theme system error detected</strong>
+        <strong>{{ lang.errors.theme.system_error_heading | default: "⚠️ Theme system error detected" }}</strong>
         <p class="mb-0 mt-2">
-          We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository.
+          {{ lang.errors.theme.system_error_description | default: "We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository." }}
         </p>
       </div>
       {% endif %}
@@ -314,7 +314,7 @@ title: Home
                   {%- endcomment -%}
                   <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ object.object_id }}" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
                     <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center h-100">
-                      <span class="text-muted">Loading...</span>
+                      <span class="text-muted">{{ lang.loading | default: "Loading..." }}</span>
                     </div>
                   </div>
                 {% endif %}
@@ -523,7 +523,7 @@ title: Home
                     {% endif %}
                     <div class="story-iiif-thumbnail card-img-top" data-object-id="{{ thumb_obj.object_id }}" data-info-json="{{ thumb_info_path | relative_url }}" style="aspect-ratio: 1; overflow: hidden;">
                       <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center h-100">
-                        <span class="text-muted">Loading...</span>
+                        <span class="text-muted">{{ lang.loading | default: "Loading..." }}</span>
                       </div>
                     </div>
                   {% endif %}

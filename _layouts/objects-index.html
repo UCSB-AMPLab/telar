@@ -37,7 +37,7 @@ layout: default
 <div class="container my-5">
   <div class="row">
     <div class="col-12">
-      <h1>{{ page.title }}</h1>
+      <h1>{{ lang.pages.objects_heading | default: page.title }}</h1>
     </div>
     <div class="col-12">
         <article class="page-content">
@@ -142,7 +142,7 @@ layout: default
           {% comment %}Media type filter (auto-detected: Image/Video/Audio){% endcomment %}
           <div class="objects-filter-section" data-filter="media_type">
             <button type="button" class="objects-filter-section-toggle" aria-expanded="false">
-              <span>{{ lang.objects.media_type | default: "Type" }}</span>
+              <span>{{ lang.objects.type | default: "Type" }}</span>
               <span class="objects-filter-indicator">+</span>
             </button>
             <div class="objects-filter-options">
@@ -254,13 +254,13 @@ layout: default
         {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
         {%- comment -%}For IIIF manifests, JavaScript will load thumbnail{%- endcomment -%}
         <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
-          <span class="text-muted">Loading...</span>
+          <span class="text-muted">{{ lang.loading | default: "Loading..." }}</span>
         </div>
         {% elsif object.object_id %}
         {%- comment -%}For local objects, load thumbnail via info.json{%- endcomment -%}
         <div class="local-iiif-thumbnail" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}">
           <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
-            <span class="text-muted">Loading...</span>
+            <span class="text-muted">{{ lang.loading | default: "Loading..." }}</span>
           </div>
         </div>
         {% else %}
@@ -307,12 +307,12 @@ layout: default
         <img src="{{ object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ object.alt_text | default: object.title }}" class="iiif-thumbnail">
         {% elsif object.iiif_manifest and object.iiif_manifest != "" %}
         <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
-          <span class="text-muted">Loading...</span>
+          <span class="text-muted">{{ lang.loading | default: "Loading..." }}</span>
         </div>
         {% elsif object.object_id %}
         <div class="local-iiif-thumbnail" data-info-json="{{ '/iiif/objects/' | append: object.object_id | append: '/info.json' | relative_url }}">
           <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
-            <span class="text-muted">Loading...</span>
+            <span class="text-muted">{{ lang.loading | default: "Loading..." }}</span>
           </div>
         </div>
         {% else %}

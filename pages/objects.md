@@ -1,6 +1,7 @@
 ---
 layout: objects-index
 title: Objects in the Stories
+title_key: navigation.objects
 permalink: /objects/
 ---
 

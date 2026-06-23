@@ -33,19 +33,35 @@
   {%- comment -%} Expose the Jekyll baseurl to client JS — objects-filter.js reads this to fetch
   search-data.json from the correct path under a non-empty baseurl, instead of a fragile URL regex. {%- endcomment -%}
   <meta name="baseurl" content="{{ site.baseurl }}">
-  <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
 
-  <!-- Bootstrap 5 CSS — loaded into the third-party layer so Telar rules win by layer order -->
-  <style>@layer reset, third-party, telar-base, telar-bootstrap-overrides, telar-components, telar-overrides;</style>
-  <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <style>@import url('https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css') layer(third-party);</style>
-
-  <!-- Load language data with fallback to English -->
+  <!-- Load language data with fallback to English (needed before the title resolver below) -->
   {% if site.telar_language and site.data.languages[site.telar_language] %}
     {% assign lang = site.data.languages[site.telar_language] %}
   {% else %}
     {% assign lang = site.data.languages['en'] %}
   {% endif %}
+
+  {%- comment -%} Built-in pages (home/objects/glossary) carry a `title_key` (e.g.
+  navigation.objects) so the browser-tab title follows the site language, reusing the
+  same nav labels. The English `title:` front matter stays as a fallback when the key
+  is absent, so the title is never empty. Resolved here because the lang pack is only in
+  scope in this outermost layout. {%- endcomment -%}
+  {% assign page_title = page.title %}
+  {% if page.title_key %}
+    {%- comment -%} Liquid can't index a hash with an array element (lang[parts[0]]), so
+    pull each path segment into a scalar first. {%- endcomment -%}
+    {% assign title_key_parts = page.title_key | split: "." %}
+    {% assign title_key_section = title_key_parts[0] %}
+    {% assign title_key_leaf = title_key_parts[1] %}
+    {% assign localized_title = lang[title_key_section][title_key_leaf] %}
+    {% if localized_title and localized_title != "" %}{% assign page_title = localized_title %}{% endif %}
+  {% endif %}
+  <title>{% if page_title %}{{ page_title }} | {% endif %}{{ site.title }}</title>
+
+  <!-- Bootstrap 5 CSS — loaded into the third-party layer so Telar rules win by layer order -->
+  <style>@layer reset, third-party, telar-base, telar-bootstrap-overrides, telar-components, telar-overrides;</style>
+  <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>@import url('https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css') layer(third-party);</style>
 
   <!-- Google Fonts - Dynamic based on theme -->
   {% assign theme = site.data.themes[site.telar_theme] %}
@@ -62,7 +78,10 @@
     {% include katex.html %}
   {% endif %}
 
-  {% seo %}
+  {%- comment -%} title=false: the localized <title> is emitted above from title_key / page.title;
+  jekyll-seo-tag would otherwise add a second, English <title>. og:title/twitter:title still come
+  from seo-tag (bound to static page.title) and remain a known untranslated surface. {%- endcomment -%}
+  {% seo title=false %}
 </head>
 <body>
   {% include header.html %}
