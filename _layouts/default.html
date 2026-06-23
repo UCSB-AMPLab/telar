@@ -78,7 +78,10 @@
     {% include katex.html %}
   {% endif %}
 
-  {% seo %}
+  {%- comment -%} title=false: the localized <title> is emitted above from title_key / page.title;
+  jekyll-seo-tag would otherwise add a second, English <title>. og:title/twitter:title still come
+  from seo-tag (bound to static page.title) and remain a known untranslated surface. {%- endcomment -%}
+  {% seo title=false %}
 </head>
 <body>
   {% include header.html %}
