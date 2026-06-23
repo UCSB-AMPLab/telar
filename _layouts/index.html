@@ -174,14 +174,14 @@ title: Home
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>{{ lang.errors.theme.not_found_heading | default: "⚠️ Your selected theme doesn't exist" }}</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>.
+          {{ lang.errors.theme.not_found_description | default: "The theme <code>__THEME__</code> doesn't exist. We've applied the <code>trama</code> (default) theme instead. To choose a different theme, update <code>telar_theme</code> in <code>_config.yml</code> to match a file in your <code>_data/themes</code> folder. Built-in options include <code>trama</code>, <code>paisajes</code>, <code>neogranadina</code>, <code>santa-barbara</code>, and <code>austin</code>." | replace: "__THEME__", site.telar_theme }}
         </p>
       </div>
       {% elsif theme_error_type == "malformed" %}
       <div class="alert alert-warning telar-alert" role="alert">
         <strong>{{ lang.errors.theme.broken_heading | default: "⚠️ Your theme file is broken" }}</strong>
         <p class="mb-0 mt-2">
-          The theme <code>{{ site.telar_theme }}</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/{{ site.telar_theme }}.yml</code> for syntax errors or compare it to a working theme file.
+          {{ lang.errors.theme.broken | default: "The theme <code>__THEME__</code> file appears to be broken or incomplete. We've applied a built-in fallback theme instead. Check <code>_data/themes/__THEME__.yml</code> for syntax errors or compare it to a working theme file." | replace: "__THEME__", site.telar_theme }}
         </p>
       </div>
       {% elsif theme_error_type == "critical" %}
