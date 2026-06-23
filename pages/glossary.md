@@ -1,6 +1,7 @@
 ---
 layout: glossary-index
 title: Glossary
+title_key: navigation.glossary
 permalink: /glossary/
 ---
 

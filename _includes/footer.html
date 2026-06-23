@@ -8,6 +8,13 @@
   also names the project's stewards — Neogranadina and AMPL — and is styled with
   Bootstrap utility classes for its light background and two-column layout.
 {%- endcomment -%}
+{%- comment -%}Include scope does not reliably inherit the layout's `lang` assign, so resolve
+the language pack here (English fallback) for the translatable credit line below.{%- endcomment -%}
+{% if site.telar_language and site.data.languages[site.telar_language] %}
+  {% assign lang = site.data.languages[site.telar_language] %}
+{% else %}
+  {% assign lang = site.data.languages['en'] %}
+{% endif %}
 <footer class="site-footer mt-5 py-4 bg-light">
   <div class="container">
     <div class="row">
@@ -15,8 +22,14 @@
         <p class="mb-0 text-muted">&copy; {{ 'now' | date: "%Y" }} {{ site.author | default: site.title }}</p>
       </div>
       <div class="col-md-6 text-md-end">
+        {%- comment -%}Build each linked name, then substitute the brace-free tokens in the
+        translatable credit sentence so the link markup and word order both follow the language.{%- endcomment -%}
+        {% capture footer_telar %}<a href="https://github.com/UCSB-AMPLab/telar" target="_blank" class="footer-link">Telar</a>{% endcapture %}
+        {% capture footer_version %}<a href="https://github.com/UCSB-AMPLab/telar/releases" target="_blank" class="footer-link text-muted" style="font-size: 0.875rem;">v{{ site.telar.version }}</a>{% endcapture %}
+        {% capture footer_neogranadina %}<a href="https://neogranadina.org" class="footer-link">Neogranadina</a>{% endcapture %}
+        {% capture footer_ampl %}<a href="https://ampl.clair.ucsb.edu" class="footer-link">AMPL</a>{% endcapture %}
         <p class="mb-0 text-muted">
-          Built with <a href="https://github.com/UCSB-AMPLab/telar" target="_blank" class="footer-link">Telar</a> <a href="https://github.com/UCSB-AMPLab/telar/releases" target="_blank" class="footer-link text-muted" style="font-size: 0.875rem;">v{{ site.telar.version }}</a>, a project of <a href="https://neogranadina.org" class="footer-link">Neogranadina</a> and <a href="https://ampl.clair.ucsb.edu" class="footer-link">AMPL</a>.
+          {{ lang.footer.built_with | default: "Built with __TELAR__ __VERSION__, a project of __NEOGRANADINA__ and __AMPL__." | replace: "__TELAR__", footer_telar | replace: "__VERSION__", footer_version | replace: "__NEOGRANADINA__", footer_neogranadina | replace: "__AMPL__", footer_ampl }}
         </p>
       </div>
     </div>

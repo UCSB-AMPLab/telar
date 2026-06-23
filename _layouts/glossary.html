@@ -24,7 +24,7 @@ layout: default
   <div class="row">
     <div class="col-lg-8 mx-auto">
       <a href="{{ '/glossary/' | relative_url }}" class="btn btn-sm btn-outline-secondary mb-3">
-        ← Back to Glossary
+        {{ lang.buttons.back_to_glossary | default: "← Back to Glossary" }}
       </a>
 
       <h1>{{ page.title }}{% if page.demo %}<span class="demo-badge-inline">{{ lang.demo.panel_badge }}</span>{% endif %}</h1>
