@@ -75,10 +75,11 @@ from migrations.v140_to_v150 import Migration140to150
 from migrations.v150_to_v151 import Migration150to151
 from migrations.v151_to_v152 import Migration151to152
 from migrations.v152_to_v153 import Migration152to153
+from migrations.v153_to_v154 import Migration153to154
 
 
 # Latest version
-LATEST_VERSION = "1.5.3"
+LATEST_VERSION = "1.5.4"
 
 # All available migrations in order
 MIGRATIONS = [
@@ -114,6 +115,7 @@ MIGRATIONS = [
     Migration150to151,
     Migration151to152,
     Migration152to153,
+    Migration153to154,
 ]
 
 

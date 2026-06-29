@@ -4,6 +4,18 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-06-29
+
+CI/build fix release. Adds a GitHub Pages concurrency group to the build workflow so rapid successive builds of the same repository no longer race on Pages' one-deployment-per-repo limit. CI only — no content, schema, or configuration changes. Upgrade in place or simply redeploy.
+
+### Fixed
+
+- **Spurious "build failed" emails on rapid successive builds.** GitHub Pages allows only one in-progress deployment per repository, so when several builds started within the same second (for example, when a new site is created and multiple commits plus a manual run land together) the losing runs failed their "Deploy to GitHub Pages" step and emailed the owner, even though the site deployed correctly. Build runs are now grouped per branch with a `concurrency` setting and superseded runs are cancelled, so the newest build wins cleanly with no failure noise.
+
+### Notes
+
+- The only changed framework file is `.github/workflows/build.yml`. The Telar Compositor updates it automatically on upgrade; sites upgrading via the "Upgrade Telar" Actions workflow or locally must add the `concurrency` block by hand, since GitHub does not allow automated upgrades to modify workflow files (see the release notes for the exact snippet).
+
 ## [1.5.3] - 2026-06-23
 
 Internationalization fix release. Built-in interface text that still showed in English on Spanish-language sites (`telar_language: es`) now follows the site language. Display only — no content, schema, or configuration changes. Upgrade in place or simply redeploy.
