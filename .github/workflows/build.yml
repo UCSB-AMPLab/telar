@@ -34,7 +34,7 @@ name: Build and Deploy Telar Site
 # build time. Sites without audio objects skip audio tool installation and
 # processing entirely — zero friction for image-only sites.
 #
-# Version: v1.5.0
+# Version: v1.5.4
 
 on:
   push:
@@ -54,6 +54,18 @@ permissions:
   contents: write
   pages: write
   id-token: write
+
+# GitHub Pages allows only one in-progress deployment per repository. When a
+# site is pushed to several times in quick succession (for example, the Telar
+# Compositor's site-creation flow fires two commits and a manual run within the
+# same second), the extra build runs would otherwise race on the single Pages
+# deployment slot — the losers fail their "Deploy to GitHub Pages" step and the
+# owner gets a spurious build-failure email, even though a sibling run deploys
+# the site correctly. Grouping the runs and cancelling superseded ones keeps the
+# newest commit's build as the single winner with no failure noise.
+concurrency:
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:

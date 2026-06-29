@@ -1,19 +1,27 @@
 {
   "schema_version": 1,
-  "from_version": "1.5.1",
-  "to_version": "1.5.2",
-  "description": "Validation banner message fixes and homepage warning localisation; display-only",
+  "from_version": "1.5.3",
+  "to_version": "1.5.4",
+  "description": "Add a GitHub Pages concurrency group to the build workflow so rapid successive builds don't race; no content changes",
   "operations": [],
   "manual_steps": {
     "en": [
       {
-        "description": "**No action needed.** This is a display-only fix.\n\n- **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.\n- **If you work with your site locally:** just rebuild your site to use the updated warning messages.",
+        "description": "**If you use the Telar Compositor: no action needed.** The Compositor updates your build workflow automatically when it upgrades your site.",
+        "doc_url": "https://telar.org/docs"
+      },
+      {
+        "description": "**If you use GitHub Pages with the \"Upgrade Telar\" workflow, or work locally:** GitHub does not allow the automated upgrade to change workflow files, so your build workflow is not updated for you. Add the following block to `.github/workflows/build.yml`, just before the `jobs:` line (or recopy the file from the latest template):\n\n```yaml\nconcurrency:\n  group: \"pages-${{ github.ref }}\"\n  cancel-in-progress: true\n```\n\nUntil you do, your site keeps building and deploying correctly — you may just get an occasional spurious \"build failed\" email when two builds start at the same time.",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
-        "description": "**No se requiere ninguna acción.** Esta corrección solo afecta los mensajes que se muestran en pantalla.\n\n- **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.\n- **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los mensajes de advertencia actualizados.",
+        "description": "**Si usas el Compositor de Telar: no tienes que hacer nada.** El Compositor actualiza por ti el flujo de trabajo de construcción cuando actualiza tu sitio.",
+        "doc_url": "https://telar.org/guia"
+      },
+      {
+        "description": "**Si usas GitHub Pages con el flujo de trabajo \"Upgrade Telar\", o trabajas localmente:** GitHub no permite que la actualización automática modifique los archivos de flujo de trabajo, así que el tuyo no se actualiza solo. Agrega el siguiente bloque a `.github/workflows/build.yml`, justo antes de la línea `jobs:` (o vuelve a copiar el archivo desde la plantilla más reciente):\n\n```yaml\nconcurrency:\n  group: \"pages-${{ github.ref }}\"\n  cancel-in-progress: true\n```\n\nMientras tanto, tu sitio se sigue construyendo y publicando sin problemas; solo podrías recibir de vez en cuando un correo de «build failed» que no corresponde a una falla real, cuando dos ejecuciones empiezan al mismo tiempo.",
         "doc_url": "https://telar.org/guia"
       }
     ]
