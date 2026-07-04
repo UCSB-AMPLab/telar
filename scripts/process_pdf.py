@@ -42,7 +42,7 @@ This script is designed to be called from generate_iiif.py when it
 detects a .pdf source file, but it can also be run standalone for
 testing.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import json
@@ -51,8 +51,7 @@ import tempfile
 from pathlib import Path
 
 from iiif_utils import (
-    detect_tile_backend, generate_tiles_libvips, patch_info_json,
-    generate_full_max, load_object_metadata,
+    patch_info_json, generate_full_max, load_object_metadata,
 )
 
 
@@ -256,7 +255,7 @@ def _create_page_manifest(page_dir, object_id, page_number, width, height, base_
         json.dump(manifest, f, indent=2)
 
 
-def process_pdf_object(pdf_path, output_dir, object_id, base_url, backend):
+def process_pdf_object(pdf_path, output_dir, object_id, base_url):
     """Process a PDF into tiled IIIF pages with manifests.
 
     This is the main orchestrator, called by generate_iiif.py when it
@@ -264,13 +263,14 @@ def process_pdf_object(pdf_path, output_dir, object_id, base_url, backend):
     each one, creates per-page and multi-canvas manifests, and copies
     page 1 as the thumbnail image.
 
+    PDF pages are always tiled via `vips dzsave` — libvips is required
+    for PDF processing regardless of the image backend in use.
+
     Args:
         pdf_path: Path to the source PDF file
         output_dir: Output directory for this object (e.g. iiif/objects/my-doc)
         object_id: Object identifier
         base_url: Base URL for the site
-        backend: Tile backend name (currently only 'libvips' is supported
-                 for PDF processing)
     """
     from PIL import Image
 

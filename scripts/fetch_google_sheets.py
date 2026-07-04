@@ -21,7 +21,7 @@ The resulting CSV files are the input for the next build step:
 csv_to_json.py (the telar package), which processes them into the JSON
 data that Jekyll uses to render the site.
 
-Version: v1.5.0
+Version: v1.6.0
 
 Usage:
     python3 scripts/fetch_google_sheets.py
@@ -165,8 +165,7 @@ def main():
 
         # Determine output filename based on tab name
         # Known system tabs (English and Spanish)
-        system_tabs = {'project', 'proyecto', 'objects', 'objetos', 'glossary', 'glosario',
-                       'instructions', 'instrucciones'}
+        system_tabs = {'project', 'proyecto', 'objects', 'objetos', 'glossary', 'glosario'}
 
         if tab_lower == 'project' or tab_lower == 'proyecto':
             filename = 'project.csv' if tab_lower == 'project' else 'proyecto.csv'

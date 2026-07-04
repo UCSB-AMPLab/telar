@@ -55,7 +55,7 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index, get_source_url
+from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import has_latex
 
 

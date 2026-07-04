@@ -16,10 +16,9 @@ embedded in the markup.
 This script parses the published HTML page to discover all tab names
 and their GIDs, then tests each GID against the shared Sheet ID to
 confirm it works. The result is a mapping of tab names to GIDs that
-fetch_google_sheets.py uses to download each tab as a CSV file. It can
-also output environment variables for GitHub Actions workflows.
+fetch_google_sheets.py uses to download each tab as a CSV file.
 
-Version: v1.5.0
+Version: v1.6.0
 
 Usage:
     python scripts/discover_sheet_gids.py <SHARED_URL> <PUBLISHED_URL>
@@ -184,28 +183,20 @@ Example:
   python scripts/discover_sheet_gids.py \\
     "https://docs.google.com/spreadsheets/d/ABC123.../edit" \\
     "https://docs.google.com/spreadsheets/d/e/2PACX-.../pubhtml"
-
-  # Output as environment variables for GitHub Actions
-  python scripts/discover_sheet_gids.py --output-env \\
-    "SHARED_URL" "PUBLISHED_URL"
         '''
     )
     parser.add_argument('shared_url', help='Shared Google Sheets URL (from Share button)')
     parser.add_argument('published_url', help='Published Google Sheets URL (from Publish to web)')
-    parser.add_argument('--output-env', action='store_true',
-                        help='Output as environment variables (for GitHub Actions)')
 
     args = parser.parse_args()
 
     shared_url = args.shared_url
     published_url = args.published_url
-    output_env = args.output_env
 
-    if not output_env:
-        print("=" * 70)
-        print("Google Sheets GID Discovery Tool")
-        print("=" * 70)
-        print()
+    print("=" * 70)
+    print("Google Sheets GID Discovery Tool")
+    print("=" * 70)
+    print()
 
     # Extract Sheet ID from shared URL
     sheet_id = extract_sheet_id(shared_url)
@@ -216,118 +207,77 @@ Example:
         print("  https://docs.google.com/spreadsheets/d/SHEET_ID/edit", file=sys.stderr)
         sys.exit(1)
 
-    if not output_env:
-        print(f"✓ Sheet ID: {sheet_id}")
+    print(f"✓ Sheet ID: {sheet_id}")
 
-        # Extract published ID
-        published_id = extract_published_id(published_url)
-        if not published_id:
-            print("WARNING: Could not extract published ID from URL")
-            print(f"Published URL provided: {published_url}")
-            print("This may still work if the URL is valid...")
-        else:
-            print(f"✓ Published ID: {published_id}")
+    # Extract published ID
+    published_id = extract_published_id(published_url)
+    if not published_id:
+        print("WARNING: Could not extract published ID from URL")
+        print(f"Published URL provided: {published_url}")
+        print("This may still work if the URL is valid...")
+    else:
+        print(f"✓ Published ID: {published_id}")
 
-        print()
-        print("Discovering tabs from published sheet...")
+    print()
+    print("Discovering tabs from published sheet...")
 
     # Discover GIDs from published HTML
     tabs = discover_gids_from_published(published_url)
 
     if not tabs:
         print("ERROR: Could not discover sheet tabs from published URL", file=sys.stderr)
-        if not output_env:
-            print("\nPlease ensure:", file=sys.stderr)
-            print("  1. You have published the sheet (File > Share > Publish to web)", file=sys.stderr)
-            print("  2. The published URL is accessible", file=sys.stderr)
+        print("\nPlease ensure:", file=sys.stderr)
+        print("  1. You have published the sheet (File > Share > Publish to web)", file=sys.stderr)
+        print("  2. The published URL is accessible", file=sys.stderr)
         sys.exit(1)
 
-    if not output_env:
-        print(f"✓ Found {len(tabs)} tab(s)")
-        print()
-        print("-" * 70)
-        print("Testing tabs with shared Sheet ID:")
-        print("-" * 70)
+    print(f"✓ Found {len(tabs)} tab(s)")
+    print()
+    print("-" * 70)
+    print("Testing tabs with shared Sheet ID:")
+    print("-" * 70)
 
     working_tabs = []
     for tab_name, gid in tabs:
         works = test_gid(sheet_id, gid)
-        if not output_env:
-            status = "✓" if works else "✗"
-            print(f"{status} {tab_name:20s} → gid={gid}")
+        status = "✓" if works else "✗"
+        print(f"{status} {tab_name:20s} → gid={gid}")
         if works:
             working_tabs.append((tab_name, gid))
 
     if not working_tabs:
         print("\nERROR: None of the discovered GIDs work with the shared Sheet ID", file=sys.stderr)
-        if not output_env:
-            print("This usually means the sheet is not properly shared.", file=sys.stderr)
-            print("\nPlease ensure:", file=sys.stderr)
-            print("  1. The sheet is shared with 'Anyone with the link' (Viewer access)", file=sys.stderr)
-            print("  2. Both URLs are from the SAME Google Sheet", file=sys.stderr)
+        print("This usually means the sheet is not properly shared.", file=sys.stderr)
+        print("\nPlease ensure:", file=sys.stderr)
+        print("  1. The sheet is shared with 'Anyone with the link' (Viewer access)", file=sys.stderr)
+        print("  2. Both URLs are from the SAME Google Sheet", file=sys.stderr)
         sys.exit(1)
 
-    # Map tab names/numbers to environment variable names
-    # System tabs
-    system_tabs = {'project', 'objects', 'instructions', 'tab 1', 'tab 2', 'tab 3'}
+    print()
+    print("-" * 70)
+    print("Discovered Tabs:")
+    print("-" * 70)
+    print()
+    for tab_name, gid in working_tabs:
+        print(f"✓ {tab_name:20s} (gid={gid})")
 
-    tab_mapping = {
-        'project': 'PROJECT_GID',
-        'objects': 'OBJECTS_GID',
-        'tab 1': 'PROJECT_GID',  # Fallback for generic tab names
-        'tab 2': 'PROJECT_GID',
-        'tab 3': 'OBJECTS_GID',
-    }
+    print()
+    print("-" * 70)
+    print("Quick Test URLs:")
+    print("-" * 70)
+    print()
+    for tab_name, gid in working_tabs:
+        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?gid={gid}&format=csv"
+        print(f"{tab_name}:")
+        print(f"  {url}")
+        print()
 
-    # Dynamically add story tabs discovered in the sheet (v0.6.0+)
-    # Supports both semantic (your-story, tu-historia) and traditional (story-1, story-2) identifiers
-    for tab_name, _ in working_tabs:
-        tab_lower = tab_name.lower()
-        # Any tab that's not a system tab is a story/chapter tab
-        if tab_lower not in system_tabs and not tab_lower.startswith('#'):
-            # Create environment variable name from tab name
-            # your-story → YOUR_STORY_GID, story-1 → STORY_1_GID
-            safe_name = re.sub(r'[^A-Z0-9_]', '_', tab_name.upper())
-            tab_mapping[tab_lower] = f'{safe_name}_GID'
-
-    if output_env:
-        # Output environment variables for GitHub Actions
-        print(f"SHEET_ID={sheet_id}")
-        for tab_name, gid in working_tabs:
-            var_name = tab_mapping.get(tab_name.lower())
-            if var_name:
-                print(f"{var_name}={gid}")
-            else:
-                # For unknown tabs, create a safe variable name
-                safe_name = re.sub(r'[^A-Z0-9_]', '_', tab_name.upper())
-                print(f"{safe_name}_GID={gid}")
-    else:
-        # Human-readable output
-        print()
-        print("-" * 70)
-        print("Discovered Tabs:")
-        print("-" * 70)
-        print()
-        for tab_name, gid in working_tabs:
-            print(f"✓ {tab_name:20s} (gid={gid})")
-
-        print()
-        print("-" * 70)
-        print("Quick Test URLs:")
-        print("-" * 70)
-        print()
-        for tab_name, gid in working_tabs:
-            url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?gid={gid}&format=csv"
-            print(f"{tab_name}:")
-            print(f"  {url}")
-            print()
-
-        print("-" * 70)
-        print("✓ Discovery complete!")
-        print("-" * 70)
-        print()
-        print("Your Google Sheets URLs are already configured in _config.yml")
-        print("No additional setup needed for GitHub Actions.")
+    print("-" * 70)
+    print("✓ Discovery complete!")
+    print("-" * 70)
+    print()
+    print("Your Google Sheets URLs are already configured in _config.yml")
+    print("No additional setup needed for GitHub Actions.")
 
 if __name__ == '__main__':
     main()

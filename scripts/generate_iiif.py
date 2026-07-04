@@ -34,7 +34,7 @@ Tile generation backends:
   - iiif library (fallback): Pure Python, no system dependencies.
     Install: pip install iiif
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import os
@@ -52,45 +52,6 @@ from iiif_utils import (
     check_dependencies, preprocess_image,
     generate_tiles_libvips, copy_base_image, create_single_canvas_manifest,
 )
-
-
-def _sample_edge_color(image_path):
-    """
-    Sample pixels along the edges of an image and return the average colour
-    as a hex string (e.g., '#e8dcc8').
-
-    Samples ~200 pixels total: 50 from each edge (top, bottom, left, right),
-    evenly spaced. Returns None if PIL is not available or sampling fails.
-    """
-    try:
-        from PIL import Image
-    except ImportError:
-        return None
-
-    try:
-        img = Image.open(image_path).convert('RGB')
-        w, h = img.size
-        samples_per_edge = 50
-        pixels = []
-
-        for i in range(samples_per_edge):
-            frac = i / max(samples_per_edge - 1, 1)
-            # Top edge
-            pixels.append(img.getpixel((int(frac * (w - 1)), 0)))
-            # Bottom edge
-            pixels.append(img.getpixel((int(frac * (w - 1)), h - 1)))
-            # Left edge
-            pixels.append(img.getpixel((0, int(frac * (h - 1)))))
-            # Right edge
-            pixels.append(img.getpixel((w - 1, int(frac * (h - 1)))))
-
-        r = sum(p[0] for p in pixels) // len(pixels)
-        g = sum(p[1] for p in pixels) // len(pixels)
-        b = sum(p[2] for p in pixels) // len(pixels)
-
-        return f'#{r:02x}{g:02x}{b:02x}'
-    except Exception:
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -141,18 +102,6 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url, backend
 
         # Copy full-resolution image BEFORE cleaning up temp file
         copy_base_image(processed_path, tiles_dir, object_id)
-
-        # Sample edge colour and write into info.json as a custom field
-        edge_color = _sample_edge_color(processed_path)
-        if edge_color:
-            info_path = tiles_dir / 'info.json'
-            if info_path.exists():
-                with open(info_path, 'r') as f:
-                    info = json.load(f)
-                info['telar:edgeColor'] = edge_color
-                with open(info_path, 'w') as f:
-                    json.dump(info, f, indent=2)
-                print(f"  Edge colour: {edge_color}")
     finally:
         # Clean up temporary file if created
         if temp_path and Path(temp_path).exists():
@@ -271,16 +220,9 @@ def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/obj
     output_path = Path(output_dir)
 
     if not source_path.exists():
-        # Check for old directory name (pre-v0.9.0)
-        old_path = Path(str(source_dir).replace('telar-content/objects', 'telar-content/images'))
-        if old_path.exists() and str(old_path) != str(source_path):
-            print(f"⚠️  Found '{old_path}' — please rename to '{source_path}'")
-            print(f"   Run: mv {old_path} {source_path}")
-            source_path = old_path
-        else:
-            print(f"❌ Source directory {source_dir} does not exist.")
-            print(f"   Please create it and add images, or use --source-dir to specify a different location.")
-            return False
+        print(f"❌ Source directory {source_dir} does not exist.")
+        print(f"   Please create it and add images, or use --source-dir to specify a different location.")
+        return False
 
     # Get base URL from config or environment
     # Priority: --base-url flag > _config.yml > SITE_URL env var > localhost default
@@ -374,7 +316,7 @@ def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/obj
             if image_file.suffix.lower() == '.pdf':
                 try:
                     from process_pdf import process_pdf_object
-                    process_pdf_object(image_file, object_output, object_id, base_url, backend)
+                    process_pdf_object(image_file, object_output, object_id, base_url)
                     print(f"  ✓ Generated multi-page tiles for {object_id}")
                     processed_count += 1
                 except ImportError:
