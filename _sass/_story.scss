@@ -10,10 +10,11 @@
  * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 @use 'responsive' as *;
+@use 'mixins' as *;
 
 @layer telar-components {
 
@@ -688,31 +689,15 @@
 
 // Fixed above the card-stack. High z-index to float above all cards.
 .btn-nav-back {
+  @include light-glass-button;
   position: fixed;
   top: 0.75rem;
   left: 0.75rem;
-  text-decoration: none;
-  color: rgba(0, 0, 0, 0.7);
-  padding: 0.5rem 1rem;
   min-width: 9rem;
   justify-content: center;
-  border: none;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(4px);
   transition: background 0.3s ease, color 0.3s ease;
   z-index: 9900;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-
-  @media (hover: hover) and (pointer: fine) {
-    &:hover {
-      background: rgba(255, 255, 255, 0.85);
-      color: rgba(0, 0, 0, 0.9);
-    }
-  }
 }
 
 // Icons hidden on desktop — text only
@@ -849,9 +834,6 @@
     display: none;
   }
 
-  .btn-nav-icon {
-    display: none;
-  }
   .btn-nav-back.is-home .btn-nav-icon--home,
   .btn-nav-back.is-start .btn-nav-icon--start {
     display: block;
@@ -887,8 +869,8 @@
     width: calc(100% - 2rem);
     // fights inline `top` set by card-pool.js on all text cards
     top: auto !important;
-    bottom: max(1rem, env(safe-area-inset-bottom));  // uses env() because the Sass var $telar-card-mobile-bottom cannot be used in a @media value
-    max-height: 40vh;
+    bottom: $telar-card-mobile-bottom;
+    max-height: $telar-card-mobile-max-height;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     transition: transform 0.4s ease-out;  // Slightly faster than desktop 0.5s
@@ -942,7 +924,7 @@
   .viewer-plate[data-card-type="vimeo"] + .text-card,
   .viewer-plate[data-card-type="google-drive"] + .text-card,
   .viewer-plate[data-card-type="audio"] + .text-card {
-    max-height: 35vh;
+    max-height: $telar-card-mobile-max-height-media;
   }
 
   // dvh override for media-type text cards (video/audio).

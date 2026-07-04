@@ -7,10 +7,18 @@
  * copy-to-clipboard functionality, embed code generation, and social media
  * sharing links.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 @use 'responsive' as *;
+@use 'mixins' as *;
+
+// Focus ring shared by the share panel's text inputs, textarea, and selects.
+@mixin share-focus-ring {
+  border-color: var(--color-link);
+  box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
+  outline: none;
+}
 
 @layer telar-components {
 
@@ -20,32 +28,16 @@
 
 /* Share Button - Light Style (matches Back to Home button) */
 .share-button {
+  @include light-glass-button;
   display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.6);
-  color: rgba(0, 0, 0, 0.7);
-  border: none;
-  border-radius: 20px;
   font-size: 1rem;
   font-family: var(--font-body);
-  cursor: pointer;
   transition: all 0.3s ease;
-  text-decoration: none;
-  backdrop-filter: blur(4px);
 
   .share-button-icon {
     width: 1.2rem;
     height: 1.2rem;
     flex-shrink: 0;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    &:hover {
-      background: rgba(255, 255, 255, 0.85);
-      color: rgba(0, 0, 0, 0.9);
-    }
   }
 
   &:focus {
@@ -362,9 +354,7 @@
     height: 31px;
 
     &:focus {
-      border-color: var(--color-link);
-      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
-      outline: none;
+      @include share-focus-ring;
     }
   }
 
@@ -437,9 +427,7 @@
     margin-bottom: 0.25rem;
 
     &:focus {
-      border-color: var(--color-link);
-      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
-      outline: none;
+      @include share-focus-ring;
     }
 
     @media (max-width: $telar-vertical-min-width) {
@@ -498,9 +486,7 @@
     height: 31px;
 
     &:focus {
-      border-color: var(--color-link);
-      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
-      outline: none;
+      @include share-focus-ring;
     }
   }
 
@@ -514,25 +500,10 @@
     margin-bottom: 1rem;
 
     &:focus {
-      border-color: var(--color-link);
-      box-shadow: 0 0 0 0.2rem rgba(139, 69, 19, 0.25);
-      outline: none;
+      @include share-focus-ring;
     }
   }
 
-  // Success message styling (for copy feedback)
-  .share-success-message {
-    display: flex;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    margin-top: 1rem;
-    border-radius: 4px;
-
-    .icon {
-      width: 1.2rem;
-      height: 1.2rem;
-    }
-  }
 }
 
 /* Story intro share button placement */
