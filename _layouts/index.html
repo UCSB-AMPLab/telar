@@ -100,7 +100,6 @@ title: Home
   <!-- Google Sheets Validation -->
   {% assign has_gs_issue = false %}
   {% assign gs_error_type = "" %}
-  {% assign gs_error_details = "" %}
 
   {% if site.google_sheets.enabled %}
     {% assign published_url = site.google_sheets.published_url | strip %}
@@ -249,6 +248,7 @@ title: Home
   {% assign dev_features = site['development-features'] %}
   {%- comment -%}Support both new names (skip_*) and legacy names (hide_*){%- endcomment -%}
   {% assign skip_stories = dev_features.skip_stories | default: dev_features.hide_stories | default: false %}
+  {% comment %}This skip_collections alias is also computed in _includes/header.html and _layouts/objects-index.html — one line each, not worth an include{% endcomment %}
   {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
   {% if skip_collections %}{% assign skip_stories = true %}{% endif %}
 

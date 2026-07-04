@@ -59,6 +59,9 @@
   <title>{% if page_title %}{{ page_title }} | {% endif %}{{ site.title }}</title>
 
   <!-- Bootstrap 5 CSS — loaded into the third-party layer so Telar rules win by layer order -->
+  <!-- This @layer order must stay identical to _layouts/story.html and the
+       documentation copy in _sass/_responsive.scss — the HTML declaration wins
+       the layer-ordering race, so it cannot be consolidated into one copy. -->
   <style>@layer reset, third-party, telar-base, telar-bootstrap-overrides, telar-components, telar-overrides;</style>
   <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <style>@import url('https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css') layer(third-party);</style>

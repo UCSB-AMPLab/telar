@@ -43,6 +43,7 @@
           {%- comment -%}Check if objects should be hidden from nav{%- endcomment -%}
           {% assign dev_features = site['development-features'] %}
           {%- comment -%}Support both new name (skip_collections) and legacy name (hide_collections){%- endcomment -%}
+          {%- comment -%}This alias is also computed in _layouts/index.html and _layouts/objects-index.html — one line each, not worth an include{%- endcomment -%}
           {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
 
           {% if site.data.navigation.menu %}
