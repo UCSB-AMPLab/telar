@@ -6,6 +6,8 @@ Changes:
 - Ensure language files exist (_data/lang/en.yml and es.yml)
 - Update all framework files from GitHub (layouts, includes, scripts, styles)
 - No breaking changes - all new features are additive
+
+Version: v0.4.0-beta
 """
 
 from typing import List, Dict

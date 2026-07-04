@@ -5,6 +5,8 @@ Changes:
 - Move index.html to _layouts/index.html
 - Create editable index.md in root
 - Manual step: Update build.yml workflow file
+
+Version: v0.3.2-beta
 """
 
 from typing import List, Dict

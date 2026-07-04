@@ -8,6 +8,8 @@ Covers pure functions:
   - check_audio_dependencies: system tool detection
   - find_audio_objects: objects.json filtering for audio files
   - build_clip_filename: clip output filename construction
+
+Version: v1.6.0
 """
 import hashlib
 import json

@@ -7,6 +7,8 @@ Changes:
 - Fix object gallery mobile layout
 - Update framework files from GitHub
 - No breaking changes - all fixes and improvements are automatic
+
+Version: v0.4.1-beta
 """
 
 from typing import List, Dict

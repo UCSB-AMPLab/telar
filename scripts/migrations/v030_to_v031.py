@@ -1,4 +1,7 @@
-"""Migration from v0.3.0-beta to v0.3.1-beta"""
+"""Migration from v0.3.0-beta to v0.3.1-beta
+
+Version: v0.3.1-beta
+"""
 
 from typing import List, Dict
 from .base import BaseMigration
