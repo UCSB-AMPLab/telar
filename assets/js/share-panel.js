@@ -23,7 +23,7 @@
  * absent, and swaps the button icon to a checkmark briefly as confirmation. Wrapped in
  * an IIFE so its state and helpers stay out of the global scope.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 (function() {
@@ -54,15 +54,12 @@
     sharePanel.addEventListener('show.bs.modal', handlePanelOpen);
 
     // Get DOM elements after panel structure is known
-    const shareUrlInput = document.getElementById('share-url-input');
     const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
-    const shareSiteUrlInput = document.getElementById('share-site-url-input');
     const shareCopySiteBtn = document.getElementById('share-copy-site-btn');
     const shareStorySelect = document.getElementById('share-story-select');
     const embedPresetSelect = document.getElementById('embed-preset-select');
     const embedWidthInput = document.getElementById('embed-width-input');
     const embedHeightInput = document.getElementById('embed-height-input');
-    const embedCodeTextarea = document.getElementById('embed-code-textarea');
     const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
 
     // Story page: Privacy toggle

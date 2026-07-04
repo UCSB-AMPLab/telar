@@ -66,5 +66,9 @@ Copyright (c) Lucide Contributors
 License: ISC
 Source: https://github.com/lucide-icons/lucide
 
-Telar uses a subset of Lucide icons as inline SVGs in telar-icons.js.
-The icons are embedded directly in the source code — no CDN dependency.
+Telar uses a subset of Lucide icons as inline SVGs, embedded directly in
+the source code — no CDN dependency. Copies live in assets/js/embed.js,
+assets/js/share-panel.js, assets/js/story-unlock.js, and the templates
+_includes/share-button.html, _includes/share-panel.html,
+_layouts/index.html, _layouts/object.html, _layouts/story.html, and
+_layouts/objects-index.html.

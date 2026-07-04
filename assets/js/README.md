@@ -35,7 +35,6 @@ Loaded directly by individual layouts via `<script>` tags, not bundled:
 | `story-unlock.js` | Client-side decryption overlay for protected stories (AES-GCM via Web Crypto). | story layout |
 | `embed.js` | Detects iframe embedding and trims site chrome down to the story itself. | story layout |
 | `widgets.js` | Carousel initialization for content widgets (tabs and accordions are pure Bootstrap). | story layout |
-| `telar-icons.js` | Runtime inline-SVG icon helper (Lucide paths). Currently loaded by no layout — the icons it served are now inlined directly in templates. Candidate for removal. | nothing |
 
 ## Vendored
 

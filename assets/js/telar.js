@@ -30,10 +30,7 @@
  * whose cloned nodes would lose a per-element handler. `initializeGlossaryLinks`
  * is retained as a no-op for callers that still invoke it.
  *
- * PanelStack — a tiny last-in-first-out record of which panels are layered (for
- * example Layer 1 to Layer 2 to glossary), exposed on `window.Telar`.
- *
- * @version v1.5.1
+ * @version v1.6.0
  */
 
 // Wait for DOM to be ready
@@ -103,31 +100,8 @@ function initializePanelTriggers() {
   });
 }
 
-/**
- * Panel stacking system
- * Handles multiple panel layers (Layer 1 -> Layer 2 -> Glossary)
- */
-class PanelStack {
-  constructor() {
-    this.stack = [];
-  }
-
-  push(panelId) {
-    this.stack.push(panelId);
-  }
-
-  pop() {
-    return this.stack.pop();
-  }
-
-  getCurrent() {
-    return this.stack[this.stack.length - 1];
-  }
-}
-
 // Export for use in chapter pages
 window.Telar = {
-  PanelStack: new PanelStack(),
   initializeGlossaryLinks: initializeGlossaryLinks // Retained no-op; clicks are delegated
 };
 

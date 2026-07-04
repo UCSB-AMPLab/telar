@@ -12,15 +12,12 @@
  * Telar's own story navigation and a focused carousel must not steal them; wrapping
  * and touch/swipe stay on so the carousel feels natural to page through by hand.
  *
- * Re-initialisation — widgets can arrive after first paint when Telar's story
- * navigation loads panel content dynamically, so initialisation runs both on the
- * initial DOM-ready (or immediately, if the document is already parsed) and again
- * whenever a `panelLoaded` event fires, ensuring any newly injected carousels are
- * wired up.
+ * Initialisation runs on DOM-ready, or immediately if the document is already
+ * parsed by the time this script executes.
  *
  * Wrapped in an IIFE to keep its helpers out of the global scope.
  *
- * @version v0.5.0-beta
+ * @version v1.6.0
  */
 
 (function() {
@@ -62,8 +59,4 @@
     // DOM is already ready
     initWidgets();
   }
-
-  // Re-initialize when panels are dynamically loaded
-  // (for Telar's story navigation system)
-  document.addEventListener('panelLoaded', initWidgets);
 })();
