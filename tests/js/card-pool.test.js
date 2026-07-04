@@ -6,14 +6,11 @@
  * DOM-interacting functions (initCardPool, activateCard, preloadAhead)
  * are not tested here — they require a real browser environment.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  getObjectZBase,
-  getViewerPlateZIndex,
-  getTextCardZIndex,
   getCardMessiness,
   computeCardTop,
   getSceneIndex,
@@ -28,33 +25,54 @@ import { computeFocalTarget } from '../../assets/js/telar-story/iiif-card.js';
 
 // ── Z-index banding ───────────────────────────────────────────────────────────
 
-describe('getObjectZBase', () => {
-  it('returns 100 for object 0', () => {
-    expect(getObjectZBase(0)).toBe(100);
+describe('computeZIndexPlan — scene banding invariants', () => {
+  it('assigns each scene a 100-wide band with the viewer plate at the band base', () => {
+    const { plateZ } = computeZIndexPlan([
+      { object: 'A' }, { object: 'A' }, { object: 'B' },
+    ]);
+    // Scene 0 (steps 0-1) → band base 100; scene 1 (step 2) → band base 200
+    expect(plateZ[0]).toBe(100);
+    expect(plateZ[1]).toBe(100);
+    expect(plateZ[2]).toBe(200);
   });
 
-  it('returns 200 for object 1', () => {
-    expect(getObjectZBase(1)).toBe(200);
-  });
-});
-
-describe('getViewerPlateZIndex', () => {
-  it('returns 100 for object 0 (base of band)', () => {
-    expect(getViewerPlateZIndex(0)).toBe(100);
-  });
-});
-
-describe('getTextCardZIndex', () => {
-  it('returns 101 for object 0, run position 0', () => {
-    expect(getTextCardZIndex(0, 0)).toBe(101);
-  });
-
-  it('returns 103 for object 0, run position 2', () => {
-    expect(getTextCardZIndex(0, 2)).toBe(103);
+  it('places text cards at band base + 1 + run position, resetting per scene', () => {
+    const { plateZ, textCardZ } = computeZIndexPlan([
+      { object: 'A' }, { object: 'A' }, { object: 'A' },
+      { object: 'B' }, { object: 'B' },
+    ]);
+    // Scene 0: run positions 0, 1, 2 above band base 100
+    expect(textCardZ[0]).toBe(101);
+    expect(textCardZ[1]).toBe(102);
+    expect(textCardZ[2]).toBe(103);
+    // Scene 1: run position resets — 201, 202 above band base 200
+    expect(textCardZ[3]).toBe(201);
+    expect(textCardZ[4]).toBe(202);
+    // Text cards always sit above their own plate
+    for (const i of [0, 1, 2, 3, 4]) {
+      expect(textCardZ[i]).toBeGreaterThan(plateZ[i]);
+    }
   });
 
-  it('returns 201 for object 1, run position 0', () => {
-    expect(getTextCardZIndex(1, 0)).toBe(201);
+  it('gives a reappearing object a new, higher band (A → B → A)', () => {
+    // The scene-based plan keys bands by scene, not object, so the second
+    // appearance of A stacks above everything from B's scene.
+    const { plateZ, textCardZ } = computeZIndexPlan([
+      { object: 'A' }, { object: 'B' }, { object: 'A' },
+    ]);
+    expect(plateZ[0]).toBe(100);
+    expect(plateZ[1]).toBe(200);
+    expect(plateZ[2]).toBe(300);
+    expect(textCardZ[2]).toBe(301);
+  });
+
+  it('stacks each new scene plate above all cards of the previous scene', () => {
+    const { plateZ, textCardZ } = computeZIndexPlan([
+      { object: 'A' }, { object: 'A' }, { object: 'A' }, { object: 'A' },
+      { object: 'B' },
+    ]);
+    const maxSceneOCardZ = Math.max(textCardZ[0], textCardZ[1], textCardZ[2], textCardZ[3]);
+    expect(plateZ[4]).toBeGreaterThan(maxSceneOCardZ);
   });
 });
 

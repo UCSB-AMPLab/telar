@@ -2269,7 +2269,7 @@
   }
   function _buildAriaLabel(objectId, stepAlt, cardType) {
     if (stepAlt) return stepAlt;
-    const obj = state.objectsIndex?.[objectId] || {};
+    const obj = state.objectsIndex[objectId] || {};
     if (obj.alt_text) return obj.alt_text;
     if (obj.title) return obj.title;
     if (objectId) return objectId;
@@ -2308,7 +2308,7 @@
     return `${baseTranslate} rotate(${messiness.rot}deg) translate(${messiness.offX}px, ${messiness.offY}px)`;
   }
   function _recomputeCardGeometry(viewportW, viewportH) {
-    const peekHeight = _config.peekHeight ?? 1;
+    const peekHeight = _config.peekHeight;
     const landscapeSideCard = isLandscapeSideCard();
     const cards = document.querySelectorAll(".text-card");
     for (const card of cards) {
@@ -2353,7 +2353,7 @@
       const firstStepIdx = state.sceneFirstStep[sceneIdx];
       const objectId = state.sceneToObject[sceneIdx];
       if (!objectId) continue;
-      const firstStep = steps[firstStepIdx] || {};
+      const firstStep = steps[firstStepIdx];
       const objectData = state.objectsIndex[objectId] || {};
       const audioExt = audioObjects[objectId];
       const sceneCardType = detectCardType({
@@ -2401,62 +2401,60 @@
         file_path: audioExt2 ? `objects/${objectId}.${audioExt2}` : ""
       });
       if (!objectId) {
-        const zIndex = _zPlan.textCardZ[stepIdx];
+        const zIndex2 = _zPlan.textCardZ[stepIdx];
         const titleCard = document.createElement("div");
         titleCard.className = "title-card";
         titleCard.dataset.stepIndex = String(stepIdx);
         titleCard.dataset.cardType = "title";
-        titleCard.style.zIndex = zIndex;
+        titleCard.style.zIndex = zIndex2;
         titleCard.style.transform = "translateY(100vh)";
         titleCard.innerHTML = _buildTitleCardContent(step);
         cardStack.appendChild(titleCard);
         state.titleCards[stepIdx] = titleCard;
         continue;
       }
-      if (cardType === "text-only" || objectId) {
-        if (!Object.hasOwn(objectRunPosition, objectId)) {
-          objectRunPosition[objectId] = 0;
-        }
-        const runPos = objectRunPosition[objectId];
-        objectRunPosition[objectId]++;
-        const objectIndex = getSceneIndex(stepIdx);
-        const zIndex = _zPlan.textCardZ[stepIdx];
-        const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
-        const messiness = getCardMessiness(stepIdx, messinessPercent);
-        const card = document.createElement("div");
-        card.className = "text-card";
-        card.dataset.stepIndex = stepIdx;
-        card.dataset.object = objectId;
-        card.dataset.runPosition = runPos;
-        card.style.zIndex = zIndex;
-        card.style.top = `${topPx}px`;
-        card.style.height = `${cardH}px`;
-        card.style.transform = buildTransform(messiness, "translateY(100vh)");
-        card.dataset.messinessRot = messiness.rot;
-        card.dataset.messinessOffX = messiness.offX;
-        card.dataset.messinessOffY = messiness.offY;
-        const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
-        if (hiddenStep) {
-          const content = hiddenStep.querySelector(".step-content");
-          if (content) {
-            card.appendChild(content.cloneNode(true));
-          } else {
-            card.innerHTML = buildTextCardContent(step);
-          }
+      if (!Object.hasOwn(objectRunPosition, objectId)) {
+        objectRunPosition[objectId] = 0;
+      }
+      const runPos = objectRunPosition[objectId];
+      objectRunPosition[objectId]++;
+      const objectIndex = getSceneIndex(stepIdx);
+      const zIndex = _zPlan.textCardZ[stepIdx];
+      const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
+      const messiness = getCardMessiness(stepIdx, messinessPercent);
+      const card = document.createElement("div");
+      card.className = "text-card";
+      card.dataset.stepIndex = stepIdx;
+      card.dataset.object = objectId;
+      card.dataset.runPosition = runPos;
+      card.style.zIndex = zIndex;
+      card.style.top = `${topPx}px`;
+      card.style.height = `${cardH}px`;
+      card.style.transform = buildTransform(messiness, "translateY(100vh)");
+      card.dataset.messinessRot = messiness.rot;
+      card.dataset.messinessOffX = messiness.offX;
+      card.dataset.messinessOffY = messiness.offY;
+      const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
+      if (hiddenStep) {
+        const content = hiddenStep.querySelector(".step-content");
+        if (content) {
+          card.appendChild(content.cloneNode(true));
         } else {
           card.innerHTML = buildTextCardContent(step);
         }
-        cardStack.appendChild(card);
-        state.textCards[stepIdx] = card;
-        state.cardPool.push({
-          stepIndex: stepIdx,
-          objectId,
-          cardType,
-          runPosition: runPos,
-          objectIndex,
-          element: card
-        });
+      } else {
+        card.innerHTML = buildTextCardContent(step);
       }
+      cardStack.appendChild(card);
+      state.textCards[stepIdx] = card;
+      state.cardPool.push({
+        stepIndex: stepIdx,
+        objectId,
+        cardType,
+        runPosition: runPos,
+        objectIndex,
+        element: card
+      });
     }
     if (steps.length > 0) {
       const firstStep = steps[0];
@@ -2514,7 +2512,7 @@
   `;
   }
   function activateCard(index2, direction) {
-    if (state.titleCards?.[index2]) {
+    if (state.titleCards[index2]) {
       _activateTitleCardStep(index2, direction);
       return;
     }
@@ -2525,7 +2523,7 @@
     const step = _stepsData[index2] || {};
     const prevStep2 = index2 > 0 ? _stepsData[index2 - 1] : null;
     const objectId = poolEntry.objectId;
-    const prevObjectId = state.currentObjectRun?.objectId;
+    const prevObjectId = state.currentObjectRun.objectId;
     const currentMode = isFullObjectMode(step);
     const prevMode = prevStep2 ? isFullObjectMode(prevStep2) : null;
     const isModeChange = prevMode !== null && currentMode !== prevMode;
@@ -2657,7 +2655,7 @@
   function setCardProgress(stepIndex, progress) {
     if (progress < 1e-3) return;
     const nextIndex = stepIndex + 1;
-    const nextCard = state.textCards[nextIndex] || state.titleCards?.[nextIndex];
+    const nextCard = state.textCards[nextIndex] || state.titleCards[nextIndex];
     if (!nextCard) return;
     const cardStack = document.querySelector(".card-stack");
     if (!cardStack || !cardStack.classList.contains("is-scrubbing")) return;
@@ -3030,7 +3028,6 @@
       if (!plate) continue;
       const firstStepIdx = state.sceneFirstStep[targetScene];
       const step = _stepsData[firstStepIdx];
-      if (!step) continue;
       const objectId = step.object || step.objectId || "";
       if (!objectId) continue;
       const zIndex = _zPlan.plateZ[firstStepIdx];
@@ -3064,7 +3061,6 @@
       if (!plate) continue;
       const firstStepIdx = state.sceneFirstStep[targetScene];
       const step = _stepsData[firstStepIdx];
-      if (!step) continue;
       const objectId = step.object || step.objectId || "";
       if (!objectId) continue;
       const zIndex = _zPlan.plateZ[firstStepIdx];
@@ -3092,7 +3088,7 @@
     _prefetchedScenes.add(sceneIndex);
     const objectId = state.sceneToObject[sceneIndex];
     if (!objectId) return;
-    const objData = state.objectsIndex?.[objectId];
+    const objData = state.objectsIndex[objectId];
     if (objData?.iiif_manifest || objData?.source_url) return;
     const basePath = getBasePath();
     const baseUrl = `${window.location.origin}${basePath}/iiif/objects/${objectId}`;

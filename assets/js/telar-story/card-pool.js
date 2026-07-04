@@ -43,7 +43,7 @@
  * label ("Image viewer", "Video player", or "Audio player"). The label
  * is refreshed on every step change.
  *
- * Exported pure functions (getObjectZBase, getSceneIndex, computeCardTop,
+ * Exported pure functions (computeZIndexPlan, getSceneIndex, computeCardTop,
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
@@ -68,22 +68,18 @@ import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } 
 import { isFullObjectMode } from './text-card.js';
 import {
   createVideoPlayer,
-  destroyVideoPlayer,
   activateVideoCard,
   deactivateVideoCard,
   updateVideoClip,
-  computeVideoLayout,
   applyClipEndDim,
   showVideoPlayOverlay,
 } from './video-card.js';
 import {
   createAudioPlayer,
-  destroyAudioPlayer,
   activateAudioCard,
   deactivateAudioCard,
   updateAudioClip,
   applyAudioClipEndDim,
-  removeAudioClipEndDim,
 } from './audio-card.js';
 
 /** Normalise truthy loop values from CSV/JSON: "true", "TRUE", "yes", "sí", true → true */
@@ -152,17 +148,6 @@ export function computeZIndexPlan(steps) {
   }
 
   return { plateZ, textCardZ };
-}
-
-// Legacy exports kept for existing tests
-export function getObjectZBase(objectIndex) {
-  return (objectIndex + 1) * 100;
-}
-export function getViewerPlateZIndex(objectIndex) {
-  return getObjectZBase(objectIndex);
-}
-export function getTextCardZIndex(objectIndex, runPosition) {
-  return getObjectZBase(objectIndex) + 1 + runPosition;
 }
 
 // ── Messiness (pure, unit-tested) ─────────────────────────────────────────────
@@ -240,7 +225,7 @@ export function computeCardTop(viewportH, cardH, runPosition, peekHeightPx) {
  */
 function _buildAriaLabel(objectId, stepAlt, cardType) {
   if (stepAlt) return stepAlt;
-  const obj = state.objectsIndex?.[objectId] || {};
+  const obj = state.objectsIndex[objectId] || {};
   if (obj.alt_text) return obj.alt_text;
   if (obj.title) return obj.title;
   if (objectId) return objectId;
@@ -340,7 +325,7 @@ function buildTransform(messiness, baseTranslate) {
  * @param {number} viewportH - Current viewport height in px
  */
 function _recomputeCardGeometry(viewportW, viewportH) {
-  const peekHeight = _config.peekHeight ?? 1;
+  const peekHeight = _config.peekHeight;
   const landscapeSideCard = isLandscapeSideCard();
 
   const cards = document.querySelectorAll('.text-card');
@@ -434,7 +419,7 @@ export function initCardPool(storyData, config) {
     const firstStepIdx = state.sceneFirstStep[sceneIdx];
     const objectId = state.sceneToObject[sceneIdx];
     if (!objectId) continue;  // Title card scene — no viewer plate
-    const firstStep = steps[firstStepIdx] || {};
+    const firstStep = steps[firstStepIdx];
     const objectData = state.objectsIndex[objectId] || {};
     const audioExt = audioObjects[objectId];
     const sceneCardType = detectCardType({
@@ -509,60 +494,58 @@ export function initCardPool(storyData, config) {
       continue;  // skip text card creation for this step
     }
 
-    if (cardType === 'text-only' || objectId) {
-      // Track run position within this object's sequence
-      if (!Object.hasOwn(objectRunPosition, objectId)) {
-        objectRunPosition[objectId] = 0;
-      }
-      const runPos = objectRunPosition[objectId];
-      objectRunPosition[objectId]++;
+    // Track run position within this object's sequence
+    if (!Object.hasOwn(objectRunPosition, objectId)) {
+      objectRunPosition[objectId] = 0;
+    }
+    const runPos = objectRunPosition[objectId];
+    objectRunPosition[objectId]++;
 
-      const objectIndex = getSceneIndex(stepIdx);
-      const zIndex = _zPlan.textCardZ[stepIdx];
-      // All cards share the same centred top — peek offset applied via
-      // transform when stacking, so the active card always covers the previous
-      const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
-      const messiness = getCardMessiness(stepIdx, messinessPercent);
+    const objectIndex = getSceneIndex(stepIdx);
+    const zIndex = _zPlan.textCardZ[stepIdx];
+    // All cards share the same centred top — peek offset applied via
+    // transform when stacking, so the active card always covers the previous
+    const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
+    const messiness = getCardMessiness(stepIdx, messinessPercent);
 
-      const card = document.createElement('div');
-      card.className = 'text-card';
-      card.dataset.stepIndex = stepIdx;
-      card.dataset.object = objectId;
-      card.dataset.runPosition = runPos;
-      card.style.zIndex = zIndex;
-      card.style.top = `${topPx}px`;
-      card.style.height = `${cardH}px`;
-      card.style.transform = buildTransform(messiness, 'translateY(100vh)');
-      card.dataset.messinessRot = messiness.rot;
-      card.dataset.messinessOffX = messiness.offX;
-      card.dataset.messinessOffY = messiness.offY;
+    const card = document.createElement('div');
+    card.className = 'text-card';
+    card.dataset.stepIndex = stepIdx;
+    card.dataset.object = objectId;
+    card.dataset.runPosition = runPos;
+    card.style.zIndex = zIndex;
+    card.style.top = `${topPx}px`;
+    card.style.height = `${cardH}px`;
+    card.style.transform = buildTransform(messiness, 'translateY(100vh)');
+    card.dataset.messinessRot = messiness.rot;
+    card.dataset.messinessOffX = messiness.offX;
+    card.dataset.messinessOffY = messiness.offY;
 
-      // Clone rendered content from the hidden step-data element (Jekyll has
-      // already processed markdownify, panel triggers, layer conditions, etc.)
-      const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
-      if (hiddenStep) {
-        const content = hiddenStep.querySelector('.step-content');
-        if (content) {
-          card.appendChild(content.cloneNode(true));
-        } else {
-          card.innerHTML = buildTextCardContent(step);
-        }
+    // Clone rendered content from the hidden step-data element (Jekyll has
+    // already processed markdownify, panel triggers, layer conditions, etc.)
+    const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
+    if (hiddenStep) {
+      const content = hiddenStep.querySelector('.step-content');
+      if (content) {
+        card.appendChild(content.cloneNode(true));
       } else {
         card.innerHTML = buildTextCardContent(step);
       }
-
-      cardStack.appendChild(card);
-      state.textCards[stepIdx] = card;
-
-      state.cardPool.push({
-        stepIndex: stepIdx,
-        objectId,
-        cardType,
-        runPosition: runPos,
-        objectIndex,
-        element: card,
-      });
+    } else {
+      card.innerHTML = buildTextCardContent(step);
     }
+
+    cardStack.appendChild(card);
+    state.textCards[stepIdx] = card;
+
+    state.cardPool.push({
+      stepIndex: stepIdx,
+      objectId,
+      cardType,
+      runPosition: runPos,
+      objectIndex,
+      element: card,
+    });
   }
 
   // Preload the first scene's viewer plate behind the intro card.
@@ -674,7 +657,7 @@ function _buildTitleCardContent(step) {
  */
 export function activateCard(index, direction) {
   // Title card path — no viewer plate, no text card, no IIIF
-  if (state.titleCards?.[index]) {
+  if (state.titleCards[index]) {
     _activateTitleCardStep(index, direction);
     return;
   }
@@ -689,7 +672,7 @@ export function activateCard(index, direction) {
   const prevStep = index > 0 ? _stepsData[index - 1] : null;
 
   const objectId = poolEntry.objectId;
-  const prevObjectId = state.currentObjectRun?.objectId;
+  const prevObjectId = state.currentObjectRun.objectId;
 
   const currentMode = isFullObjectMode(step);
   const prevMode = prevStep ? isFullObjectMode(prevStep) : null;
@@ -913,7 +896,7 @@ export function setCardProgress(stepIndex, progress) {
   if (progress < 0.001) return; // At exact integer, no scrub needed
 
   const nextIndex = stepIndex + 1;
-  const nextCard = state.textCards[nextIndex] || state.titleCards?.[nextIndex];
+  const nextCard = state.textCards[nextIndex] || state.titleCards[nextIndex];
   if (!nextCard) return;
 
   // Only apply per-frame transforms during scrub mode
@@ -1519,7 +1502,6 @@ export function preloadAhead(currentIndex, ahead, behind) {
 
     const firstStepIdx = state.sceneFirstStep[targetScene];
     const step = _stepsData[firstStepIdx];
-    if (!step) continue;
 
     const objectId = step.object || step.objectId || '';
     if (!objectId) continue;
@@ -1567,7 +1549,6 @@ export function preloadAhead(currentIndex, ahead, behind) {
 
     const firstStepIdx = state.sceneFirstStep[targetScene];
     const step = _stepsData[firstStepIdx];
-    if (!step) continue;
 
     const objectId = step.object || step.objectId || '';
     if (!objectId) continue;
@@ -1621,7 +1602,7 @@ function _prefetchTilesForScene(sceneIndex) {
   if (!objectId) return;
 
   // Skip external manifests — tile URL patterns are server-specific
-  const objData = state.objectsIndex?.[objectId];
+  const objData = state.objectsIndex[objectId];
   if (objData?.iiif_manifest || objData?.source_url) return;
 
   // Construct base URL from origin, not from info.json id field
