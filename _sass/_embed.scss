@@ -13,7 +13,7 @@
  * positioning with show/hide logic instead of the absolute
  * positioning and transforms used in desktop scroll mode.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 @layer telar-components {
@@ -113,6 +113,10 @@ body.embed-mode {
   .mobile-nav {
     position: fixed;
     left: 20%;
+    /* The vertical-layout base pins `right`; with both edges set, the fixed
+       box stretches across the viewport and translateX(-50%) throws it
+       off-screen. Intrinsic width keeps it centred over the narrative column. */
+    right: auto;
     bottom: max(8%, 1.5rem);
     transform: translateX(-50%);
     z-index: 9900;

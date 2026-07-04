@@ -22,7 +22,7 @@
  * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
  * modal and must be explicitly dismissed.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -83,6 +83,25 @@ export function initializePanels() {
       closePanel('glossary');
     });
   }
+
+  // Bootstrap can dismiss a panel without going through closePanel (the
+  // offcanvas X button uses data-bs-dismiss), so panel state is reconciled
+  // on hidden.bs.offcanvas — the one event every dismissal path fires.
+  ['layer1', 'layer2', 'glossary'].forEach((panelType) => {
+    const panel = document.getElementById(`panel-${panelType}`);
+    if (!panel) return;
+    panel.addEventListener('hidden.bs.offcanvas', function () {
+      const before = state.panelStack.length;
+      state.panelStack = state.panelStack.filter(p => p.type !== panelType);
+      if (state.panelStack.length !== before) {
+        writeHash();
+      }
+      if (!document.querySelector('.offcanvas.show')) {
+        state.isPanelOpen = false;
+        deactivateScrollLock();
+      }
+    });
+  });
 }
 
 /**

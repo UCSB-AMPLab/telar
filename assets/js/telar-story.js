@@ -4682,6 +4682,21 @@
         closePanel("glossary");
       });
     }
+    ["layer1", "layer2", "glossary"].forEach((panelType) => {
+      const panel = document.getElementById(`panel-${panelType}`);
+      if (!panel) return;
+      panel.addEventListener("hidden.bs.offcanvas", function() {
+        const before = state.panelStack.length;
+        state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
+        if (state.panelStack.length !== before) {
+          writeHash();
+        }
+        if (!document.querySelector(".offcanvas.show")) {
+          state.isPanelOpen = false;
+          deactivateScrollLock();
+        }
+      });
+    });
   }
   function openPanel(panelType, contentId) {
     const panelId = `panel-${panelType}`;
@@ -5320,6 +5335,7 @@
       state.steps[0].classList.add("mobile-active");
       state.currentMobileStep = 0;
     }
+    state.mobileInIntro = !!document.querySelector(".story-intro");
     const buttons = createNavigationButtons();
     if (!buttons) return;
     state.mobileNavButtons = { prev: buttons.prev, next: buttons.next };

@@ -25,7 +25,7 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
@@ -179,6 +179,11 @@ export function initializeButtonNavigation() {
     state.steps[0].classList.add('mobile-active');
     state.currentMobileStep = 0;
   }
+
+  // The story boots on the intro card, so button navigation starts there:
+  // the first "next" dismisses the intro into step 0, and "prev" stays
+  // disabled until the intro is dismissed.
+  state.mobileInIntro = !!document.querySelector('.story-intro');
 
   const buttons = createNavigationButtons();
   if (!buttons) return;
