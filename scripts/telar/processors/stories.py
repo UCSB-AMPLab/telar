@@ -57,6 +57,7 @@ from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import has_latex
+from telar.media_type import AUDIO_EXTENSIONS
 
 
 def _warn(msg, warnings):
@@ -190,7 +191,6 @@ def process_story(df, christmas_tree=False):
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
                 # Check for a local image or audio file via the one-time index
-                audio_extensions = {'.mp3', '.ogg', '.m4a'}
                 has_local_image = False
 
                 for f in _obj_file_index.get(actual_object_id, []):
@@ -199,7 +199,7 @@ def process_story(df, christmas_tree=False):
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
                         break
-                    if suffix in audio_extensions:
+                    if suffix in AUDIO_EXTENSIONS:
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
                         break

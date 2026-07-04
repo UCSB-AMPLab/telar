@@ -40,7 +40,7 @@ installed via the platform's package manager (brew on macOS, apt on
 Linux). The CI workflow installs them conditionally when audio files are
 detected.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import argparse
@@ -54,12 +54,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from telar.media_type import AUDIO_EXTENSIONS
+
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
 
 # object_id is interpolated into filesystem write paths (peaks, clips, cache),
 # so it must be a bare slug. Anything with a path separator or ".." is rejected
@@ -183,8 +183,9 @@ def find_audio_objects(objects_json_path, objects_dir):
     """
     Load objects.json and filter to objects that have an audio source file.
 
-    For each object, checks whether a file named {object_id}.mp3,
-    {object_id}.ogg, or {object_id}.m4a exists in objects_dir.
+    For each object, checks whether a file named {object_id} plus a supported
+    audio extension (.mp3, .ogg, .m4a — lower or upper case) exists in
+    objects_dir. Lowercase extensions take precedence when both exist.
 
     Args:
         objects_json_path (str | Path): Path to _data/objects.json.

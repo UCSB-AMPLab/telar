@@ -265,6 +265,33 @@ def test_find_audio_objects():
         assert 'extension' in r
 
 
+def test_find_audio_objects_uppercase_extension():
+    """Finds audio files with uppercase extensions (case-sensitive filesystems)."""
+    objects_data = [
+        {'object_id': 'field-recording'},
+    ]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        objects_dir = tmpdir / 'objects'
+        objects_dir.mkdir()
+        data_dir = tmpdir / '_data'
+        data_dir.mkdir()
+
+        (objects_dir / 'field-recording.MP3').write_bytes(b'fake mp3')
+
+        objects_json_path = data_dir / 'objects.json'
+        objects_json_path.write_text(json.dumps(objects_data))
+
+        results = find_audio_objects(objects_json_path, objects_dir)
+
+    assert len(results) == 1
+    assert results[0]['object_id'] == 'field-recording'
+    # Extension matches the on-disk filename so built URLs resolve on
+    # case-sensitive hosting
+    assert results[0]['extension'].lower() == 'mp3'
+
+
 # ---------------------------------------------------------------------------
 # Test 10: build_clip_filename — output filename format
 # ---------------------------------------------------------------------------

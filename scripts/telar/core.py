@@ -54,6 +54,7 @@ from telar.processors.stories import process_story
 from telar.demo import load_demo_bundle, merge_demo_content, fetch_demo_content_if_enabled
 from telar.encryption import encrypt_story, get_protected_stories, get_story_key_from_config
 from telar.glossary import strip_glossary_links
+from telar.media_type import AUDIO_EXTENSIONS
 from telar.search import generate_search_data
 
 
@@ -258,9 +259,6 @@ def _encrypt_protected_stories(data_dir):
         print("     Fix the story_id / data-file mismatch (or remove the 'protected' "
               "flag), then rebuild.")
         raise SystemExit(1)
-
-
-AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
 
 
 def _generate_audio_manifest(data_dir):
