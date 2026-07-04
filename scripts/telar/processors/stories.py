@@ -43,7 +43,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.5.1
+Version: v1.6.0
 """
 
 import re
@@ -358,11 +358,13 @@ def process_story(df, christmas_tree=False):
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings
 
-    # Check for LaTeX content across all steps
+    # Check for LaTeX content across all steps. Scans every documented LaTeX
+    # surface ("Where LaTeX Works" in the markdown-syntax docs): step
+    # question/answer prose and resolved layer content (*_text columns).
     latex_detected = False
     for idx, row in df.iterrows():
         for col in df.columns:
-            if col.endswith('_text'):
+            if col in ('question', 'answer') or col.endswith('_text'):
                 text = str(row.get(col, ''))
                 if text and has_latex(text):
                     latex_detected = True
