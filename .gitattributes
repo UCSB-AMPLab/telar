@@ -1,0 +1,5 @@
+# Mark build artifacts as generated so diffs collapse them and language
+# statistics count only human-maintained source.
+# Version: v1.6.0
+assets/js/telar-story.js linguist-generated
+assets/js/telar-story.js.map linguist-generated

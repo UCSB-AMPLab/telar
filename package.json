@@ -20,7 +20,7 @@
     "url": "https://github.com/UCSB-AMPLab/telar/issues"
   },
   "scripts": {
-    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap",
+    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
     "test:js": "vitest run",
     "test:js:watch": "vitest"
   },

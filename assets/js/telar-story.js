@@ -1,3 +1,4 @@
+/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
 (() => {
   // assets/js/telar-story/state.js
   var MOBILE_NAV_COOLDOWN = 400;
