@@ -42,7 +42,7 @@ A multi-author deployment where untrusted users can write story content
 DOMPurify on the injected panel/glossary HTML in the JS runtime, where the
 untrusted boundary actually is.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import re
@@ -50,6 +50,63 @@ import markdown
 from telar.images import process_images, resolve_path_case_insensitive
 from telar.latex import protect_latex, restore_latex
 from telar.widgets import process_widgets
+
+FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
+TITLE_PATTERN = re.compile(r'title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
+
+
+def _split_frontmatter(content, require_title=False):
+    """
+    Split optional YAML frontmatter from content, returning (title, body).
+
+    If require_title is True, a frontmatter match is only honored when it
+    contains a `title:` key — this avoids false matches with horizontal
+    rules or other standalone `---` usage in pasted inline content.
+
+    Args:
+        content: Raw text that may begin with a `---`-delimited frontmatter block
+        require_title: Whether a `title:` key is required to treat the block as frontmatter
+
+    Returns:
+        tuple: (title, body) — title is '' when absent, body is stripped
+    """
+    match = FRONTMATTER_PATTERN.match(content)
+    if not match:
+        return '', content.strip()
+
+    frontmatter_text = match.group(1)
+    title_match = TITLE_PATTERN.search(frontmatter_text)
+
+    if require_title and not title_match:
+        return '', content.strip()
+
+    title = title_match.group(1) if title_match else ''
+    return title, match.group(2).strip()
+
+
+def _process_pipeline(body, widget_source, widget_warnings):
+    """
+    Run the widget/image/LaTeX/markdown pipeline shared by file-based and
+    inline panel content: process_widgets -> process_images -> protect_latex
+    -> markdown.markdown(extensions=['extra', 'nl2br']) -> restore_latex.
+
+    Raw HTML passes through unsanitised by design (trusted-author model) —
+    see the module docstring.
+
+    Args:
+        body: Markdown text to process
+        widget_source: Identifier passed to process_widgets (file_path or 'inline-content')
+        widget_warnings: List to collect widget warnings
+
+    Returns:
+        str: Rendered HTML
+    """
+    body = process_widgets(body, widget_source, widget_warnings)
+    body = process_images(body)
+    body, latex_replacements = protect_latex(body)
+    html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
+    html_content = restore_latex(html_content, latex_replacements)
+    return html_content
 
 
 def read_markdown_file(file_path, widget_warnings=None):
@@ -77,61 +134,13 @@ def read_markdown_file(file_path, widget_warnings=None):
         with open(full_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Parse frontmatter
-        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
-        match = re.match(frontmatter_pattern, content, re.DOTALL)
+        title, body = _split_frontmatter(content)
+        html_content = _process_pipeline(body, file_path, widget_warnings)
 
-        if match:
-            frontmatter_text = match.group(1)
-            body = match.group(2).strip()
-
-            # Extract title from frontmatter
-            title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
-            title = title_match.group(1) if title_match else ''
-
-            # Process widgets BEFORE markdown conversion
-            body = process_widgets(body, file_path, widget_warnings)
-
-            # Process images (sizes and captions) BEFORE markdown conversion
-            body = process_images(body)
-
-            # Protect LaTeX blocks from markdown processing
-            body, latex_replacements = protect_latex(body)
-
-            # Convert markdown to HTML. Raw HTML passes through unsanitised by
-            # design (trusted-author model) — see the module docstring.
-            html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
-
-            # Restore LaTeX blocks
-            html_content = restore_latex(html_content, latex_replacements)
-
-            return {
-                'title': title,
-                'content': html_content
-            }
-        else:
-            # No frontmatter, just content
-            content_body = content.strip()
-
-            # Process widgets BEFORE markdown conversion
-            content_body = process_widgets(content_body, file_path, widget_warnings)
-
-            # Process images (sizes and captions) BEFORE markdown conversion
-            content_body = process_images(content_body)
-
-            # Protect LaTeX blocks from markdown processing
-            content_body, latex_replacements = protect_latex(content_body)
-
-            # Convert markdown to HTML. Raw HTML passes through unsanitised by
-            # design (trusted-author model) — see the module docstring.
-            html_content = markdown.markdown(content_body, extensions=['extra', 'nl2br'])
-
-            # Restore LaTeX blocks
-            html_content = restore_latex(html_content, latex_replacements)
-            return {
-                'title': '',
-                'content': html_content
-            }
+        return {
+            'title': title,
+            'content': html_content
+        }
 
     except Exception as e:
         print(f"❌ Error reading markdown file {full_path}: {e}")
@@ -161,37 +170,12 @@ def process_inline_content(text, widget_warnings=None):
 
     # Normalize line endings (spreadsheets may use \r\n or \r)
     content = text.replace('\r\n', '\n').replace('\r', '\n').strip()
-    title = ''
 
-    # Check for YAML frontmatter (same pattern as read_markdown_file)
     # Only treat as frontmatter if it contains a title: key to avoid
     # false matches with horizontal rules or other --- usage
-    frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
-    match = re.match(frontmatter_pattern, content, re.DOTALL)
+    title, content = _split_frontmatter(content, require_title=True)
 
-    if match:
-        frontmatter_text = match.group(1)
-        title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
-        if title_match:
-            title = title_match.group(1)
-            content = match.group(2).strip()
-        # else: no title: key found, treat entire content as regular text
-
-    # Process widgets BEFORE markdown conversion
-    content = process_widgets(content, 'inline-content', widget_warnings)
-
-    # Process images (sizes and captions) BEFORE markdown conversion
-    content = process_images(content)
-
-    # Protect LaTeX blocks from markdown processing
-    content, latex_replacements = protect_latex(content)
-
-    # Convert markdown to HTML (nl2br handles single line breaks). Raw HTML
-    # passes through unsanitised by design — see the module docstring.
-    html_content = markdown.markdown(content, extensions=['extra', 'nl2br'])
-
-    # Restore LaTeX blocks
-    html_content = restore_latex(html_content, latex_replacements)
+    html_content = _process_pipeline(content, 'inline-content', widget_warnings)
 
     return {
         'title': title,

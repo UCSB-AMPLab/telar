@@ -375,18 +375,15 @@ def main():
 
     # Convert objects (with bilingual fallback: objects.csv or objetos.csv)
     objects_path = find_csv_with_fallback('telar-content/spreadsheets/objects', 'objetos')
-    if christmas_tree_mode:
-        objects_ok = csv_to_json(
-            objects_path,
-            '_data/objects.json',
-            lambda df: process_objects(df, christmas_tree=True)
-        )
-    else:
-        objects_ok = csv_to_json(
-            objects_path,
-            '_data/objects.json',
-            process_objects
-        )
+    process_objects_func = (
+        (lambda df: process_objects(df, christmas_tree=True)) if christmas_tree_mode
+        else process_objects
+    )
+    objects_ok = csv_to_json(
+        objects_path,
+        '_data/objects.json',
+        process_objects_func
+    )
 
     # The audio manifest and search index both read _data/objects.json. If the
     # objects conversion was skipped or failed, that file is missing or stale, so
@@ -407,32 +404,22 @@ def main():
     # v0.6.0+: Process ALL CSVs except system files
     system_csvs = {'project.csv', 'proyecto.csv', 'objects.csv', 'objetos.csv'}
 
-    if christmas_tree_mode:
-        for csv_file in structures_dir.glob('*.csv'):
-            if csv_file.name not in system_csvs:
-                # --story flag: skip all story CSVs except the requested one
-                if args.story and csv_file.stem != args.story:
-                    continue
-                json_filename = csv_file.stem + '.json'
-                json_file = data_dir / json_filename
-                csv_to_json(
-                    str(csv_file),
-                    str(json_file),
-                    lambda df: process_story(df, christmas_tree=True)
-                )
-    else:
-        for csv_file in structures_dir.glob('*.csv'):
-            if csv_file.name not in system_csvs:
-                # --story flag: skip all story CSVs except the requested one
-                if args.story and csv_file.stem != args.story:
-                    continue
-                json_filename = csv_file.stem + '.json'
-                json_file = data_dir / json_filename
-                csv_to_json(
-                    str(csv_file),
-                    str(json_file),
-                    process_story
-                )
+    process_story_func = (
+        (lambda df: process_story(df, christmas_tree=True)) if christmas_tree_mode
+        else process_story
+    )
+    for csv_file in structures_dir.glob('*.csv'):
+        if csv_file.name not in system_csvs:
+            # --story flag: skip all story CSVs except the requested one
+            if args.story and csv_file.stem != args.story:
+                continue
+            json_filename = csv_file.stem + '.json'
+            json_file = data_dir / json_filename
+            csv_to_json(
+                str(csv_file),
+                str(json_file),
+                process_story_func
+            )
 
     # Merge demo content if available
     print("-" * 50)

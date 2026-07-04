@@ -40,7 +40,7 @@ rename of the gallery classification column from `object_type` to `medium`
 — with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
 `medio_genero`) so existing spreadsheets continue to work without changes.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 from pathlib import Path
@@ -273,11 +273,7 @@ def is_header_row(row_values):
     valid_names = set(COLUMN_NAME_MAPPING.keys()) | set(COLUMN_NAME_MAPPING.values())
 
     # Also include common column names not in the mapping
-    valid_names.update(['x', 'y', 'zoom', 'page', 'order', 'story_id', 'title', 'subtitle',
-                        'byline', 'object_id', 'description', 'source_url', 'creator',
-                        'period', 'medium', 'dimensions', 'location', 'source', 'credit',
-                        'thumbnail', 'year', 'object_type', 'subjects', 'featured',
-                        'protected', 'show_sections'])
+    valid_names.update(['x', 'y', 'zoom'])
 
     # Count how many cells match known column names
     matches = 0

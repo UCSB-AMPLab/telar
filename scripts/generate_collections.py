@@ -66,6 +66,8 @@ KNOWN_OBJECT_FIELDS = {
 # now lives in the telar.media_type leaf module — imported above — so this file
 # and telar.search share one implementation instead of two that could diverge.
 
+FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
+
 
 def _yaml_escape(value):
     """Escape a string value for safe inclusion in double-quoted YAML."""
@@ -321,8 +323,7 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
             content = f.read()
 
         # Parse frontmatter and body
-        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
-        match = re.match(frontmatter_pattern, content, re.DOTALL)
+        match = FRONTMATTER_PATTERN.match(content)
 
         if not match:
             print(f"Warning: No frontmatter found in {source_file}")
@@ -542,8 +543,6 @@ def generate_stories():
 
         demo_label = " [DEMO]" if is_demo else ""
         print(f"✓ Generated {filepath}{demo_label}")
-
-FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
 
 def _parse_page_frontmatter(source_file):

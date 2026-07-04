@@ -44,19 +44,24 @@ import yaml
 from pathlib import Path
 
 
-def run_command(cmd, description, check=True):
-    """Run a shell command with status output"""
+def _run_command(cmd, description, check, use_shell):
+    """Run a command (shell string or argument list) with status output."""
     print(f"\n{'='*60}")
     print(f"  {description}")
     print(f"{'='*60}\n")
 
-    result = subprocess.run(cmd, shell=True)
+    result = subprocess.run(cmd, shell=use_shell)
 
     if check and result.returncode != 0:
         print(f"\n❌ Error: {description} failed with exit code {result.returncode}")
         sys.exit(result.returncode)
 
     return result
+
+
+def run_command(cmd, description, check=True):
+    """Run a shell command with status output"""
+    return _run_command(cmd, description, check, use_shell=True)
 
 
 def run_command_list(cmd, description, check=True):
@@ -65,17 +70,7 @@ def run_command_list(cmd, description, check=True):
     Preferred over run_command when any part of the command is interpolated
     (e.g. a base URL from config), so shell metacharacters cannot be injected.
     """
-    print(f"\n{'='*60}")
-    print(f"  {description}")
-    print(f"{'='*60}\n")
-
-    result = subprocess.run(cmd, shell=False)
-
-    if check and result.returncode != 0:
-        print(f"\n❌ Error: {description} failed with exit code {result.returncode}")
-        sys.exit(result.returncode)
-
-    return result
+    return _run_command(cmd, description, check, use_shell=False)
 
 
 def kill_running_jekyll(port):

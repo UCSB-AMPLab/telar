@@ -59,6 +59,12 @@ from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import has_latex
 
 
+def _warn(msg, warnings):
+    """Print a WARN-prefixed message and record it in the warnings list."""
+    print(f"  [WARN] {msg}")
+    warnings.append(msg)
+
+
 def process_story(df, christmas_tree=False):
     """
     Process story CSV with panel content (file references or inline text).
@@ -111,8 +117,7 @@ def process_story(df, christmas_tree=False):
                     df.at[idx, 'page'] = page_int
                 except (ValueError, TypeError):
                     msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
-                    print(f"  [WARN] {msg}")
-                    warnings.append(msg)
+                    _warn(msg, warnings)
                     df.at[idx, 'page'] = ''
 
     # Load objects data for validation
@@ -175,8 +180,7 @@ def process_story(df, christmas_tree=False):
                 error_msg = get_lang_string('errors.object_warnings.object_not_found', object_id=object_id)
                 df.at[idx, 'viewer_warning'] = error_msg
                 msg = f"Story step {step_num} references missing object: {object_id}"
-                print(f"  [WARN] {msg}")
-                warnings.append(msg)
+                _warn(msg, warnings)
                 continue
 
             # Check if object has IIIF manifest or local image
@@ -205,8 +209,7 @@ def process_story(df, christmas_tree=False):
                     error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=actual_object_id)
                     df.at[idx, 'viewer_warning'] = error_msg
                     msg = f"Story step {step_num} references object without IIIF source: {actual_object_id}"
-                    print(f"  [WARN] {msg}")
-                    warnings.append(msg)
+                    _warn(msg, warnings)
 
     # Process content columns (layer1_content, layer2_content, etc.)
     # Also handles legacy _file suffix for backward compatibility
@@ -293,18 +296,13 @@ def process_story(df, christmas_tree=False):
                 )
 
     # Set default coordinates for empty values
-    coordinate_columns = ['x', 'y', 'zoom']
-    for col in coordinate_columns:
+    coordinate_defaults = {'x': '0.5', 'y': '0.5', 'zoom': '1'}
+    for col, default in coordinate_defaults.items():
         if col in df.columns:
             # Convert to string first to handle NaN values
             df[col] = df[col].astype(str)
             # Set defaults for empty or 'nan' values
-            if col == 'x':
-                df.loc[df[col].isin(['', 'nan']), col] = '0.5'
-            elif col == 'y':
-                df.loc[df[col].isin(['', 'nan']), col] = '0.5'
-            elif col == 'zoom':
-                df.loc[df[col].isin(['', 'nan']), col] = '1'
+            df.loc[df[col].isin(['', 'nan']), col] = default
 
     # Collect all warnings for intro display
     all_warnings = []
