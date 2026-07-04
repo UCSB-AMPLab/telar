@@ -2,16 +2,15 @@
  * Telar Story – Shared Utilities
  *
  * This module contains small helper functions used by more than one other
- * module. Each function does one thing: compute the site's base URL path,
- * fix image URLs inside HTML content, or convert normalised coordinates
- * into the values OpenSeadragon expects for viewport positioning.
+ * module. Each function does one thing: escape text for safe HTML/attribute
+ * inclusion, compute the site's base URL path, or fix image URLs inside
+ * HTML content.
  *
  * These helpers exist because the same logic was needed in multiple places —
  * base path extraction in both manifest URL building and panel content
- * formatting, viewport coordinate calculation in both animated and instant
- * positioning. Extracting them avoids the duplication.
+ * formatting.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 /**
@@ -80,37 +79,4 @@ export function fixImageUrls(htmlContent, basePath) {
   });
 
   return tempDiv.innerHTML;
-}
-
-/**
- * Convert normalised coordinates (0–1) into OpenSeadragon viewport values.
- *
- * Story steps store viewer positions as normalised x, y, zoom values where
- * x and y are fractions of the image dimensions (0 = top/left, 1 =
- * bottom/right) and zoom is a multiplier relative to the home zoom level.
- *
- * This function translates those into the absolute coordinates and zoom
- * level that OpenSeadragon's viewport.panTo() and viewport.zoomTo() expect.
- *
- * @param {Object} viewport - The OpenSeadragon viewport instance.
- * @param {number} x - Normalised horizontal position (0–1).
- * @param {number} y - Normalised vertical position (0–1).
- * @param {number} zoom - Zoom multiplier relative to home zoom.
- * @returns {{ point: { x: number, y: number }, actualZoom: number }}
- */
-export function calculateViewportPosition(viewport, x, y, zoom) {
-  const homeZoom = viewport.getHomeZoom();
-  const imageBounds = viewport.getHomeBounds();
-
-  const point = {
-    x: imageBounds.x + (x * imageBounds.width),
-    y: imageBounds.y + (y * imageBounds.height),
-  };
-
-  // Slight zoom-out so the image doesn't fill the viewer edge-to-edge,
-  // leaving room for the drop shadow to be visible on all sides.
-  const VIEWER_INSET = 0.98;
-  const actualZoom = homeZoom * zoom * VIEWER_INSET;
-
-  return { point, actualZoom };
 }

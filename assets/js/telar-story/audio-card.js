@@ -41,7 +41,7 @@
  * slower but still functional. Audio load errors inject a .telar-alert
  * notification into the card area.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -515,8 +515,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           overlayEl.style.cssText =
             "position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:1;";
           // Dynamic aria-label using object alt_text/title
-          const _aObjectsData = window.objectsData || [];
-          const _aObj = _aObjectsData.find(o => o.object_id === plateEl?.dataset?.object) || {};
+          const _aObj = state.objectsIndex[plateEl?.dataset?.object] || {};
           const _aAlt = _aObj.alt_text || _aObj.title || 'audio';
           const overlayBtn = document.createElement("button");
           overlayBtn.setAttribute("aria-label", `Play ${_aAlt}`);

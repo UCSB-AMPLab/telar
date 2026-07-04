@@ -12,14 +12,13 @@
  *   4. Focal point = (x·imageW, y·imageH).
  *   5. Device-independence: same (x, y, zoom) on two viewports gives the same
  *      diameterImg (footprint no longer scales with width).
- *   6. Skip and fallback cases: title-card-active, null cardOverlayRect.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
-import { computeFocalTarget, _compensateForCardOverlay, _clampFocalPx } from '../../assets/js/telar-story/iiif-card.js';
+import { computeFocalTarget, _clampFocalPx } from '../../assets/js/telar-story/iiif-card.js';
 
 // ── Viewport helpers ───────────────────────────────────────────────────────────
 
@@ -346,54 +345,6 @@ describe('computeFocalTarget — null cardBox fallback', () => {
     const result = computeFocalTarget(0.5, 0.5, 5, IMAGE_W, IMAGE_H, null, 'vertical');
     expect(result).not.toBeNull();
     expect(result.region.h).toBeCloseTo(667 * 0.60, 0); // ≈ 400
-  });
-
-});
-
-// ── Test suite 8: _compensateForCardOverlay skip cases ────────────────────────
-
-describe('_compensateForCardOverlay — skip and fallback cases', () => {
-
-  beforeEach(() => {
-    state.activeTitleCardIndex = null;
-    state.cardOverlayRect = null;
-    state.layoutMode = 'horizontal';
-    setDesktopViewport(1440, 900);
-  });
-
-  it('returns null when a title card is active (title-card-active skip)', () => {
-    state.activeTitleCardIndex = 0; // title card is active
-    const result = _compensateForCardOverlay(0.5, 0.5, 1.5, IMAGE_W, IMAGE_H);
-    expect(result).toBeNull();
-  });
-
-  it('returns null for title card at any activeTitleCardIndex value', () => {
-    state.activeTitleCardIndex = 3;
-    const result = _compensateForCardOverlay(0.5, 0.5, 1.5, IMAGE_W, IMAGE_H);
-    expect(result).toBeNull();
-  });
-
-  it('returns non-null when no title card is active and cardOverlayRect is null (full-object fallback)', () => {
-    // state.activeTitleCardIndex = null, state.cardOverlayRect = null
-    // → _defaultCardBox path → should produce a valid result
-    state.activeTitleCardIndex = null;
-    state.cardOverlayRect = null;
-    state.layoutMode = 'horizontal';
-    const result = _compensateForCardOverlay(0.5, 0.5, 5, IMAGE_W, IMAGE_H);
-    // With a null cardOverlayRect, the _defaultCardBox fallback yields a
-    // non-null region. This suite tests the state-based skip guard only.
-    // If _compensateForCardOverlay is still exported, it must not return null here.
-    expect(result).not.toBeNull();
-  });
-
-  it('returns non-null when a measured cardOverlayRect is set (horizontal placement)', () => {
-    state.activeTitleCardIndex = null;
-    // Simulate a DOMRect-like card on the left side
-    state.cardOverlayRect = { x: 0, y: 0, width: 402, height: 900 };
-    state.layoutMode = 'horizontal';
-    setDesktopViewport(1440, 900);
-    const result = _compensateForCardOverlay(0.5, 0.5, 5, IMAGE_W, IMAGE_H);
-    expect(result).not.toBeNull();
   });
 
 });

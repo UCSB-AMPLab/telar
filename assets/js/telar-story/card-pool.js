@@ -47,7 +47,7 @@
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -65,13 +65,7 @@ import {
   _deriveCardPlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
-import {
-  createTextCard,
-  activateTextCard,
-  deactivateTextCard,
-  isFullObjectMode,
-  createFullObjectCard,
-} from './text-card.js';
+import { isFullObjectMode } from './text-card.js';
 import {
   createVideoPlayer,
   destroyVideoPlayer,

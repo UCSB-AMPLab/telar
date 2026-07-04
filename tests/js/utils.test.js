@@ -1,17 +1,15 @@
 /**
  * Tests for Telar Story – Shared Utilities
  *
- * Tests the three utility functions: getBasePath, fixImageUrls, and
- * calculateViewportPosition. These are the most purely testable functions
- * in the story module — getBasePath and fixImageUrls need jsdom for
- * window.location and document.createElement, while calculateViewportPosition
- * is pure maths with a mock viewport object.
+ * Tests the utility functions: escapeHtml, getBasePath, and fixImageUrls.
+ * getBasePath and fixImageUrls need jsdom for window.location and
+ * document.createElement.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getBasePath, fixImageUrls, calculateViewportPosition, escapeHtml } from '../../assets/js/telar-story/utils.js';
+import { getBasePath, fixImageUrls, escapeHtml } from '../../assets/js/telar-story/utils.js';
 
 // ── escapeHtml ───────────────────────────────────────────────────────────────
 
@@ -117,51 +115,5 @@ describe('fixImageUrls', () => {
     const div = document.createElement('div');
     div.innerHTML = result;
     expect(div.querySelector('p').textContent).toBe('No images here');
-  });
-});
-
-// ── calculateViewportPosition ────────────────────────────────────────────────
-
-function createMockViewport(homeZoom, bounds) {
-  return {
-    getHomeZoom: () => homeZoom,
-    getHomeBounds: () => bounds,
-  };
-}
-
-describe('calculateViewportPosition', () => {
-  // VIEWER_INSET = 0.98 — slight zoom-out so drop shadow is visible on all sides
-  const VIEWER_INSET = 0.98;
-
-  it('calculates position at origin with 1x zoom', () => {
-    const viewport = createMockViewport(1.0, { x: 0, y: 0, width: 1, height: 1 });
-    const result = calculateViewportPosition(viewport, 0, 0, 1);
-    expect(result.point.x).toBe(0);
-    expect(result.point.y).toBe(0);
-    expect(result.actualZoom).toBe(1.0 * VIEWER_INSET);
-  });
-
-  it('calculates position at centre', () => {
-    const viewport = createMockViewport(1.0, { x: 0, y: 0, width: 1, height: 0.75 });
-    const result = calculateViewportPosition(viewport, 0.5, 0.5, 1);
-    expect(result.point.x).toBe(0.5);
-    expect(result.point.y).toBe(0.375);
-    expect(result.actualZoom).toBe(1.0 * VIEWER_INSET);
-  });
-
-  it('applies zoom multiplier', () => {
-    const viewport = createMockViewport(2.0, { x: 0, y: 0, width: 1, height: 1 });
-    const result = calculateViewportPosition(viewport, 0.5, 0.5, 3);
-    expect(result.point.x).toBe(0.5);
-    expect(result.point.y).toBe(0.5);
-    expect(result.actualZoom).toBe(6.0 * VIEWER_INSET);
-  });
-
-  it('handles non-zero bounds origin', () => {
-    const viewport = createMockViewport(1.5, { x: 0.1, y: 0.2, width: 0.8, height: 0.6 });
-    const result = calculateViewportPosition(viewport, 0.5, 0.5, 2);
-    expect(result.point.x).toBeCloseTo(0.5);
-    expect(result.point.y).toBeCloseTo(0.5);
-    expect(result.actualZoom).toBe(3.0 * VIEWER_INSET);
   });
 });

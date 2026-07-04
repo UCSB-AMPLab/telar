@@ -37,7 +37,7 @@
  * Google Drive embeds have no player API, so they receive no clip control
  * or autoplay detection.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -498,8 +498,7 @@ function _showVideoPlayOverlay(plateEl) {
   overlayEl.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;';
 
   // Dynamic aria-label using object alt_text/title
-  const _vObjectsData = window.objectsData || [];
-  const _vObj = _vObjectsData.find(o => o.object_id === plateEl.dataset.object) || {};
+  const _vObj = state.objectsIndex[plateEl.dataset.object] || {};
   const _vAlt = _vObj.alt_text || _vObj.title || 'video';
   const overlayBtn = document.createElement('button');
   overlayBtn.setAttribute('aria-label', `Play ${_vAlt}`);

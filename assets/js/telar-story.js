@@ -1357,8 +1357,7 @@
     const overlayEl = document.createElement("div");
     overlayEl.className = "video-play-overlay";
     overlayEl.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;";
-    const _vObjectsData = window.objectsData || [];
-    const _vObj = _vObjectsData.find((o) => o.object_id === plateEl.dataset.object) || {};
+    const _vObj = state.objectsIndex[plateEl.dataset.object] || {};
     const _vAlt = _vObj.alt_text || _vObj.title || "video";
     const overlayBtn = document.createElement("button");
     overlayBtn.setAttribute("aria-label", `Play ${_vAlt}`);
@@ -1973,8 +1972,7 @@
           const overlayEl = document.createElement("div");
           overlayEl.className = "audio-play-overlay";
           overlayEl.style.cssText = "position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:1;";
-          const _aObjectsData = window.objectsData || [];
-          const _aObj = _aObjectsData.find((o) => o.object_id === plateEl?.dataset?.object) || {};
+          const _aObj = state.objectsIndex[plateEl?.dataset?.object] || {};
           const _aAlt = _aObj.alt_text || _aObj.title || "audio";
           const overlayBtn = document.createElement("button");
           overlayBtn.setAttribute("aria-label", `Play ${_aAlt}`);
@@ -4581,11 +4579,6 @@
         }, step.object),
         demo: step.layer2_demo || false
       };
-    } else if (panelType === "glossary") {
-      return {
-        title: "Glossary Term",
-        html: "<p>Glossary content...</p>"
-      };
     }
     return null;
   }
@@ -4655,7 +4648,6 @@
   }
 
   // assets/js/telar-story/deep-link.js
-  var _isScrollDrivenHashUpdate = false;
   var _deepLinkTimers = [];
   function _cancelDeepLinkTimers() {
     _deepLinkTimers.forEach(clearTimeout);
@@ -4672,7 +4664,7 @@
     window.addEventListener("keydown", cancel);
     window.addEventListener("touchstart", cancel, { passive: true });
   }
-  var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g|ps)(\d+))?)?$/;
+  var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g)(\d+))?)?$/;
   function parseFragment(hash) {
     if (!hash || hash === "#") return null;
     const m = FRAGMENT_RE.exec(hash);
@@ -4682,17 +4674,17 @@
       // 1-based step number
       layer: m[2] ? parseInt(m[2], 10) : null,
       subType: m[3] || null,
-      // 'g' or 'ps'
+      // 'g' or null
       subN: m[4] ? parseInt(m[4], 10) : null
     };
   }
   function writeHash() {
-    _writeHashFragment(null, null);
+    _writeHashFragment(null);
   }
   function writeHashWithGlossary(n) {
-    _writeHashFragment("g", n);
+    _writeHashFragment(n);
   }
-  function _writeHashFragment(subType, subN) {
+  function _writeHashFragment(glossaryN) {
     const idx = state.currentIndex;
     let hash = "";
     if (idx >= 0) {
@@ -4702,23 +4694,19 @@
           const layerMatch = state.panelStack[i].type.match(/^layer(\d+)$/);
           if (layerMatch) {
             hash += `l${layerMatch[1]}`;
-            if (subType !== null && subN !== null) {
-              hash += `${subType}${subN}`;
+            if (glossaryN !== null) {
+              hash += `g${glossaryN}`;
             }
             break;
           }
         }
       }
     }
-    _isScrollDrivenHashUpdate = true;
     if (hash) {
       history.replaceState(null, "", hash);
     } else {
       history.replaceState(null, "", window.location.pathname + window.location.search);
     }
-    Promise.resolve().then(() => {
-      _isScrollDrivenHashUpdate = false;
-    });
   }
   function navigateToIntro() {
     if (state.viewerPlates) {

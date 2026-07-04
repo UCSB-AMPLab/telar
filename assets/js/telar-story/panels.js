@@ -248,7 +248,11 @@ export function closeAllPanels() {
 /**
  * Get panel content for a step from the story data.
  *
- * @param {string} panelType - 'layer1', 'layer2', or 'glossary'.
+ * Only 'layer1' and 'layer2' are handled here — the glossary panel is
+ * driven separately by telar.js writing directly into
+ * #panel-glossary-content, not through openPanel()/getPanelContent().
+ *
+ * @param {string} panelType - 'layer1' or 'layer2'.
  * @param {string} contentId - The step number.
  * @returns {{ title: string, html: string, demo?: boolean }|null}
  */
@@ -283,11 +287,6 @@ function getPanelContent(panelType, contentId) {
         media: step.layer2_media,
       }, step.object),
       demo: step.layer2_demo || false,
-    };
-  } else if (panelType === 'glossary') {
-    return {
-      title: 'Glossary Term',
-      html: '<p>Glossary content...</p>',
     };
   }
 
