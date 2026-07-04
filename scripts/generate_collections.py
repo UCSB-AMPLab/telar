@@ -62,10 +62,6 @@ KNOWN_OBJECT_FIELDS = {
 }
 
 
-# Media-type detection (detect_media_type, VIDEO_URL_PATTERNS, AUDIO_EXTENSIONS)
-# now lives in the telar.media_type leaf module — imported above — so this file
-# and telar.search share one implementation instead of two that could diverge.
-
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
 

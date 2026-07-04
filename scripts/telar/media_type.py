@@ -1,12 +1,12 @@
 """
 Media-type detection (leaf module)
 
-Single source of truth for the gallery "Type" facet (Video / Audio / Image).
-Kept dependency-free (standard library only) so both `generate_collections.py`
-and `telar.search` can import it without a circular import — previously each
-carried its own hand-copied implementation that could silently diverge.
+Single source of truth for media-type detection and the video/audio media
+lists (the gallery "Type" facet: Video / Audio / Image). Kept dependency-free
+(standard library only) so any pipeline module can import it without creating
+a circular import.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 from pathlib import Path
