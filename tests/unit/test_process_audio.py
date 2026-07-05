@@ -3,11 +3,9 @@ Tests for process_audio.py — Build-time audio processing script.
 
 Covers pure functions:
   - convert_audiowaveform_to_peaks: format conversion + normalisation
-  - is_audio_file: extension detection
   - compute_cache_key: SHA256 hashing for skip-if-unchanged caching
   - check_audio_dependencies: system tool detection
   - find_audio_objects: objects.json filtering for audio files
-  - build_clip_filename: clip output filename construction
 
 Version: v1.6.0
 """
@@ -26,11 +24,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'scripts'))
 from process_audio import (
     convert_audiowaveform_to_peaks,
-    is_audio_file,
     compute_cache_key,
     check_audio_dependencies,
     find_audio_objects,
-    build_clip_filename,
 )
 
 
@@ -112,33 +108,11 @@ def test_convert_audiowaveform_to_peaks_empty():
 
 
 # ---------------------------------------------------------------------------
-# Test 4: is_audio_file — extension detection
-# ---------------------------------------------------------------------------
-
-def test_is_audio_file():
-    """Returns True for audio extensions (case-insensitive), False for others."""
-    # True cases
-    assert is_audio_file('interview.mp3') is True
-    assert is_audio_file('music.ogg') is True
-    assert is_audio_file('recording.m4a') is True
-    assert is_audio_file('INTERVIEW.MP3') is True
-    assert is_audio_file('track.OGG') is True
-    assert is_audio_file('clip.M4A') is True
-
-    # False cases
-    assert is_audio_file('photo.jpg') is False
-    assert is_audio_file('document.pdf') is False
-    assert is_audio_file('notes.txt') is False
-    assert is_audio_file('audio') is False  # no extension
-    assert is_audio_file('') is False
-
-
-# ---------------------------------------------------------------------------
-# Test 5: compute_cache_key — different inputs produce different keys
+# Test 4: compute_cache_key — different inputs produce different keys
 # ---------------------------------------------------------------------------
 
 def test_compute_cache_key_different_inputs():
-    """Different file content or different clip params produce different hashes."""
+    """Different file content produces different hashes."""
     with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f1:
         f1.write(b'audio content A')
         path1 = f1.name
@@ -151,29 +125,19 @@ def test_compute_cache_key_different_inputs():
     key2 = compute_cache_key(path2)
     assert key1 != key2
 
-    # Same file, different clip params
-    key3 = compute_cache_key(path1, clip_start=0, clip_end=30)
-    key4 = compute_cache_key(path1, clip_start=30, clip_end=60)
-    assert key3 != key4
-
-    # Clip params vs no clip params
-    key5 = compute_cache_key(path1)
-    key6 = compute_cache_key(path1, clip_start=0, clip_end=30)
-    assert key5 != key6
-
 
 # ---------------------------------------------------------------------------
-# Test 6: compute_cache_key — same inputs produce same key
+# Test 5: compute_cache_key — same inputs produce same key
 # ---------------------------------------------------------------------------
 
 def test_compute_cache_key_same_inputs():
-    """Same file content and clip params produce the same hash."""
+    """Same file content produces the same hash."""
     with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
         f.write(b'stable audio content')
         path = f.name
 
-    key1 = compute_cache_key(path, clip_start=10, clip_end=40)
-    key2 = compute_cache_key(path, clip_start=10, clip_end=40)
+    key1 = compute_cache_key(path)
+    key2 = compute_cache_key(path)
     assert key1 == key2
 
     # Hex digest format (SHA256 = 64 hex chars)
@@ -182,7 +146,7 @@ def test_compute_cache_key_same_inputs():
 
 
 # ---------------------------------------------------------------------------
-# Test 7: check_audio_dependencies — audiowaveform missing
+# Test 6: check_audio_dependencies — audiowaveform missing
 # ---------------------------------------------------------------------------
 
 def test_check_audio_dependencies_missing_audiowaveform():
@@ -202,7 +166,7 @@ def test_check_audio_dependencies_missing_audiowaveform_message(capsys):
 
 
 # ---------------------------------------------------------------------------
-# Test 8: check_audio_dependencies — ffmpeg missing
+# Test 7: check_audio_dependencies — ffmpeg missing
 # ---------------------------------------------------------------------------
 
 def test_check_audio_dependencies_missing_ffmpeg():
@@ -222,7 +186,7 @@ def test_check_audio_dependencies_missing_ffmpeg_message(capsys):
 
 
 # ---------------------------------------------------------------------------
-# Test 9: find_audio_objects — filters to audio files only
+# Test 8: find_audio_objects — filters to audio files only
 # ---------------------------------------------------------------------------
 
 def test_find_audio_objects():
@@ -290,19 +254,3 @@ def test_find_audio_objects_uppercase_extension():
     # Extension matches the on-disk filename so built URLs resolve on
     # case-sensitive hosting
     assert results[0]['extension'].lower() == 'mp3'
-
-
-# ---------------------------------------------------------------------------
-# Test 10: build_clip_filename — output filename format
-# ---------------------------------------------------------------------------
-
-def test_build_clip_filename():
-    """Returns '{object_id}-{clip_start}-{clip_end}.{extension}' format."""
-    result = build_clip_filename('interview-hernandez', 330, 435, 'mp3')
-    assert result == 'interview-hernandez-330-435.mp3'
-
-    result2 = build_clip_filename('song-cumbia', 0, 60, 'ogg')
-    assert result2 == 'song-cumbia-0-60.ogg'
-
-    result3 = build_clip_filename('track', 10, 20, 'm4a')
-    assert result3 == 'track-10-20.m4a'

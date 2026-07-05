@@ -20,7 +20,7 @@ without duplicating it.
 None of these functions are meant to be run directly. They are
 imported by the two entry-point scripts.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import json
@@ -147,10 +147,18 @@ def preprocess_image(image_path):
             converted_img = rgb_img
             needs_conversion = True
 
-        # Handle palette mode (GIF, some PNGs)
+        # Handle palette mode (GIF, some PNGs). Palette images can carry a
+        # transparency index, so convert to RGBA first (this resolves the
+        # index into a real alpha channel) and composite onto white — the
+        # same approach copy_base_image() uses for the viewer's base image.
+        # A direct convert('RGB') would ignore the transparency index and
+        # render those pixels as whatever colour sits at that palette slot.
         elif img.mode == 'P':
             print(f"  ⚠️  Converting palette mode to RGB")
-            converted_img = img.convert('RGB')
+            rgba_img = img.convert('RGBA')
+            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+            rgb_img.paste(rgba_img, mask=rgba_img.split()[-1])
+            converted_img = rgb_img
             needs_conversion = True
 
         # Handle other uncommon modes
