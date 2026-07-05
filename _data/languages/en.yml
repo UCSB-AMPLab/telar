@@ -92,6 +92,21 @@ object:
     copy_sheets: "start, end (Sheets)"
     copy_csv: "start, end (CSV)"
 
+  # Audio player controls (object page; used in markup and JS state toggles)
+  audio_controls:
+    play: "Play audio"
+    pause: "Pause audio"
+    restart: "Restart from beginning"
+    mute: "Mute audio"
+    unmute: "Unmute audio"
+    waveform_label: "Audio waveform for __TITLE__"
+
+  # Embed URL copy button tooltip
+  copy_embed_url_tooltip: "Copy embed URL"
+
+  # Iframe title for video embeds
+  video_frame_title: "Video: __TITLE__"
+
   # Object thumbnails
   no_image: "No image"
 
@@ -105,6 +120,8 @@ story:
   demo_label: "Demo content"
   step_number: "Step {{ number }}"
   sections_heading: "Sections"
+  site_nav_label: "Site navigation"
+  dismiss_credits: "Dismiss credits"
   scroll_hint: "Press ↓ or scroll to begin"
   scroll_hint_mobile: "Use the arrow buttons to navigate"
   config_issues_heading: "The following steps have content or configuration issues:"
@@ -167,12 +184,26 @@ objects:
   sort_by: "Sort by"
   sort_title: "Title"
   sort_year: "Year"
+  # Media-type labels on thumbnail placeholders (screen readers)
+  media_video: "Video"
+  media_audio: "Audio"
 
 # Panels system
 panels:
   default_title: "Panel Title"
   glossary_term_prefix: "Key term"
   glossary_term_title: "Glossary Term"
+
+# Glossary term pages
+glossary:
+  related_terms: "Related Terms"
+  appears_in: "Appears in"
+
+# Widgets (carousel controls; resolved by widgets.py at build)
+widgets:
+  slide_label: "Slide {{ number }}"
+  prev: "Previous"
+  next: "Next"
 
 # Empty state messages
 empty_states:
@@ -189,6 +220,10 @@ errors:
   check_objects_csv: "Please check <code>telar-content/spreadsheets/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL."
   failed_to_load: "Failed to load"
   no_image: "No image"
+
+  # Panel image errors (shown in-panel by JS)
+  image_not_found_label: "Image file not found:"
+  image_not_found_hint: "Please add this file or update the path in the markdown."
   objects_config_issues: "The following objects have configuration issues:"
   objects_will_fail: "These objects will fail to load in the viewer."
 
@@ -245,6 +280,11 @@ errors:
     system_error_heading: "⚠️ Theme system error detected"
     system_error_description: "We encountered a problem loading themes. The <code>_data/themes</code> folder may be missing or damaged. The site is currently using basic default styling. Please check that your <code>_data/themes</code> folder contains valid theme files, or restore it from your repository."
 
+  # Widget errors (rendered into page HTML at build)
+  widgets:
+    rendering_error: "Widget rendering error ({{ widget_type }}): {{ error }}"
+    unknown_type: "Unknown widget type: {{ widget_type }}"
+
   # Object and IIIF warning messages (from build validation, displayed in browser)
   object_warnings:
     # IIIF validation errors (full messages)
@@ -283,6 +323,10 @@ errors:
     short_filename_mismatch: "Image filename mismatch"
     short_ambiguous_match: "Ambiguous image match"
     short_missing_source: "Missing image source"
+
+    # Audio source errors
+    audio_missing: "No audio file found for object '{{ object_id }}'. Add an audio file (.mp3, .ogg, or .m4a) to telar-content/objects/{{ object_id }}.mp3"
+    short_audio_missing: "Audio file missing"
 
     # Story/object reference errors
     object_not_found: "the object <code>{{ object_id }}</code> was not found in <code>objects.csv</code>"
@@ -378,11 +422,13 @@ unlock:
   description: "The author has restricted access to this story. Enter the key to continue."
   placeholder: "Enter key"
   button: "Unlock"
+  toggle_key_visibility: "Toggle key visibility"
   back_link: "← Back to stories"
   card_description: "This story is protected. You need a key to unlock it."
 
 # Upgrade messages
 upgrade:
+  summary_heading: "✓ Upgrade Successful!"
   summary_message: "Your Telar site has been upgraded. Review the summary below."
 
 # Site footer credit. The __TOKEN__ placeholders are replaced in footer.html with
