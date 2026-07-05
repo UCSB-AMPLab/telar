@@ -430,6 +430,9 @@ unlock:
 upgrade:
   summary_heading: "✓ ¡Actualización exitosa!"
   summary_message: "Tu sitio Telar se actualizó. Revisa el resumen a continuación."
+  alert_heading: "✅ ¡Tu sitio se actualizó correctamente!"
+  alert_body: "Tu sitio ya está en Telar __VERSION__ y listo para usar. Los detalles están en el __SUMMARY_LINK__."
+  alert_remove: "Para quitar este aviso, edita __INDEX__ en tu repositorio y elimina la línea __INCLUDE_LINE__."
 
 # Crédito del pie de página. Los marcadores __TOKEN__ se reemplazan en footer.html con
 # los nombres enlazados (sin llaves, para que funcionen dentro de un argumento default: de Liquid).

@@ -430,6 +430,9 @@ unlock:
 upgrade:
   summary_heading: "✓ Upgrade Successful!"
   summary_message: "Your Telar site has been upgraded. Review the summary below."
+  alert_heading: "✅ Your site upgrade was successful!"
+  alert_body: "Successfully upgraded to Telar __VERSION__! Your site has been upgraded and is ready to use. For details, see the __SUMMARY_LINK__."
+  alert_remove: "To remove this alert, edit __INDEX__ in your repository and delete the line __INCLUDE_LINE__."
 
 # Site footer credit. The __TOKEN__ placeholders are replaced in footer.html with
 # linked names (brace-free so they are safe inside a Liquid default: argument).
