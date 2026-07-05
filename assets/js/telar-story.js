@@ -2497,8 +2497,8 @@
   `;
   }
   function _buildTitleCardContent(step) {
-    const heading = step.question || "";
-    const body = step.answer || "";
+    const heading = escapeHtml(step.question || "");
+    const body = escapeHtml(step.answer || "");
     return `
     <div class="title-card-inner">
       <h2 class="title-card-heading">${heading}</h2>

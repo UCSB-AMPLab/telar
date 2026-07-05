@@ -1,10 +1,11 @@
 /**
- * Tests for Telar Story – Card Pool (pure functions only)
+ * Tests for Telar Story – Card Pool
  *
- * Tests z-index banding, messiness computation, peek positioning, and
- * scene map helpers (buildSceneMaps, getSceneIndex).
- * DOM-interacting functions (initCardPool, activateCard, preloadAhead)
- * are not tested here — they require a real browser environment.
+ * Tests z-index banding, messiness computation, peek positioning, scene map
+ * helpers (buildSceneMaps, getSceneIndex), and the jsdom-safe slice of the
+ * DOM behavior: activateCard guards and initCardPool's build phase (card
+ * content escaping). Paths that need OpenSeadragon or a real browser
+ * (preloadAhead, IIIF plate init) are covered by the e2e suites instead.
  *
  * @version v1.6.0
  */
@@ -19,6 +20,7 @@ import {
   setCardProgress,
   activateCard,
   computeTileUrls,
+  initCardPool,
 } from '../../assets/js/telar-story/card-pool.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import { computeFocalTarget } from '../../assets/js/telar-story/iiif-card.js';
@@ -583,5 +585,58 @@ describe('_computeTileUrls tile-prefetch compensation', () => {
       }
     }
     expect(centreIsCovered).toBe(true);
+  });
+});
+
+// ── Built card content escapes author text ───────────────────────────────────
+// question/answer are documented as plain text; both JS builders must escape
+// them identically. Runs the real initCardPool build phase in jsdom: title
+// cards exercise _buildTitleCardContent (the live path), and omitting the
+// .step-data markup forces the clone miss that exercises buildTextCardContent.
+
+describe('initCardPool — built card content escapes author text', () => {
+  const HTMLY = '<b onmouseover="x()">Coleccion</b> & "quotes"';
+
+  beforeEach(() => {
+    document.body.innerHTML = '<div class="card-stack"></div>';
+    state.objectsIndex = {};
+    state.viewerPlates = {};
+    state.textCards = {};
+    state.cardPool = [];
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    state.viewerPlates = {};
+    state.textCards = {};
+    state.cardPool = [];
+    state.titleCards = {};
+  });
+
+  it('escapes question and answer in title cards (live path)', () => {
+    initCardPool({ steps: [{ step: '1', object: '', question: HTMLY, answer: HTMLY }] }, {});
+    const heading = document.querySelector('.title-card .title-card-heading');
+    const body = document.querySelector('.title-card .title-card-body');
+    expect(heading).not.toBeNull();
+    expect(heading.textContent).toBe(HTMLY);
+    expect(heading.querySelector('b')).toBeNull();
+    expect(body.textContent).toBe(HTMLY);
+    expect(body.querySelector('b')).toBeNull();
+  });
+
+  it('escapes question and answer in the fallback text-card builder (clone miss)', () => {
+    // Leading title step keeps scene 0 plate-free, so initCardPool's IIIF
+    // preload tail (which needs OpenSeadragon) never runs in jsdom.
+    initCardPool({ steps: [
+      { step: '1', object: '', question: 'intro', answer: '' },
+      { step: '2', object: 'obj-a', question: HTMLY, answer: HTMLY },
+    ] }, {});
+    const q = document.querySelector('.text-card .step-question');
+    const a = document.querySelector('.text-card .step-answer');
+    expect(q).not.toBeNull();
+    expect(q.textContent).toBe(HTMLY);
+    expect(q.querySelector('b')).toBeNull();
+    expect(a.textContent).toBe(HTMLY);
+    expect(a.querySelector('b')).toBeNull();
   });
 });

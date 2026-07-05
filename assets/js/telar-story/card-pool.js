@@ -589,7 +589,17 @@ export function initCardPool(storyData, config) {
 }
 
 /**
- * Build the inner HTML for a text card from step data.
+ * Build the inner HTML for a text card from step data — the fallback used
+ * only when a step has no server-rendered .story-step/.step-content node to
+ * clone (a data/DOM desync; every normal build emits one per step).
+ *
+ * Must stay selector-compatible with the server-rendered step markup that
+ * downstream code keys on: .step-question, .step-answer, and
+ * .panel-trigger[data-panel][data-step] (panels.js delegates on [data-panel]).
+ * Intentional divergences from the server markup: content renders as escaped
+ * flat text (no markdown), headings use div not h2, no viewer-warning block,
+ * and layer triggers render only when layer*_button is non-empty (the server
+ * falls back to a default label whenever layer content exists).
  *
  * @param {Object} step - Step data object
  * @returns {string} HTML string
@@ -619,12 +629,18 @@ function buildTextCardContent(step) {
 /**
  * Build the inner HTML for a title card from step data.
  *
+ * question/answer carry author CSV text whose documented contract is plain
+ * text only, so both are escaped, matching buildTextCardContent. Escaping
+ * here is display consistency, not an injection boundary — the same strings
+ * flow unescaped through the Liquid intro TOC and the server-rendered step
+ * pool.
+ *
  * @param {Object} step - Step data object
  * @returns {string} HTML string
  */
 function _buildTitleCardContent(step) {
-  const heading = step.question || '';
-  const body    = step.answer   || '';
+  const heading = escapeHtml(step.question || '');
+  const body    = escapeHtml(step.answer   || '');
   return `
     <div class="title-card-inner">
       <h2 class="title-card-heading">${heading}</h2>
