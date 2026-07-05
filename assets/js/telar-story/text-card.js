@@ -22,9 +22,10 @@
  * image right with text background).
  *
  * Rules:
+ *   - x and y both undefined → full-object (no coordinates = full object,
+ *     regardless of zoom)
  *   - zoom undefined or empty → full-object
  *   - zoom as number <= 1.0 → full-object
- *   - x and y both undefined → full-object (no coordinates = full object)
  *   - zoom > 1.0 with valid x/y → detail mode
  *
  * @param {Object} stepData - Step data object from window.storyData.steps
@@ -36,8 +37,8 @@
 export function isFullObjectMode(stepData) {
   const zoom = stepData.zoom;
 
-  // No coordinates at all → full object
-  if (stepData.x === undefined && stepData.y === undefined && zoom === undefined) {
+  // No coordinates at all → full object, regardless of zoom
+  if (stepData.x === undefined && stepData.y === undefined) {
     return true;
   }
 

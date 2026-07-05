@@ -133,6 +133,9 @@ story:
 embed_banner:
   text: "Esta historia forma parte de {site_name}, un sitio web creado con <a href='https://github.com/UCSB-AMPLab/telar' target='_blank'>Telar</a> para contar historias."
   link: "Ver el sitio completo"
+  # Respaldo cuando la página no trae og:site_name; se inserta en {site_name} arriba
+  # ("este sitio" y no "el sitio completo", que tras "forma parte de" queda mal)
+  site_fallback: "este sitio"
 
 # Encabezados de página y texto introductorio
 pages:

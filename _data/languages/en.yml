@@ -133,6 +133,8 @@ story:
 embed_banner:
   text: "This story is part of {site_name}, a digital storytelling site built with <a href='https://github.com/UCSB-AMPLab/telar' target='_blank'>Telar</a>."
   link: "View the full site"
+  # Fallback when the page carries no og:site_name; composes into {site_name} above
+  site_fallback: "the full site"
 
 # Page headings and intro text
 pages:
