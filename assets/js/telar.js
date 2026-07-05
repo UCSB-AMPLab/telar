@@ -13,8 +13,8 @@
  * `.glossary-content`, and injects that into the shared glossary panel. The fetch is
  * deliberate: glossary pages are real, independently linkable URLs, so the panel is
  * just a convenient in-place view of content that also stands on its own. Because the
- * injected content may itself contain glossary links — and may contain mathematical
- * notation — we re-initialise glossary links and re-run LaTeX rendering on the freshly
+ * injected content may itself contain glossary links (already covered by delegation)
+ * and may contain mathematical notation, we re-run LaTeX rendering on the freshly
  * loaded fragment. Re-opening an already-open panel waits for it to finish hiding
  * before loading the new term, so the swap reads as a clean transition.
  *
@@ -25,8 +25,7 @@
  * Glossary clicks are wired with a single delegated document listener
  * (`initializeGlossaryDelegation`), so any glossary link works no matter when it
  * enters the DOM — including story cards the viewer builds and clones at runtime,
- * whose cloned nodes would lose a per-element handler. `initializeGlossaryLinks`
- * is retained as a no-op for callers that still invoke it.
+ * whose cloned nodes would lose a per-element handler.
  *
  * @version v1.6.0
  */
@@ -75,11 +74,6 @@ function initializeClickOutsideClose() {
   });
 }
 
-// Export for use in chapter pages
-window.Telar = {
-  initializeGlossaryLinks: initializeGlossaryLinks // Retained no-op; clicks are delegated
-};
-
 /**
  * Register a single delegated click listener for glossary links.
  *
@@ -97,21 +91,6 @@ function initializeGlossaryDelegation() {
     if (!link) return;
     handleGlossaryLinkClick(e, link);
   });
-}
-
-/**
- * Retained for API compatibility.
- *
- * Click handling is now delegated at the document level by
- * initializeGlossaryDelegation(), so per-element binding is no longer needed.
- * This is a deliberate no-op, kept because panels.js and the panel content loader
- * (and possibly user/site code) still call window.Telar.initializeGlossaryLinks()
- * after injecting dynamic content — delegation already covers that content.
- *
- * @param {Element} container - Ignored.
- */
-function initializeGlossaryLinks(container) {
-  // No-op: glossary clicks are handled via delegation. See initializeGlossaryDelegation().
 }
 
 /**
@@ -221,8 +200,6 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
 
       if (glossaryContent) {
         contentElement.innerHTML = glossaryContent.innerHTML;
-        // Initialize glossary links within the loaded content (enables glossary-to-glossary linking)
-        initializeGlossaryLinks(contentElement);
 
         // Re-render LaTeX in fetched glossary content
         if (window.telarRenderLatex) {

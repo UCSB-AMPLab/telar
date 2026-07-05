@@ -4478,9 +4478,6 @@
       }
       const contentElement = document.getElementById(`${panelId}-content`);
       contentElement.innerHTML = content.html;
-      if (window.Telar && window.Telar.initializeGlossaryLinks) {
-        window.Telar.initializeGlossaryLinks(contentElement);
-      }
       const glossaryLinks = contentElement.querySelectorAll(".glossary-link");
       glossaryLinks.forEach((el, i) => {
         el.dataset.deepLinkN = i + 1;
@@ -4498,7 +4495,7 @@
       } else {
         state.panelStack.push({ type: panelType, id: contentId });
       }
-      const bsOffcanvas = new bootstrap.Offcanvas(panel);
+      const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel) || new bootstrap.Offcanvas(panel);
       bsOffcanvas.show();
       state.isPanelOpen = true;
       activateScrollLock();

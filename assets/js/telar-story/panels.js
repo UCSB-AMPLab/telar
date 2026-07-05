@@ -135,11 +135,6 @@ export function openPanel(panelType, contentId) {
     const contentElement = document.getElementById(`${panelId}-content`);
     contentElement.innerHTML = content.html;
 
-    // Re-initialise glossary links in dynamically loaded content
-    if (window.Telar && window.Telar.initializeGlossaryLinks) {
-      window.Telar.initializeGlossaryLinks(contentElement);
-    }
-
     // Assign deep-link running numbers to glossary links
     const glossaryLinks = contentElement.querySelectorAll('.glossary-link');
     glossaryLinks.forEach((el, i) => {
@@ -165,7 +160,7 @@ export function openPanel(panelType, contentId) {
       state.panelStack.push({ type: panelType, id: contentId });
     }
 
-    const bsOffcanvas = new bootstrap.Offcanvas(panel);
+    const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel) || new bootstrap.Offcanvas(panel);
     bsOffcanvas.show();
 
     state.isPanelOpen = true;
