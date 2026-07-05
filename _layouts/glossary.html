@@ -36,7 +36,7 @@ layout: default
       <!-- Related Terms -->
       {% if page.related_terms %}
       <div class="related-terms mt-5 pt-4 border-top">
-        <h3>Related Terms</h3>
+        <h3>{{ lang.glossary.related_terms | default: "Related Terms" }}</h3>
         <ul class="list-unstyled">
           {% for related_term_id in page.related_terms %}
             {% assign related_term = site.glossary | where: "term_id", related_term_id | first %}
@@ -54,7 +54,7 @@ layout: default
       {% assign appearances = site.chapters | where_exp: "chapter", "chapter.glossary_terms contains page.term_id" %}
       {% if appearances.size > 0 %}
       <div class="appears-in mt-5 pt-4 border-top">
-        <h3>Appears in</h3>
+        <h3>{{ lang.glossary.appears_in | default: "Appears in" }}</h3>
         <ul class="list-unstyled">
           {% for chapter in appearances %}
           <li class="mb-2">

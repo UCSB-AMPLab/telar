@@ -37,7 +37,7 @@ pairs from a text block, used by the carousel parser.
 and renders it with the parsed widget data. If the template fails, it
 returns an error `<div>` instead of crashing the build.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import html
@@ -46,6 +46,7 @@ import markdown
 from html.parser import HTMLParser
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from telar.config import get_lang_string
 from telar.images import validate_image_path, get_image_dimensions
 
 
@@ -422,10 +423,16 @@ def render_widget_html(widget_type, widget_data, widget_id):
         )
         template = env.get_template(f'{widget_type}.html')
 
-        # Render with data
+        # Render with data. Control labels are resolved from the language pack
+        # here (templates are Jinja2, not Liquid, so they cannot reach lang
+        # directly); slide_label keeps its {{ number }} token, which the
+        # carousel template substitutes per slide.
         rendered = template.render(
             widget_id=widget_id,
             base_url='{{ site.baseurl }}',  # Will be processed by Jekyll
+            slide_label=get_lang_string('widgets.slide_label'),
+            prev_label=get_lang_string('widgets.prev'),
+            next_label=get_lang_string('widgets.next'),
             **widget_data
         )
 
@@ -433,8 +440,12 @@ def render_widget_html(widget_type, widget_data, widget_id):
 
     except Exception as e:
         # Return error HTML if template rendering fails
-        return (f'<div class="telar-widget-error">Widget rendering error '
-                f'({html.escape(str(widget_type))}): {html.escape(str(e))}</div>')
+        error_text = get_lang_string(
+            'errors.widgets.rendering_error',
+            widget_type=html.escape(str(widget_type)),
+            error=html.escape(str(e)),
+        )
+        return f'<div class="telar-widget-error">{error_text}</div>'
 
 
 def process_widgets(text, file_path, warnings_list):
@@ -467,12 +478,16 @@ def process_widgets(text, file_path, warnings_list):
         }
 
         if widget_type not in widget_parsers:
+            # widget_type is regex-constrained to \w+, so it is safe to embed
+            # in the returned HTML without escaping.
+            unknown_msg = get_lang_string('errors.widgets.unknown_type',
+                                          widget_type=widget_type)
             warnings_list.append({
                 'type': 'widget',
                 'widget_type': widget_type,
-                'message': f'Unknown widget type: {widget_type}'
+                'message': unknown_msg
             })
-            return f'<div class="telar-widget-error">Unknown widget type: {widget_type}</div>'
+            return f'<div class="telar-widget-error">{unknown_msg}</div>'
 
         # Parse widget content
         parser = widget_parsers[widget_type]

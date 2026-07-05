@@ -294,11 +294,11 @@ title: Home
             <a href="{{ object.url | relative_url }}" class="story-card text-decoration-none">
               <div class="card h-100 border-0 shadow-sm">
                 {% if object.media_type == 'Video' %}
-                  <div class="card-img-top video-thumbnail" aria-label="Video" style="aspect-ratio: 1;">
+                  <div class="card-img-top video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}" style="aspect-ratio: 1;">
                     <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                   </div>
                 {% elsif object.media_type == 'Audio' %}
-                  <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
+                  <div class="card-img-top audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}" style="aspect-ratio: 1;">
                     <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                   </div>
                 {% else %}
@@ -390,11 +390,11 @@ title: Home
                 {% endunless %}
                 {% if thumb_obj %}
                   {% if thumb_obj.media_type == 'Video' %}
-                    <div class="video-thumbnail" aria-label="Video">
+                    <div class="video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     </div>
                   {% elsif thumb_obj.media_type == 'Audio' %}
-                    <div class="audio-thumbnail" aria-label="Audio">
+                    <div class="audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                     </div>
                   {% else %}
@@ -507,11 +507,11 @@ title: Home
 
                 {% if thumb_obj %}
                   {% if thumb_obj.media_type == 'Video' %}
-                    <div class="card-img-top video-thumbnail" aria-label="Video" style="aspect-ratio: 1;">
+                    <div class="card-img-top video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}" style="aspect-ratio: 1;">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     </div>
                   {% elsif thumb_obj.media_type == 'Audio' %}
-                    <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
+                    <div class="card-img-top audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}" style="aspect-ratio: 1;">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                     </div>
                   {% else %}
@@ -608,11 +608,11 @@ title: Home
         <a href="{{ object.url | relative_url }}" class="collection-item">
           <div class="collection-thumbnail">
             {% if object.media_type == 'Video' %}
-              <div class="video-thumbnail" aria-label="Video">
+              <div class="video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}">
                 <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
               </div>
             {% elsif object.media_type == 'Audio' %}
-              <div class="audio-thumbnail" aria-label="Audio">
+              <div class="audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}">
                 <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
               </div>
             {% elsif object.thumbnail and object.thumbnail != "" %}

@@ -705,11 +705,9 @@ def process_objects(df, christmas_tree=False):
                 if not peaks_path.exists():
                     print(f"  [INFO] No peaks file for audio object {object_id} — WaveSurfer will decode on the fly")
             else:
-                error_msg = get_lang_string('errors.object_warnings.image_missing', object_id=object_id)
-                # Override with audio-specific message
-                error_msg = f"No audio file found for object '{object_id}'. Add an audio file (.mp3, .ogg, or .m4a) to telar-content/objects/{object_id}.mp3"
+                error_msg = get_lang_string('errors.object_warnings.audio_missing', object_id=object_id)
                 df.at[idx, 'object_warning'] = error_msg
-                df.at[idx, 'object_warning_short'] = 'Audio file missing'
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_audio_missing')
                 msg = f"Object {object_id} has no audio file in telar-content/objects/"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)

@@ -26,7 +26,7 @@ inherit the parent's `lang` assign; resolve the language pack here with an Engli
 
       <!-- Success Alert -->
       <div class="alert alert-success mb-4" role="alert">
-        <strong>✓ Upgrade Successful!</strong>
+        <strong>{{ lang.upgrade.summary_heading | default: "✓ Upgrade Successful!" }}</strong>
         <p class="mb-0 mt-2">{{ lang.upgrade.summary_message | default: "Your Telar site has been upgraded. Review the summary below." }}</p>
       </div>
 

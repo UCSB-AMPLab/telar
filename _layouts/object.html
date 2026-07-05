@@ -402,7 +402,7 @@ layout: default
           <dd class="col-sm-8">
             <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
               <code id="embed-url-display" style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"></code>
-              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy embed URL">
+              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.copy_embed_url_tooltip | default: 'Copy embed URL' }}">
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
               </button>
             </div>
@@ -629,6 +629,9 @@ layout: default
 {% endif %}
 
 {% if object_media_type == 'Video' %}
+{%- comment -%}Iframe title resolved once here, reused by all three embed branches below.{%- endcomment -%}
+{% assign escaped_title = page.title | escape %}
+{% assign video_frame_title = lang.object.video_frame_title | default: 'Video: __TITLE__' | replace: '__TITLE__', escaped_title %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const viewer = document.getElementById('object-viewer');
@@ -646,7 +649,7 @@ document.addEventListener('DOMContentLoaded', function() {
       'style="width:100%;aspect-ratio:16/9;border:none;" ' +
       'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
       'allowfullscreen ' +
-      'title="Video: {{ page.title | escape }}"></iframe>';
+      'title="{{ video_frame_title }}"></iframe>';
 
     // Set embed URL display
     const embedDisplay = document.getElementById('embed-url-display');
@@ -663,7 +666,7 @@ document.addEventListener('DOMContentLoaded', function() {
       'style="width:100%;aspect-ratio:16/9;border:none;" ' +
       'allow="autoplay; fullscreen; picture-in-picture" ' +
       'allowfullscreen ' +
-      'title="Video: {{ page.title | escape }}"></iframe>';
+      'title="{{ video_frame_title }}"></iframe>';
 
     const embedDisplay = document.getElementById('embed-url-display');
     if (embedDisplay) embedDisplay.textContent = embedUrl;
@@ -678,7 +681,7 @@ document.addEventListener('DOMContentLoaded', function() {
     viewer.innerHTML = '<iframe id="video-player-iframe" src="' + previewUrl + '" ' +
       'style="width:100%;aspect-ratio:16/9;border:none;" ' +
       'allow="autoplay" ' +
-      'title="Video: {{ page.title | escape }}"></iframe>';
+      'title="{{ video_frame_title }}"></iframe>';
 
     // Google Drive: embed URL load error fallback
     const iframe = document.getElementById('video-player-iframe');
@@ -844,6 +847,9 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 
 {% if object_media_type == 'Audio' %}
+{%- comment -%}Waveform aria-label resolved once here; __TITLE__ carries the escaped page title.{%- endcomment -%}
+{% assign escaped_title = page.title | escape %}
+{% assign waveform_label = lang.object.audio_controls.waveform_label | default: 'Audio waveform for __TITLE__' | replace: '__TITLE__', escaped_title %}
 <script>
 // Load the vendored WaveSurfer UMD bundle (core + Regions plugin) once, from
 // the repo's assets/vendor/ — mirrors loadWaveSurferAPI() in
@@ -896,15 +902,15 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // Build waveform container with overlaid controls (matches story audio plates)
   viewer.innerHTML =
-    '<div id="audio-waveform" role="img" aria-label="Audio waveform for {{ page.title | escape }}" style="width:100%;height:100%;padding:0 3%;box-sizing:border-box;position:relative;z-index:0;"></div>' +
+    '<div id="audio-waveform" role="img" aria-label="{{ waveform_label }}" style="width:100%;height:100%;padding:0 3%;box-sizing:border-box;position:relative;z-index:0;"></div>' +
     '<div class="audio-object-controls">' +
-      '<button class="audio-object-btn" id="audio-play-btn" aria-label="Play audio" type="button">' +
+      '<button class="audio-object-btn" id="audio-play-btn" aria-label="{{ lang.object.audio_controls.play | default: 'Play audio' }}" type="button">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>' +
       '</button>' +
-      '<button class="audio-object-btn" id="audio-restart-btn" aria-label="Restart from beginning" type="button">' +
+      '<button class="audio-object-btn" id="audio-restart-btn" aria-label="{{ lang.object.audio_controls.restart | default: 'Restart from beginning' }}" type="button">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>' +
       '</button>' +
-      '<button class="audio-object-btn" id="audio-mute-btn" aria-label="Mute audio" type="button">' +
+      '<button class="audio-object-btn" id="audio-mute-btn" aria-label="{{ lang.object.audio_controls.mute | default: 'Mute audio' }}" type="button">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>' +
       '</button>' +
     '</div>' +
@@ -993,11 +999,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   ws.on('play', function() {
     playBtn.innerHTML = pauseIcon;
-    playBtn.setAttribute('aria-label', 'Pause audio');
+    playBtn.setAttribute('aria-label', '{{ lang.object.audio_controls.pause | default: 'Pause audio' }}');
   });
   ws.on('pause', function() {
     playBtn.innerHTML = playIcon;
-    playBtn.setAttribute('aria-label', 'Play audio');
+    playBtn.setAttribute('aria-label', '{{ lang.object.audio_controls.play | default: 'Play audio' }}');
   });
 
   // Restart button — plays from clip region start, stops at region end
@@ -1028,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const nowMuted = !ws.getMuted();
     ws.setMuted(nowMuted);
     muteBtn.innerHTML = nowMuted ? volumeOffIcon : volumeOnIcon;
-    muteBtn.setAttribute('aria-label', nowMuted ? 'Unmute audio' : 'Mute audio');
+    muteBtn.setAttribute('aria-label', nowMuted ? '{{ lang.object.audio_controls.unmute | default: 'Unmute audio' }}' : '{{ lang.object.audio_controls.mute | default: 'Mute audio' }}');
   });
 
   // Time display

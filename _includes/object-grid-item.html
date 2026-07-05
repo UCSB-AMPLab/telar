@@ -31,12 +31,12 @@
       <div class="collection-item-image" {% if include.object.iiif_manifest and include.object.iiif_manifest != "" %}data-iiif-manifest="{{ include.object.iiif_manifest }}"{% endif %}>
         {% if include.object.media_type == 'Video' %}
         {%- comment -%}Video thumbnail: play icon on neutral background{%- endcomment -%}
-        <div class="video-thumbnail" aria-label="Video">
+        <div class="video-thumbnail" aria-label="{{ include.lang.objects.media_video | default: 'Video' }}">
           <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         </div>
         {% elsif include.object.media_type == 'Audio' %}
         {%- comment -%}Audio thumbnail: speaker icon on neutral background{%- endcomment -%}
-        <div class="audio-thumbnail" aria-label="Audio">
+        <div class="audio-thumbnail" aria-label="{{ include.lang.objects.media_audio | default: 'Audio' }}">
           <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
         </div>
         {% elsif include.object.thumbnail and include.object.thumbnail != "" %}

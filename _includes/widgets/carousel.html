@@ -11,7 +11,9 @@
   optional preset that adds a carousel-size-* modifier, ignored when "default"); and
   base_url. Each image src is resolved at build time: absolute http(s) URLs are used
   as given, while bare filenames are joined to {{ base_url }}/assets/images/, so the
-  same widget works for both externally hosted and site-local images.
+  same widget works for both externally hosted and site-local images. Control
+  labels come from the language pack via the build step: slide_label (whose
+  number token is substituted per slide below), prev_label, and next_label.
 -->
 <div class="telar-widget telar-widget-carousel">
   <div id="carousel-{{ widget_id }}" class="carousel slide{% if size_class and size_class != 'default' %} carousel-size-{{ size_class }}{% endif %}" data-bs-ride="false">
@@ -21,7 +23,7 @@
       <button type="button" data-bs-target="#carousel-{{ widget_id }}"
               data-bs-slide-to="{{ loop.index0 }}"
               {% if loop.first %}class="active" aria-current="true"{% endif %}
-              aria-label="Slide {{ loop.index }}"></button>
+              aria-label="{{ slide_label | default('Slide {{ number }}') | replace('{{ number }}', loop.index | string) }}"></button>
       {% endfor %}
     </div>
 
@@ -52,12 +54,12 @@
     <button class="carousel-control-prev" type="button"
             data-bs-target="#carousel-{{ widget_id }}" data-bs-slide="prev">
       <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-      <span class="visually-hidden">Previous</span>
+      <span class="visually-hidden">{{ prev_label | default('Previous') }}</span>
     </button>
     <button class="carousel-control-next" type="button"
             data-bs-target="#carousel-{{ widget_id }}" data-bs-slide="next">
       <span class="carousel-control-next-icon" aria-hidden="true"></span>
-      <span class="visually-hidden">Next</span>
+      <span class="visually-hidden">{{ next_label | default('Next') }}</span>
     </button>
   </div>
 </div>

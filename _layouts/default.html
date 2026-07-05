@@ -41,6 +41,26 @@
     {% assign lang = site.data.languages['en'] %}
   {% endif %}
 
+  <script>
+  // Expose site-wide language strings to JavaScript (telar.js, the panels.html
+  // inline script). The story layout is a standalone document that does not
+  // render through this shell, so it defines the same set itself; the merge
+  // form keeps the two definitions safe to coexist. Story-only keys (unlock)
+  // live in story.html.
+  window.telarLang = Object.assign(window.telarLang || {}, {
+    goDeeper: "{{ lang.buttons.go_deeper }}",
+    stepNumber: "{{ lang.story.step_number }}",
+    demoPanelBadge: "{{ lang.demo.panel_badge }}",
+    creditPrefix: "{{ lang.object.credit_prefix }}",
+    imageNotFoundLabel: {{ lang.errors.image_not_found_label | jsonify }},
+    imageNotFoundHint: {{ lang.errors.image_not_found_hint | jsonify }},
+    embedBanner: {
+      text: {{ lang.embed_banner.text | jsonify }},
+      link: "{{ lang.embed_banner.link }}"
+    }
+  });
+  </script>
+
   {%- comment -%} Built-in pages (home/objects/glossary) carry a `title_key` (e.g.
   navigation.objects) so the browser-tab title follows the site language, reusing the
   same nav labels. The English `title:` front matter stays as a fallback when the key
