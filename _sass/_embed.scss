@@ -16,6 +16,8 @@
  * @version v1.6.0
  */
 
+@use 'responsive' as *;
+
 @layer telar-components {
 
 /* =========================================
@@ -274,7 +276,8 @@ body.embed-mode {
 
 /* Mobile-sized embeds: revert to mobile positioning (right side, vertically stacked) */
 /* This media query is at root level to ensure proper source order over desktop embed rules */
-@media (max-width: 768px) {
+/* Boundary matches the canonical vertical-layout breakpoint (_responsive.scss $telar-vertical-min-width) */
+@media (max-width: $telar-vertical-min-width) {
   body.embed-mode .mobile-nav {
     right: 1rem;
     left: auto;
