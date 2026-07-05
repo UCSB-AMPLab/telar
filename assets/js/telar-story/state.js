@@ -22,7 +22,7 @@
  *   the current step (0.0–1.0). `isSnapping` tracks in-flight snap
  *   animations from the lenis/snap plugin.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -43,8 +43,6 @@ export const state = {
   steps: [],
   /** Index of the current desktop step (-1 = none). */
   currentIndex: -1,
-  /** Object ID currently displayed in the viewer. */
-  currentObject: null,
 
   // ── Scroll engine ─────────────────────────────────────────────────────────
   /** Continuous float position (e.g. 2.3 = step 2, 30% progress). */
@@ -61,8 +59,6 @@ export const state = {
   snap: null,
 
   // ── Viewer cards ─────────────────────────────────────────────────────────
-  /** The viewer card object currently visible on screen. */
-  currentViewerCard: null,
   /** @type {ViewerCard[]} Pool of viewer card objects. */
   viewerCards: [],
   /** Counter for generating unique viewer instance DOM IDs. */

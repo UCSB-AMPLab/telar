@@ -63,8 +63,7 @@
     {% assign show_story_steps = false %}
   {% endif %}
 
-  {%- comment -%}Single lookup of the story's data file, reused at every site below
-  instead of re-deriving site.data[page.data_file] each time.{%- endcomment -%}
+  {%- comment -%}Single lookup of the story's data file, reused below.{%- endcomment -%}
   {%- assign story_data = site.data[page.data_file] %}
 
   <!-- Check if story is encrypted (protected) -->

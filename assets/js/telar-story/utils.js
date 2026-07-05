@@ -22,10 +22,11 @@
  * the result is safe both between tags and inside `"..."` / `'...'` attribute
  * values.
  *
- * This is the canonical copy for the bundled story runtime. The standalone
- * scripts that are not part of this esbuild bundle (objects-filter.js,
- * share-panel.js, story-unlock.js) keep their own byte-compatible copies
- * because they cannot share the import — keep the four definitions in sync.
+ * This is the canonical copy for the bundled story runtime. Two standalone
+ * scripts outside this esbuild bundle keep their own copies because they
+ * cannot share the import: objects-filter.js has a byte-compatible
+ * `escapeHtml`, and share-panel.js has an `escapeAttr` variant of the same
+ * body — keep all three in sync.
  *
  * @param {*} text - The value to escape (null/undefined become an empty string).
  * @returns {string} The escaped string.

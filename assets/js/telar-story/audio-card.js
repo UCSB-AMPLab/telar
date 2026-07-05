@@ -55,8 +55,7 @@ const audioHeightResize = parseFloat(_cs.getPropertyValue('--telar-audio-height-
 
 // Waveform height as a fraction of the viewport, by layout mode: vertical and
 // embed use the shorter mobile fraction, desktop the taller one. Single
-// decision point so create/activate/resize never disagree (the earlier split —
-// 0.35 on create/activate, 0.5 on resize — made the waveform jump on resize).
+// decision point so create/activate/resize never disagree.
 function _audioHeightFraction() {
   return (state.layoutMode === 'vertical' || state.isEmbed)
     ? audioHeightMobile
@@ -515,7 +514,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           overlayEl.style.cssText =
             "position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:1;";
           // Dynamic aria-label using object alt_text/title
-          const _aObj = state.objectsIndex[plateEl?.dataset?.object] || {};
+          const _aObj = state.objectsIndex[plateEl.dataset.object] || {};
           const _aAlt = _aObj.alt_text || _aObj.title || 'audio';
           const overlayBtn = document.createElement("button");
           overlayBtn.setAttribute("aria-label", `Play ${_aAlt}`);

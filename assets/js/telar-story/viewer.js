@@ -39,16 +39,7 @@
  * text each time the active object changes. The badge stays hidden once
  * the user dismisses it.
  *
- * Note on dead code removal (v0.10.0): this module previously contained
- * the full viewer card lifecycle — creation, destruction, positioning,
- * object switching, and nearby preloading. Those responsibilities moved
- * to iiif-card.js (plate lifecycle and OSD positioning) and card-pool.js
- * (card-stack orchestration and viewer injection) during the v1.0.0-beta
- * rewrite. The old functions were tree-shaken from the bundle but
- * remained in the source, which caused confusion when fixes were applied
- * to dead code paths. They have now been removed entirely.
- *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';

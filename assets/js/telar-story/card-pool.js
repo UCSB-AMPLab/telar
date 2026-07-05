@@ -58,7 +58,6 @@ import { getBasePath, escapeHtml } from './utils.js';
 import { IiifViewer } from './iiif-viewer.js';
 import {
   deactivateIiifCard,
-  destroyIiifCard,
   animateIiifToPosition,
   snapIiifToPosition,
   computeFocalTarget,
@@ -128,7 +127,7 @@ export function computeZIndexPlan(steps) {
   const textCardZ = {};
 
   for (let i = 0; i < steps.length; i++) {
-    const objectId = steps[i].object || steps[i].objectId || '';
+    const objectId = steps[i].object || '';
     const effectiveId = objectId === '' ? '__title_' + (titleCounter++) + '__' : objectId;
     if (effectiveId !== currentObjectId) {
       scene++;
@@ -268,7 +267,7 @@ export function _buildSceneMaps(steps) {
   state.sceneFirstStep = {};
 
   for (let i = 0; i < steps.length; i++) {
-    const objectId = steps[i].object || steps[i].objectId || '';
+    const objectId = steps[i].object || '';
     const effectiveId = objectId === '' ? '__title_' + (titleCounter++) + '__' : objectId;
     if (effectiveId !== currentObjectId) {
       scene++;
@@ -335,7 +334,7 @@ function _recomputeCardGeometry(viewportW, viewportH) {
     if (landscapeSideCard) {
       // Landscape phone: the CSS rule sets `height: auto !important`, so the card
       // is sized to its content. Clear any stale inline height, measure the real
-      // rendered height, and centre by THAT — the portrait `viewportH * 0.80`
+      // rendered height, and centre by that — the portrait `viewportH * 0.80`
       // model oversizes the card and jams it against the top on a short landscape
       // viewport. Inline !important top beats the
       // landscape rule's `top: auto !important`.
@@ -386,9 +385,9 @@ export function initCardPool(storyData, config) {
   // Store for use by activateCard
   _stepsData = steps;
   // Mirror into shared state so scroll-engine can feed lerpIiifPosition the
-  // SAME filtered array its stepIndex is computed against — passing the
-  // unfiltered window.storyData.steps mismatched the index on stories with
-  // metadata rows.
+  // same filtered array its stepIndex is computed against. The unfiltered
+  // window.storyData.steps includes metadata rows, which would misalign
+  // the index.
   state.stepsData = steps;
   _config = {
     peekHeight,
@@ -469,7 +468,7 @@ export function initCardPool(storyData, config) {
 
   for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
     const step = steps[stepIdx];
-    const objectId = step.object || step.objectId || '';
+    const objectId = step.object || '';
     const objectData = state.objectsIndex[objectId] || {};
     const audioExt2 = audioObjects[objectId];
     const cardType = detectCardType({
@@ -554,7 +553,7 @@ export function initCardPool(storyData, config) {
   // ready when the transition happens.
   if (steps.length > 0) {
     const firstStep = steps[0];
-    const firstObjectId = firstStep.object || firstStep.objectId || '';
+    const firstObjectId = firstStep.object || '';
     if (firstObjectId && state.viewerPlates[0]) {
       const plate = state.viewerPlates[0];
       const zIndex = _zPlan.plateZ[0];
@@ -666,7 +665,6 @@ export function activateCard(index, direction) {
   if (!card) return;
 
   const poolEntry = state.cardPool.find(c => c.stepIndex === index);
-  if (!poolEntry) return;
 
   const step = _stepsData[index] || {};
   const prevStep = index > 0 ? _stepsData[index - 1] : null;
@@ -863,7 +861,7 @@ export function activateCard(index, direction) {
   // Update aria-label on the active viewer plate for current step
   const _stepData = _stepsData[index] || {};
   const _stepAlt = _stepData.alt_text || '';
-  const _plateForStep = state.viewerPlates?.[state.stepToScene?.[index]];
+  const _plateForStep = state.viewerPlates[state.stepToScene[index]];
   if (_plateForStep) {
     const _cType = _plateForStep.dataset.cardType || 'iiif';
     _plateForStep.setAttribute('aria-label', _buildAriaLabel(objectId, _stepAlt, _cType));
@@ -917,8 +915,8 @@ export function setCardProgress(stepIndex, progress) {
   const currentStep = _stepsData[stepIndex];
   if (!nextStep || !currentStep) return;
 
-  const nextObjectId = nextStep.object || nextStep.objectId || '';
-  const currentObjectId = currentStep.object || currentStep.objectId || '';
+  const nextObjectId = nextStep.object || '';
+  const currentObjectId = currentStep.object || '';
 
   if (nextObjectId !== currentObjectId) {
     if (nextObjectId === '') {
@@ -968,7 +966,7 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
 
   // Intra-scene mode change: a full-object↔detail flip within one object's run
   // flags needsNewViewer, but the scene — and therefore the plate element — is
-  // unchanged, so prevPlate and newPlate resolve to the SAME node. The plate is
+  // unchanged, so prevPlate and newPlate resolve to the same node. The plate is
   // already on-screen; keep it visible and return before the slide/deactivate
   // logic below, which would otherwise add then immediately strip is-active
   // (add at the end, remove in the prevPlate block) and blank the viewer. This
@@ -1131,7 +1129,7 @@ function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page
 
       // Verify-and-retry (belt-and-braces on top of the rAF-deferred
       // .ready). Even after the rAF settle, a residual race can leave
-      // the viewer at home zoom (measured: step 19, authored 10×). One frame after
+      // the viewer at home zoom. One frame after
       // applying the snap, read the current OSD zoom and compare against home zoom.
       // If they match — and the authored zoom was meaningfully > 1 — the apply
       // was dropped; re-apply exactly once. Tolerance: 5% of homeZoom.
@@ -1503,7 +1501,7 @@ export function preloadAhead(currentIndex, ahead, behind) {
     const firstStepIdx = state.sceneFirstStep[targetScene];
     const step = _stepsData[firstStepIdx];
 
-    const objectId = step.object || step.objectId || '';
+    const objectId = step.object || '';
     if (!objectId) continue;
 
     const zIndex = _zPlan.plateZ[firstStepIdx];
@@ -1550,7 +1548,7 @@ export function preloadAhead(currentIndex, ahead, behind) {
     const firstStepIdx = state.sceneFirstStep[targetScene];
     const step = _stepsData[firstStepIdx];
 
-    const objectId = step.object || step.objectId || '';
+    const objectId = step.object || '';
     if (!objectId) continue;
 
     const zIndex = _zPlan.plateZ[firstStepIdx];

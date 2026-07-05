@@ -26,7 +26,7 @@
   height: 100vh;
   overflow: hidden;
   background: #000;
-  // NO display:flex — no longer a column layout
+  // Fixed full-viewport stack — adding display:flex here breaks the card overlay
 }
 
 // dvh override: browsers that support dvh use the dynamic viewport height,
@@ -92,19 +92,16 @@
     height: 100%;
   }
 
-  // Telar weave background on OSD's own container. Pre-migration the weave
-  // lived on Tify's wrapper div (.viewer-instance .tify); with the new
-  // wrapper attaching OSD directly to .viewer-instance, .tify is gone and
-  // the weave belongs on OSD's container itself. This keeps the OSD area
-  // opaque during card-stack transitions (so you can't see the plate
-  // behind through the canvas) and shows the weave around the fitted
-  // image wherever the canvas content is transparent.
+  // Telar weave background on OSD's own container: the wrapper attaches
+  // OSD directly to .viewer-instance, so the weave belongs on OSD's
+  // container itself. This keeps the OSD area opaque during card-stack
+  // transitions (so you can't see the plate behind through the canvas)
+  // and shows the weave around the fitted image wherever the canvas
+  // content is transparent.
   //
   // !important is required: OpenSeadragon sets `background: none transparent`
   // as an inline style attribute on .openseadragon-container at instantiation
-  // time, which CSS cannot beat by specificity alone. This is the same reason
-  // the pre-v1.4.0 Tify-era weave rule on .viewer-instance .tify used
-  // !important (it was fighting OSD's inline style through Tify's wrapper).
+  // time, which CSS cannot beat by specificity alone.
   .viewer-instance .openseadragon-container {
     background: #fff url('../img/background-gris.svg') repeat !important;
     background-size: 20px auto !important;
@@ -437,10 +434,8 @@
 }
 
 // ── Text Card Container Queries ───────────────────────────────────────────────
-// Card-width-driven padding and font-size scaling. These replace the
-// .text-card-targeting rules from the old height-tier blocks (deleted below).
-// Values mapped from the former Tier-1/2/3 blocks so there is no visual jump
-// at the most common phone widths.
+// Card-width-driven padding and font-size scaling. Values chosen so there
+// is no visual jump at the most common phone widths.
 //
 // In horizontal mode, .text-card is 37% wide ≈ 360-420px on typical phones —
 // so (max-width: 480px) fires broadly and (max-width: 360px) fires on
@@ -878,16 +873,16 @@
 
   // ── Landscape-phone side card override ─────────────────────────────────────
   // EN: When the viewport is too short for a bottom card (landscape phones,
-  //     height ≤ 480px), restore the side-card geometry from production v1.3.0.
+  //     height ≤ 480px), the side-card geometry applies instead.
   //     Threshold 480px catches all modern landscape phones (≤ 430px tall) and
   //     misses all portrait phones (iPhone SE 667px, SE 1st-gen 568px).
   //     card-pool.js controls `top` via inline style with !important;
   //     bottom: auto releases the bottom anchor so the side card positions correctly.
   // ES: Cuando el viewport es demasiado corto para una tarjeta inferior (teléfonos
-  //     en horizontal, altura ≤ 480px), se restaura la geometría de tarjeta lateral
-  //     de la versión 1.3.0 de producción. El umbral de 480px captura todos los
-  //     teléfonos modernos en horizontal (≤ 430px de alto) y excluye los teléfonos
-  //     en vertical (iPhone SE 667px, SE 1.ª gen. 568px). card-pool.js
+  //     en horizontal, altura ≤ 480px), se aplica la geometría de tarjeta lateral.
+  //     El umbral de 480px captura todos los teléfonos modernos en horizontal
+  //     (≤ 430px de alto) y excluye los teléfonos en vertical (iPhone SE 667px,
+  //     SE 1.ª gen. 568px). card-pool.js
   //     controla `top` mediante estilo inline con !important; bottom: auto libera
   //     el ancla inferior para que la tarjeta lateral se posicione correctamente.
   @media (max-height: $telar-card-landscape-max-height) {

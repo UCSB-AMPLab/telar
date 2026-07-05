@@ -6,7 +6,7 @@
  * It does NOT create viewer plates or inject viewer instances — that work
  * lives in card-pool.js, which pre-creates all plate DOM elements at init
  * time and injects the IIIF wrapper on demand via its internal
- * _initOsdInPlate() (renamed from _initTifyInPlate in v1.4.0).
+ * _initOsdInPlate().
  *
  * The separation exists because the card-pool module owns the full card
  * lifecycle (creation, ordering, preloading), while this module provides
@@ -563,7 +563,6 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // Find the active viewer card for this scene (not by objectId — repeated objects have
   // multiple scenes and objectId lookup would find the wrong one on backward nav).
   const sceneIndex = state.stepToScene[stepIndex];
-  if (sceneIndex === undefined || sceneIndex < 0) return;
   const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
   if (!viewerCard || !viewerCard.isReady) return;
 

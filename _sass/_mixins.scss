@@ -9,9 +9,7 @@
  * Layer 1. Rather than duplicating those colour rules for every context, this
  * mixin generates them from a single definition.
  *
- * v1.4.0 removed the `hide-viewer-chrome` mixin alongside the Tify
- * override block in `_viewer.scss`; the tabs panel inversion below is
- * the file's sole remaining mixin.
+ * The tabs panel inversion below is the file's sole mixin of this kind.
  *
  * Also home to the carousel-caption and accordion panel colour inversions
  * (same pattern as tabs) and the light-glass-button mixin shared between

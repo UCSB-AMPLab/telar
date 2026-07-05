@@ -119,13 +119,13 @@ COLUMN_NAME_MAPPING = {
     'periodo': 'period',
     'medio': 'medium',
     'dimensiones': 'dimensions',
-    'ubicacion': 'source',  # v0.8.0: renamed from 'location' to 'source'
+    'ubicacion': 'source',
     'credito': 'credit',
     'miniatura': 'thumbnail',
     # v0.8.0 gallery filtering columns
     'año': 'year',
     'ano': 'year',  # without tilde
-    # v0.10.0: object_type renamed to medium; backward compat keeps old names working
+    # Old column names remain accepted from user CSVs (documented compat)
     'tipo_objeto': 'medium',
     'object_type': 'medium',
     'medium_genre': 'medium',     # v1.0.0-beta: alternative English name
@@ -135,7 +135,7 @@ COLUMN_NAME_MAPPING = {
     'materia': 'subjects',
     'destacado': 'featured',
     'fuente': 'source',
-    # Backward compatibility: location -> source (v0.8.0 schema change)
+    # The old column name is still accepted
     'location': 'source',
 
     # Project columns (Spanish -> English)

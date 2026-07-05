@@ -28,7 +28,7 @@
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -50,7 +50,6 @@ import { IiifViewer } from './iiif-viewer.js';
 if (typeof window !== 'undefined') {
   window.IiifViewer = IiifViewer;
 }
-import './video-card.js';
 import { initializeButtonNavigation } from './navigation.js';
 import { initScrollEngine, getScrollEngineState } from './scroll-engine.js';
 import {

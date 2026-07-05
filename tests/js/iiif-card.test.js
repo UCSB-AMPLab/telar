@@ -351,24 +351,19 @@ describe('computeFocalTarget — null cardBox fallback', () => {
 
 // ── _clampFocalPx — Rule B focal clamp (regression guard for the off-screen bug) ──
 //
-// The original Rule B clamp used the region centre (CB) as the post-pan focal
-// reference and swapped its min/max bounds, which inverted the valid pan range and
-// flung the focal ~100k px off-screen at zoomed steps (measured: step 3 focal landed
-// at (-99639, -266227) on a 1440×900 cell). _clampFocalPx returns the focal's target
-// position in element px directly (the apply path is transient-zoom-free: it never
-// reads the live OSD zoom). These cases lock the corrected behaviour: the focal lands
-// at the uncovered-region centre when that position covers the region, clamps to the
-// image-bounds edge otherwise, and keeps the ideal (region-centre) position when the
-// image is too small to cover the region.
+// _clampFocalPx returns the focal's target position in element px directly (the apply
+// path is transient-zoom-free: it never reads the live OSD zoom). These cases lock the
+// correct behaviour: the focal lands at the uncovered-region centre when that position
+// covers the region, clamps to the image-bounds edge otherwise, and keeps the ideal
+// (region-centre) position when the image is too small to cover the region.
 describe('_clampFocalPx — Rule B focal clamp', () => {
   it('keeps the region centre when the focal there covers the region (step-3 regression case)', () => {
-    // Instrumented step-3 values (1440×900, authored 0.486,0.277,zoom10):
+    // 1440×900 cell, authored 0.486,0.277,zoom10:
     const region = { x: 576, y: 0, w: 864, h: 900 };       // uncovered, side card on left
     const edges = { eLeft: 2867.7, eRight: 3032.9, eTop: 2525.4, eBottom: 6591.5 };
     const ideal = { x: 1008, y: 450 };                     // region centre (576+432, 0+450)
     const F = _clampFocalPx(region, edges, ideal);
     // Region centre is coverable → focal lands exactly there, on-screen.
-    // (The old buggy clamp drove the focal to ≈(-99639, -266227).)
     expect(F.x).toBeCloseTo(1008, 0);
     expect(F.y).toBeCloseTo(450, 0);
   });

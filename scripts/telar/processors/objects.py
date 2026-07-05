@@ -547,7 +547,6 @@ def process_objects(df, christmas_tree=False):
                                 )
 
                                 # Source (Repository/Institution name, not geographic location)
-                                # Note: renamed from 'location' to 'source' in v0.8.0
                                 extracted['source'] = find_metadata_field(
                                     metadata_array,
                                     ['Repository', 'Holding Institution', 'Institution', 'Source', 'Current Location'],
@@ -587,7 +586,7 @@ def process_objects(df, christmas_tree=False):
                                         print(f"  [INFO] Year value '{extracted['year']}' has no "
                                               f"4-digit year — leaving as-is")
 
-                                # Medium/Genre (v0.10.0: renamed from object_type; classification for filtering)
+                                # Medium/Genre: classification for filtering
                                 extracted['medium'] = find_metadata_field(
                                     metadata_array,
                                     ['Type', 'Object Type', 'Resource Type', 'Format'],
@@ -713,8 +712,8 @@ def process_objects(df, christmas_tree=False):
                 warnings.append(msg)
             continue
 
-        # No external IIIF manifest - check for local image file (O(1) index lookup,
-        # using the shared extension set so .bmp/.svg objects are no longer missed)
+        # No external IIIF manifest - check for local image file (O(1) index lookup;
+        # the shared extension set covers all image types, including .bmp/.svg)
         has_local_image = False
         for f in _obj_file_index.get(object_id, []):
             if f.suffix.lower() in IMAGE_EXTENSIONS:

@@ -19,8 +19,8 @@
  *
  * When any panel is open, the scroll lock system blocks step navigation
  * (wheel events, keyboard arrows, touch swipes) and shows a subtle backdrop.
- * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
- * modal and must be explicitly dismissed.
+ * This is the "panel freeze" system — panels are truly modal and must be
+ * explicitly dismissed.
  *
  * @version v1.6.0
  */
@@ -196,9 +196,8 @@ export function closePanel(panelType) {
   // closePanel is the single owner of stack mutation on close: drop the closing
   // panel from the stack, then write the hash from the updated stack. The URL
   // reverts to step-only (or the panel below) immediately, without waiting for
-  // the Bootstrap close animation (350ms). Removing the old
-  // filter-into-savedStack-then-restore dance also makes this exception-safe —
-  // there is no temporary shared-state swap to leak if writeHash throws.
+  // the Bootstrap close animation (350ms). There is no temporary shared-state
+  // swap here, so this is exception-safe — nothing to leak if writeHash throws.
   state.panelStack = state.panelStack.filter(p => p.type !== panelType);
   writeHash();
 
@@ -218,9 +217,8 @@ export function closePanel(panelType) {
 export function closeTopPanel() {
   if (state.panelStack.length > 0) {
     const top = state.panelStack[state.panelStack.length - 1];
-    // closePanel now removes `top` from the stack itself — no separate pop
-    // (the old pop ran AFTER closePanel had already filtered for the hash,
-    // double-counting the mutation).
+    // closePanel removes `top` from the stack itself; closeTopPanel must not
+    // also pop it, or the stack mutation double-counts.
     closePanel(top.type);
   }
 }
@@ -304,8 +302,6 @@ function getPanelContent(panelType, contentId) {
  * @returns {string} Formatted HTML.
  */
 function formatPanelContent(panelData, objectId) {
-  if (!panelData) return '<p>No content available.</p>';
-
   let html = '';
   const basePath = getBasePath();
 
@@ -365,9 +361,8 @@ export function stepHasLayer2Content(step) {
  * Creates a subtle backdrop element and registers a click handler on the
  * story container to close the topmost panel when the user clicks outside it.
  *
- * The old split-column layout toggled overflow on .narrative-column; that
- * element is gone in the card-stack layout. The backdrop and click-outside
- * listener are wired unconditionally.
+ * The card-stack layout has no scrollable narrative column to toggle overflow
+ * on, so the backdrop and click-outside listener are wired unconditionally.
  */
 export function initializeScrollLock() {
   const backdrop = document.createElement('div');

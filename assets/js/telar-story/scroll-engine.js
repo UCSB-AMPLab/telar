@@ -36,7 +36,7 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import Lenis from 'lenis';
@@ -116,7 +116,8 @@ export function initScrollEngine(stepCount) {
 
   // Create Snap plugin with lock mode — directional snapping (forward on
   // scroll-down, backward on scroll-up).  Lerp-only (no fixed duration) for
-  // a gradual settle.  2s dwell on complete absorbs residual scroll input.
+  // a gradual settle.  500ms dwell on complete (see dwellTimer below) absorbs
+  // residual scroll input.
   snap = new Snap(lenis, {
     type: 'lock',
     velocityThreshold: 0.5,
@@ -202,7 +203,7 @@ function registerSnapPoints(count) {
  * Programmatically navigate to a step (button/keyboard nav).
  *
  * Uses lenis.scrollTo so the same physics engine drives the animation.
- * Does NOT add is-scrubbing so CSS transitions play at full duration.
+ * Does not add is-scrubbing so CSS transitions play at full duration.
  *
  * @param {number} targetIndex - Target step index.
  */
@@ -282,7 +283,7 @@ export function keyboardNav(direction) {
   }
 
   // Sync snap.currentSnapIndex so wheel-triggered snaps stay aligned
-  if (snap) snap.currentSnapIndex = target;
+  snap.currentSnapIndex = target;
 
   // Activate card immediately so it swaps on keypress — the IIIF lerp
   // then runs during the 0.8s scroll animation for simultaneous effect.

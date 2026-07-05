@@ -123,28 +123,24 @@ $telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
 }
 
 // ── Height-density consolidation ──────────────────────────────────────────────
-// Replaces the nine height-tier blocks that existed across _story.scss,
-// _layout.scss, and _panels.scss (three blocks × three files = 9 blocks total).
+// One set of density reductions, using the most aggressive values needed
+// across the affected partials; clamp()-based fluid scaling could add
+// intermediate gradations later.
 //
-// Uses the Tier-3 (most aggressive) values from those blocks. One step
-// rather than three progressive tiers loses the intermediate gradations —
-// a minor trade-off; clamp()-based fluid scaling could restore them later.
-//
-// Breakpoint: max-height: 600px (NOT the former max-width AND max-height form).
-// Dropping the width clause covers:
+// Breakpoint: max-height: 600px, with no width clause. Dropping the width
+// clause covers:
 //   • Small portrait phones (iPhone SE, 375×667 — 667h > 600h but still
-//     reasonably small; the 700px former Tier-1 covered this).
-//     Note: iPhone SE at 667h is NOT triggered by 600px. The consolidation
-//     intentionally accepts this: only devices at or below 600px trigger
-//     (very small Androids + landscape phones), matching the former Tier-3.
-//   • Landscape phones (iPhone Pro Max landscape = 430h; all modern landscape
-//     phones are ≤ 600h) — the former max-width clause excluded landscape
-//     phones wider than 768px; this block correctly includes them.
+//     reasonably small).
+//     Note: iPhone SE at 667h is not triggered by 600px. This is
+//     deliberate: only devices at or below 600px trigger (very small
+//     Androids + landscape phones).
+//   • Landscape phones (iPhone Pro Max landscape = 430h; all modern
+//     landscape phones are ≤ 600h) — a max-width clause would exclude
+//     landscape phones wider than 768px; this block correctly includes them.
 //
-// This block is UNLAYERED — matches the reduced-motion block precedent above.
+// This block is unlayered — matches the reduced-motion block precedent above.
 // Unlayered CSS beats any @layer rule (including telar-components), so these
-// Tier-3 density reductions win over layered desktop rules without !important.
-// The selectors are identical to those in the deleted blocks — no broader scope.
+// density reductions win over layered desktop rules without !important.
 //
 // .text-card sizing is intentionally absent: the @container (max-width: ...)
 // rules in _story.scss (inside @layer telar-components) own that now.

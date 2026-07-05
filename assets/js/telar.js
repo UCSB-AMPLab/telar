@@ -2,12 +2,10 @@
  * Telar — site-wide panel and glossary behaviour.
  *
  * This is the small layer of interactivity that every Telar page loads,
- * independent of the story viewer. It wires up the slide-in offcanvas panels and
- * the glossary that those panels can host.
- *
- * Panel triggers — any element marked as a `.panel-trigger` opens the offcanvas
- * panel named in its `data-panel` attribute, using Bootstrap's Offcanvas component
- * (the same toolkit that powers the rest of the layout's modals and navigation).
+ * independent of the story viewer. It wires up the glossary panel and the
+ * click-outside-to-close behaviour shared by all offcanvas panels; the layer1/
+ * layer2 story panel triggers themselves are handled by the delegated listener
+ * in `telar-story/panels.js`.
  *
  * Glossary flow — glossary terms appear two ways: as entries on the glossary index
  * and as inline `[[term_id]]` links woven into story prose. Rather than navigating
@@ -36,9 +34,6 @@
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Telar initialized');
-
-  // Initialize panel triggers
-  initializePanelTriggers();
 
   // Initialize glossary links via event delegation (one document-level listener
   // that catches clicks on any current or future glossary link — including story
@@ -77,26 +72,6 @@ function initializeClickOutsideClose() {
     if (bsOffcanvas) {
       bsOffcanvas.hide();
     }
-  });
-}
-
-/**
- * Initialize panel trigger buttons
- */
-function initializePanelTriggers() {
-  const triggers = document.querySelectorAll('.panel-trigger');
-
-  triggers.forEach(trigger => {
-    trigger.addEventListener('click', function(e) {
-      e.preventDefault();
-      const panelId = this.dataset.panel;
-      const panel = document.getElementById(panelId);
-
-      if (panel) {
-        const bsOffcanvas = new bootstrap.Offcanvas(panel);
-        bsOffcanvas.show();
-      }
-    });
   });
 }
 

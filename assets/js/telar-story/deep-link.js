@@ -174,11 +174,8 @@ function _writeHashFragment(glossaryN) {
  */
 export function navigateToIntro() {
   // Hide all active viewer plates
-  if (state.viewerPlates) {
-    for (const key of Object.keys(state.viewerPlates)) {
-      const plate = state.viewerPlates[key];
-      if (plate) plate.classList.remove('is-active');
-    }
+  for (const plate of Object.values(state.viewerPlates)) {
+    plate.classList.remove('is-active');
   }
 
   if (state.lenis) {
@@ -215,38 +212,21 @@ export function navigateToStep(stepNumber) {
 
   // Hide all active viewer plates before jumping — prevents plates from
   // nearby steps bleeding through when the target is a title/section card.
-  if (state.viewerPlates) {
-    for (const key of Object.keys(state.viewerPlates)) {
-      const plate = state.viewerPlates[key];
-      if (plate) plate.classList.remove('is-active');
-    }
+  for (const plate of Object.values(state.viewerPlates)) {
+    plate.classList.remove('is-active');
   }
 
   if (state.lenis) {
     const targetPx = (targetIndex + 1) * window.innerHeight;
 
-    // Clean INSTANT jump via Lenis's supported API.
-    //
-    // The previous approach — stop() → write document.scrollTop → poke
-    // animatedScroll/targetScroll → rAF start() — did NOT land cleanly. On
-    // start(), Lenis re-syncs animatedScroll from the real DOM scroll and then
-    // SMOOTH-ANIMATES from the stale position to the target instead of jumping.
-    // That stray animation drives the per-frame IIIF interpolation
-    // (lerpIiifPosition); when the scroll reaches the integer step,
-    // lerpIiifPosition early-returns (progress ≈ 0), so the viewer is left
-    // frozen at whatever the last sub-integer frame applied — a partially
-    // interpolated zoom. Measured on WebKit (centering sweep, Common desktop
-    // 1920×1080, step 4, the zoom-OUT from authored 10× to 2.9×): the viewer
-    // stuck at effNzoom ≈ 4–7× and never converged. It is timing-gated, so it
-    // only surfaced under the slow (trace-recording) Playwright runner; the
-    // keyboard/button paths never hit it because lenis.scrollTo() eases cleanly
-    // to the exact endpoint, landing the final lerp frame at the authored target.
-    //
-    // immediate:true performs the jump with NO animation — so there is no lerp
-    // staircase, and nothing for the Snap plugin's lock to interrupt (the lock
-    // only blocks ANIMATED multi-step scrollTo, which is why the old code
-    // bypassed scrollTo at all). force:true overrides the lock/stopped state.
-    // The viewer then simply keeps the target set by activateCard below.
+    // scrollTo must jump straight to the target with no animation. An animated
+    // scroll drives the per-frame IIIF interpolation (lerpIiifPosition) at each
+    // intermediate frame; lerpIiifPosition only skips interpolating once
+    // progress is within 0.001 of the integer step, so an animated approach
+    // can leave the viewer on the last interpolated (not authored) x/y/zoom
+    // instead of landing exactly on the target position. immediate:true removes
+    // the intermediate frames entirely; force:true overrides the Snap plugin's
+    // lock/stopped state so the jump isn't blocked.
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned (matches keyboardNav)
 
@@ -298,17 +278,9 @@ export function applyDeepLinkOnLoad() {
     // Desktop Lenis mode: instant scroll jump to the correct viewport position.
     // Position model: intro = 0, step 0 = 1 * innerHeight, step 1 = 2 * innerHeight …
     //
-    // Use Lenis's supported jump API rather than the old manual poke
-    // (stop → write scrollTop → set animatedScroll/targetScroll → rAF start).
-    // The poke did NOT land cleanly: Lenis re-syncs animatedScroll from the real
-    // scroll on start() and smooth-animates from the stale position, driving the
-    // per-frame IIIF lerp; at the integer step lerpIiifPosition early-returns,
-    // freezing the viewer at a partially-interpolated zoom. On a deep-linked load
-    // this was racy (measured on WebKit: #s4 landed at effNz ~9.4/1.06/10.56
-    // across reloads instead of the authored 2.9×). This is the same defect fixed
-    // in navigateToStep — see the fuller note there. immediate:true jumps with no
-    // animation (no lerp staircase; nothing for the Snap lock to interrupt);
-    // force:true overrides the lock/stopped state.
+    // scrollTo must jump straight to the target with no animation — see
+    // navigateToStep for why (an animated scroll can leave the per-frame IIIF
+    // lerp on an interpolated position instead of the authored one).
     const targetPx = (targetIndex + 1) * window.innerHeight;
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned

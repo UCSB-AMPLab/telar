@@ -8,8 +8,6 @@
     steps: [],
     /** Index of the current desktop step (-1 = none). */
     currentIndex: -1,
-    /** Object ID currently displayed in the viewer. */
-    currentObject: null,
     // ── Scroll engine ─────────────────────────────────────────────────────────
     /** Continuous float position (e.g. 2.3 = step 2, 30% progress). */
     scrollPosition: 0,
@@ -24,8 +22,6 @@
     /** Snap plugin instance reference. */
     snap: null,
     // ── Viewer cards ─────────────────────────────────────────────────────────
-    /** The viewer card object currently visible on screen. */
-    currentViewerCard: null,
     /** @type {ViewerCard[]} Pool of viewer card objects. */
     viewerCards: [],
     /** Counter for generating unique viewer instance DOM IDs. */
@@ -1047,7 +1043,6 @@
     const y = yA + (yB - yA) * progress;
     const zoom = zA + (zB - zA) * progress;
     const sceneIndex = state.stepToScene[stepIndex];
-    if (sceneIndex === void 0 || sceneIndex < 0) return;
     const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
     if (!viewerCard || !viewerCard.isReady) return;
     snapIiifToPosition(viewerCard, x, y, zoom);
@@ -1972,7 +1967,7 @@
           const overlayEl = document.createElement("div");
           overlayEl.className = "audio-play-overlay";
           overlayEl.style.cssText = "position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:1;";
-          const _aObj = state.objectsIndex[plateEl?.dataset?.object] || {};
+          const _aObj = state.objectsIndex[plateEl.dataset.object] || {};
           const _aAlt = _aObj.alt_text || _aObj.title || "audio";
           const overlayBtn = document.createElement("button");
           overlayBtn.setAttribute("aria-label", `Play ${_aAlt}`);
@@ -2231,7 +2226,7 @@
     const plateZ = {};
     const textCardZ = {};
     for (let i = 0; i < steps.length; i++) {
-      const objectId = steps[i].object || steps[i].objectId || "";
+      const objectId = steps[i].object || "";
       const effectiveId = objectId === "" ? "__title_" + titleCounter++ + "__" : objectId;
       if (effectiveId !== currentObjectId) {
         scene++;
@@ -2289,7 +2284,7 @@
     state.sceneToObject = {};
     state.sceneFirstStep = {};
     for (let i = 0; i < steps.length; i++) {
-      const objectId = steps[i].object || steps[i].objectId || "";
+      const objectId = steps[i].object || "";
       const effectiveId = objectId === "" ? "__title_" + titleCounter++ + "__" : objectId;
       if (effectiveId !== currentObjectId) {
         scene++;
@@ -2391,7 +2386,7 @@
     const objectRunPosition = {};
     for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
       const step = steps[stepIdx];
-      const objectId = step.object || step.objectId || "";
+      const objectId = step.object || "";
       const objectData = state.objectsIndex[objectId] || {};
       const audioExt2 = audioObjects[objectId];
       const cardType = detectCardType({
@@ -2458,7 +2453,7 @@
     }
     if (steps.length > 0) {
       const firstStep = steps[0];
-      const firstObjectId = firstStep.object || firstStep.objectId || "";
+      const firstObjectId = firstStep.object || "";
       if (firstObjectId && state.viewerPlates[0]) {
         const plate = state.viewerPlates[0];
         const zIndex = _zPlan.plateZ[0];
@@ -2519,7 +2514,6 @@
     const card = state.textCards[index2];
     if (!card) return;
     const poolEntry = state.cardPool.find((c) => c.stepIndex === index2);
-    if (!poolEntry) return;
     const step = _stepsData[index2] || {};
     const prevStep2 = index2 > 0 ? _stepsData[index2 - 1] : null;
     const objectId = poolEntry.objectId;
@@ -2645,7 +2639,7 @@
     }
     const _stepData = _stepsData[index2] || {};
     const _stepAlt = _stepData.alt_text || "";
-    const _plateForStep = state.viewerPlates?.[state.stepToScene?.[index2]];
+    const _plateForStep = state.viewerPlates[state.stepToScene[index2]];
     if (_plateForStep) {
       const _cType = _plateForStep.dataset.cardType || "iiif";
       _plateForStep.setAttribute("aria-label", _buildAriaLabel(objectId, _stepAlt, _cType));
@@ -2667,8 +2661,8 @@
     const nextStep2 = _stepsData[nextIndex];
     const currentStep = _stepsData[stepIndex];
     if (!nextStep2 || !currentStep) return;
-    const nextObjectId = nextStep2.object || nextStep2.objectId || "";
-    const currentObjectId = currentStep.object || currentStep.objectId || "";
+    const nextObjectId = nextStep2.object || "";
+    const currentObjectId = currentStep.object || "";
     if (nextObjectId !== currentObjectId) {
       if (nextObjectId === "") {
         const currentSceneIndex = getSceneIndex(stepIndex);
@@ -3028,7 +3022,7 @@
       if (!plate) continue;
       const firstStepIdx = state.sceneFirstStep[targetScene];
       const step = _stepsData[firstStepIdx];
-      const objectId = step.object || step.objectId || "";
+      const objectId = step.object || "";
       if (!objectId) continue;
       const zIndex = _zPlan.plateZ[firstStepIdx];
       if (plate.classList.contains("audio-plate")) {
@@ -3061,7 +3055,7 @@
       if (!plate) continue;
       const firstStepIdx = state.sceneFirstStep[targetScene];
       const step = _stepsData[firstStepIdx];
-      const objectId = step.object || step.objectId || "";
+      const objectId = step.object || "";
       if (!objectId) continue;
       const zIndex = _zPlan.plateZ[firstStepIdx];
       if (plate.classList.contains("audio-plate")) {
@@ -4579,7 +4573,6 @@
     return null;
   }
   function formatPanelContent(panelData, objectId) {
-    if (!panelData) return "<p>No content available.</p>";
     let html = "";
     const basePath = getBasePath();
     if (panelData.text) {
@@ -4705,11 +4698,8 @@
     }
   }
   function navigateToIntro() {
-    if (state.viewerPlates) {
-      for (const key of Object.keys(state.viewerPlates)) {
-        const plate = state.viewerPlates[key];
-        if (plate) plate.classList.remove("is-active");
-      }
+    for (const plate of Object.values(state.viewerPlates)) {
+      plate.classList.remove("is-active");
     }
     if (state.lenis) {
       state.lenis.stop();
@@ -4732,11 +4722,8 @@
   function navigateToStep(stepNumber) {
     const targetIndex = stepNumber - 1;
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
-    if (state.viewerPlates) {
-      for (const key of Object.keys(state.viewerPlates)) {
-        const plate = state.viewerPlates[key];
-        if (plate) plate.classList.remove("is-active");
-      }
+    for (const plate of Object.values(state.viewerPlates)) {
+      plate.classList.remove("is-active");
     }
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * window.innerHeight;
@@ -4947,7 +4934,7 @@
         scrubCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
       }
     }
-    if (snap) snap.currentSnapIndex = target;
+    snap.currentSnapIndex = target;
     const targetStep = target - 1;
     if (targetStep >= 0 && targetStep !== state.currentIndex) {
       state.scrollDriven = true;

@@ -471,7 +471,7 @@
       // The key is included deliberately: a key-bearing URL is the intended way
       // to share access to a protected story, and the toggle defaults to
       // "Without key" so it is never added unless the user explicitly opts in
-      // (which surfaces embed-key-warning). Reviewed and kept as-is — this is a
+      // (which surfaces embed-key-warning). This is a
       // deliberate, documented risk: protected stories are a deterrent, not
       // real encryption, so a shared key is not a confidentiality boundary. The
       // user-facing warning is the mitigation — an embed pasted into a public

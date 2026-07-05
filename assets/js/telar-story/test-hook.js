@@ -24,7 +24,7 @@
  * `IiifViewer` wrapper's closure), so the wrapper registers itself here on init
  * and unregisters on destroy.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -83,9 +83,8 @@ function visibleArea(el) {
  * Story pages stack viewer plates: a fresh deep-zoom plate slides OVER the prior
  * one, and both fill the viewport at once. A pure visible-area ranking is
  * occlusion-blind — the `getBoundingClientRect` areas tie and the sort returns
- * whichever registered first, often the hidden plate behind at home zoom. (That
- * tie was the entire "step-19 collapse" the sweep reported.) Selection here, in
- * order:
+ * whichever registered first, often the hidden plate behind at home zoom.
+ * Selection here, in order:
  *   1. Prefer plates marked `.is-active` (card-pool's own "visible plate"
  *      signal). Stale `is-active` can linger on more than one stacked plate, so
  *      this only narrows the field; it does not decide on its own.

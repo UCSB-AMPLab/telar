@@ -107,7 +107,7 @@ def generate_objects():
         content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
 
         # Resolve medium: prefer 'medium' field; fall back to 'object_type' for backward compat
-        # (v0.10.0: object_type is renamed to medium in CSV; old sites may still have object_type in JSON)
+        # (old sites may still have object_type in JSON)
         medium_value = obj.get('medium', '') or obj.get('object_type', '')
 
         # Auto-detect media type for gallery Type filter
@@ -139,7 +139,7 @@ def generate_objects():
         # Additional optional fields
         if obj.get('year'):
             content += f'year: "{obj.get("year")}"\n'
-        # Note: object_type key is no longer written to frontmatter (v0.10.0 rename to medium above)
+        # Frontmatter carries 'medium' only; object_type is not written
         if obj.get('subjects'):
             content += f'subjects: "{obj.get("subjects")}"\n'
         if obj.get('is_featured_sample'):
