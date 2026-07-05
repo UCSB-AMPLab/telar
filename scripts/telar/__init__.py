@@ -4,7 +4,7 @@ Telar Data Processing Package
 Modular package for processing Telar story data from CSV/Google Sheets
 into JSON format for the Jekyll-based storytelling framework.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 # Public API re-exports
@@ -20,7 +20,7 @@ from telar.images import (
 from telar.iiif_metadata import (
     detect_iiif_version, extract_language_map_value, strip_html_tags,
     clean_metadata_value, find_metadata_field, is_legal_boilerplate,
-    extract_credit, extract_manifest_metadata, apply_metadata_fallback
+    extract_credit, apply_metadata_fallback
 )
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.widgets import (

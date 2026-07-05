@@ -39,13 +39,11 @@ Helper functions `strip_html_tags()` and `clean_metadata_value()` sanitize
 extracted text by removing HTML markup, decoding entities, and normalizing
 whitespace. Many IIIF manifests contain HTML-formatted metadata.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import re
 import html
-import json
-import urllib.request
 
 
 def detect_iiif_version(manifest):
@@ -318,102 +316,6 @@ def extract_credit(manifest, version='2.0', site_language='en'):
             credit = fallback
 
     return credit
-
-
-def extract_manifest_metadata(manifest_url, site_language='en'):
-    """
-    Extract all metadata fields from IIIF manifest.
-
-    Extracts: title, description, creator, period, location, credit
-
-    Args:
-        manifest_url: URL of IIIF manifest
-        site_language: Preferred language for extraction
-
-    Returns:
-        dict: Extracted metadata with keys: title, description, creator, period, location, credit
-              Returns empty dict on error
-    """
-    try:
-        # Fetch manifest
-        response = urllib.request.urlopen(manifest_url, timeout=10)
-        manifest = json.loads(response.read())
-
-        version = detect_iiif_version(manifest)
-        metadata_array = manifest.get('metadata', [])
-
-        extracted = {}
-
-        # Title
-        if version == '2.0':
-            extracted['title'] = clean_metadata_value(manifest.get('label', ''))
-        else:  # v3.0
-            label = manifest.get('label', {})
-            if isinstance(label, dict):
-                extracted['title'] = clean_metadata_value(
-                    extract_language_map_value(label, site_language)
-                )
-            else:
-                extracted['title'] = clean_metadata_value(label)
-
-        # Description
-        if version == '2.0':
-            desc = manifest.get('description', '')
-            extracted['description'] = strip_html_tags(desc)
-        else:  # v3.0
-            summary = manifest.get('summary', {})
-            if isinstance(summary, dict):
-                extracted['description'] = strip_html_tags(
-                    extract_language_map_value(summary, site_language)
-                )
-            else:
-                extracted['description'] = strip_html_tags(summary)
-
-        # Creator
-        extracted['creator'] = find_metadata_field(
-            metadata_array,
-            ['Creator', 'Artist', 'Author', 'Maker', 'Cartographer', 'Contributor', 'Painter', 'Sculptor'],
-            version,
-            site_language
-        )
-
-        # Period
-        extracted['period'] = find_metadata_field(
-            metadata_array,
-            ['Date', 'Period', 'Creation Date', 'Created', 'Date Created', 'Date Note', 'Temporal'],
-            version,
-            site_language
-        )
-
-        # Location (Repository/Institution name, not geographic location)
-        extracted['location'] = find_metadata_field(
-            metadata_array,
-            ['Repository', 'Holding Institution', 'Institution', 'Current Location'],
-            version,
-            site_language
-        )
-
-        # If location not found in metadata, try provider (v3.0)
-        if not extracted['location'] and version == '3.0':
-            providers = manifest.get('provider', [])
-            if providers and isinstance(providers, list) and len(providers) > 0:
-                provider = providers[0]
-                if isinstance(provider, dict):
-                    label = provider.get('label', {})
-                    if isinstance(label, dict):
-                        extracted['location'] = extract_language_map_value(label, site_language)
-                    else:
-                        extracted['location'] = str(label).strip()
-
-        # Credit
-        extracted['credit'] = extract_credit(manifest, version, site_language)
-
-        return extracted
-
-    except Exception:
-        # Silently fail - return empty dict
-        # Errors will be caught and logged by calling function
-        return {}
 
 
 def apply_metadata_fallback(row_dict, iiif_metadata):
