@@ -323,7 +323,7 @@
 
 .telar-widget-accordion .accordion-button:focus {
   border-color: var(--color-link);
-  box-shadow: 0 0 0 0.25rem rgba(var(--color-link), 0.25);
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--color-link) 25%, transparent);
 }
 
 .telar-widget-accordion .accordion-button::after {

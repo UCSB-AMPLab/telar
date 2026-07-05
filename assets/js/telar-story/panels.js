@@ -370,8 +370,8 @@ export function initializeScrollLock() {
   backdrop.style.cssText = `
     position: fixed;
     inset: -50px;
-    background: rgba(0, 0, 0, 0.025);
-    z-index: 9900;
+    background: var(--color-panel-backdrop);
+    z-index: var(--z-panel-backdrop);
     display: none;
     pointer-events: none;
   `;

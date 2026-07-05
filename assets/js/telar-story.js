@@ -1990,7 +1990,7 @@
         if (!plateEl.querySelector(".audio-clip-end-overlay")) {
           const dimEl = document.createElement("div");
           dimEl.className = "audio-clip-end-overlay";
-          dimEl.style.cssText = "position:absolute;inset:0;background:rgba(0,0,0,0.25);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
+          dimEl.style.cssText = "position:absolute;inset:0;background:var(--color-overlay-dim);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
           plateEl.appendChild(dimEl);
         }
       });
@@ -2141,7 +2141,7 @@
     if (!overlay) {
       overlay = document.createElement("div");
       overlay.className = "audio-clip-end-overlay";
-      overlay.style.cssText = "position:absolute;inset:0;background:rgba(0,0,0,0.25);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
+      overlay.style.cssText = "position:absolute;inset:0;background:var(--color-overlay-dim);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
       plateEl.appendChild(overlay);
     }
     void overlay.offsetHeight;
@@ -4604,8 +4604,8 @@
     backdrop.style.cssText = `
     position: fixed;
     inset: -50px;
-    background: rgba(0, 0, 0, 0.025);
-    z-index: 9900;
+    background: var(--color-panel-backdrop);
+    z-index: var(--z-panel-backdrop);
     display: none;
     pointer-events: none;
   `;

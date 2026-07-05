@@ -9,7 +9,7 @@
  * and content elements that appear inside panels: footnotes, blockquotes,
  * hyperlinks, images, and glossary inline links.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 @use 'responsive' as *;
@@ -332,23 +332,9 @@
   color: var(--color-link);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  #panel-layer1 .offcanvas-body a[href^="#_ftn"]:hover {
-    color: #1a252f;
-    text-decoration: underline;
-  }
-}
-
 /* Layer 2 (dark purple) footnote references */
 #panel-layer2 .offcanvas-body a[href^="#_ftn"] {
   color: var(--color-link);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  #panel-layer2 .offcanvas-body a[href^="#_ftn"]:hover {
-    color: #C5DBE8;
-    text-decoration: underline;
-  }
 }
 
 /* Horizontal rule separator before footnotes */
@@ -386,7 +372,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   #panel-layer1 .offcanvas-body a[href^="#_ftnref"]:hover {
-    color: var(--color-primary);
+    color: var(--color-heading);
     text-decoration: underline;
   }
 }
@@ -394,13 +380,6 @@
 /* Layer 2 footnote numbers */
 #panel-layer2 .offcanvas-body a[href^="#_ftnref"] {
   color: var(--color-link);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  #panel-layer2 .offcanvas-body a[href^="#_ftnref"]:hover {
-    color: #E8DCC4;
-    text-decoration: underline;
-  }
 }
 
 /* Blockquote Styling */
@@ -414,16 +393,16 @@
 
 /* Layer 1 (light blue) blockquotes */
 #panel-layer1 .offcanvas-body blockquote {
-  border-left-color: var(--color-primary);
-  background: rgba(44, 62, 80, 0.05);
-  color: var(--color-primary);
+  border-left-color: var(--color-heading);
+  background: color-mix(in srgb, var(--color-heading) 5%, transparent);
+  color: var(--color-heading);
 }
 
 /* Layer 2 (dark purple) blockquotes */
 #panel-layer2 .offcanvas-body blockquote {
   border-left-color: var(--color-panel-layer1-bg);
-  background: rgba(168, 197, 212, 0.1);
-  color: #C5DBE8;
+  background: color-mix(in srgb, var(--color-panel-layer1-bg) 10%, transparent);
+  color: var(--color-panel-layer2-text);
 }
 
 /* Blockquote paragraph spacing */

@@ -543,7 +543,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           const dimEl = document.createElement("div");
           dimEl.className = "audio-clip-end-overlay";
           dimEl.style.cssText =
-            "position:absolute;inset:0;background:rgba(0,0,0,0.25);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
+            "position:absolute;inset:0;background:var(--color-overlay-dim);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
           plateEl.appendChild(dimEl);
         }
       });
@@ -775,7 +775,7 @@ export function applyAudioClipEndDim(plateEl) {
     overlay = document.createElement("div");
     overlay.className = "audio-clip-end-overlay";
     overlay.style.cssText =
-      "position:absolute;inset:0;background:rgba(0,0,0,0.25);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
+      "position:absolute;inset:0;background:var(--color-overlay-dim);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
     plateEl.appendChild(overlay);
   }
   // Force reflow so CSS transition fires

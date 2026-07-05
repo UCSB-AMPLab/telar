@@ -486,10 +486,6 @@
   transition: transform 0.5s ease-out;  // slides away via translateY(-120vh)
 }
 
-.intro-vignette {
-  display: none;  // not used in full-screen text mode
-}
-
 .intro-floating-card {
   text-align: center;
   max-width: 550px;
@@ -500,7 +496,7 @@
     font-family: var(--font-headings);
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--color-heading);
     line-height: 1.2;
     margin-bottom: 0.5rem;
   }
@@ -516,7 +512,7 @@
   .intro-demo-label {
     font-size: 0.9rem;
     font-weight: 500;
-    color: var(--color-accent, #6c757d);
+    color: var(--color-accent);
     margin-bottom: 0.5rem;
   }
 
@@ -660,7 +656,7 @@
     font-family: var(--font-headings);
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--color-heading);
     line-height: 1.2;
     margin-bottom: 0.5rem;
   }

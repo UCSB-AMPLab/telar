@@ -11,7 +11,7 @@
  * Consumers: import this partial as `@use 'responsive' as *` (namespace-free)
  * so that $vars and @mixin vertical-layout are available unqualified.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 // Layer order declaration — documentation duplicate of the HTML-level
@@ -108,8 +108,7 @@ $telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
   // Card-slide transitions — _story.scss:66, 350, 418
   // fights JS-set transform inline style on sliding card plates
   .viewer-plate,
-  .text-card,
-  .intro-vignette {
+  .text-card {
     transition: none !important; // fights JS-set transform inline style
   }
 

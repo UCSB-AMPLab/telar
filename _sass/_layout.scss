@@ -138,7 +138,7 @@
 
 .story-card h3 {
   font-family: var(--font-headings);
-  color: var(--color-primary);
+  color: var(--color-heading);
   font-size: 1.2rem;
   margin-top: 1rem;
   font-weight: 400;
@@ -191,7 +191,7 @@
 .object-demo-label {
   font-size: 1.75rem;
   font-weight: 500;
-  color: var(--color-accent, #6c757d);
+  color: var(--color-accent);
   margin-bottom: 0.25rem;
   font-family: var(--font-body);
 }
@@ -265,7 +265,7 @@
 .video-thumbnail,
 .audio-thumbnail {
   height: 250px;
-  background: var(--color-button-bg, #883C36);
+  background: var(--color-button-bg);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -273,7 +273,7 @@
 }
 
 .media-type-icon {
-  color: var(--color-button-text, #fff);
+  color: var(--color-button-text);
   width: 72px;
   height: 72px;
 }
@@ -311,8 +311,8 @@
   margin-top: 3rem;
   margin-bottom: 1.5rem;
   font-size: 2rem;
-  color: var(--color-primary);
-  border-bottom: 2px solid var(--color-primary);
+  color: var(--color-heading);
+  border-bottom: 2px solid var(--color-heading);
   padding-bottom: 0.5rem;
 }
 
@@ -539,7 +539,7 @@
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.5rem;
-  background: var(--color-heading, #2c3e50);
+  background: var(--color-heading);
   color: #fff;
   border-radius: 50px;
   font-size: 0.75rem;
@@ -704,7 +704,7 @@
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 0.95rem;
-  color: var(--color-primary);
+  color: var(--color-heading);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -753,7 +753,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .objects-filter-option:hover {
-    color: var(--color-heading, #333);
+    color: var(--color-heading);
   }
 }
 
@@ -761,7 +761,7 @@
   flex-shrink: 0;
   width: 1rem;
   height: 1rem;
-  accent-color: var(--color-heading, #2c3e50);
+  accent-color: var(--color-heading);
 }
 
 .objects-filter-option-label {
@@ -830,7 +830,7 @@
   padding: 0;
   font-family: inherit;
   font-size: inherit;
-  color: var(--color-link, #007bff);
+  color: var(--color-link);
   cursor: pointer;
   text-decoration: none;
   transition: color 0.2s ease;
@@ -838,13 +838,13 @@
 
 @media (hover: hover) and (pointer: fine) {
   .objects-sort-btn:hover {
-    color: var(--color-heading, #333);
+    color: var(--color-heading);
     text-decoration: underline;
   }
 }
 
 .objects-sort-btn.active {
-  color: var(--color-heading, #333);
+  color: var(--color-heading);
   font-weight: 600;
   cursor: pointer;  /* Still clickable to toggle direction */
 }
@@ -1061,7 +1061,7 @@
   .collection-item .story-protected-thumbnail {
     aspect-ratio: 1;
     width: 100%;
-    background: var(--color-primary, #555);
+    background: var(--color-heading);
   }
 
   .collection-item .story-thumbnail-placeholder {
