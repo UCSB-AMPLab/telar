@@ -97,6 +97,31 @@ class TestDeriveSentinels:
         )
         assert sentinels == []
 
+    def test_non_latin_scripts_yield_sentinels(self):
+        # The gate must protect stories in any script, not just Latin —
+        # a story whose prose derives zero sentinels is invisible to the
+        # content sweep.
+        cases = {
+            "cyrillic": "Это защищённая история о старинных картах города",
+            "greek": "Αυτή είναι μια προστατευμένη ιστορία για παλιούς χάρτες",
+            "cjk": "这是一个关于古代地图和殖民地景观的受保护故事内容",
+            "arabic": "هذه قصة محمية عن الخرائط القديمة والمناظر الطبيعية",
+        }
+        for name, prose in cases.items():
+            sentinels = derive_sentinels([{"question": prose, "answer": ""}])
+            assert sentinels, f"{name} prose produced no sentinels"
+            assert any(s in prose for s in sentinels), name
+
+    def test_underscores_split_segments(self):
+        # Markdown transforms underscores (emphasis), so they cannot sit
+        # inside a sentinel even though regex \w matches them.
+        sentinels = derive_sentinels(
+            [{"question": "an _emphasised protected passage_ inside the "
+                          "question text of this fixture", "answer": ""}]
+        )
+        assert all("_" not in s for s in sentinels)
+        assert any("emphasised protected passage" in s for s in sentinels)
+
 
 class TestFragmentExtraction:
     def test_extracts_between_markers(self, tmp_path):

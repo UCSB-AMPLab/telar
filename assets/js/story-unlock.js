@@ -67,6 +67,8 @@ function getPayloadKey() {
   // after that point would yield null. The binding is computed once at init.
   if (_payloadBinding) return _payloadBinding;
   const d = window.storyData;
+  // A stub that reached the browser un-encrypted carries salt: "" — falsy, so
+  // the cache path is skipped entirely and a bad build fails safe here.
   if (!d || !d.salt) return null;
   const material = String(d.salt) + String(d.iv || '');
   try {
@@ -157,8 +159,14 @@ async function deriveKey(password, salt) {
 /**
  * The story identifier that the build bound into the envelope as additional
  * authenticated data. The template emits window.telarStoryId (the data_file
- * name); the URL segment is the same identifier and covers pages rendered
- * without it.
+ * name); the URL-segment fallback covers pages rendered without it.
+ *
+ * INVARIANT: the fallback only decrypts correctly when the story's permalink
+ * slug equals its data-file stem. That holds for stories with a story_id
+ * (both derive from it) but is NOT structurally guaranteed for the
+ * `story-{number}` fallback naming — which is why the template must keep
+ * emitting telarStoryId on every protected page. If the fallback is ever
+ * the live path, AAD mismatch shows as a wrong-key error on a correct key.
  * @returns {string} Story identifier for AAD
  */
 function getStoryAadId() {

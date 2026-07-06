@@ -116,12 +116,18 @@ def derive_sentinels(steps):
             continue
         for field in PROSE_FIELDS:
             text = step.get(field) or ''
-            # Answers arrive as rendered HTML: drop the markup so only the
-            # author's prose can become a sentinel.
+            # Tags are stripped from EVERY prose field, not just answers
+            # (answers arrive as rendered HTML; the others may carry inline
+            # markup too): markup vocabulary — class names, URLs — lives on
+            # every page and must never become a sentinel.
             text = re.sub(r'<[^>]+>', ' ', text)
             # Split on characters that markdown/HTML rendering or smart
-            # punctuation could alter; what remains appears verbatim.
-            for segment in re.split(r"[^A-Za-z0-9 ,.À-ſ-]+", text):
+            # punctuation could alter; what remains appears verbatim. \w
+            # keeps letters and digits of every script (Cyrillic, Greek,
+            # Arabic, CJK — not just Latin); underscores split separately
+            # because markdown transforms them (emphasis) even though \w
+            # matches them.
+            for segment in re.split(r"[^\w ,.-]+|_+", text):
                 segment = ' '.join(segment.split())
                 if len(segment) >= MIN_SENTINEL_LENGTH:
                     segments.append(segment[:MAX_SENTINEL_LENGTH].strip())
@@ -171,24 +177,38 @@ def sweep_files(site_dir, skip_top=('telar-content',)):
         yield path
 
 
+def _warn_skipped(skipped, sweep_name):
+    """A file the sweep cannot read is a file the gate did not check —
+    say so rather than let the final "passed" overstate coverage."""
+    if skipped:
+        print(f"  WARNING: {sweep_name} could not read {len(skipped)} "
+              "file(s) as UTF-8; they were NOT scanned:")
+        for path in skipped:
+            print(f"    {path}")
+
+
 def content_sentinel_sweep(site_dir, sentinels_by_story):
     """Grep the rendered output for protected plaintext. Returns hits."""
     hits = []
+    skipped = []
     for path in sweep_files(site_dir):
         try:
             text = path.read_text(encoding='utf-8')
         except (UnicodeDecodeError, OSError):
+            skipped.append(str(path))
             continue
         for story_id, sentinels in sentinels_by_story.items():
             for sentinel in sentinels:
                 if sentinel in text:
                     hits.append((str(path), story_id, sentinel))
+    _warn_skipped(skipped, 'content sweep')
     return hits
 
 
 def shape_sweep(site_dir):
     """Post-injection shape checks: no stub token, no fragment output."""
     problems = []
+    skipped = []
     fragment_dir = Path(site_dir) / FRAGMENT_URL_PREFIX
     if fragment_dir.exists():
         problems.append(f"{fragment_dir} still exists after fragment deletion")
@@ -197,7 +217,9 @@ def shape_sweep(site_dir):
             if STUB_TOKEN in path.read_text(encoding='utf-8'):
                 problems.append(f"{path}: leftover {STUB_TOKEN}")
         except (UnicodeDecodeError, OSError):
+            skipped.append(str(path))
             continue
+    _warn_skipped(skipped, 'shape sweep')
     return problems
 
 
@@ -271,8 +293,22 @@ def process_site(site_dir, data_dir, config_path):
             + "\n  ".join(lines)
         )
 
-    print(f"✓ {len(protected)} protected story/stories encrypted; "
-          "shape and content gates passed.")
+    # The content gate only checks stories it could derive sentinels FROM.
+    # A story whose prose has no run of MIN_SENTINEL_LENGTH sentinel-safe
+    # characters (very short steps) yields none — the shape gate still
+    # protects it, but the success line must not claim content coverage
+    # it doesn't have.
+    uncovered = sorted(sid for sid, s in sentinels_by_story.items() if not s)
+    if uncovered:
+        print(f"  WARNING: no content sentinels could be derived for: "
+              f"{', '.join(uncovered)} — the content gate did not check "
+              "these stories (shape gates still apply).")
+        print(f"✓ {len(protected)} protected story/stories encrypted; "
+              f"shape gates passed; content gate covered "
+              f"{len(protected) - len(uncovered)} of {len(protected)}.")
+    else:
+        print(f"✓ {len(protected)} protected story/stories encrypted; "
+              "shape and content gates passed.")
     return len(protected)
 
 
