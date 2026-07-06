@@ -641,7 +641,16 @@
     border-radius: 50%;
     border: 2px solid rgba(0, 0, 0, 0.1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    /* Remove white filter on mobile - show dark X like arrows/home */
+  }
+
+  /* Show the dark X like arrows/home. The base #panel-layer1/#panel-layer2
+     rules invert the icon white for the dark desktop panels (and
+     #panel-glossary dims it); their ID specificity beats a class-level
+     reset, so this one must match it or the X paints white on the white
+     circle above. */
+  #panel-layer1 .btn-close,
+  #panel-layer2 .btn-close,
+  #panel-glossary .btn-close {
     filter: none;
     opacity: 1;
   }
