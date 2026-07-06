@@ -427,6 +427,8 @@ unlock:
   toggle_key_visibility: "Toggle key visibility"
   back_link: "← Back to stories"
   card_description: "This story is protected. You need a key to unlock it."
+  error_empty: "Please enter a key"
+  error_incorrect: "Incorrect key. Please try again."
 
 # Upgrade messages
 upgrade:

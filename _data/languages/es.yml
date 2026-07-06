@@ -428,6 +428,8 @@ unlock:
   toggle_key_visibility: "Mostrar u ocultar la clave"
   back_link: "← Volver a las historias"
   card_description: "Esta historia está protegida. Necesitas una clave para abrirla."
+  error_empty: "Ingresa una clave"
+  error_incorrect: "Clave incorrecta. Inténtalo de nuevo."
 
 # Mensajes de actualización
 upgrade:
