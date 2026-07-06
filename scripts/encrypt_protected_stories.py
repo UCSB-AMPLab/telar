@@ -79,9 +79,30 @@ PROSE_FIELDS = ('question', 'answer', 'layer1_content', 'layer2_content')
 # that page", not a stock phrase collision ('start, end, loop' appears in the
 # CHANGELOG). Tags are stripped first so markup vocabulary (class names,
 # URLs) can never become a sentinel — those live on every page.
+# Dense scripts (CJK, kana, Hangul) carry roughly a word per character, so a
+# 20-char bar there demands a whole paragraph where Latin needs a phrase —
+# segments that are mostly dense-script characters use the lower bar.
 MIN_SENTINEL_LENGTH = 20
+MIN_SENTINEL_LENGTH_DENSE = 10
 MAX_SENTINEL_LENGTH = 60
 MAX_SENTINELS_PER_STORY = 24
+
+# Han (incl. Ext A), kana, Hangul — the scripts where 10 characters already
+# form a distinctive phrase.
+_DENSE_SCRIPT_RE = re.compile(
+    '[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿]'
+)
+
+
+def _min_sentinel_length(segment):
+    """The length bar a segment must clear to become a sentinel."""
+    compact = segment.replace(' ', '')
+    if not compact:
+        return MIN_SENTINEL_LENGTH
+    dense = len(_DENSE_SCRIPT_RE.findall(compact))
+    if dense * 2 >= len(compact):
+        return MIN_SENTINEL_LENGTH_DENSE
+    return MIN_SENTINEL_LENGTH
 
 
 class GateFailure(Exception):
@@ -129,7 +150,7 @@ def derive_sentinels(steps):
             # matches them.
             for segment in re.split(r"[^\w ,.-]+|_+", text):
                 segment = ' '.join(segment.split())
-                if len(segment) >= MIN_SENTINEL_LENGTH:
+                if len(segment) >= _min_sentinel_length(segment):
                     segments.append(segment[:MAX_SENTINEL_LENGTH].strip())
     # Longest first: most distinctive, least likely to collide.
     segments.sort(key=len, reverse=True)

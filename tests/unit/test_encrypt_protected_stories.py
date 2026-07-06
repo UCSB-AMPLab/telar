@@ -112,6 +112,21 @@ class TestDeriveSentinels:
             assert sentinels, f"{name} prose produced no sentinels"
             assert any(s in prose for s in sentinels), name
 
+    def test_dense_scripts_clear_a_lower_bar(self):
+        # Ten Han characters are a distinctive phrase; ten Latin characters
+        # are not. The dense-script minimum applies only when the segment is
+        # mostly dense-script characters.
+        short_cjk = "古代地图殖民地景观故事"          # 11 chars, all Han
+        short_latin = "a tiny bit"                    # 10 chars, Latin
+        assert derive_sentinels([{"question": short_cjk, "answer": ""}])
+        assert derive_sentinels([{"question": short_latin, "answer": ""}]) == []
+
+    def test_mostly_latin_keeps_the_full_bar(self):
+        # A sprinkle of dense-script characters must not lower the bar for a
+        # basically-Latin segment.
+        mixed = "see 地图 maps"                        # 2 of 10 compact chars dense
+        assert derive_sentinels([{"question": mixed, "answer": ""}]) == []
+
     def test_underscores_split_segments(self):
         # Markdown transforms underscores (emphasis), so they cannot sit
         # inside a sentinel even though regex \w matches them.

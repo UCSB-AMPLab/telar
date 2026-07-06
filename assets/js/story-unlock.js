@@ -159,18 +159,22 @@ async function deriveKey(password, salt) {
 /**
  * The story identifier that the build bound into the envelope as additional
  * authenticated data. The template emits window.telarStoryId (the data_file
- * name); the URL-segment fallback covers pages rendered without it.
- *
- * INVARIANT: the fallback only decrypts correctly when the story's permalink
- * slug equals its data-file stem. That holds for stories with a story_id
- * (both derive from it) but is NOT structurally guaranteed for the
- * `story-{number}` fallback naming — which is why the template must keep
- * emitting telarStoryId on every protected page. If the fallback is ever
- * the live path, AAD mismatch shows as a wrong-key error on a correct key.
- * @returns {string} Story identifier for AAD
+ * name) on every protected page; there is deliberately NO fallback to the
+ * URL segment — the permalink slug equals the data-file stem only by
+ * convention (not at all for `story-{number}` naming), so a URL-derived AAD
+ * can silently decrypt-fail as a "wrong key" on a correct key. A missing
+ * telarStoryId is a template bug; the console.warn names it so nobody
+ * debugs the key instead. (The session-cache functions still use the URL
+ * segment — cache identity doesn't need to match the AAD.)
+ * @returns {string} Story identifier for AAD ('' if the template is broken)
  */
 function getStoryAadId() {
-  return window.telarStoryId || getStoryId();
+  if (!window.telarStoryId) {
+    console.warn('story-unlock: window.telarStoryId missing — the story ' +
+      'template must emit it on protected pages; decryption will fail.');
+    return '';
+  }
+  return window.telarStoryId;
 }
 
 /**
