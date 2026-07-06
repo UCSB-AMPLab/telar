@@ -310,15 +310,24 @@
   <script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
 
   <!-- KaTeX for LaTeX rendering (loaded dynamically if story has LaTeX) -->
-  <!-- A second copy of this loading logic (URLs, version pin, delimiter list,
-       trust callback) lives in _includes/katex.html, used by the default
-       layout for non-story pages. Any version bump here must also be made there.
-       The loader itself is assets/js/katex-loader.js; this inline script only
-       hands it the Liquid-dependent has_latex flag (protected stories carry no
-       readable steps before unlock, so their flag must ride frontmatter). -->
+  <!-- CDN URLs, version pin, and the delimiter list are read from
+       _data/katex.yml, the single source shared with _includes/katex.html
+       (used by the default layout for non-story pages). To bump the KaTeX
+       version, edit _data/katex.yml only.
+       The loader itself is assets/js/katex-loader.js; this inline script
+       hands it the config plus the Liquid-dependent has_latex flag (protected
+       stories carry no readable steps before unlock, so their flag must ride
+       frontmatter). -->
   <script>
     window.telarKatexConfig = {
-      hasLatex: {% if page.has_latex %}true{% else %}false{% endif %}
+      hasLatex: {% if page.has_latex %}true{% else %}false{% endif %},
+      cssUrl: {{ site.data.katex.css | jsonify }},
+      urls: [
+        {{ site.data.katex.js | jsonify }},
+        {{ site.data.katex.auto_render | jsonify }},
+        {{ site.data.katex.mhchem | jsonify }}
+      ],
+      delimiters: {{ site.data.katex.delimiters | jsonify }}
     };
   </script>
   <script src="{{ '/assets/js/katex-loader.js' | relative_url }}"></script>

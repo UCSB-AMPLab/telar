@@ -22,13 +22,20 @@
  * after decryption and calls it on the newly-injected step markup, so the
  * loader racing the unlock is expected and already handled downstream.
  *
- * A second copy of this loading logic (URLs, version pin, delimiter list,
- * trust callback) lives in _includes/katex.html, used by the default layout
- * for non-story pages. Any version bump here must also be made there.
+ * CDN URLs, version pin, and the delimiter list come from _data/katex.yml,
+ * the single source shared with _includes/katex.html (used by the default
+ * layout for non-story pages) — story.html jsonifies that data into
+ * window.telarKatexConfig (cssUrl, urls, delimiters) below. To bump the
+ * KaTeX version, edit _data/katex.yml only.
+ *
+ * The trust callback (which \href URL schemes are permitted) is logic, not
+ * data, so it stays hand-written here and in katex.html — the two copies
+ * are identical; keep them in sync if the policy changes.
  *
  * Classic script, not a module — loaded by a plain <script> tag from
  * _layouts/story.html, which also sets window.telarKatexConfig immediately
- * beforehand with the Liquid-dependent has_latex flag.
+ * beforehand with the Liquid-dependent has_latex flag plus the CDN/delimiter
+ * config.
  *
  * @version v1.6.0
  */
@@ -46,34 +53,27 @@ document.addEventListener("DOMContentLoaded", function() {
       metaHasLatex = !!(meta && meta._metadata && meta.has_latex);
     }
       if (pageHasLatex || metaHasLatex) {
+        // Fail-safe: if story.html didn't hand us the CDN config (e.g. an
+        // older build, or window.telarKatexConfig got clobbered), warn loudly
+        // rather than silently rendering no LaTeX — silent-blank is the
+        // failure mode this codebase documents and avoids elsewhere.
+        if (!config.urls) {
+          console.warn('Telar: KaTeX config missing (window.telarKatexConfig.urls) — LaTeX will not be loaded on this page.');
+          return;
+        }
+
         // Load KaTeX CSS
         var link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css';
+        link.href = config.cssUrl;
         document.head.appendChild(link);
 
         // Load KaTeX scripts sequentially
-        var scripts = [
-          'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js',
-          'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js',
-          'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js'
-        ];
+        var scripts = config.urls;
 
         function loadNext(i) {
           if (i >= scripts.length) {
-            var katexDelimiters = [
-              { left: "$$", right: "$$", display: true },
-              { left: "$", right: "$", display: false },
-              { left: "\\(", right: "\\)", display: false },
-              { left: "\\[", right: "\\]", display: true },
-              { left: "\\begin{align}", right: "\\end{align}", display: true },
-              { left: "\\begin{align*}", right: "\\end{align*}", display: true },
-              { left: "\\begin{cases}", right: "\\end{cases}", display: true },
-              { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
-              { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
-              { left: "\\begin{equation}", right: "\\end{equation}", display: true },
-              { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
-            ];
+            var katexDelimiters = config.delimiters;
             window.telarRenderLatex = function(element) {
               if (typeof renderMathInElement === 'function') {
                 renderMathInElement(element, {

@@ -4,42 +4,34 @@
   Provides window.telarRenderLatex() for rendering LaTeX in dynamically
   injected content (story panels, glossary definitions).
 
-  A second copy of this loading logic (URLs, version pin, delimiter list,
-  trust callback) lives in assets/js/katex-loader.js, the lazy loader story
-  pages use (story pages don't include this file). Any version bump here must
-  also be made there.
+  CDN URLs, version pin, and the delimiter list are read from _data/katex.yml,
+  the single source shared with assets/js/katex-loader.js (the lazy loader
+  story pages use, via window.telarKatexConfig set in _layouts/story.html).
+  To bump the KaTeX version, edit _data/katex.yml only.
+
+  The trust callback below (which \href URL schemes are permitted) is logic,
+  not data, so it stays hand-written here and in katex-loader.js — the two
+  copies are identical; keep them in sync if the policy changes.
 
   Version: v1.6.0
 -->
 
 <!-- KaTeX CSS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+<link rel="stylesheet" href="{{ site.data.katex.css }}">
 
 <!-- KaTeX JS -->
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+<script defer src="{{ site.data.katex.js }}"></script>
 
 <!-- KaTeX auto-render extension -->
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+<script defer src="{{ site.data.katex.auto_render }}"></script>
 
 <!-- mhchem extension for chemical formulas -->
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js"></script>
+<script defer src="{{ site.data.katex.mhchem }}"></script>
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {
     // Render all LaTeX on page load
-    var katexDelimiters = [
-      { left: "$$", right: "$$", display: true },
-      { left: "$", right: "$", display: false },
-      { left: "\\(", right: "\\)", display: false },
-      { left: "\\[", right: "\\]", display: true },
-      { left: "\\begin{align}", right: "\\end{align}", display: true },
-      { left: "\\begin{align*}", right: "\\end{align*}", display: true },
-      { left: "\\begin{cases}", right: "\\end{cases}", display: true },
-      { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
-      { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
-      { left: "\\begin{equation}", right: "\\end{equation}", display: true },
-      { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
-    ];
+    var katexDelimiters = {{ site.data.katex.delimiters | jsonify }};
 
     renderMathInElement(document.body, {
       delimiters: katexDelimiters,

@@ -1,0 +1,57 @@
+# KaTeX configuration — single source for the CDN URLs (version-pinned), the
+# auto-render delimiter list, and asset load order.
+#
+# Two consumers read this file:
+#   - _includes/katex.html — inline loader for non-story pages (default layout)
+#   - _layouts/story.html — hands the same values to assets/js/katex-loader.js,
+#     the lazy loader story pages use, via window.telarKatexConfig
+#
+# To bump the KaTeX version: update the four URLs below (version-pinned in
+# the path, e.g. katex@0.16.21) and version. Nothing else needs to change.
+#
+# The trust callback (which \href URL schemes are permitted) is logic, not
+# data, and stays hand-written in both consumers — see the comments there.
+
+version: "0.16.21"
+
+css: "https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css"
+js: "https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"
+auto_render: "https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"
+mhchem: "https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js"
+
+# Order matters for the lazy loader (assets/js/katex-loader.js), which loads
+# katex.min.js, then auto-render, then mhchem, sequentially.
+delimiters:
+  - left: "$$"
+    right: "$$"
+    display: true
+  - left: "$"
+    right: "$"
+    display: false
+  - left: "\\("
+    right: "\\)"
+    display: false
+  - left: "\\["
+    right: "\\]"
+    display: true
+  - left: "\\begin{align}"
+    right: "\\end{align}"
+    display: true
+  - left: "\\begin{align*}"
+    right: "\\end{align*}"
+    display: true
+  - left: "\\begin{cases}"
+    right: "\\end{cases}"
+    display: true
+  - left: "\\begin{pmatrix}"
+    right: "\\end{pmatrix}"
+    display: true
+  - left: "\\begin{bmatrix}"
+    right: "\\end{bmatrix}"
+    display: true
+  - left: "\\begin{equation}"
+    right: "\\end{equation}"
+    display: true
+  - left: "\\begin{equation*}"
+    right: "\\end{equation*}"
+    display: true
