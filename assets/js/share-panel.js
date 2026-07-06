@@ -537,6 +537,14 @@
    */
   function updateWarnings() {
     // Story page warnings (shown when "With key" is selected)
+    // Story-branch half of the four-id warning namespace in
+    // _includes/share-panel.html: #share-key-warning / #embed-key-warning here
+    // vs #share-protected-warning / #embed-protected-warning on the homepage
+    // branch (looked up below). The two halves differ on purpose — a story
+    // page can append the live decryption key, so its warnings speak to
+    // exposing the key; the homepage never holds the key. Edits to either
+    // half's ids or markup must be checked against the other and against
+    // share-panel.html's paired warning comments.
     const shareKeyWarning = document.getElementById('share-key-warning');
     const embedKeyWarning = document.getElementById('embed-key-warning');
 
@@ -557,6 +565,13 @@
     }
 
     // Homepage warnings (shown when protected story is selected)
+    // Homepage-branch half of the four-id warning namespace in
+    // _includes/share-panel.html: #share-protected-warning /
+    // #embed-protected-warning here vs #share-key-warning / #embed-key-warning
+    // on the story branch (looked up above). The homepage never holds the
+    // decryption key, so these only flag that the selected story is protected.
+    // Edits to either half's ids or markup must be checked against the other
+    // and against share-panel.html's paired warning comments.
     const shareProtectedWarning = document.getElementById('share-protected-warning');
     const embedProtectedWarning = document.getElementById('embed-protected-warning');
 
