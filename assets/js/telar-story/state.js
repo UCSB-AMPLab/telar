@@ -113,6 +113,10 @@ export const state = {
   viewerPlates: {},
   /** Map of stepIndex -> text card element. */
   textCards: {},
+  /** Map of stepIndex -> title card element. Populated by initCardPool. */
+  titleCards: {},
+  /** Index of the currently active title card step, or null when none is active. */
+  activeTitleCardIndex: null,
   /** Current object run tracking (for peek stack positioning). */
   currentObjectRun: { objectId: null, runPosition: 0 },
 
