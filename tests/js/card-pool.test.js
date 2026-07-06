@@ -250,7 +250,7 @@ describe('setCardProgress — title card fallback', () => {
   beforeEach(() => {
     state.textCards  = {};
     state.titleCards = {};
-    state.cardPool   = [];
+    state.cardRegistry = [];
   });
 
   it('is exported and does not throw when progress < 0.001', () => {
@@ -321,9 +321,9 @@ describe('cardOverlayRect — rect populated in reduced-motion synchronous branc
     // Mock getBoundingClientRect to return a known rect
     mockCard.getBoundingClientRect = vi.fn().mockReturnValue(MOCK_RECT);
 
-    // Wire minimal card-pool state: text card + pool entry for step 0, same object as currentObjectRun
+    // Wire minimal card-pool state: text card + registry entry for step 0, same object as currentObjectRun
     state.textCards = { 0: mockCard };
-    state.cardPool  = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: mockCard }];
+    state.cardRegistry = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: mockCard }];
 
     activateCard(0, 'forward');
 
@@ -366,7 +366,7 @@ describe('activateCard — same-object jump re-shows a hidden viewer plate', () 
     card.getBoundingClientRect = vi.fn().mockReturnValue(
       { top: 0, left: 0, width: 1, height: 1, bottom: 1, right: 1 });
     state.textCards = { 0: card };
-    state.cardPool = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: card }];
+    state.cardRegistry = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: card }];
   }
 
   it('re-adds is-active to the scene plate that a jump had hidden', () => {
@@ -401,7 +401,7 @@ describe('cardOverlayRect — null on title-card activation', () => {
 
     state.viewerPlates  = {};
     state.viewerCards   = [];
-    state.cardPool      = [];
+    state.cardRegistry  = [];
     state.textCards     = {};
     state.activeTitleCardIndex = null;
   });
@@ -602,14 +602,14 @@ describe('initCardPool — built card content escapes author text', () => {
     state.objectsIndex = {};
     state.viewerPlates = {};
     state.textCards = {};
-    state.cardPool = [];
+    state.cardRegistry = [];
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
     state.viewerPlates = {};
     state.textCards = {};
-    state.cardPool = [];
+    state.cardRegistry = [];
     state.titleCards = {};
   });
 

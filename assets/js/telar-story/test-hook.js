@@ -4,7 +4,7 @@
  * Measurement instrument for the cross-device centering work. It
  * exposes `window.__telarTestHook__` so an automated sweep (Playwright, the
  * Xcode iOS Simulator, or Chrome MCP) can read — in exact pixels — where an
- * authored focal point ACTUALLY renders and what image footprint ("radius") is
+ * authored focal point ACTUALLY renders and what image footprint (rect) is
  * visible, across screen sizes and orientations.
  *
  * Design principles:
@@ -140,7 +140,7 @@ function isSettled() {
  * actually renders, plus every variable needed to compare against intent.
  *
  * All positions are CSS px in viewport (screen) coordinates unless noted.
- * `visibleImageRect` is in image pixels — the footprint / "radius".
+ * `visibleImageRect` is in image pixels — the visible footprint rect.
  *
  * @param {number} nx - Authored focal x in [0, 1].
  * @param {number} ny - Authored focal y in [0, 1].
@@ -162,7 +162,7 @@ function measure(nx, ny) {
   const elPt = vp.imageToViewerElementCoordinates(new OSD.Point(nx * cs.x, ny * cs.y));
   const focalScreenPx = { x: rect.left + elPt.x, y: rect.top + elPt.y };
 
-  // Visible image footprint (the "radius"), in image px.
+  // Visible image footprint rect, in image px.
   const visImg = vp.viewportToImageRectangle(vp.getBounds(true));
 
   const homeZoom = vp.getHomeZoom();

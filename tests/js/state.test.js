@@ -77,7 +77,7 @@ describe('state', () => {
     expect(state.holdGateArmed).toBeUndefined();
     expect(state.holdGateClipDuration).toBeUndefined();
     // currentObject / currentViewerCard: unused single-value viewer tracking
-    // fields, superseded by the cardPool / viewerPlates / viewerCards maps.
+    // fields, superseded by the cardRegistry / viewerPlates / viewerCards maps.
     expect(state.currentObject).toBeUndefined();
     expect(state.currentViewerCard).toBeUndefined();
   });

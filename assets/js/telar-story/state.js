@@ -102,9 +102,13 @@ export const state = {
   /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
   manifestLoadTimes: [],
 
-  // ── Card pool ────────────────────────────────────────────────────────────
-  /** @type {Object[]} Pool of active card instances. */
-  cardPool: [],
+  // ── Card registry ──────────────────────────────────────────────────────────
+  /**
+   * @type {Object[]} Permanent step→card record: one entry per story step,
+   * built once at initCardPool time and never evicted. Not a pool — the
+   * capped, evicting structure is `viewerCards` above.
+   */
+  cardRegistry: [],
   /** Map of sceneIndex -> viewer plate element (one plate per scene). */
   viewerPlates: {},
   /** Map of stepIndex -> text card element. */
@@ -115,7 +119,7 @@ export const state = {
   // ── Scene maps (populated at initCardPool time) ───────────────────────────
   /**
    * Filtered step data (metadata rows removed), in the same index space as
-   * stepToScene / the card pool. Populated by initCardPool. The per-frame
+   * stepToScene / the card registry. Populated by initCardPool. The per-frame
    * lerp reads this so its stepIndex (a filtered-space index) lines up with
    * the step objects it interpolates between.
    */

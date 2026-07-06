@@ -1,11 +1,20 @@
 /**
  * Telar Story – Card Pool
  *
- * This module manages the lifecycle of viewer plates and text cards in the
- * card-stack layout. Every card element is created once at init time and
- * persists in the DOM for the lifetime of the page — visibility is
- * controlled entirely by CSS transforms, so slide transitions animate
- * correctly without the jank of DOM insertion and removal.
+ * This module owns two distinct lifecycles in the card-stack layout:
+ *
+ *   1. The permanent card registry (state.cardRegistry) — a step→card record
+ *      built once at init time. Every card element is created up front and
+ *      persists in the DOM for the lifetime of the page; nothing is ever
+ *      evicted. Visibility is controlled entirely by CSS transforms, so
+ *      slide transitions animate correctly without the jank of DOM
+ *      insertion and removal.
+ *
+ *   2. The viewer pool (state.viewerCards) — live viewer instances (IIIF,
+ *      video, audio) attached to viewer plates. This one genuinely pools:
+ *      it is capped at config.maxViewerCards, and when over the cap the
+ *      instance farthest by scene distance from the current position is
+ *      evicted.
  *
  * Scene maps — a story step references an object by ID, but the same
  * object can appear in multiple non-contiguous scenes (A → B → A). To
@@ -32,8 +41,8 @@
  * initialises IIIF viewers, video players, or audio players for upcoming
  * scenes. It counts by scene distance, not step offset, so a long
  * sequence of steps on the same object does not waste preload slots.
- * When the pool exceeds its cap (default 8), the instance farthest by
- * scene distance from the current position is evicted. IIIF tiles for
+ * When the viewer pool exceeds its cap (default 8), the instance farthest
+ * by scene distance from the current position is evicted. IIIF tiles for
  * scenes beyond the OSD preload range are also prefetched as image
  * link hints.
  *
@@ -537,7 +546,7 @@ export function initCardPool(storyData, config) {
     cardStack.appendChild(card);
     state.textCards[stepIdx] = card;
 
-    state.cardPool.push({
+    state.cardRegistry.push({
       stepIndex: stepIdx,
       objectId,
       cardType,
@@ -680,12 +689,12 @@ export function activateCard(index, direction) {
   const card = state.textCards[index];
   if (!card) return;
 
-  const poolEntry = state.cardPool.find(c => c.stepIndex === index);
+  const registryEntry = state.cardRegistry.find(c => c.stepIndex === index);
 
   const step = _stepsData[index] || {};
   const prevStep = index > 0 ? _stepsData[index - 1] : null;
 
-  const objectId = poolEntry.objectId;
+  const objectId = registryEntry.objectId;
   const prevObjectId = state.currentObjectRun.objectId;
 
   const currentMode = isFullObjectMode(step);
@@ -702,7 +711,7 @@ export function activateCard(index, direction) {
       _activateNewViewerPlate(objectId, index, prevObjectId, step, direction);
 
       // Reset the object run tracker
-      state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
+      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
 
       // Deactivate previous text card (keep stacked, not slide away)
       _deactivatePreviousTextCard(index, direction);
@@ -724,7 +733,7 @@ export function activateCard(index, direction) {
 
     } else {
       // Text-only on same object
-      state.currentObjectRun.runPosition = poolEntry.runPosition;
+      state.currentObjectRun.runPosition = registryEntry.runPosition;
 
       // Deactivate previous text card (becomes stacked)
       _deactivatePreviousTextCard(index, direction);
@@ -823,7 +832,7 @@ export function activateCard(index, direction) {
         }
       }
 
-      state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
+      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
 
       // Slide current text card back down
       _deactivatePreviousTextCard(index, direction);
@@ -846,7 +855,7 @@ export function activateCard(index, direction) {
 
     } else {
       // Same object, backward: text card slides down, previous card reactivated
-      state.currentObjectRun.runPosition = poolEntry.runPosition;
+      state.currentObjectRun.runPosition = registryEntry.runPosition;
 
       _deactivatePreviousTextCard(index, direction);
       _activateTextCard(card);
@@ -890,30 +899,31 @@ export function activateCard(index, direction) {
   // but no layout reversal — viewer is always full-viewport, compensation handles positioning
 }
 
-// ── Per-frame scrub positioning ───────────────────────────────────────────────
+// ── Per-frame interpolated positioning ────────────────────────────────────────
 
 /**
- * Set the visual progress of card transition during scroll scrubbing.
+ * Interpolate the visual progress of a card transition each scroll frame.
  *
  * Called every frame by the scroll engine. Positions the NEXT card
  * proportionally — at progress 0.0 it is fully below viewport, at 1.0
  * it is fully in position. The current card stays put (revealed
  * as the next card slides away backward).
  *
- * Only operates during is-scrubbing mode (CSS transitions disabled).
- * During button/keyboard nav, CSS transitions handle the animation.
+ * Only operates while the user is actively scrubbing (the is-scrubbing
+ * class is set, disabling CSS transitions). During button/keyboard nav,
+ * CSS transitions handle the animation instead.
  *
  * @param {number} stepIndex - Current step (floor of position)
  * @param {number} progress - Fractional progress 0.0-1.0
  */
 export function setCardProgress(stepIndex, progress) {
-  if (progress < 0.001) return; // At exact integer, no scrub needed
+  if (progress < 0.001) return; // At exact integer, no interpolation needed
 
   const nextIndex = stepIndex + 1;
   const nextCard = state.textCards[nextIndex] || state.titleCards[nextIndex];
   if (!nextCard) return;
 
-  // Only apply per-frame transforms during scrub mode
+  // Only apply per-frame transforms while the user is actively scrubbing
   const cardStack = document.querySelector('.card-stack');
   if (!cardStack || !cardStack.classList.contains('is-scrubbing')) return;
 
@@ -936,7 +946,7 @@ export function setCardProgress(stepIndex, progress) {
 
   if (nextObjectId !== currentObjectId) {
     if (nextObjectId === '') {
-      // Next step is a title card — scrub current plate away downward
+      // Next step is a title card — interpolate current plate away downward
       const currentSceneIndex = getSceneIndex(stepIndex);
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
       if (currentPlate) {
@@ -996,7 +1006,7 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
 
   if (direction === 'forward') {
     // For scene 0: skip the reset-to-offscreen if the plate was already
-    // positioned by the intro scrub (scroll-engine intro zone progressive
+    // positioned by the intro interpolation (scroll-engine intro zone progressive
     // positioning). Scenes 1+ always start clean at translateY(100%).
     if (sceneIndex === 0) {
       const currentTransform = newPlate.style.transform;
@@ -1331,7 +1341,7 @@ function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
  * @param {'forward'|'backward'} direction
  */
 function _deactivatePreviousTextCard(newIndex, direction) {
-  const prevCard = state.cardPool.find(c => c.element.classList.contains('is-active'));
+  const prevCard = state.cardRegistry.find(c => c.element.classList.contains('is-active'));
   if (!prevCard || prevCard.stepIndex === newIndex) return;
 
   const el = prevCard.element;

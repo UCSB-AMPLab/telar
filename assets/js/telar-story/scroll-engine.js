@@ -24,8 +24,8 @@
  *
  * Per-frame wiring — every animation frame, the scroll callback computes
  * the current fractional position and drives two visual systems:
- * setCardProgress positions the next card proportionally during the
- * scroll scrub, and lerpIiifPosition interpolates the IIIF viewer's
+ * setCardProgress interpolates the next card's position proportionally,
+ * and lerpIiifPosition interpolates the IIIF viewer's
  * x/y/zoom coordinates between same-object step pairs. Smoothness comes
  * from Lenis's animatedScroll value, not from OpenSeadragon animations.
  *
@@ -148,7 +148,7 @@ export function initScrollEngine(stepCount) {
   // Register snap points: 0 = intro, 1..stepCount = content steps
   registerSnapPoints(totalPositions);
 
-  // Wire scrub mode toggle
+  // Wire the is-scrubbing raw-input flag
   // virtual-scroll fires on raw wheel/touch input before Lenis smoothing
   let scrubEndTimer;
   lenis.on('virtual-scroll', () => {
@@ -203,7 +203,9 @@ function registerSnapPoints(count) {
  * Programmatically navigate to a step (button/keyboard nav).
  *
  * Uses lenis.scrollTo so the same physics engine drives the animation.
- * Does not add is-scrubbing so CSS transitions play at full duration.
+ * Programmatic navigation is not user scrubbing, so is-scrubbing is never
+ * added: per-frame card interpolation stays inert and CSS transitions
+ * animate the slide at full duration.
  *
  * @param {number} targetIndex - Target step index.
  */
@@ -268,17 +270,17 @@ export function keyboardNav(direction) {
   target = Math.max(0, Math.min(target, totalPositions - 1));
   if (target === rounded && isExact) return; // at boundary, no-op
 
-  // Backward only: reset any mid-scrub card that setCardProgress left
-  // partially positioned.  Forward leaves it — the CSS transition from
+  // Backward only: reset any mid-interpolation card that setCardProgress
+  // left partially positioned.  Forward leaves it — the CSS transition from
   // activateCard will smoothly complete the slide from wherever it is.
   if (direction === 'backward') {
     const contentStepIndex = Math.floor(Math.max(0, position - 1));
-    const scrubCard = state.textCards?.[contentStepIndex + 1];
-    if (scrubCard && !scrubCard.classList.contains('is-active')) {
-      const rot  = parseFloat(scrubCard.dataset.messinessRot  || 0);
-      const offX = parseFloat(scrubCard.dataset.messinessOffX || 0);
-      const offY = parseFloat(scrubCard.dataset.messinessOffY || 0);
-      scrubCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+    const interpolatedCard = state.textCards?.[contentStepIndex + 1];
+    if (interpolatedCard && !interpolatedCard.classList.contains('is-active')) {
+      const rot  = parseFloat(interpolatedCard.dataset.messinessRot  || 0);
+      const offX = parseFloat(interpolatedCard.dataset.messinessOffX || 0);
+      const offY = parseFloat(interpolatedCard.dataset.messinessOffY || 0);
+      interpolatedCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
     }
   }
 
@@ -363,7 +365,7 @@ export function updateScrollPosition(position) {
       goToStep(-1, 'backward');
     }
 
-    // Scrub the first card + viewer plate proportionally during intro→step0
+    // Interpolate the first card + viewer plate proportionally during intro→step0
     const progress = position; // 0 at top, 1 at step 0
     const firstCard = state.textCards?.[0];
     if (firstCard) {
@@ -388,7 +390,7 @@ export function updateScrollPosition(position) {
 
   state.scrollProgress = progress;
 
-  // Per-frame scrub updates
+  // Per-frame interpolation updates
   setCardProgress(stepIndex, progress);
   // Feed the FILTERED steps (state.stepsData) — stepIndex is a filtered-space
   // index (it drives state.stepToScene), so the unfiltered window.storyData

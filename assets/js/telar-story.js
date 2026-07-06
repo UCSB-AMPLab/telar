@@ -59,9 +59,13 @@
     // ── Connection speed ─────────────────────────────────────────────────────
     /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
     manifestLoadTimes: [],
-    // ── Card pool ────────────────────────────────────────────────────────────
-    /** @type {Object[]} Pool of active card instances. */
-    cardPool: [],
+    // ── Card registry ──────────────────────────────────────────────────────────
+    /**
+     * @type {Object[]} Permanent step→card record: one entry per story step,
+     * built once at initCardPool time and never evicted. Not a pool — the
+     * capped, evicting structure is `viewerCards` above.
+     */
+    cardRegistry: [],
     /** Map of sceneIndex -> viewer plate element (one plate per scene). */
     viewerPlates: {},
     /** Map of stepIndex -> text card element. */
@@ -71,7 +75,7 @@
     // ── Scene maps (populated at initCardPool time) ───────────────────────────
     /**
      * Filtered step data (metadata rows removed), in the same index space as
-     * stepToScene / the card pool. Populated by initCardPool. The per-frame
+     * stepToScene / the card registry. Populated by initCardPool. The per-frame
      * lerp reads this so its stepIndex (a filtered-space index) lines up with
      * the step objects it interpolates between.
      */
@@ -2442,7 +2446,7 @@
       }
       cardStack.appendChild(card);
       state.textCards[stepIdx] = card;
-      state.cardPool.push({
+      state.cardRegistry.push({
         stepIndex: stepIdx,
         objectId,
         cardType,
@@ -2513,10 +2517,10 @@
     }
     const card = state.textCards[index2];
     if (!card) return;
-    const poolEntry = state.cardPool.find((c) => c.stepIndex === index2);
+    const registryEntry = state.cardRegistry.find((c) => c.stepIndex === index2);
     const step = _stepsData[index2] || {};
     const prevStep2 = index2 > 0 ? _stepsData[index2 - 1] : null;
-    const objectId = poolEntry.objectId;
+    const objectId = registryEntry.objectId;
     const prevObjectId = state.currentObjectRun.objectId;
     const currentMode = isFullObjectMode(step);
     const prevMode = prevStep2 ? isFullObjectMode(prevStep2) : null;
@@ -2526,7 +2530,7 @@
     if (direction === "forward") {
       if (needsNewViewer) {
         _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
-        state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
+        state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
         _deactivatePreviousTextCard(index2, direction);
         if (state.activeTitleCardIndex != null) {
           const prevTitle = state.titleCards[state.activeTitleCardIndex];
@@ -2539,7 +2543,7 @@
         _activateTextCard(card);
         updateObjectCredits(objectId);
       } else {
-        state.currentObjectRun.runPosition = poolEntry.runPosition;
+        state.currentObjectRun.runPosition = registryEntry.runPosition;
         _deactivatePreviousTextCard(index2, direction);
         _activateTextCard(card);
         const sceneIndex = getSceneIndex(index2);
@@ -2603,7 +2607,7 @@
             }
           }
         }
-        state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
+        state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
         _deactivatePreviousTextCard(index2, direction);
         if (state.activeTitleCardIndex != null) {
           const prevTitle = state.titleCards[state.activeTitleCardIndex];
@@ -2617,7 +2621,7 @@
         _activateTextCard(card);
         updateObjectCredits(objectId);
       } else {
-        state.currentObjectRun.runPosition = poolEntry.runPosition;
+        state.currentObjectRun.runPosition = registryEntry.runPosition;
         _deactivatePreviousTextCard(index2, direction);
         _activateTextCard(card);
         const sceneIndex = getSceneIndex(index2);
@@ -2912,7 +2916,7 @@
     });
   }
   function _deactivatePreviousTextCard(newIndex, direction) {
-    const prevCard = state.cardPool.find((c) => c.element.classList.contains("is-active"));
+    const prevCard = state.cardRegistry.find((c) => c.element.classList.contains("is-active"));
     if (!prevCard || prevCard.stepIndex === newIndex) return;
     const el = prevCard.element;
     const messiness = {
@@ -4923,12 +4927,12 @@
     if (target === rounded && isExact) return;
     if (direction === "backward") {
       const contentStepIndex = Math.floor(Math.max(0, position - 1));
-      const scrubCard = state.textCards?.[contentStepIndex + 1];
-      if (scrubCard && !scrubCard.classList.contains("is-active")) {
-        const rot = parseFloat(scrubCard.dataset.messinessRot || 0);
-        const offX = parseFloat(scrubCard.dataset.messinessOffX || 0);
-        const offY = parseFloat(scrubCard.dataset.messinessOffY || 0);
-        scrubCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+      const interpolatedCard = state.textCards?.[contentStepIndex + 1];
+      if (interpolatedCard && !interpolatedCard.classList.contains("is-active")) {
+        const rot = parseFloat(interpolatedCard.dataset.messinessRot || 0);
+        const offX = parseFloat(interpolatedCard.dataset.messinessOffX || 0);
+        const offY = parseFloat(interpolatedCard.dataset.messinessOffY || 0);
+        interpolatedCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
       }
     }
     snap.currentSnapIndex = target;

@@ -257,7 +257,7 @@ describe('lerpIiifPosition', () => {
 
   it('repeated object (A→B→A): finds the correct scene card by sceneIndex, not objectId', () => {
     // Story: fig1 (scene 0, step 0-1), fig2 (scene 1, step 2-3), fig1 again (scene 2, step 4-5)
-    // When scrubbing between steps 4 and 5 (scene 2), must find scene-2 card, not scene-0 card.
+    // When interpolating between steps 4 and 5 (scene 2), must find scene-2 card, not scene-0 card.
     const stepA = makeStep('fig1', 0.1, 0.1, 1.0); // step 4
     const stepB = makeStep('fig1', 0.9, 0.9, 2.0); // step 5
     const stepsData = [
