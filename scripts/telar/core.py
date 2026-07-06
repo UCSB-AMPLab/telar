@@ -295,6 +295,47 @@ def _generate_audio_manifest(data_dir):
         print(f"  [INFO] No audio objects found — removed stale {manifest_path}")
 
 
+def _cleanup_stale_data_files(data_dir, structures_dir, demo_bundle):
+    """Remove _data/*.json files whose source CSV or demo story doesn't exist.
+
+    Every JSON file this pipeline writes to _data/ falls into one of three
+    buckets: the fixed non-story files (project.json, objects.json,
+    audio_objects.json, demo-glossary.json — each already self-manages its
+    own staleness elsewhere), one file per source CSV in
+    telar-content/spreadsheets/ (stem + '.json'), or one file per story_id
+    in the fetched demo bundle. A file whose identifier is in none of these
+    buckets has nothing left to regenerate it. This runs after CSV
+    conversion and demo merging so it sees the current source set, and
+    deletes anything in _data/ that matches neither bucket.
+
+    Args:
+        data_dir: Path to _data directory.
+        structures_dir: Path to telar-content/spreadsheets (source CSVs).
+        demo_bundle: Loaded demo bundle dict, or None if demo content is
+            disabled/unavailable.
+    """
+    non_story_files = {
+        'project.json', 'objects.json', 'audio_objects.json', 'demo-glossary.json'
+    }
+
+    expected_stems = {csv_file.stem for csv_file in structures_dir.glob('*.csv')}
+    if demo_bundle:
+        expected_stems.update(demo_bundle.get('stories', {}).keys())
+
+    removed = []
+    for json_file in sorted(data_dir.glob('*.json')):
+        if json_file.name in non_story_files:
+            continue
+        if json_file.stem in expected_stems:
+            continue
+        json_file.unlink()
+        removed.append(json_file.name)
+        print(f"  [INFO] Removed stale _data/{json_file.name} (no matching CSV or demo story)")
+
+    if removed:
+        print(f"✓ Cleaned up {len(removed)} old story data file(s)")
+
+
 def main():
     """Main conversion process."""
     import argparse
@@ -414,6 +455,10 @@ def main():
     if demo_bundle:
         print("Merging demo content...")
         merge_demo_content(demo_bundle)
+
+    # Remove _data/*.json files left behind by renamed/removed CSVs or a
+    # changed demo bundle (language switch, version bump, disabled demo)
+    _cleanup_stale_data_files(data_dir, structures_dir, demo_bundle)
 
     # Protected stories: check the post-build encrypt step can actually run
     # (encryption itself happens in scripts/encrypt_protected_stories.py)

@@ -1,4 +1,4 @@
-<!--
+{#
   Tabs Widget
 
   Renders a set of tabbed panels — a Bootstrap tab group — so that parallel pieces
@@ -9,9 +9,9 @@
   pane). The pane HTML is emitted through the "safe" filter because the build step
   has already escaped it; loop.index distinguishes the tabs, and the first tab is
   marked active and shown by default.
--->
+#}
 <div class="telar-widget telar-widget-tabs">
-  <!-- Tab navigation -->
+  {# Tab navigation #}
   <ul class="nav nav-tabs" role="tablist">
     {% for tab in tabs %}
     <li class="nav-item" role="presentation">
@@ -29,7 +29,7 @@
     {% endfor %}
   </ul>
 
-  <!-- Tab content -->
+  {# Tab content #}
   <div class="tab-content">
     {% for tab in tabs %}
     <div class="tab-pane fade {% if loop.first %}show active{% endif %}"

@@ -1,4 +1,4 @@
-<!--
+{#
   Bibliography Widget
 
   Renders a simple list of references — one block per entry, in the order given.
@@ -8,7 +8,7 @@
   build step has already escaped and formatted it, so authored citation markup
   (links, emphasis) survives intact. There is no interactivity here; styling lives
   in the stylesheet.
--->
+#}
 <div class="telar-widget-bibliography">
   {% for entry in entries %}
   <div class="telar-bib-entry">{{ entry.content_html | safe }}</div>
