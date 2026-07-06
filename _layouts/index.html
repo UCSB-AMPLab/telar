@@ -131,8 +131,10 @@ title: Home
     {% endif %}
   {% endfor %}
 
-  {%- comment -%}Collect stories with warnings{%- endcomment -%}
+  {%- comment -%}Collect stories with warnings. Protected stories are
+      skipped: their warnings belong behind the unlock gate.{%- endcomment -%}
   {% for story in site.stories %}
+    {% if story.protected %}{% continue %}{% endif %}
     {% assign story_data = site.data[story.data_file] %}
     {% if story_data.size > 0 and story_data[0]._metadata %}
       {% assign metadata = story_data[0] %}
@@ -347,7 +349,10 @@ title: Home
           {% for story in sorted_stories %}
           {% assign story_data = site.data[story.data_file] %}
           {% assign is_encrypted = false %}
-          {% if story_data.encrypted %}{% assign is_encrypted = true %}{% endif %}
+          {%- comment -%}Keyed on frontmatter: the data file is plaintext
+              through the build and must not signal protection.
+          {%- endcomment -%}
+          {% if story.protected %}{% assign is_encrypted = true %}{% endif %}
           <a href="{{ story.url | relative_url }}" class="collection-item{% if story.demo %} demo-story{% endif %}">
             <div class="collection-thumbnail">
               {% if story.demo %}
@@ -455,10 +460,12 @@ title: Home
       {% assign sorted_stories = site.stories | sort: "sort_order" %}
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-5">
         {% for story in sorted_stories %}
-        {%- comment -%}Load story data file and check if encrypted{%- endcomment -%}
+        {%- comment -%}Load story data for the thumbnail fallback; protection
+            is keyed on frontmatter (the data file is plaintext through the
+            build and must not signal protection).{%- endcomment -%}
         {% assign story_data = site.data[story.data_file] %}
         {% assign is_encrypted = false %}
-        {% if story_data.encrypted %}
+        {% if story.protected %}
           {% assign is_encrypted = true %}
         {% endif %}
         <div class="col">
@@ -649,11 +656,10 @@ title: Home
 <script id="telar-stories-data" type="application/json">
 [
   {% for story in site.stories %}
-  {% assign story_data = site.data[story.data_file] %}
   {
     "title": {{ story.title | jsonify }},
     "url": "{{ story.url | absolute_url }}",
-    "protected": {% if story_data.encrypted %}true{% else %}false{% endif %}
+    "protected": {% if story.protected %}true{% else %}false{% endif %}
   }{% unless forloop.last %},{% endunless %}
   {% endfor %}
 ]

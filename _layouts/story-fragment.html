@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!--
+  Protected Story Fragment
+
+  Build-side half of protected-story rendering: a steps-only page rendered
+  through the same story-steps.html include as open stories, under the
+  reserved /telar-protected-fragments/ prefix. It exists only inside the
+  build — scripts/encrypt_protected_stories.py encrypts the markup between
+  the fragment markers into the story's envelope and deletes this page from
+  _site before the artifact uploads (the build fails if it survives).
+
+  Version: v1.6.0
+-->
+<html lang="{{ site.telar_language | default: 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{ page.data_file }} fragment</title>
+</head>
+<body>
+<!-- telar-fragment-steps-start -->
+{% assign steps = site.data[page.data_file] %}
+{% include story-steps.html steps=steps %}
+<!-- telar-fragment-steps-end -->
+</body>
+</html>

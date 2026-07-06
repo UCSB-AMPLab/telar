@@ -1,0 +1,39 @@
+{%- comment -%}
+  Story Steps Loop
+
+  Renders a story's full step list through story-step.html. The single
+  declaration site for the step-parameter mapping: used by story.html for
+  open stories and by story-fragment.html for protected ones, so the two
+  paths cannot drift apart.
+
+  Parameters:
+    steps - the story's steps array (site.data[data_file])
+
+  Version: v1.6.0
+{%- endcomment -%}
+{% for step in include.steps %}
+  {% unless step._metadata %}
+    {% include story-step.html
+      step_number=step.step
+      question=step.question
+      answer=step.answer
+      object_id=step.object
+      x=step.x
+      y=step.y
+      zoom=step.zoom
+      page=step.page
+      layer1button=step.layer1_button
+      layer1_title=step.layer1_title
+      layer1_text=step.layer1_text
+      layer2button=step.layer2_button
+      layer2_title=step.layer2_title
+      layer2_text=step.layer2_text
+      clip_start=step.clip_start
+      clip_end=step.clip_end
+      loop=step.loop
+      alt_text=step.alt_text
+      viewer_warning=step.viewer_warning
+      is_last=forloop.last
+    %}
+  {% endunless %}
+{% endfor %}

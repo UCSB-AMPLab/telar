@@ -63,17 +63,16 @@
     {% assign show_story_steps = false %}
   {% endif %}
 
+  <!-- Protection is keyed on frontmatter. The _data JSON is plaintext
+       through the build (encryption happens post-build), so the data
+       file's shape does not signal protection and no template may read
+       it to decide protected behaviour. -->
+  {% assign is_encrypted = false %}
+  {% if page.protected %}
+    {% assign is_encrypted = true %}
+  {% endif %}
   {%- comment -%}Single lookup of the story's data file, reused below.{%- endcomment -%}
   {%- assign story_data = site.data[page.data_file] %}
-
-  <!-- Check if story is encrypted (protected) -->
-  {% assign is_encrypted = false %}
-  {% if page.data_file %}
-    {% assign story_json = story_data %}
-    {% if story_json.encrypted %}
-      {% assign is_encrypted = true %}
-    {% endif %}
-  {% endif %}
 
   <script>
   // Expose Christmas Tree Mode to JavaScript
@@ -94,7 +93,11 @@
       text: {{ lang.embed_banner.text | jsonify }},
       link: "{{ lang.embed_banner.link }}",
       siteFallback: {{ lang.embed_banner.site_fallback | jsonify }}
-    }
+    }{% if is_encrypted %},
+    unlock: {
+      errorEmpty: {{ lang.unlock.error_empty | default: "Please enter a key" | jsonify }},
+      errorIncorrect: {{ lang.unlock.error_incorrect | default: "Incorrect key. Please try again." | jsonify }}
+    }{% endif %}
   });
 
   // Expose config options to JavaScript
@@ -209,7 +212,7 @@
           {% endif %}
           {% endunless %}
 
-          {% if page.show_sections and page.data_file %}
+          {% if page.show_sections and page.data_file and is_encrypted == false %}
             {% assign story_steps = story_data %}
             {% assign section_cards = "" | split: "" %}
             {% for s in story_steps %}
@@ -231,7 +234,7 @@
             {% endif %}
           {% endif %}
 
-          {% if page.data_file %}
+          {% if page.data_file and is_encrypted == false %}
             {% assign steps = story_data %}
             {% if steps.size > 0 and steps[0]._metadata %}
               {% assign metadata = steps[0] %}
@@ -272,35 +275,12 @@
         {% if page.data_file %}
           {% assign steps = story_data %}
           {% if is_encrypted %}
-            <!-- Steps will be rendered by JavaScript after decryption -->
+            <!-- Steps arrive via story-unlock.js: the decrypted envelope's
+                 HTML (rendered at build time by story-fragment.html through
+                 the same story-steps.html include) is injected here. -->
             <div id="encrypted-steps-container"></div>
           {% else %}
-            {% for step in steps %}
-              {% unless step._metadata %}
-                {% include story-step.html
-                  step_number=step.step
-                  question=step.question
-                  answer=step.answer
-                  object_id=step.object
-                  x=step.x
-                  y=step.y
-                  zoom=step.zoom
-                  page=step.page
-                  layer1button=step.layer1_button
-                  layer1_title=step.layer1_title
-                  layer1_text=step.layer1_text
-                  layer2button=step.layer2_button
-                  layer2_title=step.layer2_title
-                  layer2_text=step.layer2_text
-                  clip_start=step.clip_start
-                  clip_end=step.clip_end
-                  loop=step.loop
-                  alt_text=step.alt_text
-                  viewer_warning=step.viewer_warning
-                  is_last=forloop.last
-                %}
-              {% endunless %}
-            {% endfor %}
+            {% include story-steps.html steps=steps %}
           {% endif %}
         {% endif %}
       </div>
@@ -341,9 +321,15 @@
     document.addEventListener("DOMContentLoaded", function() {
       // Check after storyData is available
       setTimeout(function() {
+        // Protected pages carry an envelope (no readable steps), so their
+        // LaTeX flag rides frontmatter, stamped at generation time.
+        var pageHasLatex = {% if page.has_latex %}true{% else %}false{% endif %};
+        var metaHasLatex = false;
         if (window.storyData && window.storyData.steps) {
           var meta = window.storyData.steps[0];
-          if (meta && meta._metadata && meta.has_latex) {
+          metaHasLatex = !!(meta && meta._metadata && meta.has_latex);
+        }
+          if (pageHasLatex || metaHasLatex) {
             // Load KaTeX CSS
             var link = document.createElement('link');
             link.rel = 'stylesheet';
@@ -396,7 +382,6 @@
             }
             loadNext(0);
           }
-        }
       }, 0);
     });
   </script>
@@ -409,9 +394,15 @@
     // Pass story data to JavaScript
     {% if page.data_file %}
     {% assign story_json = story_data %}
-    {% if story_json.encrypted %}
-    // Story is encrypted - pass encrypted data
-    window.storyData = {{ story_json | jsonify }};
+    {% if is_encrypted %}
+    // Protected story — stub envelope. The post-build encryption step
+    // (scripts/encrypt_protected_stories.py) swaps in the real ciphertext;
+    // if a build skips that step, the stub keeps the page failing safe:
+    // unlock UI present, decryption fails loudly, no plaintext on the page.
+    // The story id is the envelope's additional authenticated data: the JS
+    // decrypt must pass the exact identifier the encrypt step bound.
+    window.telarStoryId = {{ page.data_file | jsonify }};
+    window.storyData = {"encrypted": true, "salt": "", "iv": "", "ciphertext": "__TELAR_PENDING__"};
     {% else %}
     // Story is not encrypted - pass steps normally
     {% assign first_step = story_json[0] %}
