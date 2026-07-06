@@ -1875,6 +1875,11 @@
             });
           });
         }
+        if (clipStart) {
+          ws.on("ready", () => {
+            ws.setTime(clipStart);
+          });
+        }
         ws.on("timeupdate", (currentTime) => {
           const elapsedSecond = Math.floor(currentTime);
           if (elapsedSecond !== wrapper._lastElapsedSecond) {

@@ -393,6 +393,18 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           });
         }
 
+        // Position the playhead at the clip start once the waveform is ready
+        // (mirrors the Vimeo player's ready-seek in video-card.js). This is
+        // the only seek that covers the step that created the player:
+        // updateAudioClip no-ops when the clip parameters are unchanged, so
+        // without this the first play — overlay button or controls pill —
+        // starts from 0 rather than clip_start.
+        if (clipStart) {
+          ws.on("ready", () => {
+            ws.setTime(clipStart);
+          });
+        }
+
         // Clip boundary enforcement via timeupdate (not the 'finish' event)
         ws.on("timeupdate", (currentTime) => {
           // Call onTimeUpdate at 1-second granularity for aria-live (Accessibility)
