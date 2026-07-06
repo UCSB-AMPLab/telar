@@ -146,6 +146,11 @@ export function formatElapsedTime(seconds) {
  * Bar colours derive from the button text colour so they adapt to any
  * theme (dark themes get light bars, light themes get dark bars).
  *
+ * MUST agree with deriveThemeColors in assets/js/object-theme.js — same
+ * inputs, same outputs. Object pages do not load the telar-story.js bundle,
+ * so they carry their own copy; if you change this derivation, change that
+ * one too.
+ *
  * @param {string} accentHex - CSS hex colour for --color-link, e.g. '#883C36'
  * @param {string} [barHex='#ffffff'] - CSS hex colour for --color-button-text
  * @returns {Object} Theme colour set

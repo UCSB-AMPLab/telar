@@ -6,9 +6,11 @@ layout: default
   Object layout — the detail page for a single collection object, rendered inside the default
   shell. One template serves all three media types (Image, Video, Audio); the media type,
   injected into frontmatter by generate_collections.py as `page.media_type`, switches which
-  viewer and which author-facing tools appear. This is the large (~1,280-line) object page,
+  viewer and which author-facing tools appear. This is the large (~1,230-line) object page,
   long mostly because each media branch carries its own viewer wiring, metadata block, and
-  copy-to-clipboard scripts.
+  copy-to-clipboard scripts; the shared algorithmic pieces (theme-colour maths, video embed
+  resolution, coordinate normalisation) live in assets/js/object-theme.js,
+  assets/js/video-embed.js, and assets/js/telar-story/iiif-viewer.js.
 
   What it renders — a two-column layout: a viewer on the left and a metadata sidebar on the
   right. The viewer branches by media type — an OpenSeadragon IIIF viewer for images (with a
@@ -454,6 +456,15 @@ layout: default
   </div>
 </div>
 
+<!-- Object-page helpers: theme-colour maths shared by the author panels and
+     the audio waveform (all media types), and video embed resolution (video
+     only). Classic scripts — parsed before the inline/module scripts below,
+     so window.telarObjectTheme / window.telarVideoEmbed are ready. -->
+<script src="{{ '/assets/js/object-theme.js' | relative_url }}"></script>
+{% if object_media_type == 'Video' %}
+<script src="{{ '/assets/js/video-embed.js' | relative_url }}"></script>
+{% endif %}
+
 {% if object_media_type == 'Image' %}
 <!-- IIIF viewer (OpenSeadragon — vendored, see assets/vendor/) -->
 <script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
@@ -462,7 +473,7 @@ layout: default
   // story-only), so we import the wrapper directly from its ESM source.
   // Jekyll publishes assets/js/telar-story/*.js alongside the bundled
   // output, so the browser can fetch this path at runtime.
-  import { IiifViewer } from '{{ "/assets/js/telar-story/iiif-viewer.js" | relative_url }}';
+  import { IiifViewer, normalizedViewportPosition } from '{{ "/assets/js/telar-story/iiif-viewer.js" | relative_url }}';
 
   // Expose language strings to JavaScript
   window.telarCoordLang = {
@@ -488,23 +499,9 @@ layout: default
   };
 
   document.addEventListener('DOMContentLoaded', async function() {
-    // Coordinate panel theme colouring — detect luminance of theme colour
-    const panel = document.querySelector('.coordinate-panel');
-    if (panel) {
-      const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
-      if (bg) {
-        // Parse hex colour to RGB
-        const hex = bg.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16) / 255;
-        const g = parseInt(hex.substring(2, 4), 16) / 255;
-        const b = parseInt(hex.substring(4, 6), 16) / 255;
-        // WCAG relative luminance
-        const lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
-                   + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
-                   + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
-        panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
-      }
-    }
+    // Coordinate panel theme colouring — object-theme.js picks coord-light /
+    // coord-dark from the theme button background's luminance
+    window.telarObjectTheme.applyPanelContrastClass(document.querySelector('.coordinate-panel'));
 
     {% assign external_source = page.source_url | default: page.iiif_manifest %}
     {% if external_source and external_source != "" %}
@@ -585,23 +582,14 @@ layout: default
       if (!osdViewer || !osdViewer.viewport) return;
 
       try {
-        const viewport = osdViewer.viewport;
-        const center = viewport.getCenter();
-        const bounds = viewport.getHomeBounds();
-
-        // Convert to normalized 0-1 coordinates
-        const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
-        const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
-
-        // Get zoom relative to home zoom
-        const homeZoom = viewport.getHomeZoom();
-        const currentZoom = viewport.getZoom();
-        const zoom = Math.max(0.1, Math.min(10, currentZoom / homeZoom));
+        // Normalised x/y/zoom maths lives in iiif-viewer.js (imported above
+        // alongside the viewer wrapper itself)
+        const pos = normalizedViewportPosition(osdViewer.viewport);
 
         // Update display
-        document.getElementById('coord-x').textContent = x.toFixed(3);
-        document.getElementById('coord-y').textContent = y.toFixed(3);
-        document.getElementById('coord-zoom').textContent = zoom.toFixed(1);
+        document.getElementById('coord-x').textContent = pos.x.toFixed(3);
+        document.getElementById('coord-y').textContent = pos.y.toFixed(3);
+        document.getElementById('coord-zoom').textContent = pos.zoom.toFixed(1);
 
         // Update page number for multi-page objects
         if (isMultiPage) {
@@ -637,52 +625,21 @@ document.addEventListener('DOMContentLoaded', function() {
   const viewer = document.getElementById('object-viewer');
   const sourceUrl = {{ page.source_url | default: '' | jsonify | replace: '</', '<\/' }};
 
-  {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
-    // YouTube embed
-    // Extract video ID from URL
-    let videoId = '';
-    const ytMatch = sourceUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (ytMatch) videoId = ytMatch[1];
+  // Provider detection, video-ID extraction, and iframe construction live in
+  // video-embed.js (loaded above); this script injects the result and wires
+  // the page around it. The frame title is Liquid-escaped for attribute
+  // context, which resolveVideoEmbed requires.
+  const embed = window.telarVideoEmbed.resolveVideoEmbed(sourceUrl, {{ video_frame_title | jsonify | replace: '</', '<\/' }});
+  if (!embed) return;
+  viewer.innerHTML = embed.iframeHtml;
 
-    const embedUrl = 'https://www.youtube.com/embed/' + videoId + '?enablejsapi=1';
-    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + embedUrl + '" ' +
-      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
-      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
-      'allowfullscreen ' +
-      'title="{{ video_frame_title }}"></iframe>';
+  {% unless page.source_url contains 'drive.google.com' %}
+  // Set embed URL display (YouTube/Vimeo; the Drive sidebar has no display)
+  const embedDisplay = document.getElementById('embed-url-display');
+  if (embedDisplay) embedDisplay.textContent = embed.embedUrl;
+  {% endunless %}
 
-    // Set embed URL display
-    const embedDisplay = document.getElementById('embed-url-display');
-    if (embedDisplay) embedDisplay.textContent = embedUrl;
-
-  {% elsif page.source_url contains 'vimeo.com' %}
-    // Vimeo embed
-    let vimeoId = '';
-    const vmMatch = sourceUrl.match(/vimeo\.com\/(\d+)/);
-    if (vmMatch) vimeoId = vmMatch[1];
-
-    const embedUrl = 'https://player.vimeo.com/video/' + vimeoId;
-    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + embedUrl + '" ' +
-      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
-      'allow="autoplay; fullscreen; picture-in-picture" ' +
-      'allowfullscreen ' +
-      'title="{{ video_frame_title }}"></iframe>';
-
-    const embedDisplay = document.getElementById('embed-url-display');
-    if (embedDisplay) embedDisplay.textContent = embedUrl;
-
-  {% elsif page.source_url contains 'drive.google.com' %}
-    // Google Drive embed
-    let fileId = '';
-    const gdMatch = sourceUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (gdMatch) fileId = gdMatch[1];
-
-    const previewUrl = 'https://drive.google.com/file/d/' + fileId + '/preview';
-    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + previewUrl + '" ' +
-      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
-      'allow="autoplay" ' +
-      'title="{{ video_frame_title }}"></iframe>';
-
+  {% if page.source_url contains 'drive.google.com' %}
     // Google Drive: embed URL load error fallback
     const iframe = document.getElementById('video-player-iframe');
     let loadTimer = setTimeout(function() {
@@ -722,20 +679,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Theme colouring for clip panel (same as coordinate panel)
-  var panel = document.querySelector('.clip-panel');
-  if (panel) {
-    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
-    if (bg) {
-      var hex = bg.replace('#', '');
-      var r = parseInt(hex.substring(0, 2), 16) / 255;
-      var g = parseInt(hex.substring(2, 4), 16) / 255;
-      var b = parseInt(hex.substring(4, 6), 16) / 255;
-      var lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
-               + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
-               + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
-      panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
-    }
-  }
+  window.telarObjectTheme.applyPanelContrastClass(document.querySelector('.clip-panel'));
 
   // Load YouTube IFrame API for clip picker
   {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
@@ -920,38 +864,19 @@ document.addEventListener('DOMContentLoaded', async function() {
   await loadVendoredWaveSurfer();
   const WaveSurfer = window.WaveSurfer;
 
-  // Derive theme colours (same logic as story audio-card.js deriveThemeColors)
-  const accentHex = getComputedStyle(document.documentElement).getPropertyValue('--color-link').trim() || '#883C36';
-  const barHex = getComputedStyle(document.documentElement).getPropertyValue('--color-button-text').trim() || '#ffffff';
-
-  const aR = parseInt(accentHex.slice(1, 3), 16);
-  const aG = parseInt(accentHex.slice(3, 5), 16);
-  const aB = parseInt(accentHex.slice(5, 7), 16);
-
-  // Background: accent darkened to 70%
-  const bgR = Math.round(aR * 0.7);
-  const bgG = Math.round(aG * 0.7);
-  const bgB = Math.round(aB * 0.7);
-
-  // Bar text colour
-  const bR = parseInt(barHex.slice(1, 3), 16);
-  const bG = parseInt(barHex.slice(3, 5), 16);
-  const bB = parseInt(barHex.slice(5, 7), 16);
-
-  // Unplayed bars: 25% bar colour over 75% background (opaque — WaveSurfer clip-path needs it)
-  const upR = Math.round(bgR * 0.75 + bR * 0.25);
-  const upG = Math.round(bgG * 0.75 + bG * 0.25);
-  const upB = Math.round(bgB * 0.75 + bB * 0.25);
-
-  const playedColor = barHex;
-  const unplayedColor = 'rgb(' + upR + ',' + upG + ',' + upB + ')';
-  const bgColor = 'rgb(' + bgR + ',' + bgG + ',' + bgB + ')';
+  // Derive theme colours via object-theme.js — its deriveThemeColors is the
+  // object-page twin of the story-side copy in telar-story/audio-card.js
+  // (must-agree cross-links in both files)
+  const themeColors = window.telarObjectTheme.deriveThemeColors(
+    getComputedStyle(document.documentElement).getPropertyValue('--color-link').trim() || '#883C36',
+    getComputedStyle(document.documentElement).getPropertyValue('--color-button-text').trim() || '#ffffff'
+  );
+  const playedColor = themeColors.playedColor;
+  const unplayedColor = themeColors.unplayedColor;
+  const bgColor = themeColors.backgroundColor;
 
   // Apply accent-tinted background + telar weave pattern to viewer container
   viewer.style.background = bgColor;
-
-  // Keep rgb values for region colour
-  const rgb = { r: aR, g: aG, b: aB };
 
   // Load peaks if available
   const peaksUrl = baseUrl + '/assets/audio/peaks/' + objectId + '.json';
@@ -1109,20 +1034,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Theme colouring for audio clip panel
-  var panel = document.querySelector('.clip-panel');
-  if (panel) {
-    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
-    if (bg) {
-      var hex = bg.replace('#', '');
-      var r = parseInt(hex.substring(0, 2), 16) / 255;
-      var g = parseInt(hex.substring(2, 4), 16) / 255;
-      var b = parseInt(hex.substring(4, 6), 16) / 255;
-      var lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
-               + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
-               + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
-      panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
-    }
-  }
+  window.telarObjectTheme.applyPanelContrastClass(document.querySelector('.clip-panel'));
 
   // Copy buttons
   var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
