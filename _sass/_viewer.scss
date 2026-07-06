@@ -13,7 +13,7 @@
  * corners if it overflows. The pagination + error UI rules at the
  * bottom of the file style the wrapper's injected DOM directly.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 /* Viewer Containers */
@@ -65,7 +65,8 @@
   max-height: 80vh;
   min-height: 80px;
   overflow: hidden;
-  /* background and background-image set inline by JS (accent-tinted + weave pattern) */
+  /* solid accent-tinted background set inline by JS (no weave-pattern image
+     on the audio object viewer — see _layouts/object.html's viewer init) */
 }
 
 /* Object-page viewer: transparent OSD background so the weave pattern

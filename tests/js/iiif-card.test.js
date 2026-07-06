@@ -12,6 +12,11 @@
  *   4. Focal point = (x·imageW, y·imageH).
  *   5. Device-independence: same (x, y, zoom) on two viewports gives the same
  *      diameterImg (footprint no longer scales with width).
+ *   6. Sanity-check failures: zoom ≤ 0, NaN zoom, out-of-range x, or zero
+ *      image dimensions all return null.
+ *   7. Null cardBox fallback: computeFocalTarget falls back to
+ *      _defaultCardBox for both layouts, including the CSS-derived vertical
+ *      top edge.
  *
  * @version v1.6.0
  */

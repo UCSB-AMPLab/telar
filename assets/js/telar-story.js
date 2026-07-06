@@ -70,6 +70,10 @@
     viewerPlates: {},
     /** Map of stepIndex -> text card element. */
     textCards: {},
+    /** Map of stepIndex -> title card element. Populated by initCardPool. */
+    titleCards: {},
+    /** Index of the currently active title card step, or null when none is active. */
+    activeTitleCardIndex: null,
     /** Current object run tracking (for peek stack positioning). */
     currentObjectRun: { objectId: null, runPosition: 0 },
     // ── Scene maps (populated at initCardPool time) ───────────────────────────
@@ -1982,7 +1986,7 @@
           overlayBtn.setAttribute("aria-label", `Play ${_aAlt}`);
           overlayBtn.type = "button";
           overlayBtn.innerHTML = _svg("play", 36);
-          overlayBtn.style.cssText = "width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:#333;";
+          overlayBtn.style.cssText = "width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:var(--color-body);";
           overlayEl.appendChild(overlayBtn);
           plateEl.appendChild(overlayEl);
           overlayBtn.addEventListener("click", () => {
@@ -5316,11 +5320,11 @@
     window.IiifViewer = IiifViewer;
   }
   function initializeStory() {
-    const viewerConfig = window.telarConfig?.viewer_preloading || {};
+    const viewerConfig = window.telarConfig.viewer_preloading;
     state.config.maxViewerCards = Math.min(viewerConfig.max_viewer_cards, 15);
-    state.config.preloadSteps = Math.min(viewerConfig.preload_steps || 6, state.config.maxViewerCards - 2);
-    state.config.loadingThreshold = viewerConfig.loading_threshold || 5;
-    state.config.minReadyViewers = Math.min(viewerConfig.min_ready_viewers || 3, state.config.preloadSteps);
+    state.config.preloadSteps = Math.min(viewerConfig.preload_steps, state.config.maxViewerCards - 2);
+    state.config.loadingThreshold = viewerConfig.loading_threshold;
+    state.config.minReadyViewers = Math.min(viewerConfig.min_ready_viewers, state.config.preloadSteps);
     buildObjectsIndex();
     prefetchStoryManifests();
     const cardConfig = {
