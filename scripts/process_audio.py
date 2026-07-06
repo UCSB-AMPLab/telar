@@ -359,6 +359,17 @@ def process_audio_objects(objects_dir, data_dir, output_dir,
                 continue
 
         # --- Generate peaks ---
+        # audiowaveform cannot decode M4A/AAC, and no conversion path exists
+        # here by design: the player decodes client-side when no peaks file
+        # ships, so M4A objects work — their waveform just renders slower.
+        # Say so per file rather than letting the attempt fail noisily.
+        if audio_path.suffix.lower() == '.m4a':
+            print(f'  Peaks skipped for {audio_path.name} (M4A is not supported '
+                  'by audiowaveform) — the waveform renders client-side instead.')
+            skipped_count += 1
+            print()
+            continue
+
         print(f'  Generating peaks from {audio_path.name}...')
         success = generate_peaks(audio_path, peaks_path, pixels_per_second)
         if not success:
