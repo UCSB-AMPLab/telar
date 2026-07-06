@@ -19,7 +19,11 @@ Each widget type has its own parser:
   validates that images exist using `validate_image_path()` from the images
   module, and calls `get_image_dimensions()` to calculate aspect ratios.
   The maximum aspect ratio across all slides determines the carousel's
-  CSS size class (compact, default, tall, or portrait).
+  CSS size class (compact, default, tall, or portrait). It also resolves
+  each slide's final `src`: absolute http(s) URLs pass through unchanged,
+  while bare filenames are joined to the literal `{{ site.baseurl }}` Liquid
+  token (processed later by Jekyll) plus `/assets/images/`. The carousel
+  template only ever renders `item.src` — it carries no URL logic of its own.
 
 - `parse_tabs_widget()` and `parse_accordion_widget()` both use
   `parse_markdown_sections()` to split content on `## ` headers into
@@ -189,6 +193,15 @@ def parse_carousel_widget(content, file_path, warnings_list):
                 'widget_type': 'carousel',
                 'message': f'Carousel image not found: {data["image"]} (expected at {full_path})'
             })
+
+        # Resolve the final image src here rather than in the template:
+        # absolute http(s) URLs are used as given; bare filenames are joined
+        # to the literal "{{ site.baseurl }}" Liquid token, which Jekyll
+        # resolves at site-build time (see render_widget_html's base_url).
+        if data['image'].startswith('http://') or data['image'].startswith('https://'):
+            data['src'] = data['image']
+        else:
+            data['src'] = '{{ site.baseurl }}/assets/images/' + data['image']
 
         # Warn if alt text missing
         if 'alt' not in data:
@@ -429,7 +442,6 @@ def render_widget_html(widget_type, widget_data, widget_id):
         # carousel template substitutes per slide.
         rendered = template.render(
             widget_id=widget_id,
-            base_url='{{ site.baseurl }}',  # Will be processed by Jekyll
             slide_label=get_lang_string('widgets.slide_label'),
             prev_label=get_lang_string('widgets.prev'),
             next_label=get_lang_string('widgets.next'),
