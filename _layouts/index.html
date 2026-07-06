@@ -305,7 +305,7 @@ title: Home
                   {%- comment -%}
                     All image objects route through .story-iiif-thumbnail so the existing
                     client-side IIIF loader handles the priority chain:
-                      1. explicit object.thumbnail (upgraded via upgradeIIIFThumbnailUrl)
+                      1. explicit object.thumbnail (upgraded via TelarIIIF.upgradeIIIFThumbnailUrl)
                       2. remote IIIF manifest (fetched, parsed, sized for level0/level1+)
                       3. local info.json for locally-generated tiles
                     Do NOT add a raw <img src="{{ object.thumbnail }}"> branch here — it
@@ -659,6 +659,7 @@ title: Home
 ]
 </script>
 
+<script src="{{ '/assets/js/iiif-thumbnails.js' | relative_url }}"></script>
 <script>
 // Localized strings injected from _data/languages/<telar_language>.yml
 const TelarI18n = {
@@ -669,44 +670,16 @@ const TelarI18n = {
 window.objectsData = {{ site.data.objects | jsonify }};
 
 /**
- * Pick a thumbnail size from the IIIF sizes array.
- * Returns the smallest size >= minWidth, or the largest available.
- */
-function pickThumbnailSize(sizes, minWidth) {
-  if (!sizes || sizes.length === 0) return null;
-  minWidth = minWidth || 400;
-  var sorted = sizes.slice().sort(function(a, b) { return a.width - b.width; });
-  for (var i = 0; i < sorted.length; i++) {
-    if (sorted[i].width >= minWidth) return sorted[i];
-  }
-  return sorted[sorted.length - 1];
-}
-
-/**
- * Upgrade IIIF Image API thumbnail URLs to a larger size.
- * Detects URLs with /full/{size}/0/default.{ext} pattern and replaces
- * the size segment with !600,600 for sharper thumbnails.
- */
-function upgradeIIIFThumbnailUrl(url) {
-  // Match IIIF Image API pattern: .../full/{size}/0/default.{ext}
-  // The size segment may contain backslash-escaped ! (e.g. Rumsey \!96,96)
-  // or double slashes from stripped backslashes. Handle all variants.
-  var match = url.match(/^(.*\/full\/)[\\\/]*([^/]+)(\/0\/default\.\w+)$/);
-  if (match) {
-    return match[1] + '!600,600' + match[3];
-  }
-  return url;
-}
-
-/**
- * Load story thumbnails from IIIF (remote manifests or local info.json)
+ * Load story thumbnails from IIIF (remote manifests or local info.json).
+ * Resolution logic lives in TelarIIIF (assets/js/iiif-thumbnails.js);
+ * this script only wires resolved URLs into the story cards.
  */
 document.addEventListener('DOMContentLoaded', function() {
   // Upgrade explicit IIIF thumbnail URLs to larger sizes (with fallback for Level 0 servers)
   var iiifThumbs = document.querySelectorAll('img.iiif-thumbnail');
   iiifThumbs.forEach(function(img) {
     var originalSrc = img.src;
-    var upgradedSrc = upgradeIIIFThumbnailUrl(originalSrc);
+    var upgradedSrc = TelarIIIF.upgradeIIIFThumbnailUrl(originalSrc);
     if (upgradedSrc !== originalSrc) {
       img.dataset.originalSrc = originalSrc;
       img.onerror = function() {
@@ -733,7 +706,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
       const img = document.createElement('img');
       const originalUrl = objectData.thumbnail;
-      const upgradedUrl = upgradeIIIFThumbnailUrl(originalUrl);
+      const upgradedUrl = TelarIIIF.upgradeIIIFThumbnailUrl(originalUrl);
       img.src = upgradedUrl;
       // Fall back to original size if upgraded URL fails (level0 servers)
       if (upgradedUrl !== originalUrl) {
@@ -754,93 +727,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // Check if object has remote IIIF manifest (for level2 servers that support dynamic sizing)
     else if (objectData && objectData.iiif_manifest) {
-      // Remote manifest - fetch it and extract larger canvas image
-      fetch(objectData.iiif_manifest)
-        .then(response => response.json())
-        .then(manifest => {
-          let imageServiceUrl = null;
-          let imageServiceProfile = null;
-          let fallbackImageUrl = null;
-
-          // IIIF Presentation API 2.1
-          if (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) {
-            const firstCanvas = manifest.sequences[0].canvases[0];
-            if (firstCanvas && firstCanvas.images && firstCanvas.images[0]) {
-              const resource = firstCanvas.images[0].resource;
-
-              // Try to get image service for resizing
-              if (resource.service) {
-                const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
-                imageServiceUrl = service['@id'] || service.id;
-                imageServiceProfile = service.profile;
-              }
-
-              // Fallback to full image URL
-              if (!imageServiceUrl && resource['@id']) {
-                fallbackImageUrl = resource['@id'];
-              }
-            }
-          }
-          // IIIF Presentation API 3.0
-          else if (manifest.items && manifest.items[0]) {
-            const firstCanvas = manifest.items[0];
-            if (firstCanvas.items && firstCanvas.items[0] && firstCanvas.items[0].items) {
-              const annotationBody = firstCanvas.items[0].items[0].body;
-
-              // Try to get image service for resizing
-              if (annotationBody.service && annotationBody.service.length > 0) {
-                imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
-                imageServiceProfile = annotationBody.service[0].profile;
-              }
-
-              // Fallback to full image URL
-              if (!imageServiceUrl && annotationBody.id) {
-                fallbackImageUrl = annotationBody.id;
-              }
-            }
-          }
-
-          const isLevel0 = imageServiceProfile && (
-            imageServiceProfile === 'level0' ||
-            imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
-          );
-
-          function replaceStoryPlaceholder(url) {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = item.closest('.story-card').querySelector('h3').textContent;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'cover';
-            const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-            if (placeholder) placeholder.replaceWith(img);
-          }
-
-          // Level 0: fetch info.json to get available sizes
-          if (imageServiceUrl && isLevel0) {
-            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-            fetch(`${imageServiceUrl}/info.json`)
-              .then(r => r.json())
-              .then(info => {
-                const sizes = info.sizes || [];
-                const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
-                const url = largest
-                  ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
-                  : fallbackImageUrl;
-                if (url) replaceStoryPlaceholder(url);
-              })
-              .catch(() => { if (fallbackImageUrl) replaceStoryPlaceholder(fallbackImageUrl); });
-          }
-          // Level 1+: request arbitrary size
-          else if (imageServiceUrl) {
-            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-            replaceStoryPlaceholder(`${imageServiceUrl}/full/!400,400/0/default.jpg`);
-          }
-          else if (fallbackImageUrl) {
-            replaceStoryPlaceholder(fallbackImageUrl);
-          } else {
-            throw new Error('No image found in manifest');
-          }
+      TelarIIIF.resolveManifestThumbnail(objectData.iiif_manifest, '!400,400')
+        .then(url => {
+          if (url) replaceStoryPlaceholder(url);
         })
         .catch(error => {
           console.error('Error loading remote IIIF manifest:', objectData.iiif_manifest, error);
@@ -851,28 +740,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     } else {
       // Local IIIF info.json
-      fetch(localInfoUrl)
-        .then(response => response.json())
-        .then(info => {
-          const sizes = info.sizes || [];
-          let thumbnailSize = pickThumbnailSize(sizes);
-
-          if (thumbnailSize) {
-            const baseUrl = info.id || info['@id'];
-            const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
-
-            const img = document.createElement('img');
-            img.src = thumbnailUrl;
-            img.alt = item.closest('.story-card').querySelector('h3').textContent;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'cover';
-
-            const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-            if (placeholder) {
-              placeholder.replaceWith(img);
-            }
-          }
+      TelarIIIF.resolveInfoJsonThumbnail(localInfoUrl)
+        .then(url => {
+          if (url) replaceStoryPlaceholder(url);
         })
         .catch(error => {
           console.error('Error loading local IIIF info.json:', localInfoUrl, error);
@@ -881,6 +751,17 @@ document.addEventListener('DOMContentLoaded', function() {
             placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
           }
         });
+    }
+
+    function replaceStoryPlaceholder(url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = item.closest('.story-card').querySelector('h3').textContent;
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
+      if (placeholder) placeholder.replaceWith(img);
     }
   });
 });
@@ -900,7 +781,7 @@ featuredThumbnails.forEach(function(item) {
   if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
     const img = document.createElement('img');
     const originalUrl = objectData.thumbnail;
-    const upgradedUrl = upgradeIIIFThumbnailUrl(originalUrl);
+    const upgradedUrl = TelarIIIF.upgradeIIIFThumbnailUrl(originalUrl);
     img.src = upgradedUrl;
     // Fall back to original size if upgraded URL fails (level0 servers)
     if (upgradedUrl !== originalUrl) {
@@ -918,112 +799,37 @@ featuredThumbnails.forEach(function(item) {
   }
   // Check for remote IIIF manifest
   else if (objectData && objectData.iiif_manifest) {
-    fetch(objectData.iiif_manifest)
-      .then(response => response.json())
-      .then(manifest => {
-        let imageServiceUrl = null;
-        let imageServiceProfile = null;
-        let fallbackImageUrl = null;
-
-        // IIIF Presentation API 2.1
-        if (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) {
-          const firstCanvas = manifest.sequences[0].canvases[0];
-          if (firstCanvas && firstCanvas.images && firstCanvas.images[0]) {
-            const resource = firstCanvas.images[0].resource;
-            if (resource.service) {
-              const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
-              imageServiceUrl = service['@id'] || service.id;
-              imageServiceProfile = service.profile;
-            }
-            if (!imageServiceUrl && resource['@id']) {
-              fallbackImageUrl = resource['@id'];
-            }
-          }
-        }
-        // IIIF Presentation API 3.0
-        else if (manifest.items && manifest.items[0]) {
-          const firstCanvas = manifest.items[0];
-          if (firstCanvas.items && firstCanvas.items[0] && firstCanvas.items[0].items) {
-            const annotationBody = firstCanvas.items[0].items[0].body;
-            if (annotationBody.service && annotationBody.service.length > 0) {
-              imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
-              imageServiceProfile = annotationBody.service[0].profile;
-            }
-            if (!imageServiceUrl && annotationBody.id) {
-              fallbackImageUrl = annotationBody.id;
-            }
-          }
-        }
-
-        const isLevel0 = imageServiceProfile && (
-          imageServiceProfile === 'level0' ||
-          imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
-        );
-
-        function replaceFeaturedImg(url) {
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          item.innerHTML = '';
-          item.appendChild(img);
-        }
-
-        // Level 0: fetch info.json to get available sizes
-        if (imageServiceUrl && isLevel0) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          fetch(`${imageServiceUrl}/info.json`)
-            .then(r => r.json())
-            .then(info => {
-              const sizes = info.sizes || [];
-              const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
-              const url = largest
-                ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
-                : fallbackImageUrl;
-              if (url) replaceFeaturedImg(url);
-            })
-            .catch(() => { if (fallbackImageUrl) replaceFeaturedImg(fallbackImageUrl); });
-        }
-        // Level 1+: request arbitrary size
-        else if (imageServiceUrl) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          replaceFeaturedImg(`${imageServiceUrl}/full/!200,200/0/default.jpg`);
-        }
-        else if (fallbackImageUrl) {
-          replaceFeaturedImg(fallbackImageUrl);
-        }
+    TelarIIIF.resolveManifestThumbnail(objectData.iiif_manifest, '!200,200')
+      .then(url => {
+        if (url) replaceFeaturedImg(url);
       })
       .catch(error => {
+        // A manifest with no image is a silent no-op on featured cards;
+        // only network/parse failures are logged.
+        if (error && error.noImage) return;
         console.error('Error loading featured object manifest:', objectData.iiif_manifest, error);
       });
   }
   // Local IIIF info.json
   else {
-    fetch(localInfoUrl)
-      .then(response => response.json())
-      .then(info => {
-        const sizes = info.sizes || [];
-        let thumbnailSize = pickThumbnailSize(sizes);
-
-        if (thumbnailSize) {
-          const baseUrl = info.id || info['@id'];
-          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
-
-          const img = document.createElement('img');
-          img.src = thumbnailUrl;
-          img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          item.innerHTML = '';
-          item.appendChild(img);
-        }
+    TelarIIIF.resolveInfoJsonThumbnail(localInfoUrl)
+      .then(url => {
+        if (url) replaceFeaturedImg(url);
       })
       .catch(error => {
         console.error('Error loading featured object info.json:', localInfoUrl, error);
       });
+  }
+
+  function replaceFeaturedImg(url) {
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    item.innerHTML = '';
+    item.appendChild(img);
   }
 });
 

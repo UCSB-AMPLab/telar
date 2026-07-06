@@ -262,6 +262,7 @@ layout: default
   {% endif %}
 </div>
 
+<script src="{{ '/assets/js/iiif-thumbnails.js' | relative_url }}"></script>
 <script>
 // Localized strings injected from _data/languages/<telar_language>.yml
 const TelarI18n = {
@@ -270,44 +271,16 @@ const TelarI18n = {
 };
 
 /**
- * Pick a thumbnail size from the IIIF sizes array.
- * Returns the smallest size >= minWidth, or the largest available.
- */
-function pickThumbnailSize(sizes, minWidth) {
-  if (!sizes || sizes.length === 0) return null;
-  minWidth = minWidth || 400;
-  var sorted = sizes.slice().sort(function(a, b) { return a.width - b.width; });
-  for (var i = 0; i < sorted.length; i++) {
-    if (sorted[i].width >= minWidth) return sorted[i];
-  }
-  return sorted[sorted.length - 1];
-}
-
-/**
- * Upgrade IIIF Image API thumbnail URLs to a larger size.
- * Detects URLs with /full/{size}/0/default.{ext} pattern and replaces
- * the size segment with !600,600 for sharper gallery thumbnails.
- */
-function upgradeIIIFThumbnailUrl(url) {
-  // Match IIIF Image API pattern: .../full/{size}/0/default.{ext}
-  // The size segment may contain backslash-escaped ! (e.g. Rumsey \!96,96)
-  // or double slashes from stripped backslashes. Handle all variants.
-  var match = url.match(/^(.*\/full\/)[\\\/]*([^/]+)(\/0\/default\.\w+)$/);
-  if (match) {
-    return match[1] + '!600,600' + match[3];
-  }
-  return url;
-}
-
-/**
- * Load thumbnails from IIIF manifests and info.json
+ * Load thumbnails from IIIF manifests and info.json.
+ * Resolution logic lives in TelarIIIF (assets/js/iiif-thumbnails.js);
+ * this script only wires resolved URLs into the gallery cards.
  */
 document.addEventListener('DOMContentLoaded', function() {
   // Upgrade explicit IIIF thumbnail URLs to larger sizes (with fallback for Level 0 servers)
   var iiifThumbs = document.querySelectorAll('img.iiif-thumbnail');
   iiifThumbs.forEach(function(img) {
     var originalSrc = img.src;
-    var upgradedSrc = upgradeIIIFThumbnailUrl(originalSrc);
+    var upgradedSrc = TelarIIIF.upgradeIIIFThumbnailUrl(originalSrc);
     if (upgradedSrc !== originalSrc) {
       img.dataset.originalSrc = originalSrc;
       img.onerror = function() {
@@ -325,20 +298,11 @@ document.addEventListener('DOMContentLoaded', function() {
   localItems.forEach(function(item) {
     const infoUrl = item.getAttribute('data-info-json');
 
-    fetch(infoUrl)
-      .then(response => response.json())
-      .then(info => {
-        // Get the largest available size from sizes array (first element)
-        const sizes = info.sizes || [];
-        let thumbnailSize = pickThumbnailSize(sizes);
-
-        if (thumbnailSize) {
-          const baseUrl = info.id || info['@id'];
-          // Use base URL directly - it already points to the image service
-          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
-
+    TelarIIIF.resolveInfoJsonThumbnail(infoUrl)
+      .then(url => {
+        if (url) {
           const img = document.createElement('img');
-          img.src = thumbnailUrl;
+          img.src = url;
           img.alt = item.closest('.collection-item').querySelector('h3').textContent;
 
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
@@ -367,122 +331,32 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    // Fetch manifest to extract larger canvas image
-    fetch(manifestUrl)
-      .then(response => response.json())
-      .then(manifest => {
-        let imageServiceUrl = null;
-        let imageServiceProfile = null;
-        let fallbackImageUrl = null;
-
-        // IIIF Presentation API 2.1
-        if (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) {
-          const firstCanvas = manifest.sequences[0].canvases[0];
-          if (firstCanvas && firstCanvas.images && firstCanvas.images[0]) {
-            const resource = firstCanvas.images[0].resource;
-
-            // Try to get image service for resizing
-            if (resource.service) {
-              const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
-              imageServiceUrl = service['@id'] || service.id;
-              imageServiceProfile = service.profile;
-            }
-
-            // Fallback to full image URL
-            if (!imageServiceUrl && resource['@id']) {
-              fallbackImageUrl = resource['@id'];
-            }
-          }
-        }
-        // IIIF Presentation API 3.0
-        else if (manifest.items && manifest.items[0]) {
-          const firstCanvas = manifest.items[0];
-          if (firstCanvas.items && firstCanvas.items[0] && firstCanvas.items[0].items) {
-            const annotationBody = firstCanvas.items[0].items[0].body;
-
-            // Try to get image service for resizing
-            if (annotationBody.service && annotationBody.service.length > 0) {
-              imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
-              imageServiceProfile = annotationBody.service[0].profile;
-            }
-
-            // Fallback to full image URL
-            if (!imageServiceUrl && annotationBody.id) {
-              fallbackImageUrl = annotationBody.id;
-            }
-          }
-        }
-
-        const isLevel0 = imageServiceProfile && (
-          imageServiceProfile === 'level0' ||
-          imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
-        );
-
-        // Level 0: fetch info.json to get available sizes
-        if (imageServiceUrl && isLevel0) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          fetch(`${imageServiceUrl}/info.json`)
-            .then(r => r.json())
-            .then(info => {
-              const sizes = info.sizes || [];
-              const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
-              let thumbnailUrl = largest
-                ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
-                : fallbackImageUrl;
-
-              if (thumbnailUrl) {
-                const img = document.createElement('img');
-                img.src = thumbnailUrl;
-                img.alt = item.closest('.collection-item').querySelector('h3').textContent;
-                img.className = 'iiif-thumbnail';
-                const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-                if (placeholder) placeholder.replaceWith(img);
-              }
-            })
-            .catch(() => {
-              if (fallbackImageUrl) {
-                const img = document.createElement('img');
-                img.src = fallbackImageUrl;
-                img.alt = item.closest('.collection-item').querySelector('h3').textContent;
-                img.className = 'iiif-thumbnail';
-                const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-                if (placeholder) placeholder.replaceWith(img);
-              }
-            });
-        }
-        // Level 1+: request arbitrary size
-        else if (imageServiceUrl) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          const thumbnailUrl = `${imageServiceUrl}/full/!400,400/0/default.jpg`;
+    // Resolve manifest to a thumbnail URL and swap it into the card
+    TelarIIIF.resolveManifestThumbnail(manifestUrl, '!400,400')
+      .then(url => {
+        if (url) {
           const img = document.createElement('img');
-          img.src = thumbnailUrl;
+          img.src = url;
           img.alt = item.closest('.collection-item').querySelector('h3').textContent;
           img.className = 'iiif-thumbnail';
           const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
           if (placeholder) placeholder.replaceWith(img);
-        }
-        // No image service — use fallback directly
-        else if (fallbackImageUrl) {
-          const img = document.createElement('img');
-          img.src = fallbackImageUrl;
-          img.alt = item.closest('.collection-item').querySelector('h3').textContent;
-          img.className = 'iiif-thumbnail';
-          const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-          if (placeholder) placeholder.replaceWith(img);
-        } else {
-          console.warn('No image found in manifest:', manifestUrl);
-          const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-          if (placeholder) {
-            placeholder.innerHTML = '<span class="text-muted">' + TelarI18n.noImage + '</span>';
-          }
         }
       })
       .catch(error => {
-        console.error('Error loading manifest thumbnail:', manifestUrl, error);
-        // Show error placeholder
         const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-        if (placeholder) {
-          placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
+        // An imageless manifest is a content gap, not a failure: show the
+        // muted "no image" note rather than the error state.
+        if (error && error.noImage) {
+          console.warn('No image found in manifest:', manifestUrl);
+          if (placeholder) {
+            placeholder.innerHTML = '<span class="text-muted">' + TelarI18n.noImage + '</span>';
+          }
+        } else {
+          console.error('Error loading manifest thumbnail:', manifestUrl, error);
+          if (placeholder) {
+            placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
+          }
         }
       });
   });

@@ -31,6 +31,7 @@ Loaded directly by individual layouts via `<script>` tags, not bundled:
 |---|---|---|
 | `telar.js` | Site-wide panels and glossary behavior — the small layer every page loads. | default layout (all pages) |
 | `objects-filter.js` | Browse, facet filtering, and lunr search on the objects index page. | objects-index layout |
+| `iiif-thumbnails.js` | IIIF thumbnail resolution shared by the card grids — manifest (2.1/3.0) or info.json to best thumbnail URL, plus explicit-URL upgrading. Publishes `window.TelarIIIF`. | index and objects-index layouts |
 | `share-panel.js` | Share-link and embed-code controls in the share panel, for stories and the homepage. | story and default layouts |
 | `story-unlock.js` | Client-side decryption overlay for protected stories (AES-GCM via Web Crypto). | story layout |
 | `embed.js` | Detects iframe embedding and trims site chrome down to the story itself. | story layout |
