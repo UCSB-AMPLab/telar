@@ -42,7 +42,7 @@ from migrations.base import (
     BaseMigration, ChangeRecord, ChangeStatus, UPGRADE_STATE_FILE,
     apply_config_version,
 )
-from migrations.messages import get_message
+from migrations.messages import get_message, get_file_count_suffix
 # Each migration is registered in three hand-synced places: this import block,
 # LATEST_VERSION, and the MIGRATIONS list below. All three must agree — there
 # is no auto-discovery (migrations/__init__.py is deliberately empty).
@@ -339,6 +339,7 @@ def generate_checklist(
     from_version: str,
     to_version: str,
     soft_warnings: Optional[List[str]] = None,
+    lang: str = 'en',
 ) -> str:
     """
     Generate UPGRADE_SUMMARY.md content (without YAML frontmatter).
@@ -355,6 +356,8 @@ def generate_checklist(
         to_version: Target version
         soft_warnings: Non-fatal warnings (e.g. IIIF tile regeneration) to
             surface visibly rather than bury.
+        lang: Language code for the summary text ('en' or 'es'), from the
+            site's telar_language setting.
 
     Returns:
         Markdown content for summary
@@ -371,71 +374,67 @@ def generate_checklist(
     # Categorize applied changes
     categorized = _categorize_changes(applied)
 
+    summary_title = get_message(lang, 'summary_title')
     checklist = f"""---
 layout: default
-title: Upgrade Summary
+title: {summary_title}
 ---
 
-## Upgrade Summary
-- **From:** {from_version}
-- **To:** {to_version}
-- **Date:** {_get_date()}
-- **Automated changes:** {len(applied)}
-- **Manual steps:** {len(manual_steps)}
+## {summary_title}
+- **{get_message(lang, 'summary_from')}:** {from_version}
+- **{get_message(lang, 'summary_to')}:** {to_version}
+- **{get_message(lang, 'summary_date')}:** {_get_date()}
+- **{get_message(lang, 'summary_automated_changes')}:** {len(applied)}
+- **{get_message(lang, 'summary_manual_steps')}:** {len(manual_steps)}
 """
     if failed:
-        checklist += f"- **Failed / needs attention:** {len(failed)}\n"
-    checklist += "\n## Automated Changes Applied\n\n"
+        checklist += f"- **{get_message(lang, 'summary_failed_count')}:** {len(failed)}\n"
+    checklist += f"\n## {get_message(lang, 'automated_changes_applied')}\n\n"
 
     # Output changes by category
     for category, changes in categorized.items():
-        checklist += f"### {category} ({len(changes)} file{'s' if len(changes) != 1 else ''})\n\n"
+        category_label = get_message(lang, 'category_' + category.lower())
+        file_suffix = get_file_count_suffix(lang, len(changes))
+        checklist += f"### {category_label} ({len(changes)} {file_suffix})\n\n"
         for change in changes:
             checklist += f"- [x] {change}\n"
         checklist += "\n"
 
     # Failures are never ticked and never counted as automated changes.
     if failed:
-        checklist += "## Failed / Needs Manual Attention\n\n"
-        checklist += (
-            "The following changes did not complete automatically. The site "
-            "was **not** upgraded to the new version. Resolve these (usually a "
-            "transient network problem) and run the upgrade again.\n\n"
-        )
+        checklist += f"## {get_message(lang, 'failed_needs_attention')}\n\n"
+        checklist += get_message(lang, 'failed_section_body') + "\n\n"
         for record in failed:
             checklist += f"- [ ] {record.description}\n"
         checklist += "\n"
 
     if soft_warnings:
-        checklist += "## Completed With Warnings\n\n"
-        checklist += (
-            "These steps are non-fatal and did not block the upgrade, but you "
-            "should check them:\n\n"
-        )
+        checklist += f"## {get_message(lang, 'completed_with_warnings')}\n\n"
+        checklist += get_message(lang, 'warnings_section_body') + "\n\n"
         for warning in soft_warnings:
             checklist += f"- {warning}\n"
         checklist += "\n"
 
     if manual_steps:
-        checklist += f"""## Manual Steps Required
+        checklist += f"""## {get_message(lang, 'manual_steps_required')}
 
-Please complete these after merging:
+{get_message(lang, 'complete_after_merge')}
 
 """
         for i, step in enumerate(manual_steps, 1):
             checklist += f"{i}. {step['description']}"
             if 'doc_url' in step:
-                checklist += f" ([guide]({step['doc_url']}))"
+                checklist += f" ([{get_message(lang, 'guide')}]({step['doc_url']}))"
             checklist += "\n"
     else:
-        checklist += "## No Manual Steps Required\n\nAll changes have been automated!\n"
+        checklist += f"## {get_message(lang, 'no_manual_steps')}\n\n{get_message(lang, 'all_automated')}\n"
 
-    checklist += """
-## Resources
+    checklist += f"""
+## {get_message(lang, 'resources')}
 
-- [Full Documentation](https://telar.org/docs)
-- [CHANGELOG](https://github.com/UCSB-AMPLab/telar/blob/main/CHANGELOG.md)
-- [Report Issues](https://github.com/UCSB-AMPLab/telar/issues)
+- [{get_message(lang, 'full_documentation')}](https://telar.org/docs)
+- [{get_message(lang, 'changelog')}](https://github.com/UCSB-AMPLab/telar/blob/main/CHANGELOG.md)
+- [{get_message(lang, 'report_issues')}](https://github.com/UCSB-AMPLab/telar/issues)
 """
 
     return checklist
@@ -612,7 +611,8 @@ def _write_failure_summary(repo_root: str, migrations: List[BaseMigration],
                            all_changes: List[ChangeRecord], from_version: str) -> None:
     """Write UPGRADE_SUMMARY.md and the state marker for a failed upgrade."""
     failed = [r for r in all_changes if r.status == ChangeStatus.FAILED]
-    summary = generate_checklist(migrations, all_changes, from_version, LATEST_VERSION)
+    summary = generate_checklist(migrations, all_changes, from_version, LATEST_VERSION,
+                                 lang=_get_lang(repo_root))
     summary_path = os.path.join(repo_root, 'UPGRADE_SUMMARY.md')
     with open(summary_path, 'w') as f:
         f.write(summary)
@@ -750,7 +750,7 @@ def main():
 
     # Generate and write summary
     summary = generate_checklist(migrations, all_changes, from_version, LATEST_VERSION,
-                                 soft_warnings=soft_warnings)
+                                 soft_warnings=soft_warnings, lang=lang)
     summary_path = os.path.join(repo_root, 'UPGRADE_SUMMARY.md')
     with open(summary_path, 'w') as f:
         f.write(summary)
