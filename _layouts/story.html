@@ -25,9 +25,10 @@
   jekyll-seo-tag is bypassed in favour of a generic description and canonical URL, the byline
   and description are suppressed from the intro card, and the steps are NOT rendered server-side
   (an empty container is left for story-unlock.js to populate after decryption), so authored
-  content never ships in the HTML before the reader supplies the key. KaTeX is loaded lazily,
-  only after storyData reveals the story uses LaTeX. "Christmas tree mode" is a development
-  flag that decorates warning headings.
+  content never ships in the HTML before the reader supplies the key. KaTeX is loaded lazily by
+  assets/js/katex-loader.js, only after storyData (or, for protected stories, has_latex
+  frontmatter) reveals the story uses LaTeX. "Christmas tree mode" is a development flag that
+  decorates warning headings, via assets/js/christmas-tree-decorator.js.
 {%- endcomment -%}
 <!DOCTYPE html>
 <html lang="en">
@@ -129,17 +130,12 @@
     image_unavailable_detail: {{ lang.object.viewer.image_unavailable_detail | jsonify }}
   };
 
-  // If Christmas Tree Mode is active, add 🎄 to all warning headings
-  if (window.christmasTreeMode) {
-    document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('.alert strong').forEach(function(heading) {
-        if (!heading.textContent.includes('🎄')) {
-          heading.textContent = '🎄 ' + heading.textContent;
-        }
-      });
-    });
-  }
   </script>
+  <!-- Christmas Tree Mode warning decorator — reads window.christmasTreeMode
+       (set above) and, if on, prefixes warning headings with 🎄. See
+       assets/js/christmas-tree-decorator.js for the algorithm and its Python
+       counterpart in scripts/telar/processors/stories.py. -->
+  <script src="{{ '/assets/js/christmas-tree-decorator.js' | relative_url }}"></script>
 
   <!-- Google Fonts - Dynamic based on theme -->
   {% assign theme = site.data.themes[site.telar_theme] %}
@@ -316,75 +312,16 @@
   <!-- KaTeX for LaTeX rendering (loaded dynamically if story has LaTeX) -->
   <!-- A second copy of this loading logic (URLs, version pin, delimiter list,
        trust callback) lives in _includes/katex.html, used by the default
-       layout for non-story pages. Any version bump here must also be made there. -->
+       layout for non-story pages. Any version bump here must also be made there.
+       The loader itself is assets/js/katex-loader.js; this inline script only
+       hands it the Liquid-dependent has_latex flag (protected stories carry no
+       readable steps before unlock, so their flag must ride frontmatter). -->
   <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      // Check after storyData is available
-      setTimeout(function() {
-        // Protected pages carry an envelope (no readable steps), so their
-        // LaTeX flag rides frontmatter, stamped at generation time.
-        var pageHasLatex = {% if page.has_latex %}true{% else %}false{% endif %};
-        var metaHasLatex = false;
-        if (window.storyData && window.storyData.steps) {
-          var meta = window.storyData.steps[0];
-          metaHasLatex = !!(meta && meta._metadata && meta.has_latex);
-        }
-          if (pageHasLatex || metaHasLatex) {
-            // Load KaTeX CSS
-            var link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css';
-            document.head.appendChild(link);
-
-            // Load KaTeX scripts sequentially
-            var scripts = [
-              'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js',
-              'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js',
-              'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js'
-            ];
-
-            function loadNext(i) {
-              if (i >= scripts.length) {
-                var katexDelimiters = [
-                  { left: "$$", right: "$$", display: true },
-                  { left: "$", right: "$", display: false },
-                  { left: "\\(", right: "\\)", display: false },
-                  { left: "\\[", right: "\\]", display: true },
-                  { left: "\\begin{align}", right: "\\end{align}", display: true },
-                  { left: "\\begin{align*}", right: "\\end{align*}", display: true },
-                  { left: "\\begin{cases}", right: "\\end{cases}", display: true },
-                  { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
-                  { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
-                  { left: "\\begin{equation}", right: "\\end{equation}", display: true },
-                  { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
-                ];
-                window.telarRenderLatex = function(element) {
-                  if (typeof renderMathInElement === 'function') {
-                    renderMathInElement(element, {
-                      delimiters: katexDelimiters,
-                      throwOnError: false,
-                      // Permit \href only for safe URL schemes; other trust-gated
-                      // commands render as literal text.
-                      trust: function (ctx) { return ctx.command === '\\href' && /^(https?:|mailto:)/.test(ctx.url); }
-                    });
-                  }
-                };
-                // Render LaTeX in step text already in the DOM
-                document.querySelectorAll('.story-step').forEach(function(el) {
-                  window.telarRenderLatex(el);
-                });
-                return;
-              }
-              var s = document.createElement('script');
-              s.src = scripts[i];
-              s.onload = function() { loadNext(i + 1); };
-              document.head.appendChild(s);
-            }
-            loadNext(0);
-          }
-      }, 0);
-    });
+    window.telarKatexConfig = {
+      hasLatex: {% if page.has_latex %}true{% else %}false{% endif %}
+    };
   </script>
+  <script src="{{ '/assets/js/katex-loader.js' | relative_url }}"></script>
 
   <!-- Telar Core -->
   <script src="{{ '/assets/js/telar.js' | relative_url }}"></script>
