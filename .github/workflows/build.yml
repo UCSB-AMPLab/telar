@@ -34,7 +34,7 @@ name: Build and Deploy Telar Site
 # build time. Sites without audio objects skip audio tool installation and
 # processing entirely — zero friction for image-only sites.
 #
-# Version: v1.5.4
+# Version: v1.6.0
 
 on:
   push:
@@ -365,6 +365,14 @@ jobs:
             echo "⚠️  Warning: No cached IIIF tiles found. Site may have missing images."
             echo "⚠️  Run a full build with IIIF regeneration to create tiles."
           fi
+
+      - name: Encrypt protected stories
+        # Post-build encryption and leak gate for protected stories.
+        # Runs unconditionally, immediately before the artifact upload, so
+        # the gate scans exactly what deploys. No-op when no story is
+        # protected; fails the build rather than publish protected plaintext.
+        run: |
+          python scripts/encrypt_protected_stories.py
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

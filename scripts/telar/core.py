@@ -28,16 +28,20 @@ is not a system file (`project.csv`, `objects.csv`, or their Spanish
 equivalents) is treated as a story. The `--story` flag narrows this to a
 single CSV by stem name, which speeds up iteration when working on one
 story at a time. After all CSVs are converted, demo content is loaded and
-merged if available. Protected stories are then encrypted using the
-story_key from _config.yml. Finally, `generate_search_data()` builds the
+merged if available. Finally, `generate_search_data()` builds the
 Lunr.js search index and facet counts that power the gallery's
 browse-and-search interface.
 
-Before encrypting a protected story (v1.5.1), glossary link markup in the step
-answer is reduced to plain text, because the protected-story runtime renderer
-escapes the answer and has no glossary panel.
+Protected stories are NOT encrypted here. Their `_data` JSON stays
+plaintext (gitignored, consumed only at build time); encryption happens
+post-build in `scripts/encrypt_protected_stories.py`, which encrypts the
+Jekyll-rendered step HTML together with the steps JSON in one envelope. This
+pipeline only checks the prerequisites for that step — a story_key, and a
+build workflow that actually runs it — and refuses to run when they are
+missing, so a site can never publish protected content because its workflow
+predates the build-time encryption step.
 
-Version: v1.5.1
+Version: v1.6.0
 """
 
 import os
@@ -52,8 +56,7 @@ from telar.processors.project import process_project_setup
 from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
 from telar.demo import load_demo_bundle, merge_demo_content, fetch_demo_content_if_enabled
-from telar.encryption import encrypt_story, get_protected_stories, get_story_key_from_config
-from telar.glossary import strip_glossary_links
+from telar.encryption import get_protected_stories, get_story_key_from_config
 from telar.media_type import AUDIO_EXTENSIONS
 from telar.search import generate_search_data
 
@@ -157,31 +160,31 @@ def find_csv_with_fallback(base_path, spanish_name):
         return english_path
 
 
-def _encrypt_protected_stories(data_dir):
-    """
-    Encrypt story JSON files that are marked as protected.
+# The build workflow must invoke this script for protected content to be
+# encrypted before deployment. The interlock below greps build.yml for the
+# script path itself, so the check cannot drift from the thing it checks.
+ENCRYPT_SCRIPT_MARKER = 'encrypt_protected_stories.py'
+BUILD_WORKFLOW_PATH = Path('.github/workflows/build.yml')
 
-    Reads project.json to find protected stories, then encrypts their
-    corresponding JSON files using the story_key from _config.yml.
+
+def _check_protected_prerequisites(data_dir, workflow_path=None):
+    """
+    Fail closed when protected stories cannot be encrypted downstream.
+
+    Encryption happens post-build (encrypt_protected_stories.py encrypts
+    the Jekyll-rendered steps). That step only runs if the build workflow
+    invokes it, and workflow files cannot be shipped through the upgrade
+    pipeline (the upgrade token lacks workflow write permission). So a site
+    can hold upgraded scripts and a build.yml that predates the encrypt
+    step — and that combination would deploy protected stories as plaintext
+    with nothing failing. This check makes the pipeline itself refuse to run
+    in that state.
 
     Args:
-        data_dir: Path to _data directory containing JSON files
+        data_dir: Path to _data directory containing project.json
+        workflow_path: Path to the build workflow (test seam; defaults to
+            .github/workflows/build.yml)
     """
-    # Read _config.yml for story_key
-    config_path = Path('_config.yml')
-    if not config_path.exists():
-        return
-
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-    except Exception as e:
-        print(f"  [WARN] Could not read _config.yml: {e}")
-        return
-
-    story_key = get_story_key_from_config(config)
-
-    # Read project.json to find protected stories
     project_path = data_dir / 'project.json'
     if not project_path.exists():
         return
@@ -199,66 +202,52 @@ def _encrypt_protected_stories(data_dir):
         print("No protected stories found.")
         return
 
+    # Prerequisite 1: a story_key must exist for the downstream encrypt step.
+    story_key = None
+    config_path = Path('_config.yml')
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            story_key = get_story_key_from_config(config)
+        except Exception as e:
+            print(f"  [WARN] Could not read _config.yml: {e}")
+
     if not story_key:
-        # Fail closed: stories are flagged protected but there is no key to
-        # encrypt them. Continuing would publish them as plaintext.
         print(f"  ❌ {len(protected_stories)} story/stories are marked protected but "
               f"no story_key is set in _config.yml.")
         print("     Add 'story_key: yourkey' to _config.yml, or remove the 'protected' "
               "flag from those stories. Refusing to publish protected content as plaintext.")
+        print("     Hay historias marcadas como protegidas, pero no hay "
+              "story_key en _config.yml.")
+        print("     Agrega 'story_key: tuclave' a _config.yml, o quita la marca "
+              "'protected' de esas historias.")
         raise SystemExit(1)
 
-    print(f"Encrypting {len(protected_stories)} protected story/stories...")
-
-    failures = []
-    for story_id in protected_stories:
-        # Story JSON filename matches the identifier generate_collections used
-        # (story_id, or the story-{number} fallback).
-        story_json = data_dir / f"{story_id}.json"
-
-        if not story_json.exists():
-            failures.append((story_id, f"data file not found ({story_json.name})"))
-            continue
-
+    # Prerequisite 2: the build workflow must run the post-build encrypt step.
+    workflow = Path(workflow_path) if workflow_path else BUILD_WORKFLOW_PATH
+    workflow_text = ''
+    if workflow.exists():
         try:
-            # Read story data
-            with open(story_json, 'r', encoding='utf-8') as f:
-                story_data = json.load(f)
-
-            # Reduce glossary link markup in the step answer to plain text before
-            # encrypting. Protected stories are rendered by a runtime path that
-            # HTML-escapes the answer and offers no glossary panel, so the inline
-            # <a class="glossary-inline-link"> injected by process_story would
-            # surface as escaped tag-text. Layer panel content is unaffected (it is
-            # rendered as trusted HTML at panel-open time), and the question is
-            # never glossary-processed, so only the answer needs stripping.
-            if isinstance(story_data, list):
-                for step in story_data:
-                    if isinstance(step, dict) and step.get('answer'):
-                        step['answer'] = strip_glossary_links(step['answer'])
-
-            # Encrypt story
-            encrypted = encrypt_story(story_data, story_key)
-
-            # Write encrypted data back
-            with open(story_json, 'w', encoding='utf-8') as f:
-                json.dump(encrypted, f, indent=2, ensure_ascii=False)
-
-            print(f"  🔒 Encrypted {story_json.name}")
-
+            workflow_text = workflow.read_text(encoding='utf-8')
         except Exception as e:
-            failures.append((story_id, f"encryption failed: {e}"))
+            print(f"  [WARN] Could not read {workflow}: {e}")
 
-    if failures:
-        # Fail closed: any protected story we could not encrypt must not ship
-        # as plaintext. Abort the build with a clear, actionable message.
-        print("\n  ❌ Protected stories could not be encrypted — refusing to publish "
-              "them as plaintext:")
-        for sid, why in failures:
-            print(f"       - {sid}: {why}")
-        print("     Fix the story_id / data-file mismatch (or remove the 'protected' "
-              "flag), then rebuild.")
+    if ENCRYPT_SCRIPT_MARKER not in workflow_text:
+        print(f"  ❌ {len(protected_stories)} story/stories are marked protected, but "
+              f"{workflow} does not run scripts/{ENCRYPT_SCRIPT_MARKER}.")
+        print("     Your build workflow predates build-time story encryption, so "
+              "protected stories would be published as plaintext.")
+        print("     Update .github/workflows/build.yml as described in the upgrade "
+              "notes, or remove the 'protected' flag from those stories.")
+        print(f"     Hay historias protegidas, pero {workflow} no ejecuta "
+              f"scripts/{ENCRYPT_SCRIPT_MARKER}.")
+        print("     Actualiza .github/workflows/build.yml según las notas de "
+              "actualización, o quita la marca 'protected' de esas historias.")
         raise SystemExit(1)
+
+    print(f"{len(protected_stories)} protected story/stories will be encrypted "
+          "after the Jekyll build.")
 
 
 def _generate_audio_manifest(data_dir):
@@ -426,9 +415,10 @@ def main():
         print("Merging demo content...")
         merge_demo_content(demo_bundle)
 
-    # Encrypt protected stories (v0.8.0+)
+    # Protected stories: check the post-build encrypt step can actually run
+    # (encryption itself happens in scripts/encrypt_protected_stories.py)
     print("-" * 50)
-    _encrypt_protected_stories(data_dir)
+    _check_protected_prerequisites(data_dir)
 
     print("-" * 50)
     print("Conversion complete!")
