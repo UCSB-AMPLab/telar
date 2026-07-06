@@ -758,17 +758,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // Copy buttons (same pattern as coordinate panel)
   var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
 
+  // Shared copy-then-feedback helper for this panel's two buttons: writes
+  // text to the clipboard, then swaps the button's icon for a checkmark +
+  // copiedLang for 2s before reverting.
+  function copyClipText(text, btnId) {
+    navigator.clipboard.writeText(text).then(function() {
+      var btn = document.getElementById(btnId);
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    });
+  }
+
   var copyClipCsv = document.getElementById('copy-clip-csv');
   if (copyClipCsv) {
     copyClipCsv.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + ',' + end).then(function() {
-        var btn = document.getElementById('copy-clip-csv');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + ',' + end, 'copy-clip-csv');
     });
   }
 
@@ -777,12 +784,7 @@ document.addEventListener('DOMContentLoaded', function() {
     copyClipSheets.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + '	' + end).then(function() {
-        var btn = document.getElementById('copy-clip-sheets');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + '	' + end, 'copy-clip-sheets');
     });
   }
 });
@@ -794,31 +796,8 @@ document.addEventListener('DOMContentLoaded', function() {
 {%- comment -%}Waveform aria-label resolved once here; __TITLE__ carries the escaped page title.{%- endcomment -%}
 {% assign escaped_title = page.title | escape %}
 {% assign waveform_label = lang.object.audio_controls.waveform_label | default: 'Audio waveform for __TITLE__' | replace: '__TITLE__', escaped_title %}
+<script src="{{ '/assets/js/wavesurfer-loader.js' | relative_url }}"></script>
 <script>
-// Load the vendored WaveSurfer UMD bundle (core + Regions plugin) once, from
-// the repo's assets/vendor/ — mirrors loadWaveSurferAPI() in
-// assets/js/telar-story/audio-card.js so audio object pages work offline with
-// no CDN dependency. The UMD builds expose window.WaveSurfer and
-// window.WaveSurfer.Regions.
-function loadVendoredWaveSurfer() {
-  if (window._wsApiPromise) return window._wsApiPromise;
-  window._wsApiPromise = new Promise((resolve, reject) => {
-    const base = '{{ site.baseurl }}';
-    const core = document.createElement('script');
-    core.src = base + '/assets/vendor/wavesurfer/wavesurfer.min.js';
-    core.onload = () => {
-      const regions = document.createElement('script');
-      regions.src = base + '/assets/vendor/wavesurfer/plugins/regions.min.js';
-      regions.onload = () => resolve();
-      regions.onerror = reject;
-      document.head.appendChild(regions);
-    };
-    core.onerror = reject;
-    document.head.appendChild(core);
-  });
-  return window._wsApiPromise;
-}
-
 document.addEventListener('DOMContentLoaded', async function() {
   const viewer = document.getElementById('object-viewer');
 
@@ -860,8 +839,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     '</div>' +
     '<span class="audio-object-time" id="audio-time-display">0:00 / --:--</span>';
 
-  // Load WaveSurfer from the vendored bundle (no CDN dependency)
-  await loadVendoredWaveSurfer();
+  // Load WaveSurfer from the vendored bundle (no CDN dependency) — the
+  // loader lives in assets/js/wavesurfer-loader.js (see the script tag
+  // above), the object-page twin of loadWaveSurferAPI in
+  // assets/js/telar-story/audio-card.js (must-agree cross-links in both files)
+  await window.telarLoadWaveSurfer(baseUrl);
   const WaveSurfer = window.WaveSurfer;
 
   // Derive theme colours via object-theme.js — its deriveThemeColors is the
@@ -875,7 +857,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   const unplayedColor = themeColors.unplayedColor;
   const bgColor = themeColors.backgroundColor;
 
-  // Apply accent-tinted background + telar weave pattern to viewer container
+  // Solid accent-tinted background only — no weave-pattern image is layered
+  // in for the audio object viewer (see themeColors.patternColor, unused here).
   viewer.style.background = bgColor;
 
   // Load peaks if available
@@ -1039,17 +1022,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // Copy buttons
   var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
 
+  // Shared copy-then-feedback helper for this panel's two buttons: writes
+  // text to the clipboard, then swaps the button's icon for a checkmark +
+  // copiedLang for 2s before reverting.
+  function copyClipText(text, btnId) {
+    navigator.clipboard.writeText(text).then(function() {
+      var btn = document.getElementById(btnId);
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    });
+  }
+
   var copyClipCsv = document.getElementById('copy-clip-csv');
   if (copyClipCsv) {
     copyClipCsv.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + ',' + end).then(function() {
-        var btn = document.getElementById('copy-clip-csv');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + ',' + end, 'copy-clip-csv');
     });
   }
 
@@ -1058,12 +1048,7 @@ document.addEventListener('DOMContentLoaded', function() {
     copyClipSheets.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + '	' + end).then(function() {
-        var btn = document.getElementById('copy-clip-sheets');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + '	' + end, 'copy-clip-sheets');
     });
   }
 });
@@ -1088,6 +1073,34 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
+    // Shared copy-then-feedback helpers for this panel's buttons. Two
+    // idioms coexist here: the csv/sheets buttons show a checkmark plus
+    // window.telarCoordLang.copied text; the manifest/x/y/zoom/page buttons
+    // show the checkmark alone (no text). Each helper returns the
+    // clipboard promise so callers that need to chain a .catch (manifest)
+    // still can.
+    function copyCoordText(text, btnId) {
+      return navigator.clipboard.writeText(text).then(function() {
+        const btn = document.getElementById(btnId);
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
+        setTimeout(function() {
+          btn.innerHTML = originalHTML;
+        }, 2000);
+      });
+    }
+
+    function copyCoordIconOnly(text, btnId) {
+      return navigator.clipboard.writeText(text).then(function() {
+        const btn = document.getElementById(btnId);
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
+        setTimeout(function() {
+          btn.innerHTML = originalHTML;
+        }, 2000);
+      });
+    }
+
     // CSV format copy button (comma-separated)
     document.getElementById('copy-coords-csv').addEventListener('click', function() {
       const x = document.getElementById('coord-x').textContent;
@@ -1097,14 +1110,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
       const text = isMulti ? `${x},${y},${zoom},${pageEl.textContent}` : `${x},${y},${zoom}`;
 
-      navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('copy-coords-csv');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
-        setTimeout(function() {
-          btn.innerHTML = originalHTML;
-        }, 2000);
-      });
+      copyCoordText(text, 'copy-coords-csv');
     });
 
     // Sheets format copy button (tab-separated)
@@ -1116,14 +1122,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
       const text = isMulti ? `${x}\t${y}\t${zoom}\t${pageEl.textContent}` : `${x}\t${y}\t${zoom}`;
 
-      navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('copy-coords-sheets');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
-        setTimeout(function() {
-          btn.innerHTML = originalHTML;
-        }, 2000);
-      });
+      copyCoordText(text, 'copy-coords-sheets');
     });
 
     // Copy manifest URL button
@@ -1132,14 +1131,7 @@ document.addEventListener('DOMContentLoaded', function() {
       copyManifestBtn.addEventListener('click', function() {
         const manifestUrl = this.getAttribute('data-manifest');
 
-        navigator.clipboard.writeText(manifestUrl).then(function() {
-          const btn = document.getElementById('copy-manifest');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        }).catch(function(err) {
+        copyCoordIconOnly(manifestUrl, 'copy-manifest').catch(function(err) {
           console.error('Failed to copy manifest URL:', err);
         });
       });
@@ -1150,14 +1142,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyXBtn) {
       copyXBtn.addEventListener('click', function() {
         const x = document.getElementById('coord-x').textContent;
-        navigator.clipboard.writeText(x).then(function() {
-          const btn = document.getElementById('copy-x');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(x, 'copy-x');
       });
     }
 
@@ -1165,14 +1150,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyYBtn) {
       copyYBtn.addEventListener('click', function() {
         const y = document.getElementById('coord-y').textContent;
-        navigator.clipboard.writeText(y).then(function() {
-          const btn = document.getElementById('copy-y');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(y, 'copy-y');
       });
     }
 
@@ -1180,14 +1158,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyZoomBtn) {
       copyZoomBtn.addEventListener('click', function() {
         const zoom = document.getElementById('coord-zoom').textContent;
-        navigator.clipboard.writeText(zoom).then(function() {
-          const btn = document.getElementById('copy-zoom');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(zoom, 'copy-zoom');
       });
     }
 
@@ -1195,14 +1166,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyPageBtn) {
       copyPageBtn.addEventListener('click', function() {
         const page = document.getElementById('coord-page').textContent;
-        navigator.clipboard.writeText(page).then(function() {
-          const btn = document.getElementById('copy-page');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(page, 'copy-page');
       });
     }
   });

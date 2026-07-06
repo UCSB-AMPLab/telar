@@ -89,6 +89,13 @@ let _sharedAudioContext = null;
  * Vendored instead of CDN-loaded for the minimal-computing reasons in
  * `assets/vendor/README.md` (no CDN single-point-of-failure, version pinning).
  *
+ * MUST agree with telarLoadWaveSurfer in assets/js/wavesurfer-loader.js — same
+ * vendored bundles, same load-once-and-cache strategy. Object pages cannot
+ * import this ES module, so that file carries its own classic-script copy
+ * (window.telarLoadWaveSurfer, base path passed in rather than read via
+ * getBasePath()); two copies by design, kept in sync by hand. Phase 4 may
+ * unify them.
+ *
  * @returns {Promise<void>}
  */
 export function loadWaveSurferAPI() {
@@ -538,7 +545,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           overlayBtn.type = "button";
           overlayBtn.innerHTML = _svg("play", 36);
           overlayBtn.style.cssText =
-            "width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:#333;";
+            "width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:var(--color-body);";
           overlayEl.appendChild(overlayBtn);
           plateEl.appendChild(overlayEl);
 
