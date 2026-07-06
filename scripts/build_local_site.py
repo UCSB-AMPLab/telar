@@ -15,8 +15,8 @@ or tool:
    links, and demo content (csv_to_json.py / telar package)
 3. Generate Jekyll collection markdown files from JSON
    (generate_collections.py)
-4. Process audio objects — generate peak data and clip files for audio
-   cards (process_audio.py)
+4. Process audio objects — generate waveform peak data for audio cards
+   (process_audio.py)
 5. Generate IIIF image tiles for self-hosted objects (generate_iiif.py)
 6. Bundle JavaScript modules into story.js (esbuild)
 7. Build or serve the Jekyll site
@@ -156,7 +156,7 @@ def main():
         if has_audio:
             run_command(
                 'python3 scripts/process_audio.py --objects-dir telar-content/objects --data-dir _data --output-dir assets/audio',
-                'Step 4/8: Processing audio objects (peaks + clips)'
+                'Step 4/8: Processing audio objects (waveform peaks)'
             )
         else:
             print("\n✓ Step 4/8: No audio objects found - skipping audio processing")

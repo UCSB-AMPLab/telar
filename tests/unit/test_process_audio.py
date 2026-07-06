@@ -150,15 +150,15 @@ def test_compute_cache_key_same_inputs():
 # ---------------------------------------------------------------------------
 
 def test_check_audio_dependencies_missing_audiowaveform():
-    """Raises SystemExit with message containing 'audiowaveform' when not found."""
-    with patch('shutil.which', side_effect=lambda tool: None if tool == 'audiowaveform' else '/usr/bin/ffmpeg'):
+    """Raises SystemExit when audiowaveform is not found."""
+    with patch('shutil.which', return_value=None):
         with pytest.raises(SystemExit):
             check_audio_dependencies()
 
 
 def test_check_audio_dependencies_missing_audiowaveform_message(capsys):
     """Error message must contain 'audiowaveform'."""
-    with patch('shutil.which', side_effect=lambda tool: None if tool == 'audiowaveform' else '/usr/bin/ffmpeg'):
+    with patch('shutil.which', return_value=None):
         with pytest.raises(SystemExit):
             check_audio_dependencies()
         captured = capsys.readouterr()
@@ -166,23 +166,16 @@ def test_check_audio_dependencies_missing_audiowaveform_message(capsys):
 
 
 # ---------------------------------------------------------------------------
-# Test 7: check_audio_dependencies — ffmpeg missing
+# Test 7: check_audio_dependencies — audiowaveform is the ONLY requirement
 # ---------------------------------------------------------------------------
 
-def test_check_audio_dependencies_missing_ffmpeg():
-    """Raises SystemExit with message containing 'ffmpeg' when not found."""
-    with patch('shutil.which', side_effect=lambda tool: None if tool == 'ffmpeg' else '/usr/local/bin/audiowaveform'):
-        with pytest.raises(SystemExit):
-            check_audio_dependencies()
-
-
-def test_check_audio_dependencies_missing_ffmpeg_message(capsys):
-    """Error message must contain 'ffmpeg'."""
-    with patch('shutil.which', side_effect=lambda tool: None if tool == 'ffmpeg' else '/usr/local/bin/audiowaveform'):
-        with pytest.raises(SystemExit):
-            check_audio_dependencies()
-        captured = capsys.readouterr()
-        assert 'ffmpeg' in captured.out or 'ffmpeg' in captured.err
+def test_check_audio_dependencies_requires_audiowaveform_only():
+    """ffmpeg absence must not fail the check — peak generation never
+    invokes it (M4A inputs skip peaks and decode client-side instead)."""
+    with patch('shutil.which',
+               side_effect=lambda tool:
+               '/usr/local/bin/audiowaveform' if tool == 'audiowaveform' else None):
+        check_audio_dependencies()  # must not raise
 
 
 # ---------------------------------------------------------------------------

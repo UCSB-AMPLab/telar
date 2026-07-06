@@ -34,11 +34,10 @@ unchanged audio is not reprocessed on subsequent builds. Like the IIIF
 tile generator, this script is optional — sites without audio objects
 skip it entirely, and the CI workflow detects this automatically.
 
-Both audiowaveform and ffmpeg are required only for sites that include
-audio objects. Neither is a Python package — they are system-level tools
-installed via the platform's package manager (brew on macOS, apt on
-Linux). The CI workflow installs them conditionally when audio files are
-detected.
+audiowaveform is required only for sites that include audio objects. It
+is not a Python package — it is a system-level tool installed via the
+platform's package manager (brew on macOS, apt on Linux). The CI
+workflow installs it conditionally when audio files are detected.
 
 The _data/audio_objects.json manifest (object_id -> file extension,
 consumed by story.html to inject window.audioObjects) is written by
@@ -148,15 +147,18 @@ def compute_cache_key(audio_path):
 
 def check_audio_dependencies():
     """
-    Check that audiowaveform and ffmpeg are installed and accessible.
+    Check that audiowaveform is installed and accessible.
 
-    Exits with a clear error message if either tool is missing, naming the
-    tool and providing install instructions.
+    Exits with a clear error message if it is missing, with install
+    instructions. audiowaveform is the only external tool this script
+    invokes. It decodes MP3 and Ogg natively; for M4A it fails, which
+    generate_peaks treats as a per-file skip — the player falls back to
+    client-side decoding, so M4A objects play without pre-computed peaks.
 
     Raises:
-        SystemExit: If audiowaveform or ffmpeg is not found.
+        SystemExit: If audiowaveform is not found.
     """
-    for tool in ('audiowaveform', 'ffmpeg'):
+    for tool in ('audiowaveform',):
         if shutil.which(tool) is None:
             print(
                 f"Error: {tool} is not installed. "

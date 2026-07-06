@@ -102,11 +102,11 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y libvips-tools
 
-      - name: Install audio processing tools (audiowaveform + ffmpeg)
+      - name: Install audio processing tools (audiowaveform)
         run: |
           # Only install if audio objects exist (zero friction for image-only sites)
           if ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
-            echo "Audio objects detected - installing audiowaveform and ffmpeg"
+            echo "Audio objects detected - installing audiowaveform"
             # audiowaveform is installed from a third-party Ubuntu PPA maintained
             # by Chris Needham (BBC R&D). This is an unpinned external package
             # source and an explicit trust dependency. The long-term hardening is
@@ -114,7 +114,7 @@ jobs:
             # and install it with dpkg instead of fetching from the live PPA.
             sudo add-apt-repository -y ppa:chris-needham/ppa
             sudo apt-get update -q
-            sudo apt-get install -y audiowaveform ffmpeg
+            sudo apt-get install -y audiowaveform
           else
             echo "No audio objects found - skipping audio tool installation"
           fi
