@@ -1,0 +1,26 @@
+{
+ "_comment": "Cross-language vector: produced by scripts/telar/encryption.py encrypt_story(payload, 'unit-test-key', aad='fixture-story'). Proves the JS decrypt path matches the Python encrypt path, AAD included.",
+ "key": "unit-test-key",
+ "aad": "fixture-story",
+ "payload": {
+  "steps": [
+   {
+    "_metadata": true,
+    "has_latex": true
+   },
+   {
+    "step": "1",
+    "object": "fixture-obj",
+    "question": "Fixture question one",
+    "answer": "<p>Fixture <strong>answer</strong> one.</p>"
+   }
+  ],
+  "html": "<div class=\"story-step\" data-step=\"1\" data-object=\"fixture-obj\"><div class=\"step-content\"><h2 class=\"step-question\">Fixture question one</h2><div class=\"step-answer\"><p>Fixture <strong>answer</strong> one.</p></div></div></div>"
+ },
+ "envelope": {
+  "encrypted": true,
+  "salt": "2M+xSQY97ImQogVmMfidZQ==",
+  "iv": "bzuOBb2LqsHgnHX8",
+  "ciphertext": "mx0rzNRYLwNUcco4LzzznIfFkI9TyqK3WrYbWLxHtSIeYElOx5p7+UO100WJ7OY6cCtPHzHoFkFqnv3oWwUEmM1E1Yi7UHzBsQQeziHH4PNn3/gfiOoZG3qh5qEoQZx8q/nKkxyx597TZ0CAZE/Tm/KcRdPG+wfWCqXYdv0Otkdqz7oa9BjqNqHI4D6ZeCnBw7BW67Sad9Ed+1JZ/Z8MsV7Dt08Ea8xsIcSkxDTXNvfYLbtMhel4iD+j08ViJmgVoWXwCleYwoT0Q84Xr3CE3vkPqEdW1v6gwcmeqww4fDZ6LcyvhH5pOtabdWv2ATB1CYR9B5J/q8XYCRjODBT58Vbzxs5uOqlklXYWR0KlDFB3n4PkTLZZWjyQtWkPGKgMCxzSdAAQGlIjgX7irVDZScbrLIlo0y6pjzt7LsfPPQtr7F3X9DcBG9pIXX2jXLB7nxMZ3rhFcGK6wnrI7Ylt6621C00Pvl7pjgBSe4zshBAtHSAcI/5HLSFzUc7zTG3wndp4QOQKW1K5RQPuxHqb82985Z1OTpCy9Mej1f3YXddAnUcjyfPzDEnCQgJXpgieYPFf3EeI4CYqQ9AGMot9GBc36A=="
+ }
+}
