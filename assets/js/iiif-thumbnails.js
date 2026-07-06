@@ -22,12 +22,14 @@
  *   canvas's image service and full-image URL, and resolves to a thumbnail URL. A
  *   Level 1+ service gets an arbitrary-size request (`sizeParam`, default `!400,400` —
  *   the home page's featured grid passes `!200,200` for its smaller cards). A Level 0
- *   service can't scale on demand, so its `info.json` is fetched and the largest
- *   pre-generated size used. With no usable service the canvas's full image URL is the
- *   fallback. The promise resolves `null` when a Level 0 lookup dead-ends without a
- *   fallback (a silent outcome — callers show nothing), and rejects with an error marked
- *   `noImage: true` when the manifest yields no image at all — callers distinguish that
- *   from a network failure (the objects index shows "no image" rather than an error).
+ *   service can't scale on demand, so its `info.json` is fetched and the smallest
+ *   pre-generated size at least 400px wide used (via `pickThumbnailSize`, same rule as
+ *   local tiles). With no usable service — or a Level 0 service whose info.json cannot
+ *   be fetched — the canvas's direct image URL is the fallback. The promise resolves
+ *   `null` when a Level 0 lookup dead-ends without a fallback (a silent outcome —
+ *   callers show nothing), and rejects with an error marked `noImage: true` when the
+ *   manifest yields no image at all — callers distinguish that from a network failure
+ *   (the objects index shows "no image" rather than an error).
  *
  * - `resolveInfoJsonThumbnail(infoUrl, minWidth)` — for self-hosted objects with local
  *   tiles: fetches `info.json` and picks the smallest pre-generated size at least
@@ -76,7 +78,10 @@
   /**
    * Walk a IIIF Presentation manifest (2.1 or 3.0) to the first canvas's image.
    * Returns { imageServiceUrl, imageServiceProfile, fallbackImageUrl }, any of
-   * which may be null.
+   * which may be null. The fallback (the resource's direct image URL) is
+   * captured even when a service is present: a Level 0 service whose
+   * info.json cannot be fetched still needs SOMETHING to show, and the
+   * direct URL is that something.
    */
   function extractManifestImage(manifest) {
     var imageServiceUrl = null;
@@ -96,8 +101,8 @@
           imageServiceProfile = service.profile;
         }
 
-        // Fallback to full image URL
-        if (!imageServiceUrl && resource['@id']) {
+        // Direct full-image URL, kept alongside any service
+        if (resource['@id']) {
           fallbackImageUrl = resource['@id'];
         }
       }
@@ -114,8 +119,8 @@
           imageServiceProfile = annotationBody.service[0].profile;
         }
 
-        // Fallback to full image URL
-        if (!imageServiceUrl && annotationBody.id) {
+        // Direct full-image URL, kept alongside any service
+        if (annotationBody.id) {
           fallbackImageUrl = annotationBody.id;
         }
       }
@@ -130,12 +135,24 @@
 
   /**
    * A Level 0 service serves only pre-generated sizes — no arbitrary scaling.
+   * Profiles arrive in several shapes across API versions: a bare string
+   * ('level0', v3), a compliance URL (v2/v1.1), or an ARRAY whose entries
+   * mix URLs and feature objects (v2). Misdetection matters asymmetrically:
+   * a Level 0 service treated as Level 1+ gets an arbitrary-size request it
+   * cannot serve — a 404 and a missing thumbnail — so detection accepts any
+   * string entry that names level0. (Standard level1/level2 compliance
+   * identifiers never contain 'level0'; and even a contrived over-match only
+   * routes a scaling-capable server down the guaranteed-sizes path, which
+   * still resolves.)
    */
   function isLevel0Profile(profile) {
-    return !!(profile && (
-      profile === 'level0' ||
-      profile === 'http://iiif.io/api/image/2/level0.json'
-    ));
+    var entries = Array.isArray(profile) ? profile : [profile];
+    for (var i = 0; i < entries.length; i++) {
+      if (typeof entries[i] === 'string' && entries[i].toLowerCase().indexOf('level0') !== -1) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -155,16 +172,21 @@
         var imageServiceUrl = image.imageServiceUrl;
         var fallbackImageUrl = image.fallbackImageUrl;
 
-        // Level 0: fetch info.json to get available sizes
+        // Level 0: fetch info.json to get available sizes. Every listed size
+        // is guaranteed to exist on a Level 0 service, so the sorted
+        // smallest-sufficient pick is as reliable as any other and never
+        // downloads a full-resolution master for a card. (Reading the LAST
+        // list entry instead would trust the server to sort ascending — the
+        // spec only recommends that, and a descending list would hand back
+        // the smallest image.)
         if (imageServiceUrl && isLevel0Profile(image.imageServiceProfile)) {
           imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
           return fetch(imageServiceUrl + '/info.json')
             .then(function(r) { return r.json(); })
             .then(function(info) {
-              var sizes = info.sizes || [];
-              var largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
-              return largest
-                ? imageServiceUrl + '/full/' + largest.width + ',' + largest.height + '/0/default.jpg'
+              var size = pickThumbnailSize(info.sizes, 400);
+              return size
+                ? imageServiceUrl + '/full/' + size.width + ',' + size.height + '/0/default.jpg'
                 : (fallbackImageUrl || null);
             })
             .catch(function() { return fallbackImageUrl || null; });
