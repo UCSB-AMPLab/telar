@@ -43,7 +43,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.5.1
+Version: v1.6.0
 """
 
 import re
@@ -55,8 +55,15 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index, get_source_url
+from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import has_latex
+from telar.media_type import AUDIO_EXTENSIONS
+
+
+def _warn(msg, warnings):
+    """Print a WARN-prefixed message and record it in the warnings list."""
+    print(f"  [WARN] {msg}")
+    warnings.append(msg)
 
 
 def process_story(df, christmas_tree=False):
@@ -111,8 +118,7 @@ def process_story(df, christmas_tree=False):
                     df.at[idx, 'page'] = page_int
                 except (ValueError, TypeError):
                     msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
-                    print(f"  [WARN] {msg}")
-                    warnings.append(msg)
+                    _warn(msg, warnings)
                     df.at[idx, 'page'] = ''
 
     # Load objects data for validation
@@ -175,8 +181,7 @@ def process_story(df, christmas_tree=False):
                 error_msg = get_lang_string('errors.object_warnings.object_not_found', object_id=object_id)
                 df.at[idx, 'viewer_warning'] = error_msg
                 msg = f"Story step {step_num} references missing object: {object_id}"
-                print(f"  [WARN] {msg}")
-                warnings.append(msg)
+                _warn(msg, warnings)
                 continue
 
             # Check if object has IIIF manifest or local image
@@ -186,7 +191,6 @@ def process_story(df, christmas_tree=False):
             # If no external IIIF manifest, check for local image file
             if not iiif_manifest:
                 # Check for a local image or audio file via the one-time index
-                audio_extensions = {'.mp3', '.ogg', '.m4a'}
                 has_local_image = False
 
                 for f in _obj_file_index.get(actual_object_id, []):
@@ -195,7 +199,7 @@ def process_story(df, christmas_tree=False):
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
                         break
-                    if suffix in audio_extensions:
+                    if suffix in AUDIO_EXTENSIONS:
                         has_local_image = True
                         print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
                         break
@@ -205,8 +209,7 @@ def process_story(df, christmas_tree=False):
                     error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=actual_object_id)
                     df.at[idx, 'viewer_warning'] = error_msg
                     msg = f"Story step {step_num} references object without IIIF source: {actual_object_id}"
-                    print(f"  [WARN] {msg}")
-                    warnings.append(msg)
+                    _warn(msg, warnings)
 
     # Process content columns (layer1_content, layer2_content, etc.)
     # Also handles legacy _file suffix for backward compatibility
@@ -293,18 +296,13 @@ def process_story(df, christmas_tree=False):
                 )
 
     # Set default coordinates for empty values
-    coordinate_columns = ['x', 'y', 'zoom']
-    for col in coordinate_columns:
+    coordinate_defaults = {'x': '0.5', 'y': '0.5', 'zoom': '1'}
+    for col, default in coordinate_defaults.items():
         if col in df.columns:
             # Convert to string first to handle NaN values
             df[col] = df[col].astype(str)
             # Set defaults for empty or 'nan' values
-            if col == 'x':
-                df.loc[df[col].isin(['', 'nan']), col] = '0.5'
-            elif col == 'y':
-                df.loc[df[col].isin(['', 'nan']), col] = '0.5'
-            elif col == 'zoom':
-                df.loc[df[col].isin(['', 'nan']), col] = '1'
+            df.loc[df[col].isin(['', 'nan']), col] = default
 
     # Collect all warnings for intro display
     all_warnings = []
@@ -358,11 +356,13 @@ def process_story(df, christmas_tree=False):
     # Store warnings in dataframe as metadata (will be added to JSON)
     df.attrs['viewer_warnings'] = all_warnings
 
-    # Check for LaTeX content across all steps
+    # Check for LaTeX content across all steps. Scans every documented LaTeX
+    # surface ("Where LaTeX Works" in the markdown-syntax docs): step
+    # question/answer prose and resolved layer content (*_text columns).
     latex_detected = False
     for idx, row in df.iterrows():
         for col in df.columns:
-            if col.endswith('_text'):
+            if col in ('question', 'answer') or col.endswith('_text'):
                 text = str(row.get(col, ''))
                 if text and has_latex(text):
                     latex_detected = True

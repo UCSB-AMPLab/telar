@@ -8,6 +8,8 @@ Changes:
 - Site title wrapping improvements
 - Site description link styling
 - No breaking changes - all improvements are automatic
+
+Version: v0.4.2-beta
 """
 
 from typing import List, Dict

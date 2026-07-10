@@ -235,8 +235,9 @@ class TestRenderWidgetHtml:
             render_call = mock_template.render.call_args
             assert render_call[1]['widget_id'] == 'widget-1'
 
-    def test_includes_base_url_placeholder(self):
-        """Should include Jekyll base_url placeholder."""
+    def test_does_not_pass_base_url(self):
+        """URL resolution lives in parse_carousel_widget (each item's src);
+        templates receive no base_url."""
         with patch('telar.widgets.Environment') as MockEnv:
             mock_template = MagicMock()
             mock_template.render.return_value = '<div>Content</div>'
@@ -247,4 +248,4 @@ class TestRenderWidgetHtml:
             render_widget_html('tabs', {'tabs': []}, 'widget-1')
 
             render_call = mock_template.render.call_args
-            assert render_call[1]['base_url'] == '{{ site.baseurl }}'
+            assert 'base_url' not in render_call[1]

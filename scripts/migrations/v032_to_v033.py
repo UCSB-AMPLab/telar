@@ -3,6 +3,8 @@ Migration from v0.3.2-beta to v0.3.3-beta.
 
 Changes:
 - Manual step: Update build.yml workflow file to remove git push step
+
+Version: v0.3.3-beta
 """
 
 from typing import List, Dict

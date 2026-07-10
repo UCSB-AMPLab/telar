@@ -4,7 +4,7 @@
  * Measurement instrument for the cross-device centering work. It
  * exposes `window.__telarTestHook__` so an automated sweep (Playwright, the
  * Xcode iOS Simulator, or Chrome MCP) can read — in exact pixels — where an
- * authored focal point ACTUALLY renders and what image footprint ("radius") is
+ * authored focal point ACTUALLY renders and what image footprint (rect) is
  * visible, across screen sizes and orientations.
  *
  * Design principles:
@@ -24,7 +24,7 @@
  * `IiifViewer` wrapper's closure), so the wrapper registers itself here on init
  * and unregisters on destroy.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -83,9 +83,8 @@ function visibleArea(el) {
  * Story pages stack viewer plates: a fresh deep-zoom plate slides OVER the prior
  * one, and both fill the viewport at once. A pure visible-area ranking is
  * occlusion-blind — the `getBoundingClientRect` areas tie and the sort returns
- * whichever registered first, often the hidden plate behind at home zoom. (That
- * tie was the entire "step-19 collapse" the sweep reported.) Selection here, in
- * order:
+ * whichever registered first, often the hidden plate behind at home zoom.
+ * Selection here, in order:
  *   1. Prefer plates marked `.is-active` (card-pool's own "visible plate"
  *      signal). Stale `is-active` can linger on more than one stacked plate, so
  *      this only narrows the field; it does not decide on its own.
@@ -141,7 +140,7 @@ function isSettled() {
  * actually renders, plus every variable needed to compare against intent.
  *
  * All positions are CSS px in viewport (screen) coordinates unless noted.
- * `visibleImageRect` is in image pixels — the footprint / "radius".
+ * `visibleImageRect` is in image pixels — the visible footprint rect.
  *
  * @param {number} nx - Authored focal x in [0, 1].
  * @param {number} ny - Authored focal y in [0, 1].
@@ -163,7 +162,7 @@ function measure(nx, ny) {
   const elPt = vp.imageToViewerElementCoordinates(new OSD.Point(nx * cs.x, ny * cs.y));
   const focalScreenPx = { x: rect.left + elPt.x, y: rect.top + elPt.y };
 
-  // Visible image footprint (the "radius"), in image px.
+  // Visible image footprint rect, in image px.
   const visImg = vp.viewportToImageRectangle(vp.getBounds(true));
 
   const homeZoom = vp.getHomeZoom();

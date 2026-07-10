@@ -4,6 +4,8 @@ Migration from v0.3.3-beta to v0.3.4-beta.
 Changes:
 - Remove unused OpenSeadragon configuration section from _config.yml
 - Add telar_language configuration field
+
+Version: v0.3.4-beta
 """
 
 from typing import List, Dict

@@ -100,7 +100,6 @@ title: Home
   <!-- Google Sheets Validation -->
   {% assign has_gs_issue = false %}
   {% assign gs_error_type = "" %}
-  {% assign gs_error_details = "" %}
 
   {% if site.google_sheets.enabled %}
     {% assign published_url = site.google_sheets.published_url | strip %}
@@ -132,8 +131,10 @@ title: Home
     {% endif %}
   {% endfor %}
 
-  {%- comment -%}Collect stories with warnings{%- endcomment -%}
+  {%- comment -%}Collect stories with warnings. Protected stories are
+      skipped: their warnings belong behind the unlock gate.{%- endcomment -%}
   {% for story in site.stories %}
+    {% if story.protected %}{% continue %}{% endif %}
     {% assign story_data = site.data[story.data_file] %}
     {% if story_data.size > 0 and story_data[0]._metadata %}
       {% assign metadata = story_data[0] %}
@@ -249,6 +250,7 @@ title: Home
   {% assign dev_features = site['development-features'] %}
   {%- comment -%}Support both new names (skip_*) and legacy names (hide_*){%- endcomment -%}
   {% assign skip_stories = dev_features.skip_stories | default: dev_features.hide_stories | default: false %}
+  {% comment %}This skip_collections alias is also computed in _includes/header.html and _layouts/objects-index.html — one line each, not worth an include{% endcomment %}
   {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
   {% if skip_collections %}{% assign skip_stories = true %}{% endif %}
 
@@ -294,18 +296,18 @@ title: Home
             <a href="{{ object.url | relative_url }}" class="story-card text-decoration-none">
               <div class="card h-100 border-0 shadow-sm">
                 {% if object.media_type == 'Video' %}
-                  <div class="card-img-top video-thumbnail" aria-label="Video" style="aspect-ratio: 1;">
+                  <div class="card-img-top video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}" style="aspect-ratio: 1;">
                     <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                   </div>
                 {% elsif object.media_type == 'Audio' %}
-                  <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
+                  <div class="card-img-top audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}" style="aspect-ratio: 1;">
                     <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                   </div>
                 {% else %}
                   {%- comment -%}
                     All image objects route through .story-iiif-thumbnail so the existing
                     client-side IIIF loader handles the priority chain:
-                      1. explicit object.thumbnail (upgraded via upgradeIIIFThumbnailUrl)
+                      1. explicit object.thumbnail (upgraded via TelarIIIF.upgradeIIIFThumbnailUrl)
                       2. remote IIIF manifest (fetched, parsed, sized for level0/level1+)
                       3. local info.json for locally-generated tiles
                     Do NOT add a raw <img src="{{ object.thumbnail }}"> branch here — it
@@ -347,7 +349,10 @@ title: Home
           {% for story in sorted_stories %}
           {% assign story_data = site.data[story.data_file] %}
           {% assign is_encrypted = false %}
-          {% if story_data.encrypted %}{% assign is_encrypted = true %}{% endif %}
+          {%- comment -%}Keyed on frontmatter: the data file is plaintext
+              through the build and must not signal protection.
+          {%- endcomment -%}
+          {% if story.protected %}{% assign is_encrypted = true %}{% endif %}
           <a href="{{ story.url | relative_url }}" class="collection-item{% if story.demo %} demo-story{% endif %}">
             <div class="collection-thumbnail">
               {% if story.demo %}
@@ -390,11 +395,11 @@ title: Home
                 {% endunless %}
                 {% if thumb_obj %}
                   {% if thumb_obj.media_type == 'Video' %}
-                    <div class="video-thumbnail" aria-label="Video">
+                    <div class="video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     </div>
                   {% elsif thumb_obj.media_type == 'Audio' %}
-                    <div class="audio-thumbnail" aria-label="Audio">
+                    <div class="audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                     </div>
                   {% else %}
@@ -436,7 +441,7 @@ title: Home
 
   {% else %}
     {%- comment -%}
-      DEFAULT MODE: preserve the existing stories-first layout exactly as it was.
+      The stories-first layout, shown when collection_mode is off.
       This branch is entered whenever collection_mode is false/absent, or when
       collection_mode is true but skip_collections fires or there are no
       objects to show.
@@ -455,10 +460,12 @@ title: Home
       {% assign sorted_stories = site.stories | sort: "sort_order" %}
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-5">
         {% for story in sorted_stories %}
-        {%- comment -%}Load story data file and check if encrypted{%- endcomment -%}
+        {%- comment -%}Load story data for the thumbnail fallback; protection
+            is keyed on frontmatter (the data file is plaintext through the
+            build and must not signal protection).{%- endcomment -%}
         {% assign story_data = site.data[story.data_file] %}
         {% assign is_encrypted = false %}
-        {% if story_data.encrypted %}
+        {% if story.protected %}
           {% assign is_encrypted = true %}
         {% endif %}
         <div class="col">
@@ -507,11 +514,11 @@ title: Home
 
                 {% if thumb_obj %}
                   {% if thumb_obj.media_type == 'Video' %}
-                    <div class="card-img-top video-thumbnail" aria-label="Video" style="aspect-ratio: 1;">
+                    <div class="card-img-top video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}" style="aspect-ratio: 1;">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     </div>
                   {% elsif thumb_obj.media_type == 'Audio' %}
-                    <div class="card-img-top audio-thumbnail" aria-label="Audio" style="aspect-ratio: 1;">
+                    <div class="card-img-top audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}" style="aspect-ratio: 1;">
                       <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                     </div>
                   {% else %}
@@ -608,11 +615,11 @@ title: Home
         <a href="{{ object.url | relative_url }}" class="collection-item">
           <div class="collection-thumbnail">
             {% if object.media_type == 'Video' %}
-              <div class="video-thumbnail" aria-label="Video">
+              <div class="video-thumbnail" aria-label="{{ lang.objects.media_video | default: 'Video' }}">
                 <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
               </div>
             {% elsif object.media_type == 'Audio' %}
-              <div class="audio-thumbnail" aria-label="Audio">
+              <div class="audio-thumbnail" aria-label="{{ lang.objects.media_audio | default: 'Audio' }}">
                 <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
               </div>
             {% elsif object.thumbnail and object.thumbnail != "" %}
@@ -649,16 +656,16 @@ title: Home
 <script id="telar-stories-data" type="application/json">
 [
   {% for story in site.stories %}
-  {% assign story_data = site.data[story.data_file] %}
   {
     "title": {{ story.title | jsonify }},
     "url": "{{ story.url | absolute_url }}",
-    "protected": {% if story_data.encrypted %}true{% else %}false{% endif %}
+    "protected": {% if story.protected %}true{% else %}false{% endif %}
   }{% unless forloop.last %},{% endunless %}
   {% endfor %}
 ]
 </script>
 
+<script src="{{ '/assets/js/iiif-thumbnails.js' | relative_url }}"></script>
 <script>
 // Localized strings injected from _data/languages/<telar_language>.yml
 const TelarI18n = {
@@ -669,44 +676,16 @@ const TelarI18n = {
 window.objectsData = {{ site.data.objects | jsonify }};
 
 /**
- * Pick a thumbnail size from the IIIF sizes array.
- * Returns the smallest size >= minWidth, or the largest available.
- */
-function pickThumbnailSize(sizes, minWidth) {
-  if (!sizes || sizes.length === 0) return null;
-  minWidth = minWidth || 400;
-  var sorted = sizes.slice().sort(function(a, b) { return a.width - b.width; });
-  for (var i = 0; i < sorted.length; i++) {
-    if (sorted[i].width >= minWidth) return sorted[i];
-  }
-  return sorted[sorted.length - 1];
-}
-
-/**
- * Upgrade IIIF Image API thumbnail URLs to a larger size.
- * Detects URLs with /full/{size}/0/default.{ext} pattern and replaces
- * the size segment with !600,600 for sharper thumbnails.
- */
-function upgradeIIIFThumbnailUrl(url) {
-  // Match IIIF Image API pattern: .../full/{size}/0/default.{ext}
-  // The size segment may contain backslash-escaped ! (e.g. Rumsey \!96,96)
-  // or double slashes from stripped backslashes. Handle all variants.
-  var match = url.match(/^(.*\/full\/)[\\\/]*([^/]+)(\/0\/default\.\w+)$/);
-  if (match) {
-    return match[1] + '!600,600' + match[3];
-  }
-  return url;
-}
-
-/**
- * Load story thumbnails from IIIF (remote manifests or local info.json)
+ * Load story thumbnails from IIIF (remote manifests or local info.json).
+ * Resolution logic lives in TelarIIIF (assets/js/iiif-thumbnails.js);
+ * this script only wires resolved URLs into the story cards.
  */
 document.addEventListener('DOMContentLoaded', function() {
   // Upgrade explicit IIIF thumbnail URLs to larger sizes (with fallback for Level 0 servers)
   var iiifThumbs = document.querySelectorAll('img.iiif-thumbnail');
   iiifThumbs.forEach(function(img) {
     var originalSrc = img.src;
-    var upgradedSrc = upgradeIIIFThumbnailUrl(originalSrc);
+    var upgradedSrc = TelarIIIF.upgradeIIIFThumbnailUrl(originalSrc);
     if (upgradedSrc !== originalSrc) {
       img.dataset.originalSrc = originalSrc;
       img.onerror = function() {
@@ -733,7 +712,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
       const img = document.createElement('img');
       const originalUrl = objectData.thumbnail;
-      const upgradedUrl = upgradeIIIFThumbnailUrl(originalUrl);
+      const upgradedUrl = TelarIIIF.upgradeIIIFThumbnailUrl(originalUrl);
       img.src = upgradedUrl;
       // Fall back to original size if upgraded URL fails (level0 servers)
       if (upgradedUrl !== originalUrl) {
@@ -754,93 +733,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // Check if object has remote IIIF manifest (for level2 servers that support dynamic sizing)
     else if (objectData && objectData.iiif_manifest) {
-      // Remote manifest - fetch it and extract larger canvas image
-      fetch(objectData.iiif_manifest)
-        .then(response => response.json())
-        .then(manifest => {
-          let imageServiceUrl = null;
-          let imageServiceProfile = null;
-          let fallbackImageUrl = null;
-
-          // IIIF Presentation API 2.1
-          if (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) {
-            const firstCanvas = manifest.sequences[0].canvases[0];
-            if (firstCanvas && firstCanvas.images && firstCanvas.images[0]) {
-              const resource = firstCanvas.images[0].resource;
-
-              // Try to get image service for resizing
-              if (resource.service) {
-                const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
-                imageServiceUrl = service['@id'] || service.id;
-                imageServiceProfile = service.profile;
-              }
-
-              // Fallback to full image URL
-              if (!imageServiceUrl && resource['@id']) {
-                fallbackImageUrl = resource['@id'];
-              }
-            }
-          }
-          // IIIF Presentation API 3.0
-          else if (manifest.items && manifest.items[0]) {
-            const firstCanvas = manifest.items[0];
-            if (firstCanvas.items && firstCanvas.items[0] && firstCanvas.items[0].items) {
-              const annotationBody = firstCanvas.items[0].items[0].body;
-
-              // Try to get image service for resizing
-              if (annotationBody.service && annotationBody.service.length > 0) {
-                imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
-                imageServiceProfile = annotationBody.service[0].profile;
-              }
-
-              // Fallback to full image URL
-              if (!imageServiceUrl && annotationBody.id) {
-                fallbackImageUrl = annotationBody.id;
-              }
-            }
-          }
-
-          const isLevel0 = imageServiceProfile && (
-            imageServiceProfile === 'level0' ||
-            imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
-          );
-
-          function replaceStoryPlaceholder(url) {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = item.closest('.story-card').querySelector('h3').textContent;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'cover';
-            const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-            if (placeholder) placeholder.replaceWith(img);
-          }
-
-          // Level 0: fetch info.json to get available sizes
-          if (imageServiceUrl && isLevel0) {
-            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-            fetch(`${imageServiceUrl}/info.json`)
-              .then(r => r.json())
-              .then(info => {
-                const sizes = info.sizes || [];
-                const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
-                const url = largest
-                  ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
-                  : fallbackImageUrl;
-                if (url) replaceStoryPlaceholder(url);
-              })
-              .catch(() => { if (fallbackImageUrl) replaceStoryPlaceholder(fallbackImageUrl); });
-          }
-          // Level 1+: request arbitrary size
-          else if (imageServiceUrl) {
-            imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-            replaceStoryPlaceholder(`${imageServiceUrl}/full/!400,400/0/default.jpg`);
-          }
-          else if (fallbackImageUrl) {
-            replaceStoryPlaceholder(fallbackImageUrl);
-          } else {
-            throw new Error('No image found in manifest');
-          }
+      TelarIIIF.resolveManifestThumbnail(objectData.iiif_manifest, '!400,400')
+        .then(url => {
+          if (url) replaceStoryPlaceholder(url);
         })
         .catch(error => {
           console.error('Error loading remote IIIF manifest:', objectData.iiif_manifest, error);
@@ -851,28 +746,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     } else {
       // Local IIIF info.json
-      fetch(localInfoUrl)
-        .then(response => response.json())
-        .then(info => {
-          const sizes = info.sizes || [];
-          let thumbnailSize = pickThumbnailSize(sizes);
-
-          if (thumbnailSize) {
-            const baseUrl = info.id || info['@id'];
-            const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
-
-            const img = document.createElement('img');
-            img.src = thumbnailUrl;
-            img.alt = item.closest('.story-card').querySelector('h3').textContent;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'cover';
-
-            const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
-            if (placeholder) {
-              placeholder.replaceWith(img);
-            }
-          }
+      TelarIIIF.resolveInfoJsonThumbnail(localInfoUrl)
+        .then(url => {
+          if (url) replaceStoryPlaceholder(url);
         })
         .catch(error => {
           console.error('Error loading local IIIF info.json:', localInfoUrl, error);
@@ -881,6 +757,17 @@ document.addEventListener('DOMContentLoaded', function() {
             placeholder.innerHTML = '<span class="text-danger">' + TelarI18n.thumbnailLoadError + '</span>';
           }
         });
+    }
+
+    function replaceStoryPlaceholder(url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = item.closest('.story-card').querySelector('h3').textContent;
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      const placeholder = item.querySelector('.manifest-thumbnail-placeholder');
+      if (placeholder) placeholder.replaceWith(img);
     }
   });
 });
@@ -900,7 +787,7 @@ featuredThumbnails.forEach(function(item) {
   if (objectData && objectData.thumbnail && objectData.thumbnail.trim() !== '') {
     const img = document.createElement('img');
     const originalUrl = objectData.thumbnail;
-    const upgradedUrl = upgradeIIIFThumbnailUrl(originalUrl);
+    const upgradedUrl = TelarIIIF.upgradeIIIFThumbnailUrl(originalUrl);
     img.src = upgradedUrl;
     // Fall back to original size if upgraded URL fails (level0 servers)
     if (upgradedUrl !== originalUrl) {
@@ -918,112 +805,37 @@ featuredThumbnails.forEach(function(item) {
   }
   // Check for remote IIIF manifest
   else if (objectData && objectData.iiif_manifest) {
-    fetch(objectData.iiif_manifest)
-      .then(response => response.json())
-      .then(manifest => {
-        let imageServiceUrl = null;
-        let imageServiceProfile = null;
-        let fallbackImageUrl = null;
-
-        // IIIF Presentation API 2.1
-        if (manifest.sequences && manifest.sequences[0] && manifest.sequences[0].canvases) {
-          const firstCanvas = manifest.sequences[0].canvases[0];
-          if (firstCanvas && firstCanvas.images && firstCanvas.images[0]) {
-            const resource = firstCanvas.images[0].resource;
-            if (resource.service) {
-              const service = Array.isArray(resource.service) ? resource.service[0] : resource.service;
-              imageServiceUrl = service['@id'] || service.id;
-              imageServiceProfile = service.profile;
-            }
-            if (!imageServiceUrl && resource['@id']) {
-              fallbackImageUrl = resource['@id'];
-            }
-          }
-        }
-        // IIIF Presentation API 3.0
-        else if (manifest.items && manifest.items[0]) {
-          const firstCanvas = manifest.items[0];
-          if (firstCanvas.items && firstCanvas.items[0] && firstCanvas.items[0].items) {
-            const annotationBody = firstCanvas.items[0].items[0].body;
-            if (annotationBody.service && annotationBody.service.length > 0) {
-              imageServiceUrl = annotationBody.service[0].id || annotationBody.service[0]['@id'];
-              imageServiceProfile = annotationBody.service[0].profile;
-            }
-            if (!imageServiceUrl && annotationBody.id) {
-              fallbackImageUrl = annotationBody.id;
-            }
-          }
-        }
-
-        const isLevel0 = imageServiceProfile && (
-          imageServiceProfile === 'level0' ||
-          imageServiceProfile === 'http://iiif.io/api/image/2/level0.json'
-        );
-
-        function replaceFeaturedImg(url) {
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          item.innerHTML = '';
-          item.appendChild(img);
-        }
-
-        // Level 0: fetch info.json to get available sizes
-        if (imageServiceUrl && isLevel0) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          fetch(`${imageServiceUrl}/info.json`)
-            .then(r => r.json())
-            .then(info => {
-              const sizes = info.sizes || [];
-              const largest = sizes.length > 0 ? sizes[sizes.length - 1] : null;
-              const url = largest
-                ? `${imageServiceUrl}/full/${largest.width},${largest.height}/0/default.jpg`
-                : fallbackImageUrl;
-              if (url) replaceFeaturedImg(url);
-            })
-            .catch(() => { if (fallbackImageUrl) replaceFeaturedImg(fallbackImageUrl); });
-        }
-        // Level 1+: request arbitrary size
-        else if (imageServiceUrl) {
-          imageServiceUrl = imageServiceUrl.replace(/\/$/, '');
-          replaceFeaturedImg(`${imageServiceUrl}/full/!200,200/0/default.jpg`);
-        }
-        else if (fallbackImageUrl) {
-          replaceFeaturedImg(fallbackImageUrl);
-        }
+    TelarIIIF.resolveManifestThumbnail(objectData.iiif_manifest, '!200,200')
+      .then(url => {
+        if (url) replaceFeaturedImg(url);
       })
       .catch(error => {
+        // A manifest with no image is a silent no-op on featured cards;
+        // only network/parse failures are logged.
+        if (error && error.noImage) return;
         console.error('Error loading featured object manifest:', objectData.iiif_manifest, error);
       });
   }
   // Local IIIF info.json
   else {
-    fetch(localInfoUrl)
-      .then(response => response.json())
-      .then(info => {
-        const sizes = info.sizes || [];
-        let thumbnailSize = pickThumbnailSize(sizes);
-
-        if (thumbnailSize) {
-          const baseUrl = info.id || info['@id'];
-          const thumbnailUrl = `${baseUrl}/full/${thumbnailSize.width},${thumbnailSize.height}/0/default.jpg`;
-
-          const img = document.createElement('img');
-          img.src = thumbnailUrl;
-          img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          item.innerHTML = '';
-          item.appendChild(img);
-        }
+    TelarIIIF.resolveInfoJsonThumbnail(localInfoUrl)
+      .then(url => {
+        if (url) replaceFeaturedImg(url);
       })
       .catch(error => {
         console.error('Error loading featured object info.json:', localInfoUrl, error);
       });
+  }
+
+  function replaceFeaturedImg(url) {
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = item.closest('.collection-item').querySelector('.collection-title').textContent;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    item.innerHTML = '';
+    item.appendChild(img);
   }
 });
 

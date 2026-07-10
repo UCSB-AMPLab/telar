@@ -25,7 +25,7 @@
  * switches to that field in ascending order. DOM reordering uses appendChild
  * which maintains event listeners on the cards.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 (function() {
@@ -159,14 +159,6 @@
    */
   function populateFilters() {
     if (!searchData || !searchData.facets) return;
-
-    const facetMap = {
-      'media_type': 'media_type',
-      'medium': 'medium',
-      'creator': 'creator',
-      'period': 'period',
-      'subjects': 'subjects'
-    };
 
     elements.filterSections.forEach(section => {
       const filterType = section.dataset.filter;

@@ -41,7 +41,7 @@
  * slower but still functional. Audio load errors inject a .telar-alert
  * notification into the card area.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -55,8 +55,7 @@ const audioHeightResize = parseFloat(_cs.getPropertyValue('--telar-audio-height-
 
 // Waveform height as a fraction of the viewport, by layout mode: vertical and
 // embed use the shorter mobile fraction, desktop the taller one. Single
-// decision point so create/activate/resize never disagree (the earlier split —
-// 0.35 on create/activate, 0.5 on resize — made the waveform jump on resize).
+// decision point so create/activate/resize never disagree.
 function _audioHeightFraction() {
   return (state.layoutMode === 'vertical' || state.isEmbed)
     ? audioHeightMobile
@@ -89,6 +88,13 @@ let _sharedAudioContext = null;
  * the core must finish before the plugin (sequential onload chain below).
  * Vendored instead of CDN-loaded for the minimal-computing reasons in
  * `assets/vendor/README.md` (no CDN single-point-of-failure, version pinning).
+ *
+ * MUST agree with telarLoadWaveSurfer in assets/js/wavesurfer-loader.js — same
+ * vendored bundles, same load-once-and-cache strategy. Object pages cannot
+ * import this ES module, so that file carries its own classic-script copy
+ * (window.telarLoadWaveSurfer, base path passed in rather than read via
+ * getBasePath()); two copies by design, kept in sync by hand. Phase 4 may
+ * unify them.
  *
  * @returns {Promise<void>}
  */
@@ -146,6 +152,11 @@ export function formatElapsedTime(seconds) {
  *
  * Bar colours derive from the button text colour so they adapt to any
  * theme (dark themes get light bars, light themes get dark bars).
+ *
+ * MUST agree with deriveThemeColors in assets/js/object-theme.js — same
+ * inputs, same outputs. Object pages do not load the telar-story.js bundle,
+ * so they carry their own copy; if you change this derivation, change that
+ * one too.
  *
  * @param {string} accentHex - CSS hex colour for --color-link, e.g. '#883C36'
  * @param {string} [barHex='#ffffff'] - CSS hex colour for --color-button-text
@@ -389,6 +400,18 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           });
         }
 
+        // Position the playhead at the clip start once the waveform is ready
+        // (mirrors the Vimeo player's ready-seek in video-card.js). This is
+        // the only seek that covers the step that created the player:
+        // updateAudioClip no-ops when the clip parameters are unchanged, so
+        // without this the first play — overlay button or controls pill —
+        // starts from 0 rather than clip_start.
+        if (clipStart) {
+          ws.on("ready", () => {
+            ws.setTime(clipStart);
+          });
+        }
+
         // Clip boundary enforcement via timeupdate (not the 'finish' event)
         ws.on("timeupdate", (currentTime) => {
           // Call onTimeUpdate at 1-second granularity for aria-live (Accessibility)
@@ -515,15 +538,14 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           overlayEl.style.cssText =
             "position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:1;";
           // Dynamic aria-label using object alt_text/title
-          const _aObjectsData = window.objectsData || [];
-          const _aObj = _aObjectsData.find(o => o.object_id === plateEl?.dataset?.object) || {};
+          const _aObj = state.objectsIndex[plateEl.dataset.object] || {};
           const _aAlt = _aObj.alt_text || _aObj.title || 'audio';
           const overlayBtn = document.createElement("button");
           overlayBtn.setAttribute("aria-label", `Play ${_aAlt}`);
           overlayBtn.type = "button";
           overlayBtn.innerHTML = _svg("play", 36);
           overlayBtn.style.cssText =
-            "width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:#333;";
+            "width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:var(--color-body);";
           overlayEl.appendChild(overlayBtn);
           plateEl.appendChild(overlayEl);
 
@@ -545,7 +567,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           const dimEl = document.createElement("div");
           dimEl.className = "audio-clip-end-overlay";
           dimEl.style.cssText =
-            "position:absolute;inset:0;background:rgba(0,0,0,0.25);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
+            "position:absolute;inset:0;background:var(--color-overlay-dim);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
           plateEl.appendChild(dimEl);
         }
       });
@@ -777,7 +799,7 @@ export function applyAudioClipEndDim(plateEl) {
     overlay = document.createElement("div");
     overlay.className = "audio-clip-end-overlay";
     overlay.style.cssText =
-      "position:absolute;inset:0;background:rgba(0,0,0,0.25);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
+      "position:absolute;inset:0;background:var(--color-overlay-dim);opacity:0;transition:opacity 300ms ease-in;pointer-events:none;";
     plateEl.appendChild(overlay);
   }
   // Force reflow so CSS transition fires

@@ -71,7 +71,7 @@ objects with intentionally broken IIIF URLs (404, 500, 503, 429, invalid)
 to exercise every warning code path. These test objects are marked with a
 Christmas tree emoji in their titles for easy identification.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import re
@@ -90,12 +90,7 @@ import yaml
 
 from telar.config import get_lang_string, load_site_language
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index, get_source_url
-from telar.media_type import detect_media_type
-
-
-# Video URL patterns for media type detection (matches generate_collections.py)
-_VIDEO_URL_PATTERNS = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
-_AUDIO_EXTENSIONS = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
+from telar.media_type import detect_media_type, VIDEO_URL_PATTERNS, AUDIO_EXTENSIONS
 
 
 def _detect_media_type(source_url, object_id):
@@ -113,11 +108,11 @@ def _detect_media_type(source_url, object_id):
     detector deliberately does not.
     """
     url = (source_url or '').strip()
-    if any(pat in url for pat in _VIDEO_URL_PATTERNS):
+    if any(pat in url for pat in VIDEO_URL_PATTERNS):
         return 'Video'
     objects_dir = Path('telar-content/objects')
     if objects_dir.exists():
-        for ext in _AUDIO_EXTENSIONS:
+        for ext in AUDIO_EXTENSIONS:
             if (objects_dir / f'{object_id}{ext}').exists():
                 return 'Audio'
     return 'Image'
@@ -432,10 +427,9 @@ def process_objects(df, christmas_tree=False):
             obj_media_type = _detect_media_type(manifest_url, object_id)
             if obj_media_type == 'Video':
                 # Validate video source URL — check it's a recognised host
-                video_hosts = ['youtube.com', 'youtu.be', 'vimeo.com', 'drive.google.com']
-                recognised = any(host in manifest_url for host in video_hosts)
+                recognised = any(host in manifest_url for host in VIDEO_URL_PATTERNS)
                 if recognised:
-                    host = next(h for h in video_hosts if h in manifest_url)
+                    host = next(h for h in VIDEO_URL_PATTERNS if h in manifest_url)
                     print(f"  [INFO] Video object {object_id} uses {host}")
                 else:
                     msg = f"Video object {object_id} uses unrecognised video host: {manifest_url}"
@@ -553,7 +547,6 @@ def process_objects(df, christmas_tree=False):
                                 )
 
                                 # Source (Repository/Institution name, not geographic location)
-                                # Note: renamed from 'location' to 'source' in v0.8.0
                                 extracted['source'] = find_metadata_field(
                                     metadata_array,
                                     ['Repository', 'Holding Institution', 'Institution', 'Source', 'Current Location'],
@@ -593,7 +586,7 @@ def process_objects(df, christmas_tree=False):
                                         print(f"  [INFO] Year value '{extracted['year']}' has no "
                                               f"4-digit year — leaving as-is")
 
-                                # Medium/Genre (v0.10.0: renamed from object_type; classification for filtering)
+                                # Medium/Genre: classification for filtering
                                 extracted['medium'] = find_metadata_field(
                                     metadata_array,
                                     ['Type', 'Object Type', 'Resource Type', 'Format'],
@@ -657,27 +650,10 @@ def process_objects(df, christmas_tree=False):
 
                 # Only process error if not skipping
                 if not skip_429:
-                    if e.code == 404:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_404')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_404')
-                    elif e.code == 429:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_429')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_429')
-                    elif e.code == 403:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_403')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_403')
-                    elif e.code == 401:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_401')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_401')
-                    elif e.code == 500:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_500')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_500')
-                    elif e.code == 503:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_503')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_503')
-                    elif e.code == 502:
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_502')
-                        df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_502')
+                    known_codes = (404, 429, 403, 401, 500, 503, 502)
+                    if e.code in known_codes:
+                        df.at[idx, 'object_warning'] = get_lang_string(f'errors.object_warnings.iiif_{e.code}')
+                        df.at[idx, 'object_warning_short'] = get_lang_string(f'errors.object_warnings.short_{e.code}')
                     else:
                         df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_error_generic', code=e.code)
                         df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_error_generic', code=e.code)
@@ -713,11 +689,10 @@ def process_objects(df, christmas_tree=False):
         obj_media_type = _detect_media_type('', object_id)
         if obj_media_type == 'Audio':
             # Find which audio extension matches
-            audio_extensions = ['.mp3', '.ogg', '.m4a', '.MP3', '.OGG', '.M4A']
             audio_dir = Path('telar-content/objects')
             audio_found = None
             if audio_dir.exists():
-                for ext in audio_extensions:
+                for ext in AUDIO_EXTENSIONS:
                     audio_path = audio_dir / f'{object_id}{ext}'
                     if audio_path.exists():
                         audio_found = audio_path
@@ -729,18 +704,16 @@ def process_objects(df, christmas_tree=False):
                 if not peaks_path.exists():
                     print(f"  [INFO] No peaks file for audio object {object_id} — WaveSurfer will decode on the fly")
             else:
-                error_msg = get_lang_string('errors.object_warnings.image_missing', object_id=object_id)
-                # Override with audio-specific message
-                error_msg = f"No audio file found for object '{object_id}'. Add an audio file (.mp3, .ogg, or .m4a) to telar-content/objects/{object_id}.mp3"
+                error_msg = get_lang_string('errors.object_warnings.audio_missing', object_id=object_id)
                 df.at[idx, 'object_warning'] = error_msg
-                df.at[idx, 'object_warning_short'] = 'Audio file missing'
+                df.at[idx, 'object_warning_short'] = get_lang_string('errors.object_warnings.short_audio_missing')
                 msg = f"Object {object_id} has no audio file in telar-content/objects/"
                 print(f"  [WARN] {msg}")
                 warnings.append(msg)
             continue
 
-        # No external IIIF manifest - check for local image file (O(1) index lookup,
-        # using the shared extension set so .bmp/.svg objects are no longer missed)
+        # No external IIIF manifest - check for local image file (O(1) index lookup;
+        # the shared extension set covers all image types, including .bmp/.svg)
         has_local_image = False
         for f in _obj_file_index.get(object_id, []):
             if f.suffix.lower() in IMAGE_EXTENSIONS:

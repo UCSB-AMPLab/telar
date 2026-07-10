@@ -2,10 +2,9 @@
  * Viewer
  *
  * Styles for the IIIF image viewer embedded in story and object pages.
- * v1.4.0 swapped the Tify dependency for a thin OpenSeadragon wrapper
- * (assets/js/telar-story/iiif-viewer.js) that ships no chrome of its
- * own, so this file no longer fights a Vue UI with `!important` —
- * selector-based specificity is enough.
+ * The viewer wrapper (assets/js/telar-story/iiif-viewer.js) ships no
+ * chrome of its own, so selector-based specificity is enough here —
+ * no `!important` is needed.
  *
  * Container styles cover all three media types (image / video / audio).
  * The .multipage class is added by object.html's inline script when
@@ -14,7 +13,7 @@
  * corners if it overflows. The pagination + error UI rules at the
  * bottom of the file style the wrapper's injected DOM directly.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 /* Viewer Containers */
@@ -66,7 +65,8 @@
   max-height: 80vh;
   min-height: 80px;
   overflow: hidden;
-  /* background and background-image set inline by JS (accent-tinted + weave pattern) */
+  /* solid accent-tinted background set inline by JS (no weave-pattern image
+     on the audio object viewer — see _layouts/object.html's viewer init) */
 }
 
 /* Object-page viewer: transparent OSD background so the weave pattern
@@ -141,14 +141,12 @@
 
 /* ============================================================
    Custom IIIF viewer chrome (iiif-viewer.js)
-   Added in v1.4.0 — replaces the deleted Tify-override block.
    The wrapper appends .telar-iiif-pagination to its OSD container
    on multi-page manifests when constructed with { showChrome: true }
    (object.html).  Story pages pass showChrome:false, so this block
    only renders on object-detail pages.
-   Pill design lifted from the previous Zasqua-pattern look but
-   re-expressed without forcing the cascade — Tify's Vue overrides
-   are gone, so selector specificity is sufficient.
+   Pill design, expressed without forcing the cascade — selector
+   specificity is sufficient.
    ============================================================ */
 
 .telar-iiif-pagination {

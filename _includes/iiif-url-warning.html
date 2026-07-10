@@ -2,27 +2,18 @@
 IIIF URL mismatch warning — a self-diagnosing banner that catches the most
 common reason locally hosted images fail to appear: the address the site is
 being viewed at no longer matches the base URL baked into its IIIF manifests
-when the tiles were generated. The markup is a hidden alert box; the embedded
-script below decides whether to reveal it.
+when the tiles were generated. The markup here is the hidden alert box; the
+diagnostic logic itself lives in assets/js/iiif-url-warning.js, a standalone
+classic script loaded below that decides whether to reveal it.
 
-How it works — on load the script reads the current origin and baseurl, fetches
-objects.json, and keeps only objects that rely on local IIIF tiles (no external
-iiif_manifest). For each it fetches the object's manifest.json and extracts the
-base URL from the manifest's own id, then compares that (trailing slashes
-normalised) against where the page is actually being served. Any object whose
-manifest points elsewhere is collected as "affected", and if there are any the
-banner is shown listing them.
-
-Local vs production guidance — the fix differs by environment, so the script
-branches on whether the origin is localhost/127.0.0.1. Local development gets a
-ready-to-run generate_iiif.py command targeting the current URL; production gets
-the suggested url:/baseurl: _config.yml values (parsed from the live address)
-plus the regenerate-and-push workflow. Detection failures fail silently — the
-banner stays hidden rather than alarming the user over an unrelated fetch error.
+This include stays self-contained: it carries the Liquid-dependent values the
+script needs (the objects.json and IIIF manifest base paths, plus the localized
+singular/plural affected-image strings) onto window.telarIIIFWarningConfig in a
+short inline script, then loads the external module. See the module's own
+header for how it uses that configuration to detect and report the mismatch.
 
 All user-facing strings come from lang.errors.iiif_mismatch in
-_data/languages/<telar_language>.yml; the two count templates are injected into
-the script as JSON for singular/plural affected-image messaging.
+_data/languages/<telar_language>.yml.
 {%- endcomment -%}
 {% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
 {% assign iiif_lang = lang.errors.iiif_mismatch %}
@@ -87,140 +78,17 @@ the script as JSON for singular/plural affected-image messaging.
 </div>
 
 <script>
-// Localized strings injected from _data/languages/<telar_language>.yml
-const TelarI18nIIIF = {
-  affectedImagesSingular: {{ iiif_lang.affected_images_count_singular | jsonify }},
-  affectedImagesPlural: {{ iiif_lang.affected_images_count_plural | jsonify }}
+// Liquid-dependent configuration for assets/js/iiif-url-warning.js: the
+// objects.json and IIIF manifest base paths (as relative_urls, so they carry
+// the site's baseurl), plus the localized singular/plural affected-image
+// strings from _data/languages/<telar_language>.yml.
+window.telarIIIFWarningConfig = {
+  objectsUrl: {{ "/objects.json" | relative_url | jsonify }},
+  iiifObjectsBase: {{ "/iiif/objects" | relative_url | jsonify }},
+  strings: {
+    affectedImagesSingular: {{ iiif_lang.affected_images_count_singular | jsonify }},
+    affectedImagesPlural: {{ iiif_lang.affected_images_count_plural | jsonify }}
+  }
 };
-
-(function() {
-  // Check for IIIF URL mismatch
-  async function checkIIIFUrlMismatch() {
-    // Get current site URL
-    const currentOrigin = window.location.origin;
-    const currentPath = window.location.pathname;
-
-    // Extract baseurl (everything up to the last path segment)
-    const pathParts = currentPath.split('/').filter(p => p);
-    const baseurl = pathParts.length > 0 ? '/' + pathParts[0] : '';
-    const currentSiteUrl = currentOrigin + baseurl;
-
-    // Detect if this is local development or production
-    const isLocalDev = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
-
-    try {
-      // Fetch all objects to check for mismatches
-      const objectsResponse = await fetch('{{ "/objects.json" | relative_url }}');
-      if (!objectsResponse.ok) return;
-
-      const objects = await objectsResponse.json();
-
-      // Find all objects with local IIIF tiles (no external iiif_manifest)
-      const localObjects = objects.filter(obj => {
-        return (!obj.iiif_manifest || obj.iiif_manifest === '');
-      });
-
-      if (localObjects.length === 0) return; // No local objects to check
-
-      // Check all local objects for URL mismatch
-      const affectedObjects = [];
-      let manifestBaseUrl = null;
-
-      for (const obj of localObjects) {
-        try {
-          const manifestPath = `{{ "/iiif/objects" | relative_url }}/${obj.object_id}/manifest.json`;
-          const manifestResponse = await fetch(manifestPath);
-          if (!manifestResponse.ok) continue; // Skip if manifest doesn't exist
-
-          const manifest = await manifestResponse.json();
-
-          // Extract base URL from manifest ID
-          const manifestId = manifest.id;
-          const extractedBaseUrl = manifestId.split('/iiif/')[0];
-
-          // Store the manifest base URL (should be same for all)
-          if (!manifestBaseUrl) {
-            manifestBaseUrl = extractedBaseUrl;
-          }
-
-          // Compare URLs (normalize trailing slashes)
-          const normalizedCurrent = currentSiteUrl.replace(/\/$/, '');
-          const normalizedManifest = extractedBaseUrl.replace(/\/$/, '');
-
-          if (normalizedCurrent !== normalizedManifest) {
-            affectedObjects.push({
-              id: obj.object_id,
-              title: obj.title || obj.object_id
-            });
-          }
-        } catch (error) {
-          console.log(`Could not check manifest for ${obj.object_id}:`, error);
-        }
-      }
-
-      // If there are affected objects, show the warning
-      if (affectedObjects.length > 0 && manifestBaseUrl) {
-        // Populate common elements
-        document.getElementById('current-url').textContent = currentSiteUrl;
-        document.getElementById('manifest-url').textContent = manifestBaseUrl;
-
-        // Update affected images heading with localized singular/plural template
-        const heading = document.getElementById('affected-images-heading');
-        const count = affectedObjects.length;
-        const template = count === 1
-          ? TelarI18nIIIF.affectedImagesSingular
-          : TelarI18nIIIF.affectedImagesPlural;
-        heading.textContent = template.replace('__COUNT__', count);
-
-        // Populate affected images list. Build each row with DOM nodes so an
-        // object title containing markup renders as text, not as HTML.
-        const affectedList = document.getElementById('affected-images');
-        affectedList.replaceChildren();
-        affectedObjects.forEach(obj => {
-          const li = document.createElement('li');
-          const strong = document.createElement('strong');
-          strong.textContent = obj.title;
-          li.appendChild(strong);
-          li.appendChild(document.createTextNode(` (${obj.id})`));
-          affectedList.appendChild(li);
-        });
-
-        // Show context-appropriate fix instructions
-        if (isLocalDev) {
-          // Local development scenario
-          document.getElementById('local-fix-instructions').style.display = 'block';
-          document.getElementById('local-command').textContent =
-            `python3 scripts/generate_iiif.py --base-url ${currentSiteUrl}`;
-        } else {
-          // Production scenario
-          document.getElementById('production-fix-instructions').style.display = 'block';
-
-          // Parse current URL into url and baseurl components
-          const urlObj = new URL(currentSiteUrl);
-          const urlPart = `${urlObj.protocol}//${urlObj.host}`;
-          const baseurlPart = urlObj.pathname || '';
-
-          document.getElementById('production-current-url').textContent = currentSiteUrl;
-          document.getElementById('production-config-suggestion').textContent =
-            `url: "${urlPart}" and baseurl: "${baseurlPart}"`;
-          document.getElementById('production-local-command').textContent =
-            `python3 scripts/generate_iiif.py --base-url ${currentSiteUrl}`;
-        }
-
-        // Show the warning
-        document.getElementById('iiif-url-warning').style.display = 'block';
-      }
-    } catch (error) {
-      // Silently fail - don't show warning if we can't determine mismatch
-      console.log('Could not check IIIF URL mismatch:', error);
-    }
-  }
-
-  // Run check when page loads
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', checkIIIFUrlMismatch);
-  } else {
-    checkIIIFUrlMismatch();
-  }
-})();
 </script>
+<script src="{{ '/assets/js/iiif-url-warning.js' | relative_url }}"></script>

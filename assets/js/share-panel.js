@@ -23,7 +23,7 @@
  * absent, and swaps the button icon to a checkmark briefly as confirmation. Wrapped in
  * an IIFE so its state and helpers stay out of the global scope.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 (function() {
@@ -54,15 +54,12 @@
     sharePanel.addEventListener('show.bs.modal', handlePanelOpen);
 
     // Get DOM elements after panel structure is known
-    const shareUrlInput = document.getElementById('share-url-input');
     const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
-    const shareSiteUrlInput = document.getElementById('share-site-url-input');
     const shareCopySiteBtn = document.getElementById('share-copy-site-btn');
     const shareStorySelect = document.getElementById('share-story-select');
     const embedPresetSelect = document.getElementById('embed-preset-select');
     const embedWidthInput = document.getElementById('embed-width-input');
     const embedHeightInput = document.getElementById('embed-height-input');
-    const embedCodeTextarea = document.getElementById('embed-code-textarea');
     const embedCopyCodeBtn = document.getElementById('embed-copy-code-btn');
 
     // Story page: Privacy toggle
@@ -474,7 +471,7 @@
       // The key is included deliberately: a key-bearing URL is the intended way
       // to share access to a protected story, and the toggle defaults to
       // "Without key" so it is never added unless the user explicitly opts in
-      // (which surfaces embed-key-warning). Reviewed and kept as-is — this is a
+      // (which surfaces embed-key-warning). This is a
       // deliberate, documented risk: protected stories are a deterrent, not
       // real encryption, so a shared key is not a confidentiality boundary. The
       // user-facing warning is the mitigation — an embed pasted into a public
@@ -540,6 +537,14 @@
    */
   function updateWarnings() {
     // Story page warnings (shown when "With key" is selected)
+    // Story-branch half of the four-id warning namespace in
+    // _includes/share-panel.html: #share-key-warning / #embed-key-warning here
+    // vs #share-protected-warning / #embed-protected-warning on the homepage
+    // branch (looked up below). The two halves differ on purpose — a story
+    // page can append the live decryption key, so its warnings speak to
+    // exposing the key; the homepage never holds the key. Edits to either
+    // half's ids or markup must be checked against the other and against
+    // share-panel.html's paired warning comments.
     const shareKeyWarning = document.getElementById('share-key-warning');
     const embedKeyWarning = document.getElementById('embed-key-warning');
 
@@ -560,6 +565,13 @@
     }
 
     // Homepage warnings (shown when protected story is selected)
+    // Homepage-branch half of the four-id warning namespace in
+    // _includes/share-panel.html: #share-protected-warning /
+    // #embed-protected-warning here vs #share-key-warning / #embed-key-warning
+    // on the story branch (looked up above). The homepage never holds the
+    // decryption key, so these only flag that the selected story is protected.
+    // Edits to either half's ids or markup must be checked against the other
+    // and against share-panel.html's paired warning comments.
     const shareProtectedWarning = document.getElementById('share-protected-warning');
     const embedProtectedWarning = document.getElementById('embed-protected-warning');
 

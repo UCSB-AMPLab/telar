@@ -1,4 +1,4 @@
-<!--
+{#
   Accordion Widget
 
   Renders a stack of collapsible panels — a Bootstrap accordion — so that long or
@@ -10,7 +10,7 @@
   pre-rendered content_html). The content arrives already converted to HTML and is
   emitted through the "safe" filter because the build step has done the escaping;
   loop.index distinguishes the panels. All panels start collapsed.
--->
+#}
 <div class="telar-widget telar-widget-accordion">
   <div class="accordion" id="accordion-{{ widget_id }}">
     {% for panel in panels %}

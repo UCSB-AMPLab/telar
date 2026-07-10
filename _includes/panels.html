@@ -193,14 +193,14 @@
     // Build the message with DOM nodes so the image path (which may contain
     // markup characters) is shown as text rather than parsed as HTML.
     const label = document.createElement('strong');
-    label.textContent = 'Image file not found:';
+    label.textContent = (window.telarLang && window.telarLang.imageNotFoundLabel) || 'Image file not found:';
     const code = document.createElement('code');
     code.textContent = src;
     errorDiv.appendChild(label);
     errorDiv.appendChild(document.createTextNode(' '));
     errorDiv.appendChild(code);
     errorDiv.appendChild(document.createElement('br'));
-    errorDiv.appendChild(document.createTextNode('Please add this file or update the path in the markdown.'));
+    errorDiv.appendChild(document.createTextNode((window.telarLang && window.telarLang.imageNotFoundHint) || 'Please add this file or update the path in the markdown.'));
 
     // Replace image with error message
     img.parentNode.replaceChild(errorDiv, img);

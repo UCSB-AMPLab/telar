@@ -22,25 +22,32 @@ script handles that preparation. It scans the objects directory for
 audio files (MP3, OGG, M4A), generates peak data using bbc/audiowaveform
 (an open-source tool that reads audio samples and outputs amplitude
 values at a given resolution), and converts the output into the JSON
-format that WaveSurfer v7 consumes directly. If a story step specifies
-clip_start and clip_end times, the script also extracts the corresponding
-audio segment using ffmpeg so the browser only needs to load the relevant
-portion.
+format that WaveSurfer v7 consumes directly. Clip boundaries (clip_start /
+clip_end) are enforced client-side — the browser loads the full peak data
+and audio file, and WaveSurfer's timeupdate event confines playback to the
+requested region (see assets/js/telar-story/audio-card.js). This script
+does not pre-extract clip segments.
 
 The output structure mirrors the IIIF tile pipeline: peak JSON files go
-to assets/audio/peaks/, clip segments to assets/audio/clips/, and cache
-files sit alongside the peaks so that unchanged audio is not reprocessed
-on subsequent builds. Like the IIIF tile generator, this script is
-optional — sites without audio objects skip it entirely, and the CI
-workflow detects this automatically.
+to assets/audio/peaks/, and cache files sit alongside them so that
+unchanged audio is not reprocessed on subsequent builds. Like the IIIF
+tile generator, this script is optional — sites without audio objects
+skip it entirely, and the CI workflow detects this automatically.
 
-Both audiowaveform and ffmpeg are required only for sites that include
-audio objects. Neither is a Python package — they are system-level tools
-installed via the platform's package manager (brew on macOS, apt on
-Linux). The CI workflow installs them conditionally when audio files are
-detected.
+audiowaveform is required only for sites that include audio objects. It
+is not a Python package — it is a system-level tool installed via the
+platform's package manager (brew on macOS, apt on Linux). The CI
+workflow installs it conditionally when audio files are detected.
 
-Version: v1.5.0
+The _data/audio_objects.json manifest (object_id -> file extension,
+consumed by story.html to inject window.audioObjects) is written by
+telar.core._generate_audio_manifest, not by this script. That function
+runs unconditionally as part of every csv_to_json.py build, including
+builds that skip this script entirely (no audio files, or cached/
+unchanged audio), so it is the single source of truth for the manifest
+and owns its stale-entry cleanup.
+
+Version: v1.6.0
 """
 
 import argparse
@@ -54,14 +61,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from telar.media_type import AUDIO_EXTENSIONS
+
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-AUDIO_EXTENSIONS = ('.mp3', '.ogg', '.m4a')
-
-# object_id is interpolated into filesystem write paths (peaks, clips, cache),
+# object_id is interpolated into filesystem write paths (peaks, cache),
 # so it must be a bare slug. Anything with a path separator or ".." is rejected
 # at ingest so a crafted object_id cannot write outside the audio output dirs.
 _SAFE_OBJECT_ID = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -75,21 +82,6 @@ def is_safe_object_id(object_id):
 # ---------------------------------------------------------------------------
 # Pure functions (unit-tested)
 # ---------------------------------------------------------------------------
-
-def is_audio_file(filename):
-    """
-    Return True if filename has a supported audio extension (.mp3, .ogg, .m4a),
-    case-insensitive.
-
-    Args:
-        filename (str): Filename or path to check.
-
-    Returns:
-        bool
-    """
-    _, ext = os.path.splitext(filename)
-    return ext.lower() in AUDIO_EXTENSIONS
-
 
 def convert_audiowaveform_to_peaks(aw_data):
     """
@@ -131,17 +123,15 @@ def convert_audiowaveform_to_peaks(aw_data):
     return {'peaks': channel_peaks, 'length': length}
 
 
-def compute_cache_key(audio_path, clip_start=None, clip_end=None):
+def compute_cache_key(audio_path):
     """
-    Compute a SHA256 cache key from the audio file content and clip parameters.
+    Compute a SHA256 cache key from the audio file content.
 
-    The cache key changes when the source file changes OR when the clip
-    boundaries change, ensuring re-processing happens only when necessary.
+    The cache key changes when the source file changes, ensuring
+    re-processing happens only when necessary.
 
     Args:
         audio_path (str | Path): Path to the source audio file.
-        clip_start (int | float | None): Clip start time in seconds.
-        clip_end (int | float | None): Clip end time in seconds.
 
     Returns:
         str: 64-character hex SHA256 digest.
@@ -152,24 +142,23 @@ def compute_cache_key(audio_path, clip_start=None, clip_end=None):
         for chunk in iter(lambda: f.read(65536), b''):
             h.update(chunk)
 
-    # Include clip params in the hash so clip changes invalidate cache
-    params_str = f'start={clip_start},end={clip_end}'
-    h.update(params_str.encode('utf-8'))
-
     return h.hexdigest()
 
 
 def check_audio_dependencies():
     """
-    Check that audiowaveform and ffmpeg are installed and accessible.
+    Check that audiowaveform is installed and accessible.
 
-    Exits with a clear error message if either tool is missing, naming the
-    tool and providing install instructions.
+    Exits with a clear error message if it is missing, with install
+    instructions. audiowaveform is the only external tool this script
+    invokes. It decodes MP3 and Ogg natively; for M4A it fails, which
+    generate_peaks treats as a per-file skip — the player falls back to
+    client-side decoding, so M4A objects play without pre-computed peaks.
 
     Raises:
-        SystemExit: If audiowaveform or ffmpeg is not found.
+        SystemExit: If audiowaveform is not found.
     """
-    for tool in ('audiowaveform', 'ffmpeg'):
+    for tool in ('audiowaveform',):
         if shutil.which(tool) is None:
             print(
                 f"Error: {tool} is not installed. "
@@ -183,8 +172,9 @@ def find_audio_objects(objects_json_path, objects_dir):
     """
     Load objects.json and filter to objects that have an audio source file.
 
-    For each object, checks whether a file named {object_id}.mp3,
-    {object_id}.ogg, or {object_id}.m4a exists in objects_dir.
+    For each object, checks whether a file named {object_id} plus a supported
+    audio extension (.mp3, .ogg, .m4a — lower or upper case) exists in
+    objects_dir. Lowercase extensions take precedence when both exist.
 
     Args:
         objects_json_path (str | Path): Path to _data/objects.json.
@@ -206,7 +196,7 @@ def find_audio_objects(objects_json_path, objects_dir):
         if not object_id:
             continue
 
-        # Guard every downstream write path (peaks/clips/cache) at the single
+        # Guard every downstream write path (peaks/cache) at the single
         # point of ingest: a non-slug object_id is skipped, not processed.
         if not is_safe_object_id(object_id):
             print(f"  [WARN] Skipping object with unsafe object_id "
@@ -226,26 +216,8 @@ def find_audio_objects(objects_json_path, objects_dir):
     return results
 
 
-def build_clip_filename(object_id, clip_start, clip_end, extension):
-    """
-    Build the output filename for an extracted clip.
-
-    Format: "{object_id}-{clip_start}-{clip_end}.{extension}"
-
-    Args:
-        object_id (str): Audio object identifier.
-        clip_start (int | float): Clip start time in seconds.
-        clip_end (int | float): Clip end time in seconds.
-        extension (str): Output file extension without dot (e.g. 'mp3').
-
-    Returns:
-        str: Filename string.
-    """
-    return f'{object_id}-{clip_start}-{clip_end}.{extension}'
-
-
 # ---------------------------------------------------------------------------
-# Processing functions (integration — require audiowaveform / ffmpeg)
+# Processing functions (integration — require audiowaveform)
 # ---------------------------------------------------------------------------
 
 def generate_peaks(audio_path, output_path, pixels_per_second=100):
@@ -308,66 +280,20 @@ def generate_peaks(audio_path, output_path, pixels_per_second=100):
             pass
 
 
-def extract_clip(audio_path, output_path, clip_start, clip_end, bitrate='96k'):
-    """
-    Extract a time-bounded clip from an audio file using ffmpeg.
-
-    Args:
-        audio_path (Path): Source audio file.
-        output_path (Path): Destination clip file.
-        clip_start (int | float): Start time in seconds.
-        clip_end (int | float): End time in seconds.
-        bitrate (str): Output audio bitrate (default: '96k').
-
-    Returns:
-        bool: True on success, False on failure.
-    """
-    audio_path = Path(audio_path)
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        subprocess.run(
-            [
-                'ffmpeg',
-                '-i', str(audio_path),
-                '-ss', str(clip_start),
-                '-to', str(clip_end),
-                '-b:a', bitrate,
-                '-c:a', 'libmp3lame',
-                str(output_path),
-                '-y',
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return True
-
-    except subprocess.CalledProcessError as e:
-        print(f'  Error running ffmpeg: {e.stderr}')
-        return False
-    except Exception as e:
-        print(f'  Error extracting clip: {e}')
-        return False
-
-
-def process_audio_objects(objects_dir, data_dir, output_dir, steps_data=None,
+def process_audio_objects(objects_dir, data_dir, output_dir,
                           pixels_per_second=100, filter_objects=None):
     """
-    Batch-process all audio objects: generate peaks and extract clips.
+    Batch-process all audio objects: generate peaks.
 
     For each audio object found in objects_dir:
     1. Check cache (skip if source file unchanged and output exists).
     2. Generate peaks JSON via audiowaveform.
     3. Write cache key file.
-    4. If steps_data provides clip_start/clip_end for this object, extract clip.
 
     Args:
         objects_dir (str | Path): Directory containing source audio files.
         data_dir (str | Path): Directory containing objects.json.
         output_dir (str | Path): Output base directory (assets/audio/).
-        steps_data (list[dict] | None): Step data with optional clip_start/clip_end.
         pixels_per_second (int): Waveform resolution passed to audiowaveform.
         filter_objects (str | None): Comma-separated object IDs to restrict processing.
 
@@ -378,10 +304,8 @@ def process_audio_objects(objects_dir, data_dir, output_dir, steps_data=None,
     data_dir = Path(data_dir)
     output_dir = Path(output_dir)
     peaks_dir = output_dir / 'peaks'
-    clips_dir = output_dir / 'clips'
 
     peaks_dir.mkdir(parents=True, exist_ok=True)
-    clips_dir.mkdir(parents=True, exist_ok=True)
 
     objects_json_path = data_dir / 'objects.json'
     if not objects_json_path.exists():
@@ -412,23 +336,12 @@ def process_audio_objects(objects_dir, data_dir, output_dir, steps_data=None,
     print('=' * 60)
     print()
 
-    # Build step clips lookup: {object_id: [(clip_start, clip_end), ...]}
-    clips_needed = {}
-    if steps_data:
-        for step in steps_data:
-            obj_id = step.get('object_id', '').strip()
-            clip_start = step.get('clip_start')
-            clip_end = step.get('clip_end')
-            if obj_id and clip_start is not None and clip_end is not None:
-                clips_needed.setdefault(obj_id, []).append((clip_start, clip_end))
-
     processed_count = 0
     skipped_count = 0
 
     for i, obj in enumerate(audio_objects, 1):
         object_id = obj['object_id']
         audio_path = obj['file_path']
-        extension = obj['extension']
 
         print(f'[{i}/{len(audio_objects)}] {object_id}...')
 
@@ -446,6 +359,17 @@ def process_audio_objects(objects_dir, data_dir, output_dir, steps_data=None,
                 continue
 
         # --- Generate peaks ---
+        # audiowaveform cannot decode M4A/AAC, and no conversion path exists
+        # here by design: the player decodes client-side when no peaks file
+        # ships, so M4A objects work — their waveform just renders slower.
+        # Say so per file rather than letting the attempt fail noisily.
+        if audio_path.suffix.lower() == '.m4a':
+            print(f'  Peaks skipped for {audio_path.name} (M4A is not supported '
+                  'by audiowaveform) — the waveform renders client-side instead.')
+            skipped_count += 1
+            print()
+            continue
+
         print(f'  Generating peaks from {audio_path.name}...')
         success = generate_peaks(audio_path, peaks_path, pixels_per_second)
         if not success:
@@ -457,26 +381,11 @@ def process_audio_objects(objects_dir, data_dir, output_dir, steps_data=None,
         cache_path.write_text(current_key, encoding='utf-8')
         print(f'  Peaks written to {peaks_path}')
 
-        # --- Extract clips if steps_data provided ---
-        if object_id in clips_needed:
-            for clip_start, clip_end in clips_needed[object_id]:
-                clip_filename = build_clip_filename(object_id, clip_start, clip_end, extension)
-                clip_path = clips_dir / clip_filename
-                print(f'  Extracting clip {clip_start}s-{clip_end}s → {clip_filename}...')
-                extract_clip(audio_path, clip_path, clip_start, clip_end)
-
         processed_count += 1
         print()
 
-    # Write audio_objects.json manifest: {object_id: extension}
-    # Used by story.html to inject window.audioObjects for client-side detection
-    audio_manifest = {}
-    for obj in audio_objects:
-        audio_manifest[obj['object_id']] = obj['extension']
-    manifest_path = data_dir / 'audio_objects.json'
-    with open(manifest_path, 'w', encoding='utf-8') as f:
-        json.dump(audio_manifest, f, indent=2)
-    print(f'Wrote audio manifest: {manifest_path}')
+    # _data/audio_objects.json is written by telar.core._generate_audio_manifest
+    # as part of the csv_to_json.py build step, not here (see module docstring).
 
     print('=' * 60)
     print('Audio processing complete!')
@@ -484,7 +393,6 @@ def process_audio_objects(objects_dir, data_dir, output_dir, steps_data=None,
     if skipped_count > 0:
         print(f'  Skipped (cached): {skipped_count} objects')
     print(f'  Peaks directory: {peaks_dir}')
-    print(f'  Clips directory: {clips_dir}')
     print('=' * 60)
 
     return True
@@ -498,8 +406,8 @@ def main():
     """Main entry point — parse arguments and run audio processing."""
     parser = argparse.ArgumentParser(
         description=(
-            'Generate WaveSurfer peak data and extract audio clips for Telar audio cards. '
-            'Requires audiowaveform and ffmpeg to be installed.'
+            'Generate WaveSurfer peak data for Telar audio cards. '
+            'Requires audiowaveform to be installed.'
         )
     )
     parser.add_argument(
@@ -515,7 +423,7 @@ def main():
     parser.add_argument(
         '--output-dir',
         default='assets/audio',
-        help='Output base directory for peaks/ and clips/ (default: assets/audio/)',
+        help='Output base directory for peaks/ (default: assets/audio/)',
     )
     parser.add_argument(
         '--pixels-per-second',

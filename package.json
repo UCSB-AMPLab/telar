@@ -1,12 +1,13 @@
 {
   "name": "telar",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "A minimal-computing framework for weaving IIIF images, audio, video, and texts into layered visual narratives.",
   "private": true,
   "license": "MIT",
   "author": "The Telar authors",
   "contributors": [
     "Adelaida Ávila",
+    "Ana María Cárdenas Gasca",
     "Juan Cobo Betancourt",
     "Natalie Cobo",
     "Santiago Muñoz"
@@ -20,7 +21,7 @@
     "url": "https://github.com/UCSB-AMPLab/telar/issues"
   },
   "scripts": {
-    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap",
+    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
     "test:js": "vitest run",
     "test:js:watch": "vitest"
   },

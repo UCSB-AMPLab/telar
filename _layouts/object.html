@@ -3,12 +3,15 @@ layout: default
 ---
 
 {%- comment -%}
-  Object layout — the detail page for a single collection object, rendered inside the default
-  shell. One template serves all three media types (Image, Video, Audio); the media type,
+  Object layout — the detail page for a single collection object, rendered inside
+  _layouts/default.html (the base page frame). One template serves all three media
+  types (Image, Video, Audio); the media type,
   injected into frontmatter by generate_collections.py as `page.media_type`, switches which
-  viewer and which author-facing tools appear. This is the large (~1,280-line) object page,
+  viewer and which author-facing tools appear. This is the large (~1,230-line) object page,
   long mostly because each media branch carries its own viewer wiring, metadata block, and
-  copy-to-clipboard scripts.
+  copy-to-clipboard scripts; the shared algorithmic pieces (theme-colour maths, video embed
+  resolution, coordinate normalisation) live in assets/js/object-theme.js,
+  assets/js/video-embed.js, and assets/js/telar-story/iiif-viewer.js.
 
   What it renders — a two-column layout: a viewer on the left and a metadata sidebar on the
   right. The viewer branches by media type — an OpenSeadragon IIIF viewer for images (with a
@@ -402,7 +405,7 @@ layout: default
           <dd class="col-sm-8">
             <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
               <code id="embed-url-display" style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"></code>
-              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="Copy embed URL">
+              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.copy_embed_url_tooltip | default: 'Copy embed URL' }}">
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
               </button>
             </div>
@@ -454,6 +457,15 @@ layout: default
   </div>
 </div>
 
+<!-- Object-page helpers: theme-colour maths shared by the author panels and
+     the audio waveform (all media types), and video embed resolution (video
+     only). Classic scripts — parsed before the inline/module scripts below,
+     so window.telarObjectTheme / window.telarVideoEmbed are ready. -->
+<script src="{{ '/assets/js/object-theme.js' | relative_url }}"></script>
+{% if object_media_type == 'Video' %}
+<script src="{{ '/assets/js/video-embed.js' | relative_url }}"></script>
+{% endif %}
+
 {% if object_media_type == 'Image' %}
 <!-- IIIF viewer (OpenSeadragon — vendored, see assets/vendor/) -->
 <script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
@@ -462,7 +474,7 @@ layout: default
   // story-only), so we import the wrapper directly from its ESM source.
   // Jekyll publishes assets/js/telar-story/*.js alongside the bundled
   // output, so the browser can fetch this path at runtime.
-  import { IiifViewer } from '{{ "/assets/js/telar-story/iiif-viewer.js" | relative_url }}';
+  import { IiifViewer, normalizedViewportPosition } from '{{ "/assets/js/telar-story/iiif-viewer.js" | relative_url }}';
 
   // Expose language strings to JavaScript
   window.telarCoordLang = {
@@ -488,23 +500,9 @@ layout: default
   };
 
   document.addEventListener('DOMContentLoaded', async function() {
-    // Coordinate panel theme colouring — detect luminance of theme colour
-    const panel = document.querySelector('.coordinate-panel');
-    if (panel) {
-      const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
-      if (bg) {
-        // Parse hex colour to RGB
-        const hex = bg.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16) / 255;
-        const g = parseInt(hex.substring(2, 4), 16) / 255;
-        const b = parseInt(hex.substring(4, 6), 16) / 255;
-        // WCAG relative luminance
-        const lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
-                   + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
-                   + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
-        panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
-      }
-    }
+    // Coordinate panel theme colouring — object-theme.js picks coord-light /
+    // coord-dark from the theme button background's luminance
+    window.telarObjectTheme.applyPanelContrastClass(document.querySelector('.coordinate-panel'));
 
     {% assign external_source = page.source_url | default: page.iiif_manifest %}
     {% if external_source and external_source != "" %}
@@ -585,23 +583,14 @@ layout: default
       if (!osdViewer || !osdViewer.viewport) return;
 
       try {
-        const viewport = osdViewer.viewport;
-        const center = viewport.getCenter();
-        const bounds = viewport.getHomeBounds();
-
-        // Convert to normalized 0-1 coordinates
-        const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
-        const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
-
-        // Get zoom relative to home zoom
-        const homeZoom = viewport.getHomeZoom();
-        const currentZoom = viewport.getZoom();
-        const zoom = Math.max(0.1, Math.min(10, currentZoom / homeZoom));
+        // Normalised x/y/zoom maths lives in iiif-viewer.js (imported above
+        // alongside the viewer wrapper itself)
+        const pos = normalizedViewportPosition(osdViewer.viewport);
 
         // Update display
-        document.getElementById('coord-x').textContent = x.toFixed(3);
-        document.getElementById('coord-y').textContent = y.toFixed(3);
-        document.getElementById('coord-zoom').textContent = zoom.toFixed(1);
+        document.getElementById('coord-x').textContent = pos.x.toFixed(3);
+        document.getElementById('coord-y').textContent = pos.y.toFixed(3);
+        document.getElementById('coord-zoom').textContent = pos.zoom.toFixed(1);
 
         // Update page number for multi-page objects
         if (isMultiPage) {
@@ -629,57 +618,29 @@ layout: default
 {% endif %}
 
 {% if object_media_type == 'Video' %}
+{%- comment -%}Iframe title resolved once here, reused by all three embed branches below.{%- endcomment -%}
+{% assign escaped_title = page.title | escape %}
+{% assign video_frame_title = lang.object.video_frame_title | default: 'Video: __TITLE__' | replace: '__TITLE__', escaped_title %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const viewer = document.getElementById('object-viewer');
   const sourceUrl = {{ page.source_url | default: '' | jsonify | replace: '</', '<\/' }};
 
-  {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
-    // YouTube embed
-    // Extract video ID from URL
-    let videoId = '';
-    const ytMatch = sourceUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (ytMatch) videoId = ytMatch[1];
+  // Provider detection, video-ID extraction, and iframe construction live in
+  // video-embed.js (loaded above); this script injects the result and wires
+  // the page around it. The frame title is Liquid-escaped for attribute
+  // context, which resolveVideoEmbed requires.
+  const embed = window.telarVideoEmbed.resolveVideoEmbed(sourceUrl, {{ video_frame_title | jsonify | replace: '</', '<\/' }});
+  if (!embed) return;
+  viewer.innerHTML = embed.iframeHtml;
 
-    const embedUrl = 'https://www.youtube.com/embed/' + videoId + '?enablejsapi=1';
-    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + embedUrl + '" ' +
-      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
-      'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
-      'allowfullscreen ' +
-      'title="Video: {{ page.title | escape }}"></iframe>';
+  {% unless page.source_url contains 'drive.google.com' %}
+  // Set embed URL display (YouTube/Vimeo; the Drive sidebar has no display)
+  const embedDisplay = document.getElementById('embed-url-display');
+  if (embedDisplay) embedDisplay.textContent = embed.embedUrl;
+  {% endunless %}
 
-    // Set embed URL display
-    const embedDisplay = document.getElementById('embed-url-display');
-    if (embedDisplay) embedDisplay.textContent = embedUrl;
-
-  {% elsif page.source_url contains 'vimeo.com' %}
-    // Vimeo embed
-    let vimeoId = '';
-    const vmMatch = sourceUrl.match(/vimeo\.com\/(\d+)/);
-    if (vmMatch) vimeoId = vmMatch[1];
-
-    const embedUrl = 'https://player.vimeo.com/video/' + vimeoId;
-    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + embedUrl + '" ' +
-      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
-      'allow="autoplay; fullscreen; picture-in-picture" ' +
-      'allowfullscreen ' +
-      'title="Video: {{ page.title | escape }}"></iframe>';
-
-    const embedDisplay = document.getElementById('embed-url-display');
-    if (embedDisplay) embedDisplay.textContent = embedUrl;
-
-  {% elsif page.source_url contains 'drive.google.com' %}
-    // Google Drive embed
-    let fileId = '';
-    const gdMatch = sourceUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (gdMatch) fileId = gdMatch[1];
-
-    const previewUrl = 'https://drive.google.com/file/d/' + fileId + '/preview';
-    viewer.innerHTML = '<iframe id="video-player-iframe" src="' + previewUrl + '" ' +
-      'style="width:100%;aspect-ratio:16/9;border:none;" ' +
-      'allow="autoplay" ' +
-      'title="Video: {{ page.title | escape }}"></iframe>';
-
+  {% if page.source_url contains 'drive.google.com' %}
     // Google Drive: embed URL load error fallback
     const iframe = document.getElementById('video-player-iframe');
     let loadTimer = setTimeout(function() {
@@ -719,20 +680,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Theme colouring for clip panel (same as coordinate panel)
-  var panel = document.querySelector('.clip-panel');
-  if (panel) {
-    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
-    if (bg) {
-      var hex = bg.replace('#', '');
-      var r = parseInt(hex.substring(0, 2), 16) / 255;
-      var g = parseInt(hex.substring(2, 4), 16) / 255;
-      var b = parseInt(hex.substring(4, 6), 16) / 255;
-      var lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
-               + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
-               + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
-      panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
-    }
-  }
+  window.telarObjectTheme.applyPanelContrastClass(document.querySelector('.clip-panel'));
 
   // Load YouTube IFrame API for clip picker
   {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
@@ -811,17 +759,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // Copy buttons (same pattern as coordinate panel)
   var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
 
+  // Shared copy-then-feedback helper for this panel's two buttons: writes
+  // text to the clipboard, then swaps the button's icon for a checkmark +
+  // copiedLang for 2s before reverting.
+  function copyClipText(text, btnId) {
+    navigator.clipboard.writeText(text).then(function() {
+      var btn = document.getElementById(btnId);
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    });
+  }
+
   var copyClipCsv = document.getElementById('copy-clip-csv');
   if (copyClipCsv) {
     copyClipCsv.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + ',' + end).then(function() {
-        var btn = document.getElementById('copy-clip-csv');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + ',' + end, 'copy-clip-csv');
     });
   }
 
@@ -830,12 +785,7 @@ document.addEventListener('DOMContentLoaded', function() {
     copyClipSheets.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + '	' + end).then(function() {
-        var btn = document.getElementById('copy-clip-sheets');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + '	' + end, 'copy-clip-sheets');
     });
   }
 });
@@ -844,31 +794,11 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 
 {% if object_media_type == 'Audio' %}
+{%- comment -%}Waveform aria-label resolved once here; __TITLE__ carries the escaped page title.{%- endcomment -%}
+{% assign escaped_title = page.title | escape %}
+{% assign waveform_label = lang.object.audio_controls.waveform_label | default: 'Audio waveform for __TITLE__' | replace: '__TITLE__', escaped_title %}
+<script src="{{ '/assets/js/wavesurfer-loader.js' | relative_url }}"></script>
 <script>
-// Load the vendored WaveSurfer UMD bundle (core + Regions plugin) once, from
-// the repo's assets/vendor/ — mirrors loadWaveSurferAPI() in
-// assets/js/telar-story/audio-card.js so audio object pages work offline with
-// no CDN dependency. The UMD builds expose window.WaveSurfer and
-// window.WaveSurfer.Regions.
-function loadVendoredWaveSurfer() {
-  if (window._wsApiPromise) return window._wsApiPromise;
-  window._wsApiPromise = new Promise((resolve, reject) => {
-    const base = '{{ site.baseurl }}';
-    const core = document.createElement('script');
-    core.src = base + '/assets/vendor/wavesurfer/wavesurfer.min.js';
-    core.onload = () => {
-      const regions = document.createElement('script');
-      regions.src = base + '/assets/vendor/wavesurfer/plugins/regions.min.js';
-      regions.onload = () => resolve();
-      regions.onerror = reject;
-      document.head.appendChild(regions);
-    };
-    core.onerror = reject;
-    document.head.appendChild(core);
-  });
-  return window._wsApiPromise;
-}
-
 document.addEventListener('DOMContentLoaded', async function() {
   const viewer = document.getElementById('object-viewer');
 
@@ -896,59 +826,41 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // Build waveform container with overlaid controls (matches story audio plates)
   viewer.innerHTML =
-    '<div id="audio-waveform" role="img" aria-label="Audio waveform for {{ page.title | escape }}" style="width:100%;height:100%;padding:0 3%;box-sizing:border-box;position:relative;z-index:0;"></div>' +
+    '<div id="audio-waveform" role="img" aria-label="{{ waveform_label }}" style="width:100%;height:100%;padding:0 3%;box-sizing:border-box;position:relative;z-index:0;"></div>' +
     '<div class="audio-object-controls">' +
-      '<button class="audio-object-btn" id="audio-play-btn" aria-label="Play audio" type="button">' +
+      '<button class="audio-object-btn" id="audio-play-btn" aria-label="{{ lang.object.audio_controls.play | default: 'Play audio' }}" type="button">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>' +
       '</button>' +
-      '<button class="audio-object-btn" id="audio-restart-btn" aria-label="Restart from beginning" type="button">' +
+      '<button class="audio-object-btn" id="audio-restart-btn" aria-label="{{ lang.object.audio_controls.restart | default: 'Restart from beginning' }}" type="button">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>' +
       '</button>' +
-      '<button class="audio-object-btn" id="audio-mute-btn" aria-label="Mute audio" type="button">' +
+      '<button class="audio-object-btn" id="audio-mute-btn" aria-label="{{ lang.object.audio_controls.mute | default: 'Mute audio' }}" type="button">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>' +
       '</button>' +
     '</div>' +
     '<span class="audio-object-time" id="audio-time-display">0:00 / --:--</span>';
 
-  // Load WaveSurfer from the vendored bundle (no CDN dependency)
-  await loadVendoredWaveSurfer();
+  // Load WaveSurfer from the vendored bundle (no CDN dependency) — the
+  // loader lives in assets/js/wavesurfer-loader.js (see the script tag
+  // above), the object-page twin of loadWaveSurferAPI in
+  // assets/js/telar-story/audio-card.js (must-agree cross-links in both files)
+  await window.telarLoadWaveSurfer(baseUrl);
   const WaveSurfer = window.WaveSurfer;
 
-  // Derive theme colours (same logic as story audio-card.js deriveThemeColors)
-  const accentHex = getComputedStyle(document.documentElement).getPropertyValue('--color-link').trim() || '#883C36';
-  const barHex = getComputedStyle(document.documentElement).getPropertyValue('--color-button-text').trim() || '#ffffff';
+  // Derive theme colours via object-theme.js — its deriveThemeColors is the
+  // object-page twin of the story-side copy in telar-story/audio-card.js
+  // (must-agree cross-links in both files)
+  const themeColors = window.telarObjectTheme.deriveThemeColors(
+    getComputedStyle(document.documentElement).getPropertyValue('--color-link').trim() || '#883C36',
+    getComputedStyle(document.documentElement).getPropertyValue('--color-button-text').trim() || '#ffffff'
+  );
+  const playedColor = themeColors.playedColor;
+  const unplayedColor = themeColors.unplayedColor;
+  const bgColor = themeColors.backgroundColor;
 
-  const aR = parseInt(accentHex.slice(1, 3), 16);
-  const aG = parseInt(accentHex.slice(3, 5), 16);
-  const aB = parseInt(accentHex.slice(5, 7), 16);
-
-  // Background: accent darkened to 70%
-  const bgR = Math.round(aR * 0.7);
-  const bgG = Math.round(aG * 0.7);
-  const bgB = Math.round(aB * 0.7);
-
-  // Bar text colour
-  const bR = parseInt(barHex.slice(1, 3), 16);
-  const bG = parseInt(barHex.slice(3, 5), 16);
-  const bB = parseInt(barHex.slice(5, 7), 16);
-
-  // Unplayed bars: 25% bar colour over 75% background (opaque — WaveSurfer clip-path needs it)
-  const upR = Math.round(bgR * 0.75 + bR * 0.25);
-  const upG = Math.round(bgG * 0.75 + bG * 0.25);
-  const upB = Math.round(bgB * 0.75 + bB * 0.25);
-
-  const playedColor = barHex;
-  const unplayedColor = 'rgb(' + upR + ',' + upG + ',' + upB + ')';
-  const bgColor = 'rgb(' + bgR + ',' + bgG + ',' + bgB + ')';
-
-  // Apply accent-tinted background + telar weave pattern to viewer container
-  const patternFill = 'rgba(255,255,255,0.12)';
-  const patternSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 543 380"><path d="M542.955,145.508l-83.257,-0.001l13.365,45.375l-12.615,43.868l82.485,0l-0,10.507l-81.743,0l7.56,40.133l-7.582,38.235l81.765,1.125l-0,10.5l-82.485,0l12.742,44.25l-14.25,0l-13.875,-44.25l-12.375,0l0,44.25l-14.25,0l0,-44.25l-52.492,0l-6.75,44.25l-14.25,0l6.75,-44.25l-41.993,0l6.75,44.25l-14.25,0l-6.75,-44.25l-88.492,0l-0,44.25l-14.25,0l-0,-44.25l-59.993,0l0,44.25l-14.25,0l0,-44.25l-34.492,0l-0,44.25l-13.5,0l-0,-44.25l-70.478,0l0,-10.5l69.368,0l1.125,-1.125l-0,-78.375l-70.493,0l0,-10.5l69.368,0l0.375,-89.25l-69.743,0l0,-10.5l69.743,0l0.75,-79.5l-70.493,0l0,-10.5l69.368,0l1.162,-2.588l-0.037,-42.412l13.5,0l-0.038,42.412l1.163,2.588l33.367,0l0,-44.993l14.25,0.001l0,45l59.993,-0l-0,-45l14.25,-0l-0,45l88.492,-0l6.743,-45l14.25,-0l-6.75,45l41.992,-0l-6.742,-45l14.25,-0l6.75,45l52.492,-0l0,-45l14.25,-0l0.375,45l12.375,-0l13.493,-45l14.25,-0l-12.743,44.992l82.485,0l0,10.508l-81.742,-0l7.522,38.594l-8.272,40.905l82.507,0l0,10.5Zm-424.47,-90l-34.492,0.001l-0,79.499l34.492,0l0,-79.5Zm74.243,0.001l-59.993,-0l0,79.499l59.993,0l-0,-79.5Zm101.242,0.001l-86.992,-0l-0.75,79.499l86.992,0l-5.317,-38.625l6.067,-40.875Zm59.243,79.508l6.48,-40.23l-6.068,-38.565l-45.337,-0.622l-6.105,40.83l5.272,38.595l45.75,-0l0.008,-0.008Zm65.242,-79.507l-50.242,-0l5.842,38.632l-6.592,40.868l50.242,-0l0.75,-79.5Zm13.493,79.5l13.875,-0l9.135,-40.223l-8.385,-39.277l-13.875,-0l-0.75,79.5Zm-313.463,10.5l-34.492,-0l-0,89.25l34.492,-0l0,-89.25Zm14.25,-0l0,89.25l59.993,-0l-0,-89.25l-59.993,-0Zm162.728,89.25l6.375,-44.655l-6.503,-43.35l-1.005,-1.245l-88.117,-0l0.75,89.25l88.5,-0Zm55.5,-89.25l-41.243,-0l6.353,44.602l-6.353,44.648l41.993,-0l-7.418,-46.208l6.668,-43.042Zm66.742,-0l-52.492,-0l-6.593,43.132l7.343,46.118l52.492,-0l-0.75,-89.25Zm27.743,89.25l13.17,-44.61l-14.295,-44.64l-12.375,-0l1.125,89.25l12.375,-0Zm-326.963,10.5l-34.492,-0l-0,79.5l34.492,-0l0,-79.5Zm74.243,-0l-59.993,-0l0,79.5l59.993,-0l-0,-79.5Zm101.242,-0l-86.992,-0l-0,79.5l86.992,-0l-5.917,-40.043l5.917,-39.457Zm14.28,79.462l45.383,-0.66l6.24,-39.345l-6.615,-39.135l-44.97,-0.24l-5.79,39.42l5.745,39.96l0.007,0Zm110.205,-79.462l-50.242,-0l6.022,40.087l-6.022,39.413l50.242,-0l0,-79.5Zm14.243,79.5l13.875,-0l8.542,-40.05l-8.542,-39.45l-13.875,-0l-0,79.5Z" fill="' + patternFill + '" fill-rule="nonzero"/></svg>';
+  // Solid accent-tinted background only — no weave-pattern image is layered
+  // in for the audio object viewer (see themeColors.patternColor, unused here).
   viewer.style.background = bgColor;
-  // Telar weave pattern removed — solid accent background only
-
-  // Keep rgb values for region colour
-  const rgb = { r: aR, g: aG, b: aB };
 
   // Load peaks if available
   const peaksUrl = baseUrl + '/assets/audio/peaks/' + objectId + '.json';
@@ -996,11 +908,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   ws.on('play', function() {
     playBtn.innerHTML = pauseIcon;
-    playBtn.setAttribute('aria-label', 'Pause audio');
+    playBtn.setAttribute('aria-label', '{{ lang.object.audio_controls.pause | default: 'Pause audio' }}');
   });
   ws.on('pause', function() {
     playBtn.innerHTML = playIcon;
-    playBtn.setAttribute('aria-label', 'Play audio');
+    playBtn.setAttribute('aria-label', '{{ lang.object.audio_controls.play | default: 'Play audio' }}');
   });
 
   // Restart button — plays from clip region start, stops at region end
@@ -1031,7 +943,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const nowMuted = !ws.getMuted();
     ws.setMuted(nowMuted);
     muteBtn.innerHTML = nowMuted ? volumeOffIcon : volumeOnIcon;
-    muteBtn.setAttribute('aria-label', nowMuted ? 'Unmute audio' : 'Mute audio');
+    muteBtn.setAttribute('aria-label', nowMuted ? '{{ lang.object.audio_controls.unmute | default: 'Unmute audio' }}' : '{{ lang.object.audio_controls.mute | default: 'Mute audio' }}');
   });
 
   // Time display
@@ -1106,35 +1018,29 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Theme colouring for audio clip panel
-  var panel = document.querySelector('.clip-panel');
-  if (panel) {
-    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-button-bg').trim();
-    if (bg) {
-      var hex = bg.replace('#', '');
-      var r = parseInt(hex.substring(0, 2), 16) / 255;
-      var g = parseInt(hex.substring(2, 4), 16) / 255;
-      var b = parseInt(hex.substring(4, 6), 16) / 255;
-      var lum = 0.2126 * (r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4))
-               + 0.7152 * (g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4))
-               + 0.0722 * (b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4));
-      panel.classList.add(lum > 0.179 ? 'coord-light' : 'coord-dark');
-    }
-  }
+  window.telarObjectTheme.applyPanelContrastClass(document.querySelector('.clip-panel'));
 
   // Copy buttons
   var copiedLang = '{{ lang.object.coordinates.copied | default: "...copied" }}';
+
+  // Shared copy-then-feedback helper for this panel's two buttons: writes
+  // text to the clipboard, then swaps the button's icon for a checkmark +
+  // copiedLang for 2s before reverting.
+  function copyClipText(text, btnId) {
+    navigator.clipboard.writeText(text).then(function() {
+      var btn = document.getElementById(btnId);
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    });
+  }
 
   var copyClipCsv = document.getElementById('copy-clip-csv');
   if (copyClipCsv) {
     copyClipCsv.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + ',' + end).then(function() {
-        var btn = document.getElementById('copy-clip-csv');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + ',' + end, 'copy-clip-csv');
     });
   }
 
@@ -1143,12 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
     copyClipSheets.addEventListener('click', function() {
       var start = document.getElementById('clip-start-display').textContent;
       var end = document.getElementById('clip-end-display').textContent;
-      navigator.clipboard.writeText(start + '	' + end).then(function() {
-        var btn = document.getElementById('copy-clip-sheets');
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + copiedLang;
-        setTimeout(function() { btn.innerHTML = orig; }, 2000);
-      });
+      copyClipText(start + '	' + end, 'copy-clip-sheets');
     });
   }
 });
@@ -1173,6 +1074,34 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
+    // Shared copy-then-feedback helpers for this panel's buttons. Two
+    // idioms coexist here: the csv/sheets buttons show a checkmark plus
+    // window.telarCoordLang.copied text; the manifest/x/y/zoom/page buttons
+    // show the checkmark alone (no text). Each helper returns the
+    // clipboard promise so callers that need to chain a .catch (manifest)
+    // still can.
+    function copyCoordText(text, btnId) {
+      return navigator.clipboard.writeText(text).then(function() {
+        const btn = document.getElementById(btnId);
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
+        setTimeout(function() {
+          btn.innerHTML = originalHTML;
+        }, 2000);
+      });
+    }
+
+    function copyCoordIconOnly(text, btnId) {
+      return navigator.clipboard.writeText(text).then(function() {
+        const btn = document.getElementById(btnId);
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
+        setTimeout(function() {
+          btn.innerHTML = originalHTML;
+        }, 2000);
+      });
+    }
+
     // CSV format copy button (comma-separated)
     document.getElementById('copy-coords-csv').addEventListener('click', function() {
       const x = document.getElementById('coord-x').textContent;
@@ -1182,14 +1111,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
       const text = isMulti ? `${x},${y},${zoom},${pageEl.textContent}` : `${x},${y},${zoom}`;
 
-      navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('copy-coords-csv');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
-        setTimeout(function() {
-          btn.innerHTML = originalHTML;
-        }, 2000);
-      });
+      copyCoordText(text, 'copy-coords-csv');
     });
 
     // Sheets format copy button (tab-separated)
@@ -1201,14 +1123,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const isMulti = document.querySelector('.coord-page-row') && document.querySelector('.coord-page-row').style.display !== 'none';
       const text = isMulti ? `${x}\t${y}\t${zoom}\t${pageEl.textContent}` : `${x}\t${y}\t${zoom}`;
 
-      navigator.clipboard.writeText(text).then(function() {
-        const btn = document.getElementById('copy-coords-sheets');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> ' + window.telarCoordLang.copied;
-        setTimeout(function() {
-          btn.innerHTML = originalHTML;
-        }, 2000);
-      });
+      copyCoordText(text, 'copy-coords-sheets');
     });
 
     // Copy manifest URL button
@@ -1217,14 +1132,7 @@ document.addEventListener('DOMContentLoaded', function() {
       copyManifestBtn.addEventListener('click', function() {
         const manifestUrl = this.getAttribute('data-manifest');
 
-        navigator.clipboard.writeText(manifestUrl).then(function() {
-          const btn = document.getElementById('copy-manifest');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        }).catch(function(err) {
+        copyCoordIconOnly(manifestUrl, 'copy-manifest').catch(function(err) {
           console.error('Failed to copy manifest URL:', err);
         });
       });
@@ -1235,14 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyXBtn) {
       copyXBtn.addEventListener('click', function() {
         const x = document.getElementById('coord-x').textContent;
-        navigator.clipboard.writeText(x).then(function() {
-          const btn = document.getElementById('copy-x');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(x, 'copy-x');
       });
     }
 
@@ -1250,14 +1151,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyYBtn) {
       copyYBtn.addEventListener('click', function() {
         const y = document.getElementById('coord-y').textContent;
-        navigator.clipboard.writeText(y).then(function() {
-          const btn = document.getElementById('copy-y');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(y, 'copy-y');
       });
     }
 
@@ -1265,14 +1159,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyZoomBtn) {
       copyZoomBtn.addEventListener('click', function() {
         const zoom = document.getElementById('coord-zoom').textContent;
-        navigator.clipboard.writeText(zoom).then(function() {
-          const btn = document.getElementById('copy-zoom');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(zoom, 'copy-zoom');
       });
     }
 
@@ -1280,14 +1167,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyPageBtn) {
       copyPageBtn.addEventListener('click', function() {
         const page = document.getElementById('coord-page').textContent;
-        navigator.clipboard.writeText(page).then(function() {
-          const btn = document.getElementById('copy-page');
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-          setTimeout(function() {
-            btn.innerHTML = originalHTML;
-          }, 2000);
-        });
+        copyCoordIconOnly(page, 'copy-page');
       });
     }
   });

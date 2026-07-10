@@ -11,7 +11,7 @@ The tests require a pre-built Jekyll site. Before running E2E tests:
 For development with live server:
     pytest tests/e2e/ -v --base-url http://127.0.0.1:4001/telar
 
-Version: v0.7.0-beta
+Version: v1.6.0
 """
 
 import pytest
@@ -83,7 +83,7 @@ def story_page(page, base_url):
 def embed_page(page, base_url):
     """Navigate to embed mode version of the story."""
     # Append embed=true parameter
-    embed_url = f"{base_url}/stories/1/?embed=true"
+    embed_url = f"{base_url}/stories/your-story/?embed=true"
     page.goto(embed_url)
     page.wait_for_load_state("networkidle")
     page.wait_for_selector(".story-container, .telar-story", state="visible", timeout=10000)
@@ -93,21 +93,25 @@ def embed_page(page, base_url):
 # Helper functions for tests
 
 def wait_for_step_change(page, current_step: int, direction: str = "forward", timeout: int = 5000):
-    """Wait for step indicator to change after navigation."""
+    """Wait for the step counter to show the expected step after navigation."""
     expected_step = current_step + 1 if direction == "forward" else current_step - 1
     page.wait_for_function(
-        f"document.querySelector('.step-indicator, [data-current-step]')?.textContent?.includes('{expected_step}')",
+        f"document.querySelector('#step-counter')?.textContent?.includes('Step {expected_step} ')",
         timeout=timeout
     )
 
 
 def get_current_step(page) -> int:
-    """Get the current step number from the UI."""
-    step_text = page.locator(".step-indicator, [data-current-step]").first.text_content()
-    # Extract number from text like "Step 2 of 5" or just "2"
+    """Get the current step number from the step counter (0 = intro, counter hidden)."""
     import re
-    match = re.search(r'\d+', step_text or "1")
-    return int(match.group()) if match else 1
+    counter = page.locator("#step-counter")
+    if counter.count() == 0:
+        return 0
+    cls = counter.get_attribute("class") or ""
+    if "d-none" in cls:
+        return 0
+    match = re.search(r'Step (\d+)', counter.text_content() or "")
+    return int(match.group(1)) if match else 0
 
 
 def scroll_to_next_step(page, scroll_amount: int = 300):

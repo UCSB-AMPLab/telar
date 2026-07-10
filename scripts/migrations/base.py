@@ -45,6 +45,8 @@ The single `UPGRADE_STATE.json` file plays two roles — written
 a crash mid-write is detectable), and written `failed` by `upgrade.py`
 when an upgrade aborts on a HARD failure (so a re-run can tell the user
 they are resuming). A clean success leaves no such file behind.
+
+Version: v1.6.0
 """
 
 from abc import ABC, abstractmethod

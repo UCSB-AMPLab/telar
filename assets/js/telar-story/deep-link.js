@@ -11,7 +11,6 @@
  *   #s{step}             — step only (e.g. #s3 = third content step)
  *   #s{step}l{layer}     — step + open panel layer (e.g. #s3l1)
  *   #s{step}l{layer}g{n} — step + layer + nth glossary link open
- *   #s{step}l{layer}ps{n}— step + layer + nth primary source link
  *
  * Step numbers are 1-based in the fragment. state.currentIndex is 0-based.
  * state.steps[index].dataset.step is the CSV step number used by openPanel().
@@ -22,25 +21,13 @@
  * is already set to 'manual' in scroll-engine.js, which prevents browser
  * scroll restoration from interfering.
  *
- * The _isScrollDrivenHashUpdate guard prevents feedback loops between the
- * hash writes here and any hashchange listener.
- *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
 import { activateCard } from './card-pool.js';
 import { goToStep } from './navigation.js';
 import { openPanel } from './panels.js';
-
-// ── Guard flag ────────────────────────────────────────────────────────────────
-
-/**
- * Set true just before replaceState and cleared in a microtask after.
- * A hashchange listener should check this flag and return early if set
- * to prevent the write→hashchange→navigate feedback loop.
- */
-let _isScrollDrivenHashUpdate = false;
 
 // ── Deep-link panel-open timer ladder ───────────────────────────────────────────
 
@@ -86,9 +73,8 @@ function _armDeepLinkCancellation() {
  *   #s{step}
  *   #s{step}l{layer}
  *   #s{step}l{layer}g{n}
- *   #s{step}l{layer}ps{n}
  */
-const FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g|ps)(\d+))?)?$/;
+const FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g)(\d+))?)?$/;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -108,7 +94,7 @@ export function parseFragment(hash) {
   return {
     step: parseInt(m[1], 10),              // 1-based step number
     layer: m[2] ? parseInt(m[2], 10) : null,
-    subType: m[3] || null,                 // 'g' or 'ps'
+    subType: m[3] || null,                 // 'g' or null
     subN: m[4] ? parseInt(m[4], 10) : null,
   };
 }
@@ -123,12 +109,9 @@ export function parseFragment(hash) {
  * Glossary panels are not reflected in the layer segment — they overlay any
  * layer and do not receive their own l{} token. writeHashWithGlossary()
  * handles writing the g{n} sub-token when a glossary link is activated.
- *
- * Sets _isScrollDrivenHashUpdate to true before replaceState and clears it
- * in a microtask so a hashchange listener can detect scroll-driven updates.
  */
 export function writeHash() {
-  _writeHashFragment(null, null);
+  _writeHashFragment(null);
 }
 
 /**
@@ -142,16 +125,15 @@ export function writeHash() {
  * @param {number} n - 1-based running number of the clicked glossary link.
  */
 export function writeHashWithGlossary(n) {
-  _writeHashFragment('g', n);
+  _writeHashFragment(n);
 }
 
 /**
  * Internal helper — builds and writes the fragment.
  *
- * @param {string|null} subType - Sub-link type token ('g', 'ps', or null).
- * @param {number|null} subN    - Sub-link running number (or null).
+ * @param {number|null} glossaryN - 1-based glossary sub-link running number, or null.
  */
-function _writeHashFragment(subType, subN) {
+function _writeHashFragment(glossaryN) {
   const idx = state.currentIndex;
 
   let hash = '';
@@ -166,9 +148,9 @@ function _writeHashFragment(subType, subN) {
         const layerMatch = state.panelStack[i].type.match(/^layer(\d+)$/);
         if (layerMatch) {
           hash += `l${layerMatch[1]}`;
-          // Append sub-link token if provided (e.g. g{n} for glossary links)
-          if (subType !== null && subN !== null) {
-            hash += `${subType}${subN}`;
+          // Append glossary sub-link token if provided (g{n})
+          if (glossaryN !== null) {
+            hash += `g${glossaryN}`;
           }
           break;
         }
@@ -176,28 +158,12 @@ function _writeHashFragment(subType, subN) {
     }
   }
 
-  _isScrollDrivenHashUpdate = true;
-
   if (hash) {
     history.replaceState(null, '', hash);
   } else {
     // Intro state — remove fragment entirely
     history.replaceState(null, '', window.location.pathname + window.location.search);
   }
-
-  Promise.resolve().then(() => { _isScrollDrivenHashUpdate = false; });
-}
-
-/**
- * Return the current value of the scroll-driven hash update guard flag.
- *
- * Exported so a hashchange listener in another module can check whether a
- * replaceState call triggered the event, and return early if so.
- *
- * @returns {boolean}
- */
-export function isScrollDrivenHashUpdate() {
-  return _isScrollDrivenHashUpdate;
 }
 
 /**
@@ -208,11 +174,8 @@ export function isScrollDrivenHashUpdate() {
  */
 export function navigateToIntro() {
   // Hide all active viewer plates
-  if (state.viewerPlates) {
-    for (const key of Object.keys(state.viewerPlates)) {
-      const plate = state.viewerPlates[key];
-      if (plate) plate.classList.remove('is-active');
-    }
+  for (const plate of Object.values(state.viewerPlates)) {
+    plate.classList.remove('is-active');
   }
 
   if (state.lenis) {
@@ -249,38 +212,21 @@ export function navigateToStep(stepNumber) {
 
   // Hide all active viewer plates before jumping — prevents plates from
   // nearby steps bleeding through when the target is a title/section card.
-  if (state.viewerPlates) {
-    for (const key of Object.keys(state.viewerPlates)) {
-      const plate = state.viewerPlates[key];
-      if (plate) plate.classList.remove('is-active');
-    }
+  for (const plate of Object.values(state.viewerPlates)) {
+    plate.classList.remove('is-active');
   }
 
   if (state.lenis) {
     const targetPx = (targetIndex + 1) * window.innerHeight;
 
-    // Clean INSTANT jump via Lenis's supported API.
-    //
-    // The previous approach — stop() → write document.scrollTop → poke
-    // animatedScroll/targetScroll → rAF start() — did NOT land cleanly. On
-    // start(), Lenis re-syncs animatedScroll from the real DOM scroll and then
-    // SMOOTH-ANIMATES from the stale position to the target instead of jumping.
-    // That stray animation drives the per-frame IIIF interpolation
-    // (lerpIiifPosition); when the scroll reaches the integer step,
-    // lerpIiifPosition early-returns (progress ≈ 0), so the viewer is left
-    // frozen at whatever the last sub-integer frame applied — a partially
-    // interpolated zoom. Measured on WebKit (centering sweep, Common desktop
-    // 1920×1080, step 4, the zoom-OUT from authored 10× to 2.9×): the viewer
-    // stuck at effNzoom ≈ 4–7× and never converged. It is timing-gated, so it
-    // only surfaced under the slow (trace-recording) Playwright runner; the
-    // keyboard/button paths never hit it because lenis.scrollTo() eases cleanly
-    // to the exact endpoint, landing the final lerp frame at the authored target.
-    //
-    // immediate:true performs the jump with NO animation — so there is no lerp
-    // staircase, and nothing for the Snap plugin's lock to interrupt (the lock
-    // only blocks ANIMATED multi-step scrollTo, which is why the old code
-    // bypassed scrollTo at all). force:true overrides the lock/stopped state.
-    // The viewer then simply keeps the target set by activateCard below.
+    // scrollTo must jump straight to the target with no animation. An animated
+    // scroll drives the per-frame IIIF interpolation (lerpIiifPosition) at each
+    // intermediate frame; lerpIiifPosition only skips interpolating once
+    // progress is within 0.001 of the integer step, so an animated approach
+    // can leave the viewer on the last interpolated (not authored) x/y/zoom
+    // instead of landing exactly on the target position. immediate:true removes
+    // the intermediate frames entirely; force:true overrides the Snap plugin's
+    // lock/stopped state so the jump isn't blocked.
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned (matches keyboardNav)
 
@@ -316,10 +262,9 @@ export function navigateToStep(stepNumber) {
  * Panel applied after step position: step first, then panel via
  * setTimeout to let the card stack render before Bootstrap Offcanvas opens.
  *
- * Sub-panel links (g{n}, ps{n}):
+ * Sub-panel links (g{n}):
  *   Glossary sub-links (g{n}) are activated here: after the panel opens,
  *   the glossary link with matching data-deep-link-n is clicked. Best-effort.
- *   Primary source sub-links (ps{n}) are not yet implemented.
  */
 export function applyDeepLinkOnLoad() {
   const parsed = parseFragment(window.location.hash);
@@ -333,17 +278,9 @@ export function applyDeepLinkOnLoad() {
     // Desktop Lenis mode: instant scroll jump to the correct viewport position.
     // Position model: intro = 0, step 0 = 1 * innerHeight, step 1 = 2 * innerHeight …
     //
-    // Use Lenis's supported jump API rather than the old manual poke
-    // (stop → write scrollTop → set animatedScroll/targetScroll → rAF start).
-    // The poke did NOT land cleanly: Lenis re-syncs animatedScroll from the real
-    // scroll on start() and smooth-animates from the stale position, driving the
-    // per-frame IIIF lerp; at the integer step lerpIiifPosition early-returns,
-    // freezing the viewer at a partially-interpolated zoom. On a deep-linked load
-    // this was racy (measured on WebKit: #s4 landed at effNz ~9.4/1.06/10.56
-    // across reloads instead of the authored 2.9×). This is the same defect fixed
-    // in navigateToStep — see the fuller note there. immediate:true jumps with no
-    // animation (no lerp staircase; nothing for the Snap lock to interrupt);
-    // force:true overrides the lock/stopped state.
+    // scrollTo must jump straight to the target with no animation — see
+    // navigateToStep for why (an animated scroll can leave the per-frame IIIF
+    // lerp on an interpolated position instead of the authored one).
     const targetPx = (targetIndex + 1) * window.innerHeight;
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned
@@ -419,6 +356,4 @@ export function applyDeepLinkOnLoad() {
       if (_deepLinkTimers.length) _armDeepLinkCancellation();
     }
   }
-
-  // Primary source sub-link activation (ps{n}) — not yet implemented
 }

@@ -2,12 +2,10 @@
  * Telar — site-wide panel and glossary behaviour.
  *
  * This is the small layer of interactivity that every Telar page loads,
- * independent of the story viewer. It wires up the slide-in offcanvas panels and
- * the glossary that those panels can host.
- *
- * Panel triggers — any element marked as a `.panel-trigger` opens the offcanvas
- * panel named in its `data-panel` attribute, using Bootstrap's Offcanvas component
- * (the same toolkit that powers the rest of the layout's modals and navigation).
+ * independent of the story viewer. It wires up the glossary panel and the
+ * click-outside-to-close behaviour shared by all offcanvas panels; the layer1/
+ * layer2 story panel triggers themselves are handled by the delegated listener
+ * in `telar-story/panels.js`.
  *
  * Glossary flow — glossary terms appear two ways: as entries on the glossary index
  * and as inline `[[term_id]]` links woven into story prose. Rather than navigating
@@ -15,8 +13,8 @@
  * `.glossary-content`, and injects that into the shared glossary panel. The fetch is
  * deliberate: glossary pages are real, independently linkable URLs, so the panel is
  * just a convenient in-place view of content that also stands on its own. Because the
- * injected content may itself contain glossary links — and may contain mathematical
- * notation — we re-initialise glossary links and re-run LaTeX rendering on the freshly
+ * injected content may itself contain glossary links (already covered by delegation)
+ * and may contain mathematical notation, we re-run LaTeX rendering on the freshly
  * loaded fragment. Re-opening an already-open panel waits for it to finish hiding
  * before loading the new term, so the swap reads as a clean transition.
  *
@@ -27,21 +25,14 @@
  * Glossary clicks are wired with a single delegated document listener
  * (`initializeGlossaryDelegation`), so any glossary link works no matter when it
  * enters the DOM — including story cards the viewer builds and clones at runtime,
- * whose cloned nodes would lose a per-element handler. `initializeGlossaryLinks`
- * is retained as a no-op for callers that still invoke it.
+ * whose cloned nodes would lose a per-element handler.
  *
- * PanelStack — a tiny last-in-first-out record of which panels are layered (for
- * example Layer 1 to Layer 2 to glossary), exposed on `window.Telar`.
- *
- * @version v1.5.1
+ * @version v1.6.0
  */
 
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Telar initialized');
-
-  // Initialize panel triggers
-  initializePanelTriggers();
 
   // Initialize glossary links via event delegation (one document-level listener
   // that catches clicks on any current or future glossary link — including story
@@ -84,54 +75,6 @@ function initializeClickOutsideClose() {
 }
 
 /**
- * Initialize panel trigger buttons
- */
-function initializePanelTriggers() {
-  const triggers = document.querySelectorAll('.panel-trigger');
-
-  triggers.forEach(trigger => {
-    trigger.addEventListener('click', function(e) {
-      e.preventDefault();
-      const panelId = this.dataset.panel;
-      const panel = document.getElementById(panelId);
-
-      if (panel) {
-        const bsOffcanvas = new bootstrap.Offcanvas(panel);
-        bsOffcanvas.show();
-      }
-    });
-  });
-}
-
-/**
- * Panel stacking system
- * Handles multiple panel layers (Layer 1 -> Layer 2 -> Glossary)
- */
-class PanelStack {
-  constructor() {
-    this.stack = [];
-  }
-
-  push(panelId) {
-    this.stack.push(panelId);
-  }
-
-  pop() {
-    return this.stack.pop();
-  }
-
-  getCurrent() {
-    return this.stack[this.stack.length - 1];
-  }
-}
-
-// Export for use in chapter pages
-window.Telar = {
-  PanelStack: new PanelStack(),
-  initializeGlossaryLinks: initializeGlossaryLinks // Retained no-op; clicks are delegated
-};
-
-/**
  * Register a single delegated click listener for glossary links.
  *
  * Glossary links open the glossary panel instead of navigating. Rather than
@@ -148,21 +91,6 @@ function initializeGlossaryDelegation() {
     if (!link) return;
     handleGlossaryLinkClick(e, link);
   });
-}
-
-/**
- * Retained for API compatibility.
- *
- * Click handling is now delegated at the document level by
- * initializeGlossaryDelegation(), so per-element binding is no longer needed.
- * This is a deliberate no-op, kept because panels.js and the panel content loader
- * (and possibly user/site code) still call window.Telar.initializeGlossaryLinks()
- * after injecting dynamic content — delegation already covers that content.
- *
- * @param {Element} container - Ignored.
- */
-function initializeGlossaryLinks(container) {
-  // No-op: glossary clicks are handled via delegation. See initializeGlossaryDelegation().
 }
 
 /**
@@ -272,8 +200,6 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
 
       if (glossaryContent) {
         contentElement.innerHTML = glossaryContent.innerHTML;
-        // Initialize glossary links within the loaded content (enables glossary-to-glossary linking)
-        initializeGlossaryLinks(contentElement);
 
         // Re-render LaTeX in fetched glossary content
         if (window.telarRenderLatex) {

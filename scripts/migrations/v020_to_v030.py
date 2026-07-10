@@ -6,6 +6,8 @@ Major changes:
 - Move project metadata to _config.yml
 - Add theme configuration
 - Update CSV column orders
+
+Version: v0.3.0-beta
 """
 
 from typing import List, Dict

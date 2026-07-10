@@ -21,7 +21,7 @@ Security model:
     the page HTML, making offline attacks feasible. For genuine
     confidentiality, the repository must be private.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import base64
@@ -60,13 +60,18 @@ def derive_key(password: str, salt: bytes) -> bytes:
     return kdf.derive(password.encode('utf-8'))
 
 
-def encrypt_story(story_data: list, story_key: str) -> dict:
+def encrypt_story(story_data, story_key: str, aad: str = None) -> dict:
     """
     Encrypt story JSON data using AES-GCM.
 
     Args:
-        story_data: List of story steps (the full story JSON)
+        story_data: JSON-serializable story payload — the envelope dict of
+            {"steps": [...], "html": "..."} for protected stories.
         story_key: User-provided encryption key from _config.yml
+        aad: Optional additional authenticated data (the story identifier),
+            binding the ciphertext to its story so an envelope cannot be
+            replayed onto a different story page. The JS decrypt call must
+            pass the same value.
 
     Returns:
         dict with encrypted format:
@@ -87,7 +92,7 @@ def encrypt_story(story_data: list, story_key: str) -> dict:
     # Encrypt story data
     aesgcm = AESGCM(key)
     plaintext = json.dumps(story_data, ensure_ascii=False).encode('utf-8')
-    ciphertext = aesgcm.encrypt(iv, plaintext, None)
+    ciphertext = aesgcm.encrypt(iv, plaintext, aad.encode('utf-8') if aad else None)
 
     # Return encrypted format
     return {

@@ -4,9 +4,9 @@
  * Verifies the zoom-aware layout detection logic:
  *   - zoom undefined / blank / null / <= 1.0 → full-object mode
  *   - zoom > 1.0 with coordinates → detail mode
- *   - no coordinates at all → full-object mode
+ *   - no coordinates at all → full-object mode, regardless of zoom
  *
- * @version v1.0.0-beta
+ * @version v1.6.0
  */
 
 import { describe, it, expect } from 'vitest';
@@ -29,8 +29,8 @@ describe('isFullObjectMode', () => {
     expect(isFullObjectMode({ zoom: '0.5' })).toBe(true);
   });
 
-  it('returns false when zoom is "2.5"', () => {
-    expect(isFullObjectMode({ zoom: '2.5' })).toBe(false);
+  it('returns false when zoom is "2.5" with valid x and y coordinates', () => {
+    expect(isFullObjectMode({ zoom: '2.5', x: '0.5', y: '0.3' })).toBe(false);
   });
 
   it('returns false when zoom is "1.5" with valid x and y coordinates', () => {
@@ -45,11 +45,15 @@ describe('isFullObjectMode', () => {
     expect(isFullObjectMode({ zoom: '1' })).toBe(true);
   });
 
-  it('returns false when zoom is "1.01" (just above boundary)', () => {
-    expect(isFullObjectMode({ zoom: '1.01' })).toBe(false);
+  it('returns false when zoom is "1.01" (just above boundary) with valid x and y coordinates', () => {
+    expect(isFullObjectMode({ zoom: '1.01', x: '0.5', y: '0.3' })).toBe(false);
   });
 
   it('returns true when zoom is null', () => {
     expect(isFullObjectMode({ zoom: null })).toBe(true);
+  });
+
+  it('returns true when zoom is "2.5" but x and y are both undefined (no coordinates overrides zoom)', () => {
+    expect(isFullObjectMode({ zoom: '2.5', x: undefined, y: undefined })).toBe(true);
   });
 });

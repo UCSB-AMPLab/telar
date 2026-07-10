@@ -19,10 +19,10 @@
  *
  * When any panel is open, the scroll lock system blocks step navigation
  * (wheel events, keyboard arrows, touch swipes) and shows a subtle backdrop.
- * This is the "panel freeze" system introduced in v0.6.0 — panels are truly
- * modal and must be explicitly dismissed.
+ * This is the "panel freeze" system — panels are truly modal and must be
+ * explicitly dismissed.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -83,6 +83,25 @@ export function initializePanels() {
       closePanel('glossary');
     });
   }
+
+  // Bootstrap can dismiss a panel without going through closePanel (the
+  // offcanvas X button uses data-bs-dismiss), so panel state is reconciled
+  // on hidden.bs.offcanvas — the one event every dismissal path fires.
+  ['layer1', 'layer2', 'glossary'].forEach((panelType) => {
+    const panel = document.getElementById(`panel-${panelType}`);
+    if (!panel) return;
+    panel.addEventListener('hidden.bs.offcanvas', function () {
+      const before = state.panelStack.length;
+      state.panelStack = state.panelStack.filter(p => p.type !== panelType);
+      if (state.panelStack.length !== before) {
+        writeHash();
+      }
+      if (!document.querySelector('.offcanvas.show')) {
+        state.isPanelOpen = false;
+        deactivateScrollLock();
+      }
+    });
+  });
 }
 
 /**
@@ -116,11 +135,6 @@ export function openPanel(panelType, contentId) {
     const contentElement = document.getElementById(`${panelId}-content`);
     contentElement.innerHTML = content.html;
 
-    // Re-initialise glossary links in dynamically loaded content
-    if (window.Telar && window.Telar.initializeGlossaryLinks) {
-      window.Telar.initializeGlossaryLinks(contentElement);
-    }
-
     // Assign deep-link running numbers to glossary links
     const glossaryLinks = contentElement.querySelectorAll('.glossary-link');
     glossaryLinks.forEach((el, i) => {
@@ -146,7 +160,7 @@ export function openPanel(panelType, contentId) {
       state.panelStack.push({ type: panelType, id: contentId });
     }
 
-    const bsOffcanvas = new bootstrap.Offcanvas(panel);
+    const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel) || new bootstrap.Offcanvas(panel);
     bsOffcanvas.show();
 
     state.isPanelOpen = true;
@@ -177,9 +191,8 @@ export function closePanel(panelType) {
   // closePanel is the single owner of stack mutation on close: drop the closing
   // panel from the stack, then write the hash from the updated stack. The URL
   // reverts to step-only (or the panel below) immediately, without waiting for
-  // the Bootstrap close animation (350ms). Removing the old
-  // filter-into-savedStack-then-restore dance also makes this exception-safe —
-  // there is no temporary shared-state swap to leak if writeHash throws.
+  // the Bootstrap close animation (350ms). There is no temporary shared-state
+  // swap here, so this is exception-safe — nothing to leak if writeHash throws.
   state.panelStack = state.panelStack.filter(p => p.type !== panelType);
   writeHash();
 
@@ -199,9 +212,8 @@ export function closePanel(panelType) {
 export function closeTopPanel() {
   if (state.panelStack.length > 0) {
     const top = state.panelStack[state.panelStack.length - 1];
-    // closePanel now removes `top` from the stack itself — no separate pop
-    // (the old pop ran AFTER closePanel had already filtered for the hash,
-    // double-counting the mutation).
+    // closePanel removes `top` from the stack itself; closeTopPanel must not
+    // also pop it, or the stack mutation double-counts.
     closePanel(top.type);
   }
 }
@@ -229,7 +241,11 @@ export function closeAllPanels() {
 /**
  * Get panel content for a step from the story data.
  *
- * @param {string} panelType - 'layer1', 'layer2', or 'glossary'.
+ * Only 'layer1' and 'layer2' are handled here — the glossary panel is
+ * driven separately by telar.js writing directly into
+ * #panel-glossary-content, not through openPanel()/getPanelContent().
+ *
+ * @param {string} panelType - 'layer1' or 'layer2'.
  * @param {string} contentId - The step number.
  * @returns {{ title: string, html: string, demo?: boolean }|null}
  */
@@ -265,11 +281,6 @@ function getPanelContent(panelType, contentId) {
       }, step.object),
       demo: step.layer2_demo || false,
     };
-  } else if (panelType === 'glossary') {
-    return {
-      title: 'Glossary Term',
-      html: '<p>Glossary content...</p>',
-    };
   }
 
   return null;
@@ -286,8 +297,6 @@ function getPanelContent(panelType, contentId) {
  * @returns {string} Formatted HTML.
  */
 function formatPanelContent(panelData, objectId) {
-  if (!panelData) return '<p>No content available.</p>';
-
   let html = '';
   const basePath = getBasePath();
 
@@ -347,9 +356,8 @@ export function stepHasLayer2Content(step) {
  * Creates a subtle backdrop element and registers a click handler on the
  * story container to close the topmost panel when the user clicks outside it.
  *
- * The old split-column layout toggled overflow on .narrative-column; that
- * element is gone in the card-stack layout. The backdrop and click-outside
- * listener are wired unconditionally.
+ * The card-stack layout has no scrollable narrative column to toggle overflow
+ * on, so the backdrop and click-outside listener are wired unconditionally.
  */
 export function initializeScrollLock() {
   const backdrop = document.createElement('div');
@@ -357,8 +365,8 @@ export function initializeScrollLock() {
   backdrop.style.cssText = `
     position: fixed;
     inset: -50px;
-    background: rgba(0, 0, 0, 0.025);
-    z-index: 9900;
+    background: var(--color-panel-backdrop);
+    z-index: var(--z-panel-backdrop);
     display: none;
     pointer-events: none;
   `;

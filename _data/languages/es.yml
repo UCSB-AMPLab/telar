@@ -92,6 +92,21 @@ object:
     copy_sheets: "inicio, fin (Sheets)"
     copy_csv: "inicio, fin (CSV)"
 
+  # Controles del reproductor de audio (página de objeto; usados en el marcado y en los cambios de estado de JS)
+  audio_controls:
+    play: "Reproducir el audio"
+    pause: "Pausar el audio"
+    restart: "Reiniciar desde el comienzo"
+    mute: "Silenciar el audio"
+    unmute: "Activar el sonido"
+    waveform_label: "Forma de onda del audio: __TITLE__"
+
+  # Botón para copiar la URL de inserción
+  copy_embed_url_tooltip: "Copiar URL para insertar"
+
+  # Título del iframe para videos insertados
+  video_frame_title: "Video: __TITLE__"
+
   # Miniaturas de objetos
   no_image: "Sin imagen"
 
@@ -105,6 +120,8 @@ story:
   demo_label: "Contenido de demostración"
   step_number: "Paso {{ number }}"
   sections_heading: "Secciones"
+  site_nav_label: "Navegación del sitio"
+  dismiss_credits: "Cerrar los créditos"
   scroll_hint: "Presiona ↓ o desplázate para empezar"
   scroll_hint_mobile: "Utiliza los botones de las flechas para desplazarte"
   config_issues_heading: "Los siguientes pasos tienen problemas de contenido o configuración:"
@@ -116,6 +133,9 @@ story:
 embed_banner:
   text: "Esta historia forma parte de {site_name}, un sitio web creado con <a href='https://github.com/UCSB-AMPLab/telar' target='_blank'>Telar</a> para contar historias."
   link: "Ver el sitio completo"
+  # Respaldo cuando la página no trae og:site_name; se inserta en {site_name} arriba
+  # ("este sitio" y no "el sitio completo", que tras "forma parte de" queda mal)
+  site_fallback: "este sitio"
 
 # Encabezados de página y texto introductorio
 pages:
@@ -167,12 +187,26 @@ objects:
   sort_by: "Ordenar por"
   sort_title: "título"
   sort_year: "año"
+  # Etiquetas de tipo de medio en las miniaturas (lectores de pantalla)
+  media_video: "Video"
+  media_audio: "Audio"
 
 # Sistema de paneles
 panels:
   default_title: "Título del panel"
   glossary_term_prefix: "Palabra clave"
   glossary_term_title: "Término del glosario"
+
+# Páginas de términos del glosario
+glossary:
+  related_terms: "Términos relacionados"
+  appears_in: "Aparece en"
+
+# Widgets (controles del carrusel; resueltos por widgets.py durante la construcción)
+widgets:
+  slide_label: "Diapositiva {{ number }}"
+  prev: "Anterior"
+  next: "Siguiente"
 
 # Mensajes de estado vacío
 empty_states:
@@ -189,6 +223,10 @@ errors:
   check_objects_csv: "Revisa <code>telar-content/spreadsheets/objects.csv</code> para asegurarte de que el objeto existe y tiene una URL válida de manifiesto IIIF."
   failed_to_load: "Error al cargar"
   no_image: "Sin imagen"
+
+  # Errores de imagen en paneles (mostrados dentro del panel por JS)
+  image_not_found_label: "No se encontró el archivo de imagen:"
+  image_not_found_hint: "Agrega este archivo o corrige la ruta en el archivo markdown."
   objects_config_issues: "Los siguientes objetos tienen problemas de configuración:"
   objects_will_fail: "Estos objetos no se cargarán en el visor."
 
@@ -245,6 +283,11 @@ errors:
     system_error_heading: "⚠️ Se detectó un error en el sistema de temas"
     system_error_description: "Encontramos un problema al cargar los temas. La carpeta <code>_data/themes</code> puede estar ausente o dañada. El sitio está usando estilos básicos por ahora. Verifica que tu carpeta <code>_data/themes</code> contenga archivos de tema válidos, o restáurala desde tu repositorio."
 
+  # Errores de widgets (generados en el HTML de la página durante la construcción)
+  widgets:
+    rendering_error: "Error al generar el widget ({{ widget_type }}): {{ error }}"
+    unknown_type: "Tipo de widget desconocido: {{ widget_type }}"
+
   # Mensajes de advertencia de objetos e IIIF (mostrados en el navegador desde validación de construcción)
   object_warnings:
     # Errores de validación IIIF (mensajes completos)
@@ -283,6 +326,10 @@ errors:
     short_filename_mismatch: "Nombre de imagen no coincide"
     short_ambiguous_match: "Coincidencia de imagen ambigua"
     short_missing_source: "Sin fuente de imagen"
+
+    # Errores de fuente de audio
+    audio_missing: "No se encontró ningún archivo de audio para el objeto '{{ object_id }}'. Agrega un archivo de audio (.mp3, .ogg o .m4a) en telar-content/objects/{{ object_id }}.mp3"
+    short_audio_missing: "Sin archivo de audio"
 
     # Errores de referencia de historia/objeto
     object_not_found: "el objeto <code>{{ object_id }}</code> no se encontró en <code>objects.csv</code>"
@@ -378,12 +425,19 @@ unlock:
   description: "El acceso a esta historia está restringido. Ingresa la clave para continuar."
   placeholder: "Ingresa la clave"
   button: "Abrir"
+  toggle_key_visibility: "Mostrar u ocultar la clave"
   back_link: "← Volver a las historias"
   card_description: "Esta historia está protegida. Necesitas una clave para abrirla."
+  error_empty: "Ingresa una clave"
+  error_incorrect: "Clave incorrecta. Inténtalo de nuevo."
 
 # Mensajes de actualización
 upgrade:
+  summary_heading: "✓ ¡Actualización exitosa!"
   summary_message: "Tu sitio Telar se actualizó. Revisa el resumen a continuación."
+  alert_heading: "✅ ¡Tu sitio se actualizó correctamente!"
+  alert_body: "Tu sitio ya está en Telar __VERSION__ y listo para usar. Los detalles están en el __SUMMARY_LINK__."
+  alert_remove: "Para quitar este aviso, edita __INDEX__ en tu repositorio y elimina la línea __INCLUDE_LINE__."
 
 # Crédito del pie de página. Los marcadores __TOKEN__ se reemplazan en footer.html con
 # los nombres enlazados (sin llaves, para que funcionen dentro de un argumento default: de Liquid).

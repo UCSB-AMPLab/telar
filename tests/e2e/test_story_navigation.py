@@ -3,8 +3,15 @@ E2E Tests for Story Navigation
 
 This module tests the core story navigation functionality across different
 input methods and viewport sizes. Telar's navigation system adapts to the
-device: desktop uses scroll accumulation, mobile uses button taps, and all
-devices support keyboard navigation.
+device: desktop uses Lenis-driven wheel/keyboard navigation over a card
+stack, mobile and embed mode use button taps.
+
+The story renders as a card stack: the original step nodes live hidden in a
+.step-data pool, and the visible story is cloned cards (.text-card,
+.title-card) plus viewer plates inside .card-stack. The current step is
+reported by the #step-counter element ("Step N / M"), which is hidden
+(d-none) while the intro card (.story-intro) is showing, and the active
+card carries the is-active class.
 
 Prerequisites:
     - Jekyll site must be running: bundle exec jekyll serve --port 4001
@@ -13,7 +20,7 @@ Prerequisites:
 Run tests:
     pytest tests/e2e/test_story_navigation.py -v --base-url http://127.0.0.1:4001/telar
 
-Version: v0.7.0-beta
+Version: v1.6.0
 """
 
 import re
@@ -23,6 +30,17 @@ from playwright.sync_api import expect
 
 # Use a known story URL (story IDs are slugs, not numbers)
 STORY_PATH = "/stories/your-story/"
+
+STEP_COUNTER_RE = re.compile(r"Step (\d+) / \d+")
+
+
+def read_step_counter(page):
+    """Return the step number shown by #step-counter, or None if hidden/empty."""
+    counter = page.locator("#step-counter")
+    if "d-none" in (counter.get_attribute("class") or ""):
+        return None
+    match = STEP_COUNTER_RE.search(counter.text_content() or "")
+    return int(match.group(1)) if match else None
 
 
 class TestStoryLoad:
@@ -38,51 +56,51 @@ class TestStoryLoad:
         expect(story_container).to_be_visible()
 
     def test_story_steps_exist(self, page, base_url):
-        """Should have story steps on the page."""
+        """Should have story step data on the page."""
         page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
 
-        # Story steps should exist
-        story_steps = page.locator(".story-step")
+        # Step nodes live hidden in the .step-data pool
+        story_steps = page.locator(".step-data .story-step")
         assert story_steps.count() > 0
 
     def test_viewer_container_loads(self, page, base_url):
-        """Should load the viewer container."""
+        """Should load the viewer plates in the card stack."""
         page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
 
-        # Wait for viewer container (viewer-column or viewer-cards-container)
-        viewer = page.locator(".viewer-column, #viewer-cards-container")
+        viewer = page.locator(".card-stack .viewer-plate")
         expect(viewer.first).to_be_visible(timeout=10000)
 
     def test_question_visible(self, page, base_url):
-        """Should display the step question."""
+        """Should render step questions in the cloned text cards."""
         page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(500)
 
-        # Step question should be visible (h2.step-question)
-        question = page.locator(".step-question")
+        question = page.locator(".text-card .step-question")
         expect(question.first).to_be_visible()
+        text = question.first.text_content()
+        assert text and len(text.strip()) > 0
 
 
 class TestKeyboardNavigation:
     """Tests for keyboard-based navigation."""
 
     def test_arrow_down_advances_step(self, page, base_url):
-        """Should advance to next step on ArrowDown key."""
+        """Should advance to step 1 on ArrowDown key."""
         page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)  # Wait for initialization
 
-        # Starts at intro (step 0)
-        # Press ArrowDown to advance
+        # Starts at intro (counter hidden); ArrowDown advances to step 1
         page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(800)  # Wait for cooldown
+        page.wait_for_timeout(900)  # Wait for scroll animation + cooldown
 
-        # After navigation, step 1 should have is-active (use specific selector)
-        step1 = page.locator(".story-step[data-step-index='1']")
-        expect(step1).to_have_class(re.compile(r"is-active"))
+        counter = page.locator("#step-counter")
+        expect(counter).to_be_visible()
+        expect(counter).to_contain_text("Step 1 /")
+        expect(page.locator(".card-stack .text-card.is-active")).to_be_visible()
 
     def test_arrow_up_goes_back(self, page, base_url):
         """Should go to previous step on ArrowUp key."""
@@ -90,40 +108,33 @@ class TestKeyboardNavigation:
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
 
-        # First, advance to step 1
+        # Advance to step 2
         page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(900)
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(900)
+        expect(page.locator("#step-counter")).to_contain_text("Step 2 /")
 
-        # Step 1 should be active
-        step1 = page.locator(".story-step[data-step-index='1']")
-        expect(step1).to_have_class(re.compile(r"is-active"))
-
-        # Now go back to intro
+        # Go back one step
         page.keyboard.press("ArrowUp")
-        page.wait_for_timeout(800)
-
-        # Going back to intro - verify intro is visible
-        intro_step = page.locator(".story-step.story-intro")
-        expect(intro_step).to_be_visible()
+        page.wait_for_timeout(900)
+        expect(page.locator("#step-counter")).to_contain_text("Step 1 /")
 
     def test_arrow_right_opens_panel(self, page, base_url):
-        """Should open layer panel on ArrowRight key (when panel content exists)."""
+        """Should open the layer 1 panel on ArrowRight when the step has panel content."""
         page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
 
-        # First advance to step 1 (intro has no panel content)
+        # Step 2 of the demo story carries layer 1 content
         page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(900)
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(900)
+        expect(page.locator("#step-counter")).to_contain_text("Step 2 /")
 
-        # Press ArrowRight to open layer1 panel (if step has layer1 content)
         page.keyboard.press("ArrowRight")
-        page.wait_for_timeout(800)
-
-        # Check if panel opened (layer1-panel should be visible)
-        # Note: This test assumes step 1 has layer1 content
-        panel = page.locator(".layer1-panel, [class*='layer1']")
-        # If no panel content for this step, test just verifies no error occurred
+        expect(page.locator("#panel-layer1.show")).to_be_visible(timeout=3000)
 
     def test_space_advances_step(self, page, base_url):
         """Should advance to next step on Space key."""
@@ -133,11 +144,11 @@ class TestKeyboardNavigation:
 
         # Press Space to advance from intro
         page.keyboard.press("Space")
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(900)
 
-        # Step 1 should now be active (use specific selector)
-        step1 = page.locator(".story-step[data-step-index='1']")
-        expect(step1).to_have_class(re.compile(r"is-active"))
+        counter = page.locator("#step-counter")
+        expect(counter).to_be_visible()
+        expect(counter).to_contain_text("Step 1 /")
 
 
 class TestMobileNavigation:
@@ -168,24 +179,24 @@ class TestMobileNavigation:
         """Should advance step when tapping next button."""
         page = mobile_story_page
 
-        # Mobile starts at intro with mobile-active
-        intro = page.locator(".story-step.story-intro")
-        expect(intro).to_have_class(re.compile(r"mobile-active"))
+        # Starts at intro: counter hidden, intro card showing
+        expect(page.locator("#step-counter")).to_have_class(re.compile(r"d-none"))
+        expect(page.locator(".story-intro")).to_be_visible()
 
-        # Click next button (.mobile-next) to advance
         next_btn = page.locator(".mobile-next")
         expect(next_btn).to_be_visible()
         next_btn.click()
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(700)  # Mobile nav cooldown is 400ms
 
-        # After navigation, intro should no longer have mobile-active
-        # and some other step should have it
-        active_step = page.locator(".story-step.mobile-active")
-        expect(active_step).to_be_visible()
+        # Counter appears with a step number and an active card shows
+        first_step = read_step_counter(page)
+        assert first_step is not None
+        expect(page.locator(".card-stack .text-card.is-active")).to_be_visible()
 
-        # The active step should NOT be the intro
-        active_class = active_step.get_attribute("class")
-        assert "story-intro" not in active_class
+        # A second tap advances by exactly one step
+        next_btn.click()
+        page.wait_for_timeout(700)
+        assert read_step_counter(page) == first_step + 1
 
 
 class TestDesktopScrollNavigation:
@@ -201,38 +212,38 @@ class TestDesktopScrollNavigation:
         return page
 
     def test_scroll_down_advances_step(self, desktop_story_page):
-        """Should advance step after sufficient scroll accumulation."""
+        """Should advance from intro to step 1 on wheel scroll."""
         page = desktop_story_page
 
-        # Starts at intro, scroll down to advance
-        # Scroll down multiple times to accumulate threshold (50vh)
-        for _ in range(5):
-            page.mouse.wheel(0, 100)
-            page.wait_for_timeout(100)
+        # Scroll down past the intro; Lenis snaps to the first step
+        for _ in range(6):
+            page.mouse.wheel(0, 250)
+            page.wait_for_timeout(120)
 
-        page.wait_for_timeout(1000)  # Wait for cooldown
-
-        # After scroll, step 1 should have is-active class
-        step1 = page.locator(".story-step[data-step-index='1']")
-        expect(step1).to_have_class(re.compile(r"is-active"))
+        # Counter becomes visible once the scroll settles on a step
+        page.wait_for_function(
+            "!document.querySelector('#step-counter').classList.contains('d-none')",
+            timeout=8000,
+        )
+        expect(page.locator("#step-counter")).to_contain_text("Step 1 /")
+        expect(page.locator(".card-stack .text-card.is-active")).to_be_visible()
 
 
 class TestStepProgression:
     """Tests for step progression and boundaries."""
 
     def test_starts_at_intro_step(self, page, base_url):
-        """Should start at the intro step (step 0)."""
+        """Should start at the intro card with the step counter hidden."""
         page.goto(f"{base_url}{STORY_PATH}")
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
 
-        # Should start at step 0 (intro) - check that intro step is visible
-        intro_step = page.locator(".story-step.story-intro")
-        expect(intro_step).to_be_visible()
+        # Intro is its own card at the top of the card stack
+        intro = page.locator(".card-stack .story-intro")
+        expect(intro).to_be_visible()
 
-        # Verify it's step 0
-        step_index = intro_step.get_attribute("data-step-index")
-        assert step_index == "0"
+        # Step counter stays hidden while the intro is showing
+        expect(page.locator("#step-counter")).to_have_class(re.compile(r"d-none"))
 
     def test_step_changes_update_ui(self, page, base_url):
         """Should update visible content when step changes."""
@@ -244,6 +255,10 @@ class TestStepProgression:
         page.keyboard.press("ArrowDown")
         page.wait_for_timeout(1000)
 
-        # Step 1 should now have is-active class
-        step1 = page.locator(".story-step[data-step-index='1']")
-        expect(step1).to_have_class(re.compile(r"is-active"))
+        # Counter shows step 1 and the active card displays its question
+        expect(page.locator("#step-counter")).to_contain_text("Step 1 /")
+        active_card = page.locator(".card-stack .text-card.is-active")
+        expect(active_card).to_be_visible()
+        question = active_card.locator(".step-question")
+        text = question.text_content()
+        assert text and len(text.strip()) > 0

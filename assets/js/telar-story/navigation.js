@@ -2,20 +2,24 @@
  * Telar Story – Navigation
  *
  * This module handles how the user moves between story steps. There are three
- * navigation modes, chosen automatically based on viewport size and embed
+ * navigation modes, chosen automatically based on layout mode and embed
  * status:
  *
- * - Desktop scroll: On viewports 768 px and wider (not embedded,
- *   not iOS), the scroll engine (scroll-engine.js) drives navigation via
- *   Lenis smooth scroll. Keyboard input is handled by initKeyboardNavigation.
+ * - Desktop scroll: In horizontal layout (not embedded, not iOS), the
+ *   scroll engine (scroll-engine.js) drives navigation via Lenis smooth
+ *   scroll. Keyboard input is handled by initKeyboardNavigation.
  *
- * - Mobile buttons: On viewports narrower than 768 px, previous/next buttons
- *   appear at the bottom of the screen. Each tap advances one step with a
- *   short cooldown to prevent double-taps.
+ * - Mobile buttons: In vertical layout, previous/next buttons appear at
+ *   the bottom of the screen. Each tap advances one step with a short
+ *   cooldown to prevent double-taps.
  *
  * - Embed buttons: When the page is loaded inside an iframe (detected by
- *   embed.js), the same button navigation is used regardless of viewport
- *   width, because iframe scroll events do not propagate reliably.
+ *   embed.js), the same button navigation is used regardless of layout
+ *   mode, because iframe scroll events do not propagate reliably.
+ *
+ * The horizontal/vertical layout threshold is not hardcoded here — it lives
+ * in _responsive.scss ($telar-vertical-min-width, $telar-vertical-min-aspect)
+ * and is read at runtime by layout-mode.js.
  *
  * Keyboard navigation works in all modes: arrow keys and Page Up/Down move
  * between steps, left/right arrows open and close panels, Space advances
@@ -25,7 +29,7 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
@@ -179,6 +183,11 @@ export function initializeButtonNavigation() {
     state.steps[0].classList.add('mobile-active');
     state.currentMobileStep = 0;
   }
+
+  // The story boots on the intro card, so button navigation starts there:
+  // the first "next" dismisses the intro into step 0, and "prev" stays
+  // disabled until the intro is dismissed.
+  state.mobileInIntro = !!document.querySelector('.story-intro');
 
   const buttons = createNavigationButtons();
   if (!buttons) return;

@@ -2,11 +2,17 @@
  * Telar Story Unlock
  *
  * Handles client-side decryption of protected stories using the Web Crypto API.
- * When a story is encrypted, this module shows an unlock overlay and decrypts
- * the content when the user provides the correct key.
+ * When a story is encrypted, this module shows an unlock overlay, decrypts the
+ * envelope when the user provides the correct key, and injects the decrypted
+ * step markup into the page. The steps are rendered at build time through the
+ * same include as open stories (scripts/encrypt_protected_stories.py encrypts
+ * the rendered HTML together with the steps JSON in one envelope), so this
+ * module does no rendering of its own: decrypt, inject, hand off.
  *
  * Encryption uses AES-256-GCM with PBKDF2 key derivation (210,000 iterations),
- * matching the Python encryption in scripts/telar/encryption.py.
+ * matching the Python encryption in scripts/telar/encryption.py. The story id
+ * is the envelope's additional authenticated data, so one story's envelope
+ * cannot be replayed onto another story's page.
  *
  * NOTE: This is a deterrent against casual access, not a confidentiality
  * guarantee. On a public site, the source CSV is publicly accessible in
@@ -14,25 +20,8 @@
  * page. Use a private repository for content that must not be read by
  * unauthorized people.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
-
-/**
- * Escape a value for safe inclusion as HTML text or inside a double-quoted
- * HTML attribute.
- *
- * Mirror of the canonical escapeHtml in assets/js/telar-story/utils.js —
- * standalone scripts are not part of the story esbuild bundle and cannot share
- * the import, so the body is kept byte-compatible. Keep the two in sync.
- *
- * @param {*} text - The value to escape (null/undefined become an empty string).
- * @returns {string} The escaped string.
- */
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text == null ? '' : String(text);
-  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 // PBKDF2 iterations — must match Python encryption (OWASP minimum for
 // PBKDF2-HMAC-SHA256). Stories are re-encrypted from plaintext each build,
@@ -78,6 +67,8 @@ function getPayloadKey() {
   // after that point would yield null. The binding is computed once at init.
   if (_payloadBinding) return _payloadBinding;
   const d = window.storyData;
+  // A stub that reached the browser un-encrypted carries salt: "" — falsy, so
+  // the cache path is skipped entirely and a bad build fails safe here.
   if (!d || !d.salt) return null;
   const material = String(d.salt) + String(d.iv || '');
   try {
@@ -166,11 +157,33 @@ async function deriveKey(password, salt) {
 }
 
 /**
- * Decrypt story data using AES-GCM.
+ * The story identifier that the build bound into the envelope as additional
+ * authenticated data. The template emits window.telarStoryId (the data_file
+ * name) on every protected page; there is deliberately NO fallback to the
+ * URL segment — the permalink slug equals the data-file stem only by
+ * convention (not at all for `story-{number}` naming), so a URL-derived AAD
+ * can silently decrypt-fail as a "wrong key" on a correct key. A missing
+ * telarStoryId is a template bug; the console.warn names it so nobody
+ * debugs the key instead. (The session-cache functions still use the URL
+ * segment — cache identity doesn't need to match the AAD.)
+ * @returns {string} Story identifier for AAD ('' if the template is broken)
+ */
+function getStoryAadId() {
+  if (!window.telarStoryId) {
+    console.warn('story-unlock: window.telarStoryId missing — the story ' +
+      'template must emit it on protected pages; decryption will fail.');
+    return '';
+  }
+  return window.telarStoryId;
+}
+
+/**
+ * Decrypt a story envelope using AES-GCM.
  * @param {string} key - User-provided decryption key
  * @param {object} encryptedData - Object with salt, iv, ciphertext (base64)
- * @returns {Promise<object>} Decrypted story steps array
- * @throws {Error} If decryption fails
+ * @returns {Promise<object>} Decrypted payload: { steps, html }
+ * @throws {Error} If decryption fails (wrong key, or an envelope bound to a
+ *   different story id)
  */
 async function decryptStory(key, encryptedData) {
   // Decode base64 values
@@ -181,9 +194,13 @@ async function decryptStory(key, encryptedData) {
   // Derive key
   const cryptoKey = await deriveKey(key, salt);
 
-  // Decrypt
+  // Decrypt; additionalData must byte-match the Python encrypt step's aad
   const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv },
+    {
+      name: 'AES-GCM',
+      iv: iv,
+      additionalData: new TextEncoder().encode(getStoryAadId()),
+    },
     cryptoKey,
     ciphertext
   );
@@ -241,159 +258,65 @@ function hideUnlockOverlay() {
 }
 
 /**
- * Load KaTeX dynamically if the decrypted story has LaTeX content.
- * Mirrors the KaTeX loading logic in story.html but runs post-decryption.
- * @param {Array} steps - Decrypted steps array
+ * Render LaTeX inside an element once the shared renderer exists.
+ *
+ * KaTeX loads through story.html's standard path (keyed on the page's
+ * has_latex frontmatter); the CDN scripts race the unlock, so retry until
+ * window.telarRenderLatex appears. When the story has no LaTeX the renderer
+ * never appears and the retries lapse harmlessly.
+ * @param {Element} element - Container whose math should render
+ * @param {number} [attempt] - Internal retry counter
  */
-function loadKaTeXIfNeeded(steps) {
-  const meta = steps[0];
-  if (!meta || !meta._metadata || !meta.has_latex) return;
-
-  // Load KaTeX CSS
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css';
-  document.head.appendChild(link);
-
-  // Load KaTeX scripts sequentially
-  const scripts = [
-    'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js',
-    'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js',
-    'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/mhchem.min.js'
-  ];
-
-  function loadNext(i) {
-    if (i >= scripts.length) {
-      const katexDelimiters = [
-        { left: "$$", right: "$$", display: true },
-        { left: "$", right: "$", display: false },
-        { left: "\\(", right: "\\)", display: false },
-        { left: "\\[", right: "\\]", display: true },
-        { left: "\\begin{align}", right: "\\end{align}", display: true },
-        { left: "\\begin{align*}", right: "\\end{align*}", display: true },
-        { left: "\\begin{cases}", right: "\\end{cases}", display: true },
-        { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
-        { left: "\\begin{bmatrix}", right: "\\end{bmatrix}", display: true },
-        { left: "\\begin{equation}", right: "\\end{equation}", display: true },
-        { left: "\\begin{equation*}", right: "\\end{equation*}", display: true }
-      ];
-      window.telarRenderLatex = function(element) {
-        if (typeof renderMathInElement === 'function') {
-          renderMathInElement(element, {
-            delimiters: katexDelimiters,
-            throwOnError: false,
-            // Permit \href only for safe URL schemes; other trust-gated commands
-            // (\includegraphics, \html*, \url) render as literal text.
-            trust: function (ctx) { return ctx.command === '\\href' && /^(https?:|mailto:)/.test(ctx.url); }
-          });
-        }
-      };
-      // Render LaTeX in step text already in the DOM
-      document.querySelectorAll('.story-step').forEach(function(el) {
-        window.telarRenderLatex(el);
-      });
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = scripts[i];
-    s.onload = function() { loadNext(i + 1); };
-    document.head.appendChild(s);
-  }
-  loadNext(0);
-}
-
-/**
- * Simple markdown to HTML conversion for step content.
- * Handles basic formatting: bold, italic, links, paragraphs.
- * @param {string} text - Markdown text
- * @returns {string} HTML string
- */
-function simpleMarkdown(text) {
-  if (!text) return '';
-  // Escape the whole string first so any literal HTML in author content renders
-  // as text, then apply the inline-formatting transforms. The markdown
-  // delimiters (* _ [ ] ( )) are not HTML-special, so they survive escaping.
-  return escapeHtml(text)
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/__(.+?)__/g, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/_(.+?)_/g, '<em>$1</em>')
-    // Links — allow only safe schemes; anything else collapses to '#'. The
-    // href and text are already escaped by the escapeHtml pass above.
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
-      const safeHref = /^(https?:|mailto:|\/|\.)/.test(href) ? href : '#';
-      return `<a href="${safeHref}">${label}</a>`;
-    })
-    // Line breaks to paragraphs
-    .split(/\n\n+/)
-    .map(p => `<p>${p.trim()}</p>`)
-    .join('\n');
-}
-
-/**
- * Render story steps dynamically after decryption.
- * @param {Array} steps - Decrypted steps array
- */
-function renderDecryptedSteps(steps) {
-  // Find the story-steps container (parent of intro step)
-  const storySteps = document.querySelector('.story-steps');
-  if (!storySteps) {
-    console.error('Story steps container not found');
+function renderLatexWhenReady(element, attempt = 0) {
+  if (window.telarRenderLatex) {
+    window.telarRenderLatex(element);
     return;
   }
+  if (attempt < 20) {
+    setTimeout(() => renderLatexWhenReady(element, attempt + 1), 250);
+  }
+}
 
-  // Remove the placeholder container if it exists
-  const placeholder = document.getElementById('encrypted-steps-container');
-  if (placeholder) {
-    placeholder.remove();
+/**
+ * Apply a decrypted envelope to the page.
+ *
+ * Single owner of the post-decryption sequence, shared by the fresh-unlock
+ * and cached-key paths: inject the build-rendered step markup into the
+ * hidden step pool, publish window.storyData in the same shape open stories
+ * get, then dispatch telar:story-unlocked so main.js initialises the story
+ * system on the injected DOM (card pool clones the steps exactly as it does
+ * for open stories).
+ * @param {object} payload - Decrypted envelope: { steps, html }
+ * @param {string} key - The key that decrypted it (share-panel integration)
+ * @throws {Error} If the payload does not carry the envelope shape
+ */
+function applyDecryptedPayload(payload, key) {
+  if (!payload || !Array.isArray(payload.steps) || typeof payload.html !== 'string') {
+    throw new Error('Decrypted payload is not a { steps, html } envelope');
   }
 
-  // Filter out metadata
-  const actualSteps = steps.filter(step => !step._metadata);
+  const container = document.getElementById('encrypted-steps-container');
+  if (!container) {
+    throw new Error('encrypted-steps-container not found in the step pool');
+  }
+  container.innerHTML = payload.html;
 
-  actualSteps.forEach((step, index) => {
-    const isLast = index === actualSteps.length - 1;
-    const stepIndex = index + 1; // +1 because intro is step 0
-    const stepEl = document.createElement('div');
-    stepEl.className = 'story-step';
-    stepEl.setAttribute('data-step', step.step || '');
-    stepEl.setAttribute('data-step-index', stepIndex);
-    stepEl.setAttribute('data-object', step.object || '');
-    stepEl.setAttribute('data-x', step.x || '');
-    stepEl.setAttribute('data-y', step.y || '');
-    stepEl.setAttribute('data-zoom', step.zoom || '');
-    stepEl.setAttribute('data-region', step.region || '');
-    if (step.page) stepEl.setAttribute('data-page', step.page);
-    stepEl.style.zIndex = step.step || stepIndex;
+  const firstStep = payload.steps[0]?._metadata ? payload.steps[1] : payload.steps[0];
+  window.storyData = {
+    steps: payload.steps,
+    firstObject: firstStep?.object || '',
+  };
 
-    // Build inner HTML
-    let html = '<div class="step-content">';
+  // Expose the key for share panel integration
+  window.telarStoryKey = key;
 
-    // Question
-    html += `<h2 class="step-question">${escapeHtml(step.question || '')}</h2>`;
+  // Render math into the pool BEFORE the event: main.js clones cards from
+  // the pool synchronously in its unlock handler, and clones inherit the
+  // pool's state. If KaTeX is still loading, the retries render the pool
+  // for every later clone — the same CDN race open stories run.
+  renderLatexWhenReady(container);
 
-    // Answer (with markdown conversion)
-    html += `<div class="step-answer">${simpleMarkdown(step.answer || '')}</div>`;
-
-    // Layer 1 panel trigger
-    if (step.layer1_title || step.layer1_text) {
-      const buttonText = step.layer1_button || 'Learn more';
-      html += `<p class="mt-3">
-        <button class="panel-trigger" data-panel="layer1" data-step="${step.step}">
-          ${escapeHtml(buttonText)} →
-        </button>
-      </p>`;
-    }
-
-    html += '</div>';
-    stepEl.innerHTML = html;
-
-    storySteps.appendChild(stepEl);
-  });
-
-  console.log(`[Telar Unlock] Rendered ${actualSteps.length} decrypted steps`);
+  window.dispatchEvent(new CustomEvent('telar:story-unlocked'));
 }
 
 /**
@@ -428,45 +351,28 @@ function showUnlockError(message) {
  */
 async function attemptUnlock(key) {
   if (!key) {
-    showUnlockError('Please enter a key');
+    showUnlockError(window.telarLang?.unlock?.errorEmpty || 'Please enter a key');
     return false;
   }
 
   try {
     // Capture the payload binding before window.storyData is replaced below
-    // (the decrypted form no longer carries salt/iv).
+    // (the decrypted form carries no salt/iv to bind to).
     const payloadKey = getPayloadKey();
 
-    const decryptedSteps = await decryptStory(key, window.storyData);
-
-    // Success! Update storyData and cache
-    const firstStep = decryptedSteps[0]?._metadata ? decryptedSteps[1] : decryptedSteps[0];
-    window.storyData = {
-      steps: decryptedSteps,
-      firstObject: firstStep?.object || '',
-    };
-
-    // Expose the key for share panel integration
-    window.telarStoryKey = key;
+    const payload = await decryptStory(key, window.storyData);
 
     // Cache only the key (+ payload binding), not the decrypted plaintext.
     cacheDecryption(key, payloadKey);
 
-    // Render the decrypted steps into the DOM
-    renderDecryptedSteps(decryptedSteps);
-
-    // Load KaTeX if the decrypted story has LaTeX content
-    loadKaTeXIfNeeded(decryptedSteps);
+    applyDecryptedPayload(payload, key);
 
     hideUnlockOverlay();
-
-    // Trigger story initialization
-    window.dispatchEvent(new CustomEvent('telar:story-unlocked'));
 
     return true;
   } catch (e) {
     console.error('Decryption failed:', e);
-    showUnlockError('Incorrect key. Please try again.');
+    showUnlockError(window.telarLang?.unlock?.errorIncorrect || 'Incorrect key. Please try again.');
     return false;
   }
 }
@@ -513,25 +419,20 @@ async function initializeStoryUnlock() {
   const cached = getCachedDecryption();
   if (cached && cached.key) {
     try {
-      const steps = await decryptStory(cached.key, window.storyData);
-      const firstStep = steps[0]?._metadata ? steps[1] : steps[0];
-      window.storyData = {
-        steps: steps,
-        firstObject: firstStep?.object || '',
-      };
+      const payload = await decryptStory(cached.key, window.storyData);
 
-      // Restore the key for share panel integration
-      window.telarStoryKey = cached.key;
-
-      // Ensure overlay is hidden when loading from cache
+      // Ensure overlay is hidden when loading from cache (no animation)
       const overlay = document.getElementById('story-unlock-overlay');
       if (overlay) {
         overlay.classList.add('d-none');
         overlay.classList.remove('show');
       }
 
-      renderDecryptedSteps(steps);
-      loadKaTeXIfNeeded(steps);
+      // Same apply path as a fresh unlock — including the unlock event,
+      // which main.js is always still waiting for at this point (this async
+      // resolution cannot run before main.js's DOMContentLoaded handler has
+      // registered the listener in the same task).
+      applyDecryptedPayload(payload, cached.key);
       return;
     } catch (e) {
       // The cached key no longer decrypts (e.g. the story was re-encrypted).
@@ -555,9 +456,6 @@ async function initializeStoryUnlock() {
   // Show unlock overlay and wait
   showUnlockOverlay();
   initializeUnlockForm();
-
-  // Prevent main story initialization until unlocked
-  window.telarStoryBlocked = true;
 }
 
 // Run initialization when DOM is ready
@@ -567,9 +465,11 @@ if (document.readyState === 'loading') {
   initializeStoryUnlock();
 }
 
-// Export for testing
+// Consumed by tests/js/story-unlock.test.js (loaded as a side-effect script
+// in jsdom; a plain script has no module exports to import).
 window.TelarUnlock = {
   isStoryEncrypted,
   attemptUnlock,
   decryptStory,
+  applyDecryptedPayload,
 };

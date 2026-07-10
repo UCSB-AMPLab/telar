@@ -24,7 +24,7 @@
  *
  * Adapted from the Telar Compositor's IIIF viewer.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { extractAllPages } from './iiif-manifest.js';
@@ -40,6 +40,27 @@ import { registerTestViewer, unregisterTestViewer } from './test-hook.js';
  * @property {boolean} [showChrome=false] - When true and the manifest has >1 page, inject prev/page-input/next chrome.
  * @property {boolean} [allowZoomGestures=false] - When true, leave OSD's mouse-wheel-zoom and click-to-zoom enabled. Default false because the wrapper is normally embedded in story plates whose scroll wheel belongs to Lenis (the scroll engine). Pass true on standalone object-viewer pages where there is no Lenis to fight and the reader expects scroll-to-zoom.
  */
+
+// ── Pure helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Read an OpenSeadragon viewport's current position in Telar's normalised
+ * story coordinates: x/y as 0–1 fractions of the home bounds (clamped), zoom
+ * as a multiple of home zoom (clamped 0.1–10). This is the forward transform
+ * that the object page's coordinate panel shows authors; the story runtime
+ * applies the inverse when it pans a viewer to an authored x/y/zoom step.
+ *
+ * @param {OpenSeadragon.Viewport} viewport - Live OSD viewport
+ * @returns {{x: number, y: number, zoom: number}}
+ */
+export function normalizedViewportPosition(viewport) {
+  const center = viewport.getCenter();
+  const bounds = viewport.getHomeBounds();
+  const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
+  const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
+  const zoom = Math.max(0.1, Math.min(10, viewport.getZoom() / viewport.getHomeZoom()));
+  return { x: x, y: y, zoom: zoom };
+}
 
 // ── Class ────────────────────────────────────────────────────────────────────
 

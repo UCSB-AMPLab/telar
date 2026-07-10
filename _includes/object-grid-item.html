@@ -1,0 +1,82 @@
+{%- comment -%}
+  Object Grid Item
+
+  One collection-item card in the objects index gallery — demo badge,
+  thumbnail cascade (explicit thumbnail, then IIIF Image API derivative, then
+  a placeholder the inline script in objects-index.html fills in by fetching
+  info.json or a IIIF Presentation manifest, then a final no-image
+  placeholder), title, period, and creator. Shared by both grids in
+  objects-index.html (browse-and-search and plain) so the two cannot drift
+  apart.
+
+  Jekyll include scope does not reliably inherit the parent layout's `lang`
+  assign (see _includes/story-step.html for the same note), so both `lang`
+  and `object` are passed in explicitly rather than relied on from the
+  including template's scope.
+
+  Parameters:
+    object       - the site.objects entry to render
+    lang         - the active language pack (site.data.languages[...])
+    show_filters - when true, stamps the data-* filter attributes
+                   (data-media-type, data-medium, data-creator, data-period,
+                   data-subjects, data-year, data-title, data-description)
+                   that objects-filter.js reads; omit/false for the plain grid
+
+  Video/Audio objects render a static icon (see the media_type branches below)
+  instead of the thumbnail cascade, and the outer `.collection-item-image`
+  wrapper withholds `data-iiif-manifest` for them: `iiif_manifest` is only a
+  `source_url` alias kept for backward compat (scripts/telar/processors/objects.py),
+  and for a video object it holds the YouTube/Vimeo/Drive page URL, not IIIF
+  JSON. Letting that attribute through would make the inline script in
+  objects-index.html fetch the page URL as if it were a manifest, failing
+  (CORS/parse error) on every load — hence the media_type guard on the div.
+
+  Version: v1.6.0
+{%- endcomment -%}
+<a href="{{ include.object.url | relative_url }}" class="collection-item{% if include.object.demo %} demo-object{% endif %}" data-object-id="{{ include.object.object_id }}"{% if include.show_filters %} data-media-type="{{ include.object.media_type | default: 'Image' }}" data-medium="{{ include.object.medium | default: include.object.object_type }}" data-creator="{{ include.object.creator }}" data-period="{{ include.object.period }}" data-subjects="{{ include.object.subjects }}" data-year="{{ include.object.year }}" data-title="{{ include.object.title }}" data-description="{{ include.object.description }}"{% endif %}>
+      {% if include.object.demo %}
+      <span class="demo-badge">{{ include.lang.demo.badge }}</span>
+      {% endif %}
+      <div class="collection-item-image" {% if include.object.iiif_manifest and include.object.iiif_manifest != "" and include.object.media_type != 'Video' and include.object.media_type != 'Audio' %}data-iiif-manifest="{{ include.object.iiif_manifest }}"{% endif %}>
+        {% if include.object.media_type == 'Video' %}
+        {%- comment -%}Video thumbnail: play icon on neutral background{%- endcomment -%}
+        <div class="video-thumbnail" aria-label="{{ include.lang.objects.media_video | default: 'Video' }}">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </div>
+        {% elsif include.object.media_type == 'Audio' %}
+        {%- comment -%}Audio thumbnail: speaker icon on neutral background{%- endcomment -%}
+        <div class="audio-thumbnail" aria-label="{{ include.lang.objects.media_audio | default: 'Audio' }}">
+          <svg class="media-type-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </div>
+        {% elsif include.object.thumbnail and include.object.thumbnail != "" %}
+        {%- comment -%}Use explicit thumbnail if provided{%- endcomment -%}
+        <img src="{{ include.object.thumbnail | relative_url }}" alt="{{ include.object.alt_text | default: include.object.title }}" class="iiif-thumbnail">
+        {% elsif include.object.iiif_manifest and include.object.iiif_manifest contains 'info.json' %}
+        {%- comment -%}For IIIF Image API, use standard thumbnail pattern{%- endcomment -%}
+        <img src="{{ include.object.iiif_manifest | replace: 'info.json', 'full/!400,400/0/default.jpg' }}" alt="{{ include.object.alt_text | default: include.object.title }}" class="iiif-thumbnail">
+        {% elsif include.object.iiif_manifest and include.object.iiif_manifest != "" %}
+        {%- comment -%}For IIIF manifests, JavaScript will load thumbnail{%- endcomment -%}
+        <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
+          <span class="text-muted">{{ include.lang.loading | default: "Loading..." }}</span>
+        </div>
+        {% elsif include.object.object_id %}
+        {%- comment -%}For local objects, load thumbnail via info.json{%- endcomment -%}
+        <div class="local-iiif-thumbnail" data-info-json="{{ '/iiif/objects/' | append: include.object.object_id | append: '/info.json' | relative_url }}">
+          <div class="manifest-thumbnail-placeholder bg-light d-flex align-items-center justify-content-center" style="height: 250px;">
+            <span class="text-muted">{{ include.lang.loading | default: "Loading..." }}</span>
+          </div>
+        </div>
+        {% else %}
+        <div class="placeholder-image bg-secondary d-flex align-items-center justify-content-center" style="height: 250px;">
+          <span class="text-white">{{ include.lang.errors.no_image }}</span>
+        </div>
+        {% endif %}
+      </div>
+      <h3>{{ include.object.title }}</h3>
+      {% if include.object.period %}
+      <p class="text-muted mb-0">{{ include.object.period }}</p>
+      {% endif %}
+      {% if include.object.creator %}
+      <p class="text-muted mb-0">{{ include.object.creator }}</p>
+      {% endif %}
+    </a>

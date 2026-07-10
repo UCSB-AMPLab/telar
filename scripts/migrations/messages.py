@@ -26,7 +26,7 @@ grammatical number matters in the summary: it returns the singular or
 plural of "file" in the active language so category headings read
 naturally ("1 file" / "2 files", "1 archivo" / "2 archivos").
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 MESSAGES = {
@@ -83,12 +83,18 @@ MESSAGES = {
         'summary_date': 'Date',
         'summary_automated_changes': 'Automated changes',
         'summary_manual_steps': 'Manual steps',
+        'summary_failed_count': 'Failed / needs attention',
         'automated_changes_applied': 'Automated Changes Applied',
+        'failed_needs_attention': 'Failed / Needs Manual Attention',
+        'failed_section_body': 'The following changes did not complete automatically. The site was **not** upgraded to the new version. Resolve these (usually a transient network problem) and run the upgrade again.',
+        'completed_with_warnings': 'Completed With Warnings',
+        'warnings_section_body': 'These steps are non-fatal and did not block the upgrade, but you should check them:',
         'manual_steps_required': 'Manual Steps Required',
         'complete_after_merge': 'Please complete these steps:',
         'no_manual_steps': 'No Manual Steps Required',
         'all_automated': 'All changes have been automated!',
         'resources': 'Resources',
+        'guide': 'guide',
         'full_documentation': 'Full Documentation',
         'changelog': 'CHANGELOG',
         'report_issues': 'Report Issues',
@@ -177,12 +183,18 @@ MESSAGES = {
         'summary_date': 'Fecha',
         'summary_automated_changes': 'Cambios automatizados',
         'summary_manual_steps': 'Pasos manuales',
+        'summary_failed_count': 'Fallas / requieren atención',
         'automated_changes_applied': 'Cambios automatizados aplicados',
+        'failed_needs_attention': 'Fallas / requieren atención manual',
+        'failed_section_body': 'Los siguientes cambios no se completaron automáticamente. El sitio **no** se actualizó a la nueva versión. Resuelve estas fallas (usualmente un problema pasajero de red) y ejecuta la actualización de nuevo.',
+        'completed_with_warnings': 'Completados con advertencias',
+        'warnings_section_body': 'Estos pasos no impidieron la actualización, pero conviene revisarlos:',
         'manual_steps_required': 'Pasos manuales necesarios',
         'complete_after_merge': 'Por favor completa estos pasos:',
         'no_manual_steps': 'No se requieren pasos manuales',
         'all_automated': '¡Todos los cambios han sido automatizados!',
         'resources': 'Recursos',
+        'guide': 'guía',
         'full_documentation': 'Documentación completa',
         'changelog': 'CHANGELOG',
         'report_issues': 'Reportar problemas',

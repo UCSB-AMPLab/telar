@@ -27,7 +27,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import argparse
@@ -56,15 +56,13 @@ KNOWN_OBJECT_FIELDS = {
     'location', 'credit', 'thumbnail', 'iiif_manifest', 'source_url',
     'source', 'object_warning', 'object_warning_short', 'year',
     'object_type', 'subjects', 'is_featured_sample', '_demo',
-    'description', 'featured',
+    'description', 'featured', 'alt_text',
     # v0.10.0: auto-detected media type and audio metadata
     'media_type', 'audio_duration', 'audio_filesize', 'audio_format',
 }
 
 
-# Media-type detection (detect_media_type, VIDEO_URL_PATTERNS, AUDIO_EXTENSIONS)
-# now lives in the telar.media_type leaf module — imported above — so this file
-# and telar.search share one implementation instead of two that could diverge.
+FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
 
 def _yaml_escape(value):
@@ -109,7 +107,7 @@ def generate_objects():
         content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
 
         # Resolve medium: prefer 'medium' field; fall back to 'object_type' for backward compat
-        # (v0.10.0: object_type is renamed to medium in CSV; old sites may still have object_type in JSON)
+        # (old sites may still have object_type in JSON)
         medium_value = obj.get('medium', '') or obj.get('object_type', '')
 
         # Auto-detect media type for gallery Type filter
@@ -118,6 +116,7 @@ def generate_objects():
 
         # Metadata fields — only include if non-empty
         metadata_fields = {
+            'alt_text': obj.get('alt_text', ''),
             'creator': obj.get('creator', ''),
             'period': obj.get('period', ''),
             'medium': medium_value,
@@ -140,7 +139,7 @@ def generate_objects():
         # Additional optional fields
         if obj.get('year'):
             content += f'year: "{obj.get("year")}"\n'
-        # Note: object_type key is no longer written to frontmatter (v0.10.0 rename to medium above)
+        # Frontmatter carries 'medium' only; object_type is not written
         if obj.get('subjects'):
             content += f'subjects: "{obj.get("subjects")}"\n'
         if obj.get('is_featured_sample'):
@@ -320,8 +319,7 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
             content = f.read()
 
         # Parse frontmatter and body
-        frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
-        match = re.match(frontmatter_pattern, content, re.DOTALL)
+        match = FRONTMATTER_PATTERN.match(content)
 
         if not match:
             print(f"Warning: No frontmatter found in {source_file}")
@@ -443,6 +441,82 @@ demo: true
 
             print(f"✓ Generated {filepath} [DEMO]")
 
+def _story_has_latex(identifier):
+    """Check the story's _data JSON metadata for the has_latex flag.
+
+    Open stories get KaTeX loading decided in-template from the same
+    metadata; protected pages cannot do that once the steps ship encrypted,
+    so the flag is lifted into frontmatter at generation time.
+    """
+    data_file = Path(f'_data/{identifier}.json')
+    if not data_file.exists():
+        return False
+    try:
+        with open(data_file, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    if isinstance(story_data, list) and story_data and story_data[0].get('_metadata'):
+        return bool(story_data[0].get('has_latex'))
+    return False
+
+
+def generate_protected_fragments():
+    """Generate steps-only fragment pages for protected stories.
+
+    Each protected story gets a standalone generated page (pages collection,
+    reserved permalink prefix /telar-protected-fragments/) whose layout
+    renders nothing but the story steps through the same include as open
+    stories. The post-build encryption step (encrypt_protected_stories.py)
+    reads the rendered fragment from _site, encrypts it into the story's
+    envelope, and deletes it — the fragment never deploys.
+
+    Not a collection of its own: that would add _config.yml surface. The
+    pages written here are cleaned up by glob on every run, so a story that
+    stops being protected leaves no orphan behind.
+    """
+    project_path = Path('_data/project.json')
+    if not project_path.exists():
+        return
+
+    with open(project_path, 'r', encoding='utf-8') as f:
+        project_data = json.load(f)
+
+    stories = []
+    if project_data and len(project_data) > 0:
+        stories = project_data[0].get('stories', [])
+
+    pages_dir = Path('_jekyll-files/_pages')
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean previous fragment pages (generate_pages only clears this
+    # directory when telar-content/texts/pages exists, so do our own)
+    for old in pages_dir.glob('telar-fragment-*.md'):
+        old.unlink()
+
+    for story in stories:
+        if not story.get('protected'):
+            continue
+        story_id = story.get('story_id', '')
+        story_num = story.get('number', '')
+        identifier = story_id if story_id else f'story-{story_num}'
+        if not Path(f'_data/{identifier}.json').exists():
+            continue
+
+        frontmatter = yaml.safe_dump(
+            {
+                'layout': 'story-fragment',
+                'data_file': identifier,
+                'permalink': f'/telar-protected-fragments/{identifier}/',
+            },
+            default_flow_style=False, allow_unicode=True, sort_keys=False,
+        )
+        filepath = pages_dir / f'telar-fragment-{identifier}.md'
+        with open(filepath, 'w') as f:
+            f.write(f"---\n{frontmatter}---\n\n")
+        print(f"✓ Generated {filepath} (protected fragment)")
+
+
 def generate_stories():
     """Generate story markdown files based on project.json stories list
 
@@ -527,6 +601,13 @@ def generate_stories():
             frontmatter_dict['demo'] = True
         if story.get('show_sections'):
             frontmatter_dict['show_sections'] = True
+        if story.get('protected'):
+            # The _data JSON is plaintext through the build (encryption
+            # happens post-build), so templates must key protected
+            # behaviour on this flag, never on the data file's shape.
+            frontmatter_dict['protected'] = True
+            if _story_has_latex(identifier):
+                frontmatter_dict['has_latex'] = True
         frontmatter_dict['sort_order'] = sort_order
         frontmatter_dict['layout'] = 'story'
         frontmatter_dict['data_file'] = identifier
@@ -541,8 +622,6 @@ def generate_stories():
 
         demo_label = " [DEMO]" if is_demo else ""
         print(f"✓ Generated {filepath}{demo_label}")
-
-FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
 
 def _parse_page_frontmatter(source_file):
@@ -755,6 +834,11 @@ def main():
     # Always generate pages (passes active language so localized sister files
     # like acerca.md/about.md can be selected at build time)
     generate_pages(telar_language=telar_language)
+
+    # After generate_pages: it may clean _jekyll-files/_pages/, where the
+    # fragment pages live
+    if not skip_stories:
+        generate_protected_fragments()
 
     print("-" * 50)
     print("Generation complete!")

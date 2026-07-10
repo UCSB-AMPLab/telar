@@ -5,10 +5,7 @@
  * This is a contract test, not a logic test — it catches accidental
  * deletions or renames of state keys that would break dependent modules.
  *
- * Updated for v1.0.0-beta: scroll accumulator fields removed,
- * Lenis scroll engine fields added.
- *
- * @version v1.4.0
+ * @version v1.6.0
  */
 
 import { describe, it, expect } from 'vitest';
@@ -22,7 +19,6 @@ describe('state', () => {
     // Navigation group
     expect(state.steps).toEqual([]);
     expect(state.currentIndex).toBe(-1);
-    expect(state.currentObject).toBeNull();
 
     // Scroll engine group (replaces scrollAccumulator)
     expect(state.scrollPosition).toBe(0);
@@ -32,7 +28,6 @@ describe('state', () => {
     expect(state.snap).toBeNull();
 
     // Viewer cards group
-    expect(state.currentViewerCard).toBeNull();
     expect(state.viewerCards).toEqual([]);
     expect(state.viewerCardCounter).toBe(0);
     expect(state.objectsIndex).toEqual({});
@@ -81,5 +76,9 @@ describe('state', () => {
     expect(state.holdGateActive).toBeUndefined();
     expect(state.holdGateArmed).toBeUndefined();
     expect(state.holdGateClipDuration).toBeUndefined();
+    // currentObject / currentViewerCard: unused single-value viewer tracking
+    // fields, superseded by the cardRegistry / viewerPlates / viewerCards maps.
+    expect(state.currentObject).toBeUndefined();
+    expect(state.currentViewerCard).toBeUndefined();
   });
 });

@@ -36,7 +36,7 @@ Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
 `subjects`, `featured`, and `source`. Both formats are supported — new fields
 are populated when present, old fields are ignored gracefully.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import json
@@ -177,6 +177,13 @@ def merge_demo_content(bundle):
 
                 # Convert demo story format to match user format
                 steps = []
+
+                # Build glossary terms dict from bundle for link processing
+                glossary_terms = {}
+                if bundle.get('glossary'):
+                    for term_id, term_data in bundle['glossary'].items():
+                        glossary_terms[term_id] = term_data.get('term', term_id)
+
                 for step in story_data.get('steps', []):
                     step_data = {
                         'step': step.get('step'),
@@ -188,12 +195,6 @@ def merge_demo_content(bundle):
                         'answer': step.get('answer', ''),
                         '_demo': True
                     }
-
-                    # Build glossary terms dict from bundle for link processing
-                    glossary_terms = {}
-                    if bundle.get('glossary'):
-                        for term_id, term_data in bundle['glossary'].items():
-                            glossary_terms[term_id] = term_data.get('term', term_id)
 
                     # Process layers
                     layers = step.get('layers', {})

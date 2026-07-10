@@ -1,0 +1,51 @@
+{%- comment -%}
+  Share Embed Controls
+
+  The embed-size controls row inside the share panel's embed section — the
+  preset dropdown (Canvas, Moodle, WordPress, and so on), the width and
+  height inputs, and the copy button. Shared by both branches of
+  share-panel.html (story page and homepage) so the two cannot drift apart.
+  The element ids (#embed-preset-select, #embed-width-input,
+  #embed-height-input, #embed-copy-code-btn) are read by
+  assets/js/share-panel.js; only one branch renders per page, so each id
+  appears once in the document.
+
+  Jekyll include scope does not reliably inherit the parent layout's `lang`
+  assign (see _includes/object-grid-item.html for the same note), so `lang`
+  is passed in explicitly rather than relied on from the including
+  template's scope.
+
+  Parameters:
+    lang - the active language pack (site.data.languages[...])
+
+  Version: v1.6.0
+{%- endcomment -%}
+<div class="share-embed-controls">
+                <div class="share-embed-preset">
+                  <label class="share-embed-label">{{ include.lang.share.preset_sizes }}</label>
+                  <select class="share-embed-select" id="embed-preset-select">
+                    <option value="canvas" selected>{{ include.lang.share.canvas_lms }}</option>
+                    <option value="moodle">{{ include.lang.share.moodle_blackboard }}</option>
+                    <option value="wordpress">{{ include.lang.share.wordpress }}</option>
+                    <option value="squarespace">{{ include.lang.share.squarespace }}</option>
+                    <option value="wix">{{ include.lang.share.wix }}</option>
+                    <option value="mobile">{{ include.lang.share.mobile }}</option>
+                    <option value="fixed">{{ include.lang.share.fixed }}</option>
+                    <option value="custom">{{ include.lang.share.custom }}</option>
+                  </select>
+                </div>
+                <div class="share-embed-dimension">
+                  <label class="share-embed-label">{{ include.lang.share.width }}</label>
+                  <input type="text" class="share-embed-input" id="embed-width-input" value="100%">
+                </div>
+                <div class="share-embed-dimension">
+                  <label class="share-embed-label">{{ include.lang.share.height }}</label>
+                  <input type="text" class="share-embed-input" id="embed-height-input" value="800">
+                </div>
+                <div class="share-embed-copy">
+                  <button class="share-copy-btn" type="button" id="embed-copy-code-btn" aria-label="{{ include.lang.share.copy }}">
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <span class="btn-text">{{ include.lang.share.copy }}</span>
+                  </button>
+                </div>
+              </div>

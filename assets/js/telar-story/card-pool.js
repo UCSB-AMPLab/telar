@@ -1,11 +1,20 @@
 /**
  * Telar Story – Card Pool
  *
- * This module manages the lifecycle of viewer plates and text cards in the
- * card-stack layout. Every card element is created once at init time and
- * persists in the DOM for the lifetime of the page — visibility is
- * controlled entirely by CSS transforms, so slide transitions animate
- * correctly without the jank of DOM insertion and removal.
+ * This module owns two distinct lifecycles in the card-stack layout:
+ *
+ *   1. The permanent card registry (state.cardRegistry) — a step→card record
+ *      built once at init time. Every card element is created up front and
+ *      persists in the DOM for the lifetime of the page; nothing is ever
+ *      evicted. Visibility is controlled entirely by CSS transforms, so
+ *      slide transitions animate correctly without the jank of DOM
+ *      insertion and removal.
+ *
+ *   2. The viewer pool (state.viewerCards) — live viewer instances (IIIF,
+ *      video, audio) attached to viewer plates. This one genuinely pools:
+ *      it is capped at config.maxViewerCards, and when over the cap the
+ *      instance farthest by scene distance from the current position is
+ *      evicted.
  *
  * Scene maps — a story step references an object by ID, but the same
  * object can appear in multiple non-contiguous scenes (A → B → A). To
@@ -32,8 +41,8 @@
  * initialises IIIF viewers, video players, or audio players for upcoming
  * scenes. It counts by scene distance, not step offset, so a long
  * sequence of steps on the same object does not waste preload slots.
- * When the pool exceeds its cap (default 8), the instance farthest by
- * scene distance from the current position is evicted. IIIF tiles for
+ * When the viewer pool exceeds its cap (default 8), the instance farthest
+ * by scene distance from the current position is evicted. IIIF tiles for
  * scenes beyond the OSD preload range are also prefetched as image
  * link hints.
  *
@@ -43,11 +52,11 @@
  * label ("Image viewer", "Video player", or "Audio player"). The label
  * is refreshed on every step change.
  *
- * Exported pure functions (getObjectZBase, getSceneIndex, computeCardTop,
+ * Exported pure functions (computeZIndexPlan, getSceneIndex, computeCardTop,
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -58,38 +67,27 @@ import { getBasePath, escapeHtml } from './utils.js';
 import { IiifViewer } from './iiif-viewer.js';
 import {
   deactivateIiifCard,
-  destroyIiifCard,
   animateIiifToPosition,
   snapIiifToPosition,
   computeFocalTarget,
   _deriveCardPlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
-import {
-  createTextCard,
-  activateTextCard,
-  deactivateTextCard,
-  isFullObjectMode,
-  createFullObjectCard,
-} from './text-card.js';
+import { isFullObjectMode } from './text-card.js';
 import {
   createVideoPlayer,
-  destroyVideoPlayer,
   activateVideoCard,
   deactivateVideoCard,
   updateVideoClip,
-  computeVideoLayout,
   applyClipEndDim,
   showVideoPlayOverlay,
 } from './video-card.js';
 import {
   createAudioPlayer,
-  destroyAudioPlayer,
   activateAudioCard,
   deactivateAudioCard,
   updateAudioClip,
   applyAudioClipEndDim,
-  removeAudioClipEndDim,
 } from './audio-card.js';
 
 /** Normalise truthy loop values from CSV/JSON: "true", "TRUE", "yes", "sí", true → true */
@@ -138,7 +136,7 @@ export function computeZIndexPlan(steps) {
   const textCardZ = {};
 
   for (let i = 0; i < steps.length; i++) {
-    const objectId = steps[i].object || steps[i].objectId || '';
+    const objectId = steps[i].object || '';
     const effectiveId = objectId === '' ? '__title_' + (titleCounter++) + '__' : objectId;
     if (effectiveId !== currentObjectId) {
       scene++;
@@ -158,17 +156,6 @@ export function computeZIndexPlan(steps) {
   }
 
   return { plateZ, textCardZ };
-}
-
-// Legacy exports kept for existing tests
-export function getObjectZBase(objectIndex) {
-  return (objectIndex + 1) * 100;
-}
-export function getViewerPlateZIndex(objectIndex) {
-  return getObjectZBase(objectIndex);
-}
-export function getTextCardZIndex(objectIndex, runPosition) {
-  return getObjectZBase(objectIndex) + 1 + runPosition;
 }
 
 // ── Messiness (pure, unit-tested) ─────────────────────────────────────────────
@@ -246,7 +233,7 @@ export function computeCardTop(viewportH, cardH, runPosition, peekHeightPx) {
  */
 function _buildAriaLabel(objectId, stepAlt, cardType) {
   if (stepAlt) return stepAlt;
-  const obj = state.objectsIndex?.[objectId] || {};
+  const obj = state.objectsIndex[objectId] || {};
   if (obj.alt_text) return obj.alt_text;
   if (obj.title) return obj.title;
   if (objectId) return objectId;
@@ -289,7 +276,7 @@ export function _buildSceneMaps(steps) {
   state.sceneFirstStep = {};
 
   for (let i = 0; i < steps.length; i++) {
-    const objectId = steps[i].object || steps[i].objectId || '';
+    const objectId = steps[i].object || '';
     const effectiveId = objectId === '' ? '__title_' + (titleCounter++) + '__' : objectId;
     if (effectiveId !== currentObjectId) {
       scene++;
@@ -346,7 +333,7 @@ function buildTransform(messiness, baseTranslate) {
  * @param {number} viewportH - Current viewport height in px
  */
 function _recomputeCardGeometry(viewportW, viewportH) {
-  const peekHeight = _config.peekHeight ?? 1;
+  const peekHeight = _config.peekHeight;
   const landscapeSideCard = isLandscapeSideCard();
 
   const cards = document.querySelectorAll('.text-card');
@@ -356,7 +343,7 @@ function _recomputeCardGeometry(viewportW, viewportH) {
     if (landscapeSideCard) {
       // Landscape phone: the CSS rule sets `height: auto !important`, so the card
       // is sized to its content. Clear any stale inline height, measure the real
-      // rendered height, and centre by THAT — the portrait `viewportH * 0.80`
+      // rendered height, and centre by that — the portrait `viewportH * 0.80`
       // model oversizes the card and jams it against the top on a short landscape
       // viewport. Inline !important top beats the
       // landscape rule's `top: auto !important`.
@@ -407,9 +394,9 @@ export function initCardPool(storyData, config) {
   // Store for use by activateCard
   _stepsData = steps;
   // Mirror into shared state so scroll-engine can feed lerpIiifPosition the
-  // SAME filtered array its stepIndex is computed against — passing the
-  // unfiltered window.storyData.steps mismatched the index on stories with
-  // metadata rows.
+  // same filtered array its stepIndex is computed against. The unfiltered
+  // window.storyData.steps includes metadata rows, which would misalign
+  // the index.
   state.stepsData = steps;
   _config = {
     peekHeight,
@@ -431,16 +418,17 @@ export function initCardPool(storyData, config) {
   state.titleCards = {};
   state.activeTitleCardIndex = null;
 
-  // Audio object manifest: maps object_id → file extension (e.g. 'mp3')
-  // Injected by story.html as window.audioObjects from _data/audio_objects.json
-  const audioObjects = storyData?.audioObjects || window.audioObjects || {};
+  // Audio object manifest: maps object_id → file extension (e.g. 'mp3').
+  // Injected by story.html as window.audioObjects from _data/audio_objects.json;
+  // storyData never carries it (story.html injects only steps and firstObject).
+  const audioObjects = window.audioObjects || {};
 
   // Create viewer plates (one per scene)
   for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
     const firstStepIdx = state.sceneFirstStep[sceneIdx];
     const objectId = state.sceneToObject[sceneIdx];
     if (!objectId) continue;  // Title card scene — no viewer plate
-    const firstStep = steps[firstStepIdx] || {};
+    const firstStep = steps[firstStepIdx];
     const objectData = state.objectsIndex[objectId] || {};
     const audioExt = audioObjects[objectId];
     const sceneCardType = detectCardType({
@@ -490,7 +478,7 @@ export function initCardPool(storyData, config) {
 
   for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
     const step = steps[stepIdx];
-    const objectId = step.object || step.objectId || '';
+    const objectId = step.object || '';
     const objectData = state.objectsIndex[objectId] || {};
     const audioExt2 = audioObjects[objectId];
     const cardType = detectCardType({
@@ -515,60 +503,58 @@ export function initCardPool(storyData, config) {
       continue;  // skip text card creation for this step
     }
 
-    if (cardType === 'text-only' || objectId) {
-      // Track run position within this object's sequence
-      if (!Object.hasOwn(objectRunPosition, objectId)) {
-        objectRunPosition[objectId] = 0;
-      }
-      const runPos = objectRunPosition[objectId];
-      objectRunPosition[objectId]++;
+    // Track run position within this object's sequence
+    if (!Object.hasOwn(objectRunPosition, objectId)) {
+      objectRunPosition[objectId] = 0;
+    }
+    const runPos = objectRunPosition[objectId];
+    objectRunPosition[objectId]++;
 
-      const objectIndex = getSceneIndex(stepIdx);
-      const zIndex = _zPlan.textCardZ[stepIdx];
-      // All cards share the same centred top — peek offset applied via
-      // transform when stacking, so the active card always covers the previous
-      const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
-      const messiness = getCardMessiness(stepIdx, messinessPercent);
+    const objectIndex = getSceneIndex(stepIdx);
+    const zIndex = _zPlan.textCardZ[stepIdx];
+    // All cards share the same centred top — peek offset applied via
+    // transform when stacking, so the active card always covers the previous
+    const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
+    const messiness = getCardMessiness(stepIdx, messinessPercent);
 
-      const card = document.createElement('div');
-      card.className = 'text-card';
-      card.dataset.stepIndex = stepIdx;
-      card.dataset.object = objectId;
-      card.dataset.runPosition = runPos;
-      card.style.zIndex = zIndex;
-      card.style.top = `${topPx}px`;
-      card.style.height = `${cardH}px`;
-      card.style.transform = buildTransform(messiness, 'translateY(100vh)');
-      card.dataset.messinessRot = messiness.rot;
-      card.dataset.messinessOffX = messiness.offX;
-      card.dataset.messinessOffY = messiness.offY;
+    const card = document.createElement('div');
+    card.className = 'text-card';
+    card.dataset.stepIndex = stepIdx;
+    card.dataset.object = objectId;
+    card.dataset.runPosition = runPos;
+    card.style.zIndex = zIndex;
+    card.style.top = `${topPx}px`;
+    card.style.height = `${cardH}px`;
+    card.style.transform = buildTransform(messiness, 'translateY(100vh)');
+    card.dataset.messinessRot = messiness.rot;
+    card.dataset.messinessOffX = messiness.offX;
+    card.dataset.messinessOffY = messiness.offY;
 
-      // Clone rendered content from the hidden step-data element (Jekyll has
-      // already processed markdownify, panel triggers, layer conditions, etc.)
-      const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
-      if (hiddenStep) {
-        const content = hiddenStep.querySelector('.step-content');
-        if (content) {
-          card.appendChild(content.cloneNode(true));
-        } else {
-          card.innerHTML = buildTextCardContent(step);
-        }
+    // Clone rendered content from the hidden step-data element (Jekyll has
+    // already processed markdownify, panel triggers, layer conditions, etc.)
+    const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
+    if (hiddenStep) {
+      const content = hiddenStep.querySelector('.step-content');
+      if (content) {
+        card.appendChild(content.cloneNode(true));
       } else {
         card.innerHTML = buildTextCardContent(step);
       }
-
-      cardStack.appendChild(card);
-      state.textCards[stepIdx] = card;
-
-      state.cardPool.push({
-        stepIndex: stepIdx,
-        objectId,
-        cardType,
-        runPosition: runPos,
-        objectIndex,
-        element: card,
-      });
+    } else {
+      card.innerHTML = buildTextCardContent(step);
     }
+
+    cardStack.appendChild(card);
+    state.textCards[stepIdx] = card;
+
+    state.cardRegistry.push({
+      stepIndex: stepIdx,
+      objectId,
+      cardType,
+      runPosition: runPos,
+      objectIndex,
+      element: card,
+    });
   }
 
   // Preload the first scene's viewer plate behind the intro card.
@@ -577,7 +563,7 @@ export function initCardPool(storyData, config) {
   // ready when the transition happens.
   if (steps.length > 0) {
     const firstStep = steps[0];
-    const firstObjectId = firstStep.object || firstStep.objectId || '';
+    const firstObjectId = firstStep.object || '';
     if (firstObjectId && state.viewerPlates[0]) {
       const plate = state.viewerPlates[0];
       const zIndex = _zPlan.plateZ[0];
@@ -613,7 +599,17 @@ export function initCardPool(storyData, config) {
 }
 
 /**
- * Build the inner HTML for a text card from step data.
+ * Build the inner HTML for a text card from step data — the fallback used
+ * only when a step has no server-rendered .story-step/.step-content node to
+ * clone (a data/DOM desync; every normal build emits one per step).
+ *
+ * Must stay selector-compatible with the server-rendered step markup that
+ * downstream code keys on: .step-question, .step-answer, and
+ * .panel-trigger[data-panel][data-step] (panels.js delegates on [data-panel]).
+ * Intentional divergences from the server markup: content renders as escaped
+ * flat text (no markdown), headings use div not h2, no viewer-warning block,
+ * and layer triggers render only when layer*_button is non-empty (the server
+ * falls back to a default label whenever layer content exists).
  *
  * @param {Object} step - Step data object
  * @returns {string} HTML string
@@ -643,12 +639,18 @@ function buildTextCardContent(step) {
 /**
  * Build the inner HTML for a title card from step data.
  *
+ * question/answer carry author CSV text whose documented contract is plain
+ * text only, so both are escaped, matching buildTextCardContent. Escaping
+ * here is display consistency, not an injection boundary — the same strings
+ * flow unescaped through the Liquid intro TOC and the server-rendered step
+ * pool.
+ *
  * @param {Object} step - Step data object
  * @returns {string} HTML string
  */
 function _buildTitleCardContent(step) {
-  const heading = step.question || '';
-  const body    = step.answer   || '';
+  const heading = escapeHtml(step.question || '');
+  const body    = escapeHtml(step.answer   || '');
   return `
     <div class="title-card-inner">
       <h2 class="title-card-heading">${heading}</h2>
@@ -680,7 +682,7 @@ function _buildTitleCardContent(step) {
  */
 export function activateCard(index, direction) {
   // Title card path — no viewer plate, no text card, no IIIF
-  if (state.titleCards?.[index]) {
+  if (state.titleCards[index]) {
     _activateTitleCardStep(index, direction);
     return;
   }
@@ -688,14 +690,13 @@ export function activateCard(index, direction) {
   const card = state.textCards[index];
   if (!card) return;
 
-  const poolEntry = state.cardPool.find(c => c.stepIndex === index);
-  if (!poolEntry) return;
+  const registryEntry = state.cardRegistry.find(c => c.stepIndex === index);
 
   const step = _stepsData[index] || {};
   const prevStep = index > 0 ? _stepsData[index - 1] : null;
 
-  const objectId = poolEntry.objectId;
-  const prevObjectId = state.currentObjectRun?.objectId;
+  const objectId = registryEntry.objectId;
+  const prevObjectId = state.currentObjectRun.objectId;
 
   const currentMode = isFullObjectMode(step);
   const prevMode = prevStep ? isFullObjectMode(prevStep) : null;
@@ -711,7 +712,7 @@ export function activateCard(index, direction) {
       _activateNewViewerPlate(objectId, index, prevObjectId, step, direction);
 
       // Reset the object run tracker
-      state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
+      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
 
       // Deactivate previous text card (keep stacked, not slide away)
       _deactivatePreviousTextCard(index, direction);
@@ -733,7 +734,7 @@ export function activateCard(index, direction) {
 
     } else {
       // Text-only on same object
-      state.currentObjectRun.runPosition = poolEntry.runPosition;
+      state.currentObjectRun.runPosition = registryEntry.runPosition;
 
       // Deactivate previous text card (becomes stacked)
       _deactivatePreviousTextCard(index, direction);
@@ -832,7 +833,7 @@ export function activateCard(index, direction) {
         }
       }
 
-      state.currentObjectRun = { objectId, runPosition: poolEntry.runPosition };
+      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
 
       // Slide current text card back down
       _deactivatePreviousTextCard(index, direction);
@@ -855,7 +856,7 @@ export function activateCard(index, direction) {
 
     } else {
       // Same object, backward: text card slides down, previous card reactivated
-      state.currentObjectRun.runPosition = poolEntry.runPosition;
+      state.currentObjectRun.runPosition = registryEntry.runPosition;
 
       _deactivatePreviousTextCard(index, direction);
       _activateTextCard(card);
@@ -886,7 +887,7 @@ export function activateCard(index, direction) {
   // Update aria-label on the active viewer plate for current step
   const _stepData = _stepsData[index] || {};
   const _stepAlt = _stepData.alt_text || '';
-  const _plateForStep = state.viewerPlates?.[state.stepToScene?.[index]];
+  const _plateForStep = state.viewerPlates[state.stepToScene[index]];
   if (_plateForStep) {
     const _cType = _plateForStep.dataset.cardType || 'iiif';
     _plateForStep.setAttribute('aria-label', _buildAriaLabel(objectId, _stepAlt, _cType));
@@ -899,30 +900,31 @@ export function activateCard(index, direction) {
   // but no layout reversal — viewer is always full-viewport, compensation handles positioning
 }
 
-// ── Per-frame scrub positioning ───────────────────────────────────────────────
+// ── Per-frame interpolated positioning ────────────────────────────────────────
 
 /**
- * Set the visual progress of card transition during scroll scrubbing.
+ * Interpolate the visual progress of a card transition each scroll frame.
  *
  * Called every frame by the scroll engine. Positions the NEXT card
  * proportionally — at progress 0.0 it is fully below viewport, at 1.0
  * it is fully in position. The current card stays put (revealed
  * as the next card slides away backward).
  *
- * Only operates during is-scrubbing mode (CSS transitions disabled).
- * During button/keyboard nav, CSS transitions handle the animation.
+ * Only operates while the user is actively scrubbing (the is-scrubbing
+ * class is set, disabling CSS transitions). During button/keyboard nav,
+ * CSS transitions handle the animation instead.
  *
  * @param {number} stepIndex - Current step (floor of position)
  * @param {number} progress - Fractional progress 0.0-1.0
  */
 export function setCardProgress(stepIndex, progress) {
-  if (progress < 0.001) return; // At exact integer, no scrub needed
+  if (progress < 0.001) return; // At exact integer, no interpolation needed
 
   const nextIndex = stepIndex + 1;
-  const nextCard = state.textCards[nextIndex] || state.titleCards?.[nextIndex];
+  const nextCard = state.textCards[nextIndex] || state.titleCards[nextIndex];
   if (!nextCard) return;
 
-  // Only apply per-frame transforms during scrub mode
+  // Only apply per-frame transforms while the user is actively scrubbing
   const cardStack = document.querySelector('.card-stack');
   if (!cardStack || !cardStack.classList.contains('is-scrubbing')) return;
 
@@ -940,12 +942,12 @@ export function setCardProgress(stepIndex, progress) {
   const currentStep = _stepsData[stepIndex];
   if (!nextStep || !currentStep) return;
 
-  const nextObjectId = nextStep.object || nextStep.objectId || '';
-  const currentObjectId = currentStep.object || currentStep.objectId || '';
+  const nextObjectId = nextStep.object || '';
+  const currentObjectId = currentStep.object || '';
 
   if (nextObjectId !== currentObjectId) {
     if (nextObjectId === '') {
-      // Next step is a title card — scrub current plate away downward
+      // Next step is a title card — interpolate current plate away downward
       const currentSceneIndex = getSceneIndex(stepIndex);
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
       if (currentPlate) {
@@ -991,7 +993,7 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
 
   // Intra-scene mode change: a full-object↔detail flip within one object's run
   // flags needsNewViewer, but the scene — and therefore the plate element — is
-  // unchanged, so prevPlate and newPlate resolve to the SAME node. The plate is
+  // unchanged, so prevPlate and newPlate resolve to the same node. The plate is
   // already on-screen; keep it visible and return before the slide/deactivate
   // logic below, which would otherwise add then immediately strip is-active
   // (add at the end, remove in the prevPlate block) and blank the viewer. This
@@ -1005,7 +1007,7 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
 
   if (direction === 'forward') {
     // For scene 0: skip the reset-to-offscreen if the plate was already
-    // positioned by the intro scrub (scroll-engine intro zone progressive
+    // positioned by the intro interpolation (scroll-engine intro zone progressive
     // positioning). Scenes 1+ always start clean at translateY(100%).
     if (sceneIndex === 0) {
       const currentTransform = newPlate.style.transform;
@@ -1154,7 +1156,7 @@ function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page
 
       // Verify-and-retry (belt-and-braces on top of the rAF-deferred
       // .ready). Even after the rAF settle, a residual race can leave
-      // the viewer at home zoom (measured: step 19, authored 10×). One frame after
+      // the viewer at home zoom. One frame after
       // applying the snap, read the current OSD zoom and compare against home zoom.
       // If they match — and the authored zoom was meaningfully > 1 — the apply
       // was dropped; re-apply exactly once. Tolerance: 5% of homeZoom.
@@ -1294,7 +1296,7 @@ function _initVideoInPlate(plateEl, objectId, sceneIndex, zIndex) {
  * @param {number} zIndex
  */
 function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
-  const audioObjects = window.storyData?.audioObjects || window.audioObjects || {};
+  const audioObjects = window.audioObjects || {};
   const ext = audioObjects[objectId];
   if (!ext) {
     console.error('_initAudioInPlate: no audio extension for', objectId);
@@ -1340,7 +1342,7 @@ function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
  * @param {'forward'|'backward'} direction
  */
 function _deactivatePreviousTextCard(newIndex, direction) {
-  const prevCard = state.cardPool.find(c => c.element.classList.contains('is-active'));
+  const prevCard = state.cardRegistry.find(c => c.element.classList.contains('is-active'));
   if (!prevCard || prevCard.stepIndex === newIndex) return;
 
   const el = prevCard.element;
@@ -1525,9 +1527,8 @@ export function preloadAhead(currentIndex, ahead, behind) {
 
     const firstStepIdx = state.sceneFirstStep[targetScene];
     const step = _stepsData[firstStepIdx];
-    if (!step) continue;
 
-    const objectId = step.object || step.objectId || '';
+    const objectId = step.object || '';
     if (!objectId) continue;
 
     const zIndex = _zPlan.plateZ[firstStepIdx];
@@ -1573,9 +1574,8 @@ export function preloadAhead(currentIndex, ahead, behind) {
 
     const firstStepIdx = state.sceneFirstStep[targetScene];
     const step = _stepsData[firstStepIdx];
-    if (!step) continue;
 
-    const objectId = step.object || step.objectId || '';
+    const objectId = step.object || '';
     if (!objectId) continue;
 
     const zIndex = _zPlan.plateZ[firstStepIdx];
@@ -1627,7 +1627,7 @@ function _prefetchTilesForScene(sceneIndex) {
   if (!objectId) return;
 
   // Skip external manifests — tile URL patterns are server-specific
-  const objData = state.objectsIndex?.[objectId];
+  const objData = state.objectsIndex[objectId];
   if (objData?.iiif_manifest || objData?.source_url) return;
 
   // Construct base URL from origin, not from info.json id field

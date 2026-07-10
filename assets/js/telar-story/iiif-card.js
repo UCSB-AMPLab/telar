@@ -6,7 +6,7 @@
  * It does NOT create viewer plates or inject viewer instances — that work
  * lives in card-pool.js, which pre-creates all plate DOM elements at init
  * time and injects the IIIF wrapper on demand via its internal
- * _initOsdInPlate() (renamed from _initTifyInPlate in v1.4.0).
+ * _initOsdInPlate().
  *
  * The separation exists because the card-pool module owns the full card
  * lifecycle (creation, ordering, preloading), while this module provides
@@ -40,7 +40,7 @@
  *   Per OSD issue #2693, the module calls WEBGL_lose_context.loseContext()
  *   first, then the wrapper's destroy(), then removes the DOM element.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 import { state } from './state.js';
@@ -62,7 +62,7 @@ import { onViewportResize, onLayoutChange, isLandscapeSideCard } from './layout-
 
 // ── Centring compensation — internal helpers ──────────────────────────────────
 //
-// Shared helpers used by computeFocalTarget and _compensateForCardOverlay.
+// Shared helpers used by computeFocalTarget and _applyFocalTarget.
 // These are pure functions — no DOM or state access.
 
 /**
@@ -191,7 +191,7 @@ const FOCAL_DIAMETER_FRAC = 0.90;   // focal circle diameter as a fraction of au
  *   4. Return the inputs the OSD apply recipe needs: focal point in
  *      image px and diameter in image px (zoom is computed live in the apply step).
  *
- * Title-card skip is NOT applied here — it lives in _compensateForCardOverlay
+ * Title-card skip is NOT applied here — it lives in _applyFocalTarget
  * so the pure function remains reusable.
  *
  * @param {number} x            Authored focal-point x in [0, 1].
@@ -385,43 +385,6 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
   return true;
 }
 
-/**
- * Compensate the OSD viewport position for the text card overlay.
- *
- * Reads state.cardOverlayRect (DOMRect from card-pool.js activation, or null)
- * and window.innerWidth/innerHeight. Derives the card placement mode from
- * rect geometry. Returns the focal-target result from computeFocalTarget.
- *
- * Returns null when:
- *   - A title card is currently active (state.activeTitleCardIndex != null)
- *   - Inputs are insane (out-of-range x/y/zoom or non-positive dims)
- *
- * @param {number} x        Authored focal-point x in [0, 1].
- * @param {number} y        Authored focal-point y in [0, 1].
- * @param {number} zoom     Authored zoom multiplier (> 0).
- * @param {number} imageW   Image width in px (from OSD TiledImage source).
- * @param {number} imageH   Image height in px (from OSD TiledImage source).
- * @returns {{ focalImg: {x: number, y: number}, diameterImg: number,
- *             region: {x: number, y: number, w: number, h: number},
- *             imageW: number, imageH: number }|null}
- */
-export function _compensateForCardOverlay(x, y, zoom, imageW, imageH) {
-  // Title-card skip: no text card overlay when title card is active
-  if (state.activeTitleCardIndex != null) return null;
-
-  const viewportW = window.innerWidth;
-  const viewportH = window.innerHeight;
-
-  // Map DOMRect to { x, y, w, h } shape, or null for CSS default
-  const r = state.cardOverlayRect;
-  const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
-
-  // Derive placement from measured rect geometry
-  const placementMode = _deriveCardPlacement(cardBox, viewportW, viewportH);
-
-  return computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
-}
-
 // ── Plate activation and deactivation ────────────────────────────────────────
 
 /**
@@ -600,7 +563,6 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // Find the active viewer card for this scene (not by objectId — repeated objects have
   // multiple scenes and objectId lookup would find the wrong one on backward nav).
   const sceneIndex = state.stepToScene[stepIndex];
-  if (sceneIndex === undefined || sceneIndex < 0) return;
   const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
   if (!viewerCard || !viewerCard.isReady) return;
 

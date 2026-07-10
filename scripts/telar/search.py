@@ -28,7 +28,7 @@ but for most sites this is imperceptible (<100ms).
 config setting. When disabled, no search data is generated and any existing
 `search-data.json` is removed — the gallery falls back to its simple grid view.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 import json
@@ -188,8 +188,7 @@ def generate_search_data(objects_path='_data/objects.json', output_path='search-
             'year': obj.get('year', ''),
             # Include for display in results
             'thumbnail': obj.get('thumbnail', ''),
-            'source_url': obj.get('source_url', ''),
-            'demo': obj.get('demo', False)
+            'source_url': obj.get('source_url', '')
         }
         search_objects.append(search_obj)
 

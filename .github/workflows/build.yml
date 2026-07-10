@@ -34,7 +34,7 @@ name: Build and Deploy Telar Site
 # build time. Sites without audio objects skip audio tool installation and
 # processing entirely — zero friction for image-only sites.
 #
-# Version: v1.5.4
+# Version: v1.6.0
 
 on:
   push:
@@ -102,11 +102,11 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y libvips-tools
 
-      - name: Install audio processing tools (audiowaveform + ffmpeg)
+      - name: Install audio processing tools (audiowaveform)
         run: |
           # Only install if audio objects exist (zero friction for image-only sites)
           if ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
-            echo "Audio objects detected - installing audiowaveform and ffmpeg"
+            echo "Audio objects detected - installing audiowaveform"
             # audiowaveform is installed from a third-party Ubuntu PPA maintained
             # by Chris Needham (BBC R&D). This is an unpinned external package
             # source and an explicit trust dependency. The long-term hardening is
@@ -114,7 +114,7 @@ jobs:
             # and install it with dpkg instead of fetching from the live PPA.
             sudo add-apt-repository -y ppa:chris-needham/ppa
             sudo apt-get update -q
-            sudo apt-get install -y audiowaveform ffmpeg
+            sudo apt-get install -y audiowaveform
           else
             echo "No audio objects found - skipping audio tool installation"
           fi
@@ -365,6 +365,14 @@ jobs:
             echo "⚠️  Warning: No cached IIIF tiles found. Site may have missing images."
             echo "⚠️  Run a full build with IIIF regeneration to create tiles."
           fi
+
+      - name: Encrypt protected stories
+        # Post-build encryption and leak gate for protected stories.
+        # Runs unconditionally, immediately before the artifact upload, so
+        # the gate scans exactly what deploys. No-op when no story is
+        # protected; fails the build rather than publish protected plaintext.
+        run: |
+          python scripts/encrypt_protected_stories.py
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

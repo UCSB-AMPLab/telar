@@ -43,6 +43,7 @@
           {%- comment -%}Check if objects should be hidden from nav{%- endcomment -%}
           {% assign dev_features = site['development-features'] %}
           {%- comment -%}Support both new name (skip_collections) and legacy name (hide_collections){%- endcomment -%}
+          {%- comment -%}This alias is also computed in _layouts/index.html and _layouts/objects-index.html — one line each, not worth an include{%- endcomment -%}
           {% assign skip_collections = dev_features.skip_collections | default: dev_features.hide_collections | default: false %}
 
           {% if site.data.navigation.menu %}
@@ -66,18 +67,18 @@
           {% else %}
             <!-- Fallback: navigation.yml missing or broken -->
             <li class="nav-item">
-              <a class="nav-link" href="{{ '/' | relative_url }}">Home</a>
+              <a class="nav-link" href="{{ '/' | relative_url }}">{{ lang.navigation.home | default: 'Home' }}</a>
             </li>
             {% unless skip_collections %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ '/objects/' | relative_url }}">Objects</a>
+              <a class="nav-link" href="{{ '/objects/' | relative_url }}">{{ lang.navigation.objects | default: 'Objects' }}</a>
             </li>
             {% endunless %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ '/glossary/' | relative_url }}">Glossary</a>
+              <a class="nav-link" href="{{ '/glossary/' | relative_url }}">{{ lang.navigation.glossary | default: 'Glossary' }}</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ '/about/' | relative_url }}">About</a>
+              <a class="nav-link" href="{{ '/about/' | relative_url }}">{{ lang.navigation.about | default: 'About' }}</a>
             </li>
           {% endif %}
         </ul>

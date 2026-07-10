@@ -6,7 +6,7 @@ needs KaTeX loaded. The key challenge is distinguishing genuine LaTeX math
 notation ($E = mc^2$) from currency amounts ($50), which also use dollar
 signs.
 
-Version: v0.9.1-beta
+Version: v1.6.0
 """
 
 import sys
@@ -184,3 +184,47 @@ class TestProtectRestore:
         protected, replacements = protect_latex(text)
         assert protected == text
         assert replacements == {}
+
+
+class TestStoryLatexFlag:
+    """process_story sets df.attrs['has_latex'] for every documented LaTeX
+    surface ("Where LaTeX Works"): step question/answer prose and layer
+    content."""
+
+    @staticmethod
+    def _story_df(rows):
+        import pandas as pd
+        base = {'question': '', 'answer': '', 'object': '', 'x': '', 'y': '', 'zoom': ''}
+        return pd.DataFrame([{**base, **row} for row in rows])
+
+    def test_answer_latex_sets_flag(self):
+        from telar.processors.stories import process_story
+        df = self._story_df([
+            {'step': '1', 'answer': 'Density is $d = \\frac{w}{t}$ here.'},
+        ])
+        out = process_story(df)
+        assert out.attrs['has_latex'] is True
+
+    def test_question_latex_sets_flag(self):
+        from telar.processors.stories import process_story
+        df = self._story_df([
+            {'step': '1', 'question': 'Why is $e^{i\\pi} = -1$?'},
+        ])
+        out = process_story(df)
+        assert out.attrs['has_latex'] is True
+
+    def test_layer_latex_sets_flag(self):
+        from telar.processors.stories import process_story
+        df = self._story_df([
+            {'step': '1', 'layer1_button': 'More', 'layer1_content': 'Panel $x^2$ maths'},
+        ])
+        out = process_story(df)
+        assert out.attrs['has_latex'] is True
+
+    def test_currency_answer_does_not_set_flag(self):
+        from telar.processors.stories import process_story
+        df = self._story_df([
+            {'step': '1', 'answer': 'It cost $50 back then.'},
+        ])
+        out = process_story(df)
+        assert out.attrs['has_latex'] is False

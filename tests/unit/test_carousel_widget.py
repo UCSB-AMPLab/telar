@@ -51,6 +51,26 @@ caption: Photo caption"""
         assert result['items'][0]['image'] == 'photo.jpg'
         assert result['items'][0]['alt'] == 'A description'
 
+    def test_resolves_local_src_to_baseurl_asset_path(self, mock_image_validation, mock_image_dimensions):
+        """Bare filenames resolve to the Liquid baseurl token + assets path."""
+        content = """image: photo.jpg
+alt: A description"""
+        warnings = []
+        result = parse_carousel_widget(content, 'test.md', warnings)
+        assert result['items'][0]['src'] == '{{ site.baseurl }}/assets/images/photo.jpg'
+
+    @pytest.mark.parametrize('url', [
+        'http://example.org/photo.jpg',
+        'https://example.org/photo.jpg',
+    ])
+    def test_absolute_urls_pass_through_as_src(self, url, mock_image_validation, mock_image_dimensions):
+        """Absolute http(s) image URLs become the src unchanged."""
+        content = f"""image: {url}
+alt: A description"""
+        warnings = []
+        result = parse_carousel_widget(content, 'test.md', warnings)
+        assert result['items'][0]['src'] == url
+
     def test_parses_multiple_items(self, mock_image_validation, mock_image_dimensions):
         """Should parse carousel with multiple items separated by ---."""
         content = """image: first.jpg

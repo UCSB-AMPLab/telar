@@ -24,7 +24,7 @@
  * The whole file is an IIFE so none of this leaks into the global scope beyond the
  * single `window.telarEmbed` flag.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 (function() {
@@ -59,15 +59,22 @@
    * Create dismissible "View full site" banner
    */
   function createEmbedBanner() {
-    // Get site name from meta tag or default
-    const siteName = document.querySelector('meta[property="og:site_name"]')?.content || 'the full site';
-
-    // Get full site URL (remove embed parameter)
-    const fullSiteUrl = getFullSiteUrl();
-
     // Get language strings from window.telarLang (set by Jekyll in layout)
     const embedStrings = window.telarLang && window.telarLang.embedBanner;
     if (!embedStrings) return; // layout without telarLang — no banner, no crash
+
+    // Get site name from meta tag, falling back to the localized string from
+    // window.telarLang (embedStrings.siteFallback), and finally to the English
+    // literal as a last resort if telarLang somehow lacks it. og:site_name is
+    // not always present — jekyll-seo-tag is skipped entirely on protected
+    // story pages (see _layouts/story.html), so this fallback is a real path,
+    // not just defensive code.
+    const siteName = document.querySelector('meta[property="og:site_name"]')?.content
+      || embedStrings.siteFallback
+      || 'the full site';
+
+    // Get full site URL (remove embed parameter)
+    const fullSiteUrl = getFullSiteUrl();
 
     // Replace {site_name} placeholder. Use a function replacement so $-sequences
     // ($&, $$, $', $`) in the site name are inserted literally, not expanded.

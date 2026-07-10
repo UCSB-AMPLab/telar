@@ -40,7 +40,7 @@ rename of the gallery classification column from `object_type` to `medium`
 — with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
 `medio_genero`) so existing spreadsheets continue to work without changes.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 from pathlib import Path
@@ -119,13 +119,13 @@ COLUMN_NAME_MAPPING = {
     'periodo': 'period',
     'medio': 'medium',
     'dimensiones': 'dimensions',
-    'ubicacion': 'source',  # v0.8.0: renamed from 'location' to 'source'
+    'ubicacion': 'source',
     'credito': 'credit',
     'miniatura': 'thumbnail',
     # v0.8.0 gallery filtering columns
     'año': 'year',
     'ano': 'year',  # without tilde
-    # v0.10.0: object_type renamed to medium; backward compat keeps old names working
+    # Old column names remain accepted from user CSVs (documented compat)
     'tipo_objeto': 'medium',
     'object_type': 'medium',
     'medium_genre': 'medium',     # v1.0.0-beta: alternative English name
@@ -135,7 +135,7 @@ COLUMN_NAME_MAPPING = {
     'materia': 'subjects',
     'destacado': 'featured',
     'fuente': 'source',
-    # Backward compatibility: location -> source (v0.8.0 schema change)
+    # The old column name is still accepted
     'location': 'source',
 
     # Project columns (Spanish -> English)
@@ -273,11 +273,7 @@ def is_header_row(row_values):
     valid_names = set(COLUMN_NAME_MAPPING.keys()) | set(COLUMN_NAME_MAPPING.values())
 
     # Also include common column names not in the mapping
-    valid_names.update(['x', 'y', 'zoom', 'page', 'order', 'story_id', 'title', 'subtitle',
-                        'byline', 'object_id', 'description', 'source_url', 'creator',
-                        'period', 'medium', 'dimensions', 'location', 'source', 'credit',
-                        'thumbnail', 'year', 'object_type', 'subjects', 'featured',
-                        'protected', 'show_sections'])
+    valid_names.update(['x', 'y', 'zoom'])
 
     # Count how many cells match known column names
     matches = 0

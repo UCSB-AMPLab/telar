@@ -22,7 +22,7 @@
  *   the current step (0.0–1.0). `isSnapping` tracks in-flight snap
  *   animations from the lenis/snap plugin.
  *
- * @version v1.5.0
+ * @version v1.6.0
  */
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -43,8 +43,6 @@ export const state = {
   steps: [],
   /** Index of the current desktop step (-1 = none). */
   currentIndex: -1,
-  /** Object ID currently displayed in the viewer. */
-  currentObject: null,
 
   // ── Scroll engine ─────────────────────────────────────────────────────────
   /** Continuous float position (e.g. 2.3 = step 2, 30% progress). */
@@ -61,8 +59,6 @@ export const state = {
   snap: null,
 
   // ── Viewer cards ─────────────────────────────────────────────────────────
-  /** The viewer card object currently visible on screen. */
-  currentViewerCard: null,
   /** @type {ViewerCard[]} Pool of viewer card objects. */
   viewerCards: [],
   /** Counter for generating unique viewer instance DOM IDs. */
@@ -106,20 +102,28 @@ export const state = {
   /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
   manifestLoadTimes: [],
 
-  // ── Card pool ────────────────────────────────────────────────────────────
-  /** @type {Object[]} Pool of active card instances. */
-  cardPool: [],
+  // ── Card registry ──────────────────────────────────────────────────────────
+  /**
+   * @type {Object[]} Permanent step→card record: one entry per story step,
+   * built once at initCardPool time and never evicted. Not a pool — the
+   * capped, evicting structure is `viewerCards` above.
+   */
+  cardRegistry: [],
   /** Map of sceneIndex -> viewer plate element (one plate per scene). */
   viewerPlates: {},
   /** Map of stepIndex -> text card element. */
   textCards: {},
+  /** Map of stepIndex -> title card element. Populated by initCardPool. */
+  titleCards: {},
+  /** Index of the currently active title card step, or null when none is active. */
+  activeTitleCardIndex: null,
   /** Current object run tracking (for peek stack positioning). */
   currentObjectRun: { objectId: null, runPosition: 0 },
 
   // ── Scene maps (populated at initCardPool time) ───────────────────────────
   /**
    * Filtered step data (metadata rows removed), in the same index space as
-   * stepToScene / the card pool. Populated by initCardPool. The per-frame
+   * stepToScene / the card registry. Populated by initCardPool. The per-frame
    * lerp reads this so its stepIndex (a filtered-space index) lines up with
    * the step objects it interpolates between.
    */

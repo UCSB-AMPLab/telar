@@ -11,7 +11,7 @@ This file exists for backward compatibility: existing imports like
 `from csv_to_json import process_images` continue to work, and the
 script remains callable as `python3 scripts/csv_to_json.py`.
 
-Version: v1.5.0
+Version: v1.6.0
 """
 
 # Re-export full public API from telar package for backward compatibility
@@ -27,7 +27,7 @@ from telar.images import (
 from telar.iiif_metadata import (
     detect_iiif_version, extract_language_map_value, strip_html_tags,
     clean_metadata_value, find_metadata_field, is_legal_boilerplate,
-    extract_credit, extract_manifest_metadata, apply_metadata_fallback
+    extract_credit, apply_metadata_fallback
 )
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.widgets import (

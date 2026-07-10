@@ -5,6 +5,10 @@ This module tests the layer panel system - the sliding panels that appear
 when users click panel buttons. Telar supports up to two layers of panels
 per step, each with customizable content.
 
+Panel trigger buttons (.panel-trigger) live inside the cloned story cards
+(.text-card) in the card stack; panels themselves are backdrop-less
+Bootstrap offcanvas elements (#panel-layer1, #panel-layer2).
+
 The tests verify:
 - Panel buttons trigger panel display
 - Panels slide in/out correctly
@@ -18,34 +22,29 @@ Prerequisites:
 Run tests:
     pytest tests/e2e/test_panel_interactions.py -v --base-url http://127.0.0.1:4001/telar
 
-Version: v0.7.0-beta
+Version: v1.6.0
 """
 
+import re
 import pytest
 from playwright.sync_api import expect
 
 
 def navigate_to_step_with_panel(page, base_url):
-    """Navigate to story and advance to a step that has panel content."""
+    """Navigate to story and advance to a step whose active card has a panel button."""
     page.goto(f"{base_url}/stories/your-story/")
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
 
-    # Click to focus the story container
-    page.locator(".story-container").click()
-    page.wait_for_timeout(300)
-
-    # Navigate forward until we find a step with a panel button
-    # Step 3 has panel content in the your-story template
+    # Advance until the active card carries a panel trigger
+    # (step 2 has layer 1 content in the your-story template)
     for _ in range(5):
-        # Check if current step has a panel button
-        panel_btn = page.locator(".story-step.is-active .panel-trigger")
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(900)
+
+        panel_btn = page.locator(".text-card.is-active .panel-trigger")
         if panel_btn.count() > 0 and panel_btn.first.is_visible():
             return page
-
-        # Advance to next step
-        page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(800)
 
     return page
 
@@ -62,8 +61,8 @@ class TestPanelButtons:
         """Should show panel button when step has panel content."""
         page = story_page_with_panel
 
-        # Look for panel trigger button on the active step
-        panel_btn = page.locator(".story-step.is-active .panel-trigger")
+        # Look for panel trigger button on the active card
+        panel_btn = page.locator(".text-card.is-active .panel-trigger")
 
         # Button should be visible
         expect(panel_btn.first).to_be_visible()
@@ -72,13 +71,12 @@ class TestPanelButtons:
         """Should display custom button label from CSV."""
         page = story_page_with_panel
 
-        # Layer 1 button on active step
-        layer1_btn = page.locator(".story-step.is-active .panel-trigger[data-panel='layer1']")
+        # Layer 1 button on active card
+        layer1_btn = page.locator(".text-card.is-active .panel-trigger[data-panel='layer1']")
 
-        if layer1_btn.count() > 0 and layer1_btn.first.is_visible():
-            # Button should have text content
-            text = layer1_btn.first.text_content()
-            assert text and len(text.strip()) > 0
+        expect(layer1_btn.first).to_be_visible()
+        text = layer1_btn.first.text_content()
+        assert text and len(text.strip()) > 0
 
 
 class TestPanelOpening:
@@ -93,7 +91,7 @@ class TestPanelOpening:
         """Should open panel when button is clicked."""
         page = story_page_with_panel
 
-        panel_btn = page.locator(".story-step.is-active .panel-trigger").first
+        panel_btn = page.locator(".text-card.is-active .panel-trigger").first
 
         expect(panel_btn).to_be_visible()
         panel_btn.click()
@@ -107,7 +105,7 @@ class TestPanelOpening:
         """Should display content within the panel."""
         page = story_page_with_panel
 
-        panel_btn = page.locator(".story-step.is-active .panel-trigger").first
+        panel_btn = page.locator(".text-card.is-active .panel-trigger").first
 
         expect(panel_btn).to_be_visible()
         panel_btn.click()
@@ -124,13 +122,13 @@ class TestPanelOpening:
         """Should animate panel sliding in."""
         page = story_page_with_panel
 
-        panel_btn = page.locator(".story-step.is-active .panel-trigger").first
+        panel_btn = page.locator(".text-card.is-active .panel-trigger").first
 
         expect(panel_btn).to_be_visible()
 
-        # Panel should not be visible initially
+        # Panel should not be open initially
         panel = page.locator("#panel-layer1")
-        expect(panel).not_to_have_class("show")
+        expect(panel).not_to_have_class(re.compile(r"\bshow\b"))
 
         # Click to open
         panel_btn.click()
@@ -147,7 +145,7 @@ class TestPanelClosing:
         """Navigate to story, advance to panel step, and open a panel."""
         page = navigate_to_step_with_panel(page, base_url)
 
-        panel_btn = page.locator(".story-step.is-active .panel-trigger").first
+        panel_btn = page.locator(".text-card.is-active .panel-trigger").first
         if panel_btn.is_visible():
             panel_btn.click()
             page.wait_for_timeout(500)
@@ -171,6 +169,22 @@ class TestPanelClosing:
         # Panel should be hidden
         expect(page.locator("#panel-layer1.show")).not_to_be_visible()
 
+    def test_keyboard_reopens_after_close_button(self, open_panel_page):
+        """ArrowRight reopens the panel after the offcanvas X closed it.
+
+        The X goes through Bootstrap's own dismiss, not closePanel(), so
+        panel state must be reconciled on hidden.bs.offcanvas or the
+        keyboard path thinks a panel is still open."""
+        page = open_panel_page
+
+        page.locator("#panel-layer1 .btn-close").click()
+        page.wait_for_timeout(600)
+        expect(page.locator("#panel-layer1.show")).not_to_be_visible()
+
+        page.keyboard.press("ArrowRight")
+        page.wait_for_timeout(600)
+        expect(page.locator("#panel-layer1")).to_have_class(re.compile(r"\bshow\b"))
+
     def test_escape_key_closes_panel(self, open_panel_page):
         """Should close panel when Escape key is pressed."""
         page = open_panel_page
@@ -186,23 +200,6 @@ class TestPanelClosing:
         # Panel should close
         expect(page.locator("#panel-layer1.show")).not_to_be_visible()
 
-    def test_clicking_outside_closes_panel(self, open_panel_page):
-        """Should close panel when clicking the backdrop."""
-        page = open_panel_page
-
-        # Verify panel is open
-        panel = page.locator("#panel-layer1.show")
-        expect(panel).to_be_visible()
-
-        # Click the backdrop (scroll-lock element)
-        backdrop = page.locator(".scroll-lock-overlay")
-        if backdrop.count() > 0 and backdrop.is_visible():
-            backdrop.click(force=True)
-            page.wait_for_timeout(500)
-
-            # Panel should close
-            expect(page.locator("#panel-layer1.show")).not_to_be_visible()
-
 
 class TestPanelContent:
     """Tests for panel content rendering."""
@@ -212,7 +209,7 @@ class TestPanelContent:
         """Navigate to story, advance to panel step, and open a panel."""
         page = navigate_to_step_with_panel(page, base_url)
 
-        panel_btn = page.locator(".story-step.is-active .panel-trigger").first
+        panel_btn = page.locator(".text-card.is-active .panel-trigger").first
         if panel_btn.is_visible():
             panel_btn.click()
             page.wait_for_timeout(500)
@@ -223,7 +220,7 @@ class TestPanelContent:
         """Should display panel title if configured."""
         page = open_panel_page
 
-        # Panel title in offcanvas header
+        # Panel title heading
         title = page.locator("#panel-layer1 .offcanvas-title")
         expect(title).to_be_visible()
 
@@ -266,8 +263,8 @@ class TestMultiplePanels:
         page = story_page_with_panel
 
         # Check if this step has both layer 1 and layer 2 buttons
-        layer1_btn = page.locator(".story-step.is-active .panel-trigger[data-panel='layer1']")
-        layer2_btn = page.locator(".story-step.is-active .panel-trigger[data-panel='layer2']")
+        layer1_btn = page.locator(".text-card.is-active .panel-trigger[data-panel='layer1']")
+        layer2_btn = page.locator(".text-card.is-active .panel-trigger[data-panel='layer2']")
 
         if layer1_btn.count() > 0 and layer2_btn.count() > 0:
             # Open layer 1
