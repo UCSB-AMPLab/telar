@@ -51,6 +51,7 @@ _SAFE_OBJECT_ID = re.compile(r'^[A-Za-z0-9_-]+$')
 from iiif_utils import (
     check_dependencies, preprocess_image,
     generate_tiles_libvips, copy_base_image, create_single_canvas_manifest,
+    fix_fallback_region_sizes, generate_full_max,
 )
 
 
@@ -71,6 +72,15 @@ def _generate_tiles_iiif(processed_path, tiles_dir, object_id, base_url):
         api_version='3.0'
     )
     sg.generate(src=str(processed_path), identifier=object_id)
+
+    # Canonicalize cropped-region tile directories — see fix_fallback_region_sizes's
+    # docstring in iiif_utils.py for why the library's own output needs this patch.
+    fix_fallback_region_sizes(tiles_dir)
+
+    # full/max/0/default.jpg — the canonical v3 full-image request, which
+    # OpenSeadragon also uses for the pyramid's whole-image top level. The
+    # iiif library does not write it; every backend must provide it.
+    generate_full_max(processed_path, tiles_dir)
 
 
 # ---------------------------------------------------------------------------

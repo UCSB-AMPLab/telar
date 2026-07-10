@@ -72,6 +72,10 @@ def check_dependencies():
         print("  Python iiif library:   pip install iiif")
         return None
 
+    if backend == 'iiif':
+        print("⚠️  libvips not found — using the pure-Python iiif fallback")
+        print("   libvips is faster and recommended: brew install vips (macOS) / apt-get install libvips-tools (Linux)")
+
     # Check for optional HEIC support
     try:
         from pillow_heif import register_heif_opener
@@ -414,6 +418,84 @@ def generate_full_max(processed_path, tiles_dir):
                     wh_path.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_file, wh_path / 'default.jpg')
 
+
+# ---------------------------------------------------------------------------
+# iiif library backend (fallback) post-processing
+# ---------------------------------------------------------------------------
+
+def fix_fallback_region_sizes(tiles_dir):
+    """Rename width-only cropped-region tile directories to canonical "w,h" form.
+
+    The pure-Python `iiif` package (the fallback backend detect_tile_backend()
+    returns when libvips is absent) defaults its internal osd_version to
+    '2.0.0'. That default makes IIIFStatic write every cropped-region tile
+    under a width-only "{w}," directory — it only pairs a "{w},{h}"
+    companion (via a symlink) with the full-region case, never with cropped
+    regions. This module's manifests always declare IIIF Image API v3, and
+    OpenSeadragon derives its tile request syntax from that declared version:
+    v3 always requests "{w},{h}". Left alone, every cropped tile from the
+    fallback backend 404s. libvips's `--layout iiif3` output never produces
+    a width-only cropped-region directory, so running this over a
+    vips-generated tree finds nothing to rename.
+
+    The `full/` directory is left untouched: the `iiif` library already
+    symlinks a "{w},{h}" companion there for full-region requests, and
+    libvips-generated trees get their own dual-write from generate_full_max.
+
+    Multi-page objects (rendered PDF pages) each get their own info.json
+    under a page-N/ subdirectory; this function recurses into any
+    subdirectory that carries one, since each is its own IIIF image root.
+
+    Args:
+        tiles_dir: Root output directory for one object (or, for a
+            multi-page object, the directory containing its page-N/
+            subdirectories) — the directory holding info.json and the
+            region subdirectories.
+    """
+    from PIL import Image
+
+    if not tiles_dir.exists():
+        return
+
+    width_only_re = re.compile(r'^(\d+),$')
+
+    for region_dir in list(tiles_dir.iterdir()):
+        if not region_dir.is_dir():
+            continue
+        if region_dir.name == 'full':
+            continue
+
+        # A subdirectory with its own info.json is a page root (multi-page
+        # PDF layout), not a region-tile directory — recurse into it instead.
+        if (region_dir / 'info.json').exists():
+            fix_fallback_region_sizes(region_dir)
+            continue
+
+        for size_dir in list(region_dir.iterdir()):
+            if not size_dir.is_dir():
+                continue
+            match = width_only_re.match(size_dir.name)
+            if not match:
+                continue
+
+            w = int(match.group(1))
+            # Read the actual tile height from disk (rotation/quality.format,
+            # e.g. "0/default.jpg") rather than recomputing it — the file is
+            # the ground truth for what height this directory represents.
+            tile_file = next(size_dir.glob('*/*.*'), None)
+            if tile_file is None:
+                continue
+
+            with Image.open(tile_file) as img:
+                h = img.size[1]
+
+            wh_dir = region_dir / f"{w},{h}"
+            if wh_dir.exists():
+                # Canonical directory already present (e.g. a prior partial
+                # run) — it's authoritative, so drop the width-only duplicate.
+                shutil.rmtree(size_dir)
+            else:
+                size_dir.rename(wh_dir)
 
 
 # ---------------------------------------------------------------------------
