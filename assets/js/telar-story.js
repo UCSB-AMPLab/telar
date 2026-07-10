@@ -2356,7 +2356,7 @@
     _buildSceneMaps(steps);
     state.titleCards = {};
     state.activeTitleCardIndex = null;
-    const audioObjects = storyData?.audioObjects || window.audioObjects || {};
+    const audioObjects = window.audioObjects || {};
     for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
       const firstStepIdx = state.sceneFirstStep[sceneIdx];
       const objectId = state.sceneToObject[sceneIdx];
@@ -2893,7 +2893,7 @@
     });
   }
   function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
-    const audioObjects = window.storyData?.audioObjects || window.audioObjects || {};
+    const audioObjects = window.audioObjects || {};
     const ext = audioObjects[objectId];
     if (!ext) {
       console.error("_initAudioInPlate: no audio extension for", objectId);

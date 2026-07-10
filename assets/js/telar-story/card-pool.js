@@ -418,9 +418,10 @@ export function initCardPool(storyData, config) {
   state.titleCards = {};
   state.activeTitleCardIndex = null;
 
-  // Audio object manifest: maps object_id → file extension (e.g. 'mp3')
-  // Injected by story.html as window.audioObjects from _data/audio_objects.json
-  const audioObjects = storyData?.audioObjects || window.audioObjects || {};
+  // Audio object manifest: maps object_id → file extension (e.g. 'mp3').
+  // Injected by story.html as window.audioObjects from _data/audio_objects.json;
+  // storyData never carries it (story.html injects only steps and firstObject).
+  const audioObjects = window.audioObjects || {};
 
   // Create viewer plates (one per scene)
   for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
@@ -1295,7 +1296,7 @@ function _initVideoInPlate(plateEl, objectId, sceneIndex, zIndex) {
  * @param {number} zIndex
  */
 function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
-  const audioObjects = window.storyData?.audioObjects || window.audioObjects || {};
+  const audioObjects = window.audioObjects || {};
   const ext = audioObjects[objectId];
   if (!ext) {
     console.error('_initAudioInPlate: no audio extension for', objectId);
