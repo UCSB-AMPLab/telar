@@ -4,6 +4,33 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-10
+
+Code health release. Housekeeping across the whole framework — verified dead-code removal, consolidation of duplicated logic, honest labelling of generated vs source files — plus a rebuilt private-stories pipeline, a localization sweep, and a long tail of fixes. Framework files and language packs upgrade automatically; one manual step is required for sites that use private stories (see Notes).
+
+### Changed
+
+- **Private stories rebuilt.** Encryption now happens after the site is built, from the fully rendered page: unlocked stories render glossary links, LaTeX, and localized errors exactly like open stories. The build scans its own output for private content before publishing, and a site with private stories and an outdated build workflow fails on purpose rather than publishing unprotected.
+- **Localization sweep.** Interface text that was hardcoded in English now follows the site language (media-type labels, audio controls, story chrome, glossary headings, panel errors, carousel controls, degraded-mode navigation, upgrade alerts, embed banner fallback); pipeline warnings and the upgrade summary are generated in the site's language.
+- **Theme colours where they belong.** Headings, glossary letters, filter toggles, and panel blockquotes follow the active theme; DEMO labels use the brand colour; the accordion focus ring is visible again.
+- **Code health.** Over 750 lines of verified dead code removed; duplicated logic consolidated to single homes (media-type lists, SCSS mixins, pipeline helpers, IIIF thumbnail resolution, object-page theme/video logic, KaTeX configuration); generated files carry generated-file banners and are marked linguist-generated; comments state constraints instead of narrating history. No reader-facing changes.
+
+### Fixed
+
+- Alt text from the objects CSV now reaches object pages and story steps (from Ana María Cárdenas Gasca's fix).
+- Audio clips honour `clip_start` on first play, not only after looping.
+- LaTeX in a step's question or answer (without layer text) now loads the renderer.
+- Local tile generation without libvips produces tiles the viewer can actually request; the generator names its backend and recommends libvips.
+- The objects page no longer makes doomed image-server requests for video/audio objects; thumbnail resolution is hardened across IIIF profile variants.
+- Panels: no instance leak on reopen, state stays in sync on outside dismissal, close icon shows in vertical/embed layouts.
+- Embedded stories use the site-wide 1024px responsive boundary; button navigation starts from the intro card; uppercase audio extensions recognised; palette-transparency images composite onto white; a text step without coordinates shows the full object; title-card text renders as plain text per its contract.
+
+### Notes
+
+- **Manual step for private-story sites:** v1.6.0's build workflow adds the encryption step, and GitHub does not allow automated upgrades to modify workflow files — recopy `build.yml` from the template (the Compositor does this automatically). Until then, marking a story `private: yes` fails the build by design. See the release notes for details.
+- Language packs are replaced wholesale on upgrade, as in previous releases — re-apply customisations.
+- Known issues: two long-standing story-engine behaviours (a card briefly lingering over the title after "Back to Start"; the URL step fragment not updating during ordinary scrolling) ship documented, to be fixed at the root by a planned story-engine restructure.
+
 ## [1.5.4] - 2026-06-29
 
 CI/build fix release. Adds a GitHub Pages concurrency group to the build workflow so rapid successive builds of the same repository no longer race on Pages' one-deployment-per-repo limit. CI only — no content, schema, or configuration changes. Upgrade in place or simply redeploy.
