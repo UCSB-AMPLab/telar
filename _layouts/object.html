@@ -3,8 +3,9 @@ layout: default
 ---
 
 {%- comment -%}
-  Object layout — the detail page for a single collection object, rendered inside the default
-  shell. One template serves all three media types (Image, Video, Audio); the media type,
+  Object layout — the detail page for a single collection object, rendered inside
+  _layouts/default.html (the base page frame). One template serves all three media
+  types (Image, Video, Audio); the media type,
   injected into frontmatter by generate_collections.py as `page.media_type`, switches which
   viewer and which author-facing tools appear. This is the large (~1,230-line) object page,
   long mostly because each media branch carries its own viewer wiring, metadata block, and
