@@ -1,6 +1,6 @@
 {
   "name": "telar",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "A minimal-computing framework for weaving IIIF images, audio, video, and texts into layered visual narratives.",
   "private": true,
   "license": "MIT",

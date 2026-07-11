@@ -4,6 +4,20 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-11
+
+Upgrade-tooling fix release. The v1.6.0 upgrade could not actually be applied: the upgrade script never registered the v1.6.0 migration, so direct upgrade runs stopped at v1.5.4 while reporting success — and the release was missing the verified tooling package the "Upgrade Telar" workflow downloads, so workflow runs failed before making any changes. Both are fixed; upgrading to v1.6.1 applies everything v1.6.0 contained. No site content, configuration, or display changes.
+
+### Fixed
+
+- **Upgrade chain repaired.** `scripts/upgrade.py` now registers the v1.5.4 → v1.6.0 migration (the migration itself shipped with v1.6.0 but was never wired in) and the new v1.6.0 → v1.6.1 step. Upgrades from any earlier version now run through to v1.6.1 and stamp the version they actually installed.
+- **Verified tooling package published.** The `telar-scripts-v1.6.1.tar.gz` release asset and its checksum, which the "Upgrade Telar" workflow requires since v1.5.0, ship with this release (v1.6.0 shipped without them, so the workflow failed closed before touching any site).
+
+### Notes
+
+- If an upgrade run reported success but left your site at v1.5.4, run the upgrade again — the chain now continues through to v1.6.1. If the "Upgrade Telar" workflow failed with a download error, that was this bug.
+- No site was ever left broken or half-upgraded: the workflow path failed before starting, and the direct path completed a valid upgrade to v1.5.4.
+
 ## [1.6.0] - 2026-07-10
 
 Code health release. Housekeeping across the whole framework — verified dead-code removal, consolidation of duplicated logic, honest labelling of generated vs source files — plus a rebuilt private-stories pipeline, a localization sweep, and a long tail of fixes. Framework files and language packs upgrade automatically; one manual step is required for sites that use private stories (see Notes).

@@ -21,7 +21,7 @@ UPGRADE_SUMMARY.md file listing every automated change made and any
 manual steps the user still needs to complete. The --dry-run flag
 previews what would happen without making changes.
 
-Version: v1.6.0
+Version: v1.6.1
 
 Usage:
     python scripts/upgrade.py              # Normal upgrade
@@ -79,10 +79,12 @@ from migrations.v150_to_v151 import Migration150to151
 from migrations.v151_to_v152 import Migration151to152
 from migrations.v152_to_v153 import Migration152to153
 from migrations.v153_to_v154 import Migration153to154
+from migrations.v154_to_v160 import Migration154to160
+from migrations.v160_to_v161 import Migration160to161
 
 
 # Latest version — must agree with the import block above and MIGRATIONS below
-LATEST_VERSION = "1.5.4"
+LATEST_VERSION = "1.6.1"
 
 # All available migrations in order — must agree with the import block and
 # LATEST_VERSION above (three hand-synced places, no auto-discovery)
@@ -120,6 +122,8 @@ MIGRATIONS = [
     Migration151to152,
     Migration152to153,
     Migration153to154,
+    Migration154to160,
+    Migration160to161,
 ]
 
 
