@@ -129,6 +129,27 @@ def test_pip_failure_returns_failure_without_raising(monkeypatch, tmp_path):
     assert len(calls) == 1
 
 
+def test_pip_timeout_returns_failure_without_raising(monkeypatch, tmp_path):
+    """A pip install that hits its timeout returns (False, [...]) and does not raise."""
+    tooling = tmp_path / 'tooling'
+    site = tmp_path / 'site'
+    site.mkdir()
+    _point_tooling_at(monkeypatch, tooling)
+    (tooling / 'requirements.txt').write_text('markdown\n')
+
+    state = {'missing': {'markdown'}}
+    _install_find_spec(monkeypatch, state)
+
+    def _hang(cmd, *args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get('timeout', 0))
+
+    monkeypatch.setattr(subprocess, 'run', _hang)
+
+    ok, missing = upgrade._ensure_regeneration_dependencies(str(site))
+    assert ok is False
+    assert missing == ['markdown']
+
+
 def test_no_manifest_anywhere_returns_failure_no_pip(monkeypatch, tmp_path):
     """With no manifest in either location, return failure without calling pip."""
     tooling = tmp_path / 'tooling'  # no requirements.txt

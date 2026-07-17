@@ -459,6 +459,9 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
     SOFT: tile generation can fail (e.g. missing source images) without
     invalidating the upgrade, and is surfaced as a warning instead.
 
+    Precondition: the modules in _REGENERATION_IMPORTS must be importable in
+    this interpreter — main() runs _ensure_regeneration_dependencies() first.
+
     Args:
         repo_root: Path to repository root
 
@@ -535,7 +538,9 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
 
 # Import names that data regeneration transitively requires. csv_to_json.py and
 # generate_collections.py load the scripts/telar package, which eagerly imports
-# these; regeneration cannot run unless every one resolves.
+# these; regeneration cannot run unless every one resolves. These are IMPORT
+# names, not pip package names — requirements.txt lists the packages that
+# provide them (PIL comes from Pillow, yaml from pyyaml).
 _REGENERATION_IMPORTS = ["markdown", "PIL", "jinja2", "cryptography", "yaml", "pandas"]
 
 
@@ -549,11 +554,12 @@ def _missing_regeneration_imports() -> List[str]:
 def _ensure_regeneration_dependencies(repo_root: str) -> Tuple[bool, List[str]]:
     """Ensure the modules data regeneration needs are importable.
 
-    Data regeneration subprocess-runs csv_to_json.py and generate_collections.py,
-    which transitively import the modules in _REGENERATION_IMPORTS through the
-    scripts/telar package. This script is fetched fresh from the release tooling
-    tarball on every run, so it ensures its own dependencies here rather than
-    relying on the site's CI workflow — a copy the migrations cannot update.
+    _regenerate_data_files() subprocess-runs csv_to_json.py and
+    generate_collections.py, which transitively import the modules in
+    _REGENERATION_IMPORTS through the scripts/telar package. This script is
+    fetched fresh from the release tooling tarball on every run, so it ensures
+    its own dependencies here rather than relying on the site's CI workflow — a
+    copy the migrations cannot update.
 
     When every required module already resolves, this returns immediately with no
     pip call. Otherwise it installs from a requirements manifest, preferring the
@@ -591,15 +597,20 @@ def _ensure_regeneration_dependencies(repo_root: str) -> Tuple[bool, List[str]]:
         return (False, missing)
 
     print(f"  Installing regeneration dependencies from {manifest} ...")
-    result = subprocess.run(
-        [sys.executable, '-m', 'pip', 'install', '-r', str(manifest)],
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        stderr_tail = '\n'.join((result.stderr or '').strip().splitlines()[-10:])
-        print(f"  ⚠️  Warning: pip install from {manifest} failed:\n{stderr_tail}")
+    try:
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r', str(manifest)],
+            capture_output=True,
+            text=True,
+            # pip resolves over the network; without a bound, a hung fetch
+            # stalls the CI job until the runner's own multi-hour timeout.
+            timeout=600,
+        )
+        if result.returncode != 0:
+            stderr_tail = '\n'.join((result.stderr or '').strip().splitlines()[-10:])
+            print(f"  ⚠️  Warning: pip install from {manifest} failed:\n{stderr_tail}")
+    except subprocess.TimeoutExpired:
+        print(f"  ⚠️  Warning: pip install from {manifest} timed out")
 
     # A fresh install may not be visible to find_spec until import caches are cleared.
     importlib.invalidate_caches()
