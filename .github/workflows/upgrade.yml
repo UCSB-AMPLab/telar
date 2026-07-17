@@ -22,7 +22,7 @@ name: Upgrade Telar
 #      fetched tooling or CI bookkeeping files) and open an issue to review and
 #      merge.
 #
-# Version: v1.5.0
+# Version: v1.6.2
 
 on:
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pyyaml pandas
+        run: pip install -r requirements.txt
 
       - name: Resolve target release
         id: resolve
@@ -218,6 +218,7 @@ jobs:
           # Set language-specific strings
           if [ "$SITE_LANG" = "es" ]; then
             TITLE="Actualizar Telar a $VERSION"
+            SUPERSEDED_MSG="Reemplazado por una ejecucion mas reciente del workflow de actualizacion."
             HEADER="## Actualizacion lista: v$FROM_VERSION → v$VERSION"
             STATUS="**Estado:** Actualizacion automatica completada"
             BRANCH_LABEL="**Rama:**"
@@ -245,6 +246,7 @@ jobs:
             FOOTER="<sub>Esta actualizacion fue realizada automaticamente por el workflow de actualizacion de Telar.</sub>"
           else
             TITLE="Upgrade Telar to $VERSION"
+            SUPERSEDED_MSG="Superseded by a fresh run of the upgrade workflow."
             HEADER="## Upgrade Ready: v$FROM_VERSION → v$VERSION"
             STATUS="**Status:** Automated upgrade complete"
             BRANCH_LABEL="**Branch:**"
@@ -348,6 +350,18 @@ jobs:
 
           # Create upgrade label if it doesn't exist
           gh label create "upgrade" --description "Automated Telar upgrade" --color "0E8A16" 2>/dev/null || true
+
+          # Close any existing open issue with the same title as the one this
+          # run is about to create, so re-running the workflow does not leave
+          # duplicate upgrade issues open for the same version and language.
+          # $TITLE is passed via --arg rather than interpolated into the jq
+          # filter, consistent with the injection-safety approach used above.
+          EXISTING_ISSUE=$(gh issue list --state open --label upgrade --json number,title | \
+            jq -r --arg title "$TITLE" '.[] | select(.title == $title) | .number' | head -n1)
+          if [ -n "$EXISTING_ISSUE" ]; then
+            gh issue comment "$EXISTING_ISSUE" --body "$SUPERSEDED_MSG"
+            gh issue close "$EXISTING_ISSUE"
+          fi
 
           # Create the issue
           gh issue create \

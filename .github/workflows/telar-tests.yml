@@ -11,7 +11,7 @@ name: Test Telar Scripts
 # On pull request to main, all test suites run automatically. When triggered
 # manually via workflow_dispatch, you can choose which suites to run.
 #
-# Version: v1.5.0
+# Version: v1.6.2
 
 on:
   pull_request:
@@ -33,11 +33,13 @@ on:
 permissions:
   contents: read
 
+# Framework unit tests run only in the Telar repos, not in sites built from
+# this template, and only for the suites selected on manual dispatch.
 jobs:
   python:
     name: Python Unit Tests
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_python }}
+    if: ${{ (github.repository == 'UCSB-AMPLab/telar' || github.repository == 'juancobo/telar') && (github.event_name != 'workflow_dispatch' || inputs.run_python) }}
 
     steps:
       - name: Checkout repository
@@ -60,7 +62,7 @@ jobs:
   javascript:
     name: JavaScript Unit Tests
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_javascript }}
+    if: ${{ (github.repository == 'UCSB-AMPLab/telar' || github.repository == 'juancobo/telar') && (github.event_name != 'workflow_dispatch' || inputs.run_javascript) }}
 
     steps:
       - name: Checkout repository
