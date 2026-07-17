@@ -82,10 +82,11 @@ from migrations.v152_to_v153 import Migration152to153
 from migrations.v153_to_v154 import Migration153to154
 from migrations.v154_to_v160 import Migration154to160
 from migrations.v160_to_v161 import Migration160to161
+from migrations.v161_to_v162 import Migration161to162
 
 
 # Latest version — must agree with the import block above and MIGRATIONS below
-LATEST_VERSION = "1.6.1"
+LATEST_VERSION = "1.6.2"
 
 # All available migrations in order — must agree with the import block and
 # LATEST_VERSION above (three hand-synced places, no auto-discovery)
@@ -125,6 +126,7 @@ MIGRATIONS = [
     Migration153to154,
     Migration154to160,
     Migration160to161,
+    Migration161to162,
 ]
 
 
