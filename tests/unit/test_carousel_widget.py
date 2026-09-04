@@ -9,7 +9,7 @@ The parsing validates required fields (image), warns about missing alt text
 for accessibility, and analyzes image aspect ratios to determine optimal
 carousel height.
 
-Version: v1.5.0
+Version: v1.7.0
 """
 
 import sys
@@ -215,6 +215,54 @@ alt: Portrait"""
             result = parse_carousel_widget(content, 'test.md', warnings)
             # Max aspect ratio is 1.67 (portrait), so should be 'portrait'
             assert result['size_class'] == 'portrait'
+
+    def test_declared_dimensions_are_used_without_opening_the_image(self, mock_image_validation):
+        """A remote image is otherwise downloaded on every build to read its
+        size. Declaring width and height is how the demo bundles avoid that."""
+        with patch('telar.widgets.get_image_dimensions') as mock:
+            content = """image: https://content.telar.org/assets/images/demo.jpg
+alt: Declared
+width: 600
+height: 1000"""
+            result = parse_carousel_widget(content, 'test.md', [])
+
+        assert result['size_class'] == 'portrait'
+        mock.assert_not_called()
+
+    def test_an_item_without_declared_dimensions_is_still_measured(self, mock_image_validation):
+        """Mixed carousels: only the undeclared item is opened."""
+        with patch('telar.widgets.get_image_dimensions', return_value=(1000, 400)) as mock:
+            content = """image: declared.jpg
+alt: Declared
+width: 800
+height: 600
+
+---
+
+image: measured.jpg
+alt: Measured"""
+            result = parse_carousel_widget(content, 'test.md', [])
+
+        assert result['size_class'] == 'default'
+        mock.assert_called_once_with('measured.jpg')
+
+    @pytest.mark.parametrize('declared', [
+        'width: 800',
+        'height: 600',
+        'width: 800\nheight: 0',
+        'width: wide\nheight: 600',
+        'width: 800\nheight: -1',
+    ])
+    def test_an_incomplete_or_invalid_declaration_falls_back_to_measuring(
+            self, declared, mock_image_validation):
+        with patch('telar.widgets.get_image_dimensions', return_value=(800, 600)) as mock:
+            content = f"""image: photo.jpg
+alt: Photo
+{declared}"""
+            result = parse_carousel_widget(content, 'test.md', [])
+
+        assert result['size_class'] == 'default'
+        mock.assert_called_once_with('photo.jpg')
 
     def test_handles_colons_in_caption(self, mock_image_validation, mock_image_dimensions):
         """Should handle colons in caption and credit values."""
