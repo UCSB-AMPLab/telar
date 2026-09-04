@@ -21,17 +21,24 @@
     "url": "https://github.com/UCSB-AMPLab/telar/issues"
   },
   "scripts": {
-    "build:js": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js": "npm run build:js:story && npm run build:js:object && npm run build:js:home && npm run build:js:objects-index && npm run build:js:iiif-url-warning && npm run build:js:objects-filter && npm run build:js:share-panel",
+    "build:js:story": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js:object": "esbuild assets/js/object-page/main.js --bundle --outfile=assets/js/object-page.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/object-page/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js:home": "esbuild assets/js/iiif-thumbnails/home.js --bundle --outfile=assets/js/home-page.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-thumbnails/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js:objects-index": "esbuild assets/js/iiif-thumbnails/objects-index.js --bundle --outfile=assets/js/objects-index-page.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-thumbnails/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js:iiif-url-warning": "esbuild assets/js/iiif-url-warning/main.js --bundle --outfile=assets/js/iiif-url-warning.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-url-warning/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js:objects-filter": "esbuild assets/js/objects-filter/main.js --bundle --outfile=assets/js/objects-filter.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/objects-filter/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
+    "build:js:share-panel": "esbuild assets/js/share-panel/main.js --bundle --outfile=assets/js/share-panel.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */\"",
     "test:js": "vitest run",
     "test:js:watch": "vitest"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
-    "jsdom": "^29.0.1",
-    "vitest": "^4.1.8"
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.0.1",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@vimeo/player": "^2.30.4",
-    "lenis": "^1.3.23"
+    "lenis": "^1.3.26"
   }
 }
