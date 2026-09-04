@@ -9,10 +9,13 @@ locally (already installed) and fails only in a clean CI/user environment.
 A workflow `if:` guard that scopes framework tests to the framework's own
 repos can be dropped in a rewrite without any test noticing. A migration
 that ships package.json without package-lock.json (or vice versa) leaves
-npm free to re-resolve versions instead of installing the pinned tree.
+npm free to re-resolve versions instead of installing the pinned tree. A
+supported Ruby declared only inside a workflow file is invisible to anyone
+working locally, so bundler resolves a different gem set and rewrites the
+lock without complaint.
 These tests turn each of those mismatches into a CI failure at PR time.
 
-Version: v1.6.2
+Version: v1.7.0
 """
 
 import ast
@@ -276,3 +279,102 @@ def test_migration_manifests_ship_lockfile_pairs():
         "FRAMEWORK_FILES must ship package.json and package-lock.json as a "
         "pair (both present or both absent):\n" + "\n".join(violations)
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 5: the supported Ruby is declared once and agrees everywhere
+# ---------------------------------------------------------------------------
+
+_GEMFILE_RUBY_RE = re.compile(r'^ruby\s+(.+)$', re.MULTILINE)
+_REQUIREMENT_RE = re.compile(r'"(>=|<=|<|>|~>|=)?\s*([0-9][0-9.]*)"')
+
+
+def _version_tuple(text):
+    return tuple(int(part) for part in text.strip().split('.'))
+
+
+def _gemfile_ruby_requirements():
+    """The (operator, version) pairs from the Gemfile's `ruby` directive."""
+    gemfile = (REPO_ROOT / 'Gemfile').read_text(encoding='utf-8')
+    match = _GEMFILE_RUBY_RE.search(gemfile)
+    assert match, (
+        "Gemfile declares no `ruby` requirement. Without one, bundler on an "
+        "older Ruby resolves a different gem set and rewrites Gemfile.lock "
+        "instead of failing."
+    )
+    return [
+        (operator or '=', _version_tuple(version))
+        for operator, version in _REQUIREMENT_RE.findall(match.group(1))
+    ]
+
+
+def _satisfies(version, operator, bound):
+    # Compare on the shorter of the two, so `>= 3.2` accepts 3.2.11.
+    width = min(len(version), len(bound))
+    left, right = version[:width], bound[:width]
+    if operator == '>=':
+        return left >= right
+    if operator == '>':
+        return left > right
+    if operator == '<=':
+        return left <= right
+    if operator == '<':
+        return version < bound if len(bound) >= len(version) else left < right
+    if operator == '~>':
+        return left[:-1] == right[:-1] and left >= right
+    return left == right
+
+
+def test_ruby_version_file_exists_and_is_specific():
+    """`.ruby-version` names one interpreter, so version managers pick it up."""
+    path = REPO_ROOT / '.ruby-version'
+    assert path.exists(), (
+        ".ruby-version is missing. The supported Ruby would then be declared "
+        "only inside workflow files, where nobody working locally sees it."
+    )
+    declared = path.read_text(encoding='utf-8').strip()
+    assert re.fullmatch(r'\d+\.\d+\.\d+', declared), (
+        f".ruby-version holds {declared!r}; it must name an exact X.Y.Z, "
+        "because rbenv and asdf do not resolve partial versions."
+    )
+
+
+def test_ruby_version_satisfies_the_gemfile_constraint():
+    declared = _version_tuple(
+        (REPO_ROOT / '.ruby-version').read_text(encoding='utf-8').strip()
+    )
+    for operator, bound in _gemfile_ruby_requirements():
+        assert _satisfies(declared, operator, bound), (
+            f".ruby-version names {declared}, which the Gemfile's "
+            f"`ruby {operator} {bound}` rejects. A developer following "
+            ".ruby-version would be refused by bundler."
+        )
+
+
+def test_workflow_ruby_pins_match_the_declared_version():
+    """Every workflow pin must agree with `.ruby-version` on major.minor.
+
+    The workflows pin a series ('3.2') and let the runner take its newest
+    patch; `.ruby-version` names the exact one. They agree when the series
+    matches — a workflow left on an older series would build against a
+    different gem set than anyone develops with.
+    """
+    declared = _version_tuple(
+        (REPO_ROOT / '.ruby-version').read_text(encoding='utf-8').strip()
+    )
+    workflows = sorted((REPO_ROOT / '.github' / 'workflows').glob('*.yml'))
+    pins = {}
+    for workflow in workflows:
+        for pin in re.findall(
+            r"ruby-version:\s*['\"]?([0-9][0-9.]*)['\"]?",
+            workflow.read_text(encoding='utf-8'),
+        ):
+            pins[workflow.name] = pin
+
+    assert pins, "No workflow pins a Ruby version; this test has nothing to check."
+    for name, pin in pins.items():
+        assert _version_tuple(pin)[:2] == declared[:2], (
+            f"{name} pins Ruby {pin}, but .ruby-version names "
+            f"{'.'.join(str(part) for part in declared)}. CI would build "
+            "against a different Ruby series than local development."
+        )
