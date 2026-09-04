@@ -34,7 +34,7 @@ Tile generation backends:
   - iiif library (fallback): Pure Python, no system dependencies.
     Install: pip install iiif
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import os
@@ -168,7 +168,13 @@ def load_objects_needing_tiles():
 
 def find_image_for_object(object_id, source_dir):
     """
-    Find image file for a given object_id, checking multiple extensions (case-insensitive)
+    Find image file for a given object_id, trying each extension in both cases
+
+    The stem is the object_id exactly as written: only the extension is tried
+    in both cases. A file whose name differs from the object_id in any other
+    way is not found here, and on a case-sensitive filesystem that includes a
+    difference of capitalisation. macOS hides that; the build runs on Linux.
+    Naming the near-match is `objects.py`'s job, at validation time.
 
     Args:
         object_id: Object identifier
@@ -212,6 +218,178 @@ def get_base_url_from_config():
         # Silently fail - caller will use fallback
         return None
 
+def _resolve_base_url(base_url):
+    """
+    Settle the base URL the manifests will carry.
+
+    Priority: the --base-url flag, then _config.yml, then the SITE_URL
+    environment variable, then a localhost default.
+
+    Args:
+        base_url: Base URL passed by the caller, or None
+
+    Returns:
+        The base URL to generate with
+    """
+    if base_url:
+        return base_url
+    return (get_base_url_from_config() or
+            os.environ.get('SITE_URL') or
+            'http://localhost:4000')
+
+
+def _print_run_banner(source_dir, output_dir, base_url, backend):
+    """
+    Print the header naming what this run is about to do.
+
+    Args:
+        source_dir: Directory containing source images
+        output_dir: Directory the tiles and manifests go to
+        base_url: Base URL the manifests will carry
+        backend: 'libvips' or 'iiif'
+    """
+    print("=" * 60)
+    print("IIIF Tile Generator for Telar")
+    print("=" * 60)
+    print(f"Source: {source_dir}")
+    print(f"Output: {output_dir}")
+    print(f"Base URL: {base_url}")
+    print(f"Backend: {backend}" + (" (28x faster)" if backend == 'libvips' else " (fallback)"))
+
+    # Show helpful message for local development
+    if base_url and ('github.io' in base_url or base_url.startswith('https://')):
+        # Extract baseurl from full URL for the hint
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        path = parsed.path if parsed.path != '/' else ''
+        print(f"\nℹ️  Generating tiles for production URL")
+        print(f"   For local development, use: --base-url http://localhost:4000{path}")
+
+    print("=" * 60)
+    print()
+
+
+def _select_objects(filter_objects):
+    """
+    Choose the objects this run will generate tiles for.
+
+    Args:
+        filter_objects: Comma-separated string of object IDs, or None for all
+
+    Returns:
+        list: Object IDs to process, empty when there is nothing to do
+        None: objects.json could not be read
+    """
+    # Load objects from objects.json (CSV-driven approach)
+    objects_needing_tiles = load_objects_needing_tiles()
+
+    if objects_needing_tiles is None:
+        return None
+
+    if not objects_needing_tiles:
+        print("ℹ️  No objects need IIIF tiles (all use external manifests)")
+        return []
+
+    # Filter to requested object IDs if --objects was provided
+    if filter_objects:
+        requested = {o.strip() for o in filter_objects.split(',')}
+        objects_needing_tiles = [o for o in objects_needing_tiles if o in requested]
+        if not objects_needing_tiles:
+            print(f"ℹ️  No matching objects found for: {filter_objects}")
+
+    return objects_needing_tiles
+
+
+def _generate_for_object(image_file, object_output, object_id, base_url, backend):
+    """
+    Run one source file through the pipeline its format calls for.
+
+    Args:
+        image_file: Path to the source file
+        object_output: Output directory for this object
+        object_id: Object identifier
+        base_url: Base URL for the site
+        backend: 'libvips' or 'iiif'
+
+    Returns:
+        'processed' or 'skipped'
+    """
+    # PDF files get multi-page processing; everything else is a single image
+    if image_file.suffix.lower() == '.pdf':
+        try:
+            from process_pdf import process_pdf_object
+            process_pdf_object(image_file, object_output, object_id, base_url)
+            print(f"  ✓ Generated multi-page tiles for {object_id}")
+            return 'processed'
+        except ImportError:
+            print(f"  ❌ PyMuPDF not installed — cannot process {image_file.name}")
+            return 'skipped'
+
+    generate_iiif_for_image(image_file, object_output, object_id, base_url, backend)
+    print(f"  ✓ Generated tiles for {object_id}")
+    return 'processed'
+
+
+def _process_object(object_id, source_dir, output_path, base_url, backend):
+    """
+    Find one object's source file and rebuild its tile tree from scratch.
+
+    A failure here is one object's, not the run's: it is reported and the
+    caller moves on to the next.
+
+    Args:
+        object_id: Object identifier
+        source_dir: Directory to search for the source file
+        output_path: Parent directory of every object's tile tree
+        base_url: Base URL for the site
+        backend: 'libvips' or 'iiif'
+
+    Returns:
+        'processed', 'skipped', or 'rejected' for an out-of-bounds output path,
+        which counts as neither
+    """
+    # Find image file for this object
+    image_file = find_image_for_object(object_id, source_dir)
+
+    if not image_file:
+        print(f"  ⚠️  No image file found for {object_id}")
+        print(f"      Checked: {object_id}.jpg, .jpeg, .png, .heic, .heif, .webp, .tif, .tiff, .pdf")
+        print(f"      The name before the extension must match {object_id} exactly, including capitalisation.")
+        print()
+        return 'skipped'
+
+    print(f"  Found: {image_file.name}")
+
+    # Output directory for this object
+    object_output = output_path / object_id
+
+    # Boundary guard (belt-and-suspenders): never rmtree/mkdir outside the
+    # output directory, whatever the object_id resolved to.
+    if not object_output.resolve().is_relative_to(output_path.resolve()):
+        print(f"  [WARNING] Skipping object with out-of-bounds output path: {object_id!r}")
+        print()
+        return 'rejected'
+
+    try:
+        # Remove existing output if present
+        if object_output.exists():
+            shutil.rmtree(object_output)
+
+        object_output.mkdir(parents=True, exist_ok=True)
+
+        outcome = _generate_for_object(image_file, object_output, object_id,
+                                       base_url, backend)
+        print()
+        return outcome
+
+    except Exception as e:
+        print(f"  ❌ Error processing {image_file.name}: {e}")
+        import traceback
+        traceback.print_exc()
+        print()
+        return 'skipped'
+
+
 def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/objects', base_url=None, filter_objects=None):
     """
     Generate IIIF tiles for objects listed in objects.json
@@ -234,55 +412,22 @@ def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/obj
         print(f"   Please create it and add images, or use --source-dir to specify a different location.")
         return False
 
-    # Get base URL from config or environment
-    # Priority: --base-url flag > _config.yml > SITE_URL env var > localhost default
-    if not base_url:
-        base_url = (get_base_url_from_config() or
-                    os.environ.get('SITE_URL') or
-                    'http://localhost:4000')
+    base_url = _resolve_base_url(base_url)
 
     # Create output directory
     output_path.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 60)
-    print("IIIF Tile Generator for Telar")
-    print("=" * 60)
-    print(f"Source: {source_dir}")
-    print(f"Output: {output_dir}")
-    print(f"Base URL: {base_url}")
-    print(f"Backend: {backend}" + (" (28x faster)" if backend == 'libvips' else " (fallback)"))
+    _print_run_banner(source_dir, output_dir, base_url, backend)
 
-    # Show helpful message for local development
-    if base_url and ('github.io' in base_url or base_url.startswith('https://')):
-        # Extract baseurl from full URL for the hint
-        from urllib.parse import urlparse
-        parsed = urlparse(base_url)
-        path = parsed.path if parsed.path != '/' else ''
-        print(f"\nℹ️  Generating tiles for production URL")
-        print(f"   For local development, use: --base-url http://localhost:4000{path}")
-
-    print("=" * 60)
-    print()
-
-    # Load objects from objects.json (CSV-driven approach)
     print("📋 Loading objects from objects.json...")
-    objects_needing_tiles = load_objects_needing_tiles()
+    objects_needing_tiles = _select_objects(filter_objects)
 
     if objects_needing_tiles is None:
         print("❌ Could not load objects.json")
         return False
 
     if not objects_needing_tiles:
-        print("ℹ️  No objects need IIIF tiles (all use external manifests)")
         return True
-
-    # Filter to requested object IDs if --objects was provided
-    if filter_objects:
-        requested = {o.strip() for o in filter_objects.split(',')}
-        objects_needing_tiles = [o for o in objects_needing_tiles if o in requested]
-        if not objects_needing_tiles:
-            print(f"ℹ️  No matching objects found for: {filter_objects}")
-            return True
 
     print(f"✓ Found {len(objects_needing_tiles)} objects needing tiles\n")
 
@@ -293,59 +438,11 @@ def generate_iiif_tiles(source_dir='telar-content/objects', output_dir='iiif/obj
     for i, object_id in enumerate(objects_needing_tiles, 1):
         print(f"[{i}/{len(objects_needing_tiles)}] Processing {object_id}...")
 
-        # Find image file for this object
-        image_file = find_image_for_object(object_id, source_dir)
-
-        if not image_file:
-            print(f"  ⚠️  No image file found for {object_id}")
-            print(f"      Checked: {object_id}.jpg, .jpeg, .png, .heic, .heif, .webp, .tif, .tiff, .pdf (case-insensitive)")
+        outcome = _process_object(object_id, source_dir, output_path, base_url, backend)
+        if outcome == 'processed':
+            processed_count += 1
+        elif outcome == 'skipped':
             skipped_count += 1
-            print()
-            continue
-
-        print(f"  Found: {image_file.name}")
-
-        # Output directory for this object
-        object_output = output_path / object_id
-
-        # Boundary guard (belt-and-suspenders): never rmtree/mkdir outside the
-        # output directory, whatever the object_id resolved to.
-        if not object_output.resolve().is_relative_to(output_path.resolve()):
-            print(f"  [WARNING] Skipping object with out-of-bounds output path: {object_id!r}")
-            print()
-            continue
-
-        try:
-            # Remove existing output if present
-            if object_output.exists():
-                shutil.rmtree(object_output)
-
-            object_output.mkdir(parents=True, exist_ok=True)
-
-            # PDF files get multi-page processing; everything else is a single image
-            if image_file.suffix.lower() == '.pdf':
-                try:
-                    from process_pdf import process_pdf_object
-                    process_pdf_object(image_file, object_output, object_id, base_url)
-                    print(f"  ✓ Generated multi-page tiles for {object_id}")
-                    processed_count += 1
-                except ImportError:
-                    print(f"  ❌ PyMuPDF not installed — cannot process {image_file.name}")
-                    skipped_count += 1
-            else:
-                generate_iiif_for_image(image_file, object_output, object_id, base_url, backend)
-                print(f"  ✓ Generated tiles for {object_id}")
-                processed_count += 1
-
-            print()
-
-        except Exception as e:
-            print(f"  ❌ Error processing {image_file.name}: {e}")
-            import traceback
-            traceback.print_exc()
-            skipped_count += 1
-            print()
-            continue
 
     print("=" * 60)
     print("✓ IIIF generation complete!")
