@@ -2,10 +2,11 @@
 Unit Tests for generate_collections.py
 
 Tests focus on the media_type detection logic, source_url injection
-for video objects, and (v1.3.0) sister-file localization in
-generate_pages().
+for video objects, (v1.3.0) sister-file localization in generate_pages(),
+and (v1.7.0) the story page manifest that tells the post-build encryption
+step where each story rendered.
 
-Version: v1.5.0
+Version: v1.7.0
 """
 
 import sys
@@ -414,3 +415,160 @@ class TestStoryFrontmatterSerialization:
         assert parsed.get('byline') != 'pwned'
         assert parsed['title'] == 'My Story'
         assert parsed['layout'] == 'story'
+
+
+class TestStoryPageManifest:
+    """generate_stories() declares where each story renders, and records it."""
+
+    def _site(self, tmp_path, stories, config=None):
+        """Build a minimal site, run generate_stories(), return its data dir."""
+        from generate_collections import generate_stories
+
+        (tmp_path / '_data').mkdir()
+        (tmp_path / '_data' / 'project.json').write_text(
+            json.dumps([{'stories': stories}]), encoding='utf-8'
+        )
+        for story in stories:
+            identifier = story.get('story_id') or f"story-{story.get('number')}"
+            (tmp_path / '_data' / f'{identifier}.json').write_text('[]', encoding='utf-8')
+
+        orig = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_stories(config)
+        finally:
+            os.chdir(orig)
+        return tmp_path / '_data'
+
+    def _manifest(self, data_dir):
+        return json.loads(
+            (data_dir / 'telar-build' / 'story-pages.json').read_text(encoding='utf-8')
+        )
+
+    def test_underscore_identifier_gets_an_explicit_permalink(self, tmp_path):
+        import yaml
+        data_dir = self._site(tmp_path, [
+            {'number': 1, 'title': 'Blank', 'story_id': 'blank_template'},
+        ])
+        document = (tmp_path / '_jekyll-files' / '_stories' / 'blank_template.md')
+        frontmatter = yaml.safe_load(document.read_text(encoding='utf-8').split('---')[1])
+        # The same URL the collection template produced by slugifying the
+        # basename — declared now instead of derived.
+        assert frontmatter['permalink'] == '/stories/blank-template/'
+        assert self._manifest(data_dir)['stories']['blank_template']['url'] == \
+            '/stories/blank-template/'
+
+    def test_manifest_covers_every_generated_story(self, tmp_path):
+        data_dir = self._site(tmp_path, [
+            {'number': 1, 'title': 'One', 'story_id': 'one'},
+            {'number': 2, 'title': 'Two'},
+        ])
+        assert set(self._manifest(data_dir)['stories']) == {'one', 'story-2'}
+
+    def test_a_story_without_a_data_file_is_not_in_the_manifest(self, tmp_path):
+        # generate_stories() skips it, so it renders at no URL and the
+        # encryptor must not be told one exists.
+        from generate_collections import generate_stories
+
+        (tmp_path / '_data').mkdir()
+        (tmp_path / '_data' / 'project.json').write_text(json.dumps([{'stories': [
+            {'number': 1, 'title': 'Present', 'story_id': 'present'},
+            {'number': 2, 'title': 'Absent', 'story_id': 'absent'},
+        ]}]), encoding='utf-8')
+        (tmp_path / '_data' / 'present.json').write_text('[]', encoding='utf-8')
+
+        orig = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_stories()
+        finally:
+            os.chdir(orig)
+        assert set(self._manifest(tmp_path / '_data')['stories']) == {'present'}
+
+    def test_colliding_identifiers_are_refused_before_anything_is_written(self, tmp_path):
+        from telar.story_pages import ManifestError
+
+        stories_dir = tmp_path / '_jekyll-files' / '_stories'
+        stories_dir.mkdir(parents=True)
+        survivor = stories_dir / 'from-an-earlier-run.md'
+        survivor.write_text('---\n---\n', encoding='utf-8')
+
+        with pytest.raises(ManifestError, match="all render at"):
+            self._site(tmp_path, [
+                {'number': 1, 'title': 'A', 'story_id': 'my_story'},
+                {'number': 2, 'title': 'B', 'story_id': 'my-story'},
+            ])
+        # The collection was not cleaned, so the site is unchanged rather
+        # than half-generated.
+        assert survivor.exists()
+        assert not (tmp_path / '_data' / 'telar-build').exists()
+
+    def test_stale_fragment_pages_are_cleared_without_project_json(self, tmp_path):
+        # A fragment left from a run when a story was protected renders
+        # plaintext steps that nothing downstream will remove.
+        from generate_collections import generate_protected_fragments
+
+        pages = tmp_path / '_jekyll-files' / '_pages'
+        pages.mkdir(parents=True)
+        stale = pages / 'telar-fragment-was-protected.md'
+        stale.write_text('---\nlayout: story-fragment\n---\n', encoding='utf-8')
+
+        orig = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_protected_fragments()
+        finally:
+            os.chdir(orig)
+        assert not stale.exists()
+
+    def test_stale_fragment_pages_are_cleared_when_stories_are_skipped(self, tmp_path):
+        from generate_collections import generate_protected_fragments
+
+        (tmp_path / '_data').mkdir()
+        (tmp_path / '_data' / 'project.json').write_text(json.dumps([{'stories': [
+            {'number': 1, 'title': 'P', 'story_id': 'p', 'protected': True},
+        ]}]), encoding='utf-8')
+        (tmp_path / '_data' / 'p.json').write_text('[]', encoding='utf-8')
+        pages = tmp_path / '_jekyll-files' / '_pages'
+        pages.mkdir(parents=True)
+        stale = pages / 'telar-fragment-p.md'
+        stale.write_text('---\nlayout: story-fragment\n---\n', encoding='utf-8')
+
+        orig = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_protected_fragments(skip=True)
+        finally:
+            os.chdir(orig)
+        assert not stale.exists()
+
+    def test_missing_project_json_drops_a_previous_manifest(self, tmp_path):
+        # An inventory from an earlier run describes pages this build cannot
+        # vouch for, and the encryption step reads it as authoritative.
+        from generate_collections import generate_stories
+
+        (tmp_path / '_data').mkdir()
+        manifest = tmp_path / '_data' / 'telar-build' / 'story-pages.json'
+        manifest.parent.mkdir()
+        manifest.write_text('{"schema": 1, "stories": {}}', encoding='utf-8')
+
+        orig = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            generate_stories()
+        finally:
+            os.chdir(orig)
+        assert not manifest.exists()
+
+    def test_custom_permalink_writes_no_permalink_and_no_url(self, tmp_path):
+        import yaml
+        config = {'collections': {'stories': {'permalink': '/relatos/:name/'}}}
+        data_dir = self._site(
+            tmp_path, [{'number': 1, 'title': 'A', 'story_id': 'uno'}], config
+        )
+        document = tmp_path / '_jekyll-files' / '_stories' / 'uno.md'
+        frontmatter = yaml.safe_load(document.read_text(encoding='utf-8').split('---')[1])
+        assert 'permalink' not in frontmatter
+        manifest = self._manifest(data_dir)
+        assert manifest['stories_permalink'] == '/relatos/:name/'
+        assert 'url' not in manifest['stories']['uno']

@@ -26,7 +26,7 @@ Each step can be skipped with flags (--skip-fetch, --skip-iiif,
 has changed. The default behaviour is to run all steps and start a
 local Jekyll server on port 4001.
 
-Version: v1.6.0
+Version: v1.7.0
 
 Usage:
     python3 scripts/build_local_site.py              # Build and serve on port 4001
@@ -42,6 +42,10 @@ import subprocess
 import sys
 import yaml
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from telar.build_conflicts import find_conflicts, format_failure  # noqa: E402
 
 
 def _run_command(cmd, description, check, use_shell):
@@ -62,6 +66,38 @@ def _run_command(cmd, description, check, use_shell):
 def run_command(cmd, description, check=True):
     """Run a shell command with status output"""
     return _run_command(cmd, description, check, use_shell=True)
+
+
+def run_jekyll_build():
+    """Build the site, then fail on any destination conflict Jekyll found.
+
+    Jekyll reports two files claiming one destination as a warning and exits
+    0, so the page that loses is silently absent — and for a protected story
+    the encryption step can end up writing to a page that is not the story.
+    The output is streamed as it arrives and kept, so the gate can read it.
+    """
+    print(f"\n{'='*60}")
+    print("  Step 7/9: Building Jekyll site")
+    print(f"{'='*60}\n")
+
+    captured = []
+    process = subprocess.Popen(
+        ['bundle', 'exec', 'jekyll', 'build'],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+    for line in process.stdout:
+        print(line, end='')
+        captured.append(line)
+    returncode = process.wait()
+    if returncode != 0:
+        print(f"\n❌ Error: Jekyll build failed with exit code {returncode}")
+        sys.exit(returncode)
+
+    conflicts = find_conflicts(''.join(captured))
+    if conflicts:
+        print(f"\n❌ {format_failure(conflicts)}")
+        sys.exit(1)
+    print("\n✓ Step 8/9: No destination conflicts in the Jekyll build.")
 
 
 def run_command_list(cmd, description, check=True):
@@ -123,25 +159,25 @@ def main():
             if gs_enabled:
                 run_command(
                     'python3 scripts/fetch_google_sheets.py',
-                    'Step 1/8: Fetching data from Google Sheets'
+                    'Step 1/9: Fetching data from Google Sheets'
                 )
             else:
-                print("\n✓ Step 1/8: Google Sheets disabled - using existing CSV files")
+                print("\n✓ Step 1/9: Google Sheets disabled - using existing CSV files")
         else:
-            print("\n⚠ Step 1/8: No _config.yml found - skipping Google Sheets fetch")
+            print("\n⚠ Step 1/9: No _config.yml found - skipping Google Sheets fetch")
     else:
-        print("\n✓ Step 1/8: Skipping Google Sheets fetch (--skip-fetch)")
+        print("\n✓ Step 1/9: Skipping Google Sheets fetch (--skip-fetch)")
 
     # Step 2: Convert CSV to JSON
     run_command(
         'python3 scripts/csv_to_json.py',
-        'Step 2/8: Converting CSV to JSON'
+        'Step 2/9: Converting CSV to JSON'
     )
 
     # Step 3: Generate Jekyll collections
     run_command(
         'python3 scripts/generate_collections.py',
-        'Step 3/8: Generating Jekyll collections'
+        'Step 3/9: Generating Jekyll collections'
     )
 
     # Step 4: Process audio objects (unless skipped)
@@ -156,12 +192,12 @@ def main():
         if has_audio:
             run_command(
                 'python3 scripts/process_audio.py --objects-dir telar-content/objects --data-dir _data --output-dir assets/audio',
-                'Step 4/8: Processing audio objects (waveform peaks)'
+                'Step 4/9: Processing audio objects (waveform peaks)'
             )
         else:
-            print("\n✓ Step 4/8: No audio objects found - skipping audio processing")
+            print("\n✓ Step 4/9: No audio objects found - skipping audio processing")
     else:
-        print("\n✓ Step 4/8: Skipping audio processing (--skip-audio)")
+        print("\n✓ Step 4/9: Skipping audio processing (--skip-audio)")
 
     # Step 5: Generate IIIF tiles (unless skipped)
     if not args.skip_iiif:
@@ -178,26 +214,30 @@ def main():
 
         run_command_list(
             ['python3', 'scripts/generate_iiif.py', '--base-url', base_url],
-            f'Step 5/8: Generating IIIF tiles (base URL: {base_url})'
+            f'Step 5/9: Generating IIIF tiles (base URL: {base_url})'
         )
     else:
-        print("\n✓ Step 5/8: Skipping IIIF generation (--skip-iiif)")
+        print("\n✓ Step 5/9: Skipping IIIF generation (--skip-iiif)")
 
     # Step 6: Build JavaScript bundle
     run_command(
         'npm run build:js',
-        'Step 6/8: Building JavaScript bundle'
+        'Step 6/9: Building JavaScript bundle'
     )
 
     # Step 7: Build or serve Jekyll
     if serve:
         print("\n" + "="*60)
-        print(f"  Step 7/8: Starting Jekyll server on port {args.port}")
+        print(f"  Step 7/9: Starting Jekyll server on port {args.port}")
         print("="*60)
         print(f"\n  Site will be available at: http://127.0.0.1:{args.port}/telar/")
         print("  NOTE: serve mode regenerates _site continuously, so protected")
         print("  stories are NOT encrypted here (local plaintext only). To test")
         print("  them, run a build and serve _site with a static server.")
+        print("  Destination conflicts are not gated here either: Jekyll")
+        print("  rebuilds on every change, so a collision would be reported")
+        print("  in this output and then overwritten. Watch for 'Conflict:'")
+        print("  above, or use --build-only, which does gate it.")
         print("  Press Ctrl+C to stop the server\n")
 
         # Run Jekyll serve (this blocks until Ctrl+C)
@@ -207,10 +247,7 @@ def main():
             check=False  # Don't exit on Ctrl+C
         )
     else:
-        run_command(
-            'bundle exec jekyll build',
-            'Step 7/8: Building Jekyll site'
-        )
+        run_jekyll_build()
 
         # Step 8: Encrypt protected stories in the built output. Same gate as
         # the deploy workflow: a no-op without protected stories, a hard
@@ -220,7 +257,7 @@ def main():
         # server.
         run_command(
             'python3 scripts/encrypt_protected_stories.py',
-            'Step 8/8: Encrypting protected stories (post-build gate)'
+            'Step 9/9: Encrypting protected stories (post-build gate)'
         )
         print("\n" + "="*60)
         print("  Build complete! Site is in _site/")
