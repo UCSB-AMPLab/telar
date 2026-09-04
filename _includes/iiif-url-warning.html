@@ -1,16 +1,16 @@
 {%- comment -%}
 IIIF URL mismatch warning — a self-diagnosing banner that catches the most
 common reason locally hosted images fail to appear: the address the site is
-being viewed at no longer matches the base URL baked into its IIIF manifests
-when the tiles were generated. The markup here is the hidden alert box; the
-diagnostic logic itself lives in assets/js/iiif-url-warning.js, a standalone
-classic script loaded below that decides whether to reveal it.
+being viewed at differs from the base URL baked into its IIIF manifests when the
+tiles were generated. The markup here is the hidden alert box; the
+diagnostic logic itself lives in assets/js/iiif-url-warning.js, the bundle
+loaded below that decides whether to reveal it.
 
 This include stays self-contained: it carries the Liquid-dependent values the
-script needs (the objects.json and IIIF manifest base paths, plus the localized
-singular/plural affected-image strings) onto window.telarIIIFWarningConfig in a
-short inline script, then loads the external module. See the module's own
-header for how it uses that configuration to detect and report the mismatch.
+bundle needs (the objects.json and IIIF manifest base paths, plus the localized
+singular/plural affected-image strings) in the #telar-iiif-warning-data JSON
+block, then loads the bundle. See the module's own header for how it uses that
+configuration to detect and report the mismatch.
 
 All user-facing strings come from lang.errors.iiif_mismatch in
 _data/languages/<telar_language>.yml.
@@ -77,18 +77,22 @@ _data/languages/<telar_language>.yml.
   </div>
 </div>
 
-<script>
-// Liquid-dependent configuration for assets/js/iiif-url-warning.js: the
-// objects.json and IIIF manifest base paths (as relative_urls, so they carry
-// the site's baseurl), plus the localized singular/plural affected-image
-// strings from _data/languages/<telar_language>.yml.
-window.telarIIIFWarningConfig = {
-  objectsUrl: {{ "/objects.json" | relative_url | jsonify }},
-  iiifObjectsBase: {{ "/iiif/objects" | relative_url | jsonify }},
-  strings: {
-    affectedImagesSingular: {{ iiif_lang.affected_images_count_singular | jsonify }},
-    affectedImagesPlural: {{ iiif_lang.affected_images_count_plural | jsonify }}
+{%- comment -%}
+Everything the diagnostic needs from Liquid, in one JSON block read by
+assets/js/iiif-url-warning.js (bundled from assets/js/iiif-url-warning/):
+the objects.json and IIIF manifest base paths (as relative_urls, so they
+carry the site's baseurl), plus the localized singular/plural affected-image
+strings from _data/languages/<telar_language>.yml. jsonify quotes and escapes
+each value.
+{%- endcomment -%}
+<script id="telar-iiif-warning-data" type="application/json">
+{
+  "objectsUrl": {{ "/objects.json" | relative_url | jsonify }},
+  "iiifObjectsBase": {{ "/iiif/objects" | relative_url | jsonify }},
+  "strings": {
+    "affectedImagesSingular": {{ iiif_lang.affected_images_count_singular | jsonify }},
+    "affectedImagesPlural": {{ iiif_lang.affected_images_count_plural | jsonify }}
   }
-};
+}
 </script>
 <script src="{{ '/assets/js/iiif-url-warning.js' | relative_url }}"></script>
