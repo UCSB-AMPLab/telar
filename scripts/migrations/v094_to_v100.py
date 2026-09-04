@@ -16,7 +16,7 @@ Fluid Multimedia Storytelling release:
 ~51 framework files fetched from GitHub, 2 language files fetched,
 1 config value updated (max_viewer_cards 10 -> 8), version bumped.
 
-Version: v1.0.0-beta
+Version: v1.7.0
 """
 
 from typing import List, Dict
@@ -139,7 +139,7 @@ class Migration094to100(BaseMigration):
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:
@@ -158,7 +158,7 @@ class Migration094to100(BaseMigration):
 
         for file_path, description in language_files.items():
             content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:

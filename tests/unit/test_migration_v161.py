@@ -23,7 +23,7 @@ sink the upgrade). These tests guard:
 Network-dependent framework fetches are not exercised here — those are
 covered by the upgrade.py integration tests.
 
-Version: v1.6.2
+Version: v1.7.0
 """
 
 import sys
@@ -35,7 +35,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'
 from migrations.v161_to_v162 import Migration161to162, FRAMEWORK_FILES, DEPENDABOT_PATH
 from migrations.base import ChangeRecord, ChangeStatus
 
-import upgrade
+import telar_upgrade as upgrade
+from migrations.discovery import discover_migrations
 
 
 # ---------- Delivery set (FRAMEWORK_FILES) ----------
@@ -205,12 +206,12 @@ class TestMigrationMetadata:
 
 class TestRegistrationCompleteness:
     """v1.6.1 itself exists to repair a registration gap in v1.6.0 — these
-    guards make sure v1.6.2 doesn't reintroduce that class of bug across the
-    three hand-synced places (import block, MIGRATIONS, LATEST_VERSION)."""
+    guards make sure the class of bug cannot come back. Registration is now
+    derived, so what they check is that the derivation sees this migration
+    and puts it where the chain ends."""
 
-    def test_imported_in_upgrade_module(self):
-        assert hasattr(upgrade, 'Migration161to162')
-        assert upgrade.Migration161to162 is Migration161to162
+    def test_discovery_finds_it(self):
+        assert Migration161to162 in discover_migrations()
 
     def test_appended_to_migrations_list(self):
         assert Migration161to162 in upgrade.MIGRATIONS

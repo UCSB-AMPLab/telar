@@ -11,7 +11,7 @@ Story Structure & UX release:
 ~20 framework files fetched from GitHub, 2 language files fetched,
 1 CSV column added (show_sections), version bumped.
 
-Version: v1.2.0
+Version: v1.7.0
 """
 
 from typing import List, Dict
@@ -87,7 +87,7 @@ class Migration110to120(BaseMigration):
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:
@@ -106,7 +106,7 @@ class Migration110to120(BaseMigration):
 
         for file_path, description in language_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:
