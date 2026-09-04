@@ -6,7 +6,7 @@ reached so far; the old `or migrations_to_run` heuristic ran every later
 migration once the list was non-empty, silently producing the wrong chain
 across a version gap.
 
-Version: v1.5.0
+Version: v1.7.0
 """
 
 import sys
@@ -15,19 +15,22 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
-import upgrade
+import telar_upgrade as upgrade
+from migrations.base import BaseMigration
 
 
 def _mig_class(frm, to, applicable=True):
-    class _Mig:
+    # Subclasses BaseMigration so the double carries the same contract the
+    # dispatcher relies on, rather than a hand-copied subset of it.
+    class _Mig(BaseMigration):
         from_version = frm
         to_version = to
 
-        def __init__(self, repo_root):
-            self.repo_root = repo_root
-
         def check_applicable(self):
             return applicable
+
+        def apply(self):
+            return []
 
         def __repr__(self):
             return f"{frm}->{to}"

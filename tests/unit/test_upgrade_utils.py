@@ -5,7 +5,7 @@ This module tests utility functions from the upgrade script that are used
 to organize and present migration changes to users. The categorization
 function groups changes by file type for better readability.
 
-Version: v1.5.0
+Version: v1.7.0
 """
 
 import sys
@@ -15,140 +15,190 @@ import pytest
 # Add scripts directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
-from upgrade import _categorize_changes
+from telar_upgrade import _categorize_changes, _category_from_description
+from migrations.base import (
+    ChangeCategory, ChangeRecord, category_for_path, coerce_change,
+)
+from migrations.messages import get_message
 
 
 class TestCategorizeChanges:
-    """Tests for _categorize_changes function."""
+    """Grouping applied changes under the summary's headings.
 
-    def test_categorizes_config_changes(self):
-        """Should categorize _config.yml changes as Configuration."""
-        changes = [
-            'Updated _config.yml with new settings',
-            'Modified configuration for theme',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Configuration' in result
-        assert len(result['Configuration']) == 2
+    A record carrying a category is filed by it. Only a record without one
+    is guessed at from its wording, which is what every record was subject
+    to before the field existed.
+    """
 
-    def test_categorizes_layout_changes(self):
-        """Should categorize layout changes."""
-        changes = [
-            'Updated layout for story pages',
-            'Modified _layouts/default.html',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Layouts' in result
-        assert len(result['Layouts']) == 2
+    def _applied(self, *records):
+        return _categorize_changes(list(records))
 
-    def test_categorizes_include_changes(self):
-        """Should categorize include file changes."""
-        changes = [
-            'Updated _includes/header.html',
-            'Modified include for footer',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Includes' in result
-        assert len(result['Includes']) == 2
+    def test_a_records_own_category_decides(self):
+        result = self._applied(
+            ChangeRecord(description='Updated _data/languages/en.yml — trama warning',
+                         category=ChangeCategory.CONFIGURATION))
 
-    def test_categorizes_style_changes(self):
-        """Should categorize CSS/SCSS changes as Styles."""
-        changes = [
-            'Updated main.scss with new variables',
-            'Modified style for buttons',
-            'Changed assets/css/telar.css',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Styles' in result
-        assert len(result['Styles']) == 3
+        assert result == {ChangeCategory.CONFIGURATION:
+                          ['Updated _data/languages/en.yml — trama warning']}
 
-    def test_categorizes_script_changes(self):
-        """Should categorize JavaScript changes as Scripts."""
-        changes = [
-            'Updated story.js navigation',
-            'Modified JavaScript for panels',
-            'Changed assets/js/viewer.js',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Scripts' in result
-        assert len(result['Scripts']) == 3
+    def test_wording_cannot_move_a_categorised_record(self):
+        """The whole point: rephrasing a description changes nothing."""
+        first = ChangeRecord(description='Updated the stylesheet',
+                             category=ChangeCategory.SCRIPTS)
+        second = ChangeRecord(description='Reworked assets/js/telar-story.js',
+                              category=ChangeCategory.SCRIPTS)
 
-    def test_categorizes_documentation_changes(self):
-        """Should categorize documentation changes."""
-        changes = [
-            'Updated README.md',
-            'Modified docs for installation',
-            'Changed documentation structure',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Documentation' in result
-        assert len(result['Documentation']) == 3
+        assert self._applied(first, second) == {
+            ChangeCategory.SCRIPTS: [first.description, second.description]}
 
-    def test_categorizes_other_changes(self):
-        """Should categorize unrecognized changes as Other."""
-        changes = [
-            'Added new feature',
-            'Removed deprecated code',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Other' in result
-        assert len(result['Other']) == 2
+    def test_a_record_without_one_is_guessed_at(self):
+        result = self._applied(ChangeRecord(description='Updated _config.yml'))
 
-    def test_handles_mixed_changes(self):
-        """Should correctly categorize a mix of different changes."""
-        changes = [
-            'Updated _config.yml',
-            'Modified _layouts/story.html',
-            'Changed main.scss',
-            'Updated story.js',
-            'Fixed README.md',
-            'Added new helper function',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Configuration' in result
-        assert 'Layouts' in result
-        assert 'Styles' in result
-        assert 'Scripts' in result
-        assert 'Documentation' in result
-        assert 'Other' in result
+        assert result == {ChangeCategory.CONFIGURATION: ['Updated _config.yml']}
+
+    def test_a_legacy_string_arrives_without_a_category(self):
+        """coerce_change wraps a plain string, so the guess still applies."""
+        record = coerce_change('Modified _layouts/story.html')
+
+        assert record.category is None
+        assert self._applied(record) == {
+            ChangeCategory.LAYOUTS: ['Modified _layouts/story.html']}
+
+    def test_an_unknown_category_falls_to_other(self):
+        result = self._applied(
+            ChangeRecord(description='something', category='invented'))
+
+        assert result == {ChangeCategory.OTHER: ['something']}
+
+    def test_headings_come_out_in_print_order(self):
+        result = self._applied(
+            ChangeRecord(description='d', category=ChangeCategory.DOCUMENTATION),
+            ChangeRecord(description='c', category=ChangeCategory.CONFIGURATION),
+            ChangeRecord(description='s', category=ChangeCategory.STYLES))
+
+        assert list(result) == [ChangeCategory.CONFIGURATION,
+                               ChangeCategory.STYLES,
+                               ChangeCategory.DOCUMENTATION]
 
     def test_empty_changes_list(self):
-        """Should return empty dict for empty input."""
-        result = _categorize_changes([])
-        assert result == {}
+        assert _categorize_changes([]) == {}
 
-    def test_removes_empty_categories(self):
-        """Should not include categories with no changes."""
-        changes = [
-            'Updated _config.yml',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Configuration' in result
-        assert 'Layouts' not in result
-        assert 'Includes' not in result
+    def test_empty_categories_are_dropped(self):
+        result = self._applied(
+            ChangeRecord(description='x', category=ChangeCategory.CONFIGURATION))
 
-    def test_case_insensitive_matching(self):
-        """Should match categories case-insensitively."""
-        changes = [
-            'Updated _CONFIG.YML',
-            'Modified LAYOUT for pages',
-            'Changed STYLE.CSS',
-        ]
-        result = _categorize_changes(changes)
-        assert 'Configuration' in result
-        assert 'Layouts' in result
-        assert 'Styles' in result
+        assert list(result) == [ChangeCategory.CONFIGURATION]
 
-    def test_prioritizes_specific_patterns(self):
-        """Should prioritize specific patterns over general ones."""
-        # _config.yml contains both 'config' and could match others
-        changes = [
-            '_config.yml: added new script setting',
+    def test_every_category_has_a_heading_in_both_languages(self):
+        for category in ChangeCategory.ORDER:
+            for lang in ('en', 'es'):
+                label = get_message(lang, 'category_' + category)
+                assert label != 'category_' + category, (category, lang)
+
+
+class TestTheDescriptionGuess:
+    """What the summary did for every change before records carried one.
+
+    Kept because legacy migrations still return bare strings. These tests
+    record where it is wrong, so the fallback's limits are written down
+    rather than assumed.
+    """
+
+    def test_it_reads_the_obvious_cases(self):
+        for description, expected in (
+                ('Updated _config.yml with new settings', ChangeCategory.CONFIGURATION),
+                ('Modified _layouts/default.html', ChangeCategory.LAYOUTS),
+                ('Updated _includes/header.html', ChangeCategory.INCLUDES),
+                ('Updated main.scss with new variables', ChangeCategory.STYLES),
+                ('Modified JavaScript for panels', ChangeCategory.SCRIPTS),
+                ('Updated README.md', ChangeCategory.DOCUMENTATION),
+                ('Added new feature', ChangeCategory.OTHER),
+        ):
+            assert _category_from_description(description) == expected, description
+
+    def test_it_matches_case_insensitively(self):
+        assert _category_from_description('Updated _CONFIG.YML') == \
+            ChangeCategory.CONFIGURATION
+
+    def test_config_beats_the_later_rules(self):
+        assert _category_from_description('_config.yml: added new script setting') == \
+            ChangeCategory.CONFIGURATION
+
+    def test_it_sees_js_inside_json(self):
+        """`.js` is a substring of `.json`, so npm manifests read as scripts."""
+        for description in ('Updated package.json — Node.js dependencies',
+                            'Updated objects.json endpoint'):
+            assert _category_from_description(description) == ChangeCategory.SCRIPTS
+
+    def test_a_python_module_named_config_reads_as_configuration(self):
+        assert _category_from_description(
+            'Updated scripts/telar/config.py — Language loading') == \
+            ChangeCategory.CONFIGURATION
+
+    def test_a_stylesheet_named_layout_reads_as_a_layout(self):
+        assert _category_from_description(
+            'Updated _sass/_layout.scss — Featured object thumbnail CSS fix') == \
+            ChangeCategory.LAYOUTS
+
+    def test_data_files_and_licences_fall_through_to_other(self):
+        for description in ('Updated _data/navigation.yml — Updated path references',
+                            'Updated NOTICE — Third-party notices',
+                            'Updated LICENSE — Updated license'):
+            assert _category_from_description(description) == ChangeCategory.OTHER
+
+
+class TestCategoryForPath:
+    """The path is what the install records carry, so it decides most of it."""
+
+    def test_it_places_the_framework_directories(self):
+        for path, expected in (
+                ('_config.yml', ChangeCategory.CONFIGURATION),
+                ('_data/languages/en.yml', ChangeCategory.CONFIGURATION),
+                ('_layouts/story.html', ChangeCategory.LAYOUTS),
+                ('_includes/widgets/carousel.html', ChangeCategory.INCLUDES),
+                ('_sass/_layout.scss', ChangeCategory.STYLES),
+                ('assets/css/telar.css', ChangeCategory.STYLES),
+                ('assets/js/widgets.js', ChangeCategory.SCRIPTS),
+                ('scripts/telar/config.py', ChangeCategory.SCRIPTS),
+                ('tests/unit/test_widget_parsing.py', ChangeCategory.SCRIPTS),
+                ('docs/README.md', ChangeCategory.DOCUMENTATION),
+                ('README.md', ChangeCategory.DOCUMENTATION),
+                ('NOTICE', ChangeCategory.DOCUMENTATION),
+                ('LICENSE', ChangeCategory.DOCUMENTATION),
+                ('.gitignore', ChangeCategory.CONFIGURATION),
+                ('.github/dependabot.yml', ChangeCategory.CONFIGURATION),
+                ('package.json', ChangeCategory.CONFIGURATION),
+                ('objects.json', ChangeCategory.OTHER),
+        ):
+            assert category_for_path(path) == expected, path
+
+    def test_a_prefix_beats_the_extension(self):
+        """assets/css/ is a style whatever the file is called."""
+        assert category_for_path('assets/css/telar.css') == ChangeCategory.STYLES
+        assert category_for_path('scripts/README.md') == ChangeCategory.SCRIPTS
+
+    def test_every_installable_path_lands_somewhere(self):
+        from migrations.v020_to_v090 import FRAMEWORK_FILES_090
+
+        for path in FRAMEWORK_FILES_090:
+            assert category_for_path(path) in ChangeCategory.ORDER, path
+
+    def test_it_disagrees_with_the_guess_on_a_third_of_the_install_set(self):
+        """The measurement this change was made for.
+
+        Not a threshold to tune — a record of how much of an upgrade's
+        report was filed by wording, most of it into "Other".
+        """
+        from migrations.v020_to_v090 import FRAMEWORK_FILES_090
+
+        disagreements = [
+            path for path, (description, _) in FRAMEWORK_FILES_090.items()
+            if _category_from_description(f'Updated {path} — {description}')
+            != category_for_path(path)
         ]
-        result = _categorize_changes(changes)
-        # Should be categorized as Configuration, not Scripts
-        assert 'Configuration' in result
-        assert result['Configuration'][0] == '_config.yml: added new script setting'
+
+        assert len(disagreements) > 30
+        assert len(disagreements) < len(FRAMEWORK_FILES_090) / 2
 
 
 class TestApplyConfigVersion:
@@ -187,7 +237,7 @@ class TestApplyConfigVersion:
         assert mod is False and out == 'title: X\nfoo: bar\n'
 
     def test_upgrade_wrapper_and_base_method_agree(self, tmp_path):
-        import upgrade as up
+        import telar_upgrade as up
         from migrations.v130_to_v140 import Migration130to140
         seed = 'telar:\n  version: "1.4.0"\n  release_date: "2026-05-26"\n'
         a = tmp_path / 'a'; a.mkdir(); (a / '_config.yml').write_text(seed)
