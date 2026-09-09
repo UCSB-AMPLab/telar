@@ -42,7 +42,7 @@ This script is designed to be called from generate_iiif.py when it
 detects a .pdf source file, but it can also be run standalone for
 testing.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import json
@@ -311,11 +311,13 @@ def process_pdf_object(pdf_path, output_dir, object_id, base_url):
             if vips_props.exists():
                 vips_props.unlink()
 
-            # Post-process: patch info.json with page-specific URL
-            patch_info_json(page_dir, f"{object_id}/{page_id}", base_url)
-
-            # Generate full/max/0/default.jpg
+            # patch_info_json's sizes array is built by listing full/ on
+            # disk, so full/ must be complete — every scaleFactor
+            # derivative written — before info.json is patched.
             generate_full_max(image_path, page_dir)
+
+            # Post-process: patch info.json with page-specific URL and sizes
+            patch_info_json(page_dir, f"{object_id}/{page_id}", base_url)
 
             # Create per-page single-canvas manifest
             _create_page_manifest(page_dir, object_id, page_number, width, height, base_url, metadata)
