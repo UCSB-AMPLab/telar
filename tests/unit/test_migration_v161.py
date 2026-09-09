@@ -33,6 +33,7 @@ import errno
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from migrations.v161_to_v162 import Migration161to162, FRAMEWORK_FILES, DEPENDABOT_PATH
+from migrations.v162_to_v170 import Migration162to170
 from migrations.base import ChangeRecord, ChangeStatus
 
 import telar_upgrade as upgrade
@@ -216,11 +217,16 @@ class TestRegistrationCompleteness:
     def test_appended_to_migrations_list(self):
         assert Migration161to162 in upgrade.MIGRATIONS
 
-    def test_is_last_in_migrations_list(self):
-        assert upgrade.MIGRATIONS[-1] is Migration161to162
+    def test_the_next_hop_follows_it(self):
+        """This migration sits in the chain with the hop out of 1.6.2 straight
+        after it, and nothing in between for a site to fall into."""
+        chain = list(upgrade.MIGRATIONS)
 
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == Migration161to162.to_version == '1.6.2'
+        assert Migration161to162 in chain
+        assert chain[chain.index(Migration161to162) + 1] is Migration162to170
+
+    def test_its_target_is_the_next_hops_entry(self):
+        assert Migration161to162.to_version == Migration162to170.from_version == '1.6.2'
 
     def test_full_chain_resolves_to_latest_version(self):
         """Walking every migration's from_version -> to_version link from the
