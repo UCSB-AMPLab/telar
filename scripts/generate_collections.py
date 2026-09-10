@@ -14,7 +14,10 @@ It creates four types of collection files:
   with metadata like title, creator, period, and IIIF manifest URL in
   the frontmatter.
 - Stories (_jekyll-files/_stories/): One file per story, linking to its
-  JSON data file and setting the story layout.
+  JSON data file, setting the story layout, and declaring the permalink it
+  renders at. The same identifier-to-URL mapping is recorded in the story
+  page manifest (telar/story_pages.py) so the post-build encryption step
+  can find each protected story's page without predicting its URL.
 - Glossary (_jekyll-files/_glossary/): Terms from both user markdown
   files (telar-content/texts/glossary/) and demo content, with glossary-
   to-glossary link processing.
@@ -27,7 +30,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import argparse
@@ -48,6 +51,10 @@ from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
 from telar.latex import has_latex
 from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
+from telar.story_pages import (
+    ManifestError, build_manifest, remove_manifest, stories_permalink,
+    write_manifest,
+)
 
 # Fields already handled explicitly in generate_objects() frontmatter.
 # Any key NOT in this set is treated as a custom field and written to extra_metadata.
@@ -65,12 +72,168 @@ KNOWN_OBJECT_FIELDS = {
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
 
+# Control characters that must not survive into a double-quoted YAML scalar,
+# with the escape YAML defines for each. A line break is the dangerous one: the
+# scalar would span lines, and frontmatter is located by splitting on a line
+# that is exactly `---` before any YAML is parsed, so a value could end the
+# block early and spill the rest of the metadata into the page body.
+_YAML_CONTROL = {
+    '\n': '\\n',
+    '\r': '\\r',
+    '\t': '\\t',
+}
+
+
 def _yaml_escape(value):
-    """Escape a string value for safe inclusion in double-quoted YAML."""
+    """Escape a string value for safe inclusion in double-quoted YAML.
+
+    Backslashes first: every other replacement introduces one, and doing it
+    later would double them.
+    """
     s = str(value)
     s = s.replace('\\', '\\\\')
     s = s.replace('"', '\\"')
+    for character, escape in _YAML_CONTROL.items():
+        s = s.replace(character, escape)
     return s
+
+
+def _object_metadata(obj, media_type, source_url):
+    """The frontmatter fields that are written only when they have a value.
+
+    Empty strings are truthy in Liquid, so a field written empty would make
+    every `{% if %}` guarding it true on a page that has nothing to show.
+    """
+    medium_value = obj.get('medium', '') or obj.get('object_type', '')
+    fields = {
+        'alt_text': obj.get('alt_text', ''),
+        'creator': obj.get('creator', ''),
+        'period': obj.get('period', ''),
+        'medium': medium_value,
+        'dimensions': obj.get('dimensions', ''),
+        'location': obj.get('source', '') or obj.get('location', ''),
+        'credit': obj.get('credit', ''),
+        'thumbnail': obj.get('thumbnail', ''),
+        'iiif_manifest': obj.get('iiif_manifest', ''),
+        'source_url': source_url,
+        'object_warning': obj.get('object_warning', ''),
+        'object_warning_short': obj.get('object_warning_short', ''),
+    }
+    return ''.join(f'{key}: "{_yaml_escape(str(value))}"\n'
+                   for key, value in fields.items() if value)
+
+
+def _object_flags(obj, is_demo):
+    """The optional scalars and the two booleans, in the order written."""
+    lines = ''
+    if obj.get('year'):
+        lines += f'year: "{obj.get("year")}"\n'
+    # Frontmatter carries 'medium' only; object_type is not written
+    if obj.get('subjects'):
+        lines += f'subjects: "{obj.get("subjects")}"\n'
+    if obj.get('is_featured_sample'):
+        lines += "is_featured_sample: true\n"
+    if is_demo:
+        lines += "demo: true\n"
+    return lines
+
+
+def _audio_duration(object_id):
+    """Duration from the peaks file process_audio.py writes, if it is there."""
+    peaks_path = Path(f'assets/audio/peaks/{object_id}.json')
+    if not peaks_path.exists():
+        return ''
+    try:
+        with open(peaks_path, 'r') as pf:
+            peaks_data = json.load(pf)
+        duration = peaks_data.get('duration', 0)
+    except (json.JSONDecodeError, KeyError):
+        return ''
+    return f'audio_duration: {duration}\n' if duration else ''
+
+
+def _audio_file_details(object_id):
+    """Size and format from the first matching file on disk.
+
+    The first match wins: on a case-insensitive filesystem `.mp3` and `.MP3`
+    both resolve to the same file, so continuing would write the block twice.
+    """
+    for ext in AUDIO_EXTENSIONS:
+        audio_path = Path(f'telar-content/objects/{object_id}{ext}')
+        if not audio_path.exists():
+            continue
+        size_bytes = audio_path.stat().st_size
+        if size_bytes < 1024 * 1024:
+            size_str = f'{size_bytes / 1024:.0f} KB'
+        else:
+            size_str = f'{size_bytes / (1024 * 1024):.1f} MB'
+        return (f'audio_filesize: "{size_str}"\n'
+                f'audio_format: "{ext.lstrip(".").upper()}"\n')
+    return ''
+
+
+def _extra_metadata(obj):
+    """Everything the object carries that the known set does not name.
+
+    A CSV round-trip leaves absent cells as the float nan or the string
+    'nan'; neither is a value anyone typed, so neither is written.
+    """
+    extra = {}
+    for key, value in obj.items():
+        if key in KNOWN_OBJECT_FIELDS:
+            continue
+        if value is None or (isinstance(value, float) and str(value) == 'nan'):
+            continue
+        s = str(value).strip()
+        if s and s.lower() != 'nan':
+            extra[key] = s
+
+    if not extra:
+        return ''
+    lines = "extra_metadata:\n"
+    for key, value in extra.items():
+        lines += f'  {key}: "{_yaml_escape(value)}"\n'
+    return lines
+
+
+def _object_page(obj):
+    """One object's markdown, frontmatter and body."""
+    object_id = obj['object_id']
+    source_url = obj.get('source_url', '') or ''
+    media_type = detect_media_type(source_url, object_id)
+
+    content = f'---\nobject_id: {object_id}\n'
+    content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
+    content += _object_metadata(obj, media_type, source_url)
+    # Always written: the template branches on it for every type.
+    content += f'media_type: "{media_type}"\n'
+    content += _object_flags(obj, obj.get('_demo', False))
+
+    if media_type == 'Audio':
+        content += _audio_duration(object_id)
+        content += _audio_file_details(object_id)
+
+    content += _extra_metadata(obj)
+
+    description = obj.get('description', '')
+    if description and has_latex(description):
+        content += "has_latex: true\n"
+
+    return content + f"""layout: object
+---
+
+{description}
+"""
+
+
+def _reset_objects_dir():
+    """A fresh directory, so an object removed from the CSV loses its page."""
+    objects_dir = Path('_jekyll-files/_objects')
+    if objects_dir.exists():
+        shutil.rmtree(objects_dir)
+        print(f"✓ Cleaned up old object files")
+    objects_dir.mkdir(parents=True, exist_ok=True)
+    return objects_dir
 
 
 def generate_objects():
@@ -82,130 +245,18 @@ def generate_objects():
     with open('_data/objects.json', 'r') as f:
         objects = json.load(f)
 
-    objects_dir = Path('_jekyll-files/_objects')
-
-    # Clean up old files to remove orphaned objects
-    if objects_dir.exists():
-        shutil.rmtree(objects_dir)
-        print(f"✓ Cleaned up old object files")
-
-    objects_dir.mkdir(parents=True, exist_ok=True)
+    objects_dir = _reset_objects_dir()
 
     for obj in objects:
         object_id = obj.get('object_id', '')
         if not object_id:
             continue
 
-        is_demo = obj.get('_demo', False)
-
-        # Generate main object page
         filepath = objects_dir / f"{object_id}.md"
-
-        # Build front matter, omitting empty fields so Liquid {% if %}
-        # conditionals work correctly (empty strings are truthy in Liquid)
-        content = f'---\nobject_id: {object_id}\n'
-        content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
-
-        # Resolve medium: prefer 'medium' field; fall back to 'object_type' for backward compat
-        # (old sites may still have object_type in JSON)
-        medium_value = obj.get('medium', '') or obj.get('object_type', '')
-
-        # Auto-detect media type for gallery Type filter
-        source_url = obj.get('source_url', '') or ''
-        media_type = detect_media_type(source_url, object_id)
-
-        # Metadata fields — only include if non-empty
-        metadata_fields = {
-            'alt_text': obj.get('alt_text', ''),
-            'creator': obj.get('creator', ''),
-            'period': obj.get('period', ''),
-            'medium': medium_value,
-            'dimensions': obj.get('dimensions', ''),
-            'location': obj.get('source', '') or obj.get('location', ''),
-            'credit': obj.get('credit', ''),
-            'thumbnail': obj.get('thumbnail', ''),
-            'iiif_manifest': obj.get('iiif_manifest', ''),
-            'source_url': source_url,
-            'object_warning': obj.get('object_warning', ''),
-            'object_warning_short': obj.get('object_warning_short', ''),
-        }
-        for key, value in metadata_fields.items():
-            if value:
-                content += f'{key}: "{_yaml_escape(str(value))}"\n'
-
-        # Media type (always written — required for type-conditional template rendering)
-        content += f'media_type: "{media_type}"\n'
-
-        # Additional optional fields
-        if obj.get('year'):
-            content += f'year: "{obj.get("year")}"\n'
-        # Frontmatter carries 'medium' only; object_type is not written
-        if obj.get('subjects'):
-            content += f'subjects: "{obj.get("subjects")}"\n'
-        if obj.get('is_featured_sample'):
-            content += "is_featured_sample: true\n"
-
-        if is_demo:
-            content += "demo: true\n"
-
-        # Audio metadata: duration and file size from disk (v0.10.0)
-        if media_type == 'Audio':
-            # Duration from peaks JSON (generated by process_audio.py)
-            peaks_path = Path(f'assets/audio/peaks/{object_id}.json')
-            if peaks_path.exists():
-                try:
-                    with open(peaks_path, 'r') as pf:
-                        peaks_data = json.load(pf)
-                    duration = peaks_data.get('duration', 0)
-                    if duration:
-                        content += f'audio_duration: {duration}\n'
-                except (json.JSONDecodeError, KeyError):
-                    pass
-
-            # File size and format from disk
-            for ext in AUDIO_EXTENSIONS:
-                audio_path = Path(f'telar-content/objects/{object_id}{ext}')
-                if audio_path.exists():
-                    size_bytes = audio_path.stat().st_size
-                    if size_bytes < 1024 * 1024:
-                        size_str = f'{size_bytes / 1024:.0f} KB'
-                    else:
-                        size_str = f'{size_bytes / (1024 * 1024):.1f} MB'
-                    content += f'audio_filesize: "{size_str}"\n'
-                    content += f'audio_format: "{ext.lstrip(".").upper()}"\n'
-                    break
-
-        # Collect custom fields not in the known set
-        extra = {}
-        for key, value in obj.items():
-            if key in KNOWN_OBJECT_FIELDS:
-                continue
-            if value is None or (isinstance(value, float) and str(value) == 'nan'):
-                continue
-            s = str(value).strip()
-            if s and s.lower() != 'nan':
-                extra[key] = s
-
-        if extra:
-            content += "extra_metadata:\n"
-            for key, value in extra.items():
-                content += f'  {key}: "{_yaml_escape(value)}"\n'
-
-        # Check description for LaTeX content
-        description = obj.get('description', '')
-        if description and has_latex(description):
-            content += "has_latex: true\n"
-
-        content += f"""layout: object
----
-
-{description}
-"""
-
         with open(filepath, 'w') as f:
-            f.write(content)
+            f.write(_object_page(obj))
 
-        demo_label = " [DEMO]" if is_demo else ""
+        demo_label = " [DEMO]" if obj.get('_demo', False) else ""
         print(f"✓ Generated {filepath}{demo_label}")
 
 def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
@@ -461,7 +512,7 @@ def _story_has_latex(identifier):
     return False
 
 
-def generate_protected_fragments():
+def generate_protected_fragments(skip=False):
     """Generate steps-only fragment pages for protected stories.
 
     Each protected story gets a standalone generated page (pages collection,
@@ -475,8 +526,20 @@ def generate_protected_fragments():
     pages written here are cleaned up by glob on every run, so a story that
     stops being protected leaves no orphan behind.
     """
+    pages_dir = Path('_jekyll-files/_pages')
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean previous fragment pages first, and unconditionally. A fragment
+    # renders the steps as plaintext for the encryption step to consume; one
+    # left from a run when a story was protected would otherwise render again
+    # with nothing to remove it. generate_pages() only clears this directory
+    # when telar-content/texts/pages exists, so this cleanup is our own and
+    # must happen before any early return below.
+    for stale in pages_dir.glob('telar-fragment-*.md'):
+        stale.unlink()
+
     project_path = Path('_data/project.json')
-    if not project_path.exists():
+    if skip or not project_path.exists():
         return
 
     with open(project_path, 'r', encoding='utf-8') as f:
@@ -486,20 +549,10 @@ def generate_protected_fragments():
     if project_data and len(project_data) > 0:
         stories = project_data[0].get('stories', [])
 
-    pages_dir = Path('_jekyll-files/_pages')
-    pages_dir.mkdir(parents=True, exist_ok=True)
-
-    # Clean previous fragment pages (generate_pages only clears this
-    # directory when telar-content/texts/pages exists, so do our own)
-    for old in pages_dir.glob('telar-fragment-*.md'):
-        old.unlink()
-
     for story in stories:
         if not story.get('protected'):
             continue
-        story_id = story.get('story_id', '')
-        story_num = story.get('number', '')
-        identifier = story_id if story_id else f'story-{story_num}'
+        identifier = _story_identifier(story)
         if not Path(f'_data/{identifier}.json').exists():
             continue
 
@@ -517,17 +570,53 @@ def generate_protected_fragments():
         print(f"✓ Generated {filepath} (protected fragment)")
 
 
-def generate_stories():
+def _story_identifier(story):
+    """The name a story's data file, document and URL are all built from."""
+    story_id = story.get('story_id', '')  # Optional semantic ID (v0.6.0+)
+    # With story_id: "your-story" → files are "your-story.json", "your-story.md"
+    # Without story_id: number=1 → files are "story-1.json", "story-1.md"
+    return story_id if story_id else f"story-{story.get('number', '')}"
+
+
+def _publishable_stories(stories):
+    """The stories that become documents, paired with their identifier.
+
+    A record with no number or title is not a story, and one whose data
+    file is missing has nothing to render — neither reaches Jekyll, so
+    neither belongs in the manifest either.
+    """
+    out = []
+    for story in stories:
+        if not story.get('number', '') or not story.get('title', ''):
+            continue
+        identifier = _story_identifier(story)
+        if not Path(f'_data/{identifier}.json').exists():
+            print(f"Warning: No data file found for {identifier}.json")
+            continue
+        out.append((identifier, story))
+    return out
+
+
+def generate_stories(config=None):
     """Generate story markdown files based on project.json stories list
 
     Reads from _data/project.json which includes both user stories and
     merged demo content (when include_demo_content is enabled).
+
+    Each document declares the permalink it renders at, and the same
+    mapping is written to the story page manifest. Ambiguity — two records
+    deriving one identifier, or two identifiers rendering at one URL — is
+    refused before any file is written, so a build that would silently drop
+    a story fails instead.
     """
 
     # Read from project.json (has merged user + demo stories)
     project_path = Path('_data/project.json')
     if not project_path.exists():
         print("Warning: _data/project.json not found")
+        # An inventory from an earlier run would describe pages this build
+        # cannot vouch for, and the encryption step reads it as authoritative.
+        remove_manifest('_data')
         return
 
     with open(project_path, 'r', encoding='utf-8') as f:
@@ -539,6 +628,16 @@ def generate_stories():
         stories = project_data[0].get('stories', [])
 
     stories_dir = Path('_jekyll-files/_stories')
+    publishable = _publishable_stories(stories)
+    permalink = stories_permalink(config)
+
+    # Built before anything is written: an ambiguous site must not leave a
+    # half-generated collection behind.
+    manifest = build_manifest(
+        ((identifier, stories_dir / f'{identifier}.md')
+         for identifier, _ in publishable),
+        permalink,
+    )
 
     # Clean up old files to remove orphaned stories
     if stories_dir.exists():
@@ -551,30 +650,10 @@ def generate_stories():
     demo_index = 0
     user_index = 1000
 
-    for story in stories:
-        story_num = story.get('number', '')
+    for identifier, story in publishable:
         story_title = story.get('title', '')
         story_subtitle = story.get('subtitle', '')
-        story_id = story.get('story_id', '')  # Optional semantic ID (v0.6.0+)
         is_demo = story.get('_demo', False)
-
-        # Skip entries without number or title
-        if not story_num or not story_title:
-            continue
-
-        # Use story_id as-is, or construct story-{order} for fallback
-        # With story_id: "your-story" → files are "your-story.json", "your-story.md"
-        # Without story_id: order=1 → files are "story-1.json", "story-1.md"
-        if story_id:
-            identifier = story_id  # No prefix: "your-story"
-        else:
-            identifier = f'story-{story_num}'  # With prefix: "story-1"
-
-        # Check if story data file exists
-        data_file = Path(f'_data/{identifier}.json')
-        if not data_file.exists():
-            print(f"Warning: No data file found for {identifier}.json")
-            continue
 
         # Assign sort order
         if is_demo:
@@ -586,6 +665,7 @@ def generate_stories():
 
         # Use identifier for filename (no additional prefix)
         filepath = stories_dir / f"{identifier}.md"
+        story_url = manifest['stories'][identifier].get('url')
 
         # Build frontmatter as a dict and serialise via yaml.safe_dump so that
         # quotes, colons, or newlines in author-supplied title/subtitle/byline
@@ -611,6 +691,11 @@ def generate_stories():
         frontmatter_dict['sort_order'] = sort_order
         frontmatter_dict['layout'] = 'story'
         frontmatter_dict['data_file'] = identifier
+        if story_url:
+            # Declared, not derived: the collection template would produce
+            # this same URL by slugifying the basename, but nothing would
+            # record which identifier landed where.
+            frontmatter_dict['permalink'] = story_url
 
         frontmatter_body = yaml.safe_dump(
             frontmatter_dict, default_flow_style=False, allow_unicode=True, sort_keys=False
@@ -622,6 +707,9 @@ def generate_stories():
 
         demo_label = " [DEMO]" if is_demo else ""
         print(f"✓ Generated {filepath}{demo_label}")
+
+    written = write_manifest('_data', manifest)
+    print(f"✓ Generated {written} ({len(manifest['stories'])} story pages)")
 
 
 def _parse_page_frontmatter(source_file):
@@ -827,8 +915,11 @@ def main():
         if stories_dir.exists():
             shutil.rmtree(stories_dir)
             print("✓ Cleaned up story files")
+        # A manifest left from an earlier run would describe pages this
+        # build does not produce.
+        remove_manifest('_data')
     else:
-        generate_stories()
+        generate_stories(config)
     print()
 
     # Always generate pages (passes active language so localized sister files
@@ -837,11 +928,19 @@ def main():
 
     # After generate_pages: it may clean _jekyll-files/_pages/, where the
     # fragment pages live
-    if not skip_stories:
-        generate_protected_fragments()
+    # Always called: even when stories are skipped, a fragment page left
+    # from an earlier run must be cleared, or it renders plaintext steps that
+    # nothing will encrypt. The function returns after that cleanup when
+    # there is nothing to generate.
+    generate_protected_fragments(skip=skip_stories)
 
     print("-" * 50)
     print("Generation complete!")
 
+
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except ManifestError as error:
+        print(f"\n❌ This site cannot be generated as described:\n  {error}")
+        raise SystemExit(1)

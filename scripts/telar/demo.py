@@ -36,7 +36,7 @@ Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
 `subjects`, `featured`, and `source`. Both formats are supported — new fields
 are populated when present, old fields are ignored gracefully.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import json
@@ -85,12 +85,30 @@ def merge_demo_content(bundle):
     - Demo stories as additional story files
     - Demo glossary files (written to _data/demo-glossary.json)
 
+    Each section isolates its own failure and reports it on the console, so a
+    broken bundle costs the sections that follow nothing. The order is fixed:
+    the story files read the glossary terms the bundle carries, not the file
+    the last section writes.
+
     Args:
         bundle: Demo bundle dict
     """
     data_dir = Path('_data')
 
-    # Merge projects
+    _merge_demo_projects(bundle, data_dir)
+    _merge_demo_objects(bundle, data_dir)
+    _write_demo_stories(bundle, data_dir)
+    _write_demo_glossary(bundle)
+
+
+def _merge_demo_projects(bundle, data_dir):
+    """
+    Prepend the bundle's stories to the user's project.json entry.
+
+    Args:
+        bundle: Demo bundle dict
+        data_dir: Path to the site's _data directory
+    """
     project_path = data_dir / 'project.json'
     if project_path.exists() and bundle.get('project'):
         try:
@@ -124,7 +142,15 @@ def merge_demo_content(bundle):
         except Exception as e:
             print(f"  [WARN] Could not merge demo projects: {e}")
 
-    # Merge objects
+
+def _merge_demo_objects(bundle, data_dir):
+    """
+    Append the bundle's objects to the user's objects.json, skipping duplicates.
+
+    Args:
+        bundle: Demo bundle dict
+        data_dir: Path to the site's _data directory
+    """
     objects_path = data_dir / 'objects.json'
     if objects_path.exists() and bundle.get('objects'):
         try:
@@ -169,7 +195,15 @@ def merge_demo_content(bundle):
         except Exception as e:
             print(f"  [WARN] Could not merge demo objects: {e}")
 
-    # Create demo story files
+
+def _write_demo_stories(bundle, data_dir):
+    """
+    Write one story file per bundle story, one failure isolated per story.
+
+    Args:
+        bundle: Demo bundle dict
+        data_dir: Path to the site's _data directory
+    """
     if bundle.get('stories'):
         for story_id, story_data in bundle['stories'].items():
             try:
@@ -197,33 +231,7 @@ def merge_demo_content(bundle):
                     }
 
                     # Process layers
-                    layers = step.get('layers', {})
-                    for layer_key in ['layer1', 'layer2']:
-                        layer = layers.get(layer_key, {})
-                        if layer:
-                            step_data[f'{layer_key}_button'] = layer.get('button', '')
-                            # Use explicit title if provided, fall back to button text
-                            step_data[f'{layer_key}_title'] = layer.get('title', layer.get('button', ''))
-
-                            content = layer.get('content', '')
-                            if content:
-                                # Initialize warnings list for widget processing
-                                widget_warnings = []
-
-                                # Process widgets BEFORE markdown conversion
-                                content = process_widgets(content, f'demo-{story_id}', widget_warnings)
-
-                                # Process images (sizes and captions) BEFORE markdown conversion
-                                content = process_images(content)
-
-                                # Convert markdown to HTML
-                                content = md_lib.markdown(content, extensions=['extra', 'nl2br'])
-
-                                # Process glossary links AFTER markdown conversion
-                                content = process_glossary_links(content, glossary_terms)
-
-                            step_data[f'{layer_key}_text'] = content
-                            step_data[f'{layer_key}_demo'] = True  # All demo bundle layers are demo content
+                    _add_demo_layers(step_data, step, story_id, glossary_terms)
 
                     steps.append(step_data)
 
@@ -235,8 +243,58 @@ def merge_demo_content(bundle):
             except Exception as e:
                 print(f"  [WARN] Could not create demo story {story_id}: {e}")
 
-    # Write demo glossary to _data/demo-glossary.json
-    # (generate_collections.py will read this and create Jekyll collection files)
+
+def _add_demo_layers(step_data, step, story_id, glossary_terms):
+    """
+    Fill one step's layer fields from the bundle, running layer content through
+    the widget, image, markdown and glossary pipeline regular stories use.
+
+    Widgets run before markdown conversion and glossary links after it: the
+    widget syntax is markdown's input, the glossary linker's input is HTML.
+
+    Args:
+        step_data: Step dict to fill in place
+        step: Bundle step dict the layers come from
+        story_id: Story identifier, which names the widget source
+        glossary_terms: {term_id: term} dict for the glossary linker
+    """
+    layers = step.get('layers', {})
+    for layer_key in ['layer1', 'layer2']:
+        layer = layers.get(layer_key, {})
+        if layer:
+            step_data[f'{layer_key}_button'] = layer.get('button', '')
+            # Use explicit title if provided, fall back to button text
+            step_data[f'{layer_key}_title'] = layer.get('title', layer.get('button', ''))
+
+            content = layer.get('content', '')
+            if content:
+                # Initialize warnings list for widget processing
+                widget_warnings = []
+
+                # Process widgets BEFORE markdown conversion
+                content = process_widgets(content, f'demo-{story_id}', widget_warnings)
+
+                # Process images (sizes and captions) BEFORE markdown conversion
+                content = process_images(content)
+
+                # Convert markdown to HTML
+                content = md_lib.markdown(content, extensions=['extra', 'nl2br'])
+
+                # Process glossary links AFTER markdown conversion
+                content = process_glossary_links(content, glossary_terms)
+
+            step_data[f'{layer_key}_text'] = content
+            step_data[f'{layer_key}_demo'] = True  # All demo bundle layers are demo content
+
+
+def _write_demo_glossary(bundle):
+    """
+    Write the bundle's glossary terms to _data/demo-glossary.json, which
+    generate_collections.py reads to create Jekyll collection files.
+
+    Args:
+        bundle: Demo bundle dict
+    """
     if bundle.get('glossary'):
         glossary_data = []
         for term_id, term_data in bundle['glossary'].items():

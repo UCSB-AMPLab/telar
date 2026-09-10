@@ -40,7 +40,7 @@ let them keep showing whatever they wrote. EN sites get acerca.md
 in fresh template clones but not via this migration (it would just
 sit unused).
 
-Version: v1.3.0
+Version: v1.7.0
 """
 
 import hashlib
@@ -317,7 +317,7 @@ class Migration121to130(BaseMigration):
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} — {description}")
             else:

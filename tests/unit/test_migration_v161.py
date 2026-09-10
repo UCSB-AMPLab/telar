@@ -23,7 +23,7 @@ sink the upgrade). These tests guard:
 Network-dependent framework fetches are not exercised here — those are
 covered by the upgrade.py integration tests.
 
-Version: v1.6.2
+Version: v1.7.0
 """
 
 import sys
@@ -33,9 +33,11 @@ import errno
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from migrations.v161_to_v162 import Migration161to162, FRAMEWORK_FILES, DEPENDABOT_PATH
+from migrations.v162_to_v170 import Migration162to170
 from migrations.base import ChangeRecord, ChangeStatus
 
-import upgrade
+import telar_upgrade as upgrade
+from migrations.discovery import discover_migrations
 
 
 # ---------- Delivery set (FRAMEWORK_FILES) ----------
@@ -205,21 +207,26 @@ class TestMigrationMetadata:
 
 class TestRegistrationCompleteness:
     """v1.6.1 itself exists to repair a registration gap in v1.6.0 — these
-    guards make sure v1.6.2 doesn't reintroduce that class of bug across the
-    three hand-synced places (import block, MIGRATIONS, LATEST_VERSION)."""
+    guards make sure the class of bug cannot come back. Registration is now
+    derived, so what they check is that the derivation sees this migration
+    and puts it where the chain ends."""
 
-    def test_imported_in_upgrade_module(self):
-        assert hasattr(upgrade, 'Migration161to162')
-        assert upgrade.Migration161to162 is Migration161to162
+    def test_discovery_finds_it(self):
+        assert Migration161to162 in discover_migrations()
 
     def test_appended_to_migrations_list(self):
         assert Migration161to162 in upgrade.MIGRATIONS
 
-    def test_is_last_in_migrations_list(self):
-        assert upgrade.MIGRATIONS[-1] is Migration161to162
+    def test_the_next_hop_follows_it(self):
+        """This migration sits in the chain with the hop out of 1.6.2 straight
+        after it, and nothing in between for a site to fall into."""
+        chain = list(upgrade.MIGRATIONS)
 
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == Migration161to162.to_version == '1.6.2'
+        assert Migration161to162 in chain
+        assert chain[chain.index(Migration161to162) + 1] is Migration162to170
+
+    def test_its_target_is_the_next_hops_entry(self):
+        assert Migration161to162.to_version == Migration162to170.from_version == '1.6.2'
 
     def test_full_chain_resolves_to_latest_version(self):
         """Walking every migration's from_version -> to_version link from the

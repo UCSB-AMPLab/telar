@@ -1,577 +1,378 @@
-/**
- * Objects Gallery Filter and Search
- *
- * This module powers the browse-and-search interface on the objects index
- * page. It loads `search-data.json` (generated at build time by Python) which
- * contains object metadata and pre-computed facet counts for the filter
- * sidebar. The facets — Type (auto-detected media type), Medium/Genre, Creator,
- * Period, Subjects — are populated dynamically with counts like "Early maps (3)"
- * so users know what's available before clicking.
- *
- * Filtering works by reading data attributes on each `.collection-item` card
- * (e.g., `data-creator`, `data-period`) and showing/hiding cards based on
- * active filter selections. Multiple filters within a category use OR logic
- * (show if matches any), while filters across categories use AND logic (must
- * match all). Active filters appear as removable chips above the grid.
- *
- * Search uses Lunr.js for fuzzy full-text matching across title, creator,
- * description, and other fields. The search index is built client-side from
- * the loaded JSON — this keeps the Python build simple and works well for
- * typical collection sizes (under 500 objects). Search input is debounced
- * at 250ms to avoid excessive filtering during typing.
- *
- * Sorting supports Title (A-Z/Z-A) and Year (ascending/descending). Clicking
- * the active sort button toggles direction; clicking an inactive button
- * switches to that field in ascending order. DOM reordering uses appendChild
- * which maintains event listeners on the cards.
- *
- * @version v1.6.0
- */
+/* GENERATED FILE - do not edit. Bundled from assets/js/objects-filter/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
+(() => {
+  // assets/js/objects-filter/escape.js
+  function escapeHtml(text, doc = document) {
+    const div = doc.createElement("div");
+    div.textContent = text;
+    return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
 
-(function() {
-  'use strict';
-
-  // State
-  let searchData = null;
-  let searchIndex = null;
-  let activeFilters = {
-    media_type: [],
-    medium: [],
-    creator: [],
-    period: [],
-    subjects: []
-  };
-  let searchQuery = '';
-  let currentSort = { field: 'title', direction: 'asc' };
-
-  // DOM elements (cached on init)
-  let elements = {};
-
-  /**
-   * Initialize the filter system
-   */
-  async function init() {
-    // Check if we're on the objects page with browse_and_search enabled
-    const objectsLayout = document.querySelector('.objects-layout');
-    if (!objectsLayout) {
-      return; // Not on objects page or browse_and_search disabled
-    }
-
-    // Cache DOM elements
-    cacheElements();
-
-    // Load search data
-    try {
-      const response = await fetch(getBaseUrl() + '/search-data.json');
-      if (!response.ok) {
-        console.warn('Objects filter: search-data.json not found');
-        return;
+  // assets/js/objects-filter/matching.js
+  function datasetKeyFor(filterType) {
+    return filterType.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+  }
+  function matchesSearch(objectId, matchingIds) {
+    return matchingIds === null || matchingIds.has(objectId);
+  }
+  function matchesFilters(dataset, activeFilters) {
+    for (const [filterType, values] of Object.entries(activeFilters)) {
+      if (values.length === 0) continue;
+      const itemValue = dataset[datasetKeyFor(filterType)] || "";
+      if (filterType === "subjects") {
+        const itemSubjects = itemValue.split("|").map((s) => s.trim());
+        if (!values.some((v) => itemSubjects.includes(v))) return false;
+      } else if (!values.includes(itemValue)) {
+        return false;
       }
-      searchData = await response.json();
-    } catch (error) {
-      console.warn('Objects filter: Failed to load search data', error);
-      return;
     }
-
-    // Initialize Lunr.js search index
-    initSearchIndex();
-
-    // Populate filter sections with facet data
-    populateFilters();
-
-    // Bind event listeners
-    bindEvents();
-
-    // Initial state
-    updateCount();
-
-    console.log('Objects filter initialized');
+    return true;
   }
 
-  /**
-   * Get the base URL for the site
-   */
-  function getBaseUrl() {
-    // Get baseurl from the page (set by Jekyll)
-    const baseUrlMeta = document.querySelector('meta[name="baseurl"]');
+  // assets/js/objects-filter/search-index.js
+  function getBaseUrl(doc = document, location = window.location) {
+    const baseUrlMeta = doc.querySelector('meta[name="baseurl"]');
     if (baseUrlMeta) {
-      return baseUrlMeta.getAttribute('content') || '';
+      return baseUrlMeta.getAttribute("content") || "";
     }
-    // Fallback: derive from the current URL. This only runs if the layout did not
-    // inject <meta name="baseurl"> — warn so a missing tag is noticed rather than
-    // silently relying on the /objects/ path shape.
     console.warn('[Telar] meta[name="baseurl"] not found; deriving the base URL from the page path.');
-    const path = window.location.pathname;
+    const path = location.pathname;
     const match = path.match(/^(\/[^\/]+)?\/objects\//);
-    return match ? (match[1] || '') : '';
+    return match ? match[1] || "" : "";
   }
-
-  /**
-   * Cache commonly used DOM elements
-   */
-  function cacheElements() {
-    elements = {
-      grid: document.querySelector('.collection-grid'),
-      items: document.querySelectorAll('.collection-item'),
-      visibleCount: document.getElementById('objects-visible-count'),
-      searchInput: document.getElementById('objects-search-input'),
-      searchClear: document.getElementById('objects-search-clear'),
-      filterSections: document.querySelectorAll('.objects-filter-section'),
-      sectionToggles: document.querySelectorAll('.objects-filter-section-toggle'),
-      activeFiltersContainer: document.getElementById('objects-active-filters'),
-      filterChips: document.getElementById('objects-filter-chips'),
-      clearAllBtn: document.getElementById('objects-clear-all'),
-      sidebarActiveFilters: document.getElementById('objects-sidebar-active-filters'),
-      sidebarFilterChips: document.getElementById('objects-sidebar-filter-chips'),
-      sidebarClearAll: document.getElementById('objects-sidebar-clear-all'),
-      sortButtons: document.querySelectorAll('.objects-sort-btn'),
-      mobileToggle: document.getElementById('objects-filters-mobile-toggle'),
-      filtersContent: document.getElementById('objects-filters-content')
-    };
-  }
-
-  /**
-   * Initialize Lunr.js search index
-   */
-  function initSearchIndex() {
-    if (typeof lunr === 'undefined') {
-      console.warn('Objects filter: Lunr.js not loaded');
-      return;
+  function buildSearchIndex(searchData, lunr = globalThis.lunr) {
+    if (typeof lunr === "undefined") {
+      console.warn("Objects filter: Lunr.js not loaded");
+      return null;
     }
-
-    searchIndex = lunr(function() {
-      this.ref('id');
-      this.field('title', { boost: 10 });
-      this.field('creator', { boost: 5 });
-      this.field('description', { boost: 2 });
-      this.field('period');
-      this.field('subjects');
-      this.field('medium');
-
-      searchData.objects.forEach(obj => {
+    return lunr(function() {
+      this.ref("id");
+      this.field("title", { boost: 10 });
+      this.field("creator", { boost: 5 });
+      this.field("description", { boost: 2 });
+      this.field("period");
+      this.field("subjects");
+      this.field("medium");
+      searchData.objects.forEach((obj) => {
         this.add(obj);
       });
     });
   }
 
-  /**
-   * Populate filter sections with facet data
-   */
-  function populateFilters() {
-    if (!searchData || !searchData.facets) return;
-
-    elements.filterSections.forEach(section => {
-      const filterType = section.dataset.filter;
-      const facets = searchData.facets[filterType];
-      const optionsContainer = section.querySelector('.objects-filter-options');
-
-      if (!facets || !optionsContainer) return;
-
-      // Clear existing options
-      optionsContainer.innerHTML = '';
-
-      // Add options
-      const entries = Object.entries(facets);
-      if (entries.length === 0) {
-        optionsContainer.innerHTML = '<span class="objects-filter-empty">No options available</span>';
-        return;
-      }
-
-      entries.forEach(([value, count]) => {
-        const option = document.createElement('label');
-        option.className = 'objects-filter-option';
-        option.innerHTML = `
-          <input type="checkbox" value="${escapeHtml(value)}" data-filter="${filterType}">
-          <span class="objects-filter-option-label">${escapeHtml(value)}</span>
-          <span class="objects-filter-option-count">(${count})</span>
-        `;
-        optionsContainer.appendChild(option);
-      });
-    });
-  }
-
-  /**
-   * Bind event listeners
-   */
-  function bindEvents() {
-    // Filter section expand/collapse
-    elements.sectionToggles.forEach(toggle => {
-      toggle.addEventListener('click', handleSectionToggle);
-    });
-
-    // Filter checkbox changes
-    document.querySelectorAll('.objects-filter-option input[type="checkbox"]').forEach(checkbox => {
-      checkbox.addEventListener('change', handleFilterChange);
-    });
-
-    // Clear all buttons
-    if (elements.clearAllBtn) {
-      elements.clearAllBtn.addEventListener('click', clearAllFilters);
-    }
-    if (elements.sidebarClearAll) {
-      elements.sidebarClearAll.addEventListener('click', clearAllFilters);
-    }
-
-    // Sort buttons
-    elements.sortButtons.forEach(btn => {
-      btn.addEventListener('click', handleSortClick);
-    });
-
-    // Search input
-    if (elements.searchInput) {
-      let debounceTimer;
-      elements.searchInput.addEventListener('input', (e) => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          handleSearch(e.target.value);
-        }, 250);
-      });
-    }
-
-    // Search clear button
-    if (elements.searchClear) {
-      elements.searchClear.addEventListener('click', () => {
-        elements.searchInput.value = '';
-        handleSearch('');
-      });
-    }
-
-    // Mobile toggle
-    if (elements.mobileToggle) {
-      elements.mobileToggle.addEventListener('click', handleMobileToggle);
-    }
-  }
-
-  /**
-   * Handle filter section expand/collapse
-   */
-  function handleSectionToggle(e) {
-    const toggle = e.currentTarget;
-    const section = toggle.closest('.objects-filter-section');
-    const options = section.querySelector('.objects-filter-options');
-    const indicator = toggle.querySelector('.objects-filter-indicator');
-    const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-
-    toggle.setAttribute('aria-expanded', !isExpanded);
-    options.classList.toggle('show', !isExpanded);
-    indicator.textContent = isExpanded ? '+' : '−';
-  }
-
-  /**
-   * Handle filter checkbox change
-   */
-  function handleFilterChange(e) {
-    const checkbox = e.target;
-    const filterType = checkbox.dataset.filter;
-    const value = checkbox.value;
-
-    if (checkbox.checked) {
-      if (!activeFilters[filterType].includes(value)) {
-        activeFilters[filterType].push(value);
-      }
-    } else {
-      activeFilters[filterType] = activeFilters[filterType].filter(v => v !== value);
-    }
-
-    applyFilters();
-    updateActiveFiltersUI();
-  }
-
-  /**
-   * Handle sort button click
-   */
-  function handleSortClick(e) {
-    const btn = e.currentTarget;
-    const sortField = btn.dataset.sort;
-
-    if (currentSort.field === sortField) {
-      // Toggle direction
-      currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-    } else {
-      // Change field, default to ascending
-      currentSort.field = sortField;
-      currentSort.direction = 'asc';
-    }
-
-    // Update button UI
-    elements.sortButtons.forEach(b => {
-      const isActive = b.dataset.sort === currentSort.field;
-      b.classList.toggle('active', isActive);
-      const arrow = b.querySelector('.objects-sort-arrow');
-      if (arrow) {
-        arrow.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
-      }
-    });
-
-    applySort();
-  }
-
-  /**
-   * Handle search input
-   */
-  function handleSearch(query) {
-    searchQuery = query.trim();
-
-    // Toggle clear button visibility
-    if (elements.searchClear) {
-      elements.searchClear.style.display = searchQuery ? 'block' : 'none';
-    }
-
-    applyFilters();
-    updateActiveFiltersUI();
-  }
-
-  /**
-   * Handle mobile filter toggle
-   */
-  function handleMobileToggle() {
-    const isExpanded = elements.mobileToggle.getAttribute('aria-expanded') === 'true';
-    elements.mobileToggle.setAttribute('aria-expanded', !isExpanded);
-    elements.filtersContent.classList.toggle('show', !isExpanded);
-  }
-
-  /**
-   * Apply all filters and search to the grid
-   */
-  function applyFilters() {
-    let matchingIds = null;
-
-    // Apply search first
-    if (searchQuery && searchIndex) {
-      try {
-        // Strip leading Lunr query operators (+ - : ~ ^ *) so a query like
-        // "C++" or "+foo" isn't mis-parsed; an empty remainder means no match.
-        const safeQuery = searchQuery.replace(/^[+\-:~^*]+/, '');
-        const results = safeQuery ? searchIndex.search(safeQuery + '*') : [];
-        matchingIds = new Set(results.map(r => r.ref));
-      } catch (e) {
-        // Still unparseable: an honest empty result set, not "show everything"
-        matchingIds = new Set();
-      }
-    }
-
-    let visibleCount = 0;
-
-    elements.items.forEach(item => {
-      const objectId = item.dataset.objectId;
-      let visible = true;
-
-      // Check search match
-      if (matchingIds !== null && !matchingIds.has(objectId)) {
-        visible = false;
-      }
-
-      // Check filters
-      if (visible) {
-        for (const [filterType, values] of Object.entries(activeFilters)) {
-          if (values.length === 0) continue;
-
-          // Convert snake_case to camelCase for dataset access
-          // e.g., 'media_type' → 'mediaType' (data-media-type → dataset.mediaType)
-          const datasetKey = filterType.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-          const itemValue = item.dataset[datasetKey] || '';
-
-          // For subjects, check if any match (pipe-separated)
-          if (filterType === 'subjects') {
-            const itemSubjects = itemValue.split('|').map(s => s.trim());
-            const hasMatch = values.some(v => itemSubjects.includes(v));
-            if (!hasMatch) {
-              visible = false;
-              break;
-            }
-          } else {
-            // For other fields, check exact match
-            if (!values.includes(itemValue)) {
-              visible = false;
-              break;
-            }
-          }
-        }
-      }
-
-      item.style.display = visible ? '' : 'none';
-      if (visible) visibleCount++;
-    });
-
-    updateCount(visibleCount);
-  }
-
-  /**
-   * Apply current sort to the grid
-   */
-  function applySort() {
-    const itemsArray = Array.from(elements.items);
-
-    // Extract a 3–4 digit year from a possibly-prose period string (e.g.
-    // "c. 1650", "1650-1700", "siglo XVII"). Non-numeric periods sort last in
-    // ascending order (Infinity) instead of collapsing to year 0.
-    const extractYear = (val) => {
-      const m = (val || '').match(/\d{3,4}/);
-      return m ? parseInt(m[0], 10) : Infinity;
-    };
-
-    itemsArray.sort((a, b) => {
-      let aVal, bVal;
-
-      if (currentSort.field === 'title') {
-        aVal = (a.dataset.title || '').toLowerCase();
-        bVal = (b.dataset.title || '').toLowerCase();
-      } else if (currentSort.field === 'year') {
-        aVal = extractYear(a.dataset.year || a.dataset.period);
-        bVal = extractYear(b.dataset.year || b.dataset.period);
-      }
-
-      let result;
-      if (typeof aVal === 'string') {
-        result = aVal.localeCompare(bVal);
-      } else {
-        result = aVal - bVal;
-      }
-
-      return currentSort.direction === 'asc' ? result : -result;
-    });
-
-    // Reorder DOM
-    itemsArray.forEach(item => {
-      elements.grid.appendChild(item);
-    });
-  }
-
-  /**
-   * Update the visible count display
-   */
-  function updateCount(count) {
-    if (count === undefined) {
-      count = Array.from(elements.items).filter(item => item.style.display !== 'none').length;
-    }
-    if (elements.visibleCount) {
-      elements.visibleCount.textContent = count;
-    }
-  }
-
-  /**
-   * Update the active filters UI (chips)
-   */
-  function updateActiveFiltersUI() {
-    const hasFilters = Object.values(activeFilters).some(arr => arr.length > 0) || searchQuery;
-
-    // Build chips HTML
-    let chipsHtml = '';
-
-    // Search chip
-    if (searchQuery) {
-      chipsHtml += `<span class="objects-filter-chip" data-type="search">
-        "${escapeHtml(searchQuery)}"
-        <button type="button" class="objects-filter-chip-remove" aria-label="Remove">&times;</button>
-      </span>`;
-    }
-
-    // Filter chips
-    for (const [filterType, values] of Object.entries(activeFilters)) {
-      values.forEach(value => {
-        chipsHtml += `<span class="objects-filter-chip" data-type="${filterType}" data-value="${escapeHtml(value)}">
-          ${escapeHtml(value)}
-          <button type="button" class="objects-filter-chip-remove" aria-label="Remove">&times;</button>
-        </span>`;
-      });
-    }
-
-    // Update both chip containers
-    [elements.filterChips, elements.sidebarFilterChips].forEach(container => {
-      if (container) {
-        container.innerHTML = chipsHtml;
-        // Bind remove handlers
-        container.querySelectorAll('.objects-filter-chip-remove').forEach(btn => {
-          btn.addEventListener('click', handleChipRemove);
-        });
-      }
-    });
-
-    // Show/hide containers
-    [elements.activeFiltersContainer, elements.sidebarActiveFilters].forEach(container => {
-      if (container) {
-        container.style.display = hasFilters ? 'flex' : 'none';
-      }
-    });
-  }
-
-  /**
-   * Handle chip remove click
-   */
-  function handleChipRemove(e) {
-    const chip = e.target.closest('.objects-filter-chip');
-    const type = chip.dataset.type;
-    const value = chip.dataset.value;
-
-    if (type === 'search') {
-      searchQuery = '';
-      if (elements.searchInput) {
-        elements.searchInput.value = '';
-      }
-      if (elements.searchClear) {
-        elements.searchClear.style.display = 'none';
-      }
-    } else {
-      activeFilters[type] = activeFilters[type].filter(v => v !== value);
-      // Uncheck the corresponding checkbox
-      const checkbox = document.querySelector(
-        `.objects-filter-option input[data-filter="${type}"][value="${value}"]`
-      );
-      if (checkbox) {
-        checkbox.checked = false;
-      }
-    }
-
-    applyFilters();
-    updateActiveFiltersUI();
-  }
-
-  /**
-   * Clear all filters and search
-   */
-  function clearAllFilters() {
-    // Reset state
-    activeFilters = {
+  // assets/js/objects-filter/main.js
+  function createObjectsFilter({
+    doc = document,
+    fetchFn = (url) => globalThis.fetch(url),
+    lunr = globalThis.lunr,
+    location = window.location
+  } = {}) {
+    let searchData = null;
+    let searchIndex = null;
+    let activeFilters = {
       media_type: [],
       medium: [],
       creator: [],
       period: [],
       subjects: []
     };
-    searchQuery = '';
-
-    // Reset UI
-    if (elements.searchInput) {
-      elements.searchInput.value = '';
+    let searchQuery = "";
+    let currentSort = { field: "title", direction: "asc" };
+    let elements = {};
+    async function init() {
+      const objectsLayout = doc.querySelector(".objects-layout");
+      if (!objectsLayout) {
+        return;
+      }
+      cacheElements();
+      try {
+        const response = await fetchFn(getBaseUrl(doc, location) + "/search-data.json");
+        if (!response.ok) {
+          console.warn("Objects filter: search-data.json not found");
+          return;
+        }
+        searchData = await response.json();
+      } catch (error) {
+        console.warn("Objects filter: Failed to load search data", error);
+        return;
+      }
+      searchIndex = buildSearchIndex(searchData, lunr);
+      populateFilters();
+      bindEvents();
+      updateCount();
+      console.log("Objects filter initialized");
     }
-    if (elements.searchClear) {
-      elements.searchClear.style.display = 'none';
+    function cacheElements() {
+      elements = {
+        grid: doc.querySelector(".collection-grid"),
+        items: doc.querySelectorAll(".collection-item"),
+        visibleCount: doc.getElementById("objects-visible-count"),
+        searchInput: doc.getElementById("objects-search-input"),
+        searchClear: doc.getElementById("objects-search-clear"),
+        filterSections: doc.querySelectorAll(".objects-filter-section"),
+        sectionToggles: doc.querySelectorAll(".objects-filter-section-toggle"),
+        activeFiltersContainer: doc.getElementById("objects-active-filters"),
+        filterChips: doc.getElementById("objects-filter-chips"),
+        clearAllBtn: doc.getElementById("objects-clear-all"),
+        sidebarActiveFilters: doc.getElementById("objects-sidebar-active-filters"),
+        sidebarFilterChips: doc.getElementById("objects-sidebar-filter-chips"),
+        sidebarClearAll: doc.getElementById("objects-sidebar-clear-all"),
+        sortButtons: doc.querySelectorAll(".objects-sort-btn"),
+        mobileToggle: doc.getElementById("objects-filters-mobile-toggle"),
+        filtersContent: doc.getElementById("objects-filters-content")
+      };
     }
-
-    // Uncheck all checkboxes
-    document.querySelectorAll('.objects-filter-option input[type="checkbox"]').forEach(cb => {
-      cb.checked = false;
-    });
-
-    applyFilters();
-    updateActiveFiltersUI();
+    function populateFilters() {
+      if (!searchData || !searchData.facets) return;
+      elements.filterSections.forEach((section) => {
+        const filterType = section.dataset.filter;
+        const facets = searchData.facets[filterType];
+        const optionsContainer = section.querySelector(".objects-filter-options");
+        if (!facets || !optionsContainer) return;
+        optionsContainer.innerHTML = "";
+        const entries = Object.entries(facets);
+        if (entries.length === 0) {
+          optionsContainer.innerHTML = '<span class="objects-filter-empty">No options available</span>';
+          return;
+        }
+        entries.forEach(([value, count]) => {
+          const option = doc.createElement("label");
+          option.className = "objects-filter-option";
+          option.innerHTML = `
+          <input type="checkbox" value="${escapeHtml(value, doc)}" data-filter="${filterType}">
+          <span class="objects-filter-option-label">${escapeHtml(value, doc)}</span>
+          <span class="objects-filter-option-count">(${count})</span>
+        `;
+          optionsContainer.appendChild(option);
+        });
+      });
+    }
+    function bindEvents() {
+      elements.sectionToggles.forEach((toggle) => {
+        toggle.addEventListener("click", handleSectionToggle);
+      });
+      doc.querySelectorAll('.objects-filter-option input[type="checkbox"]').forEach((checkbox) => {
+        checkbox.addEventListener("change", handleFilterChange);
+      });
+      if (elements.clearAllBtn) {
+        elements.clearAllBtn.addEventListener("click", clearAllFilters);
+      }
+      if (elements.sidebarClearAll) {
+        elements.sidebarClearAll.addEventListener("click", clearAllFilters);
+      }
+      elements.sortButtons.forEach((btn) => {
+        btn.addEventListener("click", handleSortClick);
+      });
+      if (elements.searchInput) {
+        let debounceTimer;
+        elements.searchInput.addEventListener("input", (e) => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            handleSearch(e.target.value);
+          }, 250);
+        });
+      }
+      if (elements.searchClear) {
+        elements.searchClear.addEventListener("click", () => {
+          elements.searchInput.value = "";
+          handleSearch("");
+        });
+      }
+      if (elements.mobileToggle) {
+        elements.mobileToggle.addEventListener("click", handleMobileToggle);
+      }
+    }
+    function handleSectionToggle(e) {
+      const toggle = e.currentTarget;
+      const section = toggle.closest(".objects-filter-section");
+      const options = section.querySelector(".objects-filter-options");
+      const indicator = toggle.querySelector(".objects-filter-indicator");
+      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", !isExpanded);
+      options.classList.toggle("show", !isExpanded);
+      indicator.textContent = isExpanded ? "+" : "\u2212";
+    }
+    function handleFilterChange(e) {
+      const checkbox = e.target;
+      const filterType = checkbox.dataset.filter;
+      const value = checkbox.value;
+      if (checkbox.checked) {
+        if (!activeFilters[filterType].includes(value)) {
+          activeFilters[filterType].push(value);
+        }
+      } else {
+        activeFilters[filterType] = activeFilters[filterType].filter((v) => v !== value);
+      }
+      applyFilters();
+      updateActiveFiltersUI();
+    }
+    function handleSortClick(e) {
+      const btn = e.currentTarget;
+      const sortField = btn.dataset.sort;
+      if (currentSort.field === sortField) {
+        currentSort.direction = currentSort.direction === "asc" ? "desc" : "asc";
+      } else {
+        currentSort.field = sortField;
+        currentSort.direction = "asc";
+      }
+      elements.sortButtons.forEach((b) => {
+        const isActive = b.dataset.sort === currentSort.field;
+        b.classList.toggle("active", isActive);
+        const arrow = b.querySelector(".objects-sort-arrow");
+        if (arrow) {
+          arrow.textContent = currentSort.direction === "asc" ? "\u2191" : "\u2193";
+        }
+      });
+      applySort();
+    }
+    function handleSearch(query) {
+      searchQuery = query.trim();
+      if (elements.searchClear) {
+        elements.searchClear.style.display = searchQuery ? "block" : "none";
+      }
+      applyFilters();
+      updateActiveFiltersUI();
+    }
+    function handleMobileToggle() {
+      const isExpanded = elements.mobileToggle.getAttribute("aria-expanded") === "true";
+      elements.mobileToggle.setAttribute("aria-expanded", !isExpanded);
+      elements.filtersContent.classList.toggle("show", !isExpanded);
+    }
+    function applyFilters() {
+      let matchingIds = null;
+      if (searchQuery && searchIndex) {
+        try {
+          const safeQuery = searchQuery.replace(/^[+\-:~^*]+/, "");
+          const results = safeQuery ? searchIndex.search(safeQuery + " " + safeQuery + "*") : [];
+          matchingIds = new Set(results.map((r) => r.ref));
+        } catch (e) {
+          matchingIds = /* @__PURE__ */ new Set();
+        }
+      }
+      let visibleCount = 0;
+      elements.items.forEach((item) => {
+        const visible = matchesSearch(item.dataset.objectId, matchingIds) && matchesFilters(item.dataset, activeFilters);
+        item.style.display = visible ? "" : "none";
+        if (visible) visibleCount++;
+      });
+      updateCount(visibleCount);
+    }
+    function applySort() {
+      const itemsArray = Array.from(elements.items);
+      const extractYear = (val) => {
+        const m = (val || "").match(/\d{3,4}/);
+        return m ? parseInt(m[0], 10) : Infinity;
+      };
+      itemsArray.sort((a, b) => {
+        let aVal, bVal;
+        if (currentSort.field === "title") {
+          aVal = (a.dataset.title || "").toLowerCase();
+          bVal = (b.dataset.title || "").toLowerCase();
+        } else if (currentSort.field === "year") {
+          aVal = extractYear(a.dataset.year || a.dataset.period);
+          bVal = extractYear(b.dataset.year || b.dataset.period);
+        }
+        let result;
+        if (typeof aVal === "string") {
+          result = aVal.localeCompare(bVal);
+        } else {
+          result = aVal - bVal;
+        }
+        return currentSort.direction === "asc" ? result : -result;
+      });
+      itemsArray.forEach((item) => {
+        elements.grid.appendChild(item);
+      });
+    }
+    function updateCount(count) {
+      if (count === void 0) {
+        count = Array.from(elements.items).filter((item) => item.style.display !== "none").length;
+      }
+      if (elements.visibleCount) {
+        elements.visibleCount.textContent = count;
+      }
+    }
+    function updateActiveFiltersUI() {
+      const hasFilters = Object.values(activeFilters).some((arr) => arr.length > 0) || searchQuery;
+      let chipsHtml = "";
+      if (searchQuery) {
+        chipsHtml += `<span class="objects-filter-chip" data-type="search">
+        "${escapeHtml(searchQuery, doc)}"
+        <button type="button" class="objects-filter-chip-remove" aria-label="Remove">&times;</button>
+      </span>`;
+      }
+      for (const [filterType, values] of Object.entries(activeFilters)) {
+        values.forEach((value) => {
+          chipsHtml += `<span class="objects-filter-chip" data-type="${filterType}" data-value="${escapeHtml(value, doc)}">
+          ${escapeHtml(value, doc)}
+          <button type="button" class="objects-filter-chip-remove" aria-label="Remove">&times;</button>
+        </span>`;
+        });
+      }
+      [elements.filterChips, elements.sidebarFilterChips].forEach((container) => {
+        if (container) {
+          container.innerHTML = chipsHtml;
+          container.querySelectorAll(".objects-filter-chip-remove").forEach((btn) => {
+            btn.addEventListener("click", handleChipRemove);
+          });
+        }
+      });
+      [elements.activeFiltersContainer, elements.sidebarActiveFilters].forEach((container) => {
+        if (container) {
+          container.style.display = hasFilters ? "flex" : "none";
+        }
+      });
+    }
+    function handleChipRemove(e) {
+      const chip = e.target.closest(".objects-filter-chip");
+      const type = chip.dataset.type;
+      const value = chip.dataset.value;
+      if (type === "search") {
+        searchQuery = "";
+        if (elements.searchInput) {
+          elements.searchInput.value = "";
+        }
+        if (elements.searchClear) {
+          elements.searchClear.style.display = "none";
+        }
+      } else {
+        activeFilters[type] = activeFilters[type].filter((v) => v !== value);
+        const checkbox = doc.querySelector(
+          `.objects-filter-option input[data-filter="${type}"][value="${value}"]`
+        );
+        if (checkbox) {
+          checkbox.checked = false;
+        }
+      }
+      applyFilters();
+      updateActiveFiltersUI();
+    }
+    function clearAllFilters() {
+      activeFilters = {
+        media_type: [],
+        medium: [],
+        creator: [],
+        period: [],
+        subjects: []
+      };
+      searchQuery = "";
+      if (elements.searchInput) {
+        elements.searchInput.value = "";
+      }
+      if (elements.searchClear) {
+        elements.searchClear.style.display = "none";
+      }
+      doc.querySelectorAll('.objects-filter-option input[type="checkbox"]').forEach((cb) => {
+        cb.checked = false;
+      });
+      applyFilters();
+      updateActiveFiltersUI();
+    }
+    return { init };
   }
-
-  /**
-   * Escape HTML special characters
-   */
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    // textContent -> innerHTML escapes < > &, but NOT quotes; add them so the
-    // result is also safe inside double- or single-quoted HTML attributes.
-    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-
-  // Initialize on DOM ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+  var objectsFilter = createObjectsFilter();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => objectsFilter.init());
   } else {
-    init();
+    objectsFilter.init();
   }
 })();
+//# sourceMappingURL=objects-filter.js.map

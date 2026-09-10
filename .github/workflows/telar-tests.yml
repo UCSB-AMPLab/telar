@@ -11,7 +11,7 @@ name: Test Telar Scripts
 # On pull request to main, all test suites run automatically. When triggered
 # manually via workflow_dispatch, you can choose which suites to run.
 #
-# Version: v1.6.2
+# Version: v1.7.0
 
 on:
   pull_request:
@@ -43,10 +43,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
 
@@ -66,10 +66,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
 

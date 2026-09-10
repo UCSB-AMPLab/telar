@@ -7,7 +7,7 @@ The upgrade script ensures those are importable before regeneration, installing
 from a requirements manifest only when something is missing — preferring the
 tooling copy beside the script and falling back to the site's own copy.
 
-Version: v1.6.2
+Version: v1.7.0
 """
 
 import sys
@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
-import upgrade
+import telar_upgrade as upgrade
 
 
 def _install_find_spec(monkeypatch, state):

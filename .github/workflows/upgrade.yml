@@ -13,16 +13,16 @@ name: Upgrade Telar
 #      no code is executed. The tooling is extracted into a throwaway temp dir —
 #      the site's own scripts/ directory is never deleted or replaced wholesale,
 #      so local customisations survive.
-#   3. Run the verified upgrade.py against the checked-out site
+#   3. Run the verified engine (scripts/telar_upgrade.py) against the site
 #      (--repo-root). Each migration installs its target-version files from the
 #      matching release tag (pinned, atomic) and the version is stamped only if
-#      every required step succeeds. If anything required fails, upgrade.py exits
+#      every required step succeeds. If anything required fails, the engine exits
 #      non-zero, this job goes red, and no upgrade branch or issue is created.
 #   4. On success, create an upgrade branch with the content changes (never the
 #      fetched tooling or CI bookkeeping files) and open an issue to review and
 #      merge.
 #
-# Version: v1.6.2
+# Version: v1.7.0
 
 on:
   workflow_dispatch:
@@ -45,12 +45,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Fetch all history for proper git operations
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -119,8 +119,11 @@ jobs:
           # Extract the tooling into the temp dir ONLY. The site's working-tree
           # scripts/ is never touched here.
           tar -xzf "$TMP/$ASSET" -C "$TMP"
-          if [ ! -f "$TMP/scripts/upgrade.py" ]; then
-            echo "::error::Verified tarball does not contain scripts/upgrade.py."
+          # The engine, not the launcher: scripts/upgrade.py in a release is
+          # the bootstrap a site runs, and running it here would download the
+          # tooling a second time.
+          if [ ! -f "$TMP/scripts/telar_upgrade.py" ]; then
+            echo "::error::Verified tarball does not contain scripts/telar_upgrade.py."
             exit 1
           fi
 
@@ -143,15 +146,15 @@ jobs:
           TMP="${{ steps.fetch.outputs.tmp }}"
 
           # Run the verified tooling from the temp dir against the checked-out
-          # site. upgrade.py imports its migrations from alongside itself (the
+          # site. The engine imports its migrations from alongside itself (the
           # verified temp copy); migrations install framework files into the
           # site (--repo-root), pinned to their release tag and written
-          # atomically. On any required-step failure upgrade.py exits non-zero,
+          # atomically. On any required-step failure the engine exits non-zero,
           # which (with set -e and no continue-on-error) fails this job and
           # prevents the branch/issue steps below from running.
-          python "$TMP/scripts/upgrade.py" --repo-root "$GITHUB_WORKSPACE"
+          python "$TMP/scripts/telar_upgrade.py" --repo-root "$GITHUB_WORKSPACE"
 
-          # upgrade.py writes UPGRADE_VERSION.txt only on full success.
+          # The engine writes UPGRADE_VERSION.txt only on full success.
           if [ -f UPGRADE_VERSION.txt ]; then
             VERSION=$(cat UPGRADE_VERSION.txt)
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -160,7 +163,7 @@ jobs:
             echo "No upgrade was needed (already up to date)."
           fi
 
-      # NOTE: Version update is handled by upgrade.py using text-based editing
+      # NOTE: Version update is handled by the engine using text-based editing
       # to preserve comments in _config.yml. Do NOT use yaml.dump() here as
       # it strips all comments!
 
@@ -181,7 +184,7 @@ jobs:
 
           # Stage the upgrade's content changes only. The fetched tooling lives
           # in a temp dir outside the working tree, so it is never staged. We
-          # additionally exclude the CI bookkeeping files that upgrade.py writes
+          # additionally exclude the CI bookkeeping files that the engine writes
           # into the site root so they are not committed into the fork's history.
           git add -- . ':!UPGRADE_VERSION.txt' ':!UPGRADE_STATE.json'
 

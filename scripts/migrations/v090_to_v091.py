@@ -9,7 +9,7 @@ This is a backward-compatible patch release that adds:
 No structural changes required — framework files are updated automatically.
 No _config.yml changes, no file renames, no CSV schema changes.
 
-Version: v0.9.1-beta
+Version: v1.7.0
 """
 
 from typing import List, Dict
@@ -62,7 +62,7 @@ class Migration090to091(BaseMigration):
 
         for file_path, description in new_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Added {file_path} - {description}")
             else:
@@ -94,7 +94,7 @@ class Migration090to091(BaseMigration):
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:

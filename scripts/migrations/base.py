@@ -46,18 +46,20 @@ a crash mid-write is detectable), and written `failed` by `upgrade.py`
 when an upgrade aborts on a HARD failure (so a re-run can tell the user
 they are resuming). A clean success leaves no such file behind.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import json
 import os
 import re
 import shutil
 import time
+
+from .messages import get_message
 
 
 class ChangeStatus(str, Enum):
@@ -82,11 +84,90 @@ class ChangeRecord:
         severity: 'hard' if a FAILED status must abort the upgrade
             (no version stamp, non-zero exit), 'soft' if it should be
             surfaced for manual attention but not block the upgrade.
+        category: Which UPGRADE_SUMMARY.md heading this belongs under, one
+            of ChangeCategory. None leaves the summary to guess from the
+            description, which is what it did for every record before this
+            field existed — a rephrased description silently moved a change
+            to "Other".
     """
 
     description: str
     status: ChangeStatus = ChangeStatus.APPLIED
     severity: str = "soft"
+    category: Optional[str] = None
+
+
+class ChangeCategory:
+    """The UPGRADE_SUMMARY.md headings, as values a record can carry.
+
+    Slugs rather than English titles: the heading a reader sees comes from
+    messages.py under `category_<slug>`, so the record names the section
+    without naming the language.
+    """
+
+    CONFIGURATION = 'configuration'
+    LAYOUTS = 'layouts'
+    INCLUDES = 'includes'
+    STYLES = 'styles'
+    SCRIPTS = 'scripts'
+    DOCUMENTATION = 'documentation'
+    OTHER = 'other'
+
+    # The order the summary prints them in.
+    ORDER = (CONFIGURATION, LAYOUTS, INCLUDES, STYLES, SCRIPTS,
+             DOCUMENTATION, OTHER)
+
+
+# Where a framework file belongs, by path. First match wins, so the
+# specific prefixes precede the extension rules: assets/css/ is a style
+# whatever it is called, and scripts/ is a script even when it holds a .md.
+_CATEGORY_BY_PREFIX = (
+    ('_config.yml', ChangeCategory.CONFIGURATION),
+    ('_data/', ChangeCategory.CONFIGURATION),
+    ('_layouts/', ChangeCategory.LAYOUTS),
+    ('_includes/', ChangeCategory.INCLUDES),
+    ('_sass/', ChangeCategory.STYLES),
+    ('assets/css/', ChangeCategory.STYLES),
+    ('assets/js/', ChangeCategory.SCRIPTS),
+    ('scripts/', ChangeCategory.SCRIPTS),
+    ('tests/', ChangeCategory.SCRIPTS),
+    ('docs/', ChangeCategory.DOCUMENTATION),
+)
+
+_CATEGORY_BY_SUFFIX = (
+    ('.scss', ChangeCategory.STYLES),
+    ('.css', ChangeCategory.STYLES),
+    ('.js', ChangeCategory.SCRIPTS),
+    ('.py', ChangeCategory.SCRIPTS),
+    ('.yml', ChangeCategory.CONFIGURATION),
+    ('.md', ChangeCategory.DOCUMENTATION),
+)
+
+# Files whose name is the whole answer.
+_CATEGORY_BY_NAME = {
+    'README.md': ChangeCategory.DOCUMENTATION,
+    'CHANGELOG.md': ChangeCategory.DOCUMENTATION,
+    'LICENSE': ChangeCategory.DOCUMENTATION,
+    'NOTICE': ChangeCategory.DOCUMENTATION,
+    '.gitignore': ChangeCategory.CONFIGURATION,
+    'package.json': ChangeCategory.CONFIGURATION,
+    'requirements.txt': ChangeCategory.CONFIGURATION,
+    'pytest.ini': ChangeCategory.CONFIGURATION,
+    'vitest.config.js': ChangeCategory.CONFIGURATION,
+}
+
+
+def category_for_path(path: str) -> str:
+    """Which summary heading a change to *path* belongs under."""
+    if path in _CATEGORY_BY_NAME:
+        return _CATEGORY_BY_NAME[path]
+    for prefix, category in _CATEGORY_BY_PREFIX:
+        if path == prefix or path.startswith(prefix):
+            return category
+    for suffix, category in _CATEGORY_BY_SUFFIX:
+        if path.endswith(suffix):
+            return category
+    return ChangeCategory.OTHER
 
 
 # Shared name for the in-progress / failed state marker (see the module
@@ -100,12 +181,12 @@ def apply_config_version(content, new_version, new_date):
 
     Single source of truth for the version stamp — both BaseMigration (per
     migration) and upgrade.py (the final stamp in main()) call this, so the
-    parsing rules can no longer drift between two copies.
+    parsing rules cannot drift between copies.
 
-    Improvements over the old per-copy logic:
+    What the parsing guarantees:
       - Indent-agnostic: any indented line is treated as inside the `telar:`
-        section; the section ends only at the next non-blank column-0 line. The
-        old `startswith('  ')` check wrongly exited on a single-space indent.
+        section; the section ends only at the next non-blank column-0 line, so
+        a single-space indent does not truncate it.
       - Inserts a release_date line right after version if the section has a
         version but no release_date.
 
@@ -158,6 +239,38 @@ def apply_config_version(content, new_version, new_date):
     return '\n'.join(lines), modified
 
 
+def coerce_change(change) -> ChangeRecord:
+    """Coerce a migration's return element to a ChangeRecord.
+
+    Migrations converted to the structured contract return ChangeRecord
+    objects directly. Legacy migrations still return plain strings; treat each
+    such string as a soft, already-applied change so the chain keeps working
+    during the incremental conversion.
+
+    One exception: legacy migrations report a failed framework-file fetch as a
+    string containing "Could not fetch". That phrase appears only on fetch
+    failures (other warnings say "Could not move/create/remove/read/update"),
+    so it is safe to map it to a HARD failure — which makes even unconverted
+    migrations fail closed instead of reporting a missing file as done.
+
+    This lives here rather than in upgrade.py because two callers need the
+    same rule: the chain runner, and any migration that runs other migrations
+    internally. A second copy of the "Could not fetch" test would be a rule
+    that can drift.
+    """
+    if isinstance(change, ChangeRecord):
+        return change
+    text = str(change)
+    if "Could not fetch" in text:
+        return ChangeRecord(description=text, status=ChangeStatus.FAILED, severity="hard")
+    return ChangeRecord(description=text, status=ChangeStatus.APPLIED, severity="soft")
+
+
+def is_hard_failure(record: ChangeRecord) -> bool:
+    """True when this record must abort the upgrade."""
+    return record.status == ChangeStatus.FAILED and record.severity == "hard"
+
+
 class BaseMigration(ABC):
     """Base class for all Telar version migrations."""
 
@@ -166,12 +279,27 @@ class BaseMigration(ABC):
     to_version: str = ""
     description: str = ""
 
+    # Versions this migration can be entered from, when it covers more than
+    # one. A consolidated migration standing in for a run of old releases
+    # lists every version it absorbs; the dispatcher pins `from_version` to
+    # whichever one the site is actually on before calling check_applicable(),
+    # so the summary still names the version the user started at. Left empty
+    # by an ordinary single-hop migration, which is entered only from its own
+    # from_version.
+    from_versions: List[str] = []
+
     # Release tag to pin framework-file fetches to (e.g. "v1.4.0"). When set,
     # the staged-atomic helpers fetch from this immutable tag instead of the
     # moving `main` branch, so an upgrade from version X to version Y always
     # receives version-Y files. Left None for pre-tagging-era betas, which
     # fall back to `main` with a documented historical caveat.
     _TARGET_TAG: Optional[str] = None
+
+    # A commit to pin to when the release was never tagged. Kept separate
+    # from _TARGET_TAG so that field stays a git tag whose version must
+    # agree with to_version — a contract the tests enforce — instead of
+    # being overloaded with a SHA that no version grammar can read.
+    _TARGET_COMMIT: Optional[str] = None
 
     def __init__(self, repo_root: str):
         """
@@ -182,6 +310,21 @@ class BaseMigration(ABC):
         """
         self.repo_root = repo_root
         self.changes_made = []
+
+    @classmethod
+    def entry_version_list(cls) -> List[str]:
+        """Every version this migration may be entered from.
+
+        A classmethod as well as a property because callers that only have
+        the class — the registry-wide checks, chiefly — need the same answer
+        as the dispatcher, and one rule cannot drift from itself.
+        """
+        return list(cls.from_versions) or [cls.from_version]
+
+    @property
+    def entry_versions(self) -> List[str]:
+        """Every version this migration may be entered from."""
+        return type(self).entry_version_list()
 
     @abstractmethod
     def check_applicable(self) -> bool:
@@ -221,21 +364,34 @@ class BaseMigration(ABC):
         """Check if file exists relative to repo root."""
         return os.path.exists(os.path.join(self.repo_root, rel_path))
 
-    def _read_file(self, rel_path: str) -> Optional[str]:
-        """Read file contents relative to repo root."""
+    def _read_file(self, rel_path: str) -> Optional[Union[str, bytes]]:
+        """Read file contents relative to repo root.
+
+        Text as `str`, anything that is not valid UTF-8 as `bytes`, so a
+        backup of a binary asset round-trips through `_write_file` instead
+        of raising mid-rollback.
+        """
         full_path = os.path.join(self.repo_root, rel_path)
         try:
-            with open(full_path, 'r', encoding='utf-8') as f:
-                return f.read()
+            with open(full_path, 'rb') as f:
+                raw = f.read()
         except FileNotFoundError:
             return None
+        try:
+            return raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return raw
 
-    def _write_file(self, rel_path: str, content: str) -> None:
-        """Write file contents relative to repo root."""
+    def _write_file(self, rel_path: str, content: Union[str, bytes]) -> None:
+        """Write file contents relative to repo root, text or binary."""
         full_path = os.path.join(self.repo_root, rel_path)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        if isinstance(content, (bytes, bytearray)):
+            with open(full_path, 'wb') as f:
+                f.write(content)
+        else:
+            with open(full_path, 'w', encoding='utf-8') as f:
+                f.write(content)
 
     def _move_file(self, src_rel_path: str, dest_rel_path: str) -> bool:
         """
@@ -300,8 +456,8 @@ class BaseMigration(ABC):
         # whitespace). If it is not, the file is not in the shape we expect, so
         # skip rather than blindly prepending the notice into the body.
         if not lines or not re.match(r'^-{3}\s*$', lines[0]):
-            print("  [WARN] index.md has no leading frontmatter delimiter — "
-                  "skipping upgrade-notice insertion")
+            print("  " + get_message(self._detect_language(),
+                                     'index_no_frontmatter'))
             return False
 
         # Find end of front matter (the closing '---')
@@ -312,8 +468,8 @@ class BaseMigration(ABC):
                 break
 
         if front_matter_end == 0:
-            print("  [WARN] index.md frontmatter is not closed — "
-                  "skipping upgrade-notice insertion")
+            print("  " + get_message(self._detect_language(),
+                                     'index_frontmatter_unclosed'))
             return False
 
         # Insert notice after front matter
@@ -426,7 +582,14 @@ class BaseMigration(ABC):
                 raise this for large vendored assets that can exceed 10 s.
 
         Returns:
-            File content as string, or None if fetch fails
+            File content as `str`, or as `bytes` when it is not valid UTF-8,
+            or None if the fetch fails.
+
+        Framework file maps name images as well as text — `leviathan.jpg`
+        among them — and a fetcher that only decoded UTF-8 turned every one
+        of those into a failed fetch. Since v1.5.0 a failed fetch is a HARD
+        failure (`upgrade.py`), so a single binary asset in a file map
+        stopped the whole chain.
         """
         import urllib.request
         import urllib.error
@@ -434,18 +597,24 @@ class BaseMigration(ABC):
         # Resolve the ref: an explicit branch/tag wins; otherwise pin to this
         # migration's release tag; only fall back to the moving 'main' branch
         # when no tag is set (pre-tagging-era betas, documented historical gap).
-        ref = branch if branch is not None else (self._TARGET_TAG or 'main')
+        ref = branch if branch is not None else self._target_ref()
 
         url = f"https://raw.githubusercontent.com/UCSB-AMPLab/telar/{ref}/{path}"
 
         try:
             with urllib.request.urlopen(url, timeout=timeout) as response:
-                return response.read().decode('utf-8')
+                raw = response.read()
+            try:
+                return raw.decode('utf-8')
+            except UnicodeDecodeError:
+                return raw
         except urllib.error.URLError as e:
-            print(f"  ⚠️  Warning: Could not fetch {path} from GitHub: {e}")
+            print("  " + get_message(self._detect_language(),
+                                     'fetch_failed_console', path, e))
             return None
         except Exception as e:
-            print(f"  ⚠️  Warning: Error fetching {path}: {e}")
+            print("  " + get_message(self._detect_language(),
+                                     'fetch_error_console', path, e))
             return None
 
     # ------------------------------------------------------------------ #
@@ -467,6 +636,16 @@ class BaseMigration(ABC):
     # Larger timeout for staged fetches — vendored assets (e.g. OpenSeadragon)
     # can exceed the default 10 s and a timeout here is a HARD failure.
     _STAGED_FETCH_TIMEOUT = 30
+
+    def _target_ref(self) -> str:
+        """The ref this migration's fetches pin to.
+
+        A tag when the release has one, the recorded commit when it does
+        not, and the moving `main` branch only when neither is declared —
+        which means the step installs whatever the framework looks like on
+        the day it runs.
+        """
+        return self._TARGET_COMMIT or self._TARGET_TAG or 'main'
 
     def _fetch_with_retry(self, path: str, branch: str) -> Optional[str]:
         """Fetch one file, retrying once with backoff before giving up."""
@@ -504,28 +683,27 @@ class BaseMigration(ABC):
                 content_map[rel_path] = (content, description)
             else:
                 failed.append(ChangeRecord(
-                    description=(
-                        f"Could not fetch {rel_path} from GitHub ({branch}). "
-                        f"Update it manually — {description}"
-                    ),
+                    description=get_message(
+                        self._detect_language(), 'record_fetch_failed',
+                        rel_path, branch, description),
                     status=ChangeStatus.FAILED,
                     severity="hard",
                 ))
 
         return content_map, failed
 
-    def _backup_existing(self, rel_paths: List[str]) -> Dict[str, Optional[str]]:
+    def _backup_existing(self, rel_paths: List[str]) -> Dict[str, Optional[Union[str, bytes]]]:
         """Read current content of each path for rollback.
 
         Returns {rel_path: content} where content is None if the file did not
         exist (so a rollback knows to delete a newly created file).
         """
-        backups: Dict[str, Optional[str]] = {}
+        backups: Dict[str, Optional[Union[str, bytes]]] = {}
         for rel_path in rel_paths:
             backups[rel_path] = self._read_file(rel_path) if self._file_exists(rel_path) else None
         return backups
 
-    def _restore_backups(self, backups: Dict[str, Optional[str]]) -> None:
+    def _restore_backups(self, backups: Dict[str, Optional[Union[str, bytes]]]) -> None:
         """Restore files to their pre-write state after a failed commit."""
         for rel_path, content in backups.items():
             if content is None:
@@ -547,6 +725,10 @@ class BaseMigration(ABC):
                 description=f"Updated {rel_path} — {description}",
                 status=ChangeStatus.APPLIED,
                 severity="hard",
+                # The path decides the summary heading, so the summary reads
+                # each record's category off the record itself rather than
+                # inferring it from the description's wording.
+                category=category_for_path(rel_path),
             ))
         return records
 
@@ -601,7 +783,7 @@ class BaseMigration(ABC):
             List[ChangeRecord] — APPLIED records on success, or HARD FAILED
             records when Phase A failed or the commit was rolled back.
         """
-        pinned = tag if tag is not None else self._TARGET_TAG
+        pinned = tag if tag is not None else self._target_ref()
 
         content_map, failed = self._fetch_all_staged(file_map, tag=pinned)
         if failed:
@@ -617,7 +799,8 @@ class BaseMigration(ABC):
             self._restore_backups(backups)
             self._clear_state_file()
             return [ChangeRecord(
-                description=f"Framework file write failed and was rolled back: {e}",
+                description=get_message(self._detect_language(),
+                                        'record_write_rolled_back', e),
                 status=ChangeStatus.FAILED,
                 severity="hard",
             )]
@@ -688,6 +871,12 @@ class BaseMigration(ABC):
         if not current_content:
             # File doesn't exist, not modified
             return False
+
+        # Binary has no lines to normalise, and either side can be bytes:
+        # compare the raw content instead of splitting it.
+        if isinstance(original_content, (bytes, bytearray)) or \
+                isinstance(current_content, (bytes, bytearray)):
+            return original_content != current_content
 
         # Normalize whitespace for comparison
         # Split into lines and strip each line to ignore formatting differences

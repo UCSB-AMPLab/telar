@@ -3,8 +3,8 @@ Migration from v1.6.0 to v1.6.1.
 
 Upgrade-tooling patch. v1.6.0 shipped scripts/migrations/v154_to_v160.py
 without registering it in scripts/upgrade.py — the import block, the
-LATEST_VERSION constant, and the MIGRATIONS list are three hand-synced
-places with no auto-discovery, and only two of the three were updated. The
+LATEST_VERSION constant, and the MIGRATIONS list were then three hand-synced
+places, and only two of the three were updated. The
 result: LATEST_VERSION was left at "1.5.4" and Migration154to160 was never
 imported or appended to MIGRATIONS, so upgrades silently stopped at 1.5.4 —
 reporting success — even though the migration file itself was correct. v1.6.1 wires
@@ -34,7 +34,7 @@ The version stamp (telar.version -> 1.6.1) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed step can
 never leave the site stamped as a version it is not running.
 
-Version: v1.6.1
+Version: v1.7.0
 """
 
 from typing import Dict, List

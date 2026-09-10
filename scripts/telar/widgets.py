@@ -41,7 +41,7 @@ pairs from a text block, used by the carousel parser.
 and renders it with the parsed widget data. If the template fails, it
 returns an error `<div>` instead of crashing the build.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import html
@@ -147,6 +147,24 @@ def parse_key_value_block(content):
     return data
 
 
+def declared_dimensions(item):
+    """The `width` and `height` an item declares, or None if it declares
+    neither, either, or something that is not a positive whole number.
+
+    A remote image is otherwise downloaded in full to read its size, on
+    every build, and silently sized as default when the download fails.
+    Declaring the dimensions is how content that lives elsewhere -- the
+    demo bundles above all -- keeps the build off the network.
+    """
+    try:
+        width, height = int(item['width']), int(item['height'])
+    except (KeyError, ValueError, TypeError):
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
 def parse_carousel_widget(content, file_path, warnings_list):
     """
     Parse carousel widget content.
@@ -157,11 +175,16 @@ def parse_carousel_widget(content, file_path, warnings_list):
     alt: Description
     caption: Caption text
     credit: Attribution
+    width: 1200
+    height: 800
 
     ---
 
     image: path2.jpg
     :::
+
+    `width` and `height` are optional. When both are given the image is not
+    opened to measure it; see `declared_dimensions`.
 
     Returns:
         dict: Parsed carousel data with 'items' list and 'size_class'
@@ -229,7 +252,7 @@ def parse_carousel_widget(content, file_path, warnings_list):
     # Analyze aspect ratios to determine optimal carousel height
     aspect_ratios = []
     for item in items:
-        dimensions = get_image_dimensions(item['image'])
+        dimensions = declared_dimensions(item) or get_image_dimensions(item['image'])
         if dimensions:
             width, height = dimensions
             if width > 0:  # Avoid division by zero

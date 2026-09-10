@@ -9,7 +9,7 @@ was not listed in requirements.txt.
 
 No _config.yml changes beyond version bump. No CSV schema changes.
 
-Version: v0.9.4-beta
+Version: v1.7.0
 """
 
 from typing import List, Dict
@@ -58,7 +58,7 @@ class Migration093to094(BaseMigration):
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:

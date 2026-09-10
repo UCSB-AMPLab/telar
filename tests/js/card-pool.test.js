@@ -1,26 +1,24 @@
 /**
- * Tests for Telar Story – Card Pool
+ * Tests for Telar Story – Card Pool: pure helpers and geometry
  *
  * Tests z-index banding, messiness computation, peek positioning, scene map
- * helpers (buildSceneMaps, getSceneIndex), and the jsdom-safe slice of the
- * DOM behavior: activateCard guards and initCardPool's build phase (card
- * content escaping). Paths that need OpenSeadragon or a real browser
- * (preloadAhead, IIIF plate init) are covered by the e2e suites instead.
+ * helpers (buildSceneMaps, getSceneIndex), and computeTileUrls (tile-prefetch
+ * compensation, tile source shape, level choice, and the grid walk). None of
+ * these touch the DOM. The jsdom-driven slice of the module — activateCard,
+ * initCardPool, and the media/label/framing/handoff/pool-cap paths they
+ * drive — lives in the sibling file, card-pool-dom.test.js.
  *
- * @version v1.6.0
+ * @version v1.7.0
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getCardMessiness,
   computeCardTop,
   getSceneIndex,
   buildSceneMaps,
   computeZIndexPlan,
-  setCardProgress,
-  activateCard,
   computeTileUrls,
-  initCardPool,
 } from '../../assets/js/telar-story/card-pool.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import { computeFocalTarget } from '../../assets/js/telar-story/iiif-card.js';
@@ -238,184 +236,6 @@ describe('computeZIndexPlan — title cards', () => {
   });
 });
 
-// ── setCardProgress — title card fallback ────────────────────────────────────
-//
-// Full DOM integration (is-scrubbing card-stack + private _stepsData) cannot be
-// unit-tested here — setCardProgress relies on internal module state that is only
-// populated by initCardPool. The title card fallback is verified manually in
-// browser testing. This block confirms the export exists and the function
-// does not throw when state has no text card at the target index.
-
-describe('setCardProgress — title card fallback', () => {
-  beforeEach(() => {
-    state.textCards  = {};
-    state.titleCards = {};
-    state.cardRegistry = [];
-  });
-
-  it('is exported and does not throw when progress < 0.001', () => {
-    // Early return at progress guard — safe even with empty state
-    expect(() => setCardProgress(0, 0)).not.toThrow();
-  });
-
-  it('does not throw when state.textCards is empty and state.titleCards has an entry', () => {
-    const mockDiv = document.createElement('div');
-    state.titleCards = { 1: mockDiv };
-    // Will return early at cardStack guard (no .card-stack.is-scrubbing in JSDOM)
-    // but must not throw — confirms the title card fallback path is reachable
-    expect(() => setCardProgress(0, 0.5)).not.toThrow();
-  });
-});
-
-// ── cardOverlayRect population ───────────────────────────────────────────────
-//
-// Tests for the three-branch rect-write logic in _activateTextCard and the
-// null-clear in _activateTitleCardStep. The private functions are exercised
-// through the exported activateCard entry point (the same activation dispatch
-// used in production). Both tests rely on minimal mock state that avoids the
-// need for a full initCardPool call.
-
-describe('cardOverlayRect — rect populated in reduced-motion synchronous branch', () => {
-  const MOCK_RECT = { top: 100, left: 10, width: 300, height: 400, bottom: 500, right: 310 };
-
-  beforeEach(() => {
-    // Reset cardOverlayRect to a known non-null value so we can prove it was written
-    state.cardOverlayRect = null;
-
-    // Stub matchMedia — jsdom does not implement it. Return matches: true for
-    // prefers-reduced-motion so _activateTextCard takes the synchronous branch.
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })));
-
-    // No title card at index 0 — ensures activateCard routes to text-card path
-    state.titleCards = {};
-
-    // Minimal scene maps so preloadAhead returns early
-    state.stepToScene  = { 0: 0 };
-    state.totalScenes  = 1;
-    state.sceneFirstStep = { 0: 0 };
-
-    // No active viewer plates (text-only path skips viewer init)
-    state.viewerPlates = {};
-    state.viewerCards  = [];
-
-    // Same-object run so activateCard takes the text-only branch (no needsNewViewer)
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
-    state.activeTitleCardIndex = null;
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('writes state.cardOverlayRect with the mocked getBoundingClientRect value (synchronous)', () => {
-    const mockCard = document.createElement('div');
-    // Mock getBoundingClientRect to return a known rect
-    mockCard.getBoundingClientRect = vi.fn().mockReturnValue(MOCK_RECT);
-
-    // Wire minimal card-pool state: text card + registry entry for step 0, same object as currentObjectRun
-    state.textCards = { 0: mockCard };
-    state.cardRegistry = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: mockCard }];
-
-    activateCard(0, 'forward');
-
-    // Synchronous branch: rect is set immediately (no transitionend needed)
-    expect(state.cardOverlayRect).toBe(MOCK_RECT);
-    expect(mockCard.getBoundingClientRect).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('activateCard — same-object jump re-shows a hidden viewer plate', () => {
-  beforeEach(() => {
-    // Reduced-motion stub so _activateTextCard takes the synchronous branch.
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-      media: query, onchange: null,
-      addListener: vi.fn(), removeListener: vi.fn(),
-      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
-    })));
-    state.titleCards = {};
-    state.stepToScene = { 0: 0 };
-    state.totalScenes = 1;
-    state.sceneFirstStep = { 0: 0 };
-    state.viewerCards = [];
-    state.activeTitleCardIndex = null;
-    // Same object as the target step → activateCard takes the text-only branch.
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
-    // scroll-driven so the IIIF animate path is skipped, isolating the
-    // is-active behaviour under test.
-    state.scrollDriven = true;
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    state.scrollDriven = false;
-  });
-
-  function wireStep0(plate) {
-    state.viewerPlates = { 0: plate };
-    const card = document.createElement('div');
-    card.getBoundingClientRect = vi.fn().mockReturnValue(
-      { top: 0, left: 0, width: 1, height: 1, bottom: 1, right: 1 });
-    state.textCards = { 0: card };
-    state.cardRegistry = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: card }];
-  }
-
-  it('re-adds is-active to the scene plate that a jump had hidden', () => {
-    const plate = document.createElement('div'); // plain IIIF plate, no is-active
-    wireStep0(plate);
-
-    expect(plate.classList.contains('is-active')).toBe(false);
-    activateCard(0, 'forward'); // same-object jump after navigateToStep hid plates
-    expect(plate.classList.contains('is-active')).toBe(true);
-    expect(plate.style.transform).toMatch(/translateY\(0\)/);
-  });
-
-  it('leaves an already-active plate untouched (idempotent during normal scroll)', () => {
-    const plate = document.createElement('div');
-    plate.classList.add('is-active');
-    wireStep0(plate);
-
-    activateCard(0, 'forward');
-    expect(plate.classList.contains('is-active')).toBe(true);
-  });
-});
-
-describe('cardOverlayRect — null on title-card activation', () => {
-  beforeEach(() => {
-    // Seed a non-null value to confirm it is cleared
-    state.cardOverlayRect = { top: 99, left: 5, width: 100, height: 200, bottom: 299, right: 105 };
-
-    // Minimal scene maps
-    state.stepToScene   = { 0: 0 };
-    state.totalScenes   = 1;
-    state.sceneFirstStep = { 0: 0 };
-
-    state.viewerPlates  = {};
-    state.viewerCards   = [];
-    state.cardRegistry  = [];
-    state.textCards     = {};
-    state.activeTitleCardIndex = null;
-  });
-
-  it('clears state.cardOverlayRect to null when a title card is activated', () => {
-    const titleCardEl = document.createElement('div');
-    state.titleCards = { 0: titleCardEl };
-
-    activateCard(0, 'forward');
-
-    expect(state.cardOverlayRect).toBeNull();
-  });
-});
-
 // ── _computeTileUrls tile-prefetch compensation ─────────────────────────────
 //
 // Verifies that computeTileUrls prefetches tiles centred on the authored focal
@@ -588,55 +408,74 @@ describe('_computeTileUrls tile-prefetch compensation', () => {
   });
 });
 
-// ── Built card content escapes author text ───────────────────────────────────
-// question/answer are documented as plain text; both JS builders must escape
-// them identically. Runs the real initCardPool build phase in jsdom: title
-// cards exercise _buildTitleCardContent (the live path), and omitting the
-// .step-data markup forces the clone miss that exercises buildTextCardContent.
+// ── Tile source shape, level choice, and the grid walk ───────────────────────
+//
+// The compensation tests above fix where the prefetch region lands. These fix
+// the three things that turn that region into URLs: what is read from
+// info.json when it advertises little, which scale factor the region is
+// fetched at, and how the tile grid is walked and capped.
 
-describe('initCardPool — built card content escapes author text', () => {
-  const HTMLY = '<b onmouseover="x()">Coleccion</b> & "quotes"';
+describe('computeTileUrls — tile source shape, level choice and grid', () => {
+  const BASE_URL = 'https://example.org/iiif/objects/test';
+
+  /** Parse "base/rx,ry,rw,rh/outW,/0/default.jpg" into its numbers. */
+  function parseTile(url) {
+    const parts = url.replace(BASE_URL + '/', '').split('/');
+    const [rx, ry, rw, rh] = parts[0].split(',').map(Number);
+    return { rx, ry, rw, rh, outW: Number(parts[1].replace(',', '')) };
+  }
 
   beforeEach(() => {
-    document.body.innerHTML = '<div class="card-stack"></div>';
-    state.objectsIndex = {};
-    state.viewerPlates = {};
-    state.textCards = {};
-    state.cardRegistry = [];
+    state.activeTitleCardIndex = null;
+    state.layoutMode = 'horizontal';
+    state.cardOverlayRect = null;
+    Object.defineProperty(window, 'innerWidth',  { value: 1440, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 900,  configurable: true, writable: true });
   });
 
-  afterEach(() => {
-    document.body.innerHTML = '';
-    state.viewerPlates = {};
-    state.textCards = {};
-    state.cardRegistry = [];
-    state.titleCards = {};
+  it('reads a 512-pixel single level from an info.json that advertises no tiles', () => {
+    const urls = computeTileUrls(BASE_URL, { width: 4000, height: 4000 }, 0.5, 0.5, 1.5);
+
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      const { rx, ry, rw, outW } = parseTile(url);
+      expect(rx % 512).toBe(0);
+      expect(ry % 512).toBe(0);
+      // Scale factor 1: the output width is the region width.
+      expect(outW).toBe(rw);
+    }
   });
 
-  it('escapes question and answer in title cards (live path)', () => {
-    initCardPool({ steps: [{ step: '1', object: '', question: HTMLY, answer: HTMLY }] }, {});
-    const heading = document.querySelector('.title-card .title-card-heading');
-    const body = document.querySelector('.title-card .title-card-body');
-    expect(heading).not.toBeNull();
-    expect(heading.textContent).toBe(HTMLY);
-    expect(heading.querySelector('b')).toBeNull();
-    expect(body.textContent).toBe(HTMLY);
-    expect(body.querySelector('b')).toBeNull();
+  it('takes a coarser level when the finest one would need more than nine tiles', () => {
+    const INFO = { width: 40000, height: 40000, tiles: [{ width: 512, scaleFactors: [1, 2, 4, 8, 16, 32] }] };
+    const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 1);
+
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.length).toBeLessThanOrEqual(9);
+    const { rw, outW } = parseTile(urls[0]);
+    const scaleFactor = rw / outW;
+    expect(scaleFactor).toBeGreaterThan(1);
+    expect(INFO.tiles[0].scaleFactors).toContain(scaleFactor);
   });
 
-  it('escapes question and answer in the fallback text-card builder (clone miss)', () => {
-    // Leading title step keeps scene 0 plate-free, so initCardPool's IIIF
-    // preload tail (which needs OpenSeadragon) never runs in jsdom.
-    initCardPool({ steps: [
-      { step: '1', object: '', question: 'intro', answer: '' },
-      { step: '2', object: 'obj-a', question: HTMLY, answer: HTMLY },
-    ] }, {});
-    const q = document.querySelector('.text-card .step-question');
-    const a = document.querySelector('.text-card .step-answer');
-    expect(q).not.toBeNull();
-    expect(q.textContent).toBe(HTMLY);
-    expect(q.querySelector('b')).toBeNull();
-    expect(a.textContent).toBe(HTMLY);
-    expect(a.querySelector('b')).toBeNull();
+  it('caps the grid at nine tiles when no level the service lists is coarse enough', () => {
+    const INFO = { width: 40000, height: 40000, tiles: [{ width: 512, scaleFactors: [1] }] };
+    const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 1);
+
+    expect(urls).toHaveLength(9);
+  });
+
+  it('clips the last tile of a row to the image bound', () => {
+    const INFO = { width: 3000, height: 3000, tiles: [{ width: 512, scaleFactors: [1] }] };
+    const urls = computeTileUrls(BASE_URL, INFO, 0.99, 0.99, 4);
+
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      const { rx, ry, rw, rh } = parseTile(url);
+      expect(rw).toBeGreaterThan(0);
+      expect(rh).toBeGreaterThan(0);
+      expect(rx + rw).toBeLessThanOrEqual(INFO.width);
+      expect(ry + rh).toBeLessThanOrEqual(INFO.height);
+    }
   });
 });

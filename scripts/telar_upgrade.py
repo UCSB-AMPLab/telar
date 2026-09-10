@@ -1,0 +1,955 @@
+#!/usr/bin/env python3
+"""
+Telar Upgrade Script
+
+When a new version of Telar is released, existing sites need to be
+updated to match the new framework. This script automates that process
+by detecting the site's current version and applying every migration
+needed to reach the latest version.
+
+Each migration is a Python class in scripts/migrations/ that knows how
+to transform a site from one specific version to the next. Migrations
+can add, modify, or delete files — for example, adding new layout
+templates, updating _config.yml with new settings, or renaming
+directories. The script chains these together: upgrading from v0.3.0
+to v0.6.2 runs every intermediate migration in sequence.
+
+After applying automated changes, the script regenerates all data files
+(JSON, collections, IIIF tiles) to apply any new validation or
+processing logic introduced in the new version. The output is an
+UPGRADE_SUMMARY.md file listing every automated change made and any
+manual steps the user still needs to complete. The --dry-run flag
+previews what would happen without making changes.
+
+This is the engine, not the entry point. A site's `scripts/upgrade.py` is a
+launcher that downloads a verified copy of this file for the newest release
+and runs it from a temp dir, so the version of this module that runs is
+never the one sitting in the site. See scripts/upgrade.py.
+
+Version: v1.7.0
+
+Usage:
+    python scripts/telar_upgrade.py              # Normal upgrade
+    python scripts/telar_upgrade.py --dry-run    # Preview without applying
+"""
+
+import os
+import re
+import shutil
+import sys
+import json
+import yaml
+import argparse
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+# Add scripts directory to path for imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+from migrations.base import (
+    BaseMigration, ChangeCategory, ChangeRecord, ChangeStatus,
+    UPGRADE_STATE_FILE, apply_config_version, coerce_change,
+)
+from migrations.messages import get_message, get_file_count_suffix
+from migrations.discovery import discover_migrations
+
+# The chain, read off the modules in migrations/ rather than hand-listed.
+#
+# The chain and LATEST_VERSION both come from discovery, so there is one
+# source and no hand-kept list can disagree with what ships. Discovery
+# refuses an ambiguous chain instead of running a wrong one; see
+# migrations/discovery.py for what it will not accept.
+#
+# Both names stay module-level and rebindable: run_upgrade.py narrows them to
+# run a chain part-way, and the tests substitute short chains of their own.
+MIGRATIONS = discover_migrations()
+
+# Where a completed upgrade lands, which is where the chain ends.
+LATEST_VERSION = MIGRATIONS[-1].to_version
+
+
+# The exact grammar for a Telar version in _config.yml: an optional single
+# git-tag prefix over MAJOR.MINOR.PATCH, with the -beta suffix preserved
+# because "0.9.4-beta" and "0.9.4" are distinct chain keys. Components reject
+# leading zeros, so "01.6.2" cannot pass as a version that matches nothing.
+# The prefix quantifier is `?`, not `*`: repeated prefixes ("vv1.6.2") stay
+# outside the grammar rather than collapsing onto a real version.
+_VERSION_RE = re.compile(
+    r'[vV]?'
+    r'(?P<canonical>'
+    r'(?:0|[1-9][0-9]*)\.'
+    r'(?:0|[1-9][0-9]*)\.'
+    r'(?:0|[1-9][0-9]*)'
+    r'(?:-beta)?'
+    r')'
+)
+
+
+def _canonical_version(value) -> Optional[str]:
+    """Canonicalise a version string to the bare form the chain dispatches on.
+
+    An accepted spelling returns its bare form, with any git-tag prefix
+    dropped and any -beta suffix kept; anything outside the grammar returns
+    None. Matching is fullmatch, not a `^...$` match: `$` also matches before
+    a trailing newline, so a version with one would be silently trimmed.
+
+    Non-strings have no canonical form. An unquoted `version: 1.6` decodes to
+    a float, which has no .strip()/.lower() and cannot reach the regex.
+    """
+    if not isinstance(value, str):
+        return None
+    match = _VERSION_RE.fullmatch(value)
+    return match.group('canonical') if match else None
+
+
+def detect_current_version(repo_root: str) -> Optional[str]:
+    """
+    Detect current Telar version from _config.yml.
+
+    The value is canonicalised here, at ingestion, so every consumer sees one
+    form: main()'s already-up-to-date check runs before get_migration_path, so
+    normalising at dispatch would still report a v-prefixed current site as
+    unsupported. Values outside the grammar are reported and returned
+    unchanged rather than repaired — a repair guesses at intent and can name a
+    different real version — and cannot reach a migration or any file on disk,
+    since they match no from_version and every writer sits downstream of that.
+
+    Args:
+        repo_root: Path to repository root
+
+    Returns:
+        Canonical version string (e.g., "0.2.0-beta") or None if not found
+    """
+    config_path = os.path.join(repo_root, '_config.yml')
+
+    if not os.path.exists(config_path):
+        print(get_message(_get_lang(repo_root), 'config_not_found'))
+        return None
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # Try to get version from telar.version. Guard against a bare `telar:`
+        # key (parses to None) or a non-dict telar section, which would otherwise
+        # raise TypeError on subscripting rather than falling back cleanly.
+        telar_section = config.get('telar') if isinstance(config, dict) else None
+        if isinstance(telar_section, dict) and 'version' in telar_section:
+            raw_version = telar_section['version']
+            canonical = _canonical_version(raw_version)
+            if canonical is not None:
+                return canonical
+
+            lang = _get_lang(repo_root)
+            if isinstance(raw_version, str):
+                print(get_message(lang, 'version_unrecognised', raw_version))
+            else:
+                print(get_message(lang, 'version_not_text', repr(raw_version)))
+            print('   ' + get_message(lang, 'version_grammar'))
+            return raw_version
+
+        # If no version found, assume 0.2.0-beta (before versioning was added)
+        print(get_message(_get_lang(repo_root), 'version_missing'))
+        return "0.2.0-beta"
+
+    except (yaml.YAMLError, KeyError, TypeError, AttributeError) as e:
+        print(get_message(_get_lang(repo_root), 'config_read_error', e))
+        return None
+
+
+def _get_lang(repo_root: str) -> str:
+    """Read the site's telar_language from _config.yml for console output.
+
+    Defaults to English when the config is missing/unreadable or the key is
+    absent. messages.py recognises 'en' and 'es'; anything else falls back to
+    English there.
+    """
+    config_path = os.path.join(repo_root, '_config.yml')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        if isinstance(config, dict):
+            lang = config.get('telar_language')
+            if isinstance(lang, str) and lang.strip():
+                return lang.strip()
+    except Exception:
+        pass
+    return 'en'
+
+
+def get_migration_path(from_version: str, repo_root: str) -> List[BaseMigration]:
+    """
+    Get list of migrations to run from current version to latest.
+
+    Args:
+        from_version: Current version string
+        repo_root: Path to repository root
+
+    Returns:
+        List of migration instances to run in order
+    """
+    migrations_to_run = []
+    current_version = from_version
+
+    for MigrationClass in MIGRATIONS:
+        migration = MigrationClass(repo_root)
+
+        # Strict chaining: a migration only joins the path when the version
+        # reached so far is one it can be entered from. The old `or migrations_to_run`
+        # heuristic ran EVERY later migration once the list was non-empty, so a
+        # version gap (e.g. a 0.4.2-beta site, or a v-prefix mismatch) silently
+        # produced the wrong chain instead of a clear "no path" signal.
+        if current_version in migration.entry_versions:
+            # A migration covering several releases is entered from whichever
+            # one the site is on; pin it before asking anything of the
+            # migration, so both its applicability check and the summary see
+            # the real starting version. For a single-hop migration this
+            # assigns the value it already had.
+            migration.from_version = current_version
+
+            if migration.check_applicable():
+                migrations_to_run.append(migration)
+            # Advance whether or not the migration still needs applying — its
+            # changes cover current_version → to_version either way, so the next
+            # link in the chain can match.
+            current_version = migration.to_version
+
+    if current_version != LATEST_VERSION:
+        lang = _get_lang(repo_root)
+        print("\n" + get_message(lang, 'chain_stops', current_version, LATEST_VERSION))
+        print(get_message(lang, 'chain_stops_note'))
+
+    return migrations_to_run
+
+
+# The chain runner and any migration that runs other migrations internally
+# must classify a change the same way, so the rule lives in base.py.
+_coerce_record = coerce_change
+
+
+def run_migrations(migrations: List[BaseMigration], dry_run: bool = False) -> List[ChangeRecord]:
+    """
+    Run all migrations in sequence.
+
+    Stops the chain as soon as a migration reports a HARD failure, so a failed
+    fetch in one step does not let later steps run against a half-updated tree.
+
+    Args:
+        migrations: List of migration instances
+        dry_run: If True, don't actually apply changes
+
+    Returns:
+        List of ChangeRecord objects for every change attempted.
+    """
+    all_changes: List[ChangeRecord] = []
+
+    for migration in migrations:
+        print(f"\n{migration}")
+
+        if dry_run:
+            print('  ' + get_message(_get_lang(migration.repo_root), 'dry_run_would_apply'))
+            continue
+
+        try:
+            records = [_coerce_record(c) for c in migration.apply()]
+        except Exception as e:
+            # An unexpected error (not a handled fetch failure) is a HARD
+            # failure: record it and stop the chain so the upgrade fails closed.
+            print('  ' + get_message(_get_lang(migration.repo_root), 'migration_error', e))
+            all_changes.append(ChangeRecord(
+                description=get_message(
+                    _get_lang(migration.repo_root), 'record_migration_aborted',
+                    migration.from_version, migration.to_version, e),
+                status=ChangeStatus.FAILED,
+                severity="hard",
+            ))
+            break
+
+        all_changes.extend(records)
+
+        for record in records:
+            mark = "✓" if record.status == ChangeStatus.APPLIED else "✗"
+            print(f"  {mark} {record.description}")
+
+        # A HARD failure in this migration stops the chain.
+        if any(r.status == ChangeStatus.FAILED and r.severity == "hard" for r in records):
+            print('  ' + get_message(_get_lang(migration.repo_root), 'migration_stopped'))
+            break
+
+    return all_changes
+
+
+def _category_from_description(description: str) -> str:
+    """Guess a category from the wording of a change description.
+
+    The fallback for a record that carries no category — every string a
+    legacy migration returns, which coerce_change wraps without one.
+
+    It is a guess, and the reason ChangeRecord.category exists: the tests
+    below record that "Updated _includes/head.html" lands under
+    Configuration, because "config" appears nowhere but "include" is
+    checked after a substring that matches `_config.yml`'s neighbours. A
+    migration rephrasing its own description moves the change to another
+    heading, or to Other, with nothing to notice it.
+    """
+    text = description.lower()
+
+    if '_config.yml' in text or 'configuration' in text or 'config' in text:
+        return ChangeCategory.CONFIGURATION
+    if 'layout' in text:
+        return ChangeCategory.LAYOUTS
+    if 'include' in text:
+        return ChangeCategory.INCLUDES
+    if 'style' in text or 'scss' in text or 'css' in text:
+        return ChangeCategory.STYLES
+    if 'javascript' in text or 'script' in text or '.js' in text:
+        return ChangeCategory.SCRIPTS
+    if 'readme' in text or 'docs' in text or 'documentation' in text:
+        return ChangeCategory.DOCUMENTATION
+    return ChangeCategory.OTHER
+
+
+def _categorize_changes(records: List[ChangeRecord]) -> dict:
+    """Group applied changes under the summary headings, in print order.
+
+    A record's own `category` is used when it has one. Only records without
+    one are guessed at from their wording, which is what every record was
+    subject to before the field existed.
+
+    Returns:
+        {category slug: [description, ...]}, empty categories dropped.
+    """
+    grouped = {category: [] for category in ChangeCategory.ORDER}
+
+    for record in records:
+        category = record.category or _category_from_description(record.description)
+        if category not in grouped:
+            category = ChangeCategory.OTHER
+        grouped[category].append(record.description)
+
+    return {name: items for name, items in grouped.items() if items}
+
+
+def generate_checklist(
+    migrations: List[BaseMigration],
+    all_changes: List[ChangeRecord],
+    from_version: str,
+    to_version: str,
+    soft_warnings: Optional[List[str]] = None,
+    lang: str = 'en',
+) -> str:
+    """
+    Generate UPGRADE_SUMMARY.md content (without YAML frontmatter).
+
+    Applied changes render as ticked `- [x]` items and are the only ones
+    counted in the automated-changes total. Failed changes render as unticked
+    `- [ ]` items under a "Failed / Needs Manual Attention" heading so a
+    failure is never reported as completed work.
+
+    Args:
+        migrations: List of migrations that were run
+        all_changes: ChangeRecords for every change attempted
+        from_version: Original version
+        to_version: Target version
+        soft_warnings: Non-fatal warnings (e.g. IIIF tile regeneration) to
+            surface visibly rather than bury.
+        lang: Language code for the summary text ('en' or 'es'), from the
+            site's telar_language setting.
+
+    Returns:
+        Markdown content for summary
+    """
+    soft_warnings = soft_warnings or []
+
+    applied = [r for r in all_changes if r.status == ChangeStatus.APPLIED]
+    failed = [r for r in all_changes if r.status == ChangeStatus.FAILED]
+
+    manual_steps = []
+    for migration in migrations:
+        manual_steps.extend(migration.get_manual_steps())
+
+    # Categorize applied changes
+    categorized = _categorize_changes(applied)
+
+    summary_title = get_message(lang, 'summary_title')
+    checklist = f"""---
+layout: default
+title: {summary_title}
+---
+
+## {summary_title}
+- **{get_message(lang, 'summary_from')}:** {from_version}
+- **{get_message(lang, 'summary_to')}:** {to_version}
+- **{get_message(lang, 'summary_date')}:** {_get_date()}
+- **{get_message(lang, 'summary_automated_changes')}:** {len(applied)}
+- **{get_message(lang, 'summary_manual_steps')}:** {len(manual_steps)}
+"""
+    if failed:
+        checklist += f"- **{get_message(lang, 'summary_failed_count')}:** {len(failed)}\n"
+    checklist += f"\n## {get_message(lang, 'automated_changes_applied')}\n\n"
+
+    # Output changes by category
+    for category, changes in categorized.items():
+        category_label = get_message(lang, 'category_' + category)
+        file_suffix = get_file_count_suffix(lang, len(changes))
+        checklist += f"### {category_label} ({len(changes)} {file_suffix})\n\n"
+        for change in changes:
+            checklist += f"- [x] {change}\n"
+        checklist += "\n"
+
+    # Failures are never ticked and never counted as automated changes.
+    if failed:
+        checklist += f"## {get_message(lang, 'failed_needs_attention')}\n\n"
+        checklist += get_message(lang, 'failed_section_body') + "\n\n"
+        for record in failed:
+            checklist += f"- [ ] {record.description}\n"
+        checklist += "\n"
+
+    if soft_warnings:
+        checklist += f"## {get_message(lang, 'completed_with_warnings')}\n\n"
+        checklist += get_message(lang, 'warnings_section_body') + "\n\n"
+        for warning in soft_warnings:
+            checklist += f"- {warning}\n"
+        checklist += "\n"
+
+    if manual_steps:
+        checklist += f"""## {get_message(lang, 'manual_steps_required')}
+
+{get_message(lang, 'complete_after_merge')}
+
+"""
+        for i, step in enumerate(manual_steps, 1):
+            checklist += f"{i}. {step['description']}"
+            if 'doc_url' in step:
+                checklist += f" ([{get_message(lang, 'guide')}]({step['doc_url']}))"
+            checklist += "\n"
+    else:
+        checklist += f"## {get_message(lang, 'no_manual_steps')}\n\n{get_message(lang, 'all_automated')}\n"
+
+    checklist += f"""
+## {get_message(lang, 'resources')}
+
+- [{get_message(lang, 'full_documentation')}](https://telar.org/docs)
+- [{get_message(lang, 'changelog')}](https://github.com/UCSB-AMPLab/telar/blob/main/CHANGELOG.md)
+- [{get_message(lang, 'report_issues')}](https://github.com/UCSB-AMPLab/telar/issues)
+"""
+
+    return checklist
+
+
+def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
+    """
+    Regenerate JSON data files and IIIF tiles from CSV sources with validation.
+
+    Runs csv_to_json.py, generate_collections.py, and generate_iiif.py to apply
+    validation logic to existing data and regenerate IIIF tiles for local images.
+
+    csv_to_json and generate_collections are HARD: if they fail the derived data
+    is stale and the upgrade must not be stamped as complete. generate_iiif is
+    SOFT: tile generation can fail (e.g. missing source images) without
+    invalidating the upgrade, and is surfaced as a warning instead.
+
+    Precondition: the modules in _REGENERATION_IMPORTS must be importable in
+    this interpreter — main() runs _ensure_regeneration_dependencies() first.
+
+    Args:
+        repo_root: Path to repository root
+
+    Returns:
+        (csv_ok, iiif_ok). csv_ok is False if the HARD data steps could not be
+        run or returned an error. iiif_ok is False if IIIF tile regeneration
+        failed (non-fatal). When the scripts are absent, csv_ok is False (the
+        caller treats "could not regenerate" as a HARD failure).
+    """
+    import subprocess
+
+    lang = _get_lang(repo_root)
+    scripts_dir = os.path.join(repo_root, 'scripts')
+    csv_to_json = os.path.join(scripts_dir, 'csv_to_json.py')
+    generate_collections = os.path.join(scripts_dir, 'generate_collections.py')
+
+    # Check if scripts exist
+    if not os.path.exists(csv_to_json):
+        return (False, True)
+
+    try:
+        # Run csv_to_json.py (generates objects.json with validation)
+        result = subprocess.run(
+            [sys.executable, csv_to_json],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode != 0:
+            print('  ' + get_message(lang, 'regeneration_script_error',
+                                     'csv_to_json.py', result.stderr))
+            return (False, True)
+
+        # Run generate_collections.py (generates story/glossary JSON with validation)
+        if os.path.exists(generate_collections):
+            result = subprocess.run(
+                [sys.executable, generate_collections],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                print('  ' + get_message(lang, 'regeneration_script_error',
+                                         'generate_collections.py', result.stderr))
+                return (False, True)
+
+        # Run generate_iiif.py (regenerates IIIF tiles for local images).
+        # SOFT: a failure here does not block the upgrade.
+        iiif_ok = True
+        generate_iiif = os.path.join(scripts_dir, 'generate_iiif.py')
+        if os.path.exists(generate_iiif):
+            result = subprocess.run(
+                [sys.executable, generate_iiif],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                timeout=180  # Longer timeout for tile generation
+            )
+
+            if result.returncode != 0:
+                print('  ' + get_message(lang, 'regeneration_script_error',
+                                         'generate_iiif.py', result.stderr))
+                iiif_ok = False
+
+        return (True, iiif_ok)
+
+    except subprocess.TimeoutExpired:
+        print('  ' + get_message(lang, 'regeneration_timeout'))
+        return (False, True)
+    except Exception as e:
+        print('  ' + get_message(lang, 'regeneration_failed', e))
+        return (False, True)
+
+
+# Import names that data regeneration transitively requires. csv_to_json.py and
+# generate_collections.py load the scripts/telar package, which eagerly imports
+# these; regeneration cannot run unless every one resolves. These are IMPORT
+# names, not pip package names — requirements.txt lists the packages that
+# provide them (PIL comes from Pillow, yaml from pyyaml).
+_REGENERATION_IMPORTS = ["markdown", "PIL", "jinja2", "cryptography", "yaml", "pandas"]
+
+
+def _missing_regeneration_imports() -> List[str]:
+    """Return the subset of _REGENERATION_IMPORTS that cannot currently be imported."""
+    import importlib.util
+    return [name for name in _REGENERATION_IMPORTS
+            if importlib.util.find_spec(name) is None]
+
+
+def _ensure_regeneration_dependencies(repo_root: str) -> Tuple[bool, List[str]]:
+    """Ensure the modules data regeneration needs are importable.
+
+    _regenerate_data_files() subprocess-runs csv_to_json.py and
+    generate_collections.py, which transitively import the modules in
+    _REGENERATION_IMPORTS through the scripts/telar package. This script is
+    fetched fresh from the release tooling tarball on every run, so it ensures
+    its own dependencies here rather than relying on the site's CI workflow — a
+    copy the migrations cannot update.
+
+    When every required module already resolves, this returns immediately with no
+    pip call. Otherwise it installs from a requirements manifest, preferring the
+    tooling copy shipped beside this script (the tarball places requirements.txt
+    as a sibling of scripts/) and falling back to the site's own requirements.txt.
+
+    Args:
+        repo_root: Path to the site being upgraded (source of the fallback manifest).
+
+    Returns:
+        (ok, missing). ok is True when every required module is importable after
+        the ensure step. missing lists the import names still unresolved.
+    """
+    import importlib
+    import subprocess
+
+    lang = _get_lang(repo_root)
+    missing = _missing_regeneration_imports()
+    if not missing:
+        return (True, [])
+
+    # Manifest search order: the tooling copy beside this script first (tarball
+    # layout: requirements.txt sibling of scripts/), then the site's own copy —
+    # the fallback that is the only manifest present when the tooling tarball
+    # carries no requirements.txt.
+    candidates = [
+        Path(__file__).resolve().parent.parent / 'requirements.txt',
+        Path(repo_root) / 'requirements.txt',
+    ]
+    manifest = next((p for p in candidates if p.is_file()), None)
+
+    if manifest is None:
+        print(get_message(lang, 'deps_no_manifest', ', '.join(missing)))
+        return (False, missing)
+
+    print(get_message(lang, 'deps_installing', manifest))
+    try:
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r', str(manifest)],
+            capture_output=True,
+            text=True,
+            # pip resolves over the network; without a bound, a hung fetch
+            # stalls the CI job until the runner's own multi-hour timeout.
+            timeout=600,
+        )
+        if result.returncode != 0:
+            stderr_tail = '\n'.join((result.stderr or '').strip().splitlines()[-10:])
+            print(get_message(lang, 'deps_pip_failed', manifest, stderr_tail))
+    except subprocess.TimeoutExpired:
+        print(get_message(lang, 'deps_pip_timeout', manifest))
+
+    # A fresh install may not be visible to find_spec until import caches are cleared.
+    importlib.invalidate_caches()
+    still_missing = _missing_regeneration_imports()
+    return (not still_missing, still_missing)
+
+
+def _update_config_version(repo_root: str, new_version: str, new_date: str) -> bool:
+    """Stamp telar.version/release_date in _config.yml (the final stamp in
+    main()). Thin I/O wrapper over the shared apply_config_version writer in
+    migrations.base, so the parsing logic is not duplicated here.
+
+    Returns True if the file was changed, False if it is missing or unchanged.
+    """
+    config_path = os.path.join(repo_root, '_config.yml')
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except FileNotFoundError:
+        return False
+
+    new_content, modified = apply_config_version(content, new_version, new_date)
+    if modified:
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+    return modified
+
+
+def _get_date() -> str:
+    """Get current date in YYYY-MM-DD format."""
+    from datetime import datetime
+    return datetime.now().strftime('%Y-%m-%d')
+
+
+def _state_file_path(repo_root: str) -> str:
+    return os.path.join(repo_root, UPGRADE_STATE_FILE)
+
+
+def _read_state_file(repo_root: str) -> Optional[dict]:
+    """Read a leftover upgrade state marker, if any."""
+    path = _state_file_path(repo_root)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _write_failed_state(repo_root: str, from_version: str, to_version: str,
+                        failed: List[ChangeRecord]) -> None:
+    """Write the partial-state marker when an upgrade aborts on HARD failure.
+
+    Records what failed so a re-run can tell the user it is resuming. The site
+    was left at the old version (unstamped), so re-running re-applies the same
+    pinned migrations from scratch.
+    """
+    data = {
+        'from_version': from_version,
+        'to_version': to_version,
+        'status': 'failed',
+        'failed_files': [r.description for r in failed],
+        'timestamp': _get_date(),
+    }
+    try:
+        with open(_state_file_path(repo_root), 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+    except OSError:
+        pass
+
+
+def _clear_state_file(repo_root: str) -> None:
+    path = _state_file_path(repo_root)
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+# Exit codes
+EXIT_OK = 0            # upgrade completed (or nothing to do / dry run)
+EXIT_PRECONDITION = 1  # could not start (bad repo, cancelled, no migrations)
+EXIT_HARD_FAILURE = 2  # a required step failed; site left unchanged/unstamped
+
+
+def _write_failure_summary(repo_root: str, migrations: List[BaseMigration],
+                           all_changes: List[ChangeRecord], from_version: str) -> None:
+    """Write UPGRADE_SUMMARY.md and the state marker for a failed upgrade."""
+    failed = [r for r in all_changes if r.status == ChangeStatus.FAILED]
+    summary = generate_checklist(migrations, all_changes, from_version, LATEST_VERSION,
+                                 lang=_get_lang(repo_root))
+    summary_path = os.path.join(repo_root, 'UPGRADE_SUMMARY.md')
+    with open(summary_path, 'w') as f:
+        f.write(summary)
+    _write_failed_state(repo_root, from_version, LATEST_VERSION, failed)
+
+
+# What marks a site's scripts/upgrade.py as the launcher rather than an older
+# copy of this engine. Defined in the launcher; matched here as text, because
+# importing the site's copy is the thing this engine must never do.
+LAUNCHER_MARKER = 'telar-upgrade-launcher-v1'
+
+
+def _site_runs_the_launcher(repo_root: str) -> bool:
+    """Whether the site's own scripts/upgrade.py is a launcher."""
+    path = os.path.join(repo_root, 'scripts', 'upgrade.py')
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            return LAUNCHER_MARKER in handle.read()
+    except OSError:
+        return False
+
+
+def _retire_local_migrations(repo_root: str, lang: str) -> List[ChangeRecord]:
+    """Remove the site's own scripts/migrations/, once nothing needs it.
+
+    A site that runs the launcher never executes the migrations sitting in it:
+    the launcher downloads a verified engine and its migrations into a temp
+    dir. What is left in the site is a directory of modules that cannot run,
+    and whose version numbers invite the belief that they can.
+
+    Three conditions, each of which has a failure behind it.
+
+    Deleting only after the whole upgrade has succeeded: the framework install
+    clears its rollback state as soon as it completes, and this directory was
+    never among the paths it backed up. A deletion inside a migration, followed
+    by a hard failure in dependency ensure or data regeneration, would leave a
+    site stamped at its old version with no local engine and nothing able to
+    put it back.
+
+    Deleting only when the site holds the launcher: without it, the site's
+    scripts/upgrade.py is an older copy of this engine and the directory is
+    the only thing it can run. Removing it would strand the site rather than
+    tidy it.
+
+    Deleting only when this engine is running from outside the site: otherwise
+    it removes the modules it imported moments ago, which is survivable in the
+    running process and indefensible in a file tree.
+
+    Soft-fail throughout. A tidy-up that has to happen cannot be a reason a
+    completed upgrade reports failure.
+    """
+    directory = os.path.join(repo_root, 'scripts', 'migrations')
+    if not os.path.isdir(directory):
+        return []
+    if not _site_runs_the_launcher(repo_root):
+        return []
+    engine_dir = os.path.dirname(os.path.abspath(__file__))
+    if os.path.abspath(os.path.join(repo_root, 'scripts')) == engine_dir:
+        return []
+
+    try:
+        shutil.rmtree(directory)
+    except OSError as error:
+        print('  ' + get_message(lang, 'retire_migrations_warning', error))
+        return [ChangeRecord(
+            description=get_message(lang, 'retire_migrations_warning', error),
+            status=ChangeStatus.FAILED,
+            severity='soft',
+            category=ChangeCategory.SCRIPTS,
+        )]
+
+    print('  ' + get_message(lang, 'retired_migrations'))
+    return [ChangeRecord(
+        description=get_message(lang, 'retired_migrations'),
+        status=ChangeStatus.APPLIED,
+        severity='soft',
+        category=ChangeCategory.SCRIPTS,
+    )]
+
+
+def main():
+    """Main upgrade orchestrator."""
+    parser = argparse.ArgumentParser(description='Upgrade Telar to the latest version')
+    parser.add_argument('--dry-run', action='store_true', help='Preview changes without applying them')
+    parser.add_argument('--repo-root', default=None,
+                        help='Path to the Telar site to upgrade (default: current directory). '
+                             'Lets the script run from a separate location, e.g. a CI temp dir.')
+    args = parser.parse_args()
+
+    # The site being upgraded — distinct from where this script lives.
+    repo_root = os.path.abspath(args.repo_root) if args.repo_root else os.getcwd()
+    lang = _get_lang(repo_root)
+
+    print("=" * 60)
+    print(get_message(lang, 'upgrade_title'))
+    print("=" * 60)
+
+    # Inform the user if a previous upgrade left a failed-state marker.
+    prior_state = _read_state_file(repo_root)
+    if prior_state and prior_state.get('status') == 'failed':
+        print("\n" + get_message(lang, 'prev_upgrade_incomplete', prior_state.get('to_version', '?')))
+        print(get_message(lang, 'prev_upgrade_rerun'))
+
+    # Check for uncommitted changes (skip the prompt when there is no terminal,
+    # e.g. in CI, to avoid an EOFError; the workflow's branch model is the gate).
+    git_dir = os.path.join(repo_root, '.git')
+    if os.path.exists(git_dir):
+        import subprocess
+        try:
+            result = subprocess.run(['git', 'status', '--porcelain'],
+                                    cwd=repo_root, capture_output=True, text=True)
+            if result.stdout.strip() and not args.dry_run:
+                print('\n' + get_message(lang, 'uncommitted_warning'))
+                print(get_message(lang, 'uncommitted_recommend'))
+                if sys.stdin.isatty():
+                    response = input(get_message(lang, 'continue_anyway'))
+                    if response.lower() != 'y':
+                        print(get_message(lang, 'upgrade_cancelled'))
+                        return EXIT_PRECONDITION
+                else:
+                    print(get_message(lang, 'no_tty_continue'))
+        except Exception:
+            pass  # Git not available or other error, continue anyway
+
+    # Detect current version
+    print('\n' + get_message(lang, 'detecting_version'))
+    from_version = detect_current_version(repo_root)
+
+    if not from_version:
+        return EXIT_PRECONDITION
+
+    print(get_message(lang, 'current_version', from_version))
+    print(get_message(lang, 'target_version', LATEST_VERSION))
+
+    # Check if already up to date
+    if from_version == LATEST_VERSION:
+        print('\n' + get_message(lang, 'already_updated'))
+        _clear_state_file(repo_root)
+        return EXIT_OK
+
+    # Get migrations to run
+    migrations = get_migration_path(from_version, repo_root)
+
+    if not migrations:
+        print('\n' + get_message(lang, 'no_migrations', from_version, LATEST_VERSION))
+        print(get_message(lang, 'unsupported_note'))
+        return EXIT_PRECONDITION
+
+    print('\n' + get_message(lang, 'migrations_to_apply', len(migrations)))
+    for migration in migrations:
+        print(f"  • {migration}")
+
+    if args.dry_run:
+        print('\n' + get_message(lang, 'dry_run_mode'))
+
+    # Run migrations
+    print('\n' + get_message(lang, 'applying_migrations'))
+    all_changes = run_migrations(migrations, dry_run=args.dry_run)
+
+    if args.dry_run:
+        print('\n' + get_message(lang, 'dry_run_complete'))
+        print(get_message(lang, 'dry_run_instruction'))
+        return EXIT_OK
+
+    # Fail closed: if any framework-file step hard-failed, do NOT stamp the
+    # version, do NOT write UPGRADE_VERSION.txt. The site keeps its old version
+    # so a re-run retries the same migrations.
+    hard_failures = [r for r in all_changes
+                     if r.status == ChangeStatus.FAILED and r.severity == "hard"]
+    if hard_failures:
+        print('\n' + get_message(lang, 'upgrade_failed_steps', len(hard_failures)))
+        print(get_message(lang, 'upgrade_not_applied'))
+        print(get_message(lang, 'transient_retry'))
+        _write_failure_summary(repo_root, migrations, all_changes, from_version)
+        print(get_message(lang, 'see_summary_failures'))
+        return EXIT_HARD_FAILURE
+
+    # Regenerate data files and IIIF tiles. csv/collections failure is HARD.
+    print('\n' + get_message(lang, 'regenerating_data'))
+
+    # Regeneration subprocess-runs scripts that import the scripts/telar package;
+    # its dependencies must be importable first or those scripts fail closed.
+    # Treat still-missing modules as the same HARD failure as a regeneration error:
+    # returning here leaves the version unstamped so a re-run retries.
+    deps_ok, missing_deps = _ensure_regeneration_dependencies(repo_root)
+    if not deps_ok:
+        print('\n' + get_message(lang, 'upgrade_failed_data'))
+        print(get_message(lang, 'upgrade_not_applied'))
+        all_changes.append(ChangeRecord(
+            description=get_message(lang, 'record_deps_missing',
+                                    ", ".join(missing_deps)),
+            status=ChangeStatus.FAILED,
+            severity="hard",
+        ))
+        _write_failure_summary(repo_root, migrations, all_changes, from_version)
+        print(get_message(lang, 'see_summary_details'))
+        return EXIT_HARD_FAILURE
+
+    csv_ok, iiif_ok = _regenerate_data_files(repo_root)
+    if not csv_ok:
+        print('\n' + get_message(lang, 'upgrade_failed_data'))
+        print(get_message(lang, 'upgrade_not_applied'))
+        all_changes.append(ChangeRecord(
+            description=get_message(lang, 'record_regeneration_failed'),
+            status=ChangeStatus.FAILED,
+            severity="hard",
+        ))
+        _write_failure_summary(repo_root, migrations, all_changes, from_version)
+        print(get_message(lang, 'see_summary_details'))
+        return EXIT_HARD_FAILURE
+    print(get_message(lang, 'data_files_regenerated'))
+
+    soft_warnings = []
+    if not iiif_ok:
+        soft_warnings.append(
+            "IIIF tile regeneration reported an error. Self-hosted object images may "
+            "not display until you run scripts/generate_iiif.py successfully. This did "
+            "not block the upgrade."
+        )
+
+    # All required steps succeeded — stamp the version exactly once.
+    print('\n' + get_message(lang, 'updating_config'))
+    if _update_config_version(repo_root, LATEST_VERSION, _get_date()):
+        print(get_message(lang, 'config_updated', LATEST_VERSION))
+    else:
+        print(get_message(lang, 'config_update_warning'))
+
+    # Only now, with the whole upgrade behind us. See _retire_local_migrations.
+    all_changes.extend(_retire_local_migrations(repo_root, lang))
+
+    # Generate and write summary
+    summary = generate_checklist(migrations, all_changes, from_version, LATEST_VERSION,
+                                 soft_warnings=soft_warnings, lang=lang)
+    summary_path = os.path.join(repo_root, 'UPGRADE_SUMMARY.md')
+    with open(summary_path, 'w') as f:
+        f.write(summary)
+
+    print('\n' + get_message(lang, 'upgrade_complete'))
+    print('  ' + get_message(lang, 'created_summary'))
+
+    # Write version for GitHub Actions (only reached on full success).
+    version_file = os.path.join(repo_root, 'UPGRADE_VERSION.txt')
+    with open(version_file, 'w') as f:
+        f.write(LATEST_VERSION)
+
+    # Clear any leftover failed-state marker from a previous attempt.
+    _clear_state_file(repo_root)
+
+    print('\n' + get_message(lang, 'review_summary'))
+
+    return EXIT_OK
+
+
+if __name__ == '__main__':
+    sys.exit(main())

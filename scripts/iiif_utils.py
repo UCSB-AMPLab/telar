@@ -12,15 +12,14 @@ canonical image, copying a base image for the viewer, creating IIIF
 Presentation v3 manifests, and loading object metadata from
 objects.json.
 
-This module holds all of those shared functions. It was extracted from
-generate_iiif.py when PDF support was added, so that the two scripts
-could share the same tile-generation and manifest-creation code
-without duplicating it.
+This module holds all of those shared functions, so the two scripts
+share one implementation of the tile-generation and manifest-creation
+code instead of duplicating it.
 
 None of these functions are meant to be run directly. They are
 imported by the two entry-point scripts.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import json
@@ -99,6 +98,120 @@ def check_dependencies():
 # Image preprocessing (shared by both backends)
 # ---------------------------------------------------------------------------
 
+def _apply_exif_orientation(img):
+    """Rotate an image to its EXIF orientation.
+
+    Args:
+        img: Freshly opened PIL image
+
+    Returns:
+        (image, has_exif_orientation) — the rotated image, and whether the
+        source carried an orientation tag other than 1 (normal), which is
+        what decides that a JPEG has to be re-saved.
+    """
+    from PIL import ImageOps
+
+    # Apply EXIF orientation if present
+    img_before_exif = img
+    img = ImageOps.exif_transpose(img)
+    if img is None:
+        img = img_before_exif
+    elif img != img_before_exif:
+        print(f"  ↻ Applied EXIF orientation correction")
+
+    # Check if image has EXIF orientation metadata (any value other than 1 = normal)
+    exif = img_before_exif.getexif()
+    has_exif_orientation = exif and 274 in exif and exif[274] != 1
+
+    return img, has_exif_orientation
+
+
+def _convert_mode_to_rgb(img):
+    """Bring an image into a mode JPEG can hold.
+
+    Args:
+        img: PIL image
+
+    Returns:
+        (image, needs_conversion) — the converted image, and whether any
+        conversion was needed. An RGB or L image comes back untouched.
+    """
+    from PIL import Image
+
+    # Handle transparency/alpha channel modes
+    if img.mode in ['RGBA', 'LA']:
+        print(f"  ⚠️  Converting {img.mode} to RGB (removing transparency)")
+        rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+        rgb_img.paste(img, mask=img.split()[-1])
+        return rgb_img, True
+
+    # Handle palette mode (GIF, some PNGs). Palette images can carry a
+    # transparency index, so convert to RGBA first (this resolves the
+    # index into a real alpha channel) and composite onto white — the
+    # same approach copy_base_image() uses for the viewer's base image.
+    # A direct convert('RGB') would ignore the transparency index and
+    # render those pixels as whatever colour sits at that palette slot.
+    if img.mode == 'P':
+        print(f"  ⚠️  Converting palette mode to RGB")
+        rgba_img = img.convert('RGBA')
+        rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+        rgb_img.paste(rgba_img, mask=rgba_img.split()[-1])
+        return rgb_img, True
+
+    # Handle other uncommon modes
+    if img.mode not in ['RGB', 'L']:
+        print(f"  ⚠️  Converting {img.mode} mode to RGB")
+        return img.convert('RGB'), True
+
+    return img, False
+
+
+def _print_conversion_message(file_ext, has_exif_orientation, needs_conversion):
+    """Announce why this image is about to be re-saved as a JPEG.
+
+    Args:
+        file_ext: Lowercased source file extension
+        has_exif_orientation: Whether the source carried an orientation tag
+        needs_conversion: Whether the image's mode had to change
+    """
+    # Show format-specific message
+    if has_exif_orientation and file_ext in ['.jpg', '.jpeg'] and not needs_conversion:
+        print(f"  💾 Saving rotated image for IIIF processing")
+    elif file_ext in ['.heic', '.heif']:
+        print(f"  ⚠️  Converting HEIC to JPEG for IIIF processing")
+    elif file_ext == '.webp':
+        print(f"  ⚠️  Converting WebP to JPEG for IIIF processing")
+    elif file_ext in ['.tif', '.tiff']:
+        print(f"  ⚠️  Converting TIFF to JPEG for IIIF processing")
+    elif file_ext == '.png' and not needs_conversion:
+        print(f"  ⚠️  Converting PNG to JPEG for IIIF processing")
+
+
+def _save_to_temp_jpeg(converted_img):
+    """Write an image to a temporary JPEG the caller owns.
+
+    The temp path is recorded before the save runs, so that if the save
+    itself raises, the just-created file is unlinked here rather than
+    leaking — the caller's finally only unlinks a path it was handed.
+
+    Args:
+        converted_img: PIL image to write
+
+    Returns:
+        str: Path to the temporary file, or None if the save failed
+    """
+    tf = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+    temp_path = tf.name
+    tf.close()
+    try:
+        converted_img.save(temp_path, 'JPEG', quality=95)
+        return temp_path
+    except Exception as save_err:
+        print(f"  ⚠️  Error saving converted image: {save_err}")
+        Path(temp_path).unlink(missing_ok=True)
+        return None
+
+
 def preprocess_image(image_path):
     """Preprocess an image for IIIF tile generation.
 
@@ -112,7 +225,7 @@ def preprocess_image(image_path):
         (processed_path, temp_file_path_or_None)
         If a temp file was created, caller must delete it after use.
     """
-    from PIL import Image, ImageOps
+    from PIL import Image
 
     # Register HEIF plugin if available
     try:
@@ -127,80 +240,19 @@ def preprocess_image(image_path):
     try:
         img = Image.open(image_path)
 
-        # Apply EXIF orientation if present
-        img_before_exif = img
-        img = ImageOps.exif_transpose(img)
-        if img is None:
-            img = img_before_exif
-        elif img != img_before_exif:
-            print(f"  ↻ Applied EXIF orientation correction")
-
-        # Check if image has EXIF orientation metadata (any value other than 1 = normal)
-        exif = img_before_exif.getexif()
-        has_exif_orientation = exif and 274 in exif and exif[274] != 1
-
-        # Convert image to RGB if needed
-        needs_conversion = False
-        converted_img = img
-
-        # Handle transparency/alpha channel modes
-        if img.mode in ['RGBA', 'LA']:
-            print(f"  ⚠️  Converting {img.mode} to RGB (removing transparency)")
-            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
-            rgb_img.paste(img, mask=img.split()[-1])
-            converted_img = rgb_img
-            needs_conversion = True
-
-        # Handle palette mode (GIF, some PNGs). Palette images can carry a
-        # transparency index, so convert to RGBA first (this resolves the
-        # index into a real alpha channel) and composite onto white — the
-        # same approach copy_base_image() uses for the viewer's base image.
-        # A direct convert('RGB') would ignore the transparency index and
-        # render those pixels as whatever colour sits at that palette slot.
-        elif img.mode == 'P':
-            print(f"  ⚠️  Converting palette mode to RGB")
-            rgba_img = img.convert('RGBA')
-            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
-            rgb_img.paste(rgba_img, mask=rgba_img.split()[-1])
-            converted_img = rgb_img
-            needs_conversion = True
-
-        # Handle other uncommon modes
-        elif img.mode not in ['RGB', 'L']:
-            print(f"  ⚠️  Converting {img.mode} mode to RGB")
-            converted_img = img.convert('RGB')
-            needs_conversion = True
+        img, has_exif_orientation = _apply_exif_orientation(img)
+        converted_img, needs_conversion = _convert_mode_to_rgb(img)
 
         # Check if we need to convert to JPEG (for non-JPEG formats)
         # OR if EXIF orientation metadata present (need to save the transposed image)
         file_ext = image_path.suffix.lower()
         if has_exif_orientation or needs_conversion or file_ext not in ['.jpg', '.jpeg']:
-            # Show format-specific message
-            if has_exif_orientation and file_ext in ['.jpg', '.jpeg'] and not needs_conversion:
-                print(f"  💾 Saving rotated image for IIIF processing")
-            elif file_ext in ['.heic', '.heif']:
-                print(f"  ⚠️  Converting HEIC to JPEG for IIIF processing")
-            elif file_ext == '.webp':
-                print(f"  ⚠️  Converting WebP to JPEG for IIIF processing")
-            elif file_ext in ['.tif', '.tiff']:
-                print(f"  ⚠️  Converting TIFF to JPEG for IIIF processing")
-            elif file_ext == '.png' and not needs_conversion:
-                print(f"  ⚠️  Converting PNG to JPEG for IIIF processing")
+            _print_conversion_message(file_ext, has_exif_orientation, needs_conversion)
 
-            # Save to temporary JPEG file. Record temp_path immediately so that
-            # if the save itself raises, the just-created file is still unlinked
-            # here rather than leaking (the caller's finally only unlinks a
-            # temp_path that was successfully returned).
-            tf = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-            temp_path = tf.name
-            tf.close()
-            try:
-                converted_img.save(temp_path, 'JPEG', quality=95)
+            temp_path = _save_to_temp_jpeg(converted_img)
+            if temp_path:
                 processed_path = Path(temp_path)
-            except Exception as save_err:
-                print(f"  ⚠️  Error saving converted image: {save_err}")
-                Path(temp_path).unlink(missing_ok=True)
-                temp_path = None  # processed_path stays as the original input
+            # A failed save leaves processed_path as the original input
     except Exception as e:
         print(f"  ⚠️  Error preprocessing image: {e}")
 
@@ -245,6 +297,113 @@ def generate_tiles_libvips(processed_path, tiles_dir, object_id, base_url):
     patch_info_json(tiles_dir, object_id, base_url)
 
 
+def _size_from_dir_name(name, img_w, img_h):
+    """Read one full/ subdirectory name as a size entry.
+
+    Args:
+        name: Directory name, "w,h" or "w,"
+        img_w: Full image width, for the width-only aspect ratio
+        img_h: Full image height, for the width-only aspect ratio
+
+    Returns:
+        {'width': w, 'height': h}, or None for a name that is neither form
+        (or a width-only name with no image dimensions to scale against).
+    """
+    # "w,h" — both dimensions explicit
+    match = re.match(r'^(\d+),(\d+)$', name)
+    if match:
+        return {
+            'width': int(match.group(1)),
+            'height': int(match.group(2)),
+        }
+
+    # "w," — width-only, compute height from aspect ratio
+    match = re.match(r'^(\d+),$', name)
+    if match and img_w and img_h:
+        sw = int(match.group(1))
+        sh = int(round(img_h * sw / img_w))
+        return {'width': sw, 'height': sh}
+
+    return None
+
+
+def _sizes_from_full_dir(full_dir, img_w, img_h):
+    """Collect the sizes array from the thumbnail directories on disk.
+
+    libvips generates both "w,h" and "w," (width-only) directories; both
+    patterns are scanned so the sizes array is complete. `max` is the
+    canonical full-image request, not a thumbnail size, so it is left out.
+
+    Args:
+        full_dir: The object's full/ directory
+        img_w: Full image width
+        img_h: Full image height
+
+    Returns:
+        list: Size dicts, empty when the directory holds no thumbnails
+    """
+    sizes = []
+    if full_dir.exists():
+        for entry in full_dir.iterdir():
+            if not entry.is_dir() or entry.name == 'max':
+                continue
+            size = _size_from_dir_name(entry.name, img_w, img_h)
+            if size:
+                sizes.append(size)
+    return sizes
+
+
+def _sizes_from_scale_factors(info, img_w, img_h):
+    """Compute the sizes array from the scaleFactors in the tiles spec.
+
+    The fallback for a tree with no thumbnail directories (libvips <8.17
+    does not create them). Each scale factor gets a correctly scaled size
+    entry so that OpenSeadragon's levelSizes array has accurate level
+    dimensions. A single full-res entry would coincidentally match maxLevel
+    and cause OSD to use wrong dimensions for edge tile calculations.
+
+    Args:
+        info: The parsed info.json
+        img_w: Full image width
+        img_h: Full image height
+
+    Returns:
+        list: Size dicts, empty when the image dimensions are unknown
+    """
+    sizes = []
+    if img_w and img_h:
+        scale_factors = []
+        for tile in info.get('tiles', []):
+            scale_factors.extend(tile.get('scaleFactors', []))
+        if scale_factors:
+            for sf in sorted(scale_factors):
+                sizes.append({
+                    'width': -(-img_w // sf),  # ceil division
+                    'height': -(-img_h // sf),
+                })
+        else:
+            sizes.append({'width': img_w, 'height': img_h})
+    return sizes
+
+
+def _fill_empty_scale_factors(info):
+    """Ensure no tile spec carries an empty scaleFactors array.
+
+    OpenSeadragon crashes with RangeError when it encounters one. This
+    happens for images smaller than the tile size (512px), where libvips
+    produces no downscale levels.
+
+    Args:
+        info: The parsed info.json, patched in place
+    """
+    tiles = info.get('tiles', [])
+    for tile in tiles:
+        if not tile.get('scaleFactors'):
+            tile['scaleFactors'] = [1]
+    if tiles:
+        info['tiles'] = tiles
+
+
 def patch_info_json(tiles_dir, object_id, base_url):
     """Patch libvips-generated info.json with correct id and sizes.
 
@@ -262,66 +421,18 @@ def patch_info_json(tiles_dir, object_id, base_url):
     # Set correct id URL
     info['id'] = f"{base_url}/iiif/objects/{object_id}"
 
-    # Populate sizes array from full/ directory.
-    # libvips generates both "w,h" and "w," (width-only) directories;
-    # we need to scan for both patterns so the sizes array is complete.
-    full_dir = tiles_dir / 'full'
     img_w = info.get('width', 0)
     img_h = info.get('height', 0)
-    sizes = []
-    if full_dir.exists():
-        for entry in full_dir.iterdir():
-            if not entry.is_dir() or entry.name == 'max':
-                continue
-            # "w,h" — both dimensions explicit
-            match = re.match(r'^(\d+),(\d+)$', entry.name)
-            if match:
-                sizes.append({
-                    'width': int(match.group(1)),
-                    'height': int(match.group(2)),
-                })
-                continue
-            # "w," — width-only, compute height from aspect ratio
-            match = re.match(r'^(\d+),$', entry.name)
-            if match and img_w and img_h:
-                sw = int(match.group(1))
-                sh = int(round(img_h * sw / img_w))
-                sizes.append({'width': sw, 'height': sh})
 
-    # Fallback: if no thumbnail directories found (libvips <8.17 doesn't
-    # create them), compute sizes from the scaleFactors in the tiles spec.
-    # Each scale factor gets a correctly scaled size entry so that
-    # OpenSeadragon's levelSizes array has accurate level dimensions.
-    # A single full-res entry would coincidentally match maxLevel and
-    # cause OSD to use wrong dimensions for edge tile calculations.
+    sizes = _sizes_from_full_dir(tiles_dir / 'full', img_w, img_h)
     if not sizes:
-        if img_w and img_h:
-            scale_factors = []
-            for tile in info.get('tiles', []):
-                scale_factors.extend(tile.get('scaleFactors', []))
-            if scale_factors:
-                for sf in sorted(scale_factors):
-                    sizes.append({
-                        'width': -(-img_w // sf),  # ceil division
-                        'height': -(-img_h // sf),
-                    })
-            else:
-                sizes.append({'width': img_w, 'height': img_h})
+        sizes = _sizes_from_scale_factors(info, img_w, img_h)
 
     if sizes:
         sizes.sort(key=lambda s: s['width'])
         info['sizes'] = sizes
 
-    # Ensure scaleFactors is never empty — OpenSeadragon crashes with
-    # RangeError when it encounters an empty array. This
-    # happens for images smaller than the tile size (512px), where libvips
-    # produces no downscale levels.
-    tiles = info.get('tiles', [])
-    for tile in tiles:
-        if not tile.get('scaleFactors'):
-            tile['scaleFactors'] = [1]
-    if tiles:
-        info['tiles'] = tiles
+    _fill_empty_scale_factors(info)
 
     # Add extraFormats and extraQualities for spec compliance
     info['extraFormats'] = ['jpg']
@@ -331,36 +442,39 @@ def patch_info_json(tiles_dir, object_id, base_url):
         json.dump(info, f, indent=2)
 
 
-def generate_full_max(processed_path, tiles_dir):
-    """Generate the full/max/0/default.jpg image.
+def _copy_full_max_to_wh(dest, tiles_dir, w, h):
+    """Create full/{w},{h}/0/default.jpg for Level 0 thumbnail support.
 
-    IIIF 3.0 viewers request the full-size image at this canonical path.
-    libvips doesn't generate it, so we create it from the preprocessed source.
+    Older libvips versions (<8.17) don't create this directory, but the
+    homepage thumbnail JS constructs URLs using the {w},{h} path.
+
+    Args:
+        dest: The full/max image to copy
+        tiles_dir: Output directory for this object's tiles
+        w: Full image width
+        h: Full image height
     """
-    from PIL import Image
-
-    max_dir = tiles_dir / 'full' / 'max' / '0'
-    max_dir.mkdir(parents=True, exist_ok=True)
-    dest = max_dir / 'default.jpg'
-
-    img = Image.open(processed_path)
-    if img.mode not in ('RGB', 'L'):
-        img = img.convert('RGB')
-    img.save(dest, 'JPEG', quality=95)
-
-    # Also create full/{w},{h}/0/default.jpg for Level 0 thumbnail support.
-    # Older libvips versions (<8.17) don't create this directory, but the
-    # homepage thumbnail JS constructs URLs using the {w},{h} path.
-    w, h = img.size
     wh_dir = tiles_dir / 'full' / f'{w},{h}' / '0'
     if not wh_dir.exists():
         wh_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(dest, wh_dir / 'default.jpg')
 
-    # Generate full/{w},{h}/ thumbnails for each scaleFactor level.
-    # patch_info_json (which runs after this) scans full/ to build the
-    # sizes array.  Every size it reports must have a corresponding file,
-    # otherwise the homepage thumbnail JS will hit a 404.
+
+def _write_scale_factor_thumbnails(img, tiles_dir, w, h):
+    """Generate full/{w},{h}/ thumbnails for each scaleFactor level.
+
+    patch_info_json (which runs after this) scans full/ to build the sizes
+    array. Every size it reports must have a corresponding file, otherwise
+    the homepage thumbnail JS will hit a 404.
+
+    Args:
+        img: The full-resolution image to resize from
+        tiles_dir: Output directory for this object's tiles
+        w: Full image width
+        h: Full image height
+    """
+    from PIL import Image
+
     info_path = tiles_dir / 'info.json'
     if info_path.exists():
         import json as _json
@@ -380,15 +494,26 @@ def generate_full_max(processed_path, tiles_dir):
                 thumb = img.resize((sw, sh), Image.LANCZOS)
                 thumb.save(sf_dir / 'default.jpg', 'JPEG', quality=85)
 
-    # Generate width-only thumbnails for small sizes the static Level 0
-    # tile pyramid does not otherwise contain. The 96px width originated
-    # for Tify v0.35 (removed in v1.4.0), which hardcoded a
-    # full/96,/0/default.jpg request regardless of profile level. It is
-    # RETAINED because patch_info_json folds these widths into info.json's
-    # sizes array, and the homepage object-grid IIIF thumbnail loader
-    # (.story-iiif-thumbnail) requests small thumbnails through info.json —
-    # so these entries now back the homepage, not Tify. Removing the width
-    # would regress homepage thumbnails; verify the grid before changing it.
+
+def _write_viewer_thumbnails(img, tiles_dir, w, h):
+    """Generate width-only thumbnails for small sizes the static Level 0
+    tile pyramid does not otherwise contain.
+
+    The 96px width is RETAINED because patch_info_json folds these widths
+    into info.json's sizes array, and the homepage object-grid IIIF
+    thumbnail loader (.story-iiif-thumbnail) requests small thumbnails
+    through info.json. Sites built on Tify v0.35 request a 96px width
+    regardless of profile level; dropping it regresses their homepage
+    thumbnails. Verify the grid before changing it.
+
+    Args:
+        img: The full-resolution image to resize from
+        tiles_dir: Output directory for this object's tiles
+        w: Full image width
+        h: Full image height
+    """
+    from PIL import Image
+
     VIEWER_THUMB_WIDTHS = [96]
     for tw in VIEWER_THUMB_WIDTHS:
         if tw >= w:
@@ -400,9 +525,18 @@ def generate_full_max(processed_path, tiles_dir):
             thumb = img.resize((tw, th), Image.LANCZOS)
             thumb.save(thumb_dir / 'default.jpg', 'JPEG', quality=85)
 
-    # Create full/{w},{h}/ counterparts for any width-only directories
-    # (from libvips or from the width-only thumbnails above). The homepage
-    # thumbnail JS constructs URLs as full/{w},{h}/, not full/{w},/.
+
+def _backfill_width_only_sizes(tiles_dir, w, h):
+    """Create full/{w},{h}/ counterparts for any width-only directories.
+
+    They come from libvips or from the width-only viewer thumbnails. The
+    homepage thumbnail JS constructs URLs as full/{w},{h}/, not full/{w},/.
+
+    Args:
+        tiles_dir: Output directory for this object's tiles
+        w: Full image width, for the aspect ratio
+        h: Full image height, for the aspect ratio
+    """
     full_dir = tiles_dir / 'full'
     if full_dir.exists():
         for entry in full_dir.iterdir():
@@ -417,6 +551,31 @@ def generate_full_max(processed_path, tiles_dir):
                 if src_file.exists() and not wh_path.exists():
                     wh_path.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src_file, wh_path / 'default.jpg')
+
+
+def generate_full_max(processed_path, tiles_dir):
+    """Generate the full/max/0/default.jpg image.
+
+    IIIF 3.0 viewers request the full-size image at this canonical path.
+    libvips doesn't generate it, so we create it from the preprocessed source.
+    """
+    from PIL import Image
+
+    max_dir = tiles_dir / 'full' / 'max' / '0'
+    max_dir.mkdir(parents=True, exist_ok=True)
+    dest = max_dir / 'default.jpg'
+
+    img = Image.open(processed_path)
+    if img.mode not in ('RGB', 'L'):
+        img = img.convert('RGB')
+    img.save(dest, 'JPEG', quality=95)
+
+    w, h = img.size
+
+    _copy_full_max_to_wh(dest, tiles_dir, w, h)
+    _write_scale_factor_thumbnails(img, tiles_dir, w, h)
+    _write_viewer_thumbnails(img, tiles_dir, w, h)
+    _backfill_width_only_sizes(tiles_dir, w, h)
 
 
 # ---------------------------------------------------------------------------
@@ -452,12 +611,8 @@ def fix_fallback_region_sizes(tiles_dir):
             subdirectories) — the directory holding info.json and the
             region subdirectories.
     """
-    from PIL import Image
-
     if not tiles_dir.exists():
         return
-
-    width_only_re = re.compile(r'^(\d+),$')
 
     for region_dir in list(tiles_dir.iterdir()):
         if not region_dir.is_dir():
@@ -471,31 +626,45 @@ def fix_fallback_region_sizes(tiles_dir):
             fix_fallback_region_sizes(region_dir)
             continue
 
-        for size_dir in list(region_dir.iterdir()):
-            if not size_dir.is_dir():
-                continue
-            match = width_only_re.match(size_dir.name)
-            if not match:
-                continue
+        _rename_width_only_sizes(region_dir)
 
-            w = int(match.group(1))
-            # Read the actual tile height from disk (rotation/quality.format,
-            # e.g. "0/default.jpg") rather than recomputing it — the file is
-            # the ground truth for what height this directory represents.
-            tile_file = next(size_dir.glob('*/*.*'), None)
-            if tile_file is None:
-                continue
 
-            with Image.open(tile_file) as img:
-                h = img.size[1]
+def _rename_width_only_sizes(region_dir):
+    """Rename one region's width-only size directories to canonical "w,h" form.
 
-            wh_dir = region_dir / f"{w},{h}"
-            if wh_dir.exists():
-                # Canonical directory already present (e.g. a prior partial
-                # run) — it's authoritative, so drop the width-only duplicate.
-                shutil.rmtree(size_dir)
-            else:
-                size_dir.rename(wh_dir)
+    Args:
+        region_dir: A cropped-region tile directory, holding one
+            subdirectory per requested size
+    """
+    from PIL import Image
+
+    width_only_re = re.compile(r'^(\d+),$')
+
+    for size_dir in list(region_dir.iterdir()):
+        if not size_dir.is_dir():
+            continue
+        match = width_only_re.match(size_dir.name)
+        if not match:
+            continue
+
+        w = int(match.group(1))
+        # Read the actual tile height from disk (rotation/quality.format,
+        # e.g. "0/default.jpg") rather than recomputing it — the file is
+        # the ground truth for what height this directory represents.
+        tile_file = next(size_dir.glob('*/*.*'), None)
+        if tile_file is None:
+            continue
+
+        with Image.open(tile_file) as img:
+            h = img.size[1]
+
+        wh_dir = region_dir / f"{w},{h}"
+        if wh_dir.exists():
+            # Canonical directory already present (e.g. a prior partial
+            # run) — it's authoritative, so drop the width-only duplicate.
+            shutil.rmtree(size_dir)
+        else:
+            size_dir.rename(wh_dir)
 
 
 # ---------------------------------------------------------------------------

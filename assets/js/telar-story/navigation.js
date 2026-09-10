@@ -29,7 +29,7 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.6.0
+ * @version v1.7.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
@@ -50,9 +50,9 @@ import {
  * Register keyboard event listener for step and panel navigation.
  *
  * Called by scroll-engine.js after Lenis is initialised. Arrow keys navigate
- * between steps via snap.next()/snap.previous() in desktop mode, or fall back
- * to nextStep/prevStep in mobile/embed mode. Panel keys open/close layers.
- * Escape closes panels.
+ * between steps through the scroll engine in desktop mode, and through
+ * nextStep/prevStep in mobile/embed mode, where there is no Lenis. Panel keys
+ * open and close layers, and Escape closes panels.
  */
 export function initKeyboardNavigation() {
   document.addEventListener('keydown', handleKeyboard);
@@ -75,35 +75,7 @@ export function goToStep(newIndex, direction = 'forward') {
   state.currentIndex = newIndex;
 
   if (newIndex === -1) {
-    // Restore the intro card (backward from step 0)
-    const intro = document.querySelector('.story-intro');
-    if (intro) {
-      intro.style.transition = 'transform 0.5s ease-out';
-      intro.style.transform = 'translateY(0)';
-    }
-    // Slide step 0's text card back down
-    const firstCard = state.textCards?.[0];
-    if (firstCard) {
-      firstCard.classList.remove('is-active', 'is-stacked');
-      const rot  = parseFloat(firstCard.dataset.messinessRot  || 0);
-      const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-      const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-      firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-    }
-    // Slide first viewer plate back down
-    const firstObject = window.storyData?.firstObject;
-    if (firstObject && state.viewerPlates?.[firstObject]) {
-      const plate = state.viewerPlates[firstObject];
-      plate.style.transform = 'translateY(100%)';
-      plate.classList.remove('is-active');
-    }
-    // Reset object run tracking
-    state.currentObjectRun = { objectId: null, runPosition: 0 };
-    // Hide step counter and credit overlay on intro
-    updateViewerInfo(-1);
-    const creditBadge = document.getElementById('object-credits-badge');
-    if (creditBadge) creditBadge.classList.add('d-none');
-    if (state.onStepChange) state.onStepChange(-1);
+    _restoreIntro();
     return;
   }
 
@@ -113,6 +85,25 @@ export function goToStep(newIndex, direction = 'forward') {
   // Panel trigger data update
   updateViewerInfo(newIndex);
   if (state.onStepChange) state.onStepChange(newIndex);
+}
+
+/**
+ * Restore the intro, the state that sits before step 0.
+ *
+ * Four things go back: the intro card into view, step 0's text card and the
+ * first object's viewer plate off the bottom of the screen, and the step
+ * chrome out of sight. A story whose author gave it no intro card still
+ * passes through here, and each piece is skipped where it is absent.
+ */
+function _restoreIntro() {
+  _showIntroCard();
+  _sendFirstTextCardOffScreen();
+  _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
+
+  state.currentObjectRun = { objectId: null, runPosition: 0 };
+  _hideStepChrome();
+
+  if (state.onStepChange) state.onStepChange(-1);
 }
 
 /**
@@ -127,6 +118,60 @@ export function nextStep() {
  */
 export function prevStep() {
   goToStep(state.currentIndex - 1, 'backward');
+}
+
+// ── Intro card ───────────────────────────────────────────────────────────────
+
+/**
+ * Bring the intro card back down into view.
+ */
+function _showIntroCard() {
+  const intro = document.querySelector('.story-intro');
+  if (!intro) return;
+
+  intro.style.transition = 'transform 0.5s ease-out';
+  intro.style.transform = 'translateY(0)';
+}
+
+/**
+ * Send step 0's text card off the bottom of the screen.
+ *
+ * The card carries its authored messiness — a rotation and a small offset —
+ * in its transform, so the slide has to restate them or the card would snap
+ * square on its way out.
+ */
+function _sendFirstTextCardOffScreen() {
+  const firstCard = state.textCards?.[0];
+  if (!firstCard) return;
+
+  firstCard.classList.remove('is-active', 'is-stacked');
+  const rot  = parseFloat(firstCard.dataset.messinessRot  || 0);
+  const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
+  const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
+  firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+}
+
+/**
+ * Send a viewer plate off the bottom of the screen.
+ *
+ * @param {HTMLElement} [plate] - The plate, where the story has one.
+ */
+function _sendPlateOffScreen(plate) {
+  if (!plate) return;
+
+  plate.style.transform = 'translateY(100%)';
+  plate.classList.remove('is-active');
+}
+
+/**
+ * Hide what belongs to a story step rather than to the intro: the step
+ * counter and the object credit badge.
+ */
+function _hideStepChrome() {
+  updateViewerInfo(-1);
+
+  const creditBadge = document.getElementById('object-credits-badge');
+  if (creditBadge) creditBadge.classList.add('d-none');
 }
 
 // ── Button navigation (mobile + embed) ───────────────────────────────────────
@@ -233,8 +278,11 @@ function goToPreviousMobileStep() {
 /**
  * Restore the intro card on mobile (backward from step 0).
  *
- * Mirrors the desktop goToStep(-1) handler: slides the first viewer plate
- * off-screen, restores the intro card, and hides the step counter.
+ * The same four pieces the desktop intro restoration moves, plus the two
+ * things button navigation owns: the tap cooldown, and the button states
+ * that keep "previous" disabled on the intro. The plate is taken by
+ * position rather than by object id, because button navigation tracks steps
+ * and not object runs.
  */
 function _restoreMobileIntro() {
   if (state.mobileNavigationCooldown) return;
@@ -244,37 +292,12 @@ function _restoreMobileIntro() {
 
   state.mobileInIntro = true;
 
-  // Show intro card
-  const intro = document.querySelector('.story-intro');
-  if (intro) {
-    intro.style.transition = 'transform 0.5s ease-out';
-    intro.style.transform = 'translateY(0)';
-  }
+  _showIntroCard();
+  _sendFirstTextCardOffScreen();
+  _sendPlateOffScreen(state.viewerPlates?.[0]);
 
-  // Slide step 0's text card off-screen
-  const firstCard = state.textCards?.[0];
-  if (firstCard) {
-    firstCard.classList.remove('is-active', 'is-stacked');
-    const rot  = parseFloat(firstCard.dataset.messinessRot  || 0);
-    const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-    const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-    firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-  }
-
-  // Slide first viewer plate off-screen
-  const firstPlate = state.viewerPlates?.[0];
-  if (firstPlate) {
-    firstPlate.style.transform = 'translateY(100%)';
-    firstPlate.classList.remove('is-active');
-  }
-
-  // Reset object run tracking
   state.currentObjectRun = { objectId: null, runPosition: 0 };
-
-  // Hide step counter and credits
-  updateViewerInfo(-1);
-  const creditBadge = document.getElementById('object-credits-badge');
-  if (creditBadge) creditBadge.classList.add('d-none');
+  _hideStepChrome();
 
   updateMobileButtonStates();
 }
@@ -371,104 +394,154 @@ function updateMobileButtonStates() {
 // ── Keyboard input ─────────────────────────────────────────────────────────
 
 /**
+ * What each navigation key does.
+ *
+ * A Map rather than an object literal, so that a key value is looked up as
+ * itself and nothing inherited can answer for it. Page Down and Page Up are
+ * the arrow keys under another name; every other key the story reads has an
+ * action of its own.
+ *
+ * @type {Map<string, (e: KeyboardEvent) => void>}
+ */
+const KEY_ACTIONS = new Map([
+  ['ArrowDown',  (e) => _stepKey(e, 'forward')],
+  ['PageDown',   (e) => _stepKey(e, 'forward')],
+  ['ArrowUp',    (e) => _stepKey(e, 'backward')],
+  ['PageUp',     (e) => _stepKey(e, 'backward')],
+  ['ArrowRight', (e) => { e.preventDefault(); _openNextLayer(); }],
+  ['ArrowLeft',  (e) => { e.preventDefault(); _closeTopmostPanel(e); }],
+  ['Escape',     (e) => _closeTopmostPanel(e)],
+  [' ',          (e) => _spaceKey(e)],
+]);
+
+/**
  * Handle keyboard navigation and panel control.
  *
- * Arrow up/down navigate steps via snap.next()/snap.previous() when the
- * Lenis snap plugin is available (desktop), or fall back to nextStep/prevStep
- * in mobile/embed mode (state.snap is null). Arrow left/right open/close
- * panels. Escape closes the current panel. Space advances (Shift+Space goes
- * back).
- *
- * Auto-repeat key events are ignored — each physical key press advances
- * exactly one step.
+ * Auto-repeat key events are ignored for story navigation — each physical key
+ * press advances exactly one step — but allowed through while a panel is
+ * open, so that a held arrow key keeps the panel scrolling.
  *
  * @param {KeyboardEvent} e
  */
 function handleKeyboard(e) {
-  // Ignore auto-repeat key events for story navigation — each key press = one
-  // step only. Allow repeats when a panel is open so held arrow keys scroll.
   if (e.repeat && !state.isPanelOpen) return;
 
-  switch (e.key) {
-    case 'ArrowDown':
-    case 'PageDown':
-      if (state.isPanelOpen) {
-        scrollOpenPanel(40);
-        break;
-      }
-      e.preventDefault();
-      if (!state.scrollLockActive) {
-        if (state.lenis) {
-          keyboardNav('forward');
-        } else {
-          nextStep();
-        }
-      }
-      break;
+  KEY_ACTIONS.get(e.key)?.(e);
+}
 
-    case 'ArrowUp':
-    case 'PageUp':
-      if (state.isPanelOpen) {
-        scrollOpenPanel(-40);
-        break;
-      }
-      e.preventDefault();
-      if (!state.scrollLockActive) {
-        if (state.lenis) {
-          keyboardNav('backward');
-        } else {
-          prevStep();
-        }
-      }
-      break;
+/**
+ * Move one step, or scroll the open panel instead.
+ *
+ * A panel takes the key first, and the event stays uncancelled in that
+ * state so that a panel too long for its own scrolling still gets the
+ * browser's. With no panel open the key belongs to the story and is
+ * cancelled whether or not a scroll lock lets the step through.
+ *
+ * @param {KeyboardEvent} e
+ * @param {string} direction - 'forward' or 'backward'.
+ */
+function _stepKey(e, direction) {
+  if (_panelTookScroll(direction === 'forward' ? 40 : -40)) return;
 
-    case 'ArrowRight':
-      e.preventDefault();
-      if (!state.isPanelOpen) {
-        const stepForL1 = getCurrentStepData();
-        const stepNumForL1 = getCurrentStepNumber();
-        if (stepForL1 && stepHasLayer1Content(stepForL1)) {
-          openPanel('layer1', stepNumForL1);
-        }
-      } else if (state.panelStack.length === 1 && state.panelStack[0]?.type === 'layer1') {
-        const stepForL2 = getCurrentStepData();
-        const stepNumForL2 = getCurrentStepNumber();
-        if (stepForL2 && stepHasLayer2Content(stepForL2)) {
-          openPanel('layer2', stepNumForL2);
-        }
-      }
-      break;
+  e.preventDefault();
+  _navigateStep(direction);
+}
 
-    case 'ArrowLeft':
-      e.preventDefault();
-      if (state.isPanelOpen) {
-        closeTopPanel();
-      }
-      break;
+/**
+ * Page through the story, or through the open panel instead.
+ *
+ * Space carries the page's own scrolling, so it is cancelled in both states.
+ * Shift reverses it.
+ *
+ * @param {KeyboardEvent} e
+ */
+function _spaceKey(e) {
+  e.preventDefault();
+  if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
 
-    case 'Escape':
-      if (state.isPanelOpen) {
-        e.preventDefault();
-        closeTopPanel();
-      }
-      break;
+  _navigateStep(e.shiftKey ? 'backward' : 'forward');
+}
 
-    case ' ':
-      if (state.isPanelOpen) {
-        scrollOpenPanel(e.shiftKey ? -100 : 100);
-        e.preventDefault();
-        break;
-      }
-      e.preventDefault();
-      if (!state.scrollLockActive) {
-        if (e.shiftKey) {
-          if (state.lenis) keyboardNav('backward'); else prevStep();
-        } else {
-          if (state.lenis) keyboardNav('forward'); else nextStep();
-        }
-      }
-      break;
+/**
+ * Give a scroll to the open panel, if there is one.
+ *
+ * @param {number} delta - Pixels to scroll (positive = down, negative = up).
+ * @returns {boolean} Whether a panel took the scroll.
+ */
+function _panelTookScroll(delta) {
+  if (!state.isPanelOpen) return false;
+
+  scrollOpenPanel(delta);
+  return true;
+}
+
+/**
+ * Move one step in the given direction.
+ *
+ * The scroll engine drives the move wherever Lenis is running; mobile and
+ * embed modes, which have no Lenis, move the card pool directly. A scroll
+ * lock — an interactive card holding the viewport — blocks both.
+ *
+ * @param {string} direction - 'forward' or 'backward'.
+ */
+function _navigateStep(direction) {
+  if (state.scrollLockActive) return;
+
+  if (state.lenis) {
+    keyboardNav(direction);
+    return;
   }
+  if (direction === 'forward') {
+    nextStep();
+  } else {
+    prevStep();
+  }
+}
+
+/**
+ * Open the next layer of panels above what is already open.
+ *
+ * With nothing open that is layer 1; above a single open layer 1 it is
+ * layer 2. Layer 2 is the top of the stack, so a deeper stack, or a stack
+ * whose one panel is not a layer 1, opens nothing.
+ */
+function _openNextLayer() {
+  if (!state.isPanelOpen) {
+    _openLayerWithContent('layer1', stepHasLayer1Content);
+    return;
+  }
+  if (state.panelStack.length === 1 && state.panelStack[0]?.type === 'layer1') {
+    _openLayerWithContent('layer2', stepHasLayer2Content);
+  }
+}
+
+/**
+ * Open a panel layer for the current step, if that step has content for it.
+ *
+ * @param {string} type - Panel type ('layer1' or 'layer2').
+ * @param {Function} hasContent - Content test for that layer, from panels.js.
+ */
+function _openLayerWithContent(type, hasContent) {
+  const step = getCurrentStepData();
+  const stepNumber = getCurrentStepNumber();
+  if (step && hasContent(step)) {
+    openPanel(type, stepNumber);
+  }
+}
+
+/**
+ * Close the topmost open panel.
+ *
+ * The event is cancelled only when there is a panel to close, which leaves
+ * Escape to the page in every other state.
+ *
+ * @param {KeyboardEvent} e
+ */
+function _closeTopmostPanel(e) {
+  if (!state.isPanelOpen) return;
+
+  e.preventDefault();
+  closeTopPanel();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

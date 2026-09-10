@@ -26,7 +26,7 @@ grammatical number matters in the summary: it returns the singular or
 plural of "file" in the active language so category headings read
 naturally ("1 file" / "2 files", "1 archivo" / "2 archivos").
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 MESSAGES = {
@@ -58,6 +58,38 @@ MESSAGES = {
         'dry_run_complete': '[DRY RUN COMPLETE]',
         'dry_run_instruction': 'Run without --dry-run to apply these changes.',
         'dry_run_would_apply': '[DRY RUN] Would apply this migration',
+
+        # Console output on the version-detection, migration-failure and
+        # data-regeneration paths. These print; they are not change
+        # descriptions, so none of them reaches coerce_change and the note
+        # above about the English phrase that classifies does not apply.
+        'config_not_found': '❌ Error: _config.yml not found. Are you in a '
+                            'Telar repository?',
+        'version_unrecognised': '⚠️  Warning: Unrecognized version "{}" in '
+                                '_config.yml.',
+        'version_not_text': '⚠️  Warning: Unrecognized version {} in '
+                            '_config.yml (the value is not text — quote it).',
+        'version_grammar': 'Expected MAJOR.MINOR.PATCH, with an optional '
+                           '"-beta" suffix, for example version: "1.6.2" or '
+                           'version: "0.9.4-beta". A leading "v" is accepted '
+                           'but belongs to git tags, not to this field.',
+        'version_missing': 'Warning: No version found in _config.yml, '
+                           'assuming 0.2.0-beta',
+        'config_read_error': '❌ Error reading _config.yml: {}',
+        'migration_error': '✗ Error: {}',
+        'migration_stopped': '✗ Stopping: this migration did not complete. '
+                             'The site is left unchanged.',
+        'regeneration_script_error': '⚠️  Warning: {} returned error: {}',
+        'regeneration_timeout': '⚠️  Warning: Data regeneration timed out',
+        'regeneration_failed': '⚠️  Warning: Data regeneration failed: {}',
+        'index_no_frontmatter': '[WARN] index.md has no leading frontmatter '
+                                'delimiter — skipping upgrade-notice insertion',
+        'index_frontmatter_unclosed': '[WARN] index.md frontmatter is not '
+                                      'closed — skipping upgrade-notice '
+                                      'insertion',
+        'fetch_failed_console': '⚠️  Warning: Could not fetch {} from '
+                                'GitHub: {}',
+        'fetch_error_console': '⚠️  Warning: Error fetching {}: {}',
 
         # Fail-closed / resume console messages (v1.5.0 redesign)
         'prev_upgrade_incomplete': 'ℹ️  A previous upgrade to {} did not complete.',
@@ -119,7 +151,6 @@ MESSAGES = {
         'removed_directory': 'Removed directory: {}',
         'updated_file': 'Updated {}',
         'fetched_file': 'Updated {}: {}',
-        'fetch_warning': '⚠️  Warning: Could not fetch {} from GitHub',
         'file_exists': '{} already exists',
         'empty_directory_removed': 'Removed empty directory: {}',
         'could_not_remove': '⚠️  Warning: Could not remove {}: {}',
@@ -128,6 +159,42 @@ MESSAGES = {
         'kept_modified_files': '⚠️  Kept {} user-modified demo files',
         'kept_images_safety': 'ℹ️  Kept {} old demo images for safety',
         'manual_delete_note': '(You can manually delete these if not using them)',
+
+        # Records written into the upgrade summary on a failure, and the
+        # console messages of the dependency-ensure step. Both are localised
+        # so a site reads its failures in its own language.
+        #
+        # record_fetch_failed carries the phrase coerce_change treats as a
+        # hard failure, but the record it fills is built with severity
+        # 'hard' already -- the phrase is not what classifies it here,
+        # which is why this one is safe to translate. A migration that
+        # returns a bare string is a different matter: there the English
+        # phrase IS the classification, so it stays English.
+        'record_deps_missing': 'Data regeneration dependencies are missing ({}). '
+                               'Data regeneration cannot run without them, so the '
+                               'site was not upgraded. Install the packages listed '
+                               'in requirements.txt and re-run the upgrade.',
+        'record_regeneration_failed': 'Data regeneration (csv_to_json / '
+                                      'generate_collections) failed. Run the data '
+                                      'scripts by hand and try the upgrade again.',
+        'record_migration_aborted': 'The {} \u2192 {} migration stopped: {}',
+        'record_fetch_failed': 'Could not fetch {} from GitHub ({}). '
+                               'Update it by hand \u2014 {}',
+        'record_write_rolled_back': 'A framework file could not be written, so the '
+                                    'changes were rolled back: {}',
+        'deps_installing': '  Installing the missing dependencies, from {} ...',
+        'deps_no_manifest': '  \u26a0\ufe0f  Warning: cannot install the missing '
+                            'dependencies ({}) because there is no requirements.txt '
+                            'beside the upgrade script or in the site.',
+        'deps_pip_failed': '  \u26a0\ufe0f  Warning: pip install from {} failed:\n{}',
+        'deps_pip_timeout': '  \u26a0\ufe0f  Warning: pip install from {} ran out of time',
+
+        'retired_migrations': 'Removed scripts/migrations/ — this site runs the '
+                              'upgrade launcher, which downloads a verified copy '
+                              'of the migrations each time it runs.',
+        'retire_migrations_warning': 'Could not remove scripts/migrations/: {}. '
+                                     'The upgrade completed; the directory is '
+                                     'unused and can be deleted by hand.',
     },
 
     'es': {
@@ -158,6 +225,43 @@ MESSAGES = {
         'dry_run_complete': '[PRUEBA COMPLETA]',
         'dry_run_instruction': 'Ejecuta sin --dry-run para aplicar estos cambios.',
         'dry_run_would_apply': '[PRUEBA] Se aplicaría esta migración',
+
+        # Ver la nota en la seccion en ingles: estas se imprimen, no son
+        # descripciones de cambios, asi que no pasan por coerce_change.
+        'config_not_found': '❌ Error: No se encontró _config.yml. ¿Estás en '
+                            'un repositorio de Telar?',
+        'version_unrecognised': '⚠️  Advertencia: No se reconoce la versión '
+                                '"{}" en _config.yml.',
+        'version_not_text': '⚠️  Advertencia: No se reconoce la versión {} en '
+                            '_config.yml (el valor no es texto: ponlo entre '
+                            'comillas).',
+        'version_grammar': 'La versión se escribe MAYOR.MENOR.PARCHE, con '
+                           '"-beta" opcional; por ejemplo version: "1.6.2" o '
+                           'version: "0.9.4-beta". La "v" inicial se acepta, '
+                           'pero pertenece a las etiquetas de git y no a este '
+                           'campo.',
+        'version_missing': 'Advertencia: No se encontró ninguna versión en '
+                           '_config.yml; se parte de 0.2.0-beta',
+        'config_read_error': '❌ Error al leer _config.yml: {}',
+        'migration_error': '✗ Error: {}',
+        'migration_stopped': '✗ La actualización se interrumpió: esta '
+                             'migración no se completó. El sitio queda sin '
+                             'cambios.',
+        'regeneration_script_error': '⚠️  Advertencia: {} devolvió un '
+                                     'error: {}',
+        'regeneration_timeout': '⚠️  Advertencia: Se agotó el tiempo al '
+                                'regenerar los datos',
+        'regeneration_failed': '⚠️  Advertencia: Falló la regeneración de '
+                               'datos: {}',
+        'index_no_frontmatter': '[ADVERTENCIA] index.md no empieza con el '
+                                'delimitador del frontmatter; no se inserta '
+                                'el aviso de actualización',
+        'index_frontmatter_unclosed': '[ADVERTENCIA] El frontmatter de '
+                                      'index.md no está cerrado; no se '
+                                      'inserta el aviso de actualización',
+        'fetch_failed_console': '⚠️  Advertencia: No se pudo descargar {} de '
+                                'GitHub: {}',
+        'fetch_error_console': '⚠️  Advertencia: Error al descargar {}: {}',
 
         # Fail-closed / resume console messages (v1.5.0 redesign)
         'prev_upgrade_incomplete': 'ℹ️  Una actualización anterior a {} quedó incompleta.',
@@ -219,7 +323,6 @@ MESSAGES = {
         'removed_directory': 'Directorio eliminado: {}',
         'updated_file': '{} actualizado',
         'fetched_file': '{} actualizado: {}',
-        'fetch_warning': '⚠️  Advertencia: No se pudo obtener {} de GitHub',
         'file_exists': '{} ya existe',
         'empty_directory_removed': 'Directorio vacío eliminado: {}',
         'could_not_remove': '⚠️  Advertencia: No se pudo eliminar {}: {}',
@@ -228,6 +331,39 @@ MESSAGES = {
         'kept_modified_files': '⚠️  Se conservaron {} archivos de demostración modificados por el usuario',
         'kept_images_safety': 'ℹ️  Se conservaron {} imágenes de demostración antiguas por seguridad',
         'manual_delete_note': '(Puedes eliminarlas manualmente si no las usas)',
+
+        # Sobre record_fetch_failed y la frase que usa coerce_change para
+        # clasificar, ver la nota en la seccion en ingles.
+        'record_deps_missing': 'La regeneraci\u00f3n de datos necesita dependencias '
+                               'que no est\u00e1n instaladas ({}). Sin ellas no se '
+                               'puede regenerar nada, as\u00ed que el sitio qued\u00f3 '
+                               'sin actualizar. Instala lo que est\u00e1 en '
+                               'requirements.txt y vuelve a ejecutar la actualizaci\u00f3n.',
+        'record_regeneration_failed': 'Fall\u00f3 la regeneraci\u00f3n de datos '
+                                      '(csv_to_json / generate_collections). Ejecuta '
+                                      'esos dos scripts a mano y despu\u00e9s vuelve '
+                                      'a intentar la actualizaci\u00f3n.',
+        'record_migration_aborted': 'La migraci\u00f3n {} \u2192 {} se interrumpi\u00f3: {}',
+        'record_fetch_failed': 'No se pudo descargar {} de GitHub ({}). '
+                               'Actual\u00edzalo a mano \u2014 {}',
+        'record_write_rolled_back': 'No se pudo escribir un archivo del marco, as\u00ed '
+                                    'que se deshicieron los cambios: {}',
+        'deps_installing': '  Instalando las dependencias que faltan, desde {}\u2026',
+        'deps_no_manifest': '  \u26a0\ufe0f  Advertencia: no se pueden instalar las '
+                            'dependencias que faltan ({}) porque no hay '
+                            'requirements.txt junto al script de actualizaci\u00f3n '
+                            'ni en el sitio.',
+        'deps_pip_failed': '  \u26a0\ufe0f  Advertencia: fall\u00f3 pip install desde {}:\n{}',
+        'deps_pip_timeout': '  \u26a0\ufe0f  Advertencia: pip install desde {} '
+                            'super\u00f3 el tiempo l\u00edmite',
+
+        'retired_migrations': 'Se elimin\u00f3 scripts/migrations/: este sitio usa '
+                              'el lanzador de actualizaci\u00f3n, que descarga una '
+                              'copia verificada de las migraciones cada vez que se '
+                              'ejecuta.',
+        'retire_migrations_warning': 'No se pudo eliminar scripts/migrations/: {}. '
+                                     'La actualizaci\u00f3n se complet\u00f3; esa '
+                                     'carpeta no se usa y puedes borrarla a mano.',
     }
 }
 

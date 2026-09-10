@@ -24,10 +24,10 @@ from one story CSV and performs several passes over the data:
    module; inline text is processed by `process_inline_content()`. Both
    paths run through the same pipeline: widgets first, then images, then
    markdown-to-HTML conversion. After HTML conversion, glossary links
-   (`[[term_id]]` syntax) are resolved by `process_glossary_links()`. As of
-   v1.5.1 the step's `answer` prose is glossary-processed too (the `question`
-   is a heading and is left alone), so `[[term]]` works in the main story
-   text, not only in layer panels.
+   (`[[term_id]]` syntax) are resolved by `process_glossary_links()`. The
+   step's `answer` prose is glossary-processed too (the `question` is a
+   heading and is left alone), so `[[term]]` works in the main story text,
+   not only in layer panels.
 
 3. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
@@ -43,7 +43,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.6.0
+Version: v1.7.0
 """
 
 import re
@@ -66,31 +66,11 @@ def _warn(msg, warnings):
     warnings.append(msg)
 
 
-def process_story(df, christmas_tree=False):
+
+def _normalise_frame(df):
+    """The shape every later pass assumes: no example column, no NaN, an
+    alt_text column, and no rows that are entirely empty.
     """
-    Process story CSV with panel content (file references or inline text).
-
-    Expected columns: step, question, answer, object, x, y, zoom,
-    layer1_content, layer2_content, etc.
-    (Also accepts legacy column names: layer1_file, layer2_file)
-
-    Args:
-        df: pandas DataFrame from story CSV
-        christmas_tree: If True, inject fake warnings for testing
-
-    Returns:
-        pandas DataFrame with processed content and aggregated warnings
-    """
-    # Tracking for summary
-    warnings = []
-
-    # Load glossary terms for auto-linking
-    glossary_terms = load_glossary_terms()
-    glossary_warnings = []
-
-    # Initialize widget warnings list
-    widget_warnings = []
-
     # Drop example column if it exists
     if 'example' in df.columns:
         df = df.drop(columns=['example'])
@@ -104,7 +84,16 @@ def process_story(df, christmas_tree=False):
 
     # Remove completely empty rows
     df = df[df.astype(str).apply(lambda x: x.str.strip()).ne('').any(axis=1)]
+    return df
 
+
+def _validate_page_column(df, warnings):
+    """A page number is an integer or it is nothing.
+
+    A step that names a page the story does not have would render
+    nowhere, so an unusable value is cleared and said out loud rather
+    than carried into the JSON.
+    """
     # Validate and normalize page column
     if 'page' in df.columns:
         for idx, row in df.iterrows():
@@ -120,25 +109,82 @@ def process_story(df, christmas_tree=False):
                     msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
                     _warn(msg, warnings)
                     df.at[idx, 'page'] = ''
+    return df
 
-    # Load objects data for validation
-    objects_data = {}
+
+def _load_objects_data():
+    """The built objects.json, keyed by id, or None when there is none.
+
+    None and an empty mapping are different answers. A site that has not
+    run the objects processor yet, or whose objects.json cannot be read,
+    has nothing to check references against, and the reference pass is
+    skipped rather than reporting every step as wrong. A site whose
+    objects.json holds no objects has been checked and has none, so every
+    object a story names is a reference to something absent.
+    """
     objects_json_path = Path('_data/objects.json')
-    if objects_json_path.exists():
-        try:
-            with open(objects_json_path, 'r', encoding='utf-8') as f:
-                objects_list = json.load(f)
-                # Create lookup dictionary by object_id
-                objects_data = {obj['object_id']: obj for obj in objects_list}
-        except Exception as e:
-            print(f"  [WARN] Could not load objects.json for validation: {e}")
+    if not objects_json_path.exists():
+        return None
+    try:
+        with open(objects_json_path, 'r', encoding='utf-8') as f:
+            objects_list = json.load(f)
+            # Create lookup dictionary by object_id
+            return {obj['object_id']: obj for obj in objects_list}
+    except Exception as e:
+        print(f"  [WARN] Could not load objects.json for validation: {e}")
+        return None
 
+
+def _check_object_has_a_source(df, idx, objects_data, actual_object_id,
+                               file_index, step_num, warnings):
+    """An object a step points at must resolve to something showable.
+
+    A manifest, or a file beside it -- image or audio, since an audio
+    object is shown by its player rather than by a picture. Neither is a
+    warning on the step, not a failure: the story still renders, with a
+    gap where the object would be.
+    """
+    # Check if object has IIIF manifest or local image
+    obj = objects_data[actual_object_id]
+    iiif_manifest = obj.get('iiif_manifest', '').strip()
+
+    # If no external IIIF manifest, check for local image file
+    if not iiif_manifest:
+        # Check for a local image or audio file via the one-time index
+        has_local_image = False
+
+        for f in file_index.get(actual_object_id, []):
+            suffix = f.suffix.lower()
+            if suffix in IMAGE_EXTENSIONS:
+                has_local_image = True
+                print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
+                break
+            if suffix in AUDIO_EXTENSIONS:
+                has_local_image = True
+                print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
+                break
+
+        # Only warn if object has neither external manifest nor local image
+        if not has_local_image:
+            error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=actual_object_id)
+            df.at[idx, 'viewer_warning'] = error_msg
+            msg = f"Story step {step_num} references object without IIIF source: {actual_object_id}"
+            _warn(msg, warnings)
+
+def _validate_object_references(df, objects_data, warnings):
+    """Every `object` a step names must be one the site has.
+
+    Lookups are case-insensitive and an accidental file extension is
+    stripped, because both are what an author actually types. A missing
+    reference becomes a viewer warning, which the story shows in its
+    intro panel rather than failing the build.
+    """
     # Add viewer_warning column if it doesn't exist
     if 'viewer_warning' not in df.columns:
         df['viewer_warning'] = ''
 
     # Validate object references
-    if 'object' in df.columns and objects_data:
+    if 'object' in df.columns and objects_data is not None:
         # Build case-insensitive lookup map for objects
         objects_lower_map = {k.lower(): k for k in objects_data.keys()}
 
@@ -184,34 +230,50 @@ def process_story(df, christmas_tree=False):
                 _warn(msg, warnings)
                 continue
 
-            # Check if object has IIIF manifest or local image
-            obj = objects_data[actual_object_id]
-            iiif_manifest = obj.get('iiif_manifest', '').strip()
+            _check_object_has_a_source(df, idx, objects_data,
+                                       actual_object_id, _obj_file_index,
+                                       step_num, warnings)
+    return df
 
-            # If no external IIIF manifest, check for local image file
-            if not iiif_manifest:
-                # Check for a local image or audio file via the one-time index
-                has_local_image = False
 
-                for f in _obj_file_index.get(actual_object_id, []):
-                    suffix = f.suffix.lower()
-                    if suffix in IMAGE_EXTENSIONS:
-                        has_local_image = True
-                        print(f"  [INFO] Object {actual_object_id} uses local image: {f}")
-                        break
-                    if suffix in AUDIO_EXTENSIONS:
-                        has_local_image = True
-                        print(f"  [INFO] Object {actual_object_id} uses local audio: {f}")
-                        break
+def _layer_content_for(cell_value, widget_warnings):
+    """One layer cell as content, from a file or from the cell itself.
 
-                # Only warn if object has neither external manifest nor local image
-                if not has_local_image:
-                    error_msg = get_lang_string('errors.object_warnings.object_no_source', object_id=actual_object_id)
-                    df.at[idx, 'viewer_warning'] = error_msg
-                    msg = f"Story step {step_num} references object without IIIF source: {actual_object_id}"
-                    _warn(msg, warnings)
+    A value ending in `.md` names a file; anything else is prose typed
+    into the spreadsheet. A filename that tries to leave the texts
+    directory is not read at all -- it falls through to inline
+    processing, so the worst an author can do to themselves is publish
+    their own path as text.
+    """
+    content_data = None
+    # Check if this looks like a file reference (.md extension)
+    if cell_value.endswith('.md'):
+        # Reject path-traversal in the author-controlled filename
+        # before joining it onto stories/. A value that tries to
+        # escape the texts directory falls through to inline
+        # processing rather than reading an arbitrary file.
+        if '..' in cell_value or cell_value.startswith('/') or '\\' in cell_value:
+            print(f"  [WARN] Ignoring unsafe layer file reference '{cell_value}' "
+                  f"(path traversal) — treating as inline content")
+        else:
+            # Try to load as markdown file
+            file_path = f"stories/{cell_value}"
+            content_data = read_markdown_file(file_path, widget_warnings)
 
-    # Process content columns (layer1_content, layer2_content, etc.)
+    # If not a file reference or file not found, treat as inline content
+    if content_data is None:
+        content_data = process_inline_content(cell_value, widget_warnings)
+    return content_data
+
+def _process_content_columns(df, glossary_terms, glossary_warnings, widget_warnings):
+    """Turn every layer column into HTML, from a file or from the cell.
+
+    A value ending in `.md` names a file under telar-content/texts;
+    anything else is prose typed into the spreadsheet. Both run the same
+    pipeline -- widgets, then images, then markdown -- so a panel reads
+    the same either way. The legacy `_file` column names are still
+    accepted.
+    """
     # Also handles legacy _file suffix for backward compatibility
     for col in df.columns:
         if col.endswith('_content') or col.endswith('_file'):
@@ -237,25 +299,9 @@ def process_story(df, christmas_tree=False):
                 if cell_value and str(cell_value).strip():
                     cell_value = str(cell_value).strip()
                     step_num = row.get('step', 'unknown')
-                    content_data = None
 
-                    # Check if this looks like a file reference (.md extension)
-                    if cell_value.endswith('.md'):
-                        # Reject path-traversal in the author-controlled filename
-                        # before joining it onto stories/. A value that tries to
-                        # escape the texts directory falls through to inline
-                        # processing rather than reading an arbitrary file.
-                        if '..' in cell_value or cell_value.startswith('/') or '\\' in cell_value:
-                            print(f"  [WARN] Ignoring unsafe layer file reference '{cell_value}' "
-                                  f"(path traversal) — treating as inline content")
-                        else:
-                            # Try to load as markdown file
-                            file_path = f"stories/{cell_value}"
-                            content_data = read_markdown_file(file_path, widget_warnings)
-
-                    # If not a file reference or file not found, treat as inline content
-                    if content_data is None:
-                        content_data = process_inline_content(cell_value, widget_warnings)
+                    content_data = _layer_content_for(
+                        cell_value, widget_warnings)
 
                     if content_data:
                         df.at[idx, title_col] = content_data['title']
@@ -269,18 +315,20 @@ def process_story(df, christmas_tree=False):
                         )
                         df.at[idx, text_col] = content_with_glossary
 
-            # Drop the _content/_file column as it's no longer needed in JSON
+            # Drop the _content/_file column: it is not part of the JSON output
             df = df.drop(columns=[col])
+    return df
 
-    # Resolve glossary [[term]] syntax in the step's answer prose. Layer panel
-    # content above is converted md->HTML before glossary processing; the answer
-    # is stored as markdown and rendered later in Liquid via `markdownify`, so the
-    # transform runs on the markdown string here — the injected inline
-    # <a class="glossary-inline-link"> passes through markdownify unchanged.
-    # Scope is the answer only: the question is the step's title/heading
-    # (<h2 class="step-question"> / <h2 class="title-card-heading">), and inline
-    # links do not belong in a heading, so [[term]] in the question is left
-    # literal. Not alt_text, button labels, or coordinates either. layer_name is
+
+def _resolve_answer_glossary(df, glossary_terms, glossary_warnings):
+    """Resolve [[term]] in the step's answer prose.
+
+    The answer only. The question is the step's heading, and an inline
+    link does not belong in one, so [[term]] there is left literal. The
+    answer is still markdown at this point -- Liquid renders it later --
+    so the transform runs on the markdown string, and the anchor it
+    injects passes through markdownify unchanged.
+    """
     # None because this is step prose, not a layer panel.
     if 'answer' in df.columns:
         for idx, row in df.iterrows():
@@ -294,7 +342,11 @@ def process_story(df, christmas_tree=False):
                     step_num,
                     None
                 )
+    return df
 
+
+def _apply_coordinate_defaults(df):
+    """A viewer needs somewhere to start, so empty coordinates get one."""
     # Set default coordinates for empty values
     coordinate_defaults = {'x': '0.5', 'y': '0.5', 'zoom': '1'}
     for col, default in coordinate_defaults.items():
@@ -303,7 +355,16 @@ def process_story(df, christmas_tree=False):
             df[col] = df[col].astype(str)
             # Set defaults for empty or 'nan' values
             df.loc[df[col].isin(['', 'nan']), col] = default
+    return df
 
+
+def _collect_step_warnings(df):
+    """Everything the intro panel will show, gathered from the columns.
+
+    These live in df.attrs rather than in a column: they belong to the
+    story, not to any one step, and the JSON writer reads them from
+    there.
+    """
     # Collect all warnings for intro display
     all_warnings = []
     for idx, row in df.iterrows():
@@ -346,18 +407,15 @@ def process_story(df, christmas_tree=False):
                         'type': 'panel',
                         'message': get_lang_string('errors.object_warnings.layer_file_missing', layer_num=layer_num)
                     })
+    return all_warnings
 
-    # Add glossary link warnings
-    all_warnings.extend(glossary_warnings)
 
-    # Add widget warnings
-    all_warnings.extend(widget_warnings)
+def _detect_latex(df):
+    """Whether any step carries LaTeX, so the page can load the renderer.
 
-    # Store warnings in dataframe as metadata (will be added to JSON)
-    df.attrs['viewer_warnings'] = all_warnings
-
-    # Check for LaTeX content across all steps. Scans every documented LaTeX
-    # surface ("Where LaTeX Works" in the markdown-syntax docs): step
+    Scans every surface the markdown-syntax docs promise LaTeX works in:
+    the question and answer prose, and the resolved layer text.
+    """
     # question/answer prose and resolved layer content (*_text columns).
     latex_detected = False
     for idx, row in df.iterrows():
@@ -370,32 +428,79 @@ def process_story(df, christmas_tree=False):
         if latex_detected:
             break
 
-    df.attrs['has_latex'] = latex_detected
+    return latex_detected
 
-    # Christmas Tree Mode: Inject fake warnings for testing
+
+def _add_christmas_tree_warnings(df, all_warnings):
+    """Every warning kind at once, so the intro panel can be looked at.
+
+    Appended rather than substituted: the point is to see them beside
+    whatever the story really produced.
+    """
+    # Inject test warnings for various error types
+    fake_warnings = [
+        {
+            'step': 1,
+            'type': 'viewer',
+            'message': get_lang_string('errors.object_warnings.missing_object_id')
+        },
+        {
+            'step': 2,
+            'type': 'panel',
+            'message': get_lang_string('errors.object_warnings.content_file_missing', file_ref='missing-file.md')
+        },
+        {
+            'step': 3,
+            'type': 'glossary',
+            'term_id': 'nonexistent-term',
+            'message': get_lang_string('errors.object_warnings.glossary_term_not_found', term_id='nonexistent-term')
+        }
+    ]
+    # Add fake warnings to existing warnings
+    df.attrs['viewer_warnings'] = all_warnings + fake_warnings
+    print("\U0001f384 Christmas Tree Mode: Injected test warnings into story")
+
+def process_story(df, christmas_tree=False):
+    """
+    Process story CSV with panel content (file references or inline text).
+
+    Expected columns: step, question, answer, object, x, y, zoom,
+    layer1_content, layer2_content, etc.
+    (Also accepts legacy column names: layer1_file, layer2_file)
+
+    Args:
+        df: pandas DataFrame from story CSV
+        christmas_tree: If True, inject fake warnings for testing
+
+    Returns:
+        pandas DataFrame with processed content and aggregated warnings
+    """
+    # One function per pass, in the order the module docstring lists
+    # them. Three accumulators are shared, and only as accumulators:
+    # `warnings` is what the summary counts, and the other two are
+    # filled by passes that cannot reach df.attrs themselves.
+    warnings = []
+    glossary_terms = load_glossary_terms()
+    glossary_warnings = []
+    widget_warnings = []
+
+    df = _normalise_frame(df)
+    df = _validate_page_column(df, warnings)
+    df = _validate_object_references(df, _load_objects_data(), warnings)
+    df = _process_content_columns(df, glossary_terms, glossary_warnings,
+                                  widget_warnings)
+    df = _resolve_answer_glossary(df, glossary_terms, glossary_warnings)
+    df = _apply_coordinate_defaults(df)
+
+    all_warnings = _collect_step_warnings(df)
+    all_warnings.extend(glossary_warnings)
+    all_warnings.extend(widget_warnings)
+    df.attrs['viewer_warnings'] = all_warnings
+
+    df.attrs['has_latex'] = _detect_latex(df)
+
     if christmas_tree:
-        # Inject test warnings for various error types
-        fake_warnings = [
-            {
-                'step': 1,
-                'type': 'viewer',
-                'message': get_lang_string('errors.object_warnings.missing_object_id')
-            },
-            {
-                'step': 2,
-                'type': 'panel',
-                'message': get_lang_string('errors.object_warnings.content_file_missing', file_ref='missing-file.md')
-            },
-            {
-                'step': 3,
-                'type': 'glossary',
-                'term_id': 'nonexistent-term',
-                'message': get_lang_string('errors.object_warnings.glossary_term_not_found', term_id='nonexistent-term')
-            }
-        ]
-        # Add fake warnings to existing warnings
-        df.attrs['viewer_warnings'] = all_warnings + fake_warnings
-        print("\U0001f384 Christmas Tree Mode: Injected test warnings into story")
+        _add_christmas_tree_warnings(df, all_warnings)
 
     # Print summary if there were issues
     if warnings:
@@ -420,3 +525,4 @@ def process_story(df, christmas_tree=False):
                   f"using spreadsheet row order instead ({e})")
 
     return df
+

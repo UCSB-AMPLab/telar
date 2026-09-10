@@ -16,7 +16,7 @@ Bug fix release:
 No _config.yml changes beyond version bump. No CSV schema changes.
 No new dependencies.
 
-Version: v0.9.3-beta
+Version: v1.7.0
 """
 
 from typing import List, Dict
@@ -83,7 +83,7 @@ class Migration092to093(BaseMigration):
 
         for file_path, description in framework_files.items():
             content = self._fetch_from_github(file_path)
-            if content:
+            if content is not None:
                 self._write_file(file_path, content)
                 changes.append(f"Updated {file_path} - {description}")
             else:

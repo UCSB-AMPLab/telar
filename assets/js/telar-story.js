@@ -2312,8 +2312,18 @@
   function getSceneIndex(stepIndex) {
     return state.stepToScene[stepIndex] ?? -1;
   }
+  function _plateForScene(sceneIndex) {
+    return sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
+  }
   function buildTransform(messiness, baseTranslate) {
     return `${baseTranslate} rotate(${messiness.rot}deg) translate(${messiness.offX}px, ${messiness.offY}px)`;
+  }
+  function _readCardMessiness(el) {
+    return {
+      rot: parseFloat(el.dataset.messinessRot || 0),
+      offX: parseFloat(el.dataset.messinessOffX || 0),
+      offY: parseFloat(el.dataset.messinessOffY || 0)
+    };
   }
   function _recomputeCardGeometry(viewportW, viewportH) {
     const peekHeight = _config.peekHeight;
@@ -2337,39 +2347,38 @@
       }
     }
   }
-  function initCardPool(storyData, config) {
-    const cardStack = document.querySelector(".card-stack");
-    if (!cardStack) return;
-    const steps = (storyData?.steps || []).filter((s) => !s._metadata);
-    const peekHeight = config?.peekHeight ?? 1;
-    const messinessPercent = config?.messiness ?? 20;
-    _stepsData = steps;
-    state.stepsData = steps;
-    _config = {
-      peekHeight,
-      messiness: messinessPercent,
-      preloadSteps: state.config.preloadSteps || 5
-    };
-    const viewportH = window.innerHeight;
-    const cardH = viewportH * 0.8;
-    _zPlan = computeZIndexPlan(steps);
-    _buildSceneMaps(steps);
-    state.titleCards = {};
-    state.activeTitleCardIndex = null;
-    const audioObjects = window.audioObjects || {};
+  function _detectStepCardType(objectId, step, audioObjects) {
+    const objectData = state.objectsIndex[objectId] || {};
+    const audioExt = audioObjects[objectId];
+    return detectCardType({
+      objectId,
+      cardType: step.cardType,
+      source_url: objectData.source_url || objectData.iiif_manifest || "",
+      file_path: audioExt ? `objects/${objectId}.${audioExt}` : ""
+    });
+  }
+  var _MEDIA_PLATE_CLASSES = {
+    "youtube": "video-plate",
+    "vimeo": "video-plate",
+    "google-drive": "video-plate",
+    "audio": "audio-plate"
+  };
+  function _markMediaPlate(plate, cardType, firstStep) {
+    const mediaClass = _MEDIA_PLATE_CLASSES[cardType];
+    if (!mediaClass) return;
+    plate.classList.add(mediaClass);
+    plate.dataset.cardType = cardType;
+    if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
+    if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
+    if (firstStep.loop) plate.dataset.loop = firstStep.loop;
+  }
+  function _createViewerPlates(steps, cardStack, audioObjects) {
     for (let sceneIdx = 0; sceneIdx < state.totalScenes; sceneIdx++) {
       const firstStepIdx = state.sceneFirstStep[sceneIdx];
       const objectId = state.sceneToObject[sceneIdx];
       if (!objectId) continue;
       const firstStep = steps[firstStepIdx];
-      const objectData = state.objectsIndex[objectId] || {};
-      const audioExt = audioObjects[objectId];
-      const sceneCardType = detectCardType({
-        objectId,
-        cardType: firstStep.cardType,
-        source_url: objectData.source_url || objectData.iiif_manifest || "",
-        file_path: audioExt ? `objects/${objectId}.${audioExt}` : ""
-      });
+      const sceneCardType = _detectStepCardType(objectId, firstStep, audioObjects);
       const plate = document.createElement("div");
       plate.className = "viewer-plate";
       plate.dataset.object = objectId;
@@ -2379,35 +2388,17 @@
       plate.setAttribute("role", "img");
       plate.setAttribute("aria-label", _buildAriaLabel(objectId, firstStep.alt_text, sceneCardType));
       plate.style.transform = "translateY(100%)";
-      if (sceneCardType === "youtube" || sceneCardType === "vimeo" || sceneCardType === "google-drive") {
-        plate.classList.add("video-plate");
-        plate.dataset.cardType = sceneCardType;
-        if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
-        if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
-        if (firstStep.loop) plate.dataset.loop = firstStep.loop;
-      }
-      if (sceneCardType === "audio") {
-        plate.classList.add("audio-plate");
-        plate.dataset.cardType = "audio";
-        if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
-        if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
-        if (firstStep.loop) plate.dataset.loop = firstStep.loop;
-      }
+      _markMediaPlate(plate, sceneCardType, firstStep);
       cardStack.appendChild(plate);
       state.viewerPlates[sceneIdx] = plate;
     }
+  }
+  function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH, peekHeight, messinessPercent) {
     const objectRunPosition = {};
     for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
       const step = steps[stepIdx];
       const objectId = step.object || "";
-      const objectData = state.objectsIndex[objectId] || {};
-      const audioExt2 = audioObjects[objectId];
-      const cardType = detectCardType({
-        objectId,
-        cardType: step.cardType,
-        source_url: objectData.source_url || objectData.iiif_manifest || "",
-        file_path: audioExt2 ? `objects/${objectId}.${audioExt2}` : ""
-      });
+      const cardType = _detectStepCardType(objectId, step, audioObjects);
       if (!objectId) {
         const zIndex2 = _zPlan.textCardZ[stepIdx];
         const titleCard = document.createElement("div");
@@ -2464,25 +2455,63 @@
         element: card
       });
     }
-    if (steps.length > 0) {
-      const firstStep = steps[0];
-      const firstObjectId = firstStep.object || "";
-      if (firstObjectId && state.viewerPlates[0]) {
-        const plate = state.viewerPlates[0];
-        const zIndex = _zPlan.plateZ[0];
-        if (plate.classList.contains("video-plate")) {
-          _initVideoInPlate(plate, firstObjectId, 0, zIndex);
-        } else if (plate.classList.contains("audio-plate")) {
-          _initAudioInPlate(plate, firstObjectId, 0, zIndex);
-        } else {
-          const x = parseFloat(firstStep.x);
-          const y = parseFloat(firstStep.y);
-          const zoom = parseFloat(firstStep.zoom);
-          const page = firstStep.page ? parseInt(firstStep.page, 10) : void 0;
-          _initOsdInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
-        }
-      }
+  }
+  function _stepFraming(step) {
+    return {
+      x: parseFloat(step.x),
+      y: parseFloat(step.y),
+      zoom: parseFloat(step.zoom),
+      page: step.page ? parseInt(step.page, 10) : void 0
+    };
+  }
+  function _resolveCardConfig(config) {
+    return {
+      peekHeight: config?.peekHeight ?? 1,
+      messiness: config?.messiness ?? 20,
+      preloadSteps: state.config.preloadSteps || 5
+    };
+  }
+  function _preloadFirstScenePlate(steps) {
+    if (steps.length === 0) return;
+    const firstStep = steps[0];
+    const firstObjectId = firstStep.object || "";
+    const plate = state.viewerPlates[0];
+    if (!firstObjectId || !plate) return;
+    const zIndex = _zPlan.plateZ[0];
+    if (plate.classList.contains("video-plate")) {
+      _initVideoInPlate(plate, firstObjectId, 0, zIndex);
+    } else if (plate.classList.contains("audio-plate")) {
+      _initAudioInPlate(plate, firstObjectId, 0, zIndex);
+    } else {
+      const { x, y, zoom, page } = _stepFraming(firstStep);
+      _initOsdInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
     }
+  }
+  function initCardPool(storyData, config) {
+    const cardStack = document.querySelector(".card-stack");
+    if (!cardStack) return;
+    const steps = (storyData?.steps || []).filter((s) => !s._metadata);
+    _stepsData = steps;
+    state.stepsData = steps;
+    _config = _resolveCardConfig(config);
+    const viewportH = window.innerHeight;
+    const cardH = viewportH * 0.8;
+    _zPlan = computeZIndexPlan(steps);
+    _buildSceneMaps(steps);
+    state.titleCards = {};
+    state.activeTitleCardIndex = null;
+    const audioObjects = window.audioObjects || {};
+    _createViewerPlates(steps, cardStack, audioObjects);
+    _createTextCards(
+      steps,
+      cardStack,
+      audioObjects,
+      viewportH,
+      cardH,
+      _config.peekHeight,
+      _config.messiness
+    );
+    _preloadFirstScenePlate(steps);
     onViewportResize(({ viewport }) => {
       _recomputeCardGeometry(viewport.w, viewport.h);
     });
@@ -2519,6 +2548,127 @@
     </div>
   `;
   }
+  function _stepClip(step) {
+    return {
+      start: parseFloat(step.clip_start) || 0,
+      end: parseFloat(step.clip_end) || 0,
+      loop: _isTruthy(step.loop)
+    };
+  }
+  function _retargetPlateForStep(plate, objectId, step, stepIndex) {
+    if (plate && plate.classList.contains("video-plate")) {
+      const clip = _stepClip(step);
+      updateVideoClip(plate, clip.start, clip.end || void 0, clip.loop);
+    } else if (plate && plate.classList.contains("audio-plate")) {
+      const clip = _stepClip(step);
+      updateAudioClip(plate, clip.start, clip.end || void 0, clip.loop);
+    } else if (!state.scrollDriven) {
+      _animateViewerToStep(objectId, step, stepIndex);
+    }
+  }
+  function _deactivateTitleCard(titleCard, direction) {
+    titleCard.classList.remove("is-active");
+    if (direction === "backward") {
+      titleCard.style.transform = "translateY(100vh)";
+      titleCard.classList.remove("is-stacked");
+    } else {
+      titleCard.classList.add("is-stacked");
+    }
+  }
+  function _clearActiveTitleCard(direction) {
+    if (state.activeTitleCardIndex == null) return;
+    const prevTitle = state.titleCards[state.activeTitleCardIndex];
+    if (prevTitle) _deactivateTitleCard(prevTitle, direction);
+    state.activeTitleCardIndex = null;
+  }
+  function _activateForward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
+    if (needsNewViewer) {
+      _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
+      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
+      _deactivatePreviousTextCard(index2, direction);
+      _clearActiveTitleCard(direction);
+      _activateTextCard(card);
+      updateObjectCredits(objectId);
+    } else {
+      state.currentObjectRun.runPosition = registryEntry.runPosition;
+      _deactivatePreviousTextCard(index2, direction);
+      _activateTextCard(card);
+      const plate = _plateForScene(getSceneIndex(index2));
+      if (plate && !plate.classList.contains("is-active")) {
+        plate.style.transform = "translateY(0)";
+        plate.classList.add("is-active");
+      }
+      _retargetPlateForStep(plate, objectId, step, index2);
+    }
+  }
+  function _swapPlatesBackward(currentPlate, prevPlate, index2, prevObjectId) {
+    if (currentPlate) {
+      if (currentPlate.classList.contains("video-plate")) {
+        currentPlate.style.transition = "none";
+        currentPlate.style.transform = "translateY(100%)";
+        void currentPlate.offsetHeight;
+        currentPlate.style.transition = "";
+        deactivateVideoCard(currentPlate);
+      } else if (currentPlate.classList.contains("audio-plate")) {
+        currentPlate.style.transition = "none";
+        currentPlate.style.transform = "translateY(100%)";
+        void currentPlate.offsetHeight;
+        currentPlate.style.transition = "";
+        deactivateAudioCard(currentPlate);
+      } else {
+        deactivateIiifCard(
+          { element: currentPlate, objectId: prevObjectId },
+          "backward"
+        );
+      }
+      currentPlate.classList.remove("is-active");
+    }
+    if (prevPlate) {
+      prevPlate.style.zIndex = _zPlan.plateZ[index2];
+      prevPlate.style.transition = "none";
+      prevPlate.style.transform = "translateY(0)";
+      void prevPlate.offsetHeight;
+      prevPlate.style.transition = "";
+      prevPlate.classList.add("is-active");
+      if (prevPlate.classList.contains("video-plate")) {
+        activateVideoCard(prevPlate, getSceneIndex(index2));
+      } else if (prevPlate.classList.contains("audio-plate")) {
+        activateAudioCard(prevPlate, getSceneIndex(index2));
+      }
+    }
+  }
+  function _activateBackward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
+    if (needsNewViewer) {
+      const currentSceneIndex = getSceneIndex(index2 + 1);
+      const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
+      const prevPlate = state.viewerPlates[getSceneIndex(index2)];
+      _swapPlatesBackward(currentPlate, prevPlate, index2, prevObjectId);
+      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
+      _deactivatePreviousTextCard(index2, direction);
+      _clearActiveTitleCard(direction);
+      _activateTextCard(card);
+      updateObjectCredits(objectId);
+    } else {
+      state.currentObjectRun.runPosition = registryEntry.runPosition;
+      _deactivatePreviousTextCard(index2, direction);
+      _activateTextCard(card);
+      _retargetPlateForStep(_plateForScene(getSceneIndex(index2)), objectId, step, index2);
+    }
+  }
+  function _needsNewViewer(step, prevStep2, objectId, prevObjectId) {
+    const currentMode = isFullObjectMode(step);
+    const prevMode = prevStep2 ? isFullObjectMode(prevStep2) : null;
+    const isModeChange = prevMode !== null && currentMode !== prevMode;
+    const isObjectChange = objectId !== prevObjectId;
+    return isObjectChange || isModeChange;
+  }
+  function _refreshPlateAriaLabel(index2, objectId) {
+    const plate = state.viewerPlates[state.stepToScene[index2]];
+    if (!plate) return;
+    const stepAlt = (_stepsData[index2] || {}).alt_text || "";
+    const cardType = plate.dataset.cardType || "iiif";
+    plate.setAttribute("aria-label", _buildAriaLabel(objectId, stepAlt, cardType));
+  }
   function activateCard(index2, direction) {
     if (state.titleCards[index2]) {
       _activateTitleCardStep(index2, direction);
@@ -2531,133 +2681,44 @@
     const prevStep2 = index2 > 0 ? _stepsData[index2 - 1] : null;
     const objectId = registryEntry.objectId;
     const prevObjectId = state.currentObjectRun.objectId;
-    const currentMode = isFullObjectMode(step);
-    const prevMode = prevStep2 ? isFullObjectMode(prevStep2) : null;
-    const isModeChange = prevMode !== null && currentMode !== prevMode;
-    const isObjectChange = objectId !== prevObjectId;
-    const needsNewViewer = isObjectChange || isModeChange;
+    const needsNewViewer = _needsNewViewer(step, prevStep2, objectId, prevObjectId);
+    const args = [
+      index2,
+      direction,
+      card,
+      registryEntry,
+      step,
+      objectId,
+      prevObjectId,
+      needsNewViewer
+    ];
     if (direction === "forward") {
-      if (needsNewViewer) {
-        _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
-        state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
-        _deactivatePreviousTextCard(index2, direction);
-        if (state.activeTitleCardIndex != null) {
-          const prevTitle = state.titleCards[state.activeTitleCardIndex];
-          if (prevTitle) {
-            prevTitle.classList.remove("is-active");
-            prevTitle.classList.add("is-stacked");
-          }
-          state.activeTitleCardIndex = null;
-        }
-        _activateTextCard(card);
-        updateObjectCredits(objectId);
-      } else {
-        state.currentObjectRun.runPosition = registryEntry.runPosition;
-        _deactivatePreviousTextCard(index2, direction);
-        _activateTextCard(card);
-        const sceneIndex = getSceneIndex(index2);
-        const plate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
-        if (plate && !plate.classList.contains("is-active")) {
-          plate.style.transform = "translateY(0)";
-          plate.classList.add("is-active");
-        }
-        if (plate && plate.classList.contains("video-plate")) {
-          const clipStart = parseFloat(step.clip_start) || 0;
-          const clipEnd = parseFloat(step.clip_end) || 0;
-          const loop = _isTruthy(step.loop);
-          updateVideoClip(plate, clipStart, clipEnd || void 0, loop);
-        } else if (plate && plate.classList.contains("audio-plate")) {
-          const clipStart = parseFloat(step.clip_start) || 0;
-          const clipEnd = parseFloat(step.clip_end) || 0;
-          const loop = _isTruthy(step.loop);
-          updateAudioClip(plate, clipStart, clipEnd || void 0, loop);
-        } else if (!state.scrollDriven) {
-          _animateViewerToStep(objectId, step, index2);
-        }
+      _activateForward(...args);
+    } else {
+      _activateBackward(...args);
+    }
+    _refreshPlateAriaLabel(index2, objectId);
+    preloadAhead(index2, _config.preloadSteps, 2);
+  }
+  function _interpolatePlateHandoff(stepIndex, nextIndex, progress) {
+    const nextStep2 = _stepsData[nextIndex];
+    const currentStep = _stepsData[stepIndex];
+    if (!nextStep2 || !currentStep) return;
+    const nextObjectId = nextStep2.object || "";
+    const currentObjectId = currentStep.object || "";
+    if (nextObjectId === currentObjectId) return;
+    if (nextObjectId === "") {
+      const currentPlate = _plateForScene(getSceneIndex(stepIndex));
+      if (currentPlate) {
+        currentPlate.style.transform = `translateY(-${progress * 100}%)`;
       }
     } else {
-      if (needsNewViewer) {
-        const currentSceneIndex = getSceneIndex(index2 + 1);
-        const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
-        const prevPlate = state.viewerPlates[getSceneIndex(index2)];
-        {
-          if (currentPlate) {
-            if (currentPlate.classList.contains("video-plate")) {
-              currentPlate.style.transition = "none";
-              currentPlate.style.transform = "translateY(100%)";
-              void currentPlate.offsetHeight;
-              currentPlate.style.transition = "";
-              deactivateVideoCard(currentPlate);
-            } else if (currentPlate.classList.contains("audio-plate")) {
-              currentPlate.style.transition = "none";
-              currentPlate.style.transform = "translateY(100%)";
-              void currentPlate.offsetHeight;
-              currentPlate.style.transition = "";
-              deactivateAudioCard(currentPlate);
-            } else {
-              deactivateIiifCard(
-                { element: currentPlate, objectId: prevObjectId },
-                "backward"
-              );
-            }
-            currentPlate.classList.remove("is-active");
-          }
-          if (prevPlate) {
-            prevPlate.style.zIndex = _zPlan.plateZ[index2];
-            prevPlate.style.transition = "none";
-            prevPlate.style.transform = "translateY(0)";
-            void prevPlate.offsetHeight;
-            prevPlate.style.transition = "";
-            prevPlate.classList.add("is-active");
-            if (prevPlate.classList.contains("video-plate")) {
-              activateVideoCard(prevPlate, getSceneIndex(index2));
-            } else if (prevPlate.classList.contains("audio-plate")) {
-              activateAudioCard(prevPlate, getSceneIndex(index2));
-            }
-          }
-        }
-        state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
-        _deactivatePreviousTextCard(index2, direction);
-        if (state.activeTitleCardIndex != null) {
-          const prevTitle = state.titleCards[state.activeTitleCardIndex];
-          if (prevTitle) {
-            prevTitle.classList.remove("is-active");
-            prevTitle.style.transform = "translateY(100vh)";
-            prevTitle.classList.remove("is-stacked");
-          }
-          state.activeTitleCardIndex = null;
-        }
-        _activateTextCard(card);
-        updateObjectCredits(objectId);
-      } else {
-        state.currentObjectRun.runPosition = registryEntry.runPosition;
-        _deactivatePreviousTextCard(index2, direction);
-        _activateTextCard(card);
-        const sceneIndex = getSceneIndex(index2);
-        const plate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
-        if (plate && plate.classList.contains("video-plate")) {
-          const clipStart = parseFloat(step.clip_start) || 0;
-          const clipEnd = parseFloat(step.clip_end) || 0;
-          const loop = _isTruthy(step.loop);
-          updateVideoClip(plate, clipStart, clipEnd || void 0, loop);
-        } else if (plate && plate.classList.contains("audio-plate")) {
-          const clipStart = parseFloat(step.clip_start) || 0;
-          const clipEnd = parseFloat(step.clip_end) || 0;
-          const loop = _isTruthy(step.loop);
-          updateAudioClip(plate, clipStart, clipEnd || void 0, loop);
-        } else if (!state.scrollDriven) {
-          _animateViewerToStep(objectId, step, index2);
-        }
+      const nextPlate = _plateForScene(getSceneIndex(nextIndex));
+      if (nextPlate) {
+        const plateTranslateY = (1 - progress) * 100;
+        nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
       }
     }
-    const _stepData = _stepsData[index2] || {};
-    const _stepAlt = _stepData.alt_text || "";
-    const _plateForStep = state.viewerPlates[state.stepToScene[index2]];
-    if (_plateForStep) {
-      const _cType = _plateForStep.dataset.cardType || "iiif";
-      _plateForStep.setAttribute("aria-label", _buildAriaLabel(objectId, _stepAlt, _cType));
-    }
-    preloadAhead(index2, _config.preloadSteps, 2);
   }
   function setCardProgress(stepIndex, progress) {
     if (progress < 1e-3) return;
@@ -2666,45 +2727,46 @@
     if (!nextCard) return;
     const cardStack = document.querySelector(".card-stack");
     if (!cardStack || !cardStack.classList.contains("is-scrubbing")) return;
-    const rot = parseFloat(nextCard.dataset.messinessRot || 0);
-    const offX = parseFloat(nextCard.dataset.messinessOffX || 0);
-    const offY = parseFloat(nextCard.dataset.messinessOffY || 0);
+    const { rot, offX, offY } = _readCardMessiness(nextCard);
     const translateY = (1 - progress) * 100;
     nextCard.style.transform = `translateY(${translateY}vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-    const nextStep2 = _stepsData[nextIndex];
-    const currentStep = _stepsData[stepIndex];
-    if (!nextStep2 || !currentStep) return;
-    const nextObjectId = nextStep2.object || "";
-    const currentObjectId = currentStep.object || "";
-    if (nextObjectId !== currentObjectId) {
-      if (nextObjectId === "") {
-        const currentSceneIndex = getSceneIndex(stepIndex);
-        const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
-        if (currentPlate) {
-          currentPlate.style.transform = `translateY(-${progress * 100}%)`;
-        }
-      } else {
-        const nextSceneIndex = getSceneIndex(nextIndex);
-        const nextPlate = nextSceneIndex >= 0 ? state.viewerPlates[nextSceneIndex] : null;
-        if (nextPlate) {
-          const plateTranslateY = (1 - progress) * 100;
-          nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
-        }
-      }
-    }
+    _interpolatePlateHandoff(stepIndex, nextIndex, progress);
   }
-  function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direction) {
-    const sceneIndex = getSceneIndex(stepIndex);
-    const prevSceneIndex = stepIndex > 0 ? getSceneIndex(stepIndex - 1) : -1;
-    const prevPlate = prevSceneIndex >= 0 ? state.viewerPlates[prevSceneIndex] : null;
-    const newPlate = sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
-    if (!newPlate) return;
-    newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
-    if (prevPlate && prevPlate === newPlate) {
-      newPlate.style.transform = "translateY(0)";
-      newPlate.classList.add("is-active");
+  function _applyFramingToViewer(viewerCard, x, y, zoom, snap2) {
+    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
+    if (!viewerCard.isReady) {
+      viewerCard.pendingZoom = { x, y, zoom, snap: snap2 };
       return;
     }
+    if (snap2) {
+      snapIiifToPosition(viewerCard, x, y, zoom);
+    } else {
+      animateIiifToPosition(viewerCard, x, y, zoom);
+    }
+  }
+  function _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step) {
+    const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
+    const { x, y, zoom, page } = _stepFraming(step);
+    if (newPlate.classList.contains("audio-plate")) {
+      if (!newPlate.querySelector(".waveform-container")) {
+        const zIndex = _zPlan.plateZ[stepIndex];
+        _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
+      }
+      activateAudioCard(newPlate, sceneIndex);
+    } else if (newPlate.classList.contains("video-plate")) {
+      if (!newPlate.querySelector(".video-iframe, iframe")) {
+        const zIndex = _zPlan.plateZ[stepIndex];
+        _initVideoInPlate(newPlate, objectId, sceneIndex, zIndex);
+      }
+      activateVideoCard(newPlate, sceneIndex);
+    } else if (!viewerCard) {
+      const zIndex = _zPlan.plateZ[stepIndex];
+      _initOsdInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
+    } else {
+      _applyFramingToViewer(viewerCard, x, y, zoom, true);
+    }
+  }
+  function _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction) {
     if (direction === "forward") {
       if (sceneIndex === 0) {
         const currentTransform = newPlate.style.transform;
@@ -2723,40 +2785,62 @@
         prevPlate.style.transform = "translateY(100%)";
       }
     }
-    newPlate.classList.add("is-active");
-    if (prevPlate) {
-      if (prevPlate.classList.contains("video-plate")) {
-        deactivateVideoCard(prevPlate);
-      } else if (prevPlate.classList.contains("audio-plate")) {
-        deactivateAudioCard(prevPlate);
-      } else {
-        prevPlate.classList.remove("is-active");
-      }
+  }
+  function _deactivateDepartingPlate(plate) {
+    if (plate.classList.contains("video-plate")) {
+      deactivateVideoCard(plate);
+    } else if (plate.classList.contains("audio-plate")) {
+      deactivateAudioCard(plate);
+    } else {
+      plate.classList.remove("is-active");
     }
-    const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
-    const x = parseFloat(step.x);
-    const y = parseFloat(step.y);
-    const zoom = parseFloat(step.zoom);
-    const page = step.page ? parseInt(step.page, 10) : void 0;
-    if (newPlate.classList.contains("audio-plate")) {
-      if (!newPlate.querySelector(".waveform-container")) {
-        const zIndex = _zPlan.plateZ[stepIndex];
-        _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
+  }
+  function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direction) {
+    const sceneIndex = getSceneIndex(stepIndex);
+    const prevSceneIndex = stepIndex > 0 ? getSceneIndex(stepIndex - 1) : -1;
+    const prevPlate = _plateForScene(prevSceneIndex);
+    const newPlate = _plateForScene(sceneIndex);
+    if (!newPlate) return;
+    newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
+    if (prevPlate && prevPlate === newPlate) {
+      newPlate.style.transform = "translateY(0)";
+      newPlate.classList.add("is-active");
+      return;
+    }
+    _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
+    newPlate.classList.add("is-active");
+    if (prevPlate) _deactivateDepartingPlate(prevPlate);
+    _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step);
+  }
+  function _viewerInstanceDiv(plateEl, viewerId) {
+    const existing = plateEl.querySelector(".viewer-instance");
+    if (existing) {
+      existing.id = viewerId;
+      return existing;
+    }
+    const viewerDiv = document.createElement("div");
+    viewerDiv.className = "viewer-instance";
+    viewerDiv.id = viewerId;
+    plateEl.appendChild(viewerDiv);
+    return viewerDiv;
+  }
+  function _initialPendingZoom(x, y, zoom) {
+    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
+    return { x, y, zoom, snap: true };
+  }
+  function _evictBeyondPoolCap(currentScene) {
+    while (state.viewerCards.length > state.config.maxViewerCards) {
+      let farthestIdx = 0;
+      let maxDist = -1;
+      for (let i = 0; i < state.viewerCards.length; i++) {
+        const dist = Math.abs(state.viewerCards[i].sceneIndex - currentScene);
+        if (dist > maxDist) {
+          maxDist = dist;
+          farthestIdx = i;
+        }
       }
-      activateAudioCard(newPlate, sceneIndex);
-    } else if (newPlate.classList.contains("video-plate")) {
-      if (!newPlate.querySelector(".video-iframe, iframe")) {
-        const zIndex = _zPlan.plateZ[stepIndex];
-        _initVideoInPlate(newPlate, objectId, sceneIndex, zIndex);
-      }
-      activateVideoCard(newPlate, sceneIndex);
-    } else if (!viewerCard) {
-      const zIndex = _zPlan.plateZ[stepIndex];
-      _initOsdInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
-    } else if (viewerCard.isReady && !isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
-      snapIiifToPosition(viewerCard, x, y, zoom);
-    } else if (!isNaN(x) && !isNaN(y) && !isNaN(zoom)) {
-      viewerCard.pendingZoom = { x, y, zoom, snap: true };
+      const evicted = state.viewerCards.splice(farthestIdx, 1)[0];
+      _evictOsdInstance(evicted);
     }
   }
   function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
@@ -2767,15 +2851,7 @@
     }
     plateEl.dataset.loading = "true";
     const viewerId = `iiif-viewer-${state.viewerCardCounter}`;
-    let viewerDiv = plateEl.querySelector(".viewer-instance");
-    if (!viewerDiv) {
-      viewerDiv = document.createElement("div");
-      viewerDiv.className = "viewer-instance";
-      viewerDiv.id = viewerId;
-      plateEl.appendChild(viewerDiv);
-    } else {
-      viewerDiv.id = viewerId;
-    }
+    _viewerInstanceDiv(plateEl, viewerId);
     const startPage = page && page > 1 ? page - 1 : 0;
     const osdWrapper = new IiifViewer({
       container: "#" + viewerId,
@@ -2792,7 +2868,7 @@
       osdWrapper,
       osdViewer: null,
       isReady: false,
-      pendingZoom: !isNaN(x) && !isNaN(y) && !isNaN(zoom) ? { x, y, zoom, snap: true } : null,
+      pendingZoom: _initialPendingZoom(x, y, zoom),
       zIndex
     };
     osdWrapper.ready.then(() => {
@@ -2836,20 +2912,7 @@
     });
     state.viewerCards.push(viewerCard);
     state.viewerCardCounter++;
-    while (state.viewerCards.length > state.config.maxViewerCards) {
-      const currentScene = sceneIndex;
-      let farthestIdx = 0;
-      let maxDist = -1;
-      for (let i = 0; i < state.viewerCards.length; i++) {
-        const dist = Math.abs(state.viewerCards[i].sceneIndex - currentScene);
-        if (dist > maxDist) {
-          maxDist = dist;
-          farthestIdx = i;
-        }
-      }
-      const evicted = state.viewerCards.splice(farthestIdx, 1)[0];
-      _evictOsdInstance(evicted);
-    }
+    _evictBeyondPoolCap(sceneIndex);
   }
   function _evictOsdInstance(viewerCard) {
     if (viewerCard.osdWrapper && typeof viewerCard.osdWrapper.destroy === "function") {
@@ -2928,11 +2991,7 @@
     const prevCard = state.cardRegistry.find((c) => c.element.classList.contains("is-active"));
     if (!prevCard || prevCard.stepIndex === newIndex) return;
     const el = prevCard.element;
-    const messiness = {
-      rot: parseFloat(el.dataset.messinessRot || 0),
-      offX: parseFloat(el.dataset.messinessOffX || 0),
-      offY: parseFloat(el.dataset.messinessOffY || 0)
-    };
+    const messiness = _readCardMessiness(el);
     el.classList.remove("is-active");
     if (direction === "backward") {
       el.style.transform = buildTransform(messiness, "translateY(100vh)");
@@ -2942,11 +3001,7 @@
     }
   }
   function _activateTextCard(cardEl) {
-    const messiness = {
-      rot: parseFloat(cardEl.dataset.messinessRot || 0),
-      offX: parseFloat(cardEl.dataset.messinessOffX || 0),
-      offY: parseFloat(cardEl.dataset.messinessOffY || 0)
-    };
+    const messiness = _readCardMessiness(cardEl);
     cardEl.classList.remove("is-stacked");
     cardEl.classList.add("is-active");
     cardEl.style.transform = buildTransform(messiness, "translateY(0)");
@@ -2968,40 +3023,30 @@
     cardEl._settleHandler = onSettled;
     cardEl.addEventListener("transitionend", onSettled);
   }
+  function _stackPreviousTitleCard(index2, direction) {
+    if (state.activeTitleCardIndex == null || state.activeTitleCardIndex === index2) return;
+    const prevTitle = state.titleCards[state.activeTitleCardIndex];
+    if (prevTitle) _deactivateTitleCard(prevTitle, direction);
+  }
+  function _hideDepartingPlateForTitle(index2, direction) {
+    const departingStepIndex = direction === "backward" ? index2 + 1 : index2 - 1;
+    const departingSceneIndex = departingStepIndex >= 0 ? getSceneIndex(departingStepIndex) : -1;
+    const departingPlate = _plateForScene(departingSceneIndex);
+    if (!departingPlate) return;
+    if (direction === "backward") {
+      departingPlate.style.transition = "none";
+      departingPlate.style.transform = "translateY(100%)";
+      void departingPlate.offsetHeight;
+      departingPlate.style.transition = "";
+    }
+    _deactivateDepartingPlate(departingPlate);
+  }
   function _activateTitleCardStep(index2, direction) {
     const titleCard = state.titleCards[index2];
     if (!titleCard) return;
-    if (state.activeTitleCardIndex != null && state.activeTitleCardIndex !== index2) {
-      const prevTitle = state.titleCards[state.activeTitleCardIndex];
-      if (prevTitle) {
-        prevTitle.classList.remove("is-active");
-        if (direction === "backward") {
-          prevTitle.style.transform = "translateY(100vh)";
-          prevTitle.classList.remove("is-stacked");
-        } else {
-          prevTitle.classList.add("is-stacked");
-        }
-      }
-    }
+    _stackPreviousTitleCard(index2, direction);
     _deactivatePreviousTextCard(index2, direction);
-    const departingStepIndex = direction === "backward" ? index2 + 1 : index2 - 1;
-    const departingSceneIndex = departingStepIndex >= 0 ? getSceneIndex(departingStepIndex) : -1;
-    const departingPlate = departingSceneIndex >= 0 ? state.viewerPlates[departingSceneIndex] : null;
-    if (departingPlate) {
-      if (direction === "backward") {
-        departingPlate.style.transition = "none";
-        departingPlate.style.transform = "translateY(100%)";
-        void departingPlate.offsetHeight;
-        departingPlate.style.transition = "";
-      }
-      if (departingPlate.classList.contains("video-plate")) {
-        deactivateVideoCard(departingPlate);
-      } else if (departingPlate.classList.contains("audio-plate")) {
-        deactivateAudioCard(departingPlate);
-      } else {
-        departingPlate.classList.remove("is-active");
-      }
-    }
+    _hideDepartingPlateForTitle(index2, direction);
     titleCard.classList.remove("is-stacked");
     titleCard.classList.add("is-active");
     titleCard.style.transform = "translateY(0)";
@@ -3012,17 +3057,34 @@
     preloadAhead(index2, _config.preloadSteps, 2);
   }
   function _animateViewerToStep(objectId, step, stepIndex) {
-    const x = parseFloat(step.x);
-    const y = parseFloat(step.y);
-    const zoom = parseFloat(step.zoom);
+    const { x, y, zoom } = _stepFraming(step);
     if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
     const sceneIndex = getSceneIndex(stepIndex);
     const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
     if (!viewerCard) return;
-    if (viewerCard.isReady) {
-      animateIiifToPosition(viewerCard, x, y, zoom);
+    _applyFramingToViewer(viewerCard, x, y, zoom, false);
+  }
+  function _warmScene(targetScene) {
+    const plate = state.viewerPlates[targetScene];
+    if (!plate) return;
+    const firstStepIdx = state.sceneFirstStep[targetScene];
+    const step = _stepsData[firstStepIdx];
+    const objectId = step.object || "";
+    if (!objectId) return;
+    const zIndex = _zPlan.plateZ[firstStepIdx];
+    if (plate.classList.contains("audio-plate")) {
+      if (!plate.querySelector(".waveform-container")) {
+        _initAudioInPlate(plate, objectId, targetScene, zIndex);
+      }
+    } else if (plate.classList.contains("video-plate")) {
+      if (!plate.querySelector(".video-iframe, iframe")) {
+        _initVideoInPlate(plate, objectId, targetScene, zIndex);
+      }
     } else {
-      viewerCard.pendingZoom = { x, y, zoom, snap: false };
+      if (state.viewerCards.find((vc) => vc.sceneIndex === targetScene)) return;
+      const { x, y, zoom, page } = _stepFraming(step);
+      _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
+      _prefetchTilesForScene(targetScene);
     }
   }
   function preloadAhead(currentIndex, ahead, behind) {
@@ -3031,30 +3093,7 @@
     for (let offset = 1; offset <= ahead; offset++) {
       const targetScene = currentScene + offset;
       if (targetScene >= state.totalScenes) break;
-      const plate = state.viewerPlates[targetScene];
-      if (!plate) continue;
-      const firstStepIdx = state.sceneFirstStep[targetScene];
-      const step = _stepsData[firstStepIdx];
-      const objectId = step.object || "";
-      if (!objectId) continue;
-      const zIndex = _zPlan.plateZ[firstStepIdx];
-      if (plate.classList.contains("audio-plate")) {
-        if (!plate.querySelector(".waveform-container")) {
-          _initAudioInPlate(plate, objectId, targetScene, zIndex);
-        }
-      } else if (plate.classList.contains("video-plate")) {
-        if (!plate.querySelector(".video-iframe, iframe")) {
-          _initVideoInPlate(plate, objectId, targetScene, zIndex);
-        }
-      } else {
-        if (state.viewerCards.find((vc) => vc.sceneIndex === targetScene)) continue;
-        const x = parseFloat(step.x);
-        const y = parseFloat(step.y);
-        const zoom = parseFloat(step.zoom);
-        const page = step.page ? parseInt(step.page, 10) : void 0;
-        _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
-        _prefetchTilesForScene(targetScene);
-      }
+      _warmScene(targetScene);
     }
     for (let offset = ahead + 1; offset <= ahead + 2; offset++) {
       const tileScene = currentScene + offset;
@@ -3064,30 +3103,7 @@
     for (let offset = 1; offset <= behind; offset++) {
       const targetScene = currentScene - offset;
       if (targetScene < 0) break;
-      const plate = state.viewerPlates[targetScene];
-      if (!plate) continue;
-      const firstStepIdx = state.sceneFirstStep[targetScene];
-      const step = _stepsData[firstStepIdx];
-      const objectId = step.object || "";
-      if (!objectId) continue;
-      const zIndex = _zPlan.plateZ[firstStepIdx];
-      if (plate.classList.contains("audio-plate")) {
-        if (!plate.querySelector(".waveform-container")) {
-          _initAudioInPlate(plate, objectId, targetScene, zIndex);
-        }
-      } else if (plate.classList.contains("video-plate")) {
-        if (!plate.querySelector(".video-iframe, iframe")) {
-          _initVideoInPlate(plate, objectId, targetScene, zIndex);
-        }
-      } else {
-        if (state.viewerCards.find((vc) => vc.sceneIndex === targetScene)) continue;
-        const x = parseFloat(step.x);
-        const y = parseFloat(step.y);
-        const zoom = parseFloat(step.zoom);
-        const page = step.page ? parseInt(step.page, 10) : void 0;
-        _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
-        _prefetchTilesForScene(targetScene);
-      }
+      _warmScene(targetScene);
     }
   }
   function _prefetchTilesForScene(sceneIndex) {
@@ -3119,11 +3135,15 @@
     }).catch(() => {
     });
   }
-  function _computeTileUrls(baseUrl, info, x, y, zoom) {
-    const imageW = info.width;
-    const imageH = info.height;
-    const tileSize = info.tiles?.[0]?.width || 512;
-    const scaleFactors = info.tiles?.[0]?.scaleFactors || [1];
+  function _tileSourceShape(info) {
+    return {
+      imageW: info.width,
+      imageH: info.height,
+      tileSize: info.tiles?.[0]?.width || 512,
+      scaleFactors: info.tiles?.[0]?.scaleFactors || [1]
+    };
+  }
+  function _prefetchRegion(imageW, imageH, x, y, zoom) {
     const vpW = window.innerWidth;
     const vpH = window.innerHeight;
     const r = state.cardOverlayRect;
@@ -3137,38 +3157,43 @@
       halfW = target.diameterImg / 2;
       halfH = target.diameterImg / 2;
     } else {
-      const vpH2 = window.innerHeight;
       centreX = x * imageW;
       centreY = y * imageH;
       const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
       halfW = vpW * pixelsPerViewportPx / 2;
-      halfH = vpH2 * pixelsPerViewportPx / 2;
+      halfH = vpH * pixelsPerViewportPx / 2;
     }
-    const left = Math.max(0, centreX - halfW);
-    const top = Math.max(0, centreY - halfH);
-    const right = Math.min(imageW, centreX + halfW);
-    const bottom = Math.min(imageH, centreY + halfH);
+    return {
+      left: Math.max(0, centreX - halfW),
+      top: Math.max(0, centreY - halfH),
+      right: Math.min(imageW, centreX + halfW),
+      bottom: Math.min(imageH, centreY + halfH)
+    };
+  }
+  function _prefetchScaleFactor(scaleFactors, tileSize, region) {
     let scaleFactor = scaleFactors[0] || 1;
     for (const sf of scaleFactors) {
-      const effectiveTile2 = tileSize * sf;
-      const tilesX = Math.ceil((right - left) / effectiveTile2);
-      const tilesY = Math.ceil((bottom - top) / effectiveTile2);
+      const effectiveTile = tileSize * sf;
+      const tilesX = Math.ceil((region.right - region.left) / effectiveTile);
+      const tilesY = Math.ceil((region.bottom - region.top) / effectiveTile);
       if (tilesX * tilesY <= 9) {
         scaleFactor = sf;
         break;
       }
     }
+    return scaleFactor;
+  }
+  function _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFactor) {
     const effectiveTile = tileSize * scaleFactor;
     const urls = [];
-    for (let tx = Math.floor(left / effectiveTile); tx * effectiveTile < right; tx++) {
-      for (let ty = Math.floor(top / effectiveTile); ty * effectiveTile < bottom; ty++) {
+    for (let tx = Math.floor(region.left / effectiveTile); tx * effectiveTile < region.right; tx++) {
+      for (let ty = Math.floor(region.top / effectiveTile); ty * effectiveTile < region.bottom; ty++) {
         const rx = tx * effectiveTile;
         const ry = ty * effectiveTile;
         const rw = Math.min(effectiveTile, imageW - rx);
         const rh = Math.min(effectiveTile, imageH - ry);
         if (rw <= 0 || rh <= 0) continue;
         const outW = Math.ceil(rw / scaleFactor);
-        const outH = Math.ceil(rh / scaleFactor);
         const url = `${baseUrl}/${rx},${ry},${rw},${rh}/${outW},/0/default.jpg`;
         urls.push(url);
         if (urls.length >= 9) return urls;
@@ -3176,9 +3201,15 @@
     }
     return urls;
   }
+  function _computeTileUrls(baseUrl, info, x, y, zoom) {
+    const { imageW, imageH, tileSize, scaleFactors } = _tileSourceShape(info);
+    const region = _prefetchRegion(imageW, imageH, x, y, zoom);
+    const scaleFactor = _prefetchScaleFactor(scaleFactors, tileSize, region);
+    return _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFactor);
+  }
 
   // node_modules/lenis/dist/lenis.mjs
-  var version = "1.3.23";
+  var version = "1.3.26";
   function clamp(min, input, max) {
     return Math.max(min, Math.min(input, max));
   }
@@ -3483,10 +3514,16 @@
     _preventNextNativeScrollEvent = false;
     _resetVelocityTimeout = null;
     _rafId = null;
+    _isDraggingSelection = false;
+    reducedMotionMediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     /**
     * Whether or not the user is touching the screen
     */
     isTouching;
+    /**
+    * Whether or not the device is running iOS
+    */
+    isIos;
     /**
     * The time in ms since the lenis instance was created
     */
@@ -3530,12 +3567,13 @@
     emitter = new Emitter();
     dimensions;
     virtualScroll;
-    constructor({ wrapper = window, content = document.documentElement, eventsTarget = wrapper, smoothWheel = true, syncTouch = false, syncTouchLerp = 0.075, touchInertiaExponent = 1.7, duration, easing, lerp: lerp2 = 0.1, infinite = false, orientation = "vertical", gestureOrientation = orientation === "horizontal" ? "both" : "vertical", touchMultiplier = 1, wheelMultiplier = 1, autoResize = true, prevent, virtualScroll, overscroll = true, autoRaf = false, anchors = false, autoToggle = false, allowNestedScroll = false, __experimental__naiveDimensions = false, naiveDimensions = __experimental__naiveDimensions, stopInertiaOnNavigate = false } = {}) {
+    constructor({ wrapper = window, content = document.documentElement, eventsTarget = wrapper, smoothWheel = true, syncTouch = false, syncTouchLerp = 0.075, touchInertiaExponent = 1.7, duration, easing, lerp: lerp2 = 0.1, infinite = false, orientation = "vertical", gestureOrientation = orientation === "horizontal" ? "both" : "vertical", touchMultiplier = 1, wheelMultiplier = 1, autoResize = true, prevent, virtualScroll, overscroll = true, autoRaf = false, anchors = false, autoToggle = false, allowNestedScroll = false, __experimental__naiveDimensions = false, naiveDimensions = __experimental__naiveDimensions, stopInertiaOnNavigate = false, respectReducedMotion = true } = {}) {
       window.lenisVersion = version;
       if (!window.lenis) window.lenis = {};
       window.lenis.version = version;
       if (orientation === "horizontal") window.lenis.horizontal = true;
       if (syncTouch === true) window.lenis.touch = true;
+      this.isIos = /(iPad|iPhone|iPod)/g.test(navigator.userAgent);
       if (!wrapper || wrapper === document.documentElement) wrapper = window;
       if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
       else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
@@ -3564,7 +3602,8 @@
         autoToggle,
         allowNestedScroll,
         naiveDimensions,
-        stopInertiaOnNavigate
+        stopInertiaOnNavigate,
+        respectReducedMotion
       };
       this.dimensions = new Dimensions(wrapper, content, { autoResize });
       this.updateClassName();
@@ -3643,7 +3682,7 @@
         const anchorElementUrl = linkElementsUrls.find((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname === targetUrl.pathname && targetUrl.hash);
         if (anchorElementUrl) {
           const options = typeof this.options.anchors === "object" && this.options.anchors ? this.options.anchors : void 0;
-          const target = `#${anchorElementUrl.hash.split("#")[1]}`;
+          const target = decodeURIComponent(anchorElementUrl.hash);
           this.scrollTo(target, options);
           return;
         }
@@ -3658,6 +3697,20 @@
     onPointerDown = (event) => {
       if (event.button === 1) this.reset();
     };
+    isTouchOnSelectionHandle(event) {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+      const touch = event.targetTouches[0] ?? event.changedTouches[0];
+      if (!touch) return false;
+      const rects = selection.getRangeAt(0).getClientRects();
+      if (rects.length === 0) return false;
+      const first = rects[0];
+      const last = rects[rects.length - 1];
+      const HANDLE_RADIUS = 40;
+      const nearStart = Math.hypot(touch.clientX - first.left, touch.clientY - first.top) <= HANDLE_RADIUS;
+      const nearEnd = Math.hypot(touch.clientX - last.right, touch.clientY - last.bottom) <= HANDLE_RADIUS;
+      return nearStart || nearEnd;
+    }
     onVirtualScroll = (data) => {
       if (typeof this.options.virtualScroll === "function" && this.options.virtualScroll(data) === false) return;
       const { deltaX, deltaY, event } = data;
@@ -3670,6 +3723,13 @@
       if (event.lenisStopPropagation) return;
       const isTouch = event.type.includes("touch");
       const isWheel = event.type.includes("wheel");
+      if (isTouch && this.isIos) {
+        if (event.type === "touchstart") this._isDraggingSelection = this.isTouchOnSelectionHandle(event);
+        if (this._isDraggingSelection) {
+          if (event.type === "touchend") this._isDraggingSelection = false;
+          return;
+        }
+      }
       this.isTouching = event.type === "touchstart" || event.type === "touchmove";
       const isClickOrTap = deltaX === 0 && deltaY === 0;
       if (this.options.syncTouch && isTouch && event.type === "touchstart" && isClickOrTap && !this.isStopped && !this.isLocked) {
@@ -3822,6 +3882,12 @@
     * })
     */
     scrollTo(_target, { offset = 0, immediate = false, lock = false, programmatic = true, lerp: lerp2 = programmatic ? this.options.lerp : void 0, duration = programmatic ? this.options.duration : void 0, easing = programmatic ? this.options.easing : void 0, onStart, onComplete, force = false, userData } = {}) {
+      if (this.prefersReducedMotion) if (programmatic) immediate = true;
+      else {
+        lerp2 = 1;
+        duration = void 0;
+        easing = void 0;
+      }
       if ((this.isStopped || this.isLocked) && !force) return;
       let target = _target;
       let adjustedOffset = offset;
@@ -3839,7 +3905,7 @@
       else {
         let node = null;
         if (typeof target === "string") {
-          node = document.querySelector(target);
+          node = target.startsWith("#") ? document.getElementById(target.slice(1)) : document.querySelector(target);
           if (!node) if (target === "#top") target = 0;
           else console.warn("Lenis: Target not found", target);
         } else if (target instanceof HTMLElement && target?.nodeType) node = target;
@@ -4092,6 +4158,12 @@
     */
     get isSmooth() {
       return this.isScrolling === "smooth";
+    }
+    /**
+    * Whether the user prefers reduced motion and lenis is honoring it (see `respectReducedMotion` option)
+    */
+    get prefersReducedMotion() {
+      return this.options.respectReducedMotion && this.reducedMotionMediaQuery.matches;
     }
     /**
     * The class name applied to the wrapper element
@@ -5024,41 +5096,51 @@
     if (newIndex < -1 || newIndex >= state.steps.length) return;
     state.currentIndex = newIndex;
     if (newIndex === -1) {
-      const intro = document.querySelector(".story-intro");
-      if (intro) {
-        intro.style.transition = "transform 0.5s ease-out";
-        intro.style.transform = "translateY(0)";
-      }
-      const firstCard = state.textCards?.[0];
-      if (firstCard) {
-        firstCard.classList.remove("is-active", "is-stacked");
-        const rot = parseFloat(firstCard.dataset.messinessRot || 0);
-        const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-        const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-        firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-      }
-      const firstObject = window.storyData?.firstObject;
-      if (firstObject && state.viewerPlates?.[firstObject]) {
-        const plate = state.viewerPlates[firstObject];
-        plate.style.transform = "translateY(100%)";
-        plate.classList.remove("is-active");
-      }
-      state.currentObjectRun = { objectId: null, runPosition: 0 };
-      updateViewerInfo(-1);
-      const creditBadge = document.getElementById("object-credits-badge");
-      if (creditBadge) creditBadge.classList.add("d-none");
-      if (state.onStepChange) state.onStepChange(-1);
+      _restoreIntro();
       return;
     }
     activateCard(newIndex, direction);
     updateViewerInfo(newIndex);
     if (state.onStepChange) state.onStepChange(newIndex);
   }
+  function _restoreIntro() {
+    _showIntroCard();
+    _sendFirstTextCardOffScreen();
+    _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
+    state.currentObjectRun = { objectId: null, runPosition: 0 };
+    _hideStepChrome();
+    if (state.onStepChange) state.onStepChange(-1);
+  }
   function nextStep() {
     goToStep(state.currentIndex + 1, "forward");
   }
   function prevStep() {
     goToStep(state.currentIndex - 1, "backward");
+  }
+  function _showIntroCard() {
+    const intro = document.querySelector(".story-intro");
+    if (!intro) return;
+    intro.style.transition = "transform 0.5s ease-out";
+    intro.style.transform = "translateY(0)";
+  }
+  function _sendFirstTextCardOffScreen() {
+    const firstCard = state.textCards?.[0];
+    if (!firstCard) return;
+    firstCard.classList.remove("is-active", "is-stacked");
+    const rot = parseFloat(firstCard.dataset.messinessRot || 0);
+    const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
+    const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
+    firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+  }
+  function _sendPlateOffScreen(plate) {
+    if (!plate) return;
+    plate.style.transform = "translateY(100%)";
+    plate.classList.remove("is-active");
+  }
+  function _hideStepChrome() {
+    updateViewerInfo(-1);
+    const creditBadge = document.getElementById("object-credits-badge");
+    if (creditBadge) creditBadge.classList.add("d-none");
   }
   function createNavigationButtons() {
     if (document.querySelector(".mobile-nav")) {
@@ -5125,28 +5207,11 @@
       state.mobileNavigationCooldown = false;
     }, MOBILE_NAV_COOLDOWN);
     state.mobileInIntro = true;
-    const intro = document.querySelector(".story-intro");
-    if (intro) {
-      intro.style.transition = "transform 0.5s ease-out";
-      intro.style.transform = "translateY(0)";
-    }
-    const firstCard = state.textCards?.[0];
-    if (firstCard) {
-      firstCard.classList.remove("is-active", "is-stacked");
-      const rot = parseFloat(firstCard.dataset.messinessRot || 0);
-      const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-      const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-      firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-    }
-    const firstPlate = state.viewerPlates?.[0];
-    if (firstPlate) {
-      firstPlate.style.transform = "translateY(100%)";
-      firstPlate.classList.remove("is-active");
-    }
+    _showIntroCard();
+    _sendFirstTextCardOffScreen();
+    _sendPlateOffScreen(state.viewerPlates?.[0]);
     state.currentObjectRun = { objectId: null, runPosition: 0 };
-    updateViewerInfo(-1);
-    const creditBadge = document.getElementById("object-credits-badge");
-    if (creditBadge) creditBadge.classList.add("d-none");
+    _hideStepChrome();
     updateMobileButtonStates();
   }
   function _dismissMobileIntro() {
@@ -5201,85 +5266,73 @@
     state.mobileNavButtons.prev.disabled = !!state.mobileInIntro;
     state.mobileNavButtons.next.disabled = state.currentMobileStep === state.steps.length - 1;
   }
+  var KEY_ACTIONS = /* @__PURE__ */ new Map([
+    ["ArrowDown", (e) => _stepKey(e, "forward")],
+    ["PageDown", (e) => _stepKey(e, "forward")],
+    ["ArrowUp", (e) => _stepKey(e, "backward")],
+    ["PageUp", (e) => _stepKey(e, "backward")],
+    ["ArrowRight", (e) => {
+      e.preventDefault();
+      _openNextLayer();
+    }],
+    ["ArrowLeft", (e) => {
+      e.preventDefault();
+      _closeTopmostPanel(e);
+    }],
+    ["Escape", (e) => _closeTopmostPanel(e)],
+    [" ", (e) => _spaceKey(e)]
+  ]);
   function handleKeyboard(e) {
     if (e.repeat && !state.isPanelOpen) return;
-    switch (e.key) {
-      case "ArrowDown":
-      case "PageDown":
-        if (state.isPanelOpen) {
-          scrollOpenPanel(40);
-          break;
-        }
-        e.preventDefault();
-        if (!state.scrollLockActive) {
-          if (state.lenis) {
-            keyboardNav("forward");
-          } else {
-            nextStep();
-          }
-        }
-        break;
-      case "ArrowUp":
-      case "PageUp":
-        if (state.isPanelOpen) {
-          scrollOpenPanel(-40);
-          break;
-        }
-        e.preventDefault();
-        if (!state.scrollLockActive) {
-          if (state.lenis) {
-            keyboardNav("backward");
-          } else {
-            prevStep();
-          }
-        }
-        break;
-      case "ArrowRight":
-        e.preventDefault();
-        if (!state.isPanelOpen) {
-          const stepForL1 = getCurrentStepData();
-          const stepNumForL1 = getCurrentStepNumber();
-          if (stepForL1 && stepHasLayer1Content(stepForL1)) {
-            openPanel("layer1", stepNumForL1);
-          }
-        } else if (state.panelStack.length === 1 && state.panelStack[0]?.type === "layer1") {
-          const stepForL2 = getCurrentStepData();
-          const stepNumForL2 = getCurrentStepNumber();
-          if (stepForL2 && stepHasLayer2Content(stepForL2)) {
-            openPanel("layer2", stepNumForL2);
-          }
-        }
-        break;
-      case "ArrowLeft":
-        e.preventDefault();
-        if (state.isPanelOpen) {
-          closeTopPanel();
-        }
-        break;
-      case "Escape":
-        if (state.isPanelOpen) {
-          e.preventDefault();
-          closeTopPanel();
-        }
-        break;
-      case " ":
-        if (state.isPanelOpen) {
-          scrollOpenPanel(e.shiftKey ? -100 : 100);
-          e.preventDefault();
-          break;
-        }
-        e.preventDefault();
-        if (!state.scrollLockActive) {
-          if (e.shiftKey) {
-            if (state.lenis) keyboardNav("backward");
-            else prevStep();
-          } else {
-            if (state.lenis) keyboardNav("forward");
-            else nextStep();
-          }
-        }
-        break;
+    KEY_ACTIONS.get(e.key)?.(e);
+  }
+  function _stepKey(e, direction) {
+    if (_panelTookScroll(direction === "forward" ? 40 : -40)) return;
+    e.preventDefault();
+    _navigateStep(direction);
+  }
+  function _spaceKey(e) {
+    e.preventDefault();
+    if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
+    _navigateStep(e.shiftKey ? "backward" : "forward");
+  }
+  function _panelTookScroll(delta) {
+    if (!state.isPanelOpen) return false;
+    scrollOpenPanel(delta);
+    return true;
+  }
+  function _navigateStep(direction) {
+    if (state.scrollLockActive) return;
+    if (state.lenis) {
+      keyboardNav(direction);
+      return;
     }
+    if (direction === "forward") {
+      nextStep();
+    } else {
+      prevStep();
+    }
+  }
+  function _openNextLayer() {
+    if (!state.isPanelOpen) {
+      _openLayerWithContent("layer1", stepHasLayer1Content);
+      return;
+    }
+    if (state.panelStack.length === 1 && state.panelStack[0]?.type === "layer1") {
+      _openLayerWithContent("layer2", stepHasLayer2Content);
+    }
+  }
+  function _openLayerWithContent(type, hasContent) {
+    const step = getCurrentStepData();
+    const stepNumber = getCurrentStepNumber();
+    if (step && hasContent(step)) {
+      openPanel(type, stepNumber);
+    }
+  }
+  function _closeTopmostPanel(e) {
+    if (!state.isPanelOpen) return;
+    e.preventDefault();
+    closeTopPanel();
   }
   function scrollOpenPanel(delta) {
     const top = state.panelStack[state.panelStack.length - 1];
