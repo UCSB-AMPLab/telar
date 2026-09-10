@@ -379,8 +379,18 @@ class TestMigrationMetadata:
 
         for desc in (en, es):
             assert 'Ruby 3.2' in desc
-            assert '.ruby-version' in desc
+            assert '3.2.11' in desc
             assert 'scripts/upgrade.py' in desc
+
+    def test_the_local_step_does_not_claim_a_ruby_version_file_arrived(self):
+        # The engine installs .ruby-version; a Compositor upgrade delivers only
+        # what its own file list covers, and root dotfiles fell outside it, so a
+        # step promising the file was wrong for every Compositor-upgraded site.
+        # The step states the requirement instead, which holds on every route.
+        m = Migration162to170('/tmp')
+        for desc in (m._get_manual_steps_en()[3]['description'],
+                     m._get_manual_steps_es()[3]['description']):
+            assert '.ruby-version' not in desc
 
     def test_the_content_step_is_last_and_points_at_the_docs_home(self):
         en = Migration162to170('/tmp')._get_manual_steps_en()[4]

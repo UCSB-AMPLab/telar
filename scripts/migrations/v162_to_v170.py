@@ -360,7 +360,7 @@ class Migration162to170(BaseMigration):
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
-                'description': '''**If you work on your site locally, two things changed.** Telar now builds with Ruby 3.2, and the `.ruby-version` file this upgrade installed names the exact version; install it before your next local build. And `scripts/upgrade.py` is now a launcher rather than the upgrade tool itself: run it and it downloads the newest release's verified upgrade tooling and runs that against your site, so your copy never falls behind again, however long it sits between upgrades.''',
+                'description': '''**If you work on your site locally, two things changed.** Telar now needs Ruby 3.2 or newer, and CI builds with 3.2.11. Install a Ruby of at least 3.2 before your next local build. And `scripts/upgrade.py` is now a launcher rather than the upgrade tool itself: run it and it downloads the newest release's verified upgrade tooling and runs that against your site, so your copy never falls behind again, however long it sits between upgrades.''',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
@@ -384,7 +384,7 @@ class Migration162to170(BaseMigration):
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
-                'description': '''**Si trabajas con tu sitio en tu propio computador, cambiaron dos cosas.** Telar ahora construye el sitio con Ruby 3.2; el archivo `.ruby-version` que instaló esta actualización dice la versión exacta. Instala esa versión antes de la próxima construcción local. Y `scripts/upgrade.py` ya no es la herramienta de actualización sino un lanzador: al ejecutarlo descarga las herramientas verificadas del lanzamiento más reciente y las ejecuta sobre tu sitio. Así tu copia de `scripts/upgrade.py` nunca vuelve a quedarse atrás, por mucho tiempo que pase entre una actualización y otra.''',
+                'description': '''**Si trabajas con tu sitio en tu propio computador, cambiaron dos cosas.** Telar ahora necesita Ruby 3.2 o una versión más nueva, y la integración continua construye el sitio con la 3.2.11. Instala Ruby 3.2 como mínimo antes de la próxima construcción local. Y `scripts/upgrade.py` ya no es la herramienta de actualización sino un lanzador: al ejecutarlo descarga las herramientas verificadas del lanzamiento más reciente y las ejecuta sobre tu sitio. Así tu copia de `scripts/upgrade.py` nunca vuelve a quedarse atrás, por mucho tiempo que pase entre una actualización y otra.''',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
