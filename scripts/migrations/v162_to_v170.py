@@ -384,7 +384,7 @@ class Migration162to170(BaseMigration):
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
-                'description': '''**Si trabajas con tu sitio en tu propio computador, cambiaron dos cosas.** Telar ahora necesita Ruby 3.2 o una versión más nueva, y la integración continua construye el sitio con la 3.2.11. Instala Ruby 3.2 como mínimo antes de la próxima construcción local. Y `scripts/upgrade.py` ya no es la herramienta de actualización sino un lanzador: al ejecutarlo descarga las herramientas verificadas del lanzamiento más reciente y las ejecuta sobre tu sitio. Así tu copia de `scripts/upgrade.py` nunca vuelve a quedarse atrás, por mucho tiempo que pase entre una actualización y otra.''',
+                'description': '''**Si trabajas en el sitio desde tu computador, cambiaron dos cosas.** Telar ahora necesita Ruby 3.2 o una versión más nueva, y la integración continua construye el sitio con la 3.2.11. Instala al menos la versión 3.2 antes de la próxima construcción local. Y `scripts/upgrade.py` ya no es la herramienta de actualización, sino un lanzador: al ejecutarlo, descarga las herramientas verificadas del lanzamiento más reciente y con ellas actualiza el sitio. Así, tu copia de `scripts/upgrade.py` nunca vuelve a quedarse atrás, por mucho tiempo que pase entre una actualización y otra.''',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
