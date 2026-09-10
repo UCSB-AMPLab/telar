@@ -90,5 +90,8 @@ DEPENDENCIES
   jekyll-seo-tag (~> 2.9)
   webrick (~> 1.9)
 
+RUBY VERSION
+   ruby 3.2.11p268
+
 BUNDLED WITH
    2.6.9

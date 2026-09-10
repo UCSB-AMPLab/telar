@@ -58,6 +58,7 @@ EXPECTED_FRAMEWORK_FILES = {
     '.gitattributes',
     '.ruby-version',
     'Gemfile',
+    'Gemfile.lock',
     'requirements.txt',
     'package.json',
     'package-lock.json',
@@ -381,6 +382,16 @@ class TestMigrationMetadata:
             assert 'Ruby 3.2' in desc
             assert '3.2.11' in desc
             assert 'scripts/upgrade.py' in desc
+
+    def test_the_gemfile_never_ships_without_its_lock(self):
+        # The Gemfile's `ruby` directive obliges bundler to record a RUBY
+        # VERSION section in the lock. The build workflow runs bundler frozen,
+        # where it may not write one, so a site that took the new Gemfile and
+        # kept its old lock stops at `bundle install` with exit 16 before it
+        # builds anything. Caught on the demo site the moment v1.7.0 reached
+        # main, and on the Compositor rehearsal site an hour earlier.
+        assert 'Gemfile' in FRAMEWORK_FILES
+        assert 'Gemfile.lock' in FRAMEWORK_FILES
 
     def test_the_local_step_does_not_claim_a_ruby_version_file_arrived(self):
         # The engine installs .ruby-version; a Compositor upgrade delivers only

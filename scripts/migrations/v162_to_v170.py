@@ -8,6 +8,7 @@ change reach an existing site, and they arrive in that order.
 1. Framework files (FRAMEWORK_FILES, installed atomically from the v1.7.0
    tag). The set is exactly the files a site owns that v1.7.0 adds or
    rewrites: the root manifests (`.gitattributes`, `.ruby-version`, `Gemfile`,
+   `Gemfile.lock`,
    `requirements.txt`, `package.json`, `package-lock.json`, `README.md`,
    `CHANGELOG.md`), the three page layouts and the IIIF URL warning include,
    the rebuilt JavaScript bundles together with the modules they are built
@@ -100,6 +101,12 @@ FRAMEWORK_FILES = {
     '.gitattributes': 'Line-ending and diff rules for the repository',
     '.ruby-version': 'Ruby version Telar builds against (3.2)',
     'Gemfile': 'Ruby dependencies for the Jekyll build',
+    # Ships with the Gemfile, never without it. The Gemfile's `ruby` directive
+    # obliges bundler to record a RUBY VERSION section in the lock, and the
+    # build workflow runs bundler frozen, where it may not write one. A site
+    # that took the new Gemfile and kept its old lock stops at `bundle install`
+    # with exit 16, before it builds anything.
+    'Gemfile.lock': 'Resolved Ruby dependencies, carrying the Ruby version the Gemfile requires',
     'requirements.txt': 'Python dependencies for the build and upgrade scripts',
     'package.json': 'Dependency metadata and build scripts for v1.7.0',
     'package-lock.json': 'Regenerated dependency lockfile matching package.json — always ships with it',
