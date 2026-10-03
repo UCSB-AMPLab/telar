@@ -39,6 +39,7 @@ Version: v1.8.0
 
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -60,11 +61,8 @@ class Migration160to161(BaseMigration):
         # visible in UPGRADE_SUMMARY.md without implying anything to install.
         return [
             ChangeRecord(
-                description=(
-                    "Upgrade-chain wiring fix (internal): the v1.5.4 -> v1.6.0 migration "
-                    "is now registered in scripts/upgrade.py, so upgrades starting below "
-                    "v1.6.0 no longer stop early at 1.5.4. No files in this site changed."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_chain_wiring_internal'),
                 status=ChangeStatus.APPLIED,
                 severity="soft",
             ),

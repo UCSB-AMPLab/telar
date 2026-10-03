@@ -89,6 +89,7 @@ Version: v1.8.0
 import os
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -272,7 +273,8 @@ class Migration162to170(BaseMigration):
         for rel_path in paths:
             if not self._file_exists(rel_path):
                 records.append(ChangeRecord(
-                    description=f"No {rel_path} to remove (already absent)",
+                    description=get_message(self._detect_language(), 'change_nothing_to_remove',
+                                            rel_path),
                     status=ChangeStatus.APPLIED,
                     severity="soft",
                 ))
@@ -282,22 +284,17 @@ class Migration162to170(BaseMigration):
                 os.remove(os.path.join(self.repo_root, rel_path))
             except OSError as e:
                 records.append(ChangeRecord(
-                    description=(
-                        f"Could not remove {rel_path}: {e}. Non-fatal — delete "
-                        "it by hand when convenient. Nothing loads it any more: "
-                        "the layouts and scripts installed by this upgrade use "
-                        "the files that replaced it."
-                    ),
+                    description=get_message(
+                        self._detect_language(), 'change_could_not_remove_superseded',
+                        rel_path, e),
                     status=ChangeStatus.FAILED,
                     severity="soft",
                 ))
                 continue
 
             records.append(ChangeRecord(
-                description=(
-                    f"Removed {rel_path} — superseded by the files installed "
-                    "with this upgrade"
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_removed_superseded', rel_path),
                 status=ChangeStatus.APPLIED,
                 severity="soft",
             ))

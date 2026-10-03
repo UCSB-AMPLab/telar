@@ -42,6 +42,64 @@ FAILURE_KEYS = (
 )
 
 
+class TestEveryChangeDescriptionIsLocalised:
+    """The half of the summary that says what happened to the site's content.
+
+    Headings and counts went through `messages.py` from the start; the lines
+    under them were built as English f-strings at the point each change was
+    made, so a Spanish site read its own file list in English. These hold
+    the closure: a description built as a literal reaches the summary in
+    whatever language it was written in, and no later pass can find it.
+    """
+
+    def _literal_descriptions(self):
+        import ast
+        import pathlib
+        directory = (pathlib.Path(__file__).resolve().parents[2]
+                     / 'scripts' / 'migrations')
+        offenders = []
+        for path in sorted(directory.rglob('*.py')):
+            if path.name == 'messages.py':
+                continue
+            source = path.read_text(encoding='utf-8')
+            for node in ast.walk(ast.parse(source, filename=str(path))):
+                if not isinstance(node, ast.Call):
+                    continue
+                called = (getattr(node.func, 'id', None)
+                          or getattr(node.func, 'attr', None))
+                if called != 'ChangeRecord':
+                    continue
+                for keyword in node.keywords:
+                    if keyword.arg != 'description':
+                        continue
+                    value = keyword.value
+                    # A name is a description built elsewhere and already
+                    # localised there; only a literal written here is a leak.
+                    if isinstance(value, (ast.Constant, ast.JoinedStr)):
+                        offenders.append('%s:%d' % (path.name, node.lineno))
+        return offenders
+
+    def test_no_migration_writes_a_description_as_a_literal(self):
+        assert self._literal_descriptions() == []
+
+    @pytest.mark.parametrize('lang', ['en', 'es'])
+    def test_every_change_key_exists_in_both_languages(self, lang):
+        change_keys = [key for key in MESSAGES['en'] if key.startswith('change_')]
+
+        assert len(change_keys) > 30
+        for key in change_keys:
+            assert key in MESSAGES[lang], (key, lang)
+
+    def test_the_two_languages_take_the_same_arguments(self):
+        """A translation with fewer placeholders drops a path silently."""
+        mismatched = [key for key in MESSAGES['en']
+                      if key.startswith('change_')
+                      and MESSAGES['en'][key].count('{}')
+                      != MESSAGES['es'][key].count('{}')]
+
+        assert mismatched == []
+
+
 class TestTheKeysExist:
 
     @pytest.mark.parametrize('key', FAILURE_KEYS)

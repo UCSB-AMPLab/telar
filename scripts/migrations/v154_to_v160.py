@@ -88,6 +88,7 @@ Version: v1.6.0
 import os
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -293,10 +294,8 @@ class Migration154to160(BaseMigration):
         if self._file_exists(GITATTRIBUTES_PATH):
             self._gitattributes_skipped = True
             return [ChangeRecord(
-                description=(
-                    f"Skipped {GITATTRIBUTES_PATH} (already exists) — "
-                    "see the manual step to merge the new linguist-generated markers"
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_gitattributes_skipped', GITATTRIBUTES_PATH),
                 status=ChangeStatus.APPLIED,
                 severity="soft",
             )]
@@ -308,17 +307,16 @@ class Migration154to160(BaseMigration):
             # failure. This record is soft on purpose, and the phrase is what
             # classifies a record that ever reaches that helper as text.
             return [ChangeRecord(
-                description=(
-                    f"{GITATTRIBUTES_PATH} did not download from GitHub. "
-                    "Non-fatal — add it manually if you want the generated-bundle markers."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_gitattributes_absent', GITATTRIBUTES_PATH),
                 status=ChangeStatus.FAILED,
                 severity="soft",
             )]
 
         self._write_file(GITATTRIBUTES_PATH, content)
         return [ChangeRecord(
-            description=f"Added {GITATTRIBUTES_PATH} — marks the generated story bundle as linguist-generated",
+            description=get_message(self._detect_language(), 'change_gitattributes_added',
+                                    GITATTRIBUTES_PATH),
             status=ChangeStatus.APPLIED,
             severity="soft",
         )]
@@ -334,12 +332,13 @@ class Migration154to160(BaseMigration):
             if self._file_exists(rel_path):
                 os.remove(os.path.join(self.repo_root, rel_path))
                 changes.append(ChangeRecord(
-                    description=f"Removed dead file {rel_path}",
+                    description=get_message(self._detect_language(), 'change_removed_dead_file',
+                                        rel_path),
                     status=ChangeStatus.APPLIED, severity="soft",
                 ))
         if not changes:
             return [ChangeRecord(
-                description="No dead files to remove",
+                description=get_message(self._detect_language(), 'change_no_dead_files'),
                 status=ChangeStatus.APPLIED, severity="soft",
             )]
         return changes

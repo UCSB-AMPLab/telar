@@ -59,6 +59,7 @@ Version: v1.6.2
 import os
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -137,7 +138,8 @@ class Migration161to162(BaseMigration):
         """
         if not self._file_exists(DEPENDABOT_PATH):
             return [ChangeRecord(
-                description=f"No {DEPENDABOT_PATH} to remove (already absent)",
+                description=get_message(self._detect_language(), 'change_nothing_to_remove',
+                                        DEPENDABOT_PATH),
                 status=ChangeStatus.APPLIED,
                 severity="soft",
             )]
@@ -146,22 +148,16 @@ class Migration161to162(BaseMigration):
             os.remove(os.path.join(self.repo_root, DEPENDABOT_PATH))
         except OSError as e:
             return [ChangeRecord(
-                description=(
-                    f"Could not remove {DEPENDABOT_PATH}: {e}. Non-fatal — "
-                    "delete it by hand when convenient. It no longer does "
-                    "anything: dependency-bump pull requests are managed by "
-                    "the Telar release process, not per-site, and GitHub's "
-                    "security alerts are unaffected either way."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_could_not_remove_dependabot',
+                    DEPENDABOT_PATH, e),
                 status=ChangeStatus.FAILED,
                 severity="soft",
             )]
 
         return [ChangeRecord(
-            description=(
-                f"Removed {DEPENDABOT_PATH} — dependency-bump pull requests are "
-                "now managed by the Telar release process, not per-site"
-            ),
+            description=get_message(
+                self._detect_language(), 'change_removed_dependabot', DEPENDABOT_PATH),
             status=ChangeStatus.APPLIED,
             severity="soft",
         )]

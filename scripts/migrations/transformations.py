@@ -44,6 +44,7 @@ from typing import Dict, List, Optional
 
 from . import config_merge
 from .base import BaseMigration, ChangeRecord, ChangeStatus
+from .messages import get_message
 
 
 # --------------------------------------------------------------------------
@@ -104,8 +105,7 @@ def rewrite_gitignore_paths(migration: BaseMigration) -> List[ChangeRecord]:
 
     migration._write_file('.gitignore', updated)
     return [ChangeRecord(
-        description='Updated .gitignore path references '
-                    '(components/ → telar-content/)',
+        description=get_message(migration._detect_language(), 'change_gitignore_paths'),
         status=ChangeStatus.APPLIED, severity='soft')]
 
 
@@ -121,7 +121,8 @@ def ensure_gitignore_entries(migration: BaseMigration) -> List[ChangeRecord]:
     for section, entries in GITIGNORE_SECTIONS:
         if migration._ensure_gitignore_entries(entries, section_comment=section):
             records.append(ChangeRecord(
-                description=f'Updated .gitignore — {section.lstrip("# ")}',
+                description=get_message(migration._detect_language(), 'change_gitignore_section',
+                                    section.lstrip('# ')),
                 status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -186,11 +187,13 @@ def remove_dead_paths(migration: BaseMigration) -> List[ChangeRecord]:
                 os.remove(full)
         except OSError as error:
             records.append(ChangeRecord(
-                description=f'Could not remove {rel_path}: {error}',
+                description=get_message(migration._detect_language(), 'change_could_not_remove',
+                                        rel_path, error),
                 status=ChangeStatus.FAILED, severity='soft'))
             continue
         records.append(ChangeRecord(
-            description=f'Removed {rel_path} — no longer part of Telar',
+            description=get_message(migration._detect_language(), 'change_removed_not_telar',
+                                    rel_path),
             status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -216,15 +219,16 @@ def remove_withdrawn_glossary_terms(migration: BaseMigration) -> List[ChangeReco
                 # reading it as a failed fetch is what stranded 65 of the 71
                 # entry points.
                 records.append(ChangeRecord(
-                    description=f'Kept {rel_path} — could not check whether '
-                                'it had been edited',
+                    description=get_message(migration._detect_language(), 'change_kept_uncheckable',
+                                            rel_path),
                     status=ChangeStatus.APPLIED, severity='soft'))
                 continue
 
             current = migration._read_file(rel_path)
             if current is None or current.strip() != original.strip():
                 records.append(ChangeRecord(
-                    description=f'Kept {rel_path} — edited on this site',
+                    description=get_message(migration._detect_language(), 'change_kept_edited',
+                                            rel_path),
                     status=ChangeStatus.APPLIED, severity='soft'))
                 continue
 
@@ -232,11 +236,13 @@ def remove_withdrawn_glossary_terms(migration: BaseMigration) -> List[ChangeReco
                 os.remove(os.path.join(migration.repo_root, rel_path))
             except OSError as error:
                 records.append(ChangeRecord(
-                    description=f'Could not remove {rel_path}: {error}',
+                    description=get_message(migration._detect_language(), 'change_could_not_remove',
+                                            rel_path, error),
                     status=ChangeStatus.FAILED, severity='soft'))
                 continue
             records.append(ChangeRecord(
-                description=f'Removed {rel_path} — withdrawn demo glossary term',
+                description=get_message(migration._detect_language(), 'change_removed_demo_term',
+                                        rel_path),
                 status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -306,15 +312,16 @@ def relocate_content(migration: BaseMigration) -> List[ChangeRecord]:
 
         if os.path.exists(destination_full):
             records.append(ChangeRecord(
-                description=f'Both {source}/ and {destination}/ are present. '
-                            'Neither was changed — please merge them by hand.',
+                description=get_message(migration._detect_language(), 'change_both_dirs_present',
+                                        source, destination),
                 status=ChangeStatus.APPLIED, severity='soft'))
             continue
 
         os.makedirs(os.path.dirname(destination_full), exist_ok=True)
         shutil.move(source_full, destination_full)
         records.append(ChangeRecord(
-            description=f'Moved {source}/ → {destination}/',
+            description=get_message(migration._detect_language(), 'change_moved_dir',
+                                        source, destination),
             status=ChangeStatus.APPLIED, severity='soft'))
 
     records.extend(_remove_empty_components(migration))
@@ -335,11 +342,11 @@ def _remove_empty_components(migration: BaseMigration) -> List[ChangeRecord]:
         if len(theirs) > 5:
             listed += f', and {len(theirs) - 5} more'
         return [ChangeRecord(
-            description=f'Kept components/ — it still holds {listed}',
+            description=get_message(migration._detect_language(), 'change_kept_components', listed),
             status=ChangeStatus.APPLIED, severity='soft')]
 
     shutil.rmtree(components)
-    return [ChangeRecord(description='Removed the empty components/ directory',
+    return [ChangeRecord(description=get_message(migration._detect_language(), 'change_removed_empty_components'),
                          status=ChangeStatus.APPLIED, severity='soft')]
 
 
@@ -374,22 +381,23 @@ def relocate_about_page(migration: BaseMigration) -> List[ChangeRecord]:
 
     if migration._file_exists(destination):
         return [ChangeRecord(
-            description=f'Both {source} and {destination} are present. '
-                        'Neither was changed — please merge them by hand.',
+            description=get_message(migration._detect_language(), 'change_both_files_present',
+                                    source, destination),
             status=ChangeStatus.APPLIED, severity='soft')]
 
     if not migration._move_file(source, destination):
-        return [ChangeRecord(description=f'Could not move {source}',
+        return [ChangeRecord(description=get_message(migration._detect_language(), 'change_could_not_move', source),
                              status=ChangeStatus.FAILED, severity='soft')]
 
-    records = [ChangeRecord(description=f'Moved {source} → {destination}',
+    records = [ChangeRecord(description=get_message(migration._detect_language(), 'change_moved_file',
+                                        source, destination),
                             status=ChangeStatus.APPLIED, severity='soft')]
 
     pages = os.path.join(migration.repo_root, 'pages')
     if os.path.isdir(pages) and not os.listdir(pages):
         os.rmdir(pages)
         records.append(ChangeRecord(
-            description='Removed the empty pages/ directory',
+            description=get_message(migration._detect_language(), 'change_removed_empty_pages'),
             status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -466,8 +474,7 @@ def flatten_image_directories(migration: BaseMigration) -> List[ChangeRecord]:
 
     if moved:
         records.append(ChangeRecord(
-            description=f'Moved {moved} image(s) up out of objects/ and '
-                        'additional/',
+            description=get_message(migration._detect_language(), 'change_moved_images', moved),
             status=ChangeStatus.APPLIED, severity='soft'))
 
     records.extend(_rewrite_image_references(migration, renamed, kept))
@@ -507,9 +514,9 @@ def _flatten_subdirectory(migration: BaseMigration, base: str,
                 # Two different images of one name is a question for the
                 # owner, not a guess for a migration.
                 records.append(ChangeRecord(
-                    description=f'Kept {base}/{subdirectory}/{filename} — '
-                                f'{base}/{filename} is a different image, '
-                                'and the spreadsheet names this one',
+                    description=get_message(
+                        migration._detect_language(), 'change_kept_different_image',
+                        base, subdirectory, filename, base, filename),
                     status=ChangeStatus.APPLIED, severity='soft'))
                 kept.add((base, subdirectory, filename))
                 continue
@@ -521,9 +528,9 @@ def _flatten_subdirectory(migration: BaseMigration, base: str,
                 # Overwriting here would destroy whichever image the site
                 # already keeps under the suffixed name.
                 records.append(ChangeRecord(
-                    description=f'Kept {base}/{subdirectory}/{filename} — '
-                                f'both {filename} and {target} are taken '
-                                f'in {base}/',
+                    description=get_message(
+                        migration._detect_language(), 'change_kept_both_taken',
+                        base, subdirectory, filename, filename, target, base),
                     status=ChangeStatus.APPLIED, severity='soft'))
                 kept.add((base, subdirectory, filename))
                 continue
@@ -533,8 +540,9 @@ def _flatten_subdirectory(migration: BaseMigration, base: str,
         except OSError as error:
             kept.add((base, subdirectory, filename))
             records.append(ChangeRecord(
-                description=f'Could not move {base}/{subdirectory}/'
-                            f'{filename}: {error}',
+                description=get_message(
+                    migration._detect_language(), 'change_could_not_move_image',
+                    base, subdirectory, filename, error),
                 status=ChangeStatus.FAILED, severity='soft'))
             continue
 
@@ -542,17 +550,17 @@ def _flatten_subdirectory(migration: BaseMigration, base: str,
         if target != filename:
             renamed[(base, subdirectory, filename)] = target
             records.append(ChangeRecord(
-                description=f'Moved {base}/{subdirectory}/{filename} → '
-                            f'{base}/{target}, renamed because {filename} '
-                            'was taken',
+                description=get_message(
+                    migration._detect_language(), 'change_moved_renamed',
+                    base, subdirectory, filename, base, target, filename),
                 status=ChangeStatus.APPLIED, severity='soft'))
 
     if not os.listdir(source):
         try:
             os.rmdir(source)
             records.append(ChangeRecord(
-                description=f'Removed the empty {base}/{subdirectory}/ '
-                            'directory',
+                description=get_message(
+                    migration._detect_language(), 'change_removed_empty_subdir', base, subdirectory),
                 status=ChangeStatus.APPLIED, severity='soft'))
         except OSError:
             pass
@@ -667,8 +675,8 @@ def _rewrite_image_references(migration: BaseMigration,
 
     if rewritten:
         records.append(ChangeRecord(
-            description=f'Updated {rewritten} image path(s) to the '
-                        'flattened directory',
+            description=get_message(migration._detect_language(), 'change_rewrote_image_paths',
+                                    rewritten),
             status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -836,7 +844,8 @@ def rename_spreadsheet_columns(migration: BaseMigration) -> List[ChangeRecord]:
         _write_rows(path, rows)
         for old, new in renamed:
             records.append(ChangeRecord(
-                description=f'Renamed the {old} column to {new} in {relative}',
+                description=get_message(migration._detect_language(), 'change_renamed_column',
+                                        old, new, relative),
                 status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -884,8 +893,9 @@ def ensure_spreadsheet_columns(migration: BaseMigration) -> List[ChangeRecord]:
 
         _write_rows(path, rows)
         records.append(ChangeRecord(
-            description=f'Added {", ".join(c["en"] for c in missing)} to '
-                        f'{relative}',
+            description=get_message(
+                migration._detect_language(), 'change_added_columns',
+                ', '.join(c['en'] for c in missing), relative),
             status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -926,15 +936,15 @@ def restructure_project_spreadsheet(migration: BaseMigration) -> List[ChangeReco
 
         if not stories:
             records.append(ChangeRecord(
-                description=f'Kept {relative} — it is in the old key-value '
-                            'format but names no stories',
+                description=get_message(migration._detect_language(), 'change_kept_no_stories',
+                                        relative),
                 status=ChangeStatus.APPLIED, severity='soft'))
             continue
 
         _write_rows(path, [LEGACY_PROJECT_HEADER] + stories)
         records.append(ChangeRecord(
-            description=f'Rewrote {relative} as a table of '
-                        f'{len(stories)} story/stories',
+            description=get_message(migration._detect_language(), 'change_rewrote_stories_table',
+                                    relative, len(stories)),
             status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
@@ -956,8 +966,7 @@ def reinstate_configuration(migration: BaseMigration) -> List[ChangeRecord]:
 
     if config_merge.read_site(site) is None:
         return [ChangeRecord(
-            description='Kept _config.yml as it is — it could not be read as '
-                        'YAML, so nothing could be moved across safely',
+            description=get_message(migration._detect_language(), 'change_kept_config_unreadable'),
             status=ChangeStatus.APPLIED, severity='soft')]
 
     # Hard, and not a candidate for the structural flag-and-continue rule.
@@ -967,7 +976,7 @@ def reinstate_configuration(migration: BaseMigration) -> List[ChangeRecord]:
     template = migration._fetch_from_github('_config.yml')
     if template is None:
         return [ChangeRecord(
-            description='Could not fetch _config.yml',
+            description=get_message(migration._detect_language(), 'change_could_not_fetch_config'),
             status=ChangeStatus.FAILED, severity='hard')]
 
     merged, notes = config_merge.merge(template, site)
@@ -976,8 +985,7 @@ def reinstate_configuration(migration: BaseMigration) -> List[ChangeRecord]:
 
     migration._write_file('_config.yml', merged)
     records = [ChangeRecord(
-        description="Rewrote _config.yml on the release's, keeping this "
-                    "site's own settings",
+        description=get_message(migration._detect_language(), 'change_rewrote_config'),
         status=ChangeStatus.APPLIED, severity='soft')]
     records.extend(ChangeRecord(description=note,
                                 status=ChangeStatus.APPLIED, severity='soft')

@@ -21,6 +21,7 @@ Version: v1.8.0
 from datetime import date
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus, coerce_change, is_hard_failure
 from .transformations import TRANSFORMATIONS
 
@@ -405,7 +406,9 @@ class Migration020to090(BaseMigration):
                 changes = transformation(self)
             except Exception as error:
                 records.append(ChangeRecord(
-                    description=f"{transformation.__name__} aborted: {error}",
+                    description=get_message(
+                        self._detect_language(), 'change_transformation_aborted',
+                        transformation.__name__, error),
                     status=ChangeStatus.FAILED,
                     severity="hard",
                 ))

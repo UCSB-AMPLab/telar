@@ -42,6 +42,7 @@ Version: v1.4.0
 import os
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -195,12 +196,13 @@ class Migration130to140(BaseMigration):
             if self._file_exists(rel_path):
                 os.remove(os.path.join(self.repo_root, rel_path))
                 changes.append(ChangeRecord(
-                    description=f"Removed stale bundle file {rel_path}",
+                    description=get_message(self._detect_language(), 'change_removed_stale_bundle',
+                                            rel_path),
                     status=ChangeStatus.APPLIED, severity="soft",
                 ))
         if not changes:
             return [ChangeRecord(
-                description="No stale bundle files to remove",
+                description=get_message(self._detect_language(), 'change_no_stale_bundles'),
                 status=ChangeStatus.APPLIED, severity="soft",
             )]
         return changes

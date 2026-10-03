@@ -37,6 +37,7 @@ Version: v1.5.4
 
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord
 
 
@@ -58,12 +59,8 @@ class Migration153to154(BaseMigration):
         # upgrade.py stamp the version once the chain completes.
         return [
             ChangeRecord(
-                description=(
-                    "Build workflow concurrency group: add the `concurrency` block to "
-                    ".github/workflows/build.yml by hand (or recopy the file). The "
-                    "in-Actions upgrade cannot modify workflow files; the Telar "
-                    "Compositor applies it automatically. See the manual step below."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_concurrency_by_hand'),
             ),
         ]
 
