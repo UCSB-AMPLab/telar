@@ -35,6 +35,7 @@ FAILURE_KEYS = (
     'deps_no_manifest',
     'deps_pip_failed',
     'deps_pip_timeout',
+    'upgrade_reached_version',
 )
 
 
@@ -71,6 +72,53 @@ class TestTheKeysExist:
     def test_the_dead_key_is_gone(self):
         for lang in ('en', 'es'):
             assert 'fetch_warning' not in MESSAGES[lang]
+
+
+class TestTheFailureMessageSaysWhereTheSiteIs:
+    """A chain that stops part-way has still moved the site.
+
+    Each migration stamps its own to_version as it completes, so the version
+    in _config.yml after a failed run is the last hop that finished. Telling
+    the user nothing changed suppresses the re-run that would finish the job,
+    and makes a subsequently failing build look unrelated to the upgrade.
+    """
+
+    def _site_at(self, tmp_path, version, lang='en'):
+        (tmp_path / '_config.yml').write_text(
+            'telar_language: "%s"\ntelar:\n  version: "%s"\n' % (lang, version),
+            encoding='utf-8')
+        return str(tmp_path)
+
+    def test_it_names_the_version_reached_when_the_chain_progressed(self, tmp_path, capsys):
+        repo = self._site_at(tmp_path, '0.6.3-beta')
+        upgrade._report_state_after_failure(repo, 'en', '0.2.0-beta')
+
+        out = capsys.readouterr().out
+        assert '0.6.3-beta' in out
+        assert upgrade.LATEST_VERSION in out
+        assert 'NOT upgraded' not in out
+
+    def test_it_says_nothing_changed_when_the_chain_never_moved(self, tmp_path, capsys):
+        repo = self._site_at(tmp_path, '0.2.0-beta')
+        upgrade._report_state_after_failure(repo, 'en', '0.2.0-beta')
+
+        assert 'NOT upgraded' in capsys.readouterr().out
+
+    def test_a_spanish_site_is_told_in_spanish(self, tmp_path, capsys):
+        repo = self._site_at(tmp_path, '0.6.3-beta', lang='es')
+        upgrade._report_state_after_failure(repo, 'es', '0.2.0-beta')
+
+        out = capsys.readouterr().out
+        assert out.strip() == get_message(
+            'es', 'upgrade_reached_version', '0.6.3-beta', upgrade.LATEST_VERSION).strip()
+
+    def test_no_stop_message_claims_the_site_is_unchanged(self):
+        # The per-migration stop line is true of that migration and false of
+        # the chain, which is where the claim did its damage.
+        for lang in ('en', 'es'):
+            stopped = get_message(lang, 'migration_stopped')
+            assert 'unchanged' not in stopped
+            assert 'sin cambios' not in stopped
 
 
 class TestClassificationIsLanguageIndependent:

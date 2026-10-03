@@ -338,6 +338,45 @@ class TestFailureStopsTheRun:
         assert consolidated == through_runner
 
 
+class TestTheRunnerIsTheOnlyPrinter:
+    """Every change a user watches scroll past appears once.
+
+    The equivalence tests compare returned records, and a second print
+    statement does not change a record, so nothing else here can see this
+    migration printing its own records alongside the chain runner's. These
+    read stdout instead.
+    """
+
+    def test_each_record_is_printed_once(self, fake_chain, tmp_path, capsys):
+        fake_chain.catalogue(
+            _fake_transformation('whole', changes=['moved the first thing',
+                                                   'moved the second thing']))
+
+        migration = Migration020to090(str(tmp_path))
+        migration.from_version = '0.2.0-beta'
+        records = upgrade.run_migrations([migration])
+
+        out = capsys.readouterr().out
+        for record in records:
+            assert out.count(record.description) == 1, record.description
+
+    def test_a_hard_failure_is_reported_once(self, fake_chain, tmp_path, capsys):
+        # The migration printed its own stop line and the runner printed
+        # another, so a failed upgrade announced that it had stopped twice.
+        failure = 'Warning: Could not fetch x from GitHub'
+        fake_chain.catalogue(
+            _fake_transformation('whole', changes=['moved the first thing', failure]))
+
+        migration = Migration020to090(str(tmp_path))
+        migration.from_version = '0.2.0-beta'
+        records = upgrade.run_migrations([migration])
+
+        out = capsys.readouterr().out
+        for record in records:
+            assert out.count(record.description) == 1, record.description
+        assert out.count('Stopping') == 1
+
+
 class TestManualSteps:
     """Forty-three instructions became four, plus the demo-content notice.
 

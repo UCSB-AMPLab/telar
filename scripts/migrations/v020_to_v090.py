@@ -211,9 +211,9 @@ ENTRY_VERSIONS = (
 # nor a dot, and judging by shape dropped the 43-entry map they belong to.
 #
 # Absent by design:
-#   telar-content/       the site's own writing. The templates among these are
-#                        replaced only by _update_template_content(), after it
-#                        checks the owner has not edited them.
+#   telar-content/       the site's own writing. The hop leaves it as it stands,
+#                        demo content included; the demo-content manual step says
+#                        so rather than anything replacing it.
 #   .github/workflows/   GITHUB_TOKEN cannot write these; they are manual steps.
 #   scripts/upgrade.py   the updater a site runs is downloaded as a verified
 #   scripts/migrations/  release asset and run from a temp dir, so a copy left
@@ -384,6 +384,11 @@ class Migration020to090(BaseMigration):
 
         A hard failure stops before the stamp, so a site that does not
         complete keeps the version it started from and re-enters here.
+
+        This method prints nothing. `run_migrations` prints every record
+        it is returned, in the site's language, for every migration in the
+        chain; a step that also printed its own records would report each
+        change twice and would do it in English.
         """
         records: List[ChangeRecord] = []
 
@@ -391,7 +396,6 @@ class Migration020to090(BaseMigration):
             try:
                 changes = transformation(self)
             except Exception as error:
-                print(f"  ✗ Error: {error}")
                 records.append(ChangeRecord(
                     description=f"{transformation.__name__} aborted: {error}",
                     status=ChangeStatus.FAILED,
@@ -402,13 +406,7 @@ class Migration020to090(BaseMigration):
             step_records = [coerce_change(change) for change in changes]
             records.extend(step_records)
 
-            for record in step_records:
-                print(f"  {'✓' if record.status == ChangeStatus.APPLIED else '✗'} "
-                      f"{record.description}")
-
             if any(is_hard_failure(record) for record in step_records):
-                print("  ✗ Stopping: this migration did not complete. "
-                      "The site is left unchanged.")
                 return records
 
         # The one install, after the content work and before the stamp. The
@@ -417,13 +415,8 @@ class Migration020to090(BaseMigration):
         # v0.9.0-beta is entitled to.
         install = self._apply_framework_files(self._files_for_entry())
         records.extend(install)
-        for record in install:
-            print(f"  {'✓' if record.status == ChangeStatus.APPLIED else '✗'} "
-                  f"{record.description}")
 
         if any(is_hard_failure(record) for record in install):
-            print("  ✗ Stopping: the framework files could not be installed. "
-                  "The site is left unchanged.")
             return records
 
         # The one stamp, written only once every step has completed.

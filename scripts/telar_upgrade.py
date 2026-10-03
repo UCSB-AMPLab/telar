@@ -660,8 +660,8 @@ def _write_failed_state(repo_root: str, from_version: str, to_version: str,
     """Write the partial-state marker when an upgrade aborts on HARD failure.
 
     Records what failed so a re-run can tell the user it is resuming. The site
-    was left at the old version (unstamped), so re-running re-applies the same
-    pinned migrations from scratch.
+    keeps whatever version the last completed migration stamped, so a re-run
+    continues from there rather than starting the chain over.
     """
     data = {
         'from_version': from_version,
@@ -689,7 +689,23 @@ def _clear_state_file(repo_root: str) -> None:
 # Exit codes
 EXIT_OK = 0            # upgrade completed (or nothing to do / dry run)
 EXIT_PRECONDITION = 1  # could not start (bad repo, cancelled, no migrations)
-EXIT_HARD_FAILURE = 2  # a required step failed; site left unchanged/unstamped
+EXIT_HARD_FAILURE = 2  # a required step failed; the chain stopped where it stood
+
+
+def _report_state_after_failure(repo_root: str, lang: str, from_version: str) -> None:
+    """Say where the site actually stands, which is not always where it started.
+
+    Each migration stamps its own to_version as it completes, so a chain that
+    stops part-way leaves the site at the last hop that finished rather than at
+    the version it began on. Telling the user nothing changed suppresses the
+    re-run that would carry it the rest of the way, and leaves a subsequently
+    failing build looking unrelated to the upgrade.
+    """
+    reached = detect_current_version(repo_root)
+    if reached and reached != from_version:
+        print(get_message(lang, 'upgrade_reached_version', reached, LATEST_VERSION))
+    else:
+        print(get_message(lang, 'upgrade_not_applied'))
 
 
 def _write_failure_summary(repo_root: str, migrations: List[BaseMigration],
@@ -869,7 +885,7 @@ def main():
                      if r.status == ChangeStatus.FAILED and r.severity == "hard"]
     if hard_failures:
         print('\n' + get_message(lang, 'upgrade_failed_steps', len(hard_failures)))
-        print(get_message(lang, 'upgrade_not_applied'))
+        _report_state_after_failure(repo_root, lang, from_version)
         print(get_message(lang, 'transient_retry'))
         _write_failure_summary(repo_root, migrations, all_changes, from_version)
         print(get_message(lang, 'see_summary_failures'))
@@ -885,7 +901,7 @@ def main():
     deps_ok, missing_deps = _ensure_regeneration_dependencies(repo_root)
     if not deps_ok:
         print('\n' + get_message(lang, 'upgrade_failed_data'))
-        print(get_message(lang, 'upgrade_not_applied'))
+        _report_state_after_failure(repo_root, lang, from_version)
         all_changes.append(ChangeRecord(
             description=get_message(lang, 'record_deps_missing',
                                     ", ".join(missing_deps)),
@@ -899,7 +915,7 @@ def main():
     csv_ok, iiif_ok = _regenerate_data_files(repo_root)
     if not csv_ok:
         print('\n' + get_message(lang, 'upgrade_failed_data'))
-        print(get_message(lang, 'upgrade_not_applied'))
+        _report_state_after_failure(repo_root, lang, from_version)
         all_changes.append(ChangeRecord(
             description=get_message(lang, 'record_regeneration_failed'),
             status=ChangeStatus.FAILED,

@@ -77,8 +77,7 @@ MESSAGES = {
                            'assuming 0.2.0-beta',
         'config_read_error': '❌ Error reading _config.yml: {}',
         'migration_error': '✗ Error: {}',
-        'migration_stopped': '✗ Stopping: this migration did not complete. '
-                             'The site is left unchanged.',
+        'migration_stopped': '✗ Stopping: this migration did not complete.',
         'regeneration_script_error': '⚠️  Warning: {} returned error: {}',
         'regeneration_timeout': '⚠️  Warning: Data regeneration timed out',
         'regeneration_failed': '⚠️  Warning: Data regeneration failed: {}',
@@ -97,7 +96,10 @@ MESSAGES = {
         'no_tty_continue': '(No interactive terminal — continuing.)',
         'upgrade_failed_steps': '✗ Upgrade did not complete: {} required step(s) failed.',
         'upgrade_not_applied': '  The site was NOT upgraded and its version was left unchanged.',
-        'transient_retry': '  This is usually a transient network problem — run the upgrade again.',
+        'upgrade_reached_version': '  The upgrade stopped, but your site did advance: '
+                                   'it is now at {}. Run the upgrade again and it will '
+                                   'continue from there up to {}.',
+        'transient_retry': '  This is usually a transient network problem.',
         'see_summary_failures': '  See UPGRADE_SUMMARY.md for the list of failures.',
         'upgrade_failed_data': '✗ Upgrade did not complete: data regeneration failed.',
         'see_summary_details': '  See UPGRADE_SUMMARY.md for details.',
@@ -245,8 +247,7 @@ MESSAGES = {
         'config_read_error': '❌ Error al leer _config.yml: {}',
         'migration_error': '✗ Error: {}',
         'migration_stopped': '✗ La actualización se interrumpió: esta '
-                             'migración no se completó. El sitio queda sin '
-                             'cambios.',
+                             'migración no se completó.',
         'regeneration_script_error': '⚠️  Advertencia: {} devolvió un '
                                      'error: {}',
         'regeneration_timeout': '⚠️  Advertencia: Se agotó el tiempo al '
@@ -269,7 +270,10 @@ MESSAGES = {
         'no_tty_continue': '(No hay terminal interactiva — se continúa.)',
         'upgrade_failed_steps': '✗ La actualización no se completó: fallaron {} paso(s) obligatorio(s).',
         'upgrade_not_applied': '  El sitio no se actualizó y su versión quedó sin cambios.',
-        'transient_retry': '  Suele ser un problema temporal de red; vuelve a ejecutar la actualización.',
+        'upgrade_reached_version': '  La actualización se detuvo, pero el sitio sí '
+                                   'avanzó: quedó en la versión {}. Vuelve a '
+                                   'ejecutarla y continuará desde ahí hasta la {}.',
+        'transient_retry': '  Suele ser un problema temporal de red.',
         'see_summary_failures': '  Revisa UPGRADE_SUMMARY.md para ver la lista de fallas.',
         'upgrade_failed_data': '✗ La actualización no se completó: falló la regeneración de los datos.',
         'see_summary_details': '  Revisa UPGRADE_SUMMARY.md para más detalles.',
