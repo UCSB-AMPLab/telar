@@ -225,6 +225,7 @@ Your stories, objects, and configuration keep working without any content change
 - **iOS Safari stability** — the URL-bar layout jump is fixed and notch safe-area clearance is added.
 
 One note: the upgrade refreshed the framework language packs (en.yml / es.yml). If you had customised either file, re-apply your changes — the new release adds six `object.viewer.*` keys (pagination labels and error messages for the IIIF viewer) that the updated packs already include.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -241,6 +242,7 @@ Las mejoras principales:
 - **Estabilidad en iOS Safari** — se corrigió el salto del diseño que causaba la barra de direcciones del navegador y se añadió espacio para la muesca de la pantalla.
 
 Un detalle: la actualización reemplazó los paquetes de idioma de Telar (en.yml / es.yml). Si habías personalizado alguno de ellos, vuelve a aplicar tus cambios — esta versión agrega seis claves `object.viewer.*` (etiquetas de paginación y mensajes de error del visor IIIF) que los paquetes actualizados ya incluyen.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

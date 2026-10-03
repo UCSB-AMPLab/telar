@@ -9,7 +9,7 @@ Bug fix release:
 No _config.yml changes beyond version bump. No CSV schema changes.
 No new dependencies.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -76,6 +76,7 @@ class Migration091to092(BaseMigration):
                     "permissions. The test workflow now only runs on the "
                     "main Telar repos, not on user sites."
                 ),
+                "audience": "local",
             },
             {
                 "title": "Regenerate IIIF tiles",
@@ -85,5 +86,6 @@ class Migration091to092(BaseMigration):
                     "workflow or run generate_iiif.py locally. This fixes "
                     "tile rendering issues on Windows browsers."
                 ),
+                "audience": "all",
             },
         ]

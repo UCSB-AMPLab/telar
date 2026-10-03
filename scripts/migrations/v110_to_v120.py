@@ -11,7 +11,7 @@ Story Structure & UX release:
 ~20 framework files fetched from GitHub, 2 language files fetched,
 1 CSV column added (show_sections), version bumped.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -182,6 +182,7 @@ class Migration110to120(BaseMigration):
 - **Ordinal numbers removed**: Story cards no longer display auto-generated numbers on the homepage, story pages, or object pages. The homepage placeholder shows the first letter of each story title instead.
 
 - **Deep link fix**: Deep links to layer 2 panels (e.g. `#s3l2`) now correctly open layer 1 underneath, so all parent panels are visible.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -201,6 +202,7 @@ class Migration110to120(BaseMigration):
 - **Números ordinales eliminados**: Las tarjetas de historia ya no muestran números generados automáticamente en la página principal, las páginas de historia ni las páginas de objeto. El marcador de posición en la página principal muestra la primera letra del título de cada historia.
 
 - **Corrección de enlaces directos**: Los enlaces directos a paneles de nivel 2 (ej. `#s3l2`) ahora abren correctamente el nivel 1 debajo, de modo que todos los paneles superiores quedan visibles.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

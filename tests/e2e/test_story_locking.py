@@ -20,11 +20,15 @@ Prerequisites:
     - Data pipeline run: python scripts/csv_to_json.py && python scripts/generate_collections.py
     - _config.yml story_key: "test" (test-instance default)
     - Jekyll site running: bundle exec jekyll serve --port 4001
+    - Encryption run against the built site: python scripts/encrypt_protected_stories.py
+      (the workflow runs it after the build; serving alone leaves the fixture
+      in the clear, and every unlock test then times out on an overlay that
+      has nothing to decrypt)
 
 Run tests:
     pytest tests/e2e/test_story_locking.py -v --base-url http://127.0.0.1:4001/telar
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import json

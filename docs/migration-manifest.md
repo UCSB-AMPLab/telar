@@ -204,12 +204,14 @@ Bilingual manual steps shown after upgrade. These are informational — they don
     "en": [
       {
         "description": "Markdown text describing features and any manual actions",
+        "audience": "all",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
         "description": "Texto en markdown describiendo las novedades",
+        "audience": "all",
         "doc_url": "https://telar.org/guia"
       }
     ]
@@ -217,12 +219,30 @@ Bilingual manual steps shown after upgrade. These are informational — they don
 }
 ```
 
-Both `en` and `es` arrays are required. Each entry has:
+Both `en` and `es` arrays are required, and the two must tag the same steps the same way — a step hidden in one language and shown in the other would make the site's language decide whether its owner is told to edit a workflow file. Each entry has:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `description` | string | Yes | Markdown text (rendered in the compositor post-upgrade UI) |
+| `audience` | string | Yes | Who still has to perform the step: `all` or `local` |
 | `doc_url` | string | No | Link to documentation |
+
+### `audience`
+
+The set belongs to the Compositor, not to the framework: its post-upgrade screen filters on this field, so a value the filter does not recognise is a value that does nothing.
+
+| Value | Meaning |
+|-------|---------|
+| `all` | Everyone upgrading, whatever route they took. |
+| `local` | Everyone except Compositor users, because the Compositor performs the step itself. In practice the workflow-file recopies, which exist only because GitHub will not let an automated upgrade write to `.github/workflows/` and the Compositor commits them directly. |
+| `google-sheets` | Only sites that pull their content from Google Sheets. Shown when the site has Sheets enabled and hidden otherwise. |
+| `compositor` | Only Compositor users. Accepted and rendered, but it hides the step from nobody — every reader of that screen is a Compositor user. It is documentation, and such a step may be left `all` instead. |
+
+The field is **required on every step**. A step that omits it is shown to everyone, which is the behaviour the field exists to prevent, so a missing value has to be an error rather than a default. A manifest published before this schema carries none at all, and the filter correctly shows those.
+
+**Two axes, not one.** `local` and `compositor` are about the upgrade route; `google-sheets` is about how the site gets its content. A step declares one value, so pick the axis that decides whether the reader has to act.
+
+It is not "who is this step about". A step whose prose already says "if you use GitHub Pages" is still `all`: every reader sees it and the prose sorts them out. Tagging by subject rather than by who must act would start hiding steps from the people who have to perform them.
 
 ## Example: v1.1.0 to v1.2.0
 
@@ -245,12 +265,14 @@ Both `en` and `es` arrays are required. Each entry has:
     "en": [
       {
         "description": "**New features available after upgrade:**\n\n- **Title card table of contents**: Add `show_sections: yes` to a story row in project.csv to display a navigable TOC on its title card, linking to each section card in the story.\n\n- **Section cards**: Unchanged from v1.1.0 — leave the object column empty for a step to create a section break.\n\n- **Ordinal numbers removed**: Story cards no longer display auto-generated numbers. The homepage uses the first letter of each story title instead.",
+        "audience": "all",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
         "description": "**Nuevas funciones disponibles tras la actualización:**\n\n- **Tabla de contenidos en tarjeta de título**: Agrega `mostrar_secciones: sí` a una fila de historia en project.csv para mostrar una tabla de contenidos navegable en su tarjeta de título, con enlaces a cada tarjeta de sección en la historia.\n\n- **Tarjetas de sección**: Sin cambios respecto a v1.1.0 — deja vacía la columna de objeto en un paso para crear un salto de sección.\n\n- **Números ordinales eliminados**: Las tarjetas de historia ya no muestran números generados automáticamente. La página de inicio usa la primera letra del título de cada historia.",
+        "audience": "all",
         "doc_url": "https://telar.org/guia"
       }
     ]
@@ -280,12 +302,14 @@ Both `en` and `es` arrays are required. Each entry has:
     "en": [
       {
         "description": "**New features available after upgrade:**\n\n- **Deep linking**: Story URLs now update as readers scroll. Copy and share a URL that points to a specific step, optionally with a panel open.\n\n- **Title cards**: Leave the object column empty for a step row to create a chapter heading card.\n\n- **Collection mode**: Add `collection_mode: true` to `_config.yml` for a collection-first homepage.\n\n- **Bibliography styling**: Wrap references in `:::bibliography` blocks for hanging-indent formatting.\n\n- **Share panel**: The share panel now includes a \"this view\" tab for position-aware sharing.",
+        "audience": "all",
         "doc_url": "https://telar.org/docs"
       }
     ],
     "es": [
       {
         "description": "**Nuevas funciones disponibles tras la actualización:**\n\n- **Enlaces directos**: Las URLs de las historias se actualizan al desplazarse. Copia y comparte una URL que apunte a un paso específico.\n\n- **Tarjetas de título**: Deja vacía la columna de objeto en una fila de paso para crear una tarjeta de encabezado de capítulo.\n\n- **Modo colección**: Agrega `collection_mode: true` en `_config.yml` para una página de inicio que prioriza la colección.\n\n- **Estilo bibliográfico**: Envuelve las referencias en bloques `:::bibliography` para formato de sangría francesa.\n\n- **Panel de compartir**: El panel de compartir ahora incluye una pestaña \"esta vista\" para compartir la posición exacta.",
+        "audience": "all",
         "doc_url": "https://telar.org/guia"
       }
     ]

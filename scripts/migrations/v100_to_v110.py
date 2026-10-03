@@ -16,7 +16,7 @@ Linking, Layers & Collections release:
 ~25 framework files fetched from GitHub, 2 language files fetched,
 1 config value added (collection_mode), version bumped.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -171,6 +171,7 @@ class Migration100to110(BaseMigration):
 - **Bibliography styling**: To format references with hanging indent in panel content, wrap them in a `:::bibliography` block in your markdown file.
 
 - **Share panel**: The share panel now includes a "this view" tab that copies the current URL with the reader's exact position.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -190,6 +191,7 @@ class Migration100to110(BaseMigration):
 - **Estilo bibliográfico**: Para dar formato de sangría francesa a las referencias en el contenido de los paneles, envuélvelas en un bloque `:::bibliography` en el archivo markdown.
 
 - **Panel de compartir**: El panel de compartir ahora incluye una pestaña "esta vista" que copia la URL actual con la posición exacta del lector.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

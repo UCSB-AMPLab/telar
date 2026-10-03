@@ -40,7 +40,7 @@ let them keep showing whatever they wrote. EN sites get acerca.md
 in fresh template clones but not via this migration (it would just
 sit unused).
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import hashlib
@@ -491,6 +491,7 @@ This release wires up Telar's existing language packs in places that previously 
 The migration changed your user-content files **only when a SHA-256 hash check confirmed the file was byte-for-byte identical to the v1.2.1 default**. If you customised any of those pages (welcome paragraph, about description, glossary or objects intros) — even with whitespace edits — the hash differs and your file is preserved untouched.
 
 A new sister-file convention now localizes the about page: a file named `acerca.md` next to `about.md` in `telar-content/texts/pages/`, carrying frontmatter `localized_for: about.md` and `language: es`, is picked up automatically when `telar_language: es`. For sites with `telar_language: es` whose `about.md` is unchanged from the v1.2.1 default, this migration creates `acerca.md` with the default Spanish content automatically. For sites that customised their `about.md`, the migration skips the create — otherwise the new sister file would shadow your customisation at build time. To add another language, create a sister with `language: <code>` (e.g. `language: fr`).''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -505,6 +506,7 @@ Esta versión cablea los paquetes de idioma de Telar en lugares que antes tenía
 La migración modificó tus archivos de contenido **solo cuando un hash SHA-256 confirmó que el archivo era byte-por-byte idéntico al default de v1.2.1**. Si personalizaste cualquiera de esas páginas (bienvenida, descripción de "Acerca de", introducciones de glosario u objetos) — incluso con cambios de espacios en blanco — el hash difiere y tu archivo se preserva sin tocarlo.
 
 Una nueva convención de "archivo hermano" localiza la página de "Acerca de": un archivo `acerca.md` junto a `about.md` en `telar-content/texts/pages/`, con `localized_for: about.md` y `language: es` en el frontmatter, se usa automáticamente cuando `telar_language: es`. Para sitios con `telar_language: es` cuyo `about.md` no se haya modificado desde el default de v1.2.1, esta migración crea `acerca.md` automáticamente con el contenido español por defecto. Para sitios que personalizaron su `about.md`, la migración no lo crea — si lo hiciera, el nuevo archivo hermano taparía tu personalización al construir el sitio. Para agregar otro idioma, crea un hermano con `language: <código>` (por ejemplo `language: fr`).''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

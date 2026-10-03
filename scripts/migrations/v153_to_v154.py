@@ -79,6 +79,7 @@ class Migration153to154(BaseMigration):
         return [
             {
                 'description': '''**If you use the Telar Compositor: no action needed.** The Compositor updates your build workflow automatically when it upgrades your site.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/docs'
             },
             {
@@ -91,6 +92,7 @@ concurrency:
 ```
 
 Until you do, your site keeps building and deploying correctly — you may just get an occasional spurious "build failed" email when two builds start at the same time.''',
+                'audience': 'local',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -99,6 +101,7 @@ Until you do, your site keeps building and deploying correctly — you may just 
         return [
             {
                 'description': '''**Si usas el Compositor de Telar: no tienes que hacer nada.** El Compositor actualiza por ti el flujo de trabajo de construcción cuando actualiza tu sitio.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/guia'
             },
             {
@@ -111,6 +114,7 @@ concurrency:
 ```
 
 Mientras tanto, tu sitio se sigue construyendo y publicando sin problemas; solo podrías recibir de vez en cuando un correo de «build failed» que no corresponde a una falla real, cuando dos ejecuciones empiezan al mismo tiempo.''',
+                'audience': 'local',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

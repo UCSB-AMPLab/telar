@@ -16,7 +16,7 @@ Bug fix release:
 No _config.yml changes beyond version bump. No CSV schema changes.
 No new dependencies.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -101,6 +101,7 @@ class Migration092to093(BaseMigration):
                 'description': '''**If you use GitHub Pages:**
 
 Your site will automatically regenerate IIIF tiles with the corrected info.json files when it rebuilds. To trigger a rebuild now, go to your repository's Actions tab, select the "Build and Deploy" workflow, and click **Run workflow**.''',
+                'audience': 'all',
             },
             {
                 'description': '''**If you work with your site locally:**
@@ -110,6 +111,7 @@ If your site uses self-hosted images, regenerate IIIF tiles to fix the info.json
 `python3 scripts/generate_iiif.py --base-url YOUR_SITE_URL`
 
 (Replace YOUR_SITE_URL with your site's URL, e.g. https://yourusername.github.io/your-repo)''',
+                'audience': 'all',
             },
         ]
 
@@ -120,6 +122,7 @@ If your site uses self-hosted images, regenerate IIIF tiles to fix the info.json
                 'description': '''**Si usas GitHub Pages:**
 
 El sitio regenerará automáticamente las teselas IIIF con los archivos info.json corregidos cuando se reconstruya. Para iniciar una reconstrucción ahora, ve a la pestaña Actions del repositorio, selecciona el flujo "Build and Deploy" y haz clic en **Run workflow**.''',
+                'audience': 'all',
             },
             {
                 'description': '''**Si trabajas con tu sitio localmente:**
@@ -129,5 +132,6 @@ Si el sitio usa imágenes auto-alojadas, regenera las teselas IIIF para corregir
 `python3 scripts/generate_iiif.py --base-url URL_DE_TU_SITIO`
 
 (Reemplaza URL_DE_TU_SITIO con la URL del sitio, ej. https://tuusuario.github.io/tu-repositorio)''',
+                'audience': 'all',
             },
         ]

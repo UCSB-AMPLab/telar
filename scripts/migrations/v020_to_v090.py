@@ -49,6 +49,7 @@ Copy these three files from the v0.9.0-beta release and replace the ones in your
 - `.github/workflows/telar-tests.yml`
 
 They are at https://github.com/UCSB-AMPLab/telar/tree/v0.9.0-beta/.github/workflows — open each file, click **Raw**, copy the whole contents, and paste it into the file of the same name in your repository.""",
+        'audience': 'local',
         'doc_url': 'https://telar.org/docs/setup/upgrading/',
         'critical': True,
     },
@@ -62,6 +63,7 @@ This upgrade moved your content out of `components/` and into `telar-content/`:
 - `components/texts/` → `telar-content/texts/`
 
 Telar takes care of the spreadsheets and the stories. What it cannot fix are the paths you typed yourself: in a page of your own, in an HTML include, or in a link or an image inside a Markdown file. Search the site for `components/` and fix what turns up.""",
+        'audience': 'all',
     },
     {
         'description': """**If you use Google Sheets, add the new columns**
@@ -73,6 +75,7 @@ The upgrade has already added the missing columns to the CSV files in your repos
 - **project tab:** a `private` column, for putting a password on a story
 
 You can also start from an up-to-date template: https://bit.ly/telar-template""",
+        'audience': 'google-sheets',
     },
     {
         'description': """**If you build the site on your own computer**
@@ -91,6 +94,7 @@ bundle exec jekyll build
 Tiles are generated much faster with libvips installed (`brew install vips` on macOS, `sudo apt-get install libvips-tools` on Debian or Ubuntu). It still works without libvips, only more slowly.
 
 If you publish through GitHub Pages and do not build on your own computer, you can skip this step, but not the workflow files.""",
+        'audience': 'all',
     },
 ]
 
@@ -107,6 +111,7 @@ Copia estos tres archivos de la versión v0.9.0-beta y reemplaza los que tengas 
 - `.github/workflows/telar-tests.yml`
 
 Están en https://github.com/UCSB-AMPLab/telar/tree/v0.9.0-beta/.github/workflows — abre cada archivo, haz clic en **Raw**, copia todo el contenido y pégalo en el archivo del mismo nombre en el repositorio.""",
+        'audience': 'local',
         'doc_url': 'https://telar.org/guia/configuracion/actualizacion/',
         'critical': True,
     },
@@ -120,6 +125,7 @@ Esta actualización sacó el contenido de `components/` y lo pasó a `telar-cont
 - `components/texts/` → `telar-content/texts/`
 
 De las hojas de cálculo y de las historias se encarga Telar. Lo que no puede arreglar son las rutas que escribiste tú a mano: en una página propia, en un *include* de HTML, o en un enlace o una imagen dentro de un archivo de Markdown. Busca `components/` en el sitio y corrige lo que aparezca.""",
+        'audience': 'all',
     },
     {
         'description': """**Si usas Google Sheets, agrega las columnas nuevas**
@@ -131,6 +137,7 @@ La actualización ya les agregó las columnas que faltaban a los archivos CSV de
 - **pestaña del proyecto:** una columna `private`, para ponerle contraseña a una historia
 
 También puedes partir de una plantilla actualizada: https://bit.ly/telar-template""",
+        'audience': 'google-sheets',
     },
     {
         'description': """**Si compilas el sitio en tu propio computador**
@@ -149,6 +156,7 @@ bundle exec jekyll build
 Las teselas se generan mucho más rápido si tienes libvips instalado (`brew install vips` en macOS, `sudo apt-get install libvips-tools` en Debian o Ubuntu). Sin libvips también funciona, solo que más lento.
 
 Si publicas con GitHub Pages y no compilas en tu computador, puedes saltarte este paso, pero no el de los flujos de trabajo.""",
+        'audience': 'all',
     },
 ]
 
@@ -476,5 +484,9 @@ class Migration020to090(BaseMigration):
         who can tell which of it they want.
         """
         if self._detect_language() == 'es':
-            return {'description': DEMO_CONTENT_NOTICE_ES}
-        return {'description': DEMO_CONTENT_NOTICE_EN}
+            return {'description': DEMO_CONTENT_NOTICE_ES,
+                'audience': 'all',
+            }
+        return {'description': DEMO_CONTENT_NOTICE_EN,
+                'audience': 'all',
+            }

@@ -16,7 +16,7 @@ Fluid Multimedia Storytelling release:
 ~51 framework files fetched from GitHub, 2 language files fetched,
 1 config value updated (max_viewer_cards 10 -> 8), version bumped.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -202,6 +202,7 @@ class Migration094to100(BaseMigration):
                 'description': '''**If you use GitHub Pages:**
 
 Replace your `.github/workflows/build.yml` with the latest version from the Telar repository. The new workflow adds an audio processing step that runs conditionally when audio files are detected. Go to https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, click "Raw", copy the entire file, and replace the contents of `.github/workflows/build.yml` in your repository.''',
+                'audience': 'local',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -223,6 +224,7 @@ sudo apt install ffmpeg audiowaveform  # Ubuntu
 ```
 
 Sites without audio objects do not need these tools.''',
+                'audience': 'all',
             },
         ]
 
@@ -233,6 +235,7 @@ Sites without audio objects do not need these tools.''',
                 'description': '''**Si usas GitHub Pages:**
 
 Reemplaza tu `.github/workflows/build.yml` con la version mas reciente del repositorio de Telar. El nuevo flujo agrega un paso de procesamiento de audio que se ejecuta condicionalmente cuando se detectan archivos de audio. Ve a https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, haz clic en "Raw", copia todo el contenido del archivo y reemplaza el contenido de `.github/workflows/build.yml` en tu repositorio.''',
+                'audience': 'local',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -254,5 +257,6 @@ sudo apt install ffmpeg audiowaveform  # Ubuntu
 ```
 
 Los sitios sin objetos de audio no necesitan estas herramientas.''',
+                'audience': 'all',
             },
         ]

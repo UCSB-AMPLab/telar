@@ -41,14 +41,15 @@ import json
 import yaml
 import argparse
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Add scripts directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
 from migrations.base import (
     BaseMigration, ChangeCategory, ChangeRecord, ChangeStatus,
-    UPGRADE_STATE_FILE, apply_config_version, coerce_change,
+    UPGRADE_STATE_FILE, apply_config_version, category_for_path,
+    coerce_change,
     is_hard_failure,
 )
 from migrations.messages import get_message, get_file_count_suffix
@@ -284,42 +285,59 @@ def run_migrations(migrations: List[BaseMigration], dry_run: bool = False) -> Li
     return all_changes
 
 
+# A path inside a change description: a dotted filename, or one of the
+# dotfiles the chain touches by name. Records that carry no category of
+# their own still name the file they changed, and the filename is the part
+# of a description that does not move when someone rewords the sentence
+# around it.
+# Longest extension first: alternation is leftmost-first, so `js` ahead of
+# `json` would match `package.js` out of `package.json` and file an npm
+# manifest under Scripts.
+_PATH_IN_DESCRIPTION = re.compile(
+    r'(?:[\w./-]*\.(?:yaml|yml|json|scss|html|lock|css|txt|ini|md|py|js)(?!\w)'
+    r'|\.gitignore|\.gitattributes|\.ruby-version'
+    r'|\bNOTICE\b|\bLICENSE\b)',
+    re.IGNORECASE,
+)
+
+
 def _category_from_description(description: str) -> str:
-    """Guess a category from the wording of a change description.
+    """The heading for a record that carries no category of its own.
 
-    The fallback for a record that carries no category — every string a
-    legacy migration returns, which coerce_change wraps without one.
+    Legacy migrations return bare strings, which `coerce_change` wraps
+    without a category, so something has to place them. This reads the
+    file path out of the description and asks `category_for_path`, which
+    is the same function a record with a category answers with.
 
-    It is a guess, and the reason ChangeRecord.category exists: the tests
-    below record that "Updated _includes/head.html" lands under
-    Configuration, because "config" appears nowhere but "include" is
-    checked after a substring that matches `_config.yml`'s neighbours. A
-    migration rephrasing its own description moves the change to another
-    heading, or to Other, with nothing to notice it.
+    It is derived rather than guessed, which is the difference that
+    matters. Matching keywords in the prose put "Updated _includes/head.html"
+    under Configuration, because "config" appears nowhere in it but the
+    substring test for `_config.yml`'s neighbours fired first; and any
+    migration that reworded its own description moved its change to another
+    heading with nothing to notice. A path does not move when the sentence
+    around it is rewritten.
+
+    A description naming no file falls to Other, which is honest: there is
+    no file for the change to be filed under.
     """
-    text = description.lower()
-
-    if '_config.yml' in text or 'configuration' in text or 'config' in text:
-        return ChangeCategory.CONFIGURATION
-    if 'layout' in text:
-        return ChangeCategory.LAYOUTS
-    if 'include' in text:
-        return ChangeCategory.INCLUDES
-    if 'style' in text or 'scss' in text or 'css' in text:
-        return ChangeCategory.STYLES
-    if 'javascript' in text or 'script' in text or '.js' in text:
-        return ChangeCategory.SCRIPTS
-    if 'readme' in text or 'docs' in text or 'documentation' in text:
-        return ChangeCategory.DOCUMENTATION
+    for match in _PATH_IN_DESCRIPTION.finditer(description):
+        token = match.group(0).lstrip('`\'"(')
+        # Both spellings: the name table is keyed on real filenames, which
+        # are cased (README.md, NOTICE), while a description may shout a
+        # path it is quoting.
+        for candidate in (token, token.lower()):
+            category = category_for_path(candidate)
+            if category != ChangeCategory.OTHER:
+                return category
     return ChangeCategory.OTHER
 
 
 def _categorize_changes(records: List[ChangeRecord]) -> dict:
     """Group applied changes under the summary headings, in print order.
 
-    A record's own `category` is used when it has one. Only records without
-    one are guessed at from their wording, which is what every record was
-    subject to before the field existed.
+    A record's own `category` is used when it has one. A record without
+    one is placed by the file path in its description, which is what
+    `_category_from_description` is for.
 
     Returns:
         {category slug: [description, ...]}, empty categories dropped.
@@ -342,6 +360,7 @@ def generate_checklist(
     to_version: str,
     soft_warnings: Optional[List[str]] = None,
     lang: str = 'en',
+    sheets_enabled: bool = True,
 ) -> str:
     """
     Generate UPGRADE_SUMMARY.md content (without YAML frontmatter).
@@ -362,6 +381,10 @@ def generate_checklist(
             surface visibly rather than bury.
         lang: Language code for the summary text ('en' or 'es'), from the
             site's telar_language setting.
+        sheets_enabled: Whether the site pulls content from Google Sheets,
+            which decides whether the spreadsheet manual steps are addressed
+            to its owner. Defaults to True so a caller that does not know
+            shows every step rather than hiding one.
 
     Returns:
         Markdown content for summary
@@ -377,9 +400,7 @@ def generate_checklist(
     flagged = [r for r in all_changes
                if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
 
-    manual_steps = []
-    for migration in migrations:
-        manual_steps.extend(migration.get_manual_steps())
+    manual_steps = _visible_manual_steps(migrations, sheets_enabled)
 
     # Categorize applied changes
     categorized = _categorize_changes(applied)
@@ -653,6 +674,53 @@ def _update_config_version(repo_root: str, new_version: str, new_date: str) -> b
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
     return modified
+
+
+def _site_uses_google_sheets(repo_root: str) -> bool:
+    """Whether this site pulls its content from a published Google Sheet.
+
+    Read for one purpose: deciding whether a manual step tagged
+    `google-sheets` is addressed to this site's owner. A config that cannot
+    be read answers False rather than raising, because a summary is not
+    worth failing an upgrade over -- and see `_visible_manual_steps` for
+    why False is the safe direction here.
+    """
+    config_path = os.path.join(repo_root, '_config.yml')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as handle:
+            config = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError):
+        return False
+    section = config.get('google_sheets')
+    return bool(isinstance(section, dict) and section.get('enabled'))
+
+
+def _visible_manual_steps(migrations: List[BaseMigration],
+                          sheets_enabled: bool) -> List[Dict[str, str]]:
+    """The manual steps this site's owner is actually meant to act on.
+
+    The framework's half of the `audience` contract. The Compositor filters
+    the same field on its own screen; a site upgrading with this engine had
+    nothing doing it, so every step reached every summary -- including the
+    spreadsheet steps, on sites with no spreadsheet.
+
+    `local` is not filtered here and cannot be. It means "the Compositor
+    does this for you", and a site running this engine is by definition not
+    being upgraded by the Compositor, so every `local` step is addressed to
+    whoever is reading this summary.
+
+    An unrecognised value shows the step. A step nobody can see is the
+    failure the field exists to prevent, so an unknown audience errs
+    towards the reader rather than away.
+    """
+    visible = []
+    for migration in migrations:
+        for step in migration.get_manual_steps():
+            audience = step.get('audience')
+            if audience == 'google-sheets' and not sheets_enabled:
+                continue
+            visible.append(step)
+    return visible
 
 
 def _get_date() -> str:
@@ -966,8 +1034,10 @@ def main():
     all_changes.extend(_retire_local_migrations(repo_root, lang))
 
     # Generate and write summary
-    summary = generate_checklist(migrations, all_changes, from_version, LATEST_VERSION,
-                                 soft_warnings=soft_warnings, lang=lang)
+    summary = generate_checklist(
+        migrations, all_changes, from_version, LATEST_VERSION,
+        soft_warnings=soft_warnings, lang=lang,
+        sheets_enabled=_site_uses_google_sheets(repo_root))
     summary_path = os.path.join(repo_root, 'UPGRADE_SUMMARY.md')
     with open(summary_path, 'w') as f:
         f.write(summary)

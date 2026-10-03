@@ -96,55 +96,77 @@ class TestCategorizeChanges:
                 assert label != 'category_' + category, (category, lang)
 
 
-class TestTheDescriptionGuess:
-    """What the summary did for every change before records carried one.
+class TestTheDescriptionFallback:
+    """Where a record that carries no category of its own is filed.
 
-    Kept because legacy migrations still return bare strings. These tests
-    record where it is wrong, so the fallback's limits are written down
-    rather than assumed.
+    Legacy migrations return bare strings, which `coerce_change` wraps
+    without a category. The fallback reads the file path out of the
+    description and asks `category_for_path`, so the answer is derived from
+    the same table an install record answers with, rather than guessed from
+    the wording around it.
     """
 
-    def test_it_reads_the_obvious_cases(self):
+    def test_it_reads_a_path_out_of_the_sentence(self):
         for description, expected in (
                 ('Updated _config.yml with new settings', ChangeCategory.CONFIGURATION),
                 ('Modified _layouts/default.html', ChangeCategory.LAYOUTS),
                 ('Updated _includes/header.html', ChangeCategory.INCLUDES),
                 ('Updated main.scss with new variables', ChangeCategory.STYLES),
-                ('Modified JavaScript for panels', ChangeCategory.SCRIPTS),
                 ('Updated README.md', ChangeCategory.DOCUMENTATION),
-                ('Added new feature', ChangeCategory.OTHER),
+                ('Skipped .gitignore (entries already present)',
+                 ChangeCategory.CONFIGURATION),
         ):
             assert _category_from_description(description) == expected, description
 
-    def test_it_matches_case_insensitively(self):
+    def test_a_description_naming_no_file_is_other(self):
+        """Honest rather than helpful.
+
+        The old fallback matched the word "JavaScript" and filed this under
+        Scripts. It read a category out of prose, which is the coupling that
+        moved a change to another heading when its sentence was reworded.
+        """
+        for description in ('Modified JavaScript for panels',
+                            'Added new feature',
+                            'Upgrade-chain wiring fix (internal)'):
+            assert _category_from_description(description) == ChangeCategory.OTHER
+
+    def test_it_reads_a_shouted_path(self):
         assert _category_from_description('Updated _CONFIG.YML') == \
             ChangeCategory.CONFIGURATION
 
-    def test_config_beats_the_later_rules(self):
-        assert _category_from_description('_config.yml: added new script setting') == \
+    def test_the_longest_extension_wins(self):
+        """`js` ahead of `json` in the alternation matches `package.js`.
+
+        Leftmost-first alternation would take the shorter one and file an
+        npm manifest under Scripts, which is what the old substring test did.
+        """
+        assert _category_from_description('Updated package.json — Node.js dependencies') == \
             ChangeCategory.CONFIGURATION
 
-    def test_it_sees_js_inside_json(self):
-        """`.js` is a substring of `.json`, so npm manifests read as scripts."""
-        for description in ('Updated package.json — Node.js dependencies',
-                            'Updated objects.json endpoint'):
-            assert _category_from_description(description) == ChangeCategory.SCRIPTS
+    def test_an_unrecognised_path_is_other_rather_than_guessed_at(self):
+        assert _category_from_description('Updated objects.json endpoint') == \
+            ChangeCategory.OTHER
 
-    def test_a_python_module_named_config_reads_as_configuration(self):
-        assert _category_from_description(
-            'Updated scripts/telar/config.py — Language loading') == \
-            ChangeCategory.CONFIGURATION
+    def test_the_cases_the_old_guess_got_wrong(self):
+        """Each of these was filed under the wrong heading by the wording.
 
-    def test_a_stylesheet_named_layout_reads_as_a_layout(self):
-        assert _category_from_description(
-            'Updated _sass/_layout.scss — Featured object thumbnail CSS fix') == \
-            ChangeCategory.LAYOUTS
-
-    def test_data_files_and_licences_fall_through_to_other(self):
-        for description in ('Updated _data/navigation.yml — Updated path references',
-                            'Updated NOTICE — Third-party notices',
-                            'Updated LICENSE — Updated license'):
-            assert _category_from_description(description) == ChangeCategory.OTHER
+        A Python module whose name contains "config" is not configuration; a
+        stylesheet whose name contains "layout" is not a layout; and a data
+        file is not nothing. All three are settled by the path.
+        """
+        for description, expected in (
+                ('Updated scripts/telar/config.py — Language loading',
+                 ChangeCategory.SCRIPTS),
+                ('Updated _sass/_layout.scss — Featured object thumbnail CSS fix',
+                 ChangeCategory.STYLES),
+                ('Updated _data/navigation.yml — Updated path references',
+                 ChangeCategory.CONFIGURATION),
+                ('Updated NOTICE — Third-party notices',
+                 ChangeCategory.DOCUMENTATION),
+                ('Updated LICENSE — Updated license',
+                 ChangeCategory.DOCUMENTATION),
+        ):
+            assert _category_from_description(description) == expected, description
 
 
 class TestCategoryForPath:
@@ -183,11 +205,13 @@ class TestCategoryForPath:
         for path in FRAMEWORK_FILES_090:
             assert category_for_path(path) in ChangeCategory.ORDER, path
 
-    def test_it_disagrees_with_the_guess_on_a_third_of_the_install_set(self):
-        """The measurement this change was made for.
+    def test_the_fallback_now_agrees_with_it_on_the_whole_install_set(self):
+        """The measurement this change was made for, inverted.
 
-        Not a threshold to tune — a record of how much of an upgrade's
-        report was filed by wording, most of it into "Other".
+        A record that names its file is filed the same way whether or not
+        it carries a category of its own. Reading the heading out of the
+        wording instead put more than thirty of these under a different
+        one, most of them "Other".
         """
         from migrations.v020_to_v090 import FRAMEWORK_FILES_090
 
@@ -197,8 +221,7 @@ class TestCategoryForPath:
             != category_for_path(path)
         ]
 
-        assert len(disagreements) > 30
-        assert len(disagreements) < len(FRAMEWORK_FILES_090) / 2
+        assert disagreements == []
 
 
 class TestApplyConfigVersion:

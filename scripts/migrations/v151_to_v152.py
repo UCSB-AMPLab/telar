@@ -101,6 +101,7 @@ class Migration151to152(BaseMigration):
 
 - **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.
 - **If you work with your site locally:** just rebuild your site to use the updated warning messages.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -112,6 +113,7 @@ class Migration151to152(BaseMigration):
 
 - **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.
 - **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los mensajes de advertencia actualizados.''',
+                'audience': 'all',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

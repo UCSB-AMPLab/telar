@@ -191,6 +191,7 @@ _CATEGORY_BY_NAME = {
     'NOTICE': ChangeCategory.DOCUMENTATION,
     '.gitignore': ChangeCategory.CONFIGURATION,
     'package.json': ChangeCategory.CONFIGURATION,
+    'package-lock.json': ChangeCategory.CONFIGURATION,
     'requirements.txt': ChangeCategory.CONFIGURATION,
     'pytest.ini': ChangeCategory.CONFIGURATION,
     'vitest.config.js': ChangeCategory.CONFIGURATION,
@@ -208,6 +209,30 @@ def category_for_path(path: str) -> str:
         if path.endswith(suffix):
             return category
     return ChangeCategory.OTHER
+
+
+# Who still has to perform a manual step. The set is the Compositor's, not
+# ours: its post-upgrade screen filters on this field, so a value it does not
+# recognise is a value that does nothing.
+#
+#   all           — everyone upgrading, whatever route they took.
+#   local         — everyone except Compositor users, because the Compositor
+#                   does this itself. In practice the workflow-file recopies,
+#                   which exist only because GitHub will not let an automated
+#                   upgrade write to .github/workflows/ and the Compositor
+#                   commits them directly.
+#   google-sheets — only sites that pull their content from Google Sheets.
+#                   The Compositor shows these when the site has Sheets
+#                   enabled and hides them otherwise.
+#   compositor    — only Compositor users. Accepted by the filter and
+#                   rendered, but it hides nothing from anyone: every reader
+#                   of that screen is a Compositor user by definition. It is
+#                   documentation, and a step may be left `all` instead.
+#
+# Two axes, not one. `local` and `compositor` are about the upgrade route;
+# `google-sheets` is about how the site gets its content. A step can only
+# declare one, so pick the axis that decides whether the reader must act.
+MANUAL_STEP_AUDIENCES = ('all', 'local', 'google-sheets', 'compositor')
 
 
 # Shared name for the in-progress / failed state marker (see the module
@@ -396,7 +421,18 @@ class BaseMigration(ABC):
         Get list of manual steps user must complete.
 
         Returns:
-            List of dicts with keys: 'description', 'doc_url' (optional)
+            List of dicts with keys: 'description', 'audience',
+            'doc_url' (optional).
+
+        `audience` says who still has to do the step, and exists because the
+        Compositor does some of them for the user. It is required on every
+        step: a step that forgets it is shown to everyone, which is the
+        behaviour it was added to stop, and a default would hide that.
+
+        The question it answers is narrow — *is this step made unnecessary by
+        the Compositor doing it for you?* It is not "who is this step about".
+        A step whose prose already says "if you use GitHub Pages" is still
+        `all`: every reader sees it and the prose sorts them out.
         """
         return []
 

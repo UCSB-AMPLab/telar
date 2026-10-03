@@ -9,7 +9,7 @@ This is a backward-compatible patch release that adds:
 No structural changes required — framework files are updated automatically.
 No _config.yml changes, no file renames, no CSV schema changes.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
