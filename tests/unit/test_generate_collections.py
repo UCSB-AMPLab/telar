@@ -166,6 +166,17 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
                 results[md_file.name] = md_file.read_text()
         return results
 
+    @staticmethod
+    def _media_type(content):
+        """The parsed value, not the bytes that carry it.
+
+        A serialiser quotes only what needs quoting, so asserting on
+        `media_type: "Image"` tested the quoting style rather than the
+        value — and would fail on a correct change to how it is written.
+        """
+        import yaml
+        return yaml.safe_load(content.split('---')[1])['media_type']
+
     def test_image_object_has_media_type_image(self, tmp_path):
         """IIIF/image object gets media_type: \"Image\" in frontmatter."""
         objects_data = [
@@ -173,7 +184,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
         ]
         files = self._run_generate_objects(tmp_path, objects_data)
         content = files.get('img-obj.md', '')
-        assert 'media_type: "Image"' in content
+        assert self._media_type(content) == 'Image'
 
     def test_youtube_object_has_media_type_video(self, tmp_path):
         """YouTube object gets media_type: \"Video\" in frontmatter."""
@@ -182,7 +193,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
         ]
         files = self._run_generate_objects(tmp_path, objects_data)
         content = files.get('vid-obj.md', '')
-        assert 'media_type: "Video"' in content
+        assert self._media_type(content) == 'Video'
 
     def test_audio_object_has_media_type_audio(self, tmp_path):
         """Object with .mp3 file gets media_type: \"Audio\" in frontmatter."""
@@ -196,7 +207,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
         ]
         files = self._run_generate_objects(tmp_path, objects_data)
         content = files.get('aud-obj.md', '')
-        assert 'media_type: "Audio"' in content
+        assert self._media_type(content) == 'Audio'
 
     def test_audio_object_has_source_url(self, tmp_path):
         """Video object gets source_url in frontmatter for sidebar rendering."""

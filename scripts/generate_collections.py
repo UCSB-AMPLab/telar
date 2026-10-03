@@ -72,30 +72,15 @@ KNOWN_OBJECT_FIELDS = {
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
 
-# Control characters that must not survive into a double-quoted YAML scalar,
-# with the escape YAML defines for each. A line break is the dangerous one: the
-# scalar would span lines, and frontmatter is located by splitting on a line
-# that is exactly `---` before any YAML is parsed, so a value could end the
-# block early and spill the rest of the metadata into the page body.
-_YAML_CONTROL = {
-    '\n': '\\n',
-    '\r': '\\r',
-    '\t': '\\t',
-}
+def _as_text(value):
+    """A frontmatter value as the text the author typed.
 
-
-def _yaml_escape(value):
-    """Escape a string value for safe inclusion in double-quoted YAML.
-
-    Backslashes first: every other replacement introduces one, and doing it
-    later would double them.
+    Every scalar the build writes is a string as far as the templates are
+    concerned, and pandas hands over numpy scalars rather than Python ones.
+    Serialising a value's own type is how `1890` reaches a page as a number
+    and `true` as a boolean, neither of which is what the cell said.
     """
-    s = str(value)
-    s = s.replace('\\', '\\\\')
-    s = s.replace('"', '\\"')
-    for character, escape in _YAML_CONTROL.items():
-        s = s.replace(character, escape)
-    return s
+    return str(value)
 
 
 def _object_metadata(obj, media_type, source_url):
@@ -119,37 +104,41 @@ def _object_metadata(obj, media_type, source_url):
         'object_warning': obj.get('object_warning', ''),
         'object_warning_short': obj.get('object_warning_short', ''),
     }
-    return ''.join(f'{key}: "{_yaml_escape(str(value))}"\n'
-                   for key, value in fields.items() if value)
+    return {key: _as_text(value) for key, value in fields.items() if value}
 
 
 def _object_flags(obj, is_demo):
     """The optional scalars and the two booleans, in the order written."""
-    lines = ''
+    flags = {}
     if obj.get('year'):
-        lines += f'year: "{obj.get("year")}"\n'
+        flags['year'] = _as_text(obj.get('year'))
     # Frontmatter carries 'medium' only; object_type is not written
     if obj.get('subjects'):
-        lines += f'subjects: "{obj.get("subjects")}"\n'
+        flags['subjects'] = _as_text(obj.get('subjects'))
+    # The only two values on an object page that are genuinely booleans,
+    # and the templates test them as booleans.
     if obj.get('is_featured_sample'):
-        lines += "is_featured_sample: true\n"
+        flags['is_featured_sample'] = True
     if is_demo:
-        lines += "demo: true\n"
-    return lines
+        flags['demo'] = True
+    return flags
 
 
 def _audio_duration(object_id):
-    """Duration from the peaks file process_audio.py writes, if it is there."""
+    """Duration from the peaks file process_audio.py writes, if it is there.
+
+    Stays a number: the template formats it arithmetically.
+    """
     peaks_path = Path(f'assets/audio/peaks/{object_id}.json')
     if not peaks_path.exists():
-        return ''
+        return {}
     try:
         with open(peaks_path, 'r') as pf:
             peaks_data = json.load(pf)
         duration = peaks_data.get('duration', 0)
     except (json.JSONDecodeError, KeyError):
-        return ''
-    return f'audio_duration: {duration}\n' if duration else ''
+        return {}
+    return {'audio_duration': duration} if duration else {}
 
 
 def _audio_file_details(object_id):
@@ -167,9 +156,9 @@ def _audio_file_details(object_id):
             size_str = f'{size_bytes / 1024:.0f} KB'
         else:
             size_str = f'{size_bytes / (1024 * 1024):.1f} MB'
-        return (f'audio_filesize: "{size_str}"\n'
-                f'audio_format: "{ext.lstrip(".").upper()}"\n')
-    return ''
+        return {'audio_filesize': size_str,
+                'audio_format': ext.lstrip('.').upper()}
+    return {}
 
 
 def _extra_metadata(obj):
@@ -188,12 +177,26 @@ def _extra_metadata(obj):
         if s and s.lower() != 'nan':
             extra[key] = s
 
-    if not extra:
-        return ''
-    lines = "extra_metadata:\n"
-    for key, value in extra.items():
-        lines += f'  {key}: "{_yaml_escape(value)}"\n'
-    return lines
+    return {'extra_metadata': extra} if extra else {}
+
+
+def _frontmatter_block(fields):
+    """Serialise frontmatter fields as YAML.
+
+    `safe_dump` rather than a hand-built string with an escape table. It
+    quotes anything that would parse back as another type, which an escape
+    table has to be told about one character at a time — and the fields that
+    were assembled outside the table did not get escaped at all: an
+    `object_id` beginning `*` made the document an alias reference, and a
+    quote anywhere in `year` ended its scalar early and left the rest of the
+    frontmatter malformed.
+
+    `sort_keys=False` keeps the order the build writes, which is the order a
+    site owner reading the file expects, and `allow_unicode` keeps accented
+    text as itself rather than as escapes.
+    """
+    return yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
+                          default_flow_style=False, width=10 ** 6)
 
 
 def _object_page(obj):
@@ -202,18 +205,20 @@ def _object_page(obj):
     source_url = obj.get('source_url', '') or ''
     media_type = detect_media_type(source_url, object_id)
 
-    content = f'---\nobject_id: {object_id}\n'
-    content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
-    content += _object_metadata(obj, media_type, source_url)
+    fields = {'object_id': _as_text(object_id),
+              'title': _as_text(obj.get('title', ''))}
+    fields.update(_object_metadata(obj, media_type, source_url))
     # Always written: the template branches on it for every type.
-    content += f'media_type: "{media_type}"\n'
-    content += _object_flags(obj, obj.get('_demo', False))
+    fields['media_type'] = _as_text(media_type)
+    fields.update(_object_flags(obj, obj.get('_demo', False)))
 
     if media_type == 'Audio':
-        content += _audio_duration(object_id)
-        content += _audio_file_details(object_id)
+        fields.update(_audio_duration(object_id))
+        fields.update(_audio_file_details(object_id))
 
-    content += _extra_metadata(obj)
+    fields.update(_extra_metadata(obj))
+
+    content = '---\n' + _frontmatter_block(fields)
 
     description = obj.get('description', '')
     if description and has_latex(description):
@@ -267,7 +272,11 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         glossary_dir: Output directory for Jekyll files
         glossary_terms: Dict of term_id -> title for link processing
     """
-    df = pd.read_csv(csv_path)
+    # Every column here is text the author typed. Left to infer, pandas
+    # reads a term titled `null` or `NA` as a missing value and the page
+    # is written `nan`, and it decides per column, so the same title
+    # survives or does not depending on what its neighbours look like.
+    df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
 
     # Normalize column names (lowercase + bilingual mapping)
     df.columns = df.columns.str.lower().str.strip()
@@ -330,26 +339,22 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         for warning in warnings_list:
             print(f"  Warning: {warning}")
 
-        # Check definition for LaTeX content
-        latex_flag = ""
-        if has_latex(processed):
-            latex_flag = "\nhas_latex: true"
-
-        # Build related_terms frontmatter
-        related_str = ''
+        fields = {'term_id': _as_text(term_id),
+                  'title': _as_text(title)}
+        # A sequence, not a joined string: the layout iterates this, and
+        # Liquid walks a string as a single item, so two related terms
+        # written as one scalar are looked up as one id that matches no
+        # term and the section renders empty.
         if related_terms:
-            related_str = f"\nrelated_terms: {','.join(related_terms)}"
+            fields['related_terms'] = [_as_text(term) for term in related_terms]
+        if has_latex(processed):
+            fields['has_latex'] = True
+        fields['layout'] = 'glossary'
 
         # Write Jekyll file
         filepath = glossary_dir / f"{term_id}.md"
-        output_content = f"""---
-term_id: {term_id}
-title: "{_yaml_escape(title)}"{related_str}{latex_flag}
-layout: glossary
----
-
-{processed}
-"""
+        output_content = ('---\n' + _frontmatter_block(fields)
+                          + '---\n\n' + processed + '\n')
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(output_content)
 
@@ -477,15 +482,13 @@ def generate_glossary():
             filepath = glossary_dir / f"{term_id}.md"
 
             # Create markdown with frontmatter
-            output_content = f"""---
-term_id: {term_id}
-title: "{_yaml_escape(term.get('title', term_id))}"
-layout: glossary
-demo: true
----
-
-{term.get('content', '')}
-"""
+            fields = {'term_id': _as_text(term_id),
+                      'title': _as_text(term.get('title', term_id)),
+                      'layout': 'glossary',
+                      # The layout tests this as a boolean.
+                      'demo': True}
+            output_content = ('---\n' + _frontmatter_block(fields)
+                              + '---\n\n' + term.get('content', '') + '\n')
 
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(output_content)

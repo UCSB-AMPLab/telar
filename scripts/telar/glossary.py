@@ -38,7 +38,7 @@ Term matching is case-insensitive (v1.5.1): an author's `[[Term]]` resolves
 against the stored key regardless of casing, and the rendered `data-term-id`
 uses the stored key so it matches the published glossary page slug.
 
-Version: v1.5.2
+Version: v1.8.0
 """
 
 import html
@@ -61,7 +61,11 @@ def load_glossary_from_csv(csv_path):
     glossary_terms = {}
 
     try:
-        df = pd.read_csv(csv_path)
+        # Every column here is text the author typed. Left to infer, pandas
+        # reads a term titled `null` or `NA` as a missing value and the page
+        # is written `nan`, and it decides per column, so the same title
+        # survives or does not depending on what its neighbours look like.
+        df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
 
         # Normalize column names (bilingual mapping). normalize_column_names
         # already lowercases internally for lookup, so pre-lowercasing here was
