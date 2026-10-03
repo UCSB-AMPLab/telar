@@ -314,7 +314,10 @@ class TestThePerFileRecordsSpeakSpanish:
         records = migration._commit_staged({'Gemfile.lock': ('x', 'Ruby dependencies')})
 
         assert len(records) == 1
-        assert records[0].description == 'Gemfile.lock actualizado'
+        # One voice across the document: this is the most frequent line in
+        # any summary — one per framework file written — and it was the only
+        # nominal one among forty-odd in the passive.
+        assert records[0].description == 'Se actualizó Gemfile.lock'
 
     def test_an_applied_record_is_written_in_english(self, tmp_path):
         migration = self._migration_at(tmp_path, 'en')

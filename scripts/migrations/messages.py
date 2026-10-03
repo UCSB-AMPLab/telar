@@ -231,6 +231,7 @@ MESSAGES = {
                                    'installed by this upgrade use the files that replaced it.',
         'change_could_not_fetch_config': 'Could not fetch _config.yml',
         'change_transformation_aborted': '{} aborted: {}',
+        'and_n_more': 'and {} more',
         'change_gitignore_paths': 'Updated .gitignore path references (components/ → telar-content/)',
         'change_gitignore_section': 'Updated .gitignore — {}',
         'change_removed_not_telar': 'Removed {} — no longer part of Telar',
@@ -257,12 +258,13 @@ MESSAGES = {
         'change_removed_empty_subdir': 'Removed the empty {}/{}/ directory',
         'change_rewrote_image_paths': 'Updated {} image path(s) to the flattened directory',
         'change_renamed_column': 'Renamed the {} column to {} in {}',
-        'change_added_columns': 'Added {} to {}',
+        'change_added_columns': 'New columns in {}: {}',
         'change_kept_no_stories': 'Kept {} — it is in the old key-value format but names no stories',
         'change_rewrote_stories_table': 'Rewrote {} as a table of {} story/stories',
         'change_kept_config_unreadable': 'Kept _config.yml as it is — it could not be read as YAML, so '
                                'nothing could be moved across safely',
-        'change_rewrote_config': "Rewrote _config.yml on the release's, keeping this site's own settings",
+        'change_rewrote_config': "Rewrote _config.yml from the release's copy, keeping this "
+                                 "site's own settings",
         'change_nothing_to_remove': 'No {} to remove (already absent)',
         'change_removed_superseded': 'Removed {} — superseded by the files installed with this upgrade',
         'change_removed_stale_bundle': 'Removed stale bundle file {}',
@@ -368,7 +370,7 @@ MESSAGES = {
         'see_summary_details': '  Revisa UPGRADE_SUMMARY.md para más detalles.',
         'data_files_regenerated': '✓ Archivos de datos regenerados',
         'chain_stops': '⚠️  La cadena de migraciones se detiene en {}: ninguna migración registrada continúa desde ahí hacia {}.',
-        'chain_stops_note': '    Esto suele significar que la versión actual no es compatible o que falta una migración en la cadena; revísalo manualmente antes de continuar.',
+        'chain_stops_note': '    Esto suele significar que la versión actual no es compatible o que falta una migración en la cadena; revísalo a mano antes de continuar.',
 
         # Phase labels (for migration console output)
         'phase': 'Fase {}',
@@ -406,7 +408,7 @@ MESSAGES = {
         'category_styles': 'Estilos',
         'category_scripts': 'Scripts',
         'category_documentation': 'Documentación',
-        'category_other': 'Otro',
+        'category_other': 'Otros',
 
         # File count suffix (for category headings)
         'file': 'archivo',
@@ -417,7 +419,7 @@ MESSAGES = {
         'moved_file': 'Movido {} → {}',
         'removed_file': 'Archivo eliminado: {}',
         'removed_directory': 'Directorio eliminado: {}',
-        'updated_file': '{} actualizado',
+        'updated_file': 'Se actualizó {}',
         'fetched_file': '{} actualizado: {}',
         'file_exists': '{} ya existe',
         'empty_directory_removed': 'Directorio vacío eliminado: {}',
@@ -426,7 +428,7 @@ MESSAGES = {
         # Safety messages (for preserved user content)
         'kept_modified_files': '⚠️  Se conservaron {} archivos de demostración modificados por el usuario',
         'kept_images_safety': 'ℹ️  Se conservaron {} imágenes de demostración antiguas por seguridad',
-        'manual_delete_note': '(Puedes eliminarlas manualmente si no las usas)',
+        'manual_delete_note': '(Puedes eliminarlas a mano si no las usas)',
 
         # Sobre record_fetch_failed y la frase que usa coerce_change para
         # clasificar, ver la nota en la seccion en ingles.
@@ -451,71 +453,84 @@ MESSAGES = {
                                     'que se deshicieron los cambios: {}',
 
         # Descripciones de cambios. Ver la nota en la seccion en ingles.
-        'change_concurrency_by_hand': 'Grupo de concurrencia del workflow de construcción: agrega el '
-                                   'bloque `concurrency` a .github/workflows/build.yml a mano (o '
-                                   'copia el archivo completo otra vez). La actualización que '
-                                   'corre dentro de GitHub Actions no puede modificar archivos de '
-                                   'workflow; el Compositor de Telar lo hace por ti. Mira el paso '
-                                   'manual más abajo.',
-        'change_gitattributes_added': 'Se agregó {} — marca como generado el paquete de historias que '
-                                   'arma la construcción',
-        'change_gitattributes_skipped': 'Se omitió {} (ya existía) — mira el paso manual para juntar '
-                                   'las marcas nuevas',
-        'change_gitattributes_absent': '{} no se descargó de GitHub. No es grave: agrégalo a mano si '
-                                   'quieres las marcas del paquete generado.',
-        'change_chain_wiring_internal': 'Arreglo interno de la cadena de actualización: la migración de '
-                                   'la v1.5.4 a la v1.6.0 quedó registrada en scripts/upgrade.py, '
-                                   'así que una actualización que empieza por debajo de la v1.6.0 '
-                                   'ya no se detiene en la 1.5.4. En este sitio no cambió ningún '
-                                   'archivo.',
-        'change_removed_dependabot': 'Se eliminó {} — las propuestas de cambio que suben versiones '
-                                   'de dependencias ahora las maneja el proceso de lanzamiento de '
-                                   'Telar, y no cada sitio por su cuenta',
-        'change_could_not_remove_dependabot': 'No se pudo eliminar {}: {}. No es grave: bórralo a mano cuando '
-                                   'puedas. Ya no hace nada, porque las propuestas de cambio que '
-                                   'suben versiones de dependencias las maneja el proceso de '
-                                   'lanzamiento de Telar y no cada sitio; las alertas de seguridad '
-                                   'de GitHub siguen igual en cualquier caso.',
-        'change_could_not_remove_superseded': 'No se pudo eliminar {}: {}. No es grave: bórralo a mano cuando '
-                                   'puedas. Ya nada lo carga, porque las plantillas y los scripts '
-                                   'que instaló esta actualización usan los archivos que lo '
-                                   'reemplazaron.',
+        'change_concurrency_by_hand': 'Grupo de concurrencia en .github/workflows/build.yml: '
+                                      'agrega el bloque `concurrency` a ese archivo a mano (o '
+                                      'vuelve a copiarlo completo). La actualización que se '
+                                      'ejecuta dentro de GitHub Actions no puede modificar '
+                                      'archivos de workflow; el Compositor de Telar lo aplica '
+                                      'automáticamente. Revisa el paso manual que aparece más '
+                                      'abajo.',
+        'change_gitattributes_added': 'Se agregó {}: marca el paquete de historias como archivo '
+                                      'generado',
+        'change_gitattributes_skipped': 'Se omitió {} (ya existía): revisa el paso manual para '
+                                        'juntar las marcas de archivo generado',
+        'change_gitattributes_absent': '{} no se descargó de GitHub. No es grave: agrégalo a mano '
+                                       'si quieres las marcas de archivo generado.',
+        'change_chain_wiring_internal': 'Arreglo interno de la cadena de actualización: la '
+                                        'migración de la v1.5.4 a la v1.6.0 quedó registrada en '
+                                        'scripts/upgrade.py, así que una actualización que empieza '
+                                        'desde una versión anterior a la v1.6.0 ya no se detiene en '
+                                        'la v1.5.4. En este sitio no cambió ningún archivo.',
+        'change_removed_dependabot': 'Se eliminó {}: los pull requests que suben versiones de '
+                                     'dependencias ahora los maneja el proceso de lanzamiento de '
+                                     'Telar, y no cada sitio por su cuenta',
+        'change_could_not_remove_dependabot': 'No se pudo eliminar {}: {}. No es grave: bórralo a mano '
+                                              'cuando puedas. Ya no hace nada, porque los pull requests '
+                                              'que suben versiones de dependencias los maneja el proceso '
+                                              'de lanzamiento de Telar y no cada sitio; las alertas de '
+                                              'seguridad de GitHub no cambian.',
+        'change_could_not_remove_superseded': 'No se pudo eliminar {}: {}. No es grave: bórralo a mano '
+                                              'cuando puedas. Ya nada lo carga, porque las plantillas y '
+                                              'los scripts que instaló esta actualización usan los '
+                                              'archivos que lo reemplazaron.',
         'change_could_not_fetch_config': 'No se pudo descargar _config.yml',
-        'change_transformation_aborted': '{} se interrumpi\u00f3: {}',
-        'change_gitignore_paths': 'Se actualizaron las rutas de .gitignore (components/ → telar-content/)',
-        'change_gitignore_section': 'Se actualizó .gitignore — {}',
-        'change_removed_not_telar': 'Se eliminó {} — ya no hace parte de Telar',
+        'change_transformation_aborted': '{} se interrumpió: {}',
+        'and_n_more': 'y {} más',
+        'change_gitignore_paths': 'Se actualizaron las rutas de .gitignore (components/ → '
+                                  'telar-content/)',
+        'change_gitignore_section': 'Se actualizó .gitignore: sección {}',
+        'change_removed_not_telar': 'Se eliminó {}: ya no forma parte de Telar',
         'change_could_not_remove': 'No se pudo eliminar {}: {}',
-        'change_kept_uncheckable': 'Se conservó {} — no se pudo comprobar si lo habías editado',
-        'change_kept_edited': 'Se conservó {} — está editado en este sitio',
-        'change_removed_demo_term': 'Se eliminó {} — término de glosario de demostración que Telar ya no trae',
-        'change_both_dirs_present': 'Están {}/ y {}/ al tiempo. No se tocó ninguna de las dos: júntalas a mano.',
+        'change_kept_uncheckable': 'Se conservó {}: no se pudo comprobar si lo habías editado',
+        'change_kept_edited': 'Se conservó {}: tiene cambios hechos en este sitio',
+        'change_removed_demo_term': 'Se eliminó {}: era un término del glosario de demostración '
+                                    'que Telar ya no trae',
+        'change_both_dirs_present': 'Las carpetas {}/ y {}/ están las dos en el sitio. No se '
+                                    'tocó ninguna: júntalas a mano.',
         'change_moved_dir': 'Se movió {}/ → {}/',
-        'change_kept_components': 'Se conservó components/ — todavía tiene {}',
+        'change_kept_components': 'Se conservó components/: todavía tiene adentro {}',
         'change_removed_empty_components': 'Se eliminó la carpeta components/, que quedó vacía',
-        'change_both_files_present': 'Están {} y {} al tiempo. No se tocó ninguno de los dos: júntalos a mano.',
+        'change_both_files_present': 'Los archivos {} y {} están los dos en el sitio. No se tocó '
+                                     'ninguno: júntalos a mano.',
         'change_could_not_move': 'No se pudo mover {}',
         'change_moved_file': 'Se movió {} → {}',
         'change_removed_empty_pages': 'Se eliminó la carpeta pages/, que quedó vacía',
-        'change_moved_images': 'Se sacaron {} imagen(es) de objects/ y additional/ a la carpeta de arriba',
-        'change_kept_different_image': 'Se conservó {}/{}/{} — {}/{} es otra imagen, y la que nombra la '
-                               'hoja de cálculo es esta',
-        'change_kept_both_taken': 'Se conservó {}/{}/{} — {} y {} ya están ocupados en {}/',
+        'change_moved_images': 'Se sacaron {} imagen(es) de las subcarpetas objects/ y '
+                               'additional/ a la carpeta que las contiene',
+        'change_kept_different_image': 'Se conservó {}/{}/{}: {}/{} es otra imagen, y la que '
+                                       'aparece en la hoja de cálculo es esta',
+        'change_kept_both_taken': 'Se conservó {}/{}/{}: los nombres {} y {} ya están '
+                                  'ocupados en {}/',
         'change_could_not_move_image': 'No se pudo mover {}/{}/{}: {}',
-        'change_moved_renamed': 'Se movió {}/{}/{} → {}/{}, con otro nombre porque {} ya estaba ocupado',
+        'change_moved_renamed': 'Se movió {}/{}/{} → {}/{}, con otro nombre porque el '
+                                'nombre {} ya estaba ocupado',
         'change_removed_empty_subdir': 'Se eliminó la carpeta {}/{}/, que quedó vacía',
-        'change_rewrote_image_paths': 'Se actualizaron {} ruta(s) de imagen a la carpeta única',
-        'change_renamed_column': 'Se cambió el nombre de la columna {} a {} en {}',
-        'change_added_columns': 'Se agregó {} a {}',
-        'change_kept_no_stories': 'Se conservó {} — está en el formato viejo de clave y valor, pero '
-                               'no nombra ninguna historia',
+        'change_rewrote_image_paths': 'Se actualizaron {} ruta(s) de imagen para que apunten a la '
+                                      'carpeta donde quedaron',
+        'change_renamed_column': 'La columna {} ahora se llama {} en {}',
+        'change_added_columns': 'Columnas nuevas en {}: {}',
+        'change_kept_no_stories': 'Se conservó {}: está en el formato viejo, de clave y '
+                                  'valor, pero no nombra ninguna historia',
         'change_rewrote_stories_table': 'Se reescribió {} como una tabla de {} historia(s)',
-        'change_kept_config_unreadable': 'Se dejó _config.yml como estaba — no se pudo leer como YAML, así '
-                               'que no hubo forma de pasar nada sin arriesgar el archivo',
-        'change_rewrote_config': 'Se reescribió _config.yml sobre el del lanzamiento, conservando '
-                               'los ajustes propios de este sitio',
-        'change_nothing_to_remove': 'No había {} que eliminar (ya no estaba)',
-        'change_removed_superseded': 'Se eliminó {} — lo reemplazan los archivos que instaló esta actualización',
+        'change_kept_config_unreadable': 'Se dejó _config.yml como estaba: no se pudo leer como '
+                                         'YAML, así que no hubo forma de pasar los ajustes sin '
+                                         'arriesgar el archivo',
+        'change_rewrote_config': 'Se reescribió _config.yml a partir del que trae esta '
+                                 'versión de Telar, pero con los ajustes propios de este '
+                                 'sitio',
+        'change_nothing_to_remove': 'No hubo que eliminar {}: no estaba en el sitio',
+        'change_removed_superseded': 'Se eliminó {}: lo reemplazan los archivos que instaló esta '
+                                     'actualización',
         'change_removed_stale_bundle': 'Se eliminó {}, un archivo de paquete que quedó viejo',
         'change_no_stale_bundles': 'No había archivos de paquete viejos que eliminar',
         'change_removed_dead_file': 'Se eliminó {}, un archivo que ya no se usa',

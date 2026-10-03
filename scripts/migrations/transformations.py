@@ -340,7 +340,8 @@ def _remove_empty_components(migration: BaseMigration) -> List[ChangeRecord]:
     if theirs:
         listed = ', '.join(theirs[:5])
         if len(theirs) > 5:
-            listed += f', and {len(theirs) - 5} more'
+            listed += ', ' + get_message(migration._detect_language(),
+                                         'and_n_more', len(theirs) - 5)
         return [ChangeRecord(
             description=get_message(migration._detect_language(), 'change_kept_components', listed),
             status=ChangeStatus.APPLIED, severity='soft')]
@@ -892,10 +893,16 @@ def ensure_spreadsheet_columns(migration: BaseMigration) -> List[ChangeRecord]:
                 row.extend(column[language] for column in missing)
 
         _write_rows(path, rows)
+        # Named in the site's language, because that is the spelling the
+        # header row just gained. Naming them in English told the owner of a
+        # Spanish sheet that "Credit" had been added to a column now headed
+        # "Crédito".
+        site_language = migration._detect_language()
+        named = ', '.join(column.get(site_language, column['en'])
+                          for column in missing)
         records.append(ChangeRecord(
             description=get_message(
-                migration._detect_language(), 'change_added_columns',
-                ', '.join(c['en'] for c in missing), relative),
+                site_language, 'change_added_columns', relative, named),
             status=ChangeStatus.APPLIED, severity='soft'))
     return records
 
