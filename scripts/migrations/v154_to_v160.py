@@ -304,9 +304,12 @@ class Migration154to160(BaseMigration):
         self._gitattributes_skipped = False
         content = self._fetch_from_github(GITATTRIBUTES_PATH, branch=self._TARGET_TAG)
         if content is None:
+            # Worded around the phrase `coerce_change` reads as a hard
+            # failure. This record is soft on purpose, and the phrase is what
+            # classifies a record that ever reaches that helper as text.
             return [ChangeRecord(
                 description=(
-                    f"Could not fetch {GITATTRIBUTES_PATH} from GitHub. "
+                    f"{GITATTRIBUTES_PATH} did not download from GitHub. "
                     "Non-fatal — add it manually if you want the generated-bundle markers."
                 ),
                 status=ChangeStatus.FAILED,

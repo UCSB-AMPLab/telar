@@ -46,7 +46,7 @@ a crash mid-write is detectable), and written `failed` by `upgrade.py`
 when an upgrade aborts on a HARD failure (so a re-run can tell the user
 they are resuming). A clean success leaves no such file behind.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from abc import ABC, abstractmethod
@@ -68,6 +68,46 @@ class ChangeStatus(str, Enum):
     APPLIED = "applied"
     FAILED = "failed"
     SKIPPED = "skipped"
+
+
+class FetchOutcome(str, Enum):
+    """Why a fetch did not produce content, when it did not.
+
+    The chain acts on this difference. A TRANSIENT failure clears on a
+    re-run, so stopping is right and the user's next attempt makes
+    progress. A STRUCTURAL failure is identical on every attempt — the
+    path is not at the pinned ref, and the ref is a tag — so stopping
+    strands the site on that step forever.
+    """
+
+    OK = "ok"
+    TRANSIENT = "transient"
+    STRUCTURAL = "structural"
+
+
+# HTTP responses that mean the path is not there and will not be on a
+# re-run. Everything else — rate limits, 5xx, DNS failures, timeouts — is
+# transient by default, and the asymmetry is deliberate: reading a transient
+# failure as structural writes a partial install the site never needed,
+# while reading a structural one as transient only costs the stalled re-run
+# that already happens today.
+STRUCTURAL_HTTP_CODES = frozenset({404, 410})
+
+
+@dataclass
+class FetchResult:
+    """What one fetch produced, and why it produced nothing when it did not.
+
+    Attributes:
+        content: File content as `str`, or `bytes` when it is not valid
+            UTF-8, or None on any failure.
+        outcome: OK, TRANSIENT or STRUCTURAL.
+        detail: The underlying error, for the console line. Empty on OK.
+    """
+
+    content: Optional[Union[str, bytes]]
+    outcome: FetchOutcome
+    detail: str = ""
 
 
 @dataclass
@@ -568,7 +608,11 @@ class BaseMigration(ABC):
 
     def _fetch_from_github(self, path: str, branch: Optional[str] = None, timeout: int = 10) -> Optional[str]:
         """
-        Fetch file content from GitHub telar repository.
+        Fetch file content from GitHub telar repository, or None on any failure.
+
+        Callers that need to act on *why* a fetch failed use `_fetch_result`
+        instead. This wrapper stays because most of the chain only needs the
+        content, and a None here means exactly what it has always meant.
 
         Args:
             path: Path to file relative to repo root (e.g., "_layouts/story.html")
@@ -591,6 +635,26 @@ class BaseMigration(ABC):
         failure (`upgrade.py`), so a single binary asset in a file map
         stopped the whole chain.
         """
+        return self._fetch_result(path, branch=branch, timeout=timeout).content
+
+    def _fetch_result(self, path: str, branch: Optional[str] = None,
+                      timeout: int = 10) -> FetchResult:
+        """Fetch one file and say what happened, not only whether it worked.
+
+        A 404 and a timeout are the same `None` to a caller that only reads
+        content, and the chain cannot choose between stopping and continuing
+        without telling them apart: one clears on a re-run and the other is
+        the same answer forever.
+
+        Args:
+            path: Path to file relative to repo root.
+            branch: Branch or tag to fetch from; see `_fetch_from_github`.
+            timeout: Socket timeout in seconds.
+
+        Returns:
+            FetchResult — content on success, otherwise the outcome that
+            says whether a re-run could ever produce a different answer.
+        """
         import urllib.request
         import urllib.error
 
@@ -605,17 +669,26 @@ class BaseMigration(ABC):
             with urllib.request.urlopen(url, timeout=timeout) as response:
                 raw = response.read()
             try:
-                return raw.decode('utf-8')
+                return FetchResult(raw.decode('utf-8'), FetchOutcome.OK)
             except UnicodeDecodeError:
-                return raw
+                return FetchResult(raw, FetchOutcome.OK)
+        except urllib.error.HTTPError as e:
+            # Caught before URLError, which it subclasses — this is the only
+            # branch that carries a status code, and the code is the whole
+            # basis for the distinction.
+            outcome = (FetchOutcome.STRUCTURAL if e.code in STRUCTURAL_HTTP_CODES
+                       else FetchOutcome.TRANSIENT)
+            print("  " + get_message(self._detect_language(),
+                                     'fetch_failed_console', path, e))
+            return FetchResult(None, outcome, str(e))
         except urllib.error.URLError as e:
             print("  " + get_message(self._detect_language(),
                                      'fetch_failed_console', path, e))
-            return None
+            return FetchResult(None, FetchOutcome.TRANSIENT, str(e))
         except Exception as e:
             print("  " + get_message(self._detect_language(),
                                      'fetch_error_console', path, e))
-            return None
+            return FetchResult(None, FetchOutcome.TRANSIENT, str(e))
 
     # ------------------------------------------------------------------ #
     # Staged-atomic framework-file installation
@@ -647,19 +720,27 @@ class BaseMigration(ABC):
         """
         return self._TARGET_COMMIT or self._TARGET_TAG or 'main'
 
-    def _fetch_with_retry(self, path: str, branch: str) -> Optional[str]:
-        """Fetch one file, retrying once with backoff before giving up."""
-        content = self._fetch_from_github(path, branch=branch, timeout=self._STAGED_FETCH_TIMEOUT)
+    def _fetch_with_retry(self, path: str, branch: str) -> FetchResult:
+        """Fetch one file, retrying a transient failure once with backoff.
+
+        A structural failure is not retried. The ref is a release tag, so
+        the second request asks the identical question and waits for the
+        identical answer — on a file map with several wrong paths that is
+        the whole backoff paid per path, for nothing.
+        """
+        result = self._fetch_result(path, branch=branch,
+                                    timeout=self._STAGED_FETCH_TIMEOUT)
         attempt = 0
-        while content is None and attempt < self._FETCH_RETRIES:
+        while result.outcome is FetchOutcome.TRANSIENT and attempt < self._FETCH_RETRIES:
             attempt += 1
             time.sleep(min(2 ** attempt, 5))
-            content = self._fetch_from_github(path, branch=branch, timeout=self._STAGED_FETCH_TIMEOUT)
-        return content
+            result = self._fetch_result(path, branch=branch,
+                                        timeout=self._STAGED_FETCH_TIMEOUT)
+        return result
 
     def _fetch_all_staged(
         self, file_map: Dict[str, str], tag: Optional[str] = None
-    ) -> Tuple[Dict[str, Tuple[str, str]], List[ChangeRecord]]:
+    ) -> Tuple[Dict[str, Tuple[str, str]], List[ChangeRecord], List[ChangeRecord]]:
         """Phase A: fetch every file in file_map into memory without writing.
 
         Args:
@@ -667,30 +748,143 @@ class BaseMigration(ABC):
             tag: Release tag to pin to. Falls back to 'main' when None.
 
         Returns:
-            (content_map, failed_records) where content_map maps
-            rel_path -> (content, description) for every successful fetch, and
-            failed_records is a list of HARD ChangeRecords for every fetch that
-            failed. When failed_records is non-empty the caller must write
-            nothing (fail closed).
+            (content_map, blocking, flagged). content_map maps
+            rel_path -> (content, description) for every successful fetch.
+            `blocking` holds a HARD record per transient failure; when it is
+            non-empty the caller must write nothing, because a re-run can
+            still produce the whole set. `flagged` holds a SOFT record per
+            structural failure, which no re-run will change.
         """
         branch = tag if tag else 'main'
         content_map: Dict[str, Tuple[str, str]] = {}
-        failed: List[ChangeRecord] = []
+        blocking: List[ChangeRecord] = []
+        flagged: List[ChangeRecord] = []
 
         for rel_path, description in file_map.items():
-            content = self._fetch_with_retry(rel_path, branch)
-            if content is not None:
-                content_map[rel_path] = (content, description)
+            result = self._fetch_with_retry(rel_path, branch)
+            if result.content is not None:
+                content_map[rel_path] = (result.content, description)
+            elif result.outcome is FetchOutcome.STRUCTURAL:
+                # Not the user's problem to fix and not theirs to retry: the
+                # path is absent from the release the migration pins to, so
+                # the file map is wrong. Flag it and let the chain go on.
+                flagged.append(ChangeRecord(
+                    description=get_message(
+                        self._detect_language(), 'record_fetch_absent',
+                        rel_path, self.to_version),
+                    status=ChangeStatus.FAILED,
+                    severity="soft",
+                    category=category_for_path(rel_path),
+                ))
             else:
-                failed.append(ChangeRecord(
+                # The record names the version, not the ref it was fetched
+                # from. A site owner knows which version they upgraded to;
+                # `main`, which is what the ref is when no tag is declared,
+                # tells them nothing they can act on.
+                blocking.append(ChangeRecord(
                     description=get_message(
                         self._detect_language(), 'record_fetch_failed',
-                        rel_path, branch),
+                        rel_path, self.to_version),
                     status=ChangeStatus.FAILED,
                     severity="hard",
                 ))
 
-        return content_map, failed
+        if content_map or not flagged:
+            return content_map, blocking, flagged
+
+        # Nothing in the map arrived and every failure was a 404. One wrong
+        # path in a file map is a wrong file map; every path wrong at once is
+        # a wrong ref, and flagging our way past that would stamp the site
+        # with a version whose files it never received. Stop instead.
+        #
+        # A one-file map whose only file is genuinely absent is caught here
+        # too, since it looks identical from inside. That is the stall this
+        # issue is about, kept deliberately for the case where continuing
+        # cannot be told apart from continuing into nothing.
+        return content_map, blocking + [
+            ChangeRecord(description=record.description,
+                         status=ChangeStatus.FAILED,
+                         severity="hard",
+                         category=record.category)
+            for record in flagged], []
+
+    def _install_files_one_by_one(
+        self, file_map: Dict[str, str], template: str,
+        branch: Optional[str] = None,
+    ) -> List[ChangeRecord]:
+        """Fetch and write each file as it arrives, reporting one record each.
+
+        The pre-consolidation shape, kept because those migrations are
+        historical and their summary wording is what their users read. It is
+        not atomic and was never meant to be: each file is written the moment
+        it arrives.
+
+        What it does share with `_apply_framework_files` is the rule for
+        deciding whether a failure stops the chain. A structural failure is
+        flagged and the chain goes on — unless nothing in the map arrived at
+        all, which is a wrong ref rather than a wrong path and has to stop.
+
+        Args:
+            file_map: {rel_path: description} of framework files.
+            template: Format string for an installed file, taking `path` and
+                `description`. Each migration keeps its own wording.
+            branch: Ref to fetch from; defaults to the migration's own.
+
+        Returns:
+            List[ChangeRecord], one per file in the map.
+        """
+        installed: List[ChangeRecord] = []
+        failures: List[ChangeRecord] = []
+
+        for rel_path, description in file_map.items():
+            result = self._fetch_result(rel_path, branch=branch)
+            if result.content is not None:
+                self._write_file(rel_path, result.content)
+                installed.append(ChangeRecord(
+                    description=template.format(path=rel_path,
+                                                description=description),
+                    status=ChangeStatus.APPLIED,
+                    severity="soft",
+                    category=category_for_path(rel_path),
+                ))
+            else:
+                failures.append(self._record_for_failed_fetch(rel_path, result))
+
+        if not installed and failures:
+            failures = [ChangeRecord(description=record.description,
+                                     status=ChangeStatus.FAILED,
+                                     severity="hard",
+                                     category=record.category)
+                        for record in failures]
+
+        return installed + failures
+
+    def _record_for_failed_fetch(self, rel_path: str,
+                                 result: FetchResult) -> ChangeRecord:
+        """The record a failed fetch becomes, classified by why it failed.
+
+        For a migration that writes its files one at a time rather than
+        through `_apply_framework_files`. Such a migration has already
+        written whatever arrived before this path, so there is no atomic
+        install left to protect and the only question the outcome decides
+        is whether the chain stops.
+        """
+        if result.outcome is FetchOutcome.STRUCTURAL:
+            return ChangeRecord(
+                description=get_message(
+                    self._detect_language(), 'record_fetch_absent',
+                    rel_path, self.to_version),
+                status=ChangeStatus.FAILED,
+                severity="soft",
+                category=category_for_path(rel_path),
+            )
+        return ChangeRecord(
+            description=get_message(
+                self._detect_language(), 'record_fetch_failed',
+                rel_path, self.to_version),
+            status=ChangeStatus.FAILED,
+            severity="hard",
+        )
 
     def _backup_existing(self, rel_paths: List[str]) -> Dict[str, Optional[Union[str, bytes]]]:
         """Read current content of each path for rollback.
@@ -790,10 +984,13 @@ class BaseMigration(ABC):
         """
         pinned = tag if tag is not None else self._target_ref()
 
-        content_map, failed = self._fetch_all_staged(file_map, tag=pinned)
-        if failed:
-            # Fail closed: a missing required file means write nothing.
-            return failed
+        content_map, blocking, flagged = self._fetch_all_staged(file_map, tag=pinned)
+        if blocking:
+            # Fail closed while a re-run could still complete the set. The
+            # atomic install is worth keeping for exactly this case, and the
+            # structural records ride along so the summary names everything
+            # that did not arrive, not only what stopped the chain.
+            return blocking + flagged
 
         paths = list(content_map.keys())
         backups = self._backup_existing(paths)
@@ -811,7 +1008,11 @@ class BaseMigration(ABC):
             )]
 
         self._clear_state_file()
-        return records
+        # Writing the files that did arrive is the part of the atomic
+        # guarantee this trades away, and only for the failure a re-run
+        # cannot clear: the alternative is a site that stops on this step
+        # every time it upgrades, forever.
+        return records + flagged
 
     def _detect_language(self) -> str:
         """

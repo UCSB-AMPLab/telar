@@ -7,7 +7,7 @@ and, more importantly, hold the one invariant translation could break —
 that whether a failure is HARD does not depend on what language the site is
 in.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import os
@@ -18,7 +18,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 import telar_upgrade as upgrade
-from migrations.base import BaseMigration, ChangeStatus, coerce_change
+from migrations.base import (
+    BaseMigration, ChangeStatus, FetchOutcome, FetchResult, coerce_change)
 from migrations.messages import MESSAGES, get_message
 
 # The phrase coerce_change reads as a hard failure when a migration returns
@@ -30,6 +31,7 @@ FAILURE_KEYS = (
     'record_regeneration_failed',
     'record_migration_aborted',
     'record_fetch_failed',
+    'record_fetch_absent',
     'record_write_rolled_back',
     'deps_installing',
     'deps_no_manifest',
@@ -139,7 +141,10 @@ class TestClassificationIsLanguageIndependent:
                 return []
 
             def _fetch_with_retry(self, path, branch):
-                return None
+                # A transient failure: this class is about the record a
+                # stop-the-chain failure carries, not about the structural
+                # one, which is soft and does not stop anything.
+                return FetchResult(None, FetchOutcome.TRANSIENT, 'timed out')
 
         return _M(str(root))
 
@@ -153,13 +158,29 @@ class TestClassificationIsLanguageIndependent:
                                              encoding='utf-8')
         migration = self._migration(tmp_path)
 
-        _, failed = migration._fetch_all_staged({'README.md': 'Readme'},
-                                                tag='v1.1.0')
+        _, failed, flagged = migration._fetch_all_staged({'README.md': 'Readme'},
+                                                         tag='v1.1.0')
 
+        assert flagged == []
         assert len(failed) == 1
         assert failed[0].status == ChangeStatus.FAILED
         assert failed[0].severity == 'hard'
         assert failed[0].description.startswith(expected_start)
+
+    def test_the_record_names_the_version_not_the_ref(self, tmp_path):
+        """`main` is what the ref is when a migration declares no tag.
+
+        A site owner can act on a version number. The ref the fetch used is
+        a maintainer's detail, and `main` in particular tells them nothing.
+        """
+        (tmp_path / '_config.yml').write_text('telar_language: "en"\n',
+                                              encoding='utf-8')
+        migration = self._migration(tmp_path)
+
+        _, failed, _ = migration._fetch_all_staged({'README.md': 'Readme'})
+
+        assert 'main' not in failed[0].description
+        assert migration.to_version in failed[0].description
 
     def test_a_bare_string_is_still_classified_in_english(self):
         """Migrations that return strings keep the English phrase.

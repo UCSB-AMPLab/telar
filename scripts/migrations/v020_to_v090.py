@@ -15,7 +15,7 @@ change and do nothing when it is not there. The entry version survives
 only where it has to — in `from_versions`, and in bounding the framework
 files to the ones the replaced chain would have written from here.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from datetime import date

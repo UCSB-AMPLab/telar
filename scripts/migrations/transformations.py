@@ -33,7 +33,7 @@ relocation may not have happened yet. That is not duplication: a site
 entering from 0.6.x has `components/`, one entering from 1.2 has
 `telar-content/`, and one transformation serves both.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import os
@@ -960,6 +960,10 @@ def reinstate_configuration(migration: BaseMigration) -> List[ChangeRecord]:
                         'YAML, so nothing could be moved across safely',
             status=ChangeStatus.APPLIED, severity='soft')]
 
+    # Hard, and not a candidate for the structural flag-and-continue rule.
+    # Every Telar release has a _config.yml by construction, so its absence
+    # says the ref is wrong rather than that one path in a map is; and the
+    # site keeps its own config either way, so nothing here is half-written.
     template = migration._fetch_from_github('_config.yml')
     if template is None:
         return [ChangeRecord(

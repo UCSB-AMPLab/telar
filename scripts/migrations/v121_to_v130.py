@@ -315,13 +315,8 @@ class Migration121to130(BaseMigration):
             'CHANGELOG.md': 'CHANGELOG (v1.3.0 release notes)',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} — {description}")
-            else:
-                changes.append(f"⚠️  Could not fetch {file_path} from GitHub (network or release timing). Update it manually.")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} — {description}"))
 
         return changes
 

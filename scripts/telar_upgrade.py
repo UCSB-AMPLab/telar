@@ -26,7 +26,7 @@ launcher that downloads a verified copy of this file for the newest release
 and runs it from a temp dir, so the version of this module that runs is
 never the one sitting in the site. See scripts/upgrade.py.
 
-Version: v1.7.0
+Version: v1.8.0
 
 Usage:
     python scripts/telar_upgrade.py              # Normal upgrade
@@ -49,6 +49,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from migrations.base import (
     BaseMigration, ChangeCategory, ChangeRecord, ChangeStatus,
     UPGRADE_STATE_FILE, apply_config_version, coerce_change,
+    is_hard_failure,
 )
 from migrations.messages import get_message, get_file_count_suffix
 from migrations.discovery import discover_migrations
@@ -234,6 +235,10 @@ def run_migrations(migrations: List[BaseMigration], dry_run: bool = False) -> Li
     Stops the chain as soon as a migration reports a HARD failure, so a failed
     fetch in one step does not let later steps run against a half-updated tree.
 
+    A SOFT failure does not stop it. That is how a structural fetch failure —
+    a path absent from the release the migration pins to — reaches the summary
+    without stranding the site on a step no re-run can get past.
+
     Args:
         migrations: List of migration instances
         dry_run: If True, don't actually apply changes
@@ -272,7 +277,7 @@ def run_migrations(migrations: List[BaseMigration], dry_run: bool = False) -> Li
             print(f"  {mark} {record.description}")
 
         # A HARD failure in this migration stops the chain.
-        if any(r.status == ChangeStatus.FAILED and r.severity == "hard" for r in records):
+        if any(is_hard_failure(r) for r in records):
             print('  ' + get_message(_get_lang(migration.repo_root), 'migration_stopped'))
             break
 
@@ -343,8 +348,10 @@ def generate_checklist(
 
     Applied changes render as ticked `- [x]` items and are the only ones
     counted in the automated-changes total. Failed changes render as unticked
-    `- [ ]` items under a "Failed / Needs Manual Attention" heading so a
-    failure is never reported as completed work.
+    `- [ ]` items so a failure is never reported as completed work, under one
+    of two headings: a blocking failure, where the site was not upgraded and
+    a re-run is the fix, and a flagged one, where the file is absent from the
+    release, the site was upgraded anyway, and a re-run changes nothing.
 
     Args:
         migrations: List of migrations that were run
@@ -362,7 +369,13 @@ def generate_checklist(
     soft_warnings = soft_warnings or []
 
     applied = [r for r in all_changes if r.status == ChangeStatus.APPLIED]
-    failed = [r for r in all_changes if r.status == ChangeStatus.FAILED]
+    # The two kinds of failure get their own sections, because one body
+    # cannot be true of both: a blocking failure means the site was not
+    # upgraded and a re-run is the fix, and a flagged one means the site was
+    # upgraded and a re-run changes nothing.
+    failed = [r for r in all_changes if is_hard_failure(r)]
+    flagged = [r for r in all_changes
+               if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
 
     manual_steps = []
     for migration in migrations:
@@ -386,6 +399,8 @@ title: {summary_title}
 """
     if failed:
         checklist += f"- **{get_message(lang, 'summary_failed_count')}:** {len(failed)}\n"
+    if flagged:
+        checklist += f"- **{get_message(lang, 'summary_flagged_count')}:** {len(flagged)}\n"
     checklist += f"\n## {get_message(lang, 'automated_changes_applied')}\n\n"
 
     # Output changes by category
@@ -402,6 +417,13 @@ title: {summary_title}
         checklist += f"## {get_message(lang, 'failed_needs_attention')}\n\n"
         checklist += get_message(lang, 'failed_section_body') + "\n\n"
         for record in failed:
+            checklist += f"- [ ] {record.description}\n"
+        checklist += "\n"
+
+    if flagged:
+        checklist += f"## {get_message(lang, 'flagged_needs_attention')}\n\n"
+        checklist += get_message(lang, 'flagged_section_body') + "\n\n"
+        for record in flagged:
             checklist += f"- [ ] {record.description}\n"
         checklist += "\n"
 
@@ -881,8 +903,7 @@ def main():
     # Fail closed: if any framework-file step hard-failed, do NOT stamp the
     # version, do NOT write UPGRADE_VERSION.txt. The site keeps its old version
     # so a re-run retries the same migrations.
-    hard_failures = [r for r in all_changes
-                     if r.status == ChangeStatus.FAILED and r.severity == "hard"]
+    hard_failures = [r for r in all_changes if is_hard_failure(r)]
     if hard_failures:
         print('\n' + get_message(lang, 'upgrade_failed_steps', len(hard_failures)))
         _report_state_after_failure(repo_root, lang, from_version)
@@ -953,6 +974,16 @@ def main():
 
     print('\n' + get_message(lang, 'upgrade_complete'))
     print('  ' + get_message(lang, 'created_summary'))
+
+    # A structural fetch failure does not stop the chain, so this is the only
+    # place the run says it happened. Printed after 'upgrade_complete' because
+    # the upgrade did complete — the site is at the latest version, carrying a
+    # flag — and printing it before would read as the abort it is not.
+    flagged = [r for r in all_changes
+               if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
+    if flagged:
+        print('\n' + get_message(lang, 'upgrade_completed_with_flags',
+                                 len(flagged), LATEST_VERSION))
 
     # Write version for GitHub Actions (only reached on full success).
     version_file = os.path.join(repo_root, 'UPGRADE_VERSION.txt')

@@ -137,13 +137,8 @@ class Migration094to100(BaseMigration):
             'tests/unit/test_process_audio.py': 'Audio pipeline tests',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}", branch=self._TARGET_TAG))
 
         return changes
 
@@ -156,13 +151,8 @@ class Migration094to100(BaseMigration):
             '_data/languages/es.yml': 'Spanish strings (clip_picker keys added)',
         }
 
-        for file_path, description in language_files.items():
-            content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            language_files, "Updated {path} - {description}", branch=self._TARGET_TAG))
 
         return changes
 

@@ -26,7 +26,7 @@ grammatical number matters in the summary: it returns the singular or
 plural of "file" in the active language so category headings read
 naturally ("1 file" / "2 files", "1 archivo" / "2 archivos").
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 MESSAGES = {
@@ -95,6 +95,10 @@ MESSAGES = {
         'prev_upgrade_rerun': '   Re-running it now. The site was left at its previous version, so this re-applies the same files from scratch.',
         'no_tty_continue': '(No interactive terminal — continuing.)',
         'upgrade_failed_steps': '✗ Upgrade did not complete: {} required step(s) failed.',
+        'upgrade_completed_with_flags': '⚠️  {} file(s) could not be installed; they '
+                                        'are listed in UPGRADE_SUMMARY.md. The site '
+                                        'still reached {}. This is a fault in Telar '
+                                        'rather than in your site — please report it.',
         'upgrade_not_applied': '  The site was NOT upgraded and its version was left unchanged.',
         'upgrade_reached_version': '  The upgrade stopped, but your site did advance: '
                                    'it is now at {}. Run the upgrade again and it will '
@@ -121,6 +125,11 @@ MESSAGES = {
         'automated_changes_applied': 'Automated Changes Applied',
         'failed_needs_attention': 'Failed / Needs Manual Attention',
         'failed_section_body': 'The following changes did not complete automatically. The site was **not** upgraded to the new version. Resolve these (usually a transient network problem) and run the upgrade again.',
+        # A separate section, because the body above is false of these: the
+        # upgrade did complete, and running it again changes nothing.
+        'summary_flagged_count': 'Files not installed',
+        'flagged_needs_attention': 'Files Not Installed',
+        'flagged_section_body': 'These files are not part of the new Telar release, so they could not be installed. The upgrade **did** complete and your site is at that version — running it again will not change this. Please report them so the release can be fixed.',
         'completed_with_warnings': 'Completed With Warnings',
         'warnings_section_body': 'These steps are non-fatal and did not block the upgrade, but you should check them:',
         'manual_steps_required': 'Manual Steps Required',
@@ -180,8 +189,14 @@ MESSAGES = {
                                       'generate_collections) failed. Run the data '
                                       'scripts by hand and try the upgrade again.',
         'record_migration_aborted': 'The {} \u2192 {} migration stopped: {}',
-        'record_fetch_failed': 'Could not fetch {} from GitHub ({}). '
+        'record_fetch_failed': 'Could not fetch {} from GitHub (Telar version {}). '
                                'Update it by hand.',
+        # The counterpart for a fetch no re-run can fix. It deliberately
+        # avoids the 'Could not fetch' phrase: that phrase classifies a bare
+        # string as a hard failure, and this failure is the soft one.
+        'record_fetch_absent': '{} is not part of Telar {}, so it could not be '
+                               'installed. The upgrade continued without it \u2014 '
+                               'please report it.',
         'record_write_rolled_back': 'A framework file could not be written, so the '
                                     'changes were rolled back: {}',
         'deps_installing': '  Installing the missing dependencies, from {} ...',
@@ -269,6 +284,10 @@ MESSAGES = {
         'prev_upgrade_rerun': '   Se reintentará ahora. El sitio quedó en su versión anterior, así que se vuelven a aplicar los mismos archivos desde cero.',
         'no_tty_continue': '(No hay terminal interactiva — se continúa.)',
         'upgrade_failed_steps': '✗ La actualización no se completó: fallaron {} paso(s) obligatorio(s).',
+        'upgrade_completed_with_flags': '⚠️  No se pudieron instalar {} archivo(s); '
+                                        'quedan listados en UPGRADE_SUMMARY.md. Aun '
+                                        'así, el sitio sí quedó en la versión {}. La '
+                                        'falla es de Telar, no de tu sitio: repórtala.',
         'upgrade_not_applied': '  El sitio no se actualizó y su versión quedó sin cambios.',
         'upgrade_reached_version': '  La actualización se detuvo, pero el sitio sí '
                                    'avanzó: quedó en la versión {}. Vuelve a '
@@ -295,6 +314,9 @@ MESSAGES = {
         'automated_changes_applied': 'Cambios automatizados aplicados',
         'failed_needs_attention': 'Fallas / requieren atención manual',
         'failed_section_body': 'Los siguientes cambios no se completaron automáticamente. El sitio **no** se actualizó a la nueva versión. Resuelve estas fallas (usualmente un problema pasajero de red) y ejecuta la actualización de nuevo.',
+        'summary_flagged_count': 'Archivos sin instalar',
+        'flagged_needs_attention': 'Archivos que no se instalaron',
+        'flagged_section_body': 'Estos archivos no forman parte de la versión nueva de Telar, así que no se pudieron instalar. La actualización **sí** terminó y el sitio quedó en esa versión; volver a ejecutarla no cambia nada. Repórtalos para que se corrija esa versión de Telar.',
         'completed_with_warnings': 'Completados con advertencias',
         'warnings_section_body': 'Estos pasos no impidieron la actualización, pero conviene revisarlos:',
         'manual_steps_required': 'Pasos manuales necesarios',
@@ -348,8 +370,13 @@ MESSAGES = {
                                       'esos dos scripts a mano y despu\u00e9s vuelve '
                                       'a intentar la actualizaci\u00f3n.',
         'record_migration_aborted': 'La migraci\u00f3n {} \u2192 {} se interrumpi\u00f3: {}',
-        'record_fetch_failed': 'No se pudo descargar {} de GitHub ({}). '
+        'record_fetch_failed': 'No se pudo descargar {} de GitHub (versi\u00f3n {} de '
+                               'Telar). '
                                'Actualiza ese archivo a mano.',
+        'record_fetch_absent': '{} no existe en la versi\u00f3n {} de Telar, as\u00ed '
+                               'que no se pudo instalar. La actualizaci\u00f3n '
+                               'sigui\u00f3 adelante sin ese archivo; por favor '
+                               'rep\u00f3rtalo.',
         'record_write_rolled_back': 'No se pudo escribir un archivo del marco, as\u00ed '
                                     'que se deshicieron los cambios: {}',
         'deps_installing': '  Instalando las dependencias que faltan, desde {}\u2026',
