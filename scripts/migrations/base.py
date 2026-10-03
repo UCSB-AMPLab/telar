@@ -685,7 +685,7 @@ class BaseMigration(ABC):
                 failed.append(ChangeRecord(
                     description=get_message(
                         self._detect_language(), 'record_fetch_failed',
-                        rel_path, branch, description),
+                        rel_path, branch),
                     status=ChangeStatus.FAILED,
                     severity="hard",
                 ))
@@ -719,10 +719,15 @@ class BaseMigration(ABC):
     def _commit_staged(self, content_map: Dict[str, Tuple[str, str]]) -> List[ChangeRecord]:
         """Phase B core: write all staged files. Raises on write error."""
         records: List[ChangeRecord] = []
-        for rel_path, (content, description) in content_map.items():
+        # The file map's annotation documents why a path is in the set, for
+        # whoever reads the migration. It stays out of the record: the summary
+        # is a file the site commits to its own repository, and a record built
+        # by interpolating English prose cannot be localised at render time.
+        for rel_path, (content, _annotation) in content_map.items():
             self._write_file(rel_path, content)
             records.append(ChangeRecord(
-                description=f"Updated {rel_path} — {description}",
+                description=get_message(self._detect_language(),
+                                        'updated_file', rel_path),
                 status=ChangeStatus.APPLIED,
                 severity="hard",
                 # The path decides the summary heading, so the summary reads

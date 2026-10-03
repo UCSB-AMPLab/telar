@@ -36,6 +36,7 @@ FAILURE_KEYS = (
     'deps_pip_failed',
     'deps_pip_timeout',
     'upgrade_reached_version',
+    'updated_file',
 )
 
 
@@ -201,6 +202,61 @@ class TestTheDependencyEnsureStepSpeaksSpanish:
         assert ok is False
         assert 'cannot install the missing dependencies' in out
         assert 'Advertencia' not in out
+
+
+class TestThePerFileRecordsSpeakSpanish:
+    """The summary is a file the site commits to its own repository.
+
+    Its headings and counts were localised; the sixty-odd lines under them
+    were not, because each was built by interpolating the English annotation
+    from the migration's own file map. A record that carries prose cannot be
+    localised at render time, so the prose is gone and only the path remains.
+    """
+
+    def _migration_at(self, tmp_path, lang):
+        (tmp_path / '_config.yml').write_text(
+            'telar_language: "%s"\n' % lang, encoding='utf-8')
+
+        class _M(BaseMigration):
+            from_version = '1.0'
+            to_version = '2.0'
+            description = 'fake'
+
+            def check_applicable(self):
+                return True
+
+            def apply(self):
+                return []
+
+        return _M(str(tmp_path))
+
+    def test_an_applied_record_is_written_in_spanish(self, tmp_path):
+        migration = self._migration_at(tmp_path, 'es')
+        records = migration._commit_staged({'Gemfile.lock': ('x', 'Ruby dependencies')})
+
+        assert len(records) == 1
+        assert records[0].description == 'Gemfile.lock actualizado'
+
+    def test_an_applied_record_is_written_in_english(self, tmp_path):
+        migration = self._migration_at(tmp_path, 'en')
+        records = migration._commit_staged({'Gemfile.lock': ('x', 'Ruby dependencies')})
+
+        assert records[0].description == 'Updated Gemfile.lock'
+
+    def test_no_record_carries_the_file_map_annotation(self, tmp_path):
+        # The annotation is maintainer documentation. It reached the user's
+        # summary in English on every site, whatever language the site was in.
+        migration = self._migration_at(tmp_path, 'es')
+        records = migration._commit_staged(
+            {'Gemfile.lock': ('x', 'Ruby dependencies for the Jekyll build')})
+
+        assert 'Ruby dependencies' not in records[0].description
+
+    def test_the_fetch_failure_record_carries_no_annotation_either(self):
+        for lang in ('en', 'es'):
+            message = get_message(lang, 'record_fetch_failed', 'Gemfile', 'v1.7.0')
+            assert 'Gemfile' in message
+            assert '{}' not in message
 
 
 class TestTheSummaryRecordsSpeakSpanish:

@@ -181,7 +181,7 @@ MESSAGES = {
                                       'scripts by hand and try the upgrade again.',
         'record_migration_aborted': 'The {} \u2192 {} migration stopped: {}',
         'record_fetch_failed': 'Could not fetch {} from GitHub ({}). '
-                               'Update it by hand \u2014 {}',
+                               'Update it by hand.',
         'record_write_rolled_back': 'A framework file could not be written, so the '
                                     'changes were rolled back: {}',
         'deps_installing': '  Installing the missing dependencies, from {} ...',
@@ -349,7 +349,7 @@ MESSAGES = {
                                       'a intentar la actualizaci\u00f3n.',
         'record_migration_aborted': 'La migraci\u00f3n {} \u2192 {} se interrumpi\u00f3: {}',
         'record_fetch_failed': 'No se pudo descargar {} de GitHub ({}). '
-                               'Actual\u00edzalo a mano \u2014 {}',
+                               'Actualiza ese archivo a mano.',
         'record_write_rolled_back': 'No se pudo escribir un archivo del marco, as\u00ed '
                                     'que se deshicieron los cambios: {}',
         'deps_installing': '  Instalando las dependencias que faltan, desde {}\u2026',
