@@ -189,6 +189,19 @@ MESSAGES = {
                                       'generate_collections) failed. Run the data '
                                       'scripts by hand and try the upgrade again.',
         'record_migration_aborted': 'The {} \u2192 {} migration stopped: {}',
+        'record_protected_unencryptable': (
+            'This site has stories marked protected, and '
+            '.github/workflows/build.yml does not run '
+            'scripts/encrypt_protected_stories.py, so the build will refuse '
+            'to publish rather than put protected text in the clear. The '
+            'upgrade itself is finished and the data files are current; this '
+            'is what is left. Open the current build.yml in the Telar '
+            'repository on GitHub, choose "Copy raw contents", paste it over '
+            'your copy, and commit. GitHub does not let an upgrade write '
+            'workflow files, which is why this one is yours \u2014 the Telar '
+            'Compositor commits them itself, so a site upgraded through it '
+            'does not need this step. If none of those stories is meant to be '
+            'private, removing the protected mark is the other way out.'),
         'record_fetch_failed': 'Could not fetch {} from GitHub (Telar version {}). '
                                'Update it by hand.',
         # The counterpart for a fetch no re-run can fix. It deliberately
@@ -442,6 +455,23 @@ MESSAGES = {
                                       'esos dos scripts a mano y despu\u00e9s vuelve '
                                       'a intentar la actualizaci\u00f3n.',
         'record_migration_aborted': 'La migraci\u00f3n {} \u2192 {} se interrumpi\u00f3: {}',
+        'record_protected_unencryptable': (
+            'Este sitio tiene historias marcadas como protegidas, y '
+            '.github/workflows/build.yml no ejecuta '
+            'scripts/encrypt_protected_stories.py. Por eso la '
+            'construcci\u00f3n se detiene a prop\u00f3sito, en vez de '
+            'publicar sin cifrar el texto de esas historias. La '
+            'actualizaci\u00f3n ya termin\u00f3 y los archivos de datos '
+            'est\u00e1n al d\u00eda: esto es lo \u00fanico que queda por '
+            'hacer. Copia el build.yml actual del repositorio de Telar sobre '
+            'el tuyo (\u00e1brelo en GitHub, usa \u00abCopy raw '
+            'contents\u00bb, reemplaza el archivo completo y confirma el '
+            'cambio). GitHub no permite que una actualizaci\u00f3n escriba '
+            'archivos de workflow, y por eso este paso queda en tus manos; el '
+            'Compositor de Telar s\u00ed los escribe, as\u00ed que un sitio '
+            'actualizado con \u00e9l no tiene que hacer nada de esto. Y si '
+            'esas historias no son privadas de verdad, la otra salida es '
+            'quitarles la marca de protegidas.'),
         'record_fetch_failed': 'No se pudo descargar {} de GitHub (versi\u00f3n {} de '
                                'Telar). '
                                'Actualiza ese archivo a mano.',

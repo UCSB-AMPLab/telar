@@ -55,6 +55,14 @@ from migrations.base import (
 from migrations.messages import get_message, get_file_count_suffix
 from migrations.discovery import discover_migrations
 
+# The exit code csv_to_json.py uses for "protected stories cannot be
+# encrypted downstream". Declared here as a literal rather than imported:
+# the scripts/telar package eagerly imports pandas and PIL, and this script
+# runs before _ensure_regeneration_dependencies() has had a chance to
+# install them. tests/unit/test_upgrade_protected_prerequisite.py reads
+# both definitions and fails if they diverge.
+PROTECTED_PREREQUISITE_EXIT = 3
+
 # The chain, read off the modules in migrations/ rather than hand-listed.
 #
 # The chain and LATEST_VERSION both come from discovery, so there is one
@@ -498,11 +506,25 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
     Args:
         repo_root: Path to repository root
 
+    One cause is carved out of the HARD rule. `csv_to_json.py` exits
+    PROTECTED_PREREQUISITE_EXIT when the site has a protected story that
+    the build workflow cannot encrypt, and it does so *after* writing every
+    JSON file — the regeneration succeeded, and what failed is a check on a
+    future build. Treating that as a hard failure aborts the upgrade and
+    leaves a working site at its old version, while preventing nothing: the
+    build runs `csv_to_json.py` too, so the same refusal stops publication
+    whether or not this upgrade completes. The site is left needing a
+    workflow edit either way; the only question is whether it also loses
+    the upgrade.
+
     Returns:
-        (csv_ok, iiif_ok). csv_ok is False if the HARD data steps could not be
-        run or returned an error. iiif_ok is False if IIIF tile regeneration
-        failed (non-fatal). When the scripts are absent, csv_ok is False (the
-        caller treats "could not regenerate" as a HARD failure).
+        (csv_ok, iiif_ok, protected_blocked). csv_ok is False if the HARD
+        data steps could not be run or returned an error. iiif_ok is False
+        if IIIF tile regeneration failed (non-fatal). protected_blocked is
+        True when the data was regenerated but a protected story has no way
+        to be encrypted; csv_ok is True in that case. When the scripts are
+        absent, csv_ok is False (the caller treats "could not regenerate"
+        as a HARD failure).
     """
     import subprocess
 
@@ -513,7 +535,7 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
 
     # Check if scripts exist
     if not os.path.exists(csv_to_json):
-        return (False, True)
+        return (False, True, False)
 
     try:
         # Run csv_to_json.py (generates objects.json with validation)
@@ -525,10 +547,14 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
             timeout=30
         )
 
-        if result.returncode != 0:
+        protected_blocked = result.returncode == PROTECTED_PREREQUISITE_EXIT
+        if result.returncode != 0 and not protected_blocked:
             print('  ' + get_message(lang, 'regeneration_script_error',
                                      'csv_to_json.py', result.stderr))
-            return (False, True)
+            return (False, True, False)
+        if protected_blocked:
+            # The refusal is the engine's own, and it prints both languages.
+            print(result.stdout.rstrip())
 
         # Run generate_collections.py (generates story/glossary JSON with validation)
         if os.path.exists(generate_collections):
@@ -543,7 +569,7 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
             if result.returncode != 0:
                 print('  ' + get_message(lang, 'regeneration_script_error',
                                          'generate_collections.py', result.stderr))
-                return (False, True)
+                return (False, True, False)
 
         # Run generate_iiif.py (regenerates IIIF tiles for local images).
         # SOFT: a failure here does not block the upgrade.
@@ -563,14 +589,14 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
                                          'generate_iiif.py', result.stderr))
                 iiif_ok = False
 
-        return (True, iiif_ok)
+        return (True, iiif_ok, protected_blocked)
 
     except subprocess.TimeoutExpired:
         print('  ' + get_message(lang, 'regeneration_timeout'))
-        return (False, True)
+        return (False, True, False)
     except Exception as e:
         print('  ' + get_message(lang, 'regeneration_failed', e))
-        return (False, True)
+        return (False, True, False)
 
 
 # Import names that data regeneration transitively requires. csv_to_json.py and
@@ -1001,7 +1027,7 @@ def main():
         print(get_message(lang, 'see_summary_details'))
         return EXIT_HARD_FAILURE
 
-    csv_ok, iiif_ok = _regenerate_data_files(repo_root)
+    csv_ok, iiif_ok, protected_blocked = _regenerate_data_files(repo_root)
     if not csv_ok:
         print('\n' + get_message(lang, 'upgrade_failed_data'))
         _report_state_after_failure(repo_root, lang, from_version)
@@ -1014,6 +1040,17 @@ def main():
         print(get_message(lang, 'see_summary_details'))
         return EXIT_HARD_FAILURE
     print(get_message(lang, 'data_files_regenerated'))
+
+    if protected_blocked:
+        # Flagged, not failed: the data regenerated, and the thing left
+        # undone is a workflow file this tool is not permitted to write.
+        # Aborting here would leave the site on its old version and stop
+        # nothing, because the build refuses on the same grounds.
+        all_changes.append(ChangeRecord(
+            description=get_message(lang, 'record_protected_unencryptable'),
+            status=ChangeStatus.FAILED,
+            severity="soft",
+        ))
 
     soft_warnings = []
     if not iiif_ok:

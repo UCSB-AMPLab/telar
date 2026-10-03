@@ -41,7 +41,7 @@ build workflow that actually runs it — and refuses to run when they are
 missing, so a site can never publish protected content because its workflow
 predates the build-time encryption step.
 
-Version: v1.6.0
+Version: v1.8.0
 """
 
 import os
@@ -166,6 +166,14 @@ def find_csv_with_fallback(base_path, spanish_name):
 ENCRYPT_SCRIPT_MARKER = 'encrypt_protected_stories.py'
 BUILD_WORKFLOW_PATH = Path('.github/workflows/build.yml')
 
+# Exit code for "protected stories cannot be encrypted downstream", as
+# distinct from a conversion that failed. Every JSON file is already
+# written when this check runs, so what exits is a statement about a
+# future build, not about the work just done. A build step fails on any
+# non-zero and so is unaffected; the upgrade reads the value to tell a
+# site it must not stamp from a site whose owner has one thing left to do.
+PROTECTED_PREREQUISITE_EXIT = 3
+
 
 def _check_protected_prerequisites(data_dir, workflow_path=None):
     """
@@ -222,7 +230,7 @@ def _check_protected_prerequisites(data_dir, workflow_path=None):
               "story_key en _config.yml.")
         print("     Agrega 'story_key: tuclave' a _config.yml, o quita la marca "
               "'protected' de esas historias.")
-        raise SystemExit(1)
+        raise SystemExit(PROTECTED_PREREQUISITE_EXIT)
 
     # Prerequisite 2: the build workflow must run the post-build encrypt step.
     workflow = Path(workflow_path) if workflow_path else BUILD_WORKFLOW_PATH
@@ -244,7 +252,7 @@ def _check_protected_prerequisites(data_dir, workflow_path=None):
               f"scripts/{ENCRYPT_SCRIPT_MARKER}.")
         print("     Actualiza .github/workflows/build.yml según las notas de "
               "actualización, o quita la marca 'protected' de esas historias.")
-        raise SystemExit(1)
+        raise SystemExit(PROTECTED_PREREQUISITE_EXIT)
 
     print(f"{len(protected_stories)} protected story/stories will be encrypted "
           "after the Jekyll build.")

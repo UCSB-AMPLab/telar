@@ -37,7 +37,8 @@ from encrypt_protected_stories import (
     shape_sweep,
 )
 from telar.encryption import derive_key, encrypt_story
-from telar.core import _check_protected_prerequisites
+from telar.core import (_check_protected_prerequisites,
+                        PROTECTED_PREREQUISITE_EXIT)
 from telar.story_pages import build_manifest, write_manifest
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -547,7 +548,13 @@ WORKFLOW_OLD = "steps:\n  - run: bundle exec jekyll build\n"
 
 
 class TestPipelinePrerequisites:
-    """_check_protected_prerequisites reads _config.yml from the CWD."""
+    """_check_protected_prerequisites reads _config.yml from the CWD.
+
+    The exit code is asserted, not just the exit. It is the signal the
+    upgrade reads to tell "this site has a workflow left to edit" from
+    "the conversion failed", so a refusal that exits 1 would put a site
+    back to being stranded at its old version.
+    """
 
     def _setup(self, tmp_path, monkeypatch, protected=True, key=STORY_KEY):
         monkeypatch.chdir(tmp_path)
@@ -563,15 +570,19 @@ class TestPipelinePrerequisites:
         data_dir = self._setup(tmp_path, monkeypatch)
         workflow = tmp_path / "build.yml"
         workflow.write_text(WORKFLOW_OLD)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exit_info:
             _check_protected_prerequisites(data_dir, workflow_path=workflow)
+
+        assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
 
     def test_missing_workflow_trips_interlock(self, tmp_path, monkeypatch):
         data_dir = self._setup(tmp_path, monkeypatch)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exit_info:
             _check_protected_prerequisites(
                 data_dir, workflow_path=tmp_path / "absent.yml"
             )
+
+        assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
 
     def test_upgraded_workflow_passes(self, tmp_path, monkeypatch):
         data_dir = self._setup(tmp_path, monkeypatch)
@@ -589,5 +600,7 @@ class TestPipelinePrerequisites:
         data_dir = self._setup(tmp_path, monkeypatch, key="")
         workflow = tmp_path / "build.yml"
         workflow.write_text(WORKFLOW_WITH_STEP)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exit_info:
             _check_protected_prerequisites(data_dir, workflow_path=workflow)
+
+        assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
