@@ -712,6 +712,50 @@ def generate_stories(config=None):
     print(f"✓ Generated {written} ({len(manifest['stories'])} story pages)")
 
 
+# Front-matter keys a page source does not get to decide. A page's URL comes
+# from the `pages` collection permalink and its layout from the collection
+# default, so a source claiming either takes a decision that belongs to the
+# build. Pre-0.9.0 sites carry both — `layout: page` and `permalink: /about/`
+# in telar-content/texts/pages/*.md — and the permalink puts the source and
+# the page generated from it at the same address, which Jekyll reports as a
+# conflict and the build gate then fails on.
+#
+# Stripping them here is what makes generation authoritative. The migration
+# removes them from the source file too, but a site whose pages have been
+# through a round trip that preserves unrecognised front matter can have them
+# back, so this path must hold regardless of whether the strip ever ran.
+GENERATED_PAGE_IGNORED_KEYS = ('layout', 'permalink')
+
+
+def _strip_generated_page_keys(frontmatter_text):
+    """Drop the keys a page source does not get to decide.
+
+    Filters the front-matter text rather than re-serialising the parsed dict,
+    so every other key keeps the author's own spelling, ordering and comments.
+    A dropped key takes its continuation lines with it.
+    """
+    kept = []
+    dropping = False
+    for line in frontmatter_text.split('\n'):
+        stripped = line.lstrip()
+        indent = line[:len(line) - len(stripped)]
+
+        if dropping:
+            # A continuation line is indented under the key it belongs to.
+            if indent and stripped:
+                continue
+            dropping = False
+
+        key = stripped.split(':', 1)[0].strip() if ':' in stripped else None
+        if not indent and key in GENERATED_PAGE_IGNORED_KEYS:
+            dropping = True
+            continue
+
+        kept.append(line)
+
+    return '\n'.join(kept).strip('\n')
+
+
 def _parse_page_frontmatter(source_file):
     """Parse a page markdown file. Returns (frontmatter_text, frontmatter_dict, body) or None on error."""
     with open(source_file, 'r', encoding='utf-8') as f:
@@ -829,7 +873,7 @@ def generate_pages(telar_language='en'):
         output_file = output_dir / canonical_filename
 
         output_content = f"""---
-{frontmatter_text}
+{_strip_generated_page_keys(frontmatter_text)}
 ---
 
 {processed}

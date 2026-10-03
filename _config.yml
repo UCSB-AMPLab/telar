@@ -86,6 +86,11 @@ exclude:
   - README.md
   - docs/
   - scripts/
+  # Page, story and glossary sources. The build reads them and generates the
+  # published pages from them; Jekyll rendering them as well puts a raw,
+  # unprocessed copy of every one at a second URL, and a source that declares
+  # its own permalink lands on top of the page generated from it.
+  - telar-content/texts/
 
 # Defaults
 defaults:
