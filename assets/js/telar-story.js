@@ -6285,6 +6285,12 @@
     infoElement.textContent = total > 0 ? `${display} / ${total}` : display;
   }
 
+  // assets/js/telar-story/ios-device.js
+  function isIOSDevice(userAgent = navigator.userAgent, maxTouchPoints = navigator.maxTouchPoints) {
+    if (/iPad|iPhone|iPod/.test(userAgent)) return true;
+    return /Macintosh/.test(userAgent) && maxTouchPoints > 1;
+  }
+
   // assets/js/telar-story/main.js
   if (typeof window !== "undefined") {
     window.IiifViewer = IiifViewer;
@@ -6309,14 +6315,13 @@
       const activeCard = document.querySelector(".text-card.is-active");
       state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
     });
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     if (state.isEmbed) {
       initializeButtonNavigation();
       const stepCount = (window.storyData?.steps || []).filter((s) => !s._metadata).length;
       initScrollEngine(stepCount);
     } else if (state.layoutMode === "vertical") {
       initializeButtonNavigation();
-    } else if (isIOS) {
+    } else if (isIOSDevice()) {
       initializeButtonNavigation();
     } else {
       document.documentElement.dataset.navigation = "scroll";

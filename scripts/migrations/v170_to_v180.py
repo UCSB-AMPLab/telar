@@ -173,6 +173,7 @@ FRAMEWORK_FILES = {
     'assets/js/telar-story/card-pool.js': 'Story engine: the card pool',
     'assets/js/telar-story/deep-link.js': 'Story engine: deep links',
     'assets/js/telar-story/iiif-card.js': 'Story engine: IIIF cards',
+    'assets/js/telar-story/ios-device.js': 'Story engine: iOS and iPadOS detection',
     'assets/js/telar-story/iiif-manifest.js': 'Story engine: IIIF manifests',
     'assets/js/telar-story/iiif-viewer.js': 'Story engine: IIIF viewer',
     'assets/js/telar-story/main.js': 'Story engine entry module',

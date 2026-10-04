@@ -17,9 +17,9 @@
  * viewed:
  * - Embed mode (inside an iframe, detected by embed.js): button navigation.
  * - Vertical viewport (matchMedia-derived, see layout-mode.js): button navigation.
- * - iOS Safari: button navigation (Lenis momentum scroll is unreliable
- *   on iOS; fluid scroll is deferred to button-only).
- * - Desktop (non-iOS): Lenis-powered scroll engine.
+ * - iPhone or iPad (see ios-device.js): button navigation, because Lenis
+ *   momentum scroll is unreliable on iOS.
+ * - Anything else: Lenis-powered scroll engine.
  *
  * For protected stories (v0.8.0+), initialization waits until the story is
  * unlocked via story-unlock.js. The unlock module fires a 'telar:story-unlocked'
@@ -51,6 +51,7 @@ if (typeof window !== 'undefined') {
   window.IiifViewer = IiifViewer;
 }
 import { initializeButtonNavigation } from './navigation.js';
+import { isIOSDevice } from './ios-device.js';
 import { initScrollEngine, getScrollEngineState } from './scroll-engine.js';
 import {
   initializePanels,
@@ -107,9 +108,6 @@ function initializeStory() {
     state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
   });
 
-  // iOS Safari uses button-only navigation — no fluid scroll
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
   if (state.isEmbed) {
     initializeButtonNavigation();
     // Also init scroll engine so button nav can use advanceToStep.
@@ -120,8 +118,7 @@ function initializeStory() {
     initScrollEngine(stepCount);
   } else if (state.layoutMode === 'vertical') {
     initializeButtonNavigation();
-  } else if (isIOS) {
-    // iOS desktop (iPad) — use button nav, Lenis momentum scroll is unreliable
+  } else if (isIOSDevice()) {
     initializeButtonNavigation();
   } else {
     // Lenis-powered continuous scroll engine. The marker keeps the keyboard
