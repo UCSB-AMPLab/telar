@@ -8,25 +8,37 @@ that prepares maths and pipes for kramdown, and the answer word limit,
 which does not cut inside code. This module is the one reading of it they
 use.
 
-In an answer, which is markdown that kramdown renders, code is a backtick
-span read as kramdown reads one: a run of N backticks opens it and the next
-N consecutive backticks close it, even inside a longer run, whose remainder
-is text; a run with no such close is literal, and a span ends with its
-paragraph. A single backtick with whitespace (ASCII, as in Ruby) on both
-sides, or at the start of the text and followed by whitespace, is literal,
-and so is a backtick escaped with a backslash. An HTML comment, CDATA or
-tag, a link's destination and a `$$…$$` span are read before code, so
-backticks inside them open nothing. HTML elements are read by kramdown's
-content model (parser/html.rb): the content of a span- or block-model
-element (`span`, `em`, `details`…) is read like any text, and every other
-element (`code`, `kbd`, `u`, `script`, an unknown tag) is raw to its own
-closing tag, or to the end of the paragraph; a `markdown` attribute changes
-which. A paragraph that opens with `\\$$`, whose first `$$` after it ends a
-line, is maths: kramdown drops that backslash. A paragraph indented by four
-spaces or a tab is a code block. Other block syntax is not read here: the
-answer's prose rules have removed it first. Not modelled, all rare in an
-answer: `~~` strikethrough; autolinks; and a code span begun in a link's
-text and closed in its destination.
+In an answer, which is markdown that kramdown renders, span syntax is read
+within a block: a paragraph, which ends at a blank line or at a line that
+opens another block (a tag of an element that is not a span element, a
+list item, heading, quote, definition, fence, IAL or EOB line), with the
+lines kramdown joins back to it (a closing tag, a fence never closed, a
+heading with no text). A block that opens with such an element's tag, or
+with a comment, is block HTML: its content is raw to the matching close,
+across blank lines, or to the end of the text. An indented or fenced code
+block, and `$$…$$` opening a block after a blank line and followed by one,
+are read for nothing inside.
+
+Code is a backtick span read as kramdown reads one: a run of N backticks
+opens it and the next N consecutive backticks close it, even inside a
+longer run, whose remainder is text; a run with no such close is literal,
+and a span ends with its block. A single backtick with whitespace (ASCII,
+as in Ruby) on both sides, or at the start of a block and followed by
+whitespace, is literal, and so is a backtick escaped with a backslash. An
+HTML comment, CDATA or tag, a link's destination and a `$$…$$` span are
+read before code, so backticks inside them open nothing. HTML elements
+are read by kramdown's content model (parser/html.rb): the content of a
+span- or block-model element (`span`, `em`, `details`…) is read like any
+text, and every other element (`code`, `kbd`, `u`, `script`, an unknown
+tag) is raw to its own closing tag, or to the end of the block; a
+`markdown` attribute changes which. A block that opens with `\\$$`, whose
+first `$$` after it ends a line, is maths: kramdown drops that backslash.
+Not modelled, all rare in an answer: a definition list's content past its
+first paragraph; a `markdown` attribute on an element inside block HTML;
+an IAL over several lines; a setext heading, link or abbreviation
+definition; `~~` strikethrough; autolinks; and a code span begun in a
+link's text and closed in its destination. The answer's prose rules have
+already flattened list, quote and heading marks.
 
 In a panel, which reaches the glossary pass as HTML, a backtick is a
 character and code is an element: a raw `<code>`, `<pre>`, `<kbd>` or
@@ -88,16 +100,69 @@ _KNOWN = _BLOCK_ELEMENTS | _SPAN_ELEMENTS | _WITHOUT_BODY | _READ_MODEL | _RAW_M
 _DESTINATION = re.compile(r'\((?:[^()\s]|\([^()]*\))*(?:\s+(?:"[^"]*"|\'[^\']*\'))?\)')
 _MATHS = re.compile(r'\$\$.*?\$\$', re.DOTALL)
 _NEXT = re.compile(r'[\\<\[$`]')
-_BLANK_LINE = re.compile(r'\n[ \t]*\n')
 # A paragraph opening with `\$$` (after up to three spaces) whose first
 # `$$` after that is followed only by whitespace to the end of its line:
 # kramdown's block maths start, which drops the backslash and leaves the
 # rest to the paragraph.
-_ESCAPED_BLOCK_MATHS = re.compile(r'(?m)^ {0,3}(\\)\$\$')
+_ESCAPED_BLOCK_MATHS = re.compile(r' {0,3}(\\)\$\$')
 _LINE_END = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
-# A paragraph whose first line is indented by four spaces or a tab and holds
-# text: kramdown's code block.
-_INDENTED = re.compile(r'(?:[ \t]*\n)*(?:\t| {4})[ \t]*[^ \t\n\r\f\v]')
+
+# kramdown's blocks, as far as they bound span syntax (GFM input, with its
+# paragraph_end quirk: parser/kramdown/paragraph.rb, kramdown-parser-gfm).
+# A line holding only whitespace.
+_BLANK = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
+# The first line of an indented code block, which holds text.
+_INDENTED = re.compile(r'(?:\t| {4})[ \t]*[^ \t\n\r\f\v]')
+# An IAL line. kramdown's may run over several lines; one on a line of its
+# own is read, which keeps the search to the line.
+_IAL = r' {0,3}\{:(?![:/])(?:\\\}|[^}\n])+\}[ \t\r\f\v]*(?:\n|\Z)'
+_IAL_LINE = re.compile(_IAL)
+_EOB_LINE = re.compile(r'\^[ \t\r\f\v]*(?:\n|\Z)')
+# A heading line, and the closing marks its text loses: with no text left,
+# it is not a heading.
+_ATX_LINE = re.compile(r'#{1,6}[\t ]+([^\n]*)')
+_ATX_CLOSE = re.compile(r'[\t ]#+\Z')
+_DEFINITION_LINE = re.compile(r' {0,3}:[\t |]')
+# A fenced code block (GFM's FENCED_CODEBLOCK_MATCH): three or more of `~`
+# and backticks in any mix, closed by the same run followed by any more of
+# its last character.
+_FENCE = re.compile(rf' {{0,3}}(([~`]){{3,}}){_S}*?(?:[^ \t\n\r\f\v]+?(?:\?[^ \t\n\r\f\v]*)?)?'
+                    rf'{_S}*?\n.*?^ {{0,3}}\1\2*{_S}*?(?:\n|\Z)', re.DOTALL | re.MULTILINE)
+# The span elements, and script, whose tag opening a line does not end a
+# paragraph.
+_LAZY_SPAN = '|'.join(sorted(_SPAN_ELEMENTS | {'script'}))
+# A line that ends the paragraph above it. A closing tag, or a fence
+# never closed, ends it only for a paragraph to follow, which kramdown
+# joins to it, so neither is listed.
+_PARAGRAPH_END = re.compile(rf'''
+    [ \t\r\f\v]*(?:\n|\Z)
+  | \^[ \t\r\f\v]*(?:\n|\Z)
+  | {_IAL.replace(' {0,3}', '[ ]{0,3}', 1)}
+  | [ ]{{0,3}}<(?>(?!(?:{_LAZY_SPAN})\b){_NAME})
+  | [ ]{{0,3}}(?:[+*-]|\d+\.)[\t |]
+  | \#{{1,6}}[\t ]
+  | [ ]{{0,3}}:[\t |]
+  | [ ]{{0,3}}>
+  | [ ]{{0,3}}[~`]{{3,}}
+''', re.VERBOSE)
+_PROCESSING_INSTRUCTION = re.compile(r'<\?.*?\?>', re.DOTALL)
+_COMMENT_TOKEN = re.compile(r'<!--.*?-->', re.DOTALL)
+_CDATA_TOKEN = re.compile(r'<!\[CDATA\[.*?\]\]>', re.DOTALL)
+_LEAD = re.compile(r' {0,3}')
+_INDENT = re.compile(r'[ \t]*')
+_TRAILING = re.compile(r'(?:[ \t]*\n)?')
+_FENCE_START = re.compile(r' {0,3}[~`]{3,}')
+_FENCE_OPENING = re.compile(rf' {{0,3}}(([~`]){{3,}}){_S}*?(?:[^ \t\n\r\f\v]+?(?:\?[^ \t\n\r\f\v]*)?)?'
+                            rf'{_S}*?\n')
+# Block maths: kramdown's BLOCK_MATH_START without its backslash, which the
+# span reading handles.
+# kramdown's text ends with a line break, so the end of an answer ends a line.
+_BLOCK_MATHS = re.compile(rf' {{0,3}}(\$\$.*?\$\$)({_S}*?\n|{_S}*\Z)?', re.DOTALL)
+_BLOCK_BOUNDARY = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)|\^[ \t\r\f\v]*(?:\n|\Z)'
+                             rf'|{_IAL}')
+# A line opening with a tag, open or closing, of an element that is not a
+# span element: it ends an indented code block.
+_HTML_LINE = re.compile(rf' {{0,3}}</?(?>(?!(?:{_LAZY_SPAN})\b){_NAME})')
 
 # The content stops at the next opening of the same element, so an element
 # that is never closed does not make the search rescan the rest of the text.
@@ -105,10 +170,10 @@ CODE_ELEMENT = re.compile(r'<(code|pre|kbd|samp)\b[^>]*>(?:(?!<\1\b).)*?</\1\s*>
                           re.DOTALL | re.IGNORECASE)
 
 
-def _literal_single(text, start, end):
+def _literal_single(text, start, end, block_starts):
     """A lone backtick between whitespace, which kramdown prints as is. The
-    start of the text counts as whitespace."""
-    return (end - start == 1 and (start == 0 or text[start - 1] in _SPACE)
+    start of a block counts as whitespace."""
+    return (end - start == 1 and (start in block_starts or text[start - 1] in _SPACE)
             and end < len(text) and text[end] in _SPACE)
 
 
@@ -125,10 +190,22 @@ def _read_content(name, attributes, inside_raw):
     return name in _READ_MODEL and not inside_raw
 
 
+# The letters Ruby's case-insensitive match folds with a letter outside
+# ASCII: the long s and the Kelvin sign. It folds no others with a known
+# element's name, which are ASCII, so not the dotted or dotless i, both of
+# which Python's own case-insensitive match folds with i.
+_RUBY_FOLDS = {'s': 'sS\u017f', 'k': 'kK\u212a'}
+
+
 @functools.lru_cache(maxsize=256)
 def _closing_tag(name, known):
-    """The closing tag of the element *name*: any case for a known one."""
-    return re.compile(rf'</{re.escape(name)}{_S}*>', re.IGNORECASE if known else 0)
+    """The closing tag of the element *name*: for a known one, in any case,
+    as Ruby's case-insensitive match reads it."""
+    if not known:
+        return re.compile(rf'</{re.escape(name)}{_S}*>')
+    letters = ''.join(f'[{_RUBY_FOLDS.get(char, char + char.upper())}]' if char.isalpha()
+                      else re.escape(char) for char in name)
+    return re.compile(rf'</{letters}{_S}*>')
 
 
 def _attributes(source, known):
@@ -143,15 +220,271 @@ def _attributes(source, known):
     return attributes
 
 
+class _Blocks:
+    """kramdown's blocks in *text*, as far as span syntax needs them: the
+    stretches it reads span syntax in (a paragraph with the lines kramdown
+    joins to it, a heading, a list item or quote read as one, each term of
+    a definition list), and the stretches it reads none in (a code block,
+    a block HTML element with what it holds, a comment opening a block, an
+    IAL or EOB line)."""
+
+    def __init__(self, text):
+        self.text = text
+        # (start, end) of each stretch read for spans; the starts of those
+        # that open after a block boundary, where `\\$$` opens block maths.
+        self.units = []
+        self.boundary_starts = []
+        # (start, end) of each stretch read for no spans, and the regions
+        # they hold, as (kind, start, end).
+        self.skips = []
+        self.regions = []
+        self.no_comment_close = False
+        self.open_fences = set()
+        # Whether the block before ended at a blank line, an EOB or IAL
+        # line, or is the start of the text.
+        self.boundary = True
+        pos = 0
+        while pos is not None and pos < len(text):
+            pos = self.block(pos)
+
+    def skip(self, start, end, kind=None):
+        self.skips.append((start, end))
+        if kind:
+            self.regions.append((kind, start, end))
+
+    def line_end(self, pos):
+        end = self.text.find('\n', pos)
+        return len(self.text) if end == -1 else end
+
+    def block(self, pos):
+        """Read the block at *pos*; where the next one starts, or None."""
+        blank = _BLANK.match(self.text, pos)
+        if blank:
+            self.boundary = True
+            return blank.end() if blank.end() > pos else None
+        for reader in (self.code_block, self.fenced, self.marker_line, self.block_html,
+                       self.block_maths):
+            end = reader(pos)
+            if end is not None:
+                # An EOB line is a boundary; an IAL line leaves it as it was,
+                # since it belongs to the block before it or after it.
+                self.boundary = (reader == self.marker_line
+                                 and (self.boundary or _EOB_LINE.match(self.text, pos)))
+                return end
+        end = self.paragraph(pos)
+        self.boundary = False
+        return end
+
+    def code_block(self, pos):
+        """An indented code block: its lines, and lazy lines after them, to
+        a blank line or a line that ends it."""
+        text = self.text
+        if not _INDENTED.match(text, pos):
+            return None
+        end = self.line_end(pos)
+        while end < len(text):
+            line = end + 1
+            if (_BLANK.match(text, line) or _IAL_LINE.match(text, line)
+                    or _EOB_LINE.match(text, line) or _HTML_LINE.match(text, line)):
+                break
+            end = self.line_end(line)
+        self.skip(pos, end, 'block')
+        return end
+
+    def fenced(self, pos):
+        match = self.fence(pos)
+        if not match:
+            return None
+        self.skip(pos, match.end(), 'block')
+        return match.end()
+
+    def fence(self, pos):
+        """The fenced code block opening at *pos*, or None. A fence left open
+        stays open for every later one of its character and length, whose
+        close would close it, so that search is made once."""
+        opening = _FENCE_OPENING.match(self.text, pos)
+        if not opening or opening.group(1) in self.open_fences:
+            return None
+        match = _FENCE.match(self.text, pos)
+        if not match:
+            self.open_fences.add(opening.group(1))
+        return match
+
+    def marker_line(self, pos):
+        """An EOB or IAL line, which prints nothing."""
+        match = _EOB_LINE.match(self.text, pos) or _IAL_LINE.match(self.text, pos)
+        if not match:
+            return None
+        self.skip(pos, match.end())
+        return match.end()
+
+    def block_html(self, pos):
+        """A comment, or an element that is not a span element, opening the
+        block, as kramdown's parse_block_html reads them."""
+        text = self.text
+        tag = _LEAD.match(text, pos).end()
+        if text.startswith('<!--', tag):
+            return self.block_comment(pos, tag)
+        match = _OPEN_TAG.match(text, tag)
+        if not match or match.group(1).lower() in _SPAN_ELEMENTS:
+            return None
+        end = _html_element_end(text, match)
+        if end is None:
+            # Its content is read: only the tag is skipped.
+            return match.end()
+        self.skip(pos, end, 'raw')
+        name = match.group(1).lower()
+        if match.group(4) or name in _WITHOUT_BODY or name in ('script', 'style'):
+            # The line break after it is left, and reads as a blank line.
+            return end
+        return _TRAILING.match(text, end).end()
+
+    def block_comment(self, pos, tag):
+        close = -1 if self.no_comment_close else self.text.find('-->', tag + 4)
+        if close == -1:
+            self.no_comment_close = True
+            return None
+        end = _TRAILING.match(self.text, close + 3).end()
+        self.skip(pos, end)
+        return end
+
+    def block_maths(self, pos):
+        """`$$…$$` opening a block after a boundary and followed by one:
+        maths of its own, which may hold blank lines."""
+        text = self.text
+        match = _BLOCK_MATHS.match(text, pos)
+        if not (self.boundary and match and match.group(2) is not None):
+            return None
+        if not (match.end() == len(text) or _BLOCK_BOUNDARY.match(text, match.end())):
+            return None
+        self.skip(pos, match.end())
+        self.regions.append(('maths', match.start(1), match.end(1)))
+        return match.end()
+
+    def paragraph(self, pos):
+        """A paragraph, heading, list item, quote or definition, read for
+        spans to the line that ends it."""
+        text = self.text
+        if self.boundary:
+            self.boundary_starts.append(pos)
+        end = self.line_end(pos)
+        if _heading(text, pos):
+            self.units.append((pos, end))
+            return end + 1
+        while end < len(text):
+            line = end + 1
+            if _PARAGRAPH_END.match(text, line) and not self.joins(line):
+                break
+            end = self.line_end(line)
+        if end < len(text) and _DEFINITION_LINE.match(text, end + 1):
+            # Each line above a definition is a term of its own.
+            start = pos
+            newline = text.find('\n', start, end)
+            while newline != -1:
+                self.units.append((start, newline))
+                start = newline + 1
+                newline = text.find('\n', start, end)
+            self.units.append((start, end))
+        else:
+            self.units.append((pos, end))
+        return end + 1 if end < len(text) else None
+
+    def joins(self, line):
+        """Whether the line at *line*, which ends a paragraph, opens one that
+        kramdown joins to it: a fence never closed, or a tag that does not
+        open block HTML."""
+        text = self.text
+        lead = _LEAD.match(text, line).end()
+        if _FENCE_START.match(text, line):
+            return not self.fence(line)
+        if _ATX_LINE.match(text, line):
+            return not _heading(text, line)
+        if text.startswith('<', lead) and not _BLANK.match(text, line):
+            match = _OPEN_TAG.match(text, lead)
+            return not match or match.group(1).lower() in _SPAN_ELEMENTS
+        return False
+
+
+def _heading(text, pos):
+    """Whether the line at *pos* is a heading that holds text."""
+    match = _ATX_LINE.match(text, pos)
+    return bool(match) and bool(_ATX_CLOSE.sub('', match.group(1).strip(_SPACE)).rstrip(_SPACE))
+
+
+def _html_element_end(text, match):
+    """Where the block HTML element opened by *match* ends, or None when
+    kramdown reads its content: past its closing tag, or the end of the
+    text. Its content is raw, as parse_raw_html reads it."""
+    name = match.group(1)
+    known = name.lower() in _KNOWN
+    name = name.lower() if known else name
+    if match.group(4) or name in _WITHOUT_BODY:
+        return match.end()
+    if name in ('script', 'style'):
+        close = _closing_tag(name, True).search(text, match.end())
+        return close.end() if close else len(text)
+    source = match.group(2)
+    if 'markdown' in source.lower():
+        markdown = _attributes(source, known).get('markdown')
+        if markdown in ('span', 'block') or markdown == '1' and name in _READ_MODEL:
+            return None
+    return _raw_html_end(text, match.end(), [(name, known)])
+
+
+def _raw_html_end(text, pos, open_names):
+    """Past the closing tag of the innermost of *open_names*, reading the
+    raw HTML from *pos* as parse_raw_html does, or the end of the text."""
+    while open_names:
+        lt = text.find('<', pos)
+        if lt == -1:
+            return len(text)
+        pos = lt + 1
+        for token in (_COMMENT_TOKEN, _PROCESSING_INSTRUCTION, _CDATA_TOKEN):
+            match = token.match(text, lt)
+            if match:
+                pos = match.end()
+                break
+        else:
+            pos = _raw_html_tag(text, lt, open_names) or pos
+    return pos
+
+
+def _raw_html_tag(text, lt, open_names):
+    """Past the tag at *lt* in raw block HTML, opening or closing an element
+    of *open_names*; None when there is no tag there."""
+    match = _OPEN_TAG.match(text, lt)
+    if match:
+        name = match.group(1)
+        known = name.lower() in _KNOWN
+        name = name.lower() if known else name
+        if name in ('script', 'style'):
+            close = _closing_tag(name, True).search(text, match.end())
+            return close.end() if close else len(text)
+        if not (match.group(4) or name in _WITHOUT_BODY):
+            open_names.append((name, known))
+        return match.end()
+    match = _CLOSE_TAG.match(text, lt)
+    if not match:
+        return None
+    innermost, known = open_names[-1]
+    closing = match.group(1).lower() if known else match.group(1)
+    if closing == innermost:
+        open_names.pop()
+    return match.end()
+
+
 class _Scan:
     """One left-to-right reading of *text*, as kramdown reads span syntax."""
 
     def __init__(self, text):
         self.text = text
         self.regions = []
-        # Where each paragraph ends, found once: nothing here crosses one.
-        self.ends = ([blank.start() for blank in _BLANK_LINE.finditer(text)]
-                     + [len(text)])
+        # The stretches read for spans, and where each ends: nothing here
+        # crosses one. What kramdown reads none of is skipped.
+        blocks = _Blocks(text)
+        self.ends = sorted(end for _, end in blocks.units) + [len(text)]
+        self.blocks = sorted(blocks.skips)
+        self.regions.extend(blocks.regions)
         # A close searched for and not found stays not found further on in
         # the same paragraph, so an unmatched opening costs one scan per
         # kind and paragraph rather than one per opening.
@@ -165,34 +498,27 @@ class _Scan:
         self.open = []
         self.paragraph_end = None
         self.raw_from = None
-        self.dropped = self.dropped_backslashes()
-        # Indented code blocks, which nothing else here reads inside.
-        self.blocks = self.indented_blocks()
-        self.regions.extend(('block', start, end) for start, end in self.blocks)
+        self.dropped = self.dropped_backslashes(blocks.boundary_starts)
+        # Where each stretch's text starts, leading spaces off, as kramdown
+        # reads it.
+        self.block_starts = {0} | {_INDENT.match(text, start).end() for start, _ in blocks.units}
 
-    def dropped_backslashes(self):
-        """Every backslash kramdown drops from a paragraph's opening `\\$$`."""
+    def dropped_backslashes(self, starts):
+        """Every backslash kramdown drops from a block's opening `\\$$`."""
         text = self.text
         dropped = set()
-        for match in _ESCAPED_BLOCK_MATHS.finditer(text):
-            line = match.start()
-            before = text.rfind('\n', 0, max(line - 1, 0)) + 1
-            if line and text[before:line - 1].strip(' \t'):
+        for start in starts:
+            match = _ESCAPED_BLOCK_MATHS.match(text, start)
+            if not match:
                 continue
             close = text.find('$$', match.end())
             if close != -1 and _LINE_END.match(text, close + 2):
                 dropped.add(match.start(1))
         return dropped
 
-    def indented_blocks(self):
-        """Every paragraph that opens indented by four spaces or a tab,
-        which kramdown prints as a code block, lazy lines and all."""
-        starts = [0] + [blank.end() for blank in _BLANK_LINE.finditer(self.text)]
-        return [(start, self.limit(start)) for start in starts
-                if _INDENTED.match(self.text, start)]
-
     def in_block(self, i):
-        """The end of the code block holding *i*, or None."""
+        """The end of the stretch kramdown reads no spans in holding *i*, or
+        None."""
         index = bisect.bisect_right(self.blocks, (i, len(self.text))) - 1
         if index >= 0 and self.blocks[index][0] <= i < self.blocks[index][1]:
             return self.blocks[index][1]
@@ -228,7 +554,7 @@ class _Scan:
         return self.token(found.start())
 
     def token(self, i):
-        """Read the token at *i*, unless an indented code block holds it."""
+        """Read the token at *i*, unless a block that is not read holds it."""
         block_end = self.in_block(i)
         if block_end is not None:
             return block_end
@@ -369,7 +695,7 @@ class _Scan:
     def close(self, i, end):
         """Where the run from *i* to *end* closes its span, or None."""
         run = end - i
-        if _literal_single(self.text, i, end):
+        if _literal_single(self.text, i, end, self.block_starts):
             return None
         limit = self.limit(end)
         if (limit, run) in self.unclosed:

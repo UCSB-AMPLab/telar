@@ -102,6 +102,8 @@ ANSWERS = {
     'maths_in_raw_span': '<span markdown="0">$$a|b$$</span> x | y',
     'pipe_in_comment': 'A <!-- a | b --> c',
     'pipe_in_cdata': 'A <![CDATA[a | b]]> c',
+    'pipe_in_block_html': 'A\n<div>x | y</div>',
+    'pipe_after_an_attached_ial': 'A\n{: .c}\n\\$$x|y$$',
 }
 
 
@@ -292,6 +294,16 @@ class TestAPipeInsideRawHtml:
         # CDATA's text counts as the line's, and an entity inside it is
         # printed as written, so the pipe goes between two CDATA sections.
         assert _answer(rendered, 'pipe_in_cdata') == '<p>A a | b c</p>'
+
+    def test_in_block_html(self, rendered):
+        # A line opening with a block element's tag ends the paragraph, and
+        # the element is raw to its close.
+        assert _answer(rendered, 'pipe_in_block_html') == '<p>A</p>\n<div>x | y</div>'
+
+    def test_after_an_ial_attached_to_the_paragraph(self, rendered):
+        # The IAL belongs to the paragraph above, so the `\\$$` after it is
+        # an escaped dollar and prose, not maths: the pipe prints as a pipe.
+        assert '\\vert' not in _answer(rendered, 'pipe_after_an_attached_ial')
 
     def test_in_a_comment_is_escaped(self, rendered):
         # A comment's text counts as the line's, so its pipe would make a

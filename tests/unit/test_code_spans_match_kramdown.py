@@ -31,7 +31,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from telar.code_spans import answer_regions, code_spans
-from telar.processors.stories import _answer_maths_for_kramdown, _answer_pipes_for_kramdown
+from telar.processors.stories import (_answer_maths_for_kramdown, _answer_pipes_for_kramdown,
+                                      _reduce_answer_to_prose)
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -107,6 +108,55 @@ FORMS = [
     'a <table>`x`</table> then `y`',
     'a\n\n    `x` $$ and `y`\nlazy `z`\n\nb `w`',
     'a\n\n\t`x` $$\n\nb `w`',
+    'a <SCRIPT>`x`</SCRİPT> `y`</script> `z`',
+    'a <script>`x`</ſcript> `y`</script> `z`',
+    'a <kbd>`x`</\u212abd> `y` </kbd> `z`',
+    'a <u>`x`</ı> `y`',
+    'a <mark>`x`</marK> `y`</mark> `z`',
+    'a\n<div>`x`</dİv> `y`</div> `z`',
+    'a\n<div>`x`</\u212abd></div> `z`',
+    'a\n<SCRIPT>`x`</ſcript>\n\n`y`',
+    'a <kbd>`x\n<pre>y` z</pre> `w`',
+    'a\n<div>b `x` c\n\nd</div> `y`',
+    '<div>x</div> `y`\nmore `z`',
+    '<p>`x`</p> `y`',
+    'a\n<div>`x`</span>`y`</div> `w`',
+    '<script>`x`\n\n`y`</script> `z`',
+    'a `x\n<hr>` y',
+    '<hr>` \nb` c',
+    'a `x\n  <table>` y',
+    'a `x\n<b>` y',
+    'a `x\n<script>` y',
+    'a `x\n</div>` y',
+    'a `x\n<!-- c -->` y',
+    'a `x\n1. b` c',
+    'a `x\n# h` c',
+    'a `x\n# #\nb` c',
+    'a `x\n#   \nb` c',
+    'a `x\n> q` c',
+    'a `x\nb `y\n: d` c',
+    'a `x\n^\nb` c',
+    'a `x\n{: .c}\nb` c',
+    'a `x\n```\nb` c',
+    'a `x\n```\nb\n```\nc` d',
+    'a `x\n``` p q\nb\n```\nc` d',
+    'a\n\n```~~~\n`x`\n```~~~\n\nz `y`',
+    'a\n\n~`~\n`x`\n~`~~~\n\nz `y`',
+    'a\n\n~`~\n`x`\n~``\n\nz `y`',
+    'a\n$$x$$\n\nb `y`',
+    'a\n\n$$x\n\ny$$\n\nb `y`',
+    'a\n^\n$$x\n\ny$$\n\nb `y`',
+    'a\n<div>x</div>\n$$x\n\ny$$\n\nb `y`',
+    'a\n<hr>\n$$x\n\ny$$\n\nb `y`',
+    'a\n<hr>\n\\$$x$$\nb `y`',
+    'a\n<div>x</div>\n\\$$x$$\nb `y`',
+    'a\n\n    x\n<div>`y`</div> `z`',
+    'a\n<DIV>`x`</div> `y`',
+    'a\n<div>`x`</DIV> `y`',
+    'a `y`\n\n$$x\n\ny$$',
+    'a `y`\n\n$$x$$  ',
+    'a `y`\n{: .c}\n\\$$x$$',
+    '{: .c}\n\\$$x$$\nb `y`',
     'a <u markdown="span">`x`</u> `y`',
     'a <u markdown="1">`x`</u> `y`',
     'a <span markdown="0">`x`</span> `y`',
@@ -133,6 +183,28 @@ PIECES = ['`', '``', '```', ' ', '\t', '\u00a0', 'a', 'b c', '\\', '\\`', '<em>'
           '<x-y>', '</x-y>', '<img src="`"/>', '<details>', '</details>', '<SCRIPT>',
           '</script>', '<b markdown="0">', '</b>', '<u markdown="span">', '<![CDATA[',
           ']]>', '<!--', '-->', '\\$', '\n\n\\$$', 'x$$', '\n\n    ', '\n\n\t']
+
+
+# Block syntax the answer passes can meet once the prose rules have run.
+# Two kinds of block are not modelled, both rare in an answer, so they are
+# left out here: a definition list's content past its first paragraph, and
+# a `markdown` attribute on an element inside block HTML.
+BLOCK_PIECES = ['\n<div>', '\n</div>', '\n<pre>', '</pre>', '\n```', '\n```\n', '\n^\n',
+                '\n{: .c}\n', '\n<!-- c -->', '\n  <table>', '</table>', '\n<SCRIPT>',
+                '\n<details>', '\n<hr>', '\n<p>', '\n<u>', '<div>', '\n\n<div>',
+                '\n\n<!-- c -->', '\n# ', '\n\n$$']
+
+
+def _random_block_answers(count, seed=571):
+    rng = random.Random(seed)
+    pieces = [p for p in PIECES if 'markdown=' not in p] + BLOCK_PIECES
+    return [_prose('a' + ''.join(rng.choice(pieces) for _ in range(rng.randint(2, 14))))
+            for _ in range(count)]
+
+
+def _prose(answer):
+    reduced = _reduce_answer_to_prose(answer)
+    return reduced[0] if isinstance(reduced, tuple) else reduced
 
 
 def _random_answers(count, seed=541):
@@ -170,9 +242,10 @@ def _read_code(answer):
 
 
 def _rendered_maths(rendered):
-    """The content of every inline formula kramdown made, in order."""
-    return [_line_ends(html.unescape(content)) for content in
-            re.findall(r'\\\((.*?)\\\)', rendered, re.DOTALL)]
+    """The content of every formula kramdown made, inline or as a block
+    of its own, in order."""
+    return [_line_ends(html.unescape(inline or block)) for inline, block in
+            re.findall(r'\\\((.*?)\\\)|\\\[(.*?)\\\]', rendered, re.DOTALL)]
 
 
 def _read_maths(answer):
@@ -186,7 +259,7 @@ def _prepared(answer):
     return _answer_pipes_for_kramdown(_answer_maths_for_kramdown(answer))
 
 
-ANSWERS = FORMS + _random_answers(400)
+ANSWERS = FORMS + _random_answers(400) + _random_block_answers(400)
 
 
 @pytest.fixture(scope='module')
@@ -216,6 +289,15 @@ def test_random_answers(kramdown):
     disagreements = [(answer, _read_code(answer), _rendered_code(kramdown[answer]))
                      for answer in _random_answers(400)
                      if _read_code(answer) != _rendered_code(kramdown[answer])]
+    assert disagreements == []
+
+
+def test_random_answers_with_blocks(kramdown):
+    disagreements = [(answer, _read_code(answer), _rendered_code(kramdown[answer]),
+                      _read_maths(answer), _rendered_maths(kramdown[answer]))
+                     for answer in _random_block_answers(400)
+                     if (_read_code(answer), _read_maths(answer))
+                     != (_rendered_code(kramdown[answer]), _rendered_maths(kramdown[answer]))]
     assert disagreements == []
 
 

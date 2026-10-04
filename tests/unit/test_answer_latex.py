@@ -130,8 +130,12 @@ class TestAStrayDoubleDollar:
         'a <u>$$</u> then',
         '\\$$$$',
         'a\n\n    $$ in a code block\n\nb',
+        'a\n\n$$x\n\ny$$\n\nb',
+        'a\n<div>$$ b</div>',
+        'a\n\n$$x\n\ny$$',
     ], ids=['in-code', 'in-a-code-element', 'after-an-escape', 'in-cdata', 'in-a-raw-element',
-            'maths-after-a-dropped-backslash', 'in-an-indented-code-block'])
+            'maths-after-a-dropped-backslash', 'in-an-indented-code-block',
+            'block-maths-over-a-blank-line', 'in-block-html', 'block-maths-ending-the-answer'])
     def test_not_stray(self, written):
         assert _answer_maths_for_kramdown(written) == written
 
@@ -142,7 +146,8 @@ class TestALongMalformedAnswerIsReadInLinearTime:
 
     @pytest.mark.parametrize('unit', ['`x ', '``y ', '\\begin{align} ', '\\( ', '\\[ ',
                                       '$$ ', '$x ', '<code>a ', '](x(y ', '<!-- ',
-                                      '<![CDATA[ ', '<u>a ', '<b markdown="0">a '])
+                                      '<![CDATA[ ', '<u>a ', '<b markdown="0">a ',
+                                      '\n{:x', '\n<div>', '\n: a', '\n````\n```', '\n```x\n'])
     def test_bounded(self, unit):
         started = time.perf_counter()
         _answer_maths_for_kramdown(unit * 20000)
