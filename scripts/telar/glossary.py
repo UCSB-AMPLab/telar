@@ -32,7 +32,8 @@ Demo glossary terms (those prefixed with `demo-`) get an extra
 The page path is not the stored key. Jekyll publishes each glossary page at
 `/glossary/:name/`, where `:name` is its slugified filename, lowercased: the
 page for `IIIF` is at `/glossary/iiif/`. `glossary_term_slug()` reproduces
-that rule, and the path is joined to the site's configured baseurl here
+that rule; a legacy page whose front matter has a `permalink` is at that
+path instead (`GlossaryTerms.addresses`), and the path is joined to the site's configured baseurl here
 because story text reaches the browser through `story.html`'s `jsonify`,
 which does not resolve Liquid inside it.
 
@@ -79,11 +80,14 @@ class GlossaryTerms(dict):
     """A glossary's term ids mapped to their titles, with each entry's kind
     id in `kinds`, which a glossary callout shows. An entry missing from
     `kinds` is of the default kind, so a plain dict works where no callout
-    is drawn."""
+    is drawn. `addresses` holds the site-relative path (no baseurl) of each
+    entry whose page is published somewhere other than `/glossary/<slug>/`;
+    a term absent from it is linked at its slug."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.kinds = {}
+        self.addresses = {}
 
 
 def read_glossary_sheet(csv_path):
@@ -201,7 +205,124 @@ def glossary_link_map(pages):
     for term_id, (title, kind) in pages.items():
         glossary_terms[term_id] = title
         glossary_terms.kinds[term_id] = kind
+    glossary_terms.addresses.update(getattr(pages, 'addresses', {}))
     return glossary_terms
+
+
+def markdown_glossary_permalink(frontmatter_text):
+    """The `permalink` of a legacy glossary file's front matter as Jekyll
+    publishes the page at it, or None when it has none. The page copies the
+    front matter verbatim, so a permalink there moves the page. Jekyll
+    reads it as a site-relative path: a leading slash is supplied and a run
+    of slashes is one."""
+    try:
+        fields = yaml.safe_load(frontmatter_text)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(fields, dict):
+        return None
+    permalink = fields.get('permalink')
+    if permalink is None or not str(permalink).strip():
+        return None
+    return re.sub(r'/{2,}', '/', '/' + str(permalink).strip())
+
+
+def glossary_term_address(term_id, permalink=None):
+    """The site-relative path (no baseurl) a glossary term's page is
+    published at: its own permalink when the front matter gives one, else
+    `/glossary/<slug>/`."""
+    return permalink or f'/glossary/{glossary_term_slug(term_id)}/'
+
+
+def first_at_each_address(entries, warn=True):
+    """The entries that keep their address, in order, as
+    [(term_id, address, item)].
+
+    Jekyll publishes one page at an address, so of the entries that share
+    one the first is kept and the others are not published or linkable.
+    Ids that differ only in case or punctuation share a slug. `warn` says
+    whether each dropped entry is reported.
+    """
+    kept, owners = [], {}
+    for term_id, address, item in entries:
+        owner = owners.get(address)
+        if owner is None:
+            owners[address] = term_id
+            kept.append((term_id, address, item))
+        elif warn:
+            print(f"  ⚠️ Glossary entries '{owner}' and '{term_id}' would both "
+                  f"be published at {address}. '{owner}' keeps that address; "
+                  f"'{term_id}' is not published and cannot be linked.")
+    return kept
+
+
+def glossary_page_file(term_id):
+    """The file a glossary page is written to, `<term_id>.md`, as a
+    case-insensitive disk names it: names that casefold alike (`Viewer.md`
+    and `viewer.md`, `Straße.md` and `Strasse.md`) are one file there."""
+    return f'{term_id}.md'.casefold()
+
+
+class DemoTermPlacement(NamedTuple):
+    """What becomes of one demo glossary term (`place_demo_terms`).
+
+    `written` is True when the term's own page is written, at `address` in
+    `_glossary/<term_id>.md`. Otherwise `reason` is 'address' (another page
+    is published at the term's address) or 'file' (another page is written
+    to the term's file), and `owner` is the term whose page holds it, with
+    `owner_is_site` saying whose. The demo id links to its own page when
+    written, else to the owner's page, at `address`, which is then the
+    owner's address.
+    """
+    term_id: str
+    written: bool
+    address: str
+    reason: Optional[str]
+    owner: Optional[str]
+    owner_is_site: bool
+
+
+def place_demo_terms(site_pages, demo_ids):
+    """The one decision of which demo glossary terms are written and what
+    each demo id links to, as a DemoTermPlacement per id, in order.
+
+    `site_pages` is the site's glossary pages in the order they are written
+    (a mapping of term ids, with `addresses` for any published away from
+    its slug); every site page is written as `<term_id>.md`. `demo_ids` is
+    the bundle's glossary ids in order. Only a written page claims its
+    address and file, so a term skipped earlier leaves both free for a
+    later one. A demo term is skipped when its address is taken, else when
+    its file is taken on a case-insensitive disk. A skipped id is linked to
+    the page that holds its address or file, so a demo story never shows a
+    term its bundle defines as missing.
+    """
+    site_addresses = getattr(site_pages, 'addresses', {})
+    at_address, in_file = {}, {}
+    for term_id in site_pages:
+        entry = (term_id, site_addresses.get(term_id) or glossary_term_address(term_id), True)
+        at_address.setdefault(entry[1], entry)
+        in_file.setdefault(glossary_page_file(term_id), entry)
+
+    placements = []
+    for term_id in demo_ids:
+        address = glossary_term_address(term_id)
+        page_file = glossary_page_file(term_id)
+        owner = at_address.get(address)
+        reason = 'address'
+        if owner is None:
+            owner = in_file.get(page_file)
+            reason = 'file'
+        if owner is None:
+            entry = (term_id, address, False)
+            at_address[address] = entry
+            in_file[page_file] = entry
+            placements.append(DemoTermPlacement(term_id, True, address, None, None,
+                                                False))
+            continue
+        owner_id, owner_address, owner_is_site = owner
+        placements.append(DemoTermPlacement(
+            term_id, False, owner_address, reason, owner_id, owner_is_site))
+    return placements
 
 
 def glossary_term_slug(term_id):
@@ -216,11 +337,13 @@ def glossary_term_slug(term_id):
     return jekyll_slug(str(term_id))
 
 
-def glossary_term_url(term_id, base_url=None):
-    """The site-relative URL of a glossary term's page, baseurl included."""
+def glossary_term_url(term_id, base_url=None, address=None):
+    """The site-relative URL of a glossary term's page, baseurl included.
+    `address` is the path the page is published at when it is not the
+    slug's (`GlossaryTerms.addresses`)."""
     if base_url is None:
         base_url = site_base_url()
-    return f'{base_url}/glossary/{glossary_term_slug(term_id)}/'
+    return base_url + glossary_term_address(term_id, address)
 
 
 # Matches the markup that process_glossary_links emits: a resolved inline link
@@ -300,7 +423,8 @@ def _glossary_callout(match, glossary_terms, lower_map, warnings_list,
     kind = getattr(glossary_terms, 'kinds', {}).get(term_id, default_kind())
     rendered = render_widget_html('glossary', {
         'term_id': term_id,
-        'term_url': glossary_term_url(term_id, base_url),
+        'term_url': glossary_term_url(
+            term_id, base_url, getattr(glossary_terms, 'addresses', {}).get(term_id)),
         'demo': term_id.startswith('demo-'),
         'kind': kind,
         'icon': kind_icon(kind),
@@ -439,7 +563,8 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
                 # Use the glossary title as display text
                 display_text = glossary_terms[term_id]
             demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
-            term_url = glossary_term_url(term_id, base_url)
+            term_url = glossary_term_url(
+                term_id, base_url, getattr(glossary_terms, 'addresses', {}).get(term_id))
             # Escape the canonical term id, the URL and the display text so a
             # quote or angle bracket in any of them cannot break out of the
             # link markup. The display text is decoded first: an entity the

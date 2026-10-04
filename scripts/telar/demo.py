@@ -49,10 +49,10 @@ import pandas as pd
 from telar.images import process_images
 from telar.latex import convert_markdown
 from telar.widgets import process_widgets
-from telar.glossary import GlossaryTerms, process_glossary_links
+from telar.glossary import (GlossaryTerms, place_demo_terms,
+                            process_glossary_links)
 from telar.glossary_kinds import resolve_kind
 from telar.media_type import detect_media_type
-from telar.story_pages import jekyll_slug
 from telar.processors.stories import (_detect_latex, _limit_answers,
                                       _prepare_answer_maths, _resolve_answer_glossary)
 
@@ -274,28 +274,38 @@ def _write_demo_stories(bundle, data_dir):
 
 def _demo_link_terms(bundle):
     """The link map a demo story resolves [[term]] against: the bundle's
-    glossary and the site's published pages together. A site page replaces a
-    demo term at the same address (`jekyll_slug`), as the glossary pages do.
+    glossary and the site's published pages together. Which demo terms
+    have pages, and what a skipped demo id links to, is `place_demo_terms`'
+    decision, the one the glossary pages are written from. A site term
+    without a page is not linked: nothing is published for it.
     """
-    terms = GlossaryTerms()
-    for term_id, term_data in (bundle.get('glossary') or {}).items():
-        terms[term_id] = term_data.get('term', term_id)
-        terms.kinds[term_id] = resolve_kind(term_data.get('kind', ''), warn=False)
-
     # Imported here: glossary_pages loads the package this module is part of.
     from telar.glossary_pages import site_glossary_pages
     with contextlib.redirect_stdout(io.StringIO()):
         pages = site_glossary_pages()
-    by_slug = {jekyll_slug(term_id): term_id for term_id in pages}
-    # A demo id at the address of a site page stays linkable under the id
-    # the bundle wrote, but names the site's term. A site term without a
-    # page is not linked: nothing is published for it.
-    for term_id in list(terms):
-        owner = by_slug.get(jekyll_slug(term_id))
-        if owner is not None:
-            terms[term_id], terms.kinds[term_id] = pages[owner]
+
+    glossary = {term_id: term_data
+                for term_id, term_data in (bundle.get('glossary') or {}).items() if term_id}
+    placements = place_demo_terms(pages, list(glossary))
+
+    terms = GlossaryTerms()
+    for placement in placements:
+        if placement.written:
+            term_data = glossary[placement.term_id]
+            title = term_data.get('term', placement.term_id)
+            kind = resolve_kind(term_data.get('kind', ''), warn=False)
+        elif placement.owner_is_site:
+            title, kind = pages[placement.owner]
+        else:
+            owner_data = glossary[placement.owner]
+            title = owner_data.get('term', placement.owner)
+            kind = resolve_kind(owner_data.get('kind', ''), warn=False)
+        terms[placement.term_id], terms.kinds[placement.term_id] = title, kind
+        terms.addresses[placement.term_id] = placement.address
     for term_id, (title, kind) in pages.items():
         terms[term_id], terms.kinds[term_id] = title, kind
+        if term_id in pages.addresses:
+            terms.addresses[term_id] = pages.addresses[term_id]
     return terms
 
 
