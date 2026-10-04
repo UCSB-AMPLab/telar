@@ -27,9 +27,9 @@ TERMS = {'iiif': 'IIIF'}
 LINK = 'class="glossary-inline-link" data-term-id="iiif"'
 
 
-def _linked(text, warnings=None):
+def _linked(text, warnings=None, markdown=False):
     return process_glossary_links(text, TERMS, warnings if warnings is not None else [],
-                                  base_url='')
+                                  base_url='', markdown=markdown)
 
 
 class TestInPanelHtml:
@@ -49,6 +49,11 @@ class TestInPanelHtml:
         assert out.count(LINK) == 1
         assert '<code>[[iiif]]</code>' in out
 
+    def test_backticks_are_characters(self):
+        # Markdown has already made its code spans into elements, so a
+        # backtick left in the HTML is text and hides nothing.
+        assert LINK in _linked('<p>It`s a [[iiif]] and ``</p>')
+
 
 class TestInAnswerMarkdown:
 
@@ -58,10 +63,10 @@ class TestInAnswerMarkdown:
         'Type ```[[iiif]]``` here.',
     ], ids=['single', 'double', 'triple'])
     def test_a_code_span_keeps_the_syntax(self, markdown):
-        assert _linked(markdown) == markdown
+        assert _linked(markdown, markdown=True) == markdown
 
     def test_an_unmatched_backtick_does_not_hide_a_link(self):
-        assert LINK in _linked("It`s [[iiif]] here.")
+        assert LINK in _linked("It`s [[iiif]] here.", markdown=True)
 
 
 class TestAMissingTermInCodeIsNotReported:

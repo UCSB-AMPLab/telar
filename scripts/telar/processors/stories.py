@@ -704,7 +704,8 @@ def _resolve_answer_glossary(df, glossary_terms, glossary_warnings):
                     glossary_terms,
                     glossary_warnings,
                     step_num,
-                    None
+                    None,
+                    markdown=True
                 )
     return df
 

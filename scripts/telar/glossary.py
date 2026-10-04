@@ -60,7 +60,7 @@ import html
 import re
 from pathlib import Path
 import pandas as pd
-from telar.code_spans import code_regions
+from telar.code_spans import code_elements, code_regions
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
@@ -335,7 +335,7 @@ def _glossary_callout(match, glossary_terms, lower_map, warnings_list,
 
 
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None,
-                           base_url=None):
+                           base_url=None, markdown=False):
     """
     Transform [[term]] or [[display|term]] syntax into glossary link HTML.
 
@@ -347,6 +347,9 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
         base_url: The site's baseurl for the term page URL; read from
             _config.yml when omitted
+        markdown: True when *text* is a step answer's markdown, whose code
+            is backtick spans as kramdown reads them; otherwise it is HTML,
+            whose code is elements and whose backticks are characters
 
     Returns:
         str: Text with glossary links transformed to HTML
@@ -412,11 +415,12 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # Text is linked, a tag never: [[term]] inside an attribute (an image's
     # alt text) stays literal, or the link it made would end the attribute.
     # A quoted attribute value may hold '>', so it does not end the tag.
-    # Code is shown as written, so [[term]] in a code span or element (on
-    # the answer's markdown, or on a panel's HTML) is the syntax, not a link.
+    # Code is shown as written, so [[term]] in code is the syntax, not a
+    # link: a code span or element in an answer's markdown, a code element in
+    # a panel's HTML.
     tags = [m.span() for m in re.finditer(
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
-    literal = tags + code_regions(text)
+    literal = tags + (code_regions(text) if markdown else code_elements(text))
 
     def link_outside_tags(match):
         start = match.start()
