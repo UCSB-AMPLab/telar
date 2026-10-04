@@ -2347,6 +2347,21 @@
   var snapRemovers = [];
   var rafId;
   var dwellTimer;
+  var dwellHeld;
+  var lastInputAt;
+  var recentSizes;
+  var runStart;
+  var snapRun;
+  var snapRef;
+  var landedAt;
+  var _resetInputHistory = () => {
+    dwellHeld = false;
+    snapRun = null;
+    snapRef = Infinity;
+    lastInputAt = runStart = -Infinity;
+    recentSizes = [];
+  };
+  _resetInputHistory();
   var scrubEndTimer;
   var cardStackEl;
   var totalPositions = 0;
@@ -2387,14 +2402,29 @@
   function _isInsidePanel(node) {
     return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
   }
-  function _isScrollTakeover({ deltaX, deltaY, event } = {}) {
+  function _isStoryInput({ deltaX, deltaY, event } = {}) {
     if (!event) return true;
     if (event.ctrlKey) return false;
     if (deltaX === 0 && deltaY === 0) return false;
     if (deltaY === 0) return false;
-    if (lenis.isStopped || lenis.isLocked) return false;
     const path = event.composedPath ? event.composedPath() : [];
     return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
+  }
+  var RISE_PX = 2;
+  var MAX_HOLD_MS = 3e3;
+  function _endDwell() {
+    const now = performance.now();
+    const wait = Math.min(WHEEL_GESTURE_GAP_MS - (now - lastInputAt), landedAt + MAX_HOLD_MS - now);
+    dwellHeld = runStart === snapRun && wait > 0;
+    dwellTimer = dwellHeld ? setTimeout(_endDwell, wait) : null;
+    if (!dwellTimer && !state.isPanelOpen) lenis.start();
+  }
+  function _noteInput({ deltaY = 0, event } = {}) {
+    const now = performance.now(), size = Math.abs(deltaY);
+    const newGesture = event?.type?.startsWith("touch") || runStart === snapRun && !state.isSnapping && size >= snapRef || (now - lastInputAt >= WHEEL_GESTURE_GAP_MS ? !(size < (recentSizes.at(-1) ?? 0)) : size > Math.max(0, ...recentSizes) + RISE_PX);
+    if (newGesture) [runStart, recentSizes] = [now, []];
+    [recentSizes, lastInputAt] = [[...recentSizes.slice(-2), size], now];
+    if (dwellHeld && runStart !== snapRun) _clearDwell();
   }
   function initScrollEngine(stepCount) {
     const surface = document.querySelector(".scroll-surface");
@@ -2415,15 +2445,10 @@
       clearTimeout(scrubEndTimer);
       scrubEndTimer = null;
     }
-    armedAt = 0;
-    navToken = 0;
-    navTarget = null;
-    navTargetToken = 0;
-    moveTarget = null;
-    moveTargetToken = 0;
-    buttonMoveToken = 0;
-    remapping = false;
-    keyboardNavInFlight = false;
+    _resetInputHistory();
+    armedAt = navToken = navTargetToken = moveTargetToken = buttonMoveToken = 0;
+    navTarget = moveTarget = null;
+    remapping = keyboardNavInFlight = false;
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     history.scrollRestoration = "manual";
     totalPositions = stepCount + 1;
@@ -2449,6 +2474,7 @@
       lerp: 0.08,
       onSnapStart: () => {
         state.isSnapping = true;
+        [snapRun, snapRef] = [runStart, recentSizes.at(-1) ?? Infinity];
       },
       onSnapComplete: () => {
         state.isSnapping = false;
@@ -2457,20 +2483,18 @@
         updateScrollPosition(finalPosition);
         writeHash();
         lenis.stop();
-        dwellTimer = setTimeout(() => {
-          if (!state.isPanelOpen) {
-            lenis.start();
-          }
-          dwellTimer = null;
-        }, navSeconds().keyboard * 1e3);
+        landedAt = performance.now();
+        dwellTimer = setTimeout(_endDwell, navSeconds().keyboard * 1e3);
       }
     });
     registerSnapPoints(totalPositions);
     cardStackEl = cardStack;
     lenis.on("virtual-scroll", (payload) => {
       if (cardHoldsGesture()) return;
+      const readerInput = _isStoryInput(payload);
+      if (readerInput) _noteInput(payload);
       cardStack.classList.add("is-scrubbing");
-      if (_isScrollTakeover(payload)) {
+      if (readerInput && !(payload?.event && (lenis.isStopped || lenis.isLocked))) {
         navTarget = null;
         keyboardNavInFlight = false;
         navToken = 0;
@@ -2649,6 +2673,7 @@
     keyboardNavInFlight = false;
   }
   function _clearDwell() {
+    dwellHeld = false;
     if (dwellTimer) {
       clearTimeout(dwellTimer);
       dwellTimer = null;

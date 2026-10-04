@@ -26,6 +26,7 @@ vi.mock('../../assets/js/telar-story/viewer.js',
   async () => (await import('./scroll-engine-harness.js')).viewerModule);
 vi.mock('../../assets/js/telar-story/card-scroll.js', () => ({
   cardHoldsGesture: () => holds.value,
+  WHEEL_GESTURE_GAP_MS: 200,
 }));
 
 import { initScrollEngine, keyboardNav } from '../../assets/js/telar-story/scroll-engine.js';

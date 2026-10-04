@@ -49,7 +49,7 @@ import { followEngine, goToStep, updateViewerInfo } from './navigation.js';
 import { initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
-import { cardHoldsGesture } from './card-scroll.js';
+import { cardHoldsGesture, WHEEL_GESTURE_GAP_MS } from './card-scroll.js';
 
 // ── Module-level references ───────────────────────────────────────────────────
 
@@ -58,6 +58,11 @@ let snap;
 let snapRemovers = [];
 let rafId;
 let dwellTimer;
+// The reader's input history, which the post-snap dwell reads (see _endDwell).
+let dwellHeld, lastInputAt, recentSizes, runStart, snapRun, snapRef, landedAt;
+const _resetInputHistory = () => { dwellHeld = false; snapRun = null; snapRef = Infinity;
+  lastInputAt = runStart = -Infinity; recentSizes = []; };
+_resetInputHistory();
 let scrubEndTimer;
 let cardStackEl;
 let totalPositions = 0;
@@ -180,7 +185,7 @@ const REST_TOLERANCE = 0.001;
 /**
  * Whether this node is inside an open panel, where the scroll is the panel's.
  *
- * Lenis is given this as its `prevent`, and the takeover test below reads the
+ * Lenis is given this as its `prevent`, and the input test below reads the
  * same rule, so there is one account of where the story's scroll stops.
  *
  * @param {HTMLElement} node
@@ -192,33 +197,49 @@ function _isInsidePanel(node) {
 }
 
 /**
- * Whether Lenis will act on this input, rather than pass it by.
- *
- * `virtual-scroll` is emitted before Lenis decides, so the listener hears
- * gestures it then ignores: a pinch-zoom, a tap, a gesture across the axis the
- * story does not scroll on, a wheel inside an open panel, and anything arriving
- * while the scroll is stopped. None of those takes the scroll from a move that
- * is still running, and reading one as a takeover stands that move down
- * mid-travel — which hands the cards back to a position the move has not
- * reached, so the reader is returned to the step they are leaving until the
- * animation lands on the one they asked for.
- *
- * Conservative by construction: these are the cases Lenis passes by, and
- * anything else is read as a takeover. A takeover missed strands the move for
- * the rest of the reader's session; a takeover imagined costs a frame.
+ * Whether this input is the reader's scroll of the story, rather than one Lenis
+ * passes by (a pinch-zoom, a tap, a gesture across the story's axis, a wheel in
+ * an open panel), which `virtual-scroll` also reports. Read as a takeover, one
+ * of those stands a running move down mid-travel. Conservative: a takeover
+ * missed strands the move for the session, one imagined costs a frame.
  *
  * @param {{deltaX?: number, deltaY?: number, event?: Event}} payload
  * @returns {boolean}
  */
-function _isScrollTakeover({ deltaX, deltaY, event } = {}) {
+function _isStoryInput({ deltaX, deltaY, event } = {}) {
   if (!event) return true;
   if (event.ctrlKey) return false;                 // pinch or browser zoom
   if (deltaX === 0 && deltaY === 0) return false;  // a tap, or a click
   if (deltaY === 0) return false;                  // across the story's axis
-  if (lenis.isStopped || lenis.isLocked) return false;
-
   const path = event.composedPath ? event.composedPath() : [];
   return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
+}
+
+// Past its minimum the post-snap dwell holds while input is the tail of the wheel
+// gesture that drove the snap, which would carry it a second step, for MAX_HOLD_MS
+// after landing at most: tails run to about 2.6 s (WebKit), and a slow steady
+// scroll can stay under the size rule. Momentum only shrinks: a new gesture is a
+// touch, an input RISE_PX over the largest of the last three (tail jitter, 24 18
+// 12 6 12 wheel px, stays under), one no smaller than the last after a 200 ms
+// pause, or, once the snap has landed, than the last before it began.
+const RISE_PX = 2, MAX_HOLD_MS = 3000;
+function _endDwell() {
+  const now = performance.now();
+  const wait = Math.min(WHEEL_GESTURE_GAP_MS - (now - lastInputAt), landedAt + MAX_HOLD_MS - now);
+  dwellHeld = runStart === snapRun && wait > 0;
+  dwellTimer = dwellHeld ? setTimeout(_endDwell, wait) : null;
+  if (!dwellTimer && !state.isPanelOpen) lenis.start();
+}
+
+/** Record a story input; one that begins a new gesture ends a held dwell. */
+function _noteInput({ deltaY = 0, event } = {}) {
+  const now = performance.now(), size = Math.abs(deltaY);
+  const newGesture = event?.type?.startsWith('touch') || (runStart === snapRun
+    && !state.isSnapping && size >= snapRef) || (now - lastInputAt >= WHEEL_GESTURE_GAP_MS
+      ? !(size < (recentSizes.at(-1) ?? 0)) : size > Math.max(0, ...recentSizes) + RISE_PX);
+  if (newGesture) [runStart, recentSizes] = [now, []];
+  [recentSizes, lastInputAt] = [[...recentSizes.slice(-2), size], now];
+  if (dwellHeld && runStart !== snapRun) _clearDwell();
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -245,26 +266,18 @@ export function initScrollEngine(stepCount) {
     return;
   }
 
-  // Idempotent re-init: cancel any prior rAF loop and pending dwell-restart
-  // timer so a second initScrollEngine() (e.g. a layout-mode switch) cannot
-  // leave a second rAF loop double-driving Lenis or an orphaned timer firing.
-  // (The dwell-restart itself is already guarded by `if (!state.isPanelOpen)`.)
-  // A move in flight belongs to the engine being replaced, and its completion
-  // is on a Lenis this one does not own: the token that would stand it down
-  // never arrives, so a target left here would be stepped from by the first
-  // press against the new engine and a suppressed settle would stay suppressed.
+  // Idempotent re-init: a second initScrollEngine() (e.g. a layout-mode switch)
+  // must not leave a second rAF loop driving Lenis or an orphaned timer firing.
+  // A move in flight belongs to the engine being replaced, on a Lenis this one
+  // does not own: the token that would stand it down never arrives, so a target
+  // left here would be stepped from by the next press, a settle stay suppressed.
   if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
   if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
   if (scrubEndTimer) { clearTimeout(scrubEndTimer); scrubEndTimer = null; }
-  armedAt = 0;
-  navToken = 0;
-  navTarget = null;
-  navTargetToken = 0;
-  moveTarget = null;
-  moveTargetToken = 0;
-  buttonMoveToken = 0;
-  remapping = false;
-  keyboardNavInFlight = false;
+  _resetInputHistory();
+  armedAt = navToken = navTargetToken = moveTargetToken = buttonMoveToken = 0;
+  navTarget = moveTarget = null;
+  remapping = keyboardNavInFlight = false;
 
   // Build steps array (navigation.js initializeStepController normally does this)
   state.steps = Array.from(document.querySelectorAll('.story-step'));
@@ -302,6 +315,7 @@ export function initScrollEngine(stepCount) {
     lerp: 0.08,
     onSnapStart: () => {
       state.isSnapping = true;
+      [snapRun, snapRef] = [runStart, recentSizes.at(-1) ?? Infinity];
     },
     onSnapComplete: () => {
       state.isSnapping = false;
@@ -321,35 +335,28 @@ export function initScrollEngine(stepCount) {
       // it is the pace of a move rather than a number of its own: a dwell
       // shorter than the motion hands the reader back a scroll that can be
       // pushed while the stack is still settling into the step behind it.
-      dwellTimer = setTimeout(() => {
-        if (!state.isPanelOpen) {
-          lenis.start();
-        }
-        dwellTimer = null;
-      }, navSeconds().keyboard * 1000);
+      landedAt = performance.now();
+      dwellTimer = setTimeout(_endDwell, navSeconds().keyboard * 1000);
     },
   });
 
   // Register snap points: 0 = intro, 1..stepCount = content steps
   registerSnapPoints(totalPositions);
 
-  // Wire the is-scrubbing flag — the reader's own scroll, from the first raw
-  // wheel or touch event to the frame the scroll finally stops on.
-  // virtual-scroll fires on raw input before Lenis smoothing; the scroll it
-  // starts outlives it by the smoothing tail and then by the snap's lerp, and
-  // the cards have to keep tracking it for all of that or they hold a position
-  // the scroll has long left. Both events therefore re-arm the same timer, so
-  // the flag lapses 100 ms after the last frame rather than the last gesture.
-  //
-  // A gesture the side card owns (card-scroll.js) is cancelled and stopped
-  // before Lenis sees it, so none should arrive here. The owner is read all
-  // the same, so that if one ever does, the engine and the card cannot
-  // disagree about whose input it is: it neither scrubs nor takes over.
+  // The is-scrubbing flag spans the reader's own scroll, from the first raw
+  // input to the frame the scroll stops on: the scroll outlives the input by
+  // the smoothing tail and the snap's lerp, and the cards track it throughout,
+  // so input and frames re-arm one timer that lapses 100 ms after the last.
+  // A gesture the side card owns (card-scroll.js) is stopped before Lenis sees
+  // it; its owner is read all the same, so that one arriving here neither
+  // scrubs nor takes over, and the engine and the card cannot disagree.
   cardStackEl = cardStack;
   lenis.on('virtual-scroll', (payload) => {
     if (cardHoldsGesture()) return;
+    const readerInput = _isStoryInput(payload);
+    if (readerInput) _noteInput(payload);
     cardStack.classList.add('is-scrubbing');
-    if (_isScrollTakeover(payload)) {
+    if (readerInput && !(payload?.event && (lenis.isStopped || lenis.isLocked))) {
       // A scroll the reader is driving has no landing the keyboard chose, so
       // the next press reads the position. Every other takeover begins a move,
       // whose token drops the target on its own; raw input begins none, so it
@@ -363,11 +370,9 @@ export function initScrollEngine(stepCount) {
       // fires, and the guards it would lower stay up for the rest of the
       // reader's session.
       keyboardNavInFlight = false;
-      // Every move stands down with its guards, a carry to the nearer step
-      // included. The reader's scroll replaces the move, so no second move is
-      // left running beside the carry of the gesture that took over, and a
-      // token kept past this point would refuse that carry and every carry
-      // after it until some other move took a token.
+      // Every move stands down with its guards, a carry included: the reader's
+      // scroll replaces it, and a token kept past here would refuse this
+      // gesture's carry and every carry after it until another move took one.
       navToken = 0;
       buttonMoveToken = 0;
     }
@@ -375,12 +380,6 @@ export function initScrollEngine(stepCount) {
   });
 
   // Per-frame position update from smoothed scroll output
-  // Every frame arms the settle, whether the reader's scroll is still flagged
-  // or not. A scroll outlives its own flag — the smoothing tail and the snap
-  // lerp both run on past it — and the frames after the flag lapses are
-  // exactly the ones no other path states a position for, so a scroll that
-  // drifts to a stop away from a waypoint would leave the stack at whatever
-  // position the flag happened to lapse on.
   lenis.on('scroll', (l) => {
     // Nothing is read from the scroll while its layout and the window
     // disagree. The browser clamps the offset to the resized window before the
@@ -735,6 +734,7 @@ function standDownMoves() {
  * dwell's own timer leaves it.
  */
 function _clearDwell() {
+  dwellHeld = false;
   if (dwellTimer) {
     clearTimeout(dwellTimer);
     dwellTimer = null;
