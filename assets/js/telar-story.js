@@ -5246,6 +5246,7 @@
   };
 
   // assets/js/telar-story/panels.js
+  var PANEL_TYPES = ["layer1", "layer2", "glossary"];
   function initializePanels() {
     document.addEventListener("click", function(e) {
       const trigger = e.target.closest('[data-panel="layer1"]');
@@ -5287,7 +5288,7 @@
     if (glossaryPanel) {
       glossaryPanel.addEventListener("show.bs.offcanvas", joinGlossaryToStack);
     }
-    ["layer1", "layer2", "glossary"].forEach((panelType) => {
+    PANEL_TYPES.forEach((panelType) => {
       const panel = document.getElementById(`panel-${panelType}`);
       if (!panel) return;
       panel.addEventListener("hidden.bs.offcanvas", function() {
@@ -5296,12 +5297,15 @@
         if (state.panelStack.length !== before) {
           writeHash();
         }
-        if (!document.querySelector(".offcanvas.show")) {
+        if (!anyPanelOpen()) {
           state.isPanelOpen = false;
           deactivateScrollLock();
         }
       });
     });
+  }
+  function anyPanelOpen() {
+    return state.panelStack.length > 0 || PANEL_TYPES.some((t) => document.getElementById(`panel-${t}`)?.classList.contains("show"));
   }
   function joinGlossaryToStack() {
     const top = state.panelStack[state.panelStack.length - 1];
@@ -5364,8 +5368,7 @@
     state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
     writeHash();
     setTimeout(() => {
-      const anyPanelOpen = document.querySelector(".offcanvas.show");
-      if (!anyPanelOpen) {
+      if (!anyPanelOpen()) {
         state.isPanelOpen = false;
         deactivateScrollLock();
       }
@@ -5378,17 +5381,7 @@
     }
   }
   function closeAllPanels() {
-    const openPanels = document.querySelectorAll(".offcanvas.show");
-    openPanels.forEach((panel) => {
-      const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel);
-      if (bsOffcanvas) {
-        bsOffcanvas.hide();
-      }
-    });
-    state.panelStack = [];
-    state.isPanelOpen = false;
-    writeHash();
-    deactivateScrollLock();
+    [...state.panelStack].reverse().forEach((p) => closePanel(p.type));
   }
   function getPanelContent(panelType, contentId) {
     const steps = window.storyData?.steps || [];
@@ -5489,17 +5482,14 @@
   function _cancelDeepLinkTimers() {
     _deepLinkTimers.forEach(clearTimeout);
     _deepLinkTimers = [];
+    window.removeEventListener("wheel", _cancelDeepLinkTimers);
+    window.removeEventListener("keydown", _cancelDeepLinkTimers);
+    window.removeEventListener("touchstart", _cancelDeepLinkTimers);
   }
   function _armDeepLinkCancellation() {
-    const cancel = () => {
-      _cancelDeepLinkTimers();
-      window.removeEventListener("wheel", cancel);
-      window.removeEventListener("keydown", cancel);
-      window.removeEventListener("touchstart", cancel);
-    };
-    window.addEventListener("wheel", cancel, { passive: true });
-    window.addEventListener("keydown", cancel);
-    window.addEventListener("touchstart", cancel, { passive: true });
+    window.addEventListener("wheel", _cancelDeepLinkTimers, { passive: true });
+    window.addEventListener("keydown", _cancelDeepLinkTimers);
+    window.addEventListener("touchstart", _cancelDeepLinkTimers, { passive: true });
   }
   var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g)(\d+))?)?$/;
   function parseFragment(hash) {
@@ -5546,6 +5536,8 @@
     }
   }
   function navigateToIntro() {
+    _cancelDeepLinkTimers();
+    closeAllPanels();
     for (const plate of Object.values(state.viewerPlates)) {
       plate.container.classList.remove("is-active");
     }
@@ -5556,7 +5548,7 @@
       if (state.snap) state.snap.currentSnapIndex = 0;
       state.lenis.stop();
       requestAnimationFrame(() => {
-        state.lenis.start();
+        if (!state.isPanelOpen) state.lenis.start();
       });
     }
     goToStep(-1, "backward");
@@ -5566,6 +5558,8 @@
   function navigateToStep(stepNumber) {
     const targetIndex = stepNumber - 1;
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
+    _cancelDeepLinkTimers();
+    closeAllPanels();
     reconcilePlatesForJump(targetIndex);
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
@@ -5754,7 +5748,7 @@
       if (_isScrollTakeover(payload)) {
         navTarget = null;
         keyboardNavInFlight = false;
-        if (navToken === navTargetToken || navToken === buttonMoveToken) navToken = 0;
+        navToken = 0;
         buttonMoveToken = 0;
       }
       armScrubEnd();
@@ -5983,6 +5977,7 @@
     snap.currentSnapIndex = target;
     _activateKeyboardTarget(target, direction);
     keyboardNavInFlight = true;
+    _endMoveHeldAt(lenis, target * vh);
     lenis.scrollTo(target * vh, {
       force: true,
       duration: navSeconds().keyboard,

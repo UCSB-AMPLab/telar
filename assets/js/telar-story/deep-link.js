@@ -27,7 +27,7 @@
 import { state } from './state.js';
 import { activateCard, reconcileStackForJump, reconcilePlatesForJump } from './card-pool.js';
 import { goToStep, jumpButtonsTo, putButtonsOnIntro } from './navigation.js';
-import { openPanel } from './panels.js';
+import { closeAllPanels, openPanel } from './panels.js';
 import { jumpScrollTo } from './scroll-engine.js';
 
 // ── Deep-link panel-open timer ladder ───────────────────────────────────────────
@@ -41,10 +41,16 @@ import { jumpScrollTo } from './scroll-engine.js';
  */
 let _deepLinkTimers = [];
 
-/** Clear any pending deep-link panel-open timers. Safe to call when empty. */
+/**
+ * Clear any pending deep-link panel-open timers and the listeners armed to
+ * clear them. Safe to call when nothing is pending.
+ */
 function _cancelDeepLinkTimers() {
   _deepLinkTimers.forEach(clearTimeout);
   _deepLinkTimers = [];
+  window.removeEventListener('wheel', _cancelDeepLinkTimers);
+  window.removeEventListener('keydown', _cancelDeepLinkTimers);
+  window.removeEventListener('touchstart', _cancelDeepLinkTimers);
 }
 
 /**
@@ -52,19 +58,17 @@ function _cancelDeepLinkTimers() {
  * Listens for wheel / keydown / touchstart — all user-initiated. We deliberately
  * do NOT listen for the Lenis 'scroll' event: applyDeepLinkOnLoad's own
  * immediate jump emits a 'scroll', which would self-cancel the ladder before any
- * panel opened. The handler clears the timers and removes all three listeners.
- * Must be armed AFTER the jump's scrollTo so it can't be tripped by the jump.
+ * panel opened. Must be armed AFTER the jump's scrollTo so it can't be tripped
+ * by the jump.
+ *
+ * A click reaches none of these, so Back to Start and a contents link cancel
+ * the ladder themselves: they close every panel, and a layer the ladder opened
+ * afterwards would sit on a stack with nothing under it.
  */
 function _armDeepLinkCancellation() {
-  const cancel = () => {
-    _cancelDeepLinkTimers();
-    window.removeEventListener('wheel', cancel);
-    window.removeEventListener('keydown', cancel);
-    window.removeEventListener('touchstart', cancel);
-  };
-  window.addEventListener('wheel', cancel, { passive: true });
-  window.addEventListener('keydown', cancel);
-  window.addEventListener('touchstart', cancel, { passive: true });
+  window.addEventListener('wheel', _cancelDeepLinkTimers, { passive: true });
+  window.addEventListener('keydown', _cancelDeepLinkTimers);
+  window.addEventListener('touchstart', _cancelDeepLinkTimers, { passive: true });
 }
 
 // ── Fragment regex ────────────────────────────────────────────────────────────
@@ -171,11 +175,16 @@ function _writeHashFragment(glossaryN) {
 /**
  * Navigate back to the intro / title card from within the story.
  *
- * Scrolls to position 0 where the scroll engine runs, restores the intro card
- * via goToStep(-1), puts the navigation buttons on the intro, hides all viewer
- * plates, and clears the hash.
+ * Closes any open panel first, and cancels any panel a deep link has yet to
+ * open: a panel freezes the story, and the button stays live above one. Then
+ * scrolls to position 0 where the scroll engine runs, restores the intro card
+ * via goToStep(-1), puts the navigation buttons on the intro, hides all
+ * viewer plates, and clears the hash.
  */
 export function navigateToIntro() {
+  _cancelDeepLinkTimers();
+  closeAllPanels();
+
   // Hide all active viewer plates
   for (const plate of Object.values(state.viewerPlates)) {
     plate.container.classList.remove('is-active');
@@ -192,7 +201,8 @@ export function navigateToIntro() {
     jumpScrollTo(0);
     if (state.snap) state.snap.currentSnapIndex = 0;
     state.lenis.stop();
-    requestAnimationFrame(() => { state.lenis.start(); });
+    // A panel still closing holds the scroll stopped, and its close starts it.
+    requestAnimationFrame(() => { if (!state.isPanelOpen) state.lenis.start(); });
   }
 
   // Use the navigation module to restore intro card visuals
@@ -207,14 +217,18 @@ export function navigateToIntro() {
  * Navigate to a specific step from within the story (e.g. TOC links).
  *
  * Unlike applyDeepLinkOnLoad (which runs once at page load), this can be
- * called at any time during the story. It jumps the scroll position and
- * activates the target card, then updates the URL hash.
+ * called at any time during the story. It closes any open panel and cancels
+ * any a deep link has yet to open, as Back to Start does, then jumps the
+ * scroll position and activates the target card, then updates the URL hash.
  *
  * @param {number} stepNumber - 1-based step number (matches CSV step column).
  */
 export function navigateToStep(stepNumber) {
   const targetIndex = stepNumber - 1;
   if (targetIndex < 0 || targetIndex >= state.steps.length) return;
+
+  _cancelDeepLinkTimers();
+  closeAllPanels();
 
   // Close every plate but the target's before jumping, or one the reader
   // walked onto earlier is still open behind the step they land on.

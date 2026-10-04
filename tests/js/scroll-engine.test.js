@@ -35,6 +35,7 @@ import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import {
   mocks, engineStory, stubEngineGlobals, readerTakesOver, wheelEvent, scrollFrame, resetState,
+  modelLenis, landMove, restAt, readerScrollsTo,
 } from './scroll-engine-harness.js';
 
 // ── updateScrollPosition: position model ──────────────────────────────────────
@@ -568,27 +569,6 @@ describe('a move the reader interrupts with the scroll', () => {
     expect(mocks.mockSettleCards).toHaveBeenCalled();
   });
 
-  it('does not start a second carry on top of the one already running', () => {
-    // A gesture that stops between steps is carried to the nearer one, and that
-    // carry takes a nav token so the next settle leaves it alone. The reader
-    // wheeling again during it must not start a second: two moves on one scroll
-    // is the thing carryToNearestStep's own guard exists to prevent.
-    vi.useFakeTimers();
-    const { lenis } = getScrollEngineState();
-    lenis.animatedScroll = 1.4 * window.innerHeight;
-
-    readerTakesOver(wheelEvent());
-    scrollFrame(1.4);
-    vi.advanceTimersByTime(150);          // the settle carries it to step 2
-    const afterFirstCarry = mocks.lenisScrollTo.mock.calls.length;
-    expect(afterFirstCarry).toBeGreaterThan(0);
-
-    readerTakesOver(wheelEvent());
-    vi.advanceTimersByTime(150);
-
-    expect(mocks.lenisScrollTo.mock.calls.length).toBe(afterFirstCarry);
-  });
-
   it('leaves the move running when Lenis passes the input by', () => {
     // Lenis emits virtual-scroll before it decides. A ctrl-wheel is a zoom,
     // which it passes by at lenis.mjs:586 — the keyboard's animation is still
@@ -642,6 +622,60 @@ describe('a move the reader interrupts with the scroll', () => {
     vi.advanceTimersByTime(150);
 
     expect(mocks.mockSettleCards).toHaveBeenCalled();
+  });
+});
+
+// ── A carry the reader takes over ────────────────────────────────────────────
+//
+// A gesture that stops between steps is carried to the step it was heading
+// for, and the carry holds a token while it travels so that nothing starts a
+// second move on the same scroll. When the reader's wheel takes the scroll
+// before the carry lands, Lenis replaces the carry with the reader's scroll
+// and never calls its completion, so the takeover is where the carry ends: a
+// token kept past it would refuse the carry of every gesture after it, until
+// some other move took a token, and leave the reader between steps.
+
+describe('a carry the reader takes over', () => {
+  beforeEach(() => {
+    engineStory(5);
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    // A gesture comes to rest between steps 1 and 2, and is carried on.
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    restAt(1);
+    restAt(1.4);
+    vi.advanceTimersByTime(150);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('carries the gesture that took over, once it comes to rest', () => {
+    expect(state.lenis.inFlight?.px, 'the first gesture is being carried').toBe(2 * window.innerHeight);
+
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    readerScrollsTo(2.6);
+    vi.advanceTimersByTime(150);
+
+    expect(state.lenis.inFlight?.px, 'the second gesture is carried too').toBe(3 * window.innerHeight);
+    landMove();
+    expect(state.scrollPosition).toBe(3);
+    expect(state.currentIndex).toBe(2);
+  });
+
+  it('starts no second carry for input Lenis passes by', () => {
+    const scrollTos = state.lenis.scrollTo.mock.calls.length;
+
+    readerTakesOver(wheelEvent({ event: { ctrlKey: true, composedPath: () => [] } }));
+    vi.advanceTimersByTime(150);
+
+    expect(state.lenis.scrollTo.mock.calls.length).toBe(scrollTos);
+    expect(state.lenis.inFlight?.px).toBe(2 * window.innerHeight);
   });
 });
 

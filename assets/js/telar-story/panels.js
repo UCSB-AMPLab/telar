@@ -36,6 +36,9 @@ import { writeHash, writeHashWithGlossary } from './deep-link.js';
 
 // ── Panel open / close ───────────────────────────────────────────────────────
 
+/** The story's panels, each the element `#panel-{type}`. */
+const PANEL_TYPES = ['layer1', 'layer2', 'glossary'];
+
 /**
  * Set up click handlers for panel trigger buttons and back buttons.
  *
@@ -97,7 +100,7 @@ export function initializePanels() {
   // Bootstrap can dismiss a panel without going through closePanel (the
   // offcanvas X button uses data-bs-dismiss), so panel state is reconciled
   // on hidden.bs.offcanvas — the one event every dismissal path fires.
-  ['layer1', 'layer2', 'glossary'].forEach((panelType) => {
+  PANEL_TYPES.forEach((panelType) => {
     const panel = document.getElementById(`panel-${panelType}`);
     if (!panel) return;
     panel.addEventListener('hidden.bs.offcanvas', function () {
@@ -106,12 +109,28 @@ export function initializePanels() {
       if (state.panelStack.length !== before) {
         writeHash();
       }
-      if (!document.querySelector('.offcanvas.show')) {
+      if (!anyPanelOpen()) {
         state.isPanelOpen = false;
         deactivateScrollLock();
       }
     });
   });
+}
+
+/**
+ * Whether any of the story's panels is open, opening or still closing, so the
+ * story stays frozen.
+ *
+ * The stack holds a panel from its open until its close is asked for, so one
+ * that has begun to slide in while another slides out keeps the story frozen
+ * when the other's close completes. A panel whose close has been asked for
+ * leaves the stack at once but keeps `show` until its slide out ends. Only the
+ * story's own panels count: another offcanvas on the page has no close that
+ * would lift the lock.
+ */
+function anyPanelOpen() {
+  return state.panelStack.length > 0
+    || PANEL_TYPES.some((t) => document.getElementById(`panel-${t}`)?.classList.contains('show'));
 }
 
 /**
@@ -225,8 +244,7 @@ export function closePanel(panelType) {
 
   // Wait for Bootstrap animation before checking panel state
   setTimeout(() => {
-    const anyPanelOpen = document.querySelector('.offcanvas.show');
-    if (!anyPanelOpen) {
+    if (!anyPanelOpen()) {
       state.isPanelOpen = false;
       deactivateScrollLock();
     }
@@ -246,21 +264,16 @@ export function closeTopPanel() {
 }
 
 /**
- * Close all open panels and deactivate scroll lock.
+ * Close every open panel, topmost first, each as its own back button closes
+ * it.
+ *
+ * The stack, the fragment and the scroll lock go as they do for any close, so
+ * the story stays frozen until the last panel has gone. A control that moves
+ * the story while panels are open (Back to Start, a contents link) closes them
+ * here before it moves.
  */
 export function closeAllPanels() {
-  const openPanels = document.querySelectorAll('.offcanvas.show');
-  openPanels.forEach(panel => {
-    const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel);
-    if (bsOffcanvas) {
-      bsOffcanvas.hide();
-    }
-  });
-
-  state.panelStack = [];
-  state.isPanelOpen = false;
-  writeHash();
-  deactivateScrollLock();
+  [...state.panelStack].reverse().forEach((p) => closePanel(p.type));
 }
 
 // ── Panel content ────────────────────────────────────────────────────────────

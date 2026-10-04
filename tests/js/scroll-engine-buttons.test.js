@@ -31,7 +31,9 @@ vi.mock('../../assets/js/telar-story/viewer.js',
 import { advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav } from '../../assets/js/telar-story/scroll-engine.js';
 import * as engine from '../../assets/js/telar-story/scroll-engine.js';
 import { navigateToIntro, navigateToStep } from '../../assets/js/telar-story/deep-link.js';
+import { initializePanels, openPanel } from '../../assets/js/telar-story/panels.js';
 import { state } from '../../assets/js/telar-story/state.js';
+import { FakeOffcanvas, finishTransitions, resetOffcanvas } from './fake-offcanvas.js';
 import {
   mocks, engineStory, stubEngineGlobals, readerTakesOver, wheelEvent, scrollFrame, resetState,
   modelLenis, landMove, restAt,
@@ -309,10 +311,145 @@ describe('a move back to where a move in flight left from', () => {
     expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(1);
   });
 
+  it('Up before a Down\'s first frame leaves the story on the step it was on', () => {
+    keyboardNav('forward');                       // heading for step 2
+    keyboardNav('backward');                      // back to the offset left from
+    landMove();
+    expect(state.currentIndex).toBe(1);
+    expect(getScrollEngineState().lenis.animatedScroll).toBe(2 * window.innerHeight);
+  });
+
+  it('Down after that pair moves one step on', () => {
+    keyboardNav('forward');
+    keyboardNav('backward');
+    landMove();
+    keyboardNav('forward');
+    landMove();
+    expect(state.currentIndex).toBe(2);
+    expect(getScrollEngineState().lenis.animatedScroll).toBe(3 * window.innerHeight);
+  });
+
   it('a tap to a new offset during a key press still replaces its move', () => {
     keyboardNav('forward');
     advanceToStep(3);
     landMove();
     expect(state.currentIndex).toBe(3);
   });
+});
+
+// ── Back to Start or a contents link over an open panel ──────────────────────
+//
+// An open panel stops the engine, and the story does not move under it. Back
+// to Start and a contents link close the panels first, as their own back
+// buttons would, and only then move the story; the engine stays stopped until
+// the last panel has gone, and runs again once it has.
+
+describe('Back to Start or a contents link with a panel open', () => {
+  const PANELS = ['layer1', 'layer2', 'glossary'].map((t) => `
+    <div class="offcanvas" id="panel-${t}" data-telar-panel="${t}">
+      <h1 id="panel-${t}-title"></h1><div id="panel-${t}-content"></div>
+    </div>`).join('');
+
+  const panelEl = (t) => document.getElementById(`panel-${t}`);
+  let frames;
+
+  /** Run the animation frames requested since the last call. */
+  const runFrames = () => frames.splice(0).forEach((cb) => cb(0));
+
+  /** The panel stack's depth each time the story's scroll is moved. */
+  function stackAtEachScroll() {
+    const lenis = state.lenis;
+    const scrollTo = lenis.scrollTo;
+    const seen = [];
+    lenis.scrollTo = vi.fn((...args) => {
+      seen.push(state.panelStack.length);
+      return scrollTo(...args);
+    });
+    return seen;
+  }
+
+  beforeEach(() => {
+    engineStory(5);
+    document.body.insertAdjacentHTML('beforeend', PANELS);
+    window.bootstrap = { Offcanvas: FakeOffcanvas };
+    resetOffcanvas();
+    window.telarLang = {};
+    window.storyData = {
+      steps: Array.from({ length: 5 }, (_, i) => ({
+        step: String(i + 1),
+        ...(i === 2 ? { layer1_text: '<p>One</p>', layer2_text: '<p>Two</p>' } : {}),
+      })),
+    };
+    history.replaceState(null, '', '/telar/stories/s/');
+    mocks.mockFollowEngine.mockClear();
+    resetState({
+      currentIndex: -1, viewerPlates: {}, panelStack: [], isPanelOpen: false, scrollLockActive: false,
+    });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    // After the fake timers, which bring a requestAnimationFrame of their own.
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', vi.fn((cb) => { frames.push(cb); }));
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    initializePanels();
+    restAt(3);                                    // on step 3
+    openPanel('layer1', '3');
+    finishTransitions();
+    runFrames();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('Back to Start closes the panel, then puts the story on the intro', () => {
+    const seen = stackAtEachScroll();
+    navigateToIntro();
+    expect(seen, 'no panel is open when the scroll moves').toEqual([0]);
+    expect(panelEl('layer1').classList.contains('hiding')).toBe(true);
+    expect(state.currentIndex).toBe(-1);
+    expect(location.hash).toBe('');
+  });
+
+  it('a contents link closes the panel, then puts the story on its step', () => {
+    const seen = stackAtEachScroll();
+    navigateToStep(5);
+    expect(seen, 'no panel is open when the scroll moves').toEqual([0]);
+    expect(panelEl('layer1').classList.contains('hiding')).toBe(true);
+    expect(state.currentIndex).toBe(4);
+    expect(location.hash).toBe('#s5');
+  });
+
+  it('Back to Start closes layer 2 and the layer 1 under it', () => {
+    openPanel('layer2', '3');
+    finishTransitions();
+    const seen = stackAtEachScroll();
+    navigateToIntro();
+    expect(seen).toEqual([0]);
+    expect(panelEl('layer1').classList.contains('hiding')).toBe(true);
+    expect(panelEl('layer2').classList.contains('hiding')).toBe(true);
+  });
+
+  for (const [control, go] of [
+    ['Back to Start', () => navigateToIntro()],
+    ['a contents link', () => navigateToStep(5)],
+  ]) {
+    it(`after ${control} the engine stays stopped until the panel has gone, and runs once it has`, () => {
+      const lenis = state.lenis;
+      expect(lenis.isStopped).toBe(true);
+      go();
+      runFrames();
+      expect(state.isPanelOpen).toBe(true);
+      expect(lenis.isStopped, 'stopped while the panel is still closing').toBe(true);
+
+      finishTransitions();
+      expect(state.isPanelOpen).toBe(false);
+      expect(lenis.isStopped, 'running once the panel has gone').toBe(false);
+      vi.advanceTimersByTime(400);
+      runFrames();
+      expect(lenis.isStopped).toBe(false);
+    });
+  }
 });

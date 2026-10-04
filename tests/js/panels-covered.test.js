@@ -12,61 +12,18 @@
  * @version v1.8.0
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
 import {
   initializePanels,
   openPanel,
+  closePanel,
   closeTopPanel,
   closeAllPanels,
 } from '../../assets/js/telar-story/panels.js';
-
-// ── A stand-in for Bootstrap's Offcanvas ─────────────────────────────────────
-
-const instances = new Map();
-const pending = [];
-
-class FakeOffcanvas {
-  static getInstance(el) { return instances.get(el) || null; }
-
-  constructor(el) {
-    this.el = el;
-    this.shown = false;
-    instances.set(el, this);
-  }
-
-  fire(name) {
-    const e = new Event(`${name}.bs.offcanvas`, { bubbles: true, cancelable: true });
-    this.el.dispatchEvent(e);
-    return e;
-  }
-
-  show() {
-    if (this.shown || this.fire('show').defaultPrevented) return;
-    this.shown = true;
-    this.el.classList.add('showing');
-    pending.push(() => {
-      this.el.classList.remove('showing');
-      this.el.classList.add('show');
-      this.fire('shown');
-    });
-  }
-
-  hide() {
-    if (!this.shown || this.fire('hide').defaultPrevented) return;
-    this.shown = false;
-    this.el.classList.add('hiding');
-    pending.push(() => {
-      this.el.classList.remove('show', 'hiding');
-      this.fire('hidden');
-    });
-  }
-}
-
-/** End every slide in flight, as Bootstrap's transition end does. */
-function finishTransitions() {
-  while (pending.length) pending.shift()();
-}
+import {
+  FakeOffcanvas, finishTransitions, finishNextTransition, resetOffcanvas,
+} from './fake-offcanvas.js';
 
 const PAGE = `
   <main class="story-container"><button id="story-btn">x</button></main>
@@ -111,8 +68,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  instances.forEach((inst) => { inst.shown = false; });
-  pending.length = 0;
+  resetOffcanvas();
   document.querySelectorAll('.offcanvas').forEach((el) => {
     el.classList.remove('show', 'showing', 'hiding');
     el.removeAttribute('inert');
@@ -163,6 +119,20 @@ describe('covered content', () => {
     expect(inertParts()).toEqual(['layer1']);
   });
 
+  it('closeAllPanels closes each panel as its back button would, and holds the story until the last has gone', () => {
+    openLayers('layer1', 'layer2');
+    openGlossary();
+    history.replaceState(null, '', '#s7l2');
+    closeAllPanels();
+    expect(state.panelStack).toEqual([]);
+    expect(window.location.hash).toBe('#s7');
+    expect(state.isPanelOpen, 'the panels are still closing').toBe(true);
+    expect(state.scrollLockActive).toBe(true);
+    finishTransitions();
+    expect(state.isPanelOpen).toBe(false);
+    expect(state.scrollLockActive).toBe(false);
+  });
+
   it('leaves nothing inert once closeAllPanels has run', () => {
     openLayers('layer1', 'layer2');
     openGlossary();
@@ -185,6 +155,90 @@ describe('covered content', () => {
     panel('glossary').classList.add('show');
     window.TelarPanels.syncCoveredContent();
     expect(inertParts()).toEqual(['layer1', 'main']);
+  });
+});
+
+// ── The scroll lock while another panel slides in ────────────────────────────
+//
+// A panel that is still sliding in is open: the story stays frozen under it.
+// Layer 1 closing while layer 2 slides in (a deep link's deferred open landing
+// after the reader closed the panels) must not start the story's scroll.
+
+describe('a panel closing while another slides in', () => {
+  let lenis;
+
+  beforeEach(() => {
+    lenis = {
+      isStopped: false,
+      stop() { this.isStopped = true; },
+      start() { this.isStopped = false; },
+    };
+    state.lenis = lenis;
+    window.telarLang = {};
+    window.storyData = { steps: [{ step: '7', layer1_text: '<p>one</p>', layer2_text: '<p>two</p>' }] };
+    openPanel('layer1', '7');
+    finishTransitions();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    state.lenis = null;
+  });
+
+  it('leaves the story frozen when the closing panel has gone', () => {
+    closePanel('layer1');
+    openPanel('layer2', '7');
+    expect(panel('layer2').classList.contains('showing')).toBe(true);
+    finishNextTransition();                       // layer 1's slide out ends
+    expect(panel('layer2').classList.contains('show'), 'layer 2 still sliding in').toBe(false);
+    expect(state.isPanelOpen).toBe(true);
+    expect(state.scrollLockActive).toBe(true);
+    expect(lenis.isStopped).toBe(true);
+  });
+
+  it('leaves the story frozen when the wait after the close runs out', () => {
+    closePanel('layer1');
+    openPanel('layer2', '7');
+    finishNextTransition();                       // layer 1's 0.3s slide ends first
+    vi.advanceTimersByTime(350);
+    expect(panel('layer2').classList.contains('show'), 'layer 2 still sliding in').toBe(false);
+    expect(state.isPanelOpen).toBe(true);
+    expect(state.scrollLockActive).toBe(true);
+    expect(lenis.isStopped).toBe(true);
+  });
+
+  it('leaves the story frozen while panels closed together are still sliding out', () => {
+    openPanel('layer2', '7');
+    finishTransitions();
+    closeAllPanels();
+    finishNextTransition();                       // layer 2 has gone, layer 1 has not
+    expect(panel('layer1').classList.contains('hiding')).toBe(true);
+    expect(state.isPanelOpen).toBe(true);
+    expect(lenis.isStopped).toBe(true);
+  });
+
+  it('frees the story when an offcanvas that is not one of its panels is shown', () => {
+    const other = document.createElement('div');
+    other.className = 'offcanvas show';
+    document.body.appendChild(other);
+    try {
+      closePanel('layer1');
+      finishTransitions();
+      vi.advanceTimersByTime(350);
+      expect(state.isPanelOpen).toBe(false);
+      expect(lenis.isStopped).toBe(false);
+    } finally {
+      other.remove();
+    }
+  });
+
+  it('frees the story once the last panel has gone', () => {
+    closePanel('layer1');
+    finishTransitions();
+    vi.advanceTimersByTime(350);
+    expect(state.isPanelOpen).toBe(false);
+    expect(lenis.isStopped).toBe(false);
   });
 });
 

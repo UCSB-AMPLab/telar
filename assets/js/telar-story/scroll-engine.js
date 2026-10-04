@@ -330,13 +330,12 @@ export function initScrollEngine(stepCount) {
       // fires, and the guards it would lower stay up for the rest of the
       // reader's session.
       keyboardNavInFlight = false;
-      // Only the keyboard's and the buttons' own moves stand down. A carry to
-      // the nearer step takes a token too, and a carry's guard is that token:
-      // taking it lets the next settle start a second carry on top of the
-      // first, which is two moves on one scroll and exactly what that guard
-      // prevents. A button move left holding its token would block the carry
-      // of the reader's own gesture instead, since the move is not coming back.
-      if (navToken === navTargetToken || navToken === buttonMoveToken) navToken = 0;
+      // Every move stands down with its guards, a carry to the nearer step
+      // included. The reader's scroll replaces the move, so no second move is
+      // left running beside the carry of the gesture that took over, and a
+      // token kept past this point would refuse that carry and every carry
+      // after it until some other move took a token.
+      navToken = 0;
       buttonMoveToken = 0;
     }
     armScrubEnd();
@@ -642,10 +641,11 @@ export function buttonHeading() {
  *
  * Lenis skips a scrollTo to the offset it holds as its target, calling the
  * completion at once, and a programmatic move holds as its target the offset
- * it has reached — before its first frame, the one it left. A tap or a link
- * back to that offset would report success while the earlier move ran on to
- * its own landing. Stopping the move leaves the scroll where it stands, which
- * is the offset asked for, and the frame Lenis emits on stopping enters it.
+ * it has reached — before its first frame, the one it left. A tap, a key press
+ * or a link back to that offset would report success while the earlier move
+ * ran on to its own landing. Stopping the move leaves the scroll where it
+ * stands, which is the offset asked for, and the frame Lenis emits on stopping
+ * enters it.
  * A key press's guard against that frame is lowered first, since its move is
  * the one being ended.
  *
@@ -856,6 +856,7 @@ export function keyboardNav(direction) {
   // undoing the immediate activation above.
   keyboardNavInFlight = true;
 
+  _endMoveHeldAt(lenis, target * vh);
   lenis.scrollTo(target * vh, {
     force: true,
     duration: navSeconds().keyboard,

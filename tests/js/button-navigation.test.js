@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   openPanel: vi.fn(),
+  closeAllPanels: vi.fn(),
   activateCard: vi.fn(),
   advanceToStep: vi.fn(() => true),
   buttonHeading: vi.fn(),
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../assets/js/telar-story/panels.js', () => ({
   openPanel: mocks.openPanel,
+  closeAllPanels: mocks.closeAllPanels,
   closeTopPanel: vi.fn(),
   stepHasLayer1Content: (step) => !!step.layer1_title,
   stepHasLayer2Content: () => false,
@@ -109,6 +111,7 @@ const lastNavButtonIndex = () => state.onStepChange.mock.calls.at(-1)?.[0];
 
 beforeEach(() => {
   mocks.openPanel.mockClear();
+  mocks.closeAllPanels.mockClear();
   mocks.activateCard.mockClear();
   mocks.advanceToStep.mockClear();
   // The engine, as the buttons see it: at rest on the current step.
@@ -302,6 +305,32 @@ describe('the intro, however the buttons arrive at it', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+// With a panel open, Back to Start and a contents link close it first, as its
+// own back button would, and only then move the story.
+describe('back to the start or a contents link with a panel open', () => {
+  /** The order of the close and the first move after it, from the mocks. */
+  const closedFirst = (moved) =>
+    mocks.closeAllPanels.mock.invocationCallOrder[0] < moved.mock.invocationCallOrder.at(-1);
+
+  it('back to the start closes the panels before the story returns to the intro', () => {
+    boot({ hash: '#s4' });
+    state.onStepChange.mockClear();
+    navigateToIntro();
+    expect(mocks.closeAllPanels).toHaveBeenCalledTimes(1);
+    expect(closedFirst(state.onStepChange)).toBe(true);
+    expect(state.currentIndex).toBe(-1);
+  });
+
+  it('a contents link closes the panels before the story moves to its step', () => {
+    boot({ hash: '#s2' });
+    mocks.activateCard.mockClear();
+    navigateToStep(4);
+    expect(mocks.closeAllPanels).toHaveBeenCalledTimes(1);
+    expect(closedFirst(mocks.activateCard)).toBe(true);
+    expect(state.currentIndex).toBe(3);
   });
 });
 

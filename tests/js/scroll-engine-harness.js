@@ -225,6 +225,20 @@ export function landMove() {
   move.onComplete?.(lenis);
 }
 
+/**
+ * The reader's own scroll taking over the modelled Lenis and coming to rest at
+ * `position`. Lenis answers input it acts on by replacing the move in flight
+ * with the reader's scroll, and the replaced move's completion is never
+ * called.
+ */
+export function readerScrollsTo(position) {
+  const lenis = engineLenis();
+  lenis.inFlight = null;
+  lenis.isScrolling = false;
+  lenis.animatedScroll = lenis.targetScroll = position * window.innerHeight;
+  emitScroll(lenis);
+}
+
 /** A scroll frame on the modelled Lenis, which also moves its target. */
 export function restAt(position) {
   const lenis = engineLenis();
