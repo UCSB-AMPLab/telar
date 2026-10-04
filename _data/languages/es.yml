@@ -344,6 +344,9 @@ errors:
     answer_footnotes_dropped: "En `{{ story }}` quitamos las notas al pie de la respuesta del paso {{ step }}, tanto el número como el texto de la nota. La respuesta de un paso es texto corrido: pasa la nota a un panel o di en la misma frase lo que decía."
     answer_markup_flattened: "En `{{ story }}` simplificamos la respuesta del paso {{ step }}: las listas, los títulos y las citas conservan las palabras y pierden el formato; las tablas, los bloques de código y las líneas divisorias desaparecen por completo. La respuesta de un paso es texto corrido: pasa ese contenido a un panel, donde se ve tal como lo escribiste."
 
+    # Coordenadas de un paso
+    coordinate_not_a_number: "En el paso {{ step }} de `{{ story }}`, el valor de `{{ column }}` es `{{ value }}`, que no es un número, así que el visor no puede usarlo para encuadrar el objeto. Escribe un número o deja la celda vacía y usaremos el valor predeterminado."
+
 # Funcionalidad de compartir e incrustar
 share:
   button: "Compartir"

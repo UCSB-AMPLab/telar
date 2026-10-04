@@ -37,13 +37,14 @@ from one story CSV and performs several passes over the data:
    read from `_config.yml` only warns. This pass runs on the answer as
    the author wrote it, before glossary anchors go into it.
 
-4. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
+4. **Coordinates** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
-   position.
+   position. A comma decimal (`0,5`) is read as the number it is. Any
+   other cell that is not a number is reported and left as typed.
 
 5. **Warning aggregation** — all warnings (missing objects, missing
    markdown files, broken glossary links, widget errors, answers held to
-   the limits) are collected
+   the limits, coordinates that are not numbers) are collected
    into a `viewer_warnings` list stored in `df.attrs`, which the core
    module later injects into the JSON output for display in the story's
    intro panel.
@@ -55,6 +56,8 @@ the intro panel's error display can be visually tested.
 Version: v1.8.0
 """
 
+import html
+import math
 import re
 import json
 from collections import namedtuple
@@ -688,6 +691,47 @@ def _apply_coordinate_defaults(df):
     return df
 
 
+# A decimal typed with a comma, the way a Spanish-speaking author writes one:
+# `0,5` or `-1,25`. One comma between digits, nothing else.
+_COMMA_DECIMAL = re.compile(r'^\s*(-?\d+),(\d+)\s*$')
+
+
+def _check_coordinates(df, story_name, warnings, coordinate_warnings):
+    """Read a comma decimal as a number, and report a cell that is neither.
+
+    Runs after the defaults, so every blank already holds one and what is
+    left is what the author typed. A comma decimal says a number plainly,
+    so it is rewritten with a point and nothing is reported. Anything else
+    that does not read as a finite number is reported and left as typed:
+    rewriting it would make the page look right while the sheet stayed
+    wrong, and the viewer's own fallback keeps the step usable meanwhile.
+    """
+    story = story_name or 'unknown'
+    for col in ('x', 'y', 'zoom'):
+        if col not in df.columns:
+            continue
+        for idx, raw in df[col].items():
+            value = str(raw)
+            comma = _COMMA_DECIMAL.match(value)
+            if comma:
+                df.at[idx, col] = f'{comma.group(1)}.{comma.group(2)}'
+                continue
+            try:
+                if math.isfinite(float(value)):
+                    continue
+            except ValueError:
+                pass
+            step = df.at[idx, 'step'] if 'step' in df.columns else 'unknown'
+            message = get_lang_string(
+                'errors.object_warnings.coordinate_not_a_number',
+                column=col, step=_step_label(step), story=story,
+                value=html.escape(value.strip()).replace('`', "'"))
+            _warn(message, warnings)
+            coordinate_warnings.append({'step': step, 'type': 'panel',
+                                        'message': message})
+    return df
+
+
 def _collect_step_warnings(df):
     """Everything the intro panel will show, gathered from the columns.
 
@@ -831,8 +875,11 @@ def process_story(df, christmas_tree=False, story_name=''):
                                   widget_warnings)
     df = _resolve_answer_glossary(df, glossary_terms, glossary_warnings)
     df = _apply_coordinate_defaults(df)
+    coordinate_warnings = []
+    df = _check_coordinates(df, story_name, warnings, coordinate_warnings)
 
     all_warnings = _collect_step_warnings(df)
+    all_warnings.extend(coordinate_warnings)
     all_warnings.extend(glossary_warnings)
     all_warnings.extend(widget_warnings)
     all_warnings.extend(answer_warnings)

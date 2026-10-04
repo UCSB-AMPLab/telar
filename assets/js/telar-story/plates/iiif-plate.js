@@ -33,7 +33,11 @@ let _viewerSeq = 0;
 // text card leaves uncovered. Without these the viewer keeps whatever OSD's home
 // position gives it — the image centred in the VIEWER, so a side card sits over
 // one edge of it.
-const FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
+//
+// Exported because the Compositor's capture path pins this value and cites it
+// in its editor. An import it can resolve beats a regex over this file, which
+// can only ever report zero matches when the name moves.
+export const FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
 
 /**
  * The framing a step asks its viewer for.

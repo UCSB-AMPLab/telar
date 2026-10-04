@@ -342,6 +342,9 @@ errors:
     answer_footnotes_dropped: "A step's answer is plain prose, so the footnotes in the answer to step {{ step }} of `{{ story }}` came out, references and definitions alike. Move the note into a layer panel, or fold what it says into the sentence."
     answer_markup_flattened: "A step's answer is plain prose, so markup in the answer to step {{ step }} of `{{ story }}` was flattened: lists, headings and quotes kept their words and lost their marks, and tables, code blocks and horizontal rules came out altogether. Move that material into a layer panel, where it renders as written."
 
+    # Step coordinates
+    coordinate_not_a_number: "The `{{ column }}` value in step {{ step }} of `{{ story }}` is `{{ value }}`, which is not a number, so the viewer cannot use it to frame the object. Type a number, or leave the cell empty to use the default."
+
 # Share and embed functionality
 share:
   button: "Share"
