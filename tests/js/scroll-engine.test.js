@@ -30,7 +30,7 @@ vi.mock('../../assets/js/telar-story/viewer.js',
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
-import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav } from '../../assets/js/telar-story/scroll-engine.js';
+import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav, jumpScrollTo, isMoveInFlight } from '../../assets/js/telar-story/scroll-engine.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import {
@@ -676,6 +676,43 @@ describe('a carry the reader takes over', () => {
 
     expect(state.lenis.scrollTo.mock.calls.length).toBe(scrollTos);
     expect(state.lenis.inFlight?.px).toBe(2 * window.innerHeight);
+  });
+});
+
+// ── A jump during a snap ─────────────────────────────────────────────────────
+//
+// A jump (Back to Start, a contents link, a fragment change) cancels the snap
+// without Snap's completion, so the snap's own in-flight flag is cleared by the
+// jump, or the engine reads a move in flight for good and refuses every carry.
+
+describe('a jump while a snap is in flight', () => {
+  beforeEach(() => {
+    engineStory(5);
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves no move in flight, and the next gesture is carried', () => {
+    state.isSnapping = true;
+    expect(isMoveInFlight()).toBe(true);
+
+    jumpScrollTo(3 * window.innerHeight);
+    expect(state.isSnapping).toBe(false);
+    expect(isMoveInFlight()).toBe(false);
+
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    restAt(3);
+    restAt(3.4);
+    vi.advanceTimersByTime(150);
+    expect(state.lenis.inFlight?.px, 'the gesture is carried to the next step').toBe(4 * window.innerHeight);
   });
 });
 

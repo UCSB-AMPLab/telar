@@ -49,6 +49,7 @@ import { followEngine, goToStep, updateViewerInfo, initKeyboardNavigation } from
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
 import { cardHoldsGesture, WHEEL_GESTURE_GAP_MS } from './card-scroll.js';
+import { isInsidePanel, isStoryInput } from './story-input.js';
 
 // ── Module-level references ───────────────────────────────────────────────────
 
@@ -181,38 +182,6 @@ let armedAt = 0;  // the scroll offset at which a frame last held the scrub open
 // of a pixel, and a thousandth of a viewport is under a pixel on every cell.
 const REST_TOLERANCE = 0.001;
 
-/**
- * Whether this node is inside an open panel, where the scroll is the panel's.
- *
- * Lenis is given this as its `prevent`, and the input test below reads the
- * same rule, so there is one account of where the story's scroll stops.
- *
- * @param {HTMLElement} node
- * @returns {boolean}
- */
-function _isInsidePanel(node) {
-  return node.closest('.offcanvas') !== null ||
-         node.closest('[data-telar-panel]') !== null;
-}
-
-/**
- * Whether this input is the reader's scroll of the story, rather than one Lenis
- * passes by (a pinch-zoom, a tap, a gesture across the story's axis, a wheel in
- * an open panel), which `virtual-scroll` also reports. Read as a takeover, one
- * of those stands a running move down mid-travel. Conservative: a takeover
- * missed strands the move for the session, one imagined costs a frame.
- *
- * @param {{deltaX?: number, deltaY?: number, event?: Event}} payload
- * @returns {boolean}
- */
-function _isStoryInput({ deltaY, event } = {}) {
-  if (!event) return true;
-  if (event.ctrlKey) return false;                 // pinch or browser zoom
-  if (deltaY === 0) return false;                  // a tap, a click, or across the story's axis
-  const path = event.composedPath ? event.composedPath() : [];
-  return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
-}
-
 // Past its minimum the post-snap dwell holds while input is the tail of the wheel
 // gesture that drove the snap, which would carry it a second step, for MAX_HOLD_MS
 // after landing at most: tails run to about 2.6 s (WebKit), and a slow steady
@@ -300,7 +269,7 @@ export function initScrollEngine(stepCount) {
     smoothWheel: !prefersReduced,
     wheelMultiplier: 0.5,    // scroll sensitivity
     autoRaf: false,          // we drive the rAF loop manually
-    prevent: _isInsidePanel,  // let wheel events pass through inside open panels
+    prevent: isInsidePanel,  // let wheel events pass through inside open panels
   });
 
   // Create Snap plugin with lock mode — directional snapping (forward on
@@ -353,7 +322,7 @@ export function initScrollEngine(stepCount) {
   cardStackEl = cardStack;
   lenis.on('virtual-scroll', (payload) => {
     if (cardHoldsGesture()) return;
-    const readerInput = _isStoryInput(payload);
+    const readerInput = isStoryInput(payload);
     if (readerInput) _noteInput(payload);
     cardStack.classList.add('is-scrubbing');
     if (readerInput && !(payload?.event && (lenis.isStopped || lenis.isLocked))) {
@@ -713,6 +682,16 @@ export function jumpScrollTo(px) {
 }
 
 /**
+ * Whether the engine is driving a move: a keyboard or button move, a snap or a
+ * carry. A fragment change on the step the story shows must still stand it down.
+ *
+ * @returns {boolean}
+ */
+export function isMoveInFlight() {
+  return navToken !== 0 || keyboardNavInFlight || state.isSnapping === true;
+}
+
+/**
  * Stand down any move in flight, for a jump that replaces it: Back to Start or
  * a contents link. The jump stops Lenis's animation without
  * calling its completion, so what the completion would have cleared is
@@ -726,6 +705,7 @@ function standDownMoves() {
   moveTargetToken = 0;
   buttonMoveToken = 0;
   keyboardNavInFlight = false;
+  state.isSnapping = false;
 }
 
 /**

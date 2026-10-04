@@ -59,7 +59,7 @@ import {
   openPanel,
   closeAllPanels,
 } from './panels.js';
-import { applyDeepLinkOnLoad, navigateToStep, navigateToIntro, writeHash } from './deep-link.js';
+import { applyDeepLinkOnLoad, handleHashChange, navigateToStep, navigateToIntro, writeHash } from './deep-link.js';
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
@@ -131,6 +131,8 @@ function initializeStory() {
 
   initializePanels();
   applyDeepLinkOnLoad();
+  // Registered once per story load; the engine has no re-init or teardown path.
+  window.addEventListener('hashchange', handleHashChange);
 
   // Wire up nav button (Back to Home on intro, Back to Start elsewhere)
   const btnNav = document.getElementById('btn-nav-back');

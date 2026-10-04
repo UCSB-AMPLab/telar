@@ -188,6 +188,7 @@ FRAMEWORK_FILES = {
     'assets/js/telar-story/panels.js': 'Story engine: panels',
     'assets/js/telar-story/scroll-engine.js': 'Story engine: scrolling',
     'assets/js/telar-story/state.js': 'Story engine: state',
+    'assets/js/telar-story/story-input.js': 'Story engine: which input is the reader scrolling the story',
     'assets/js/telar-story/utils.js': 'Story engine: shared helpers',
     'assets/js/telar-story/video-card.js': 'Story engine: video cards',
     'assets/js/telar-story/video-layout.js': 'Story engine: video layout',

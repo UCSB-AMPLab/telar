@@ -113,6 +113,11 @@ export function initializePanels() {
         state.isPanelOpen = false;
         deactivateScrollLock();
       }
+      // The entry number recorded by writeHashWithGlossary goes with the entry,
+      // unless a newer entry has already reopened the panel.
+      if (panelType === 'glossary' && !panel.classList.contains('show')) {
+        panel.removeAttribute('data-deep-link-n');
+      }
     });
   });
 }

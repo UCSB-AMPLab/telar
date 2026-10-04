@@ -2341,6 +2341,18 @@
     }
   };
 
+  // assets/js/telar-story/story-input.js
+  function isInsidePanel(node) {
+    return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
+  }
+  function isStoryInput({ deltaY, event } = {}) {
+    if (!event) return true;
+    if (event.ctrlKey) return false;
+    if (deltaY === 0) return false;
+    const path = event.composedPath ? event.composedPath() : [];
+    return !path.some((node) => node instanceof HTMLElement && isInsidePanel(node));
+  }
+
   // assets/js/telar-story/scroll-engine.js
   var lenis;
   var snap;
@@ -2399,16 +2411,6 @@
   var SCROLL_MOVING_PX = 0.5;
   var armedAt = 0;
   var REST_TOLERANCE = 1e-3;
-  function _isInsidePanel(node) {
-    return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
-  }
-  function _isStoryInput({ deltaY, event } = {}) {
-    if (!event) return true;
-    if (event.ctrlKey) return false;
-    if (deltaY === 0) return false;
-    const path = event.composedPath ? event.composedPath() : [];
-    return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
-  }
   var RISE_PX = 2;
   var MAX_HOLD_MS = 3e3;
   function _endDwell() {
@@ -2466,7 +2468,7 @@
       // scroll sensitivity
       autoRaf: false,
       // we drive the rAF loop manually
-      prevent: _isInsidePanel
+      prevent: isInsidePanel
       // let wheel events pass through inside open panels
     });
     snap = new Snap(lenis, {
@@ -2494,7 +2496,7 @@
     cardStackEl = cardStack;
     lenis.on("virtual-scroll", (payload) => {
       if (cardHoldsGesture()) return;
-      const readerInput = _isStoryInput(payload);
+      const readerInput = isStoryInput(payload);
       if (readerInput) _noteInput(payload);
       cardStack.classList.add("is-scrubbing");
       if (readerInput && !(payload?.event && (lenis.isStopped || lenis.isLocked))) {
@@ -2666,6 +2668,9 @@
     _endMoveHeldAt(state.lenis, px);
     state.lenis.scrollTo(px, { immediate: true, force: true });
   }
+  function isMoveInFlight() {
+    return navToken !== 0 || keyboardNavInFlight || state.isSnapping === true;
+  }
   function standDownMoves() {
     navToken = 0;
     navTarget = null;
@@ -2674,6 +2679,7 @@
     moveTargetToken = 0;
     buttonMoveToken = 0;
     keyboardNavInFlight = false;
+    state.isSnapping = false;
   }
   function _clearDwell() {
     dwellHeld = false;
@@ -2839,6 +2845,9 @@
         if (!anyPanelOpen()) {
           state.isPanelOpen = false;
           deactivateScrollLock();
+        }
+        if (panelType === "glossary" && !panel.classList.contains("show")) {
+          panel.removeAttribute("data-deep-link-n");
         }
       });
     });
@@ -3403,6 +3412,7 @@
 
   // assets/js/telar-story/deep-link.js
   var _deepLinkTimers = [];
+  var _lastPanelCloseAt = -Infinity;
   function _cancelDeepLinkTimers() {
     _deepLinkTimers.forEach(clearTimeout);
     _deepLinkTimers = [];
@@ -3433,6 +3443,7 @@
     _writeHashFragment(null);
   }
   function writeHashWithGlossary(n) {
+    document.getElementById("panel-glossary")?.setAttribute("data-deep-link-n", String(n));
     _writeHashFragment(n);
   }
   function _writeHashFragment(glossaryN) {
@@ -3497,6 +3508,7 @@
       reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
       jumpButtonsTo(targetIndex);
+      updateViewerInfo(targetIndex);
     }
     writeHash();
   }
@@ -3505,6 +3517,10 @@
     if (!parsed) return;
     const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
     if (targetIndex < 0) return;
+    _jumpToIndex(targetIndex);
+    _scheduleLayerOpen(parsed, targetIndex, 100);
+  }
+  function _jumpToIndex(targetIndex) {
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
@@ -3517,35 +3533,112 @@
       reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
       jumpButtonsTo(targetIndex);
+      updateViewerInfo(targetIndex);
     }
-    if (parsed.layer !== null) {
-      const stepNumber = state.steps[targetIndex]?.dataset?.step;
-      if (stepNumber) {
-        let delay = 100;
-        const onTarget = () => state.currentIndex === targetIndex;
-        if (parsed.layer >= 2) {
-          _deepLinkTimers.push(setTimeout(() => {
-            if (onTarget()) openPanel("layer1", stepNumber);
-          }, delay));
-          delay += 200;
-        }
-        _deepLinkTimers.push(setTimeout(() => {
-          if (onTarget()) openPanel("layer" + parsed.layer, stepNumber);
-        }, delay));
-        delay += 200;
-        if (parsed.subType === "g" && parsed.subN !== null) {
-          _deepLinkTimers.push(setTimeout(() => {
-            if (!onTarget()) return;
-            const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
-            if (panelContent) {
-              const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
-              if (target) target.click();
-            }
-          }, delay));
-        }
-        if (_deepLinkTimers.length) _armDeepLinkCancellation();
-      }
+  }
+  function _scheduleGlossaryClick(parsed, targetIndex, delay) {
+    _deepLinkTimers.push(setTimeout(() => {
+      if (state.currentIndex !== targetIndex) return;
+      const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
+      const target = panelContent?.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
+      if (target) target.click();
+    }, delay));
+    _armDeepLinkCancellation();
+  }
+  function _scheduleLayerOpen(parsed, targetIndex, delay) {
+    if (parsed.layer === null) return;
+    const stepNumber = state.steps[targetIndex]?.dataset?.step;
+    if (!stepNumber) return;
+    const onTarget = () => state.currentIndex === targetIndex;
+    if (parsed.layer >= 2) {
+      _deepLinkTimers.push(setTimeout(() => {
+        if (onTarget()) openPanel("layer1", stepNumber);
+      }, delay));
+      delay += 200;
     }
+    _deepLinkTimers.push(setTimeout(() => {
+      if (onTarget()) openPanel("layer" + parsed.layer, stepNumber);
+    }, delay));
+    delay += 200;
+    if (parsed.subType === "g" && parsed.subN !== null) {
+      _scheduleGlossaryClick(parsed, targetIndex, delay);
+      return;
+    }
+    _armDeepLinkCancellation();
+  }
+  var PANEL_CLOSE_SETTLE_MS = 400;
+  function _openLayerNumber() {
+    for (let i = state.panelStack.length - 1; i >= 0; i--) {
+      const m = state.panelStack[i].type.match(/^layer(\d+)$/);
+      if (m) return parseInt(m[1], 10);
+    }
+    return null;
+  }
+  function _namesIntro(hash, parsed) {
+    if (hash === "" || hash === "#") return true;
+    return parsed !== null && parsed.step < 1;
+  }
+  function _moveToIntroFromFragment() {
+    if (state.currentIndex !== -1 || state.panelStack.length > 0 || isMoveInFlight()) navigateToIntro();
+  }
+  function _nameLandedStep(parsed, targetIndex) {
+    if (parsed.step - 1 !== targetIndex) writeHash();
+  }
+  function _openGlossaryN() {
+    if (!state.panelStack.some((p) => p.type === "glossary")) return null;
+    const n = parseInt(document.getElementById("panel-glossary")?.dataset.deepLinkN, 10);
+    return Number.isNaN(n) ? -1 : n;
+  }
+  function _panelsBusy() {
+    if (state.panelStack.length > 0) return true;
+    if (Date.now() - _lastPanelCloseAt < PANEL_CLOSE_SETTLE_MS) return true;
+    return !!document.querySelector("#panel-layer1, #panel-layer2, #panel-glossary") && !!document.querySelector(".offcanvas.show, .offcanvas.showing, .offcanvas.hiding");
+  }
+  function _openDelayAfterClose() {
+    if (!_panelsBusy()) return 100;
+    _lastPanelCloseAt = Date.now();
+    return PANEL_CLOSE_SETTLE_MS;
+  }
+  function _settleOnStep(parsed, targetIndex) {
+    const wantG = parsed.subType === "g" ? parsed.subN : null;
+    const curG = _openGlossaryN();
+    if (_openLayerNumber() !== parsed.layer) {
+      _cancelDeepLinkTimers();
+      const delay = _openDelayAfterClose();
+      closeAllPanels();
+      writeHash();
+      _scheduleLayerOpen(parsed, targetIndex, delay);
+      return;
+    }
+    if (curG === wantG) {
+      _nameLandedStep(parsed, targetIndex);
+      return;
+    }
+    _cancelDeepLinkTimers();
+    if (curG !== null) {
+      closePanel("glossary");
+      _lastPanelCloseAt = Date.now();
+    }
+    writeHash();
+    if (wantG !== null) _scheduleGlossaryClick(parsed, targetIndex, curG !== null ? PANEL_CLOSE_SETTLE_MS : 0);
+  }
+  function handleHashChange() {
+    if (!state.steps.length) return;
+    const hash = window.location.hash;
+    const parsed = parseFragment(hash);
+    if (_namesIntro(hash, parsed)) {
+      _moveToIntroFromFragment();
+      return;
+    }
+    if (!parsed) return;
+    const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
+    if (state.currentIndex === targetIndex && !isMoveInFlight()) {
+      _settleOnStep(parsed, targetIndex);
+      return;
+    }
+    const delay = _openDelayAfterClose();
+    navigateToStep(targetIndex + 1);
+    _scheduleLayerOpen(parsed, targetIndex, delay);
   }
 
   // assets/js/telar-story/card-scroll.js
@@ -7115,6 +7208,7 @@
     }
     initializePanels();
     applyDeepLinkOnLoad();
+    window.addEventListener("hashchange", handleHashChange);
     const btnNav = document.getElementById("btn-nav-back");
     if (btnNav) {
       btnNav.classList.add("is-home");
