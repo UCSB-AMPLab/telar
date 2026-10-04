@@ -20,6 +20,7 @@ import {
   setCardProgress,
   activateCard,
   initCardPool,
+  reconcilePlatesForJump,
 } from '../../assets/js/telar-story/card-pool.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import {
@@ -713,5 +714,80 @@ describe('activateCard — a mode flip on one object re-seats the plate it share
     // The plate stays put, and the step's framing still reaches the viewer —
     // queued here because this viewer card is not ready yet.
     expect(viewerCard.pendingZoom).toEqual({ x: 0.4, y: 0.6, zoom: 4, snap: true });
+  });
+});
+
+// ── reconcilePlatesForJump ───────────────────────────────────────────────────
+//
+// A jump used to close the plates it crossed by removing `is-active`. That
+// class carries `translateY(0)`, and so does the inline style every path
+// writes when it opens a plate — so removing the class left the inline
+// transform holding the plate open, and the plate stayed exactly where the
+// walk had put it. Invisible wherever the target's plate covered it, and
+// across the whole screen where it did not.
+
+describe('reconcilePlatesForJump — closing the plates a jump crossed', () => {
+  function plate(className = '') {
+    const el = document.createElement('div');
+    el.className = `viewer-plate ${className}`.trim();
+    el.classList.add('is-active');
+    el.style.transform = 'translateY(0)';   // as a walk onto it left it
+    return el;
+  }
+
+  beforeEach(() => {
+    state.stepToScene = { 0: 0, 1: 1, 2: 2 };
+    state.viewerPlates = {};
+  });
+
+  it('sends a plate the reader walked onto off screen, not just inactive', () => {
+    const crossed = plate();
+    state.viewerPlates = { 0: crossed, 1: plate() };
+
+    reconcilePlatesForJump(1);
+
+    expect(crossed.style.transform).toBe('translateY(100%)');
+    expect(crossed.classList.contains('is-active')).toBe(false);
+  });
+
+  it('leaves the target step own plate alone for activateCard to place', () => {
+    const target = plate();
+    state.viewerPlates = { 0: plate(), 1: target };
+
+    reconcilePlatesForJump(1);
+
+    expect(target.style.transform).toBe('translateY(0)');
+    expect(target.classList.contains('is-active')).toBe(true);
+  });
+
+  it('closes an audio plate the jump goes back across', () => {
+    // The case this was filed for: step 9 is audio, the reader jumps to step 5.
+    const audio = plate('audio-plate');
+    state.stepToScene = { 4: 1, 8: 2 };
+    state.viewerPlates = { 1: plate(), 2: audio };
+
+    reconcilePlatesForJump(4);
+
+    expect(audio.style.transform).toBe('translateY(100%)');
+  });
+
+  it('stands the media down, as the walk it stands in for does', () => {
+    const video = plate('video-plate');
+    state.stepToScene = { 0: 0, 1: 1 };
+    state.viewerPlates = { 0: plate(), 1: video };
+    deactivateVideoCard.mockClear();
+
+    reconcilePlatesForJump(0);
+
+    expect(deactivateVideoCard).toHaveBeenCalledWith(video);
+  });
+
+  it('puts the transitions back, so the next move animates', () => {
+    const crossed = plate();
+    state.viewerPlates = { 0: crossed, 1: plate() };
+
+    reconcilePlatesForJump(1);
+
+    expect(crossed.style.transition).toBe('');
   });
 });

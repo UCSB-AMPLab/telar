@@ -638,6 +638,7 @@ describe('a move the reader interrupts with the scroll', () => {
     mocks.lenisScrollTo.mockClear();
     mocks.mockActivateCard.mockClear();
     mocks.mockSettleCards.mockClear();
+    mocks.mockGoToStep.mockClear();
     resetState({ currentIndex: -1 });
 
     vi.stubGlobal('requestAnimationFrame', vi.fn());
@@ -660,9 +661,16 @@ describe('a move the reader interrupts with the scroll', () => {
   });
 
   /** The listener Lenis calls the moment raw input arrives. */
-  function readerTakesOver() {
-    mocks.lenisOn.mock.calls.find(([event]) => event === 'virtual-scroll')[1]();
+  function readerTakesOver(payload) {
+    mocks.lenisOn.mock.calls.find(([event]) => event === 'virtual-scroll')[1](payload);
   }
+
+  /** A wheel gesture as Lenis reports one, with the fields the filter reads. */
+  const wheel = (over = {}) => ({
+    deltaX: 0, deltaY: -120,
+    event: { ctrlKey: false, composedPath: () => [] },
+    ...over,
+  });
 
   /** One frame of Lenis's smoothed output, at `position` viewports. */
   function scrollFrame(position) {
@@ -693,6 +701,59 @@ describe('a move the reader interrupts with the scroll', () => {
     scrollFrame(0.4);
 
     expect(mocks.mockSettleCards).toHaveBeenCalled();
+  });
+
+  it('does not start a second carry on top of the one already running', () => {
+    // A gesture that stops between steps is carried to the nearer one, and that
+    // carry takes a nav token so the next settle leaves it alone. The reader
+    // wheeling again during it must not start a second: two moves on one scroll
+    // is the thing carryToNearestStep's own guard exists to prevent.
+    vi.useFakeTimers();
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 1.4 * window.innerHeight;
+
+    readerTakesOver(wheel());
+    scrollFrame(1.4);
+    vi.advanceTimersByTime(150);          // the settle carries it to step 2
+    const afterFirstCarry = mocks.lenisScrollTo.mock.calls.length;
+    expect(afterFirstCarry).toBeGreaterThan(0);
+
+    readerTakesOver(wheel());
+    vi.advanceTimersByTime(150);
+
+    expect(mocks.lenisScrollTo.mock.calls.length).toBe(afterFirstCarry);
+  });
+
+  it('leaves the move running when Lenis passes the input by', () => {
+    // Lenis emits virtual-scroll before it decides. A ctrl-wheel is a zoom,
+    // which it passes by at lenis.mjs:586 — the keyboard's animation is still
+    // travelling, and the reader asked for step 1.
+    keyboardNav('forward');
+    readerTakesOver(wheel({ event: { ctrlKey: true, composedPath: () => [] } }));
+    mocks.mockGoToStep.mockClear();
+    scrollFrame(0.5);                       // still short of the step
+
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+
+  it('leaves the move running for a tap, which carries no scroll at all', () => {
+    keyboardNav('forward');
+    readerTakesOver(wheel({ deltaX: 0, deltaY: 0 }));
+    mocks.mockGoToStep.mockClear();
+    scrollFrame(0.5);
+
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+
+  it('stands the move down for a wheel, which Lenis does act on', () => {
+    // The control for the two above: the same frame, the same position, and
+    // the only difference is input Lenis takes the scroll with.
+    keyboardNav('forward');
+    readerTakesOver(wheel());
+    mocks.mockGoToStep.mockClear();
+    scrollFrame(0.5);
+
+    expect(mocks.mockGoToStep).toHaveBeenCalled();
   });
 
   it('closes the scrub on every gesture after the one that took over', () => {

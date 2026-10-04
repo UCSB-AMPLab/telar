@@ -124,6 +124,50 @@ function _clampPosition(position) {
 // of a pixel, and a thousandth of a viewport is under a pixel on every cell.
 const REST_TOLERANCE = 0.001;
 
+/**
+ * Whether this node is inside an open panel, where the scroll is the panel's.
+ *
+ * Lenis is given this as its `prevent`, and the takeover test below reads the
+ * same rule, so there is one account of where the story's scroll stops.
+ *
+ * @param {HTMLElement} node
+ * @returns {boolean}
+ */
+function _isInsidePanel(node) {
+  return node.closest('.offcanvas') !== null ||
+         node.closest('[data-telar-panel]') !== null;
+}
+
+/**
+ * Whether Lenis will act on this input, rather than pass it by.
+ *
+ * `virtual-scroll` is emitted before Lenis decides, so the listener hears
+ * gestures it then ignores: a pinch-zoom, a tap, a gesture across the axis the
+ * story does not scroll on, a wheel inside an open panel, and anything arriving
+ * while the scroll is stopped. None of those takes the scroll from a move that
+ * is still running, and reading one as a takeover stands that move down
+ * mid-travel — which hands the cards back to a position the move has not
+ * reached, so the reader is returned to the step they are leaving until the
+ * animation lands on the one they asked for.
+ *
+ * Conservative by construction: these are the cases Lenis passes by, and
+ * anything else is read as a takeover. A takeover missed strands the move for
+ * the rest of the reader's session; a takeover imagined costs a frame.
+ *
+ * @param {{deltaX?: number, deltaY?: number, event?: Event}} payload
+ * @returns {boolean}
+ */
+function _isScrollTakeover({ deltaX, deltaY, event } = {}) {
+  if (!event) return true;
+  if (event.ctrlKey) return false;                 // pinch or browser zoom
+  if (deltaX === 0 && deltaY === 0) return false;  // a tap, or a click
+  if (deltaY === 0) return false;                  // across the story's axis
+  if (lenis.isStopped || lenis.isLocked) return false;
+
+  const path = event.composedPath ? event.composedPath() : [];
+  return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -184,7 +228,7 @@ export function initScrollEngine(stepCount) {
     smoothWheel: !prefersReduced,
     wheelMultiplier: 0.5,    // scroll sensitivity
     autoRaf: false,          // we drive the rAF loop manually
-    prevent: (node) => node.closest('.offcanvas') !== null || node.closest('[data-telar-panel]') !== null,  // let wheel events pass through inside open panels
+    prevent: _isInsidePanel,  // let wheel events pass through inside open panels
   });
 
   // Create Snap plugin with lock mode — directional snapping (forward on
@@ -233,20 +277,29 @@ export function initScrollEngine(stepCount) {
   // the scroll has long left. Both events therefore re-arm the same timer, so
   // the flag lapses 100 ms after the last frame rather than the last gesture.
   cardStackEl = cardStack;
-  lenis.on('virtual-scroll', () => {
+  lenis.on('virtual-scroll', (payload) => {
     cardStack.classList.add('is-scrubbing');
-    // A scroll the reader is driving has no landing the keyboard chose, so the
-    // next press reads the position. Every other takeover begins a move, whose
-    // token drops the target on its own; raw input begins none, so it says so.
-    navTarget = null;
-    // The same takeover stands the move itself down, because the move cannot.
-    // Lenis answers raw input either by stopping the running animation, which
-    // calls neither of its callbacks, or by replacing it with the reader's own
-    // scroll, which carries the callbacks away with it — so the onComplete
-    // holding these is unreachable from the moment this fires, and the guards
-    // it would lower stay up for the rest of the reader's session.
-    keyboardNavInFlight = false;
-    navToken = 0;
+    if (_isScrollTakeover(payload)) {
+      // A scroll the reader is driving has no landing the keyboard chose, so
+      // the next press reads the position. Every other takeover begins a move,
+      // whose token drops the target on its own; raw input begins none, so it
+      // says so.
+      navTarget = null;
+      // The same takeover stands the move itself down, because the move cannot.
+      // Lenis answers input it acts on either by stopping the running
+      // animation, which calls neither of its callbacks, or by replacing it
+      // with the reader's own scroll, which carries the callbacks away with it
+      // — so the onComplete holding these is unreachable from the moment this
+      // fires, and the guards it would lower stay up for the rest of the
+      // reader's session.
+      keyboardNavInFlight = false;
+      // Only the keyboard's own move stands down. The token is not the
+      // keyboard's alone — a carry to the nearer step and a button move each
+      // take one, and a carry's guard is that token: taking it from them lets
+      // the next settle start a second carry on top of the first, which is
+      // two moves on one scroll and exactly what that guard prevents.
+      if (navToken === navTargetToken) navToken = 0;
+    }
     armScrubEnd();
   });
 

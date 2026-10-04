@@ -25,7 +25,7 @@
  */
 
 import { state } from './state.js';
-import { activateCard, reconcileStackForJump } from './card-pool.js';
+import { activateCard, reconcileStackForJump, reconcilePlatesForJump } from './card-pool.js';
 import { goToStep } from './navigation.js';
 import { openPanel } from './panels.js';
 
@@ -210,11 +210,9 @@ export function navigateToStep(stepNumber) {
   const targetIndex = stepNumber - 1;
   if (targetIndex < 0 || targetIndex >= state.steps.length) return;
 
-  // Hide all active viewer plates before jumping — prevents plates from
-  // nearby steps bleeding through when the target is a title/section card.
-  for (const plate of Object.values(state.viewerPlates)) {
-    plate.classList.remove('is-active');
-  }
+  // Close every plate but the target's before jumping, or one the reader
+  // walked onto earlier is still open behind the step they land on.
+  reconcilePlatesForJump(targetIndex);
 
   if (state.lenis) {
     const targetPx = (targetIndex + 1) * window.innerHeight;

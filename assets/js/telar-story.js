@@ -2806,6 +2806,23 @@
     }
     if (state.activeTitleCardIndex !== targetIndex) state.activeTitleCardIndex = null;
   }
+  function reconcilePlatesForJump(targetIndex) {
+    const targetScene = state.stepToScene[targetIndex];
+    const moved = [];
+    for (const [sceneIndex, plate] of Object.entries(state.viewerPlates || {})) {
+      if (!plate || Number(sceneIndex) === targetScene) continue;
+      plate.classList.remove("is-active");
+      plate.style.transition = "none";
+      plate.style.transform = "translateY(100%)";
+      if (plate.classList.contains("video-plate")) deactivateVideoCard(plate);
+      else if (plate.classList.contains("audio-plate")) deactivateAudioCard(plate);
+      moved.push(plate);
+    }
+    if (moved.length) {
+      void moved[0].offsetHeight;
+      for (const plate of moved) plate.style.transition = "";
+    }
+  }
   function _restoreBackwardTarget(cardEl) {
     if (!cardEl) return;
     if (cardEl.classList.contains("is-stacked") || cardEl.classList.contains("is-active")) return;
@@ -5050,9 +5067,7 @@
   function navigateToStep(stepNumber) {
     const targetIndex = stepNumber - 1;
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
-    for (const plate of Object.values(state.viewerPlates)) {
-      plate.classList.remove("is-active");
-    }
+    reconcilePlatesForJump(targetIndex);
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * window.innerHeight;
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
@@ -5159,6 +5174,18 @@
     return Math.max(0, Math.min(position, totalPositions - 1));
   }
   var REST_TOLERANCE = 1e-3;
+  function _isInsidePanel(node) {
+    return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
+  }
+  function _isScrollTakeover({ deltaX, deltaY, event } = {}) {
+    if (!event) return true;
+    if (event.ctrlKey) return false;
+    if (deltaX === 0 && deltaY === 0) return false;
+    if (deltaY === 0) return false;
+    if (lenis.isStopped || lenis.isLocked) return false;
+    const path = event.composedPath ? event.composedPath() : [];
+    return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
+  }
   function initScrollEngine(stepCount) {
     const surface = document.querySelector(".scroll-surface");
     const cardStack = document.querySelector(".card-stack");
@@ -5195,7 +5222,7 @@
       // scroll sensitivity
       autoRaf: false,
       // we drive the rAF loop manually
-      prevent: (node) => node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null
+      prevent: _isInsidePanel
       // let wheel events pass through inside open panels
     });
     snap = new Snap(lenis, {
@@ -5223,11 +5250,13 @@
     });
     registerSnapPoints(totalPositions);
     cardStackEl = cardStack;
-    lenis.on("virtual-scroll", () => {
+    lenis.on("virtual-scroll", (payload) => {
       cardStack.classList.add("is-scrubbing");
-      navTarget = null;
-      keyboardNavInFlight = false;
-      navToken = 0;
+      if (_isScrollTakeover(payload)) {
+        navTarget = null;
+        keyboardNavInFlight = false;
+        if (navToken === navTargetToken) navToken = 0;
+      }
       armScrubEnd();
     });
     lenis.on("scroll", (l) => {

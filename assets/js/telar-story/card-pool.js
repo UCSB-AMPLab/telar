@@ -1211,6 +1211,52 @@ export function reconcileStackForJump(targetIndex) {
 }
 
 /**
+ * Put the viewer plates in the state a walk to this step would have left them.
+ *
+ * The companion to `reconcileStackForJump`, and the same invariant one layer
+ * back: every plate but the one the target step is drawn on belongs off screen
+ * below at `translateY(100%)`, which is where a walk writes it as the reader
+ * leaves it. A jump crosses many steps at once and writes nothing, so a plate
+ * the reader walked onto earlier keeps the inline `translateY(0)` that opened
+ * it.
+ *
+ * Dropping `is-active` does not close it. That class carries `translateY(0)`
+ * as well, so removing it hands the plate to a rule of lower weight than the
+ * inline transform already holding it open, and the plate does not move. What
+ * follows depends only on whether the target's plate covers it — which an
+ * opaque full-viewport plate above it in the z-plan does, and one below it does
+ * not. An audio plate is the case where it shows: its waveform is drawn over
+ * the plate's own background, so a jump back across an audio step leaves it
+ * across the screen.
+ *
+ * A plate being closed is also a plate being left, so the media on it is stood
+ * down here exactly as `_swapPlatesBackward` stands it down on a walk.
+ *
+ * @param {number} targetIndex - Step index the jump lands on
+ */
+export function reconcilePlatesForJump(targetIndex) {
+  const targetScene = state.stepToScene[targetIndex];
+  const moved = [];
+
+  for (const [sceneIndex, plate] of Object.entries(state.viewerPlates || {})) {
+    if (!plate || Number(sceneIndex) === targetScene) continue;
+
+    plate.classList.remove('is-active');
+    plate.style.transition = 'none';
+    plate.style.transform = 'translateY(100%)';
+    if (plate.classList.contains('video-plate')) deactivateVideoCard(plate);
+    else if (plate.classList.contains('audio-plate')) deactivateAudioCard(plate);
+    moved.push(plate);
+  }
+
+  // One forced layout for the whole set, so a story pays for its plates once.
+  if (moved.length) {
+    void moved[0].offsetHeight;  // force reflow
+    for (const plate of moved) plate.style.transition = '';
+  }
+}
+
+/**
  * Bring the card a backward move is about to activate into its resting place
  * without animating it.
  *
