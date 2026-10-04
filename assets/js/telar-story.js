@@ -3926,10 +3926,7 @@
     return near.concat(rest);
   }
   function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
-    const C = Math.round(measureControlsBottom(SIDE_CARD_CONTROLS));
-    const pad = mediaPadding(W, H);
-    const band = C + pad;
-    const ceiling = sideCardCeiling({ H, W, C, T: getCardLandscapeMaxHeight(), fraction });
+    const { band, pad, ceiling } = sideCardBand({ W, H, fraction });
     const topOf = (card) => sideCardTop({
       H,
       cardH: card.offsetHeight,
@@ -3945,6 +3942,12 @@
       card.style.setProperty("top", `${topOf(card)}px`, "important");
     }
     return { band, pad, ceiling, topOf };
+  }
+  function sideCardBand({ W, H, fraction }) {
+    const C = Math.round(measureControlsBottom(SIDE_CARD_CONTROLS));
+    const pad = mediaPadding(W, H);
+    const ceiling = sideCardCeiling({ H, W, C, T: getCardLandscapeMaxHeight(), fraction });
+    return { C, pad, band: C + pad, ceiling };
   }
   function timeGeometryPass(pass) {
     const perf = typeof performance !== "undefined" ? performance : null;
@@ -6195,11 +6198,12 @@
     };
   }
   var SIDE_CARD_VIEWPORT_FRACTION = 0.8;
-  function _sizeCardToContent(card, viewportH, runPos, peekHeight) {
+  function _sizeCardToContent(card, viewportH, runPos, peekHeight, bandGeo = null) {
     card.style.height = "";
-    card.style.removeProperty("max-height");
+    if (bandGeo) card.style.maxHeight = `${bandGeo.ceiling}px`;
+    else card.style.removeProperty("max-height");
     const cardH = card.offsetHeight;
-    const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+    const topPx = bandGeo ? sideCardTop({ H: viewportH, cardH, runPos, peek: peekHeight, band: bandGeo.band, pad: bandGeo.pad }) : computeCardTop(viewportH, cardH, runPos, peekHeight);
     card.style.setProperty("top", `${topPx}px`, "important");
   }
   function _recomputeCardGeometry(viewportW, viewportH, changed = null) {
@@ -6217,11 +6221,12 @@
       fraction: SIDE_CARD_VIEWPORT_FRACTION,
       activeIndex: state.currentIndex
     }) : null;
+    const phoneBand = landscapeSideCard && !sideFit && getLayoutMode() === "vertical" && viewportW > viewportH ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION }) : null;
     for (const card of sideFit ? [] : cards) {
       clearAnswerFit(card);
       const runPos = parseInt(card.dataset.runPosition, 10) || 0;
       if (landscapeSideCard) {
-        _sizeCardToContent(card, viewportH, runPos, peekHeight);
+        _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
       } else if (getLayoutMode() === "vertical") {
         card.style.removeProperty("top");
         card.style.removeProperty("max-height");
@@ -6230,6 +6235,7 @@
         const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
         const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
         card.style.setProperty("top", `${topPx}px`, "important");
+        card.style.removeProperty("max-height");
         card.style.height = `${cardH}px`;
       }
     }

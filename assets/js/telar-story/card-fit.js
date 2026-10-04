@@ -4,8 +4,9 @@
  * The side card on a horizontal layout takes the height its content needs,
  * under a ceiling, and clears the controls at the top of the window. This
  * module holds that geometry, for the fit model (card-height.js) at every
- * window height; the landscape phone, the portrait bottom card and the fixed
- * model keep their own, in card-pool.js.
+ * window height; the portrait bottom card and the fixed model keep their own,
+ * in card-pool.js. A landscape phone's card is placed in the same band, sized
+ * by its content and scrolled by the browser.
  *
  * Ceiling. The card's top clears the lowest of the top controls, the embed
  * banner included, by one padding, and its bottom stays one padding above the
@@ -291,10 +292,7 @@ export function fitOrder(cards, activeIndex) {
  *   top under it, which a media scene's card beside its player keeps
  */
 export function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
-  const C = Math.round(measureControlsBottom(SIDE_CARD_CONTROLS));
-  const pad = mediaPadding(W, H);
-  const band = C + pad;
-  const ceiling = sideCardCeiling({ H, W, C, T: getCardLandscapeMaxHeight(), fraction });
+  const { band, pad, ceiling } = sideCardBand({ W, H, fraction });
 
   const topOf = (card) => sideCardTop({
     H, cardH: card.offsetHeight, runPos: parseInt(card.dataset.runPosition, 10) || 0,
@@ -307,6 +305,24 @@ export function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
     card.style.setProperty('top', `${topOf(card)}px`, 'important');
   }
   return { band, pad, ceiling, topOf };
+}
+
+/**
+ * The band under the top controls and the ceiling above it, for one window.
+ * The fit model and a landscape phone's card, which is sized by its content
+ * and scrolls itself, are placed by the same band.
+ *
+ * @param {Object} g
+ * @param {number} g.W - Viewport width in px
+ * @param {number} g.H - Viewport height in px
+ * @param {number} g.fraction - The side card's share of a tall viewport
+ * @returns {{ C: number, pad: number, band: number, ceiling: number }}
+ */
+export function sideCardBand({ W, H, fraction }) {
+  const C = Math.round(measureControlsBottom(SIDE_CARD_CONTROLS));
+  const pad = mediaPadding(W, H);
+  const ceiling = sideCardCeiling({ H, W, C, T: getCardLandscapeMaxHeight(), fraction });
+  return { C, pad, band: C + pad, ceiling };
 }
 
 /**

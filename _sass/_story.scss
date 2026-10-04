@@ -1164,31 +1164,33 @@
     //     el viewport corto en horizontal debe ajustar la tarjeta a su contenido y
     //     card-pool la centra según la altura medida.
     height: auto !important;
-    // EN: The cap is the viewport less the card's inset at top and bottom, so
-    //     the side card can use nearly the whole short viewport. Above the cap
-    //     a landscape phone's card scrolls inside. On a horizontal layout the
-    //     cap stands only until card-pool.js runs: card-fit.js then writes the
-    //     ceiling that keeps the card clear of the top controls and shrinks
-    //     the answer to fit, and card-scroll.js scrolls the card itself where
-    //     even that is not enough. A cap of 40dvh is the portrait bottom
-    //     card's share of a tall viewport and leaves a landscape card far too
-    //     short; no cap at all lets the content-height card grow past both
-    //     edges of a 430px viewport, from where nothing brings it back.
+    // EN: The cap is the viewport less the card's inset at top and bottom, so the
+    //     side card can use nearly the whole short viewport. It is the fallback
+    //     before card-pool.js has run its geometry: once it has, an inline
+    //     max-height overrides it. On a horizontal layout card-fit.js writes the
+    //     ceiling that keeps the card clear of the top controls and shrinks the
+    //     answer to fit, and card-scroll.js scrolls the card itself where even
+    //     that is not enough. On a landscape phone card-pool.js writes the same
+    //     ceiling and the card scrolls inside itself past it. A cap of 40dvh is
+    //     the portrait bottom card's share of a tall viewport and leaves a
+    //     landscape card far too short; no cap at all lets the content-height card
+    //     grow past both edges of a 430px viewport, from where nothing brings it
+    //     back.
     // ES: El tope es la altura del viewport menos la separación de la tarjeta
     //     arriba y abajo, así que la tarjeta lateral puede ocupar casi toda la
-    //     altura de un viewport tan bajo. Si el contenido supera el tope, en
-    //     un teléfono en horizontal se desplaza dentro de la tarjeta. En el
-    //     diseño horizontal, este tope rige solo hasta que se ejecuta
-    //     card-pool.js: luego card-fit.js escribe el límite que mantiene la
-    //     tarjeta por debajo de los controles superiores, reduce la letra de
-    //     la respuesta para que quepa, y cuando ni así alcanza,
-    //     card-scroll.js desplaza el contenido dentro de la propia tarjeta. Un
-    //     tope de 40dvh es la porción que le toca a la tarjeta inferior con la
-    //     pantalla en vertical, en un viewport alto; con ese tope, la tarjeta
-    //     en un teléfono en horizontal queda demasiado corta; sin tope alguno,
-    //     la tarjeta de altura según contenido crece hasta salirse por arriba
-    //     y por abajo de un viewport de 430px, y nada la devuelve al área
-    //     visible.
+    //     altura de un viewport tan bajo. Es el valor de reserva mientras
+    //     card-pool.js no ha calculado la geometría; después, un `max-height`
+    //     en línea lo reemplaza. En el diseño horizontal, card-fit.js escribe
+    //     el límite que mantiene la tarjeta por debajo de los controles
+    //     superiores y reduce la letra de la respuesta para que quepa, y
+    //     card-scroll.js desplaza el contenido dentro de la propia tarjeta
+    //     cuando ni así alcanza. En un teléfono en horizontal, card-pool.js
+    //     escribe ese mismo límite, y si el contenido lo supera, se desplaza
+    //     dentro de la tarjeta. Un tope de 40dvh es la porción de un viewport
+    //     alto que le toca a la tarjeta inferior en vertical, y deja la
+    //     tarjeta lateral demasiado corta; sin tope alguno, la tarjeta de
+    //     altura según contenido crece hasta salirse por arriba y por abajo
+    //     de un viewport de 430px, de donde nada la devuelve al área visible.
     max-height: calc(100vh - 2rem);
 
     // The dvh value sits inside the landscape block, in the same shape as the

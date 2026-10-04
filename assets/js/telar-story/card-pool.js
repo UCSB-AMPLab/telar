@@ -86,7 +86,7 @@ import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } 
 import { isFitHeight, applyCardMotionDuration } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
 import { arrangeMediaScene, measureTopBand } from './media-arrangement.js';
-import { fitSideCards, clearAnswerFit, timeGeometryPass, watchCardContent } from './card-fit.js';
+import { fitSideCards, sideCardBand, sideCardTop, clearAnswerFit, timeGeometryPass, watchCardContent } from './card-fit.js';
 import { attachCardScroll, resetCardScroll } from './card-scroll.js';
 import { MediaPlate } from './plates/media-plate.js';
 import { VideoPlate } from './plates/video-plate.js';
@@ -564,12 +564,18 @@ const SIDE_CARD_VIEWPORT_FRACTION = 0.80;
  * @param {number} viewportH - Current viewport height in px
  * @param {number} runPos - Position within this object's step sequence
  * @param {number} peekHeight - Pixels each successive card settles lower
+ * @param {{ band: number, pad: number, ceiling: number }|null} [bandGeo] - The
+ *   band under the top controls, for a landscape phone's card: the card is
+ *   held under its ceiling and placed below the band
  */
-function _sizeCardToContent(card, viewportH, runPos, peekHeight) {
+function _sizeCardToContent(card, viewportH, runPos, peekHeight, bandGeo = null) {
   card.style.height = '';
-  card.style.removeProperty('max-height');
+  if (bandGeo) card.style.maxHeight = `${bandGeo.ceiling}px`;
+  else card.style.removeProperty('max-height');
   const cardH = card.offsetHeight;
-  const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+  const topPx = bandGeo
+    ? sideCardTop({ H: viewportH, cardH, runPos, peek: peekHeight, band: bandGeo.band, pad: bandGeo.pad })
+    : computeCardTop(viewportH, cardH, runPos, peekHeight);
   card.style.setProperty('top', `${topPx}px`, 'important');
 }
 
@@ -603,15 +609,25 @@ function _geometryPass(viewportW, viewportH, changed) {
   const side = sideFit ? fitSideCards(changed || cards, { W: viewportW, H: viewportH,
     peek: peekHeight, fraction: SIDE_CARD_VIEWPORT_FRACTION, activeIndex: state.currentIndex }) : null;
 
+  // A landscape phone's card clears the top controls by the same band. A
+  // short portrait window is not a phone held sideways and keeps the card
+  // the CSS rule gives it.
+  const phoneBand = landscapeSideCard && !sideFit && getLayoutMode() === 'vertical'
+    && viewportW > viewportH
+    ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION })
+    : null;
+
   for (const card of sideFit ? [] : cards) {
     clearAnswerFit(card);
     const runPos = parseInt(card.dataset.runPosition, 10) || 0;
 
     if (landscapeSideCard) {
-      // A landscape phone, or a short window under the fixed model: the CSS
-      // rule sets `height: auto !important` and the ceiling, so the card is
-      // sized to its content and centred by the height it renders at.
-      _sizeCardToContent(card, viewportH, runPos, peekHeight);
+      // A landscape phone, a short portrait window, or a short window under the
+      // fixed model: the CSS rule sets `height: auto !important` and the
+      // ceiling, so the card is sized to its content and centred by the height
+      // it renders at. A phone's ceiling and top come from the band under the
+      // top controls.
+      _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
     } else if (getLayoutMode() === 'vertical') {
       // getLayoutMode() reads the live matchMedia (self-initialising), so this is
       // correct even at the init-time call below — before layout-mode.js has
@@ -629,6 +645,7 @@ function _geometryPass(viewportW, viewportH, changed) {
       const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
       const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
       card.style.setProperty('top', `${topPx}px`, 'important');
+      card.style.removeProperty('max-height');
       card.style.height = `${cardH}px`;
     }
   }
