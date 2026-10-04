@@ -59,6 +59,7 @@ Version: v1.8.0
 import html
 import re
 from pathlib import Path
+from typing import NamedTuple, Optional
 from telar.code_spans import code_elements, code_regions, overlaps
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
@@ -344,6 +345,75 @@ def _glossary_callout(match, glossary_terms, lower_map, warnings_list,
     return ' '.join(line.strip() for line in rendered.splitlines() if line.strip())
 
 
+class GlossaryLink(NamedTuple):
+    """One `[[term]]` or `[[term|display]]` in a text: where it starts and
+    ends, and its two parts as the syntax reads them, `display` being None
+    for a link without a `|`."""
+    start: int
+    end: int
+    term: str
+    display: Optional[str]
+
+
+_LINK_DELIMITER_RE = re.compile(r'[|\]]')
+
+
+def _link_part(text, start, end):
+    """A part of a link, stripped of whitespace; a part that is nothing but
+    whitespace is its last character, which the syntax keeps as the part."""
+    part = text[start:end]
+    return part.strip() or part[-1]
+
+
+def find_glossary_links(text):
+    """The glossary links in *text*, in order and without overlap.
+
+    The links are exactly the matches of
+    `\\[\\[\\s*([^|\\]]+?)(?:\\s*\\|\\s*([^|\\]]+?))?\\s*\\]\\]` under
+    `re.finditer`, which is how the Compositor reads the syntax, so the
+    two agree on every text: `[[[term]]]` is the entry `[term`, and
+    `[[term [note]]]` the entry `term [note`. Neither part can hold `|` or
+    `]`, so a link opened at `[[` ends at the first `]]` or `|` after it,
+    and a link with a `|` at the first `]]` after that. Each is found by
+    one search, reused for every opening that shares it, so the text is
+    read in linear time, where the expression's backtracking is quadratic
+    on a run of `[` and worse on whitespace before a `|`.
+    """
+    length = len(text)
+
+    def delimiter_from(index):
+        match = _LINK_DELIMITER_RE.search(text, index)
+        return match.start() if match else length
+
+    # The first delimiter at or after `searched_from` is `bar`; every
+    # opening whose term starts in that range shares it.
+    searched_from = bar = -1
+    # The delimiter after the `|` at `after_bar`, which ends the display.
+    after_bar = close = -1
+
+    start = text.find('[[')
+    while start != -1:
+        term_start = start + 2
+        if not searched_from <= term_start <= bar:
+            searched_from, bar = term_start, delimiter_from(term_start)
+        link = None
+        if term_start < bar < length:
+            if text[bar] == ']':
+                if text.startswith(']]', bar):
+                    link = GlossaryLink(start, bar + 2, _link_part(text, term_start, bar), None)
+            else:
+                if after_bar != bar:
+                    after_bar, close = bar, delimiter_from(bar + 1)
+                if close > bar + 1 and text.startswith(']]', close):
+                    link = GlossaryLink(start, close + 2, _link_part(text, term_start, bar),
+                                        _link_part(text, bar + 1, close))
+        if link is None:
+            start = text.find('[[', start + 1)
+        else:
+            yield link
+            start = text.find('[[', link.end)
+
+
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None,
                            base_url=None, markdown=False):
     """
@@ -378,18 +448,14 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # glossary page system would already collide on such keys.
     glossary_lower_map = {key.lower(): key for key in (glossary_terms or {})}
 
-    # Pattern: [[display|term]] or [[term]] with flexible spacing
-    # Captures: (optional_display) | (term_id)
-    pattern = r'\[\[\s*([^|\]]+?)(?:\s*\|\s*([^|\]]+?))?\s*\]\]'
-
-    def replace_glossary_link(match):
+    def replace_glossary_link(link):
         # If pipe is present: [[term|display]], else [[term]]
-        if match.group(2):  # Has pipe
-            raw_term_id = match.group(1).strip()
-            display_text = match.group(2).strip()
+        if link.display:  # Has pipe
+            raw_term_id = link.term.strip()
+            display_text = link.display.strip()
             has_custom_display = True
         else:  # No pipe
-            raw_term_id = match.group(1).strip()
+            raw_term_id = link.term.strip()
             display_text = None
             has_custom_display = False
 
@@ -419,7 +485,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
                     f'{html.escape(html.unescape(display_text))}</a>')
         else:
             # Invalid term - create error indicator (author's original casing preserved)
-            return _missing_entry(raw_term_id, match.group(1), warnings_list,
+            return _missing_entry(raw_term_id, link.term, warnings_list,
                                   step_num, layer_name)
 
     # Text is linked, a tag never: [[term]] inside an attribute (an image's
@@ -432,14 +498,14 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
     literal = overlaps(tags + (code_regions(text) if markdown else code_elements(text)))
 
-    def link_outside_tags(match):
-        start = match.start()
-        if literal(start, start + 1):
-            return match.group(0)
-        return replace_glossary_link(match)
-
     if glossary_terms:
-        text = re.sub(pattern, link_outside_tags, text)
+        pieces, written = [], 0
+        for link in find_glossary_links(text):
+            if literal(link.start, link.start + 1):
+                continue
+            pieces += [text[written:link.start], replace_glossary_link(link)]
+            written = link.end
+        text = ''.join(pieces) + text[written:]
     # After the links: the marker an unknown callout leaves reads as
     # [[entry]], which the link pass would report a second time.
     return _CALLOUT_SLOT_RE.sub(
