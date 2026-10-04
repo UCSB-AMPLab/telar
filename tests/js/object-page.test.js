@@ -18,7 +18,8 @@ vi.mock('../../assets/js/telar-story/iiif-viewer.js', () => {
       IiifViewer.last = this;
       this.options = options;
       this.pages = IiifViewer.pages;
-      this.currentPage = 0;
+      // The real wrapper clamps startPage to the manifest's pages.
+      this.currentPage = Math.max(0, Math.min(options.startPage ?? 0, this.pages.length - 1));
       this.viewer = {
         handlers: {},
         addHandler(name, fn) { this.handlers[name] = fn; },
@@ -41,7 +42,7 @@ import { copyWithFeedback, CHECK_ICON } from '../../assets/js/object-page/copy-f
 import { initClipPanelToggle, initClipCopyButtons } from '../../assets/js/object-page/clip-panel.js';
 import { videoProvider, initVideoEmbed, initClipPicker, initCopyEmbedUrl } from '../../assets/js/object-page/video-object.js';
 import { formatTime, controlsMarkup, initAudioPlayer } from '../../assets/js/object-page/audio-object.js';
-import { manifestUrlFor, initImageViewer, initCoordinatePanel } from '../../assets/js/object-page/image-object.js';
+import { manifestUrlFor, requestedPage, addressWithPage, initImageViewer, initCoordinatePanel } from '../../assets/js/object-page/image-object.js';
 import { IiifViewer } from '../../assets/js/telar-story/iiif-viewer.js';
 
 const LANG = {
@@ -353,6 +354,55 @@ describe('manifestUrlFor', () => {
   });
 });
 
+describe('requestedPage', () => {
+  it.each([
+    ['?page=3', 2],
+    ['?page=1', 0],
+    ['', 0],
+    ['?other=4', 0],
+    ['?page=', 0],
+    ['?page=0', 0],
+    ['?page=-2', 0],
+    ['?page=2.5', 0],
+    ['?page=3abc', 0],
+    ['?page=abc', 0],
+    ['?page=%33', 2],
+    ['?page=03', 2],
+    ['?page=+3', 0],
+    ['?page=4&page=7', 3],
+    ['page=5', 4],
+  ])('%s asks for page index %i', (search, page0) => {
+    expect(requestedPage(search)).toBe(page0);
+  });
+});
+
+describe('addressWithPage', () => {
+  const base = 'https://example.org/telar/objects/leyes/';
+
+  it('names pages after the first with a 1-indexed page parameter', () => {
+    expect(addressWithPage(base, 2, 5)).toBe(base + '?page=3');
+  });
+
+  it('drops the page parameter for the first page', () => {
+    expect(addressWithPage(base + '?page=3', 0, 5)).toBe(base);
+  });
+
+  it('keeps other parameters as written, and the hash', () => {
+    expect(addressWithPage(base + '?lang=es&q=a%20b&page=2#notes', 3, 5))
+      .toBe(base + '?lang=es&q=a%20b&page=4#notes');
+    expect(addressWithPage(base + '?page=2&lang=es#notes', 0, 5))
+      .toBe(base + '?lang=es#notes');
+  });
+
+  it('replaces every page parameter, however it is encoded', () => {
+    expect(addressWithPage(base + '?page=abc&%70age=9&x=1', 1, 5)).toBe(base + '?x=1&page=2');
+  });
+
+  it('leaves a single-page object\'s address alone', () => {
+    expect(addressWithPage(base + '?page=3', 0, 1)).toBe(base + '?page=3');
+  });
+});
+
 describe('initImageViewer', () => {
   beforeEach(() => {
     document.body.innerHTML = `
@@ -379,6 +429,59 @@ describe('initImageViewer', () => {
     expect(document.querySelector('.coord-page-row').style.display).toBe('flex');
     expect(document.querySelector('.coord-instructions-multi').style.display).toBe('block');
     expect(document.getElementById('coord-page').textContent).toBe('1');
+  });
+
+  describe('the page in the address', () => {
+    const start = window.location.href;
+    afterEach(() => { window.history.replaceState(null, '', start); });
+
+    const at = (search) => window.history.replaceState(null, '', '/objects/leyes/' + search);
+    const address = () => window.location.pathname + window.location.search + window.location.hash;
+
+    it('opens the page the address asks for, clamped by the wrapper', async () => {
+      IiifViewer.pages = [{}, {}, {}, {}];
+      at('?page=3');
+      await initImageViewer(data());
+      expect(IiifViewer.last.options.startPage).toBe(2);
+      expect(document.getElementById('coord-page').textContent).toBe('3');
+      expect(address()).toBe('/objects/leyes/?page=3');
+
+      at('?page=99');
+      await initImageViewer(data());
+      expect(document.getElementById('coord-page').textContent).toBe('4');
+      expect(address()).toBe('/objects/leyes/?page=4');
+    });
+
+    it('rewrites a malformed value to the page shown', async () => {
+      IiifViewer.pages = [{}, {}, {}];
+      at('?page=abc&lang=es#x');
+      await initImageViewer(data());
+      expect(IiifViewer.last.options.startPage).toBe(0);
+      expect(address()).toBe('/objects/leyes/?lang=es#x');
+    });
+
+    it('follows each page shown, without adding history entries', async () => {
+      IiifViewer.pages = [{}, {}, {}];
+      at('');
+      const entries = window.history.length;
+      await initImageViewer(data());
+      const wrapper = IiifViewer.last;
+      wrapper.currentPage = 1;
+      wrapper.options.onPageShown(1);
+      expect(address()).toBe('/objects/leyes/?page=2');
+      wrapper.currentPage = 0;
+      wrapper.options.onPageShown(0);
+      expect(address()).toBe('/objects/leyes/');
+      expect(window.history.length).toBe(entries);
+    });
+
+    it('leaves a single-page object\'s address alone', async () => {
+      IiifViewer.pages = [{}];
+      at('?page=3');
+      await initImageViewer(data());
+      IiifViewer.last.options.onPageShown(0);
+      expect(address()).toBe('/objects/leyes/?page=3');
+    });
   });
 
   it('logs and stops when the wrapper fails to initialise', async () => {

@@ -2554,7 +2554,7 @@
     /**
      * @param {IiifViewerOptions} options
      */
-    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false }) {
+    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false, onPageShown = null }) {
       if (!window.OpenSeadragon) {
         throw new Error("IiifViewer: window.OpenSeadragon not loaded \u2014 vendor <script> ordering issue?");
       }
@@ -2566,6 +2566,7 @@
       this.startPage = startPage;
       this.showChrome = showChrome;
       this.allowZoomGestures = allowZoomGestures;
+      this._onPageShown = onPageShown;
       this.pages = [];
       this.currentPage = startPage;
       this.viewer = null;
@@ -2607,9 +2608,10 @@
           this.viewer.gestureSettingsMouse.clickToZoom = false;
         }
         await new Promise((resolve, reject) => {
-          const onFirstOpen = () => {
+          const onFirstOpen = (event) => {
             this.viewer.removeHandler("open", onFirstOpen);
             this.viewer.removeHandler("open-failed", onOpenFailed);
+            this._reportPageShown(event);
             requestAnimationFrame(resolve);
           };
           const onOpenFailed = (event) => {
@@ -2620,9 +2622,10 @@
           this.viewer.addHandler("open", onFirstOpen);
           this.viewer.addHandler("open-failed", onOpenFailed);
         });
-        this.viewer.addHandler("open", () => {
+        this.viewer.addHandler("open", (event) => {
           this._pageTransitioning = false;
           this._updateChrome();
+          this._reportPageShown(event);
         });
         this.viewer.addHandler("open-failed", () => {
           this._pageTransitioning = false;
@@ -2651,6 +2654,22 @@
       this._pageTransitioning = true;
       this.viewer.open(this.pages[n].tileSource);
       this._updateChrome();
+    }
+    /**
+     * Tell the `onPageShown` caller which page an OSD 'open' event showed.
+     *
+     * OpenSeadragon 6.0.2 drops an open superseded by a later `setPage`
+     * without raising 'open' for it, so after two quick page changes the only
+     * 'open' is the later page's. The source check keeps the report tied to
+     * the page asked for last should an 'open' arrive for any other source.
+     *
+     * @param {{source?: *}} [event] - OSD 'open' event.
+     */
+    _reportPageShown(event) {
+      if (!this._onPageShown || this._destroyed) return;
+      const page = this.pages[this.currentPage];
+      if (!page || !event || event.source !== page.tileSource) return;
+      this._onPageShown(this.currentPage);
     }
     /**
      * Tear down the viewer and remove injected chrome.

@@ -403,7 +403,7 @@
     /**
      * @param {IiifViewerOptions} options
      */
-    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false }) {
+    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false, onPageShown = null }) {
       if (!window.OpenSeadragon) {
         throw new Error("IiifViewer: window.OpenSeadragon not loaded \u2014 vendor <script> ordering issue?");
       }
@@ -415,6 +415,7 @@
       this.startPage = startPage;
       this.showChrome = showChrome;
       this.allowZoomGestures = allowZoomGestures;
+      this._onPageShown = onPageShown;
       this.pages = [];
       this.currentPage = startPage;
       this.viewer = null;
@@ -456,9 +457,10 @@
           this.viewer.gestureSettingsMouse.clickToZoom = false;
         }
         await new Promise((resolve, reject) => {
-          const onFirstOpen = () => {
+          const onFirstOpen = (event) => {
             this.viewer.removeHandler("open", onFirstOpen);
             this.viewer.removeHandler("open-failed", onOpenFailed);
+            this._reportPageShown(event);
             requestAnimationFrame(resolve);
           };
           const onOpenFailed = (event) => {
@@ -469,9 +471,10 @@
           this.viewer.addHandler("open", onFirstOpen);
           this.viewer.addHandler("open-failed", onOpenFailed);
         });
-        this.viewer.addHandler("open", () => {
+        this.viewer.addHandler("open", (event) => {
           this._pageTransitioning = false;
           this._updateChrome();
+          this._reportPageShown(event);
         });
         this.viewer.addHandler("open-failed", () => {
           this._pageTransitioning = false;
@@ -500,6 +503,22 @@
       this._pageTransitioning = true;
       this.viewer.open(this.pages[n].tileSource);
       this._updateChrome();
+    }
+    /**
+     * Tell the `onPageShown` caller which page an OSD 'open' event showed.
+     *
+     * OpenSeadragon 6.0.2 drops an open superseded by a later `setPage`
+     * without raising 'open' for it, so after two quick page changes the only
+     * 'open' is the later page's. The source check keeps the report tied to
+     * the page asked for last should an 'open' arrive for any other source.
+     *
+     * @param {{source?: *}} [event] - OSD 'open' event.
+     */
+    _reportPageShown(event) {
+      if (!this._onPageShown || this._destroyed) return;
+      const page = this.pages[this.currentPage];
+      if (!page || !event || event.source !== page.tileSource) return;
+      this._onPageShown(this.currentPage);
     }
     /**
      * Tear down the viewer and remove injected chrome.
@@ -687,17 +706,42 @@
     if (data.objectId) return data.baseUrl + "/iiif/objects/" + data.objectId + "/manifest.json";
     return null;
   }
+  function requestedPage(search) {
+    const value = new URLSearchParams(search).get("page");
+    if (value === null || !/^[0-9]+$/.test(value)) return 0;
+    const page = parseInt(value, 10);
+    return page >= 1 ? page - 1 : 0;
+  }
+  function addressWithPage(href, page0, total) {
+    if (total <= 1) return href;
+    const url = new URL(href);
+    const kept = url.search.replace(/^\?/, "").split("&").filter(function(piece) {
+      if (piece === "") return false;
+      const keys = Array.from(new URLSearchParams(piece).keys());
+      return keys[0] !== "page";
+    });
+    if (page0 > 0) kept.push("page=" + (page0 + 1));
+    url.search = kept.length ? "?" + kept.join("&") : "";
+    return url.href;
+  }
   async function initImageViewer(data, doc = document) {
     const manifestUrl = manifestUrlFor(data);
     if (!manifestUrl) {
       console.error("No IIIF source specified");
       return;
     }
+    const win = doc.defaultView || window;
+    function writeAddress(page0) {
+      const next = addressWithPage(win.location.href, page0, wrapper.pages.length);
+      if (next !== win.location.href) win.history.replaceState(win.history.state, "", next);
+    }
     const wrapper = new IiifViewer({
       container: "#object-viewer",
       manifestUrl,
+      startPage: requestedPage(win.location.search),
       showChrome: true,
-      allowZoomGestures: true
+      allowZoomGestures: true,
+      onPageShown: writeAddress
     });
     try {
       await wrapper.ready;
@@ -707,6 +751,7 @@
     }
     const isMultiPage = wrapper.pages.length > 1;
     if (isMultiPage) {
+      writeAddress(wrapper.currentPage);
       doc.getElementById("object-viewer").classList.add("multipage");
       const pageRows = doc.querySelectorAll(".coord-page-row");
       pageRows.forEach(function(el) {
