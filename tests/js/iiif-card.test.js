@@ -17,14 +17,20 @@
  *   7. Null cardBox fallback: computeFocalTarget falls back to
  *      _defaultCardBox for both layouts, including the CSS-derived vertical
  *      top edge.
+ *   8. framePlacement: an overview (zoom ≤ 1) centres the whole image in the
+ *      uncovered region whatever its x/y; any zoom above 1 places the authored
+ *      focal point exactly, so a settled framing changes at zoom 1; zoom ≥ 2
+ *      places it as pinned. blendPlacements moves continuously between two.
  *
  * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
-import { computeFocalTarget, _clampFocalPx, overviewPullFraction, OVERVIEW_MIN_FRACTION }
-  from '../../assets/js/telar-story/iiif-card.js';
+import {
+  computeFocalTarget, framePlacement, blendPlacements, _clampFocalPx, overviewPullFraction,
+  OVERVIEW_MIN_FRACTION,
+} from '../../assets/js/telar-story/iiif-card.js';
 
 // ── Viewport helpers ───────────────────────────────────────────────────────────
 
@@ -641,4 +647,198 @@ describe('overviewPullFraction', () => {
       previous = pull;
     }
   });
+});
+
+// ── framePlacement: where the image lands ─────────────────────────────────────
+//
+// An overview step shows the whole object, and it is centred in the uncovered
+// region: the authored x/y do not move it (ruled 26 September). Above zoom 1
+// the authored focal point is what is placed (ruled 27 September), so a step
+// frames exactly the x/y it was authored or captured at. Motion between two
+// steps either side of 1 is carried by blendPlacements, not by placing the
+// blended x/y/zoom.
+
+const DESKTOP = { vw: 1440, vh: 757, mode: 'horizontal', box: { x: 0, y: 0, w: 576, h: 757 } };
+const PHONE   = { vw: 375,  vh: 812, mode: 'vertical',   box: { x: 0, y: 487, w: 375, h: 325 } };
+
+function placeImage(layout, imgW, imgH, x, y, zoom) {
+  if (layout.mode === 'horizontal') setDesktopViewport(layout.vw, layout.vh);
+  else setMobileViewport(layout.vw, layout.vh);
+  const target = computeFocalTarget(x, y, zoom, imgW, imgH, layout.box, layout.mode);
+  const p = framePlacement(target, zoom, { width: layout.vw, height: layout.vh });
+  const left = p.anchorPx.x - p.anchorImg.x * p.s;
+  const top  = p.anchorPx.y - p.anchorImg.y * p.s;
+  const r = target.region;
+  return {
+    ...p,
+    left, top, right: left + imgW * p.s, bottom: top + imgH * p.s,
+    centre: { x: left + (imgW * p.s) / 2, y: top + (imgH * p.s) / 2 },
+    regionCentre: { x: r.x + r.w / 2, y: r.y + r.h / 2 },
+  };
+}
+
+describe('framePlacement — an overview is centred in the region', () => {
+  const IMAGES = { portrait: [1000, 2000], landscape: [3000, 2000], square: [2400, 2400] };
+  const FOCALS = [
+    [0, 0], [1, 0], [0, 1], [1, 1],            // corners
+    [0.04, 0.5], [0.96, 0.5], [0.5, 0.04], [0.5, 0.96],   // edges
+    [0.04, 0.9], [0.5, 0.5],
+  ];
+
+  for (const [layoutName, layout] of [['desktop side card', DESKTOP], ['phone bottom card', PHONE]]) {
+    for (const zoom of [1, 0.6, OVERVIEW_MIN_FRACTION]) {
+      it(`centres every image at zoom ${zoom} (${layoutName}), whatever the focal point`, () => {
+        const off = [];
+        for (const [name, [w, h]] of Object.entries(IMAGES)) {
+          for (const [x, y] of FOCALS) {
+            const p = placeImage(layout, w, h, x, y, zoom);
+            const dx = p.centre.x - p.regionCentre.x;
+            const dy = p.centre.y - p.regionCentre.y;
+            if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
+              off.push(`${name} (${x}, ${y}): ${dx.toFixed(2)}, ${dy.toFixed(2)}`);
+            }
+          }
+        }
+        expect(off).toEqual([]);
+      });
+    }
+  }
+
+  it('places the reported portrait step in the middle of the region, not at 993–1371', () => {
+    const p = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 1);
+    expect(p.left).toBeCloseTo(818.75, 6);
+    expect(p.right).toBeCloseTo(1197.25, 6);
+    expect(p.top).toBeCloseTo(0, 6);
+    expect(p.bottom).toBeCloseTo(757, 6);
+  });
+
+  it('keeps a landscape image at a corner focal inside the window at zoom 1', () => {
+    // Placed by its focal point, this image ran from 355.46 to 931.46 down a 757 px window.
+    const p = placeImage(DESKTOP, 3000, 2000, 0.96, 0.04, 1);
+    expect(p.left).toBeCloseTo(576, 6);
+    expect(p.right).toBeCloseTo(1440, 6);
+    expect(p.top).toBeCloseTo(90.5, 6);
+    expect(p.bottom).toBeCloseTo(666.5, 6);
+  });
+
+  it('does not change the overview scale', () => {
+    const p = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 0.6);
+    expect(p.s).toBeCloseTo((757 / 2000) * 0.6, 12);
+  });
+});
+
+describe('framePlacement — above zoom 1 the authored focal point is placed', () => {
+  const CASES = [
+    ['portrait, left edge', 1000, 2000, 0.04, 0.5],
+    ['landscape, top-right corner', 3000, 2000, 0.96, 0.04],
+    ['square, bottom-left corner', 2400, 2400, 0.02, 0.98],
+    ['landscape, off centre', 3000, 2000, 0.3, 0.35],
+  ];
+
+  for (const [name, w, h, x, y] of CASES) {
+    for (const zoom of [1.001, 1.5, 1.678, 1.999]) {
+      it(`places the focal point exactly at zoom ${zoom} (${name})`, () => {
+        expect(placeImage(DESKTOP, w, h, x, y, zoom).anchorImg).toEqual({ x: x * w, y: y * h });
+        expect(placeImage(PHONE, w, h, x, y, zoom).anchorImg).toEqual({ x: x * w, y: y * h });
+      });
+    }
+
+    it(`places the image centre at zoom 1 and below (${name})`, () => {
+      for (const zoom of [1, 0.999, 0.6]) {
+        expect(placeImage(DESKTOP, w, h, x, y, zoom).anchorImg).toEqual({ x: w / 2, y: h / 2 });
+      }
+    });
+
+    it(`moves the image by under a pixel from 0.999 to 1 (${name})`, () => {
+      const a = placeImage(DESKTOP, w, h, x, y, 0.999);
+      const b = placeImage(DESKTOP, w, h, x, y, 1);
+      expect(Math.hypot(b.centre.x - a.centre.x, b.centre.y - a.centre.y)).toBeLessThan(1);
+    });
+  }
+
+  it('puts the Paisajes step that lost its framing back on its x/y', () => {
+    // Capítulo 1, step 3 of the Paisajes Coloniales site: obj2 (2586 × 2102) at
+    // x 0.2836, y 0.3035, zoom 1.678. Blended towards the image centre, the
+    // placed point was 0.678 of the way to the focal point.
+    const p = placeImage(DESKTOP, 2586, 2102, 0.2836, 0.3035, 1.678);
+    expect(p.anchorImg).toEqual({ x: 0.2836 * 2586, y: 0.3035 * 2102 });
+    // The focal point is nearer the image's top-left corner than half the
+    // region, so the keep-circle clamp holds the image flush to the region's
+    // top-left edges rather than show background there.
+    expect(p.left).toBeCloseTo(576, 9);
+    expect(p.top).toBeCloseTo(0, 9);
+    expect(p.s).toBeCloseTo(0.5486290281000257, 12);
+  });
+
+  it('changes a settled framing at zoom 1 by the focal offset where the image does not fill an axis', () => {
+    // Ruled 27 September: a focal off centre is placed from just above 1, so
+    // the settled framing is not continuous at 1. The portrait image fills the
+    // region's height at 1 and not its width, so the jump is horizontal: the
+    // focal's offset from centre, 460 image px, at the fit scale 757 / 2000.
+    const a = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 1);
+    const b = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 1.001);
+    expect(b.centre.x - a.centre.x).toBeGreaterThan(170);
+    expect(Math.abs(b.centre.y - a.centre.y)).toBeLessThan(1);
+  });
+});
+
+describe('blendPlacements — the frames between two settled placements', () => {
+  const imageCorner = (p) => ({
+    x: p.anchorPx.x - p.anchorImg.x * p.s,
+    y: p.anchorPx.y - p.anchorImg.y * p.s,
+  });
+
+  it('is each placement exactly at its end', () => {
+    const a = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 1);
+    const b = placeImage(DESKTOP, 1000, 2000, 0.3, 0.7, 3);
+    for (const [t, p] of [[0, a], [1, b]]) {
+      const m = blendPlacements(a, b, t);
+      expect(m.s).toBe(p.s);
+      expect(imageCorner(m).x).toBeCloseTo(imageCorner(p).x, 9);
+      expect(imageCorner(m).y).toBeCloseTo(imageCorner(p).y, 9);
+    }
+  });
+
+  it('moves the image continuously between an overview and a detail', () => {
+    // Placing the blended x/y/zoom instead jumps where the zoom crosses 1, by
+    // the focal's offset at the fit scale; the ArrowDown trace on motion-check
+    // showed 119 px in one frame there.
+    const pairs = [
+      [[0.2, 0.3, 0.8], [0.32, 0.38, 3.2]],
+      [[0.2836, 0.3035, 1], [0.2836, 0.3035, 1.678]],
+      [[0.04, 0.5, 1], [0.04, 0.5, 1.5]],
+    ];
+    for (const [A, B] of pairs) {
+      const a = placeImage(DESKTOP, 1000, 2000, ...A);
+      const b = placeImage(DESKTOP, 1000, 2000, ...B);
+      let prev = imageCorner(a);
+      let worst = 0;
+      for (let i = 1; i <= 1000; i++) {
+        const c = imageCorner(blendPlacements(a, b, i / 1000));
+        worst = Math.max(worst, Math.hypot(c.x - prev.x, c.y - prev.y));
+        prev = c;
+      }
+      expect(worst, `${JSON.stringify(A)} → ${JSON.stringify(B)}`).toBeLessThan(1);
+    }
+  });
+});
+
+describe('framePlacement — zoom 2 and above place the focal point as before', () => {
+  // Pinned from the placement before overview centring; exact, not approximate.
+  const PINS = [
+    [DESKTOP, 1000, 2000, 0.04, 0.5, 2, 0.7987759839611691, 1008, 378.5],
+    [DESKTOP, 3000, 2000, 0.9, 0.1, 3, 0.8411111111111111, 1187.6666666666667, 168.22222222222223],
+    [DESKTOP, 1000, 2000, 0.3, 0.7, 6, 2.3963279518835074, 1008, 378.5],
+    [DESKTOP, 7920, 12237, 0.05, 0.05, 8, 0.5222037976374401, 782.7927038644262, 319.5103935844677],
+    [PHONE, 3000, 2000, 0.2, 0.8, 2.5, 0.3472222222222222, 187.5, 348.1111111111111],
+  ];
+
+  for (const [layout, w, h, x, y, zoom, s, fx, fy] of PINS) {
+    it(`${w}×${h} at (${x}, ${y}) zoom ${zoom}`, () => {
+      const p = placeImage(layout, w, h, x, y, zoom);
+      expect(p.anchorImg).toEqual({ x: x * w, y: y * h });
+      expect(p.s).toBe(s);
+      expect(p.anchorPx).toEqual({ x: fx, y: fy });
+    });
+  }
 });

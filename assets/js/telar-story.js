@@ -489,37 +489,22 @@
       y: axis(region.y, region.h, edges.eTop, edges.eBottom, ideal.y)
     };
   }
-  function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
-    const v = viewerCard.osdViewer;
-    const av = viewerCard.osdWrapper;
-    const source = v.world.getItemAt(0)?.source;
-    if (!source?.width || !source?.height) return false;
-    const imgW = source.width;
-    const imgH = source.height;
-    if (state.activeTitleCardIndex != null) return false;
-    const viewportW = window.innerWidth;
-    const viewportH = window.innerHeight;
-    const r = state.cardOverlayRect;
-    const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
-    const placementMode = _deriveCardPlacement(cardBox, viewportW, viewportH);
-    const target = computeFocalTarget(x, y, zoom, imgW, imgH, cardBox, placementMode);
-    if (!target) return false;
-    const { focalImg, diameterImg, region } = target;
-    const vp = v.viewport;
-    const OSD = window.OpenSeadragon;
-    const rect = av.containerEl.getBoundingClientRect();
+  function framePlacement(target, zoom, container) {
+    const { focalImg, diameterImg, region, imageW: imgW, imageH: imgH } = target;
+    const rect = container;
     const hasRegion = region.w > 0 && region.h > 0;
     const isOverview = zoom <= 1;
     const s_tgt = Math.min(region.w, region.h) / diameterImg;
     const s_fit = hasRegion ? Math.min(region.w / imgW, region.h / imgH) : Math.min(rect.width / imgW, rect.height / imgH);
     const pull = overviewPullFraction(zoom);
     const s = isOverview ? s_fit * pull : zoom < 2 ? s_fit + (zoom - 1) * (Math.max(s_tgt * (2 / zoom), s_fit) - s_fit) : Math.max(s_tgt, s_fit);
+    const anchorImg = _placedPoint(focalImg, imgW, imgH, zoom);
     const CB = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
     const edges = {
-      eLeft: focalImg.x * s,
-      eRight: (imgW - focalImg.x) * s,
-      eTop: focalImg.y * s,
-      eBottom: (imgH - focalImg.y) * s
+      eLeft: anchorImg.x * s,
+      eRight: (imgW - anchorImg.x) * s,
+      eTop: anchorImg.y * s,
+      eBottom: (imgH - anchorImg.y) * s
     };
     const radiusPx = Math.min(
       diameterImg * s / 2,
@@ -529,13 +514,59 @@
       edges.eBottom
     );
     const F = _clampFocalPx(region, edges, CB, radiusPx);
+    return { s, anchorImg, anchorPx: F };
+  }
+  function _placedPoint(focalImg, imgW, imgH, zoom) {
+    return zoom <= 1 ? { x: imgW / 2, y: imgH / 2 } : focalImg;
+  }
+  function blendPlacements(from, to, t) {
+    const corner = (p) => ({
+      x: p.anchorPx.x - p.anchorImg.x * p.s,
+      y: p.anchorPx.y - p.anchorImg.y * p.s
+    });
+    const a = corner(from);
+    const b = corner(to);
+    const mix = (u, v) => u + (v - u) * t;
+    return {
+      s: mix(from.s, to.s),
+      anchorImg: { x: 0, y: 0 },
+      anchorPx: { x: mix(a.x, b.x), y: mix(a.y, b.y) }
+    };
+  }
+  function _livePlacement(viewerCard, x, y, zoom) {
+    const source = viewerCard.osdViewer.world.getItemAt(0)?.source;
+    if (!source?.width || !source?.height) return null;
+    if (state.activeTitleCardIndex != null) return null;
+    const r = state.cardOverlayRect;
+    const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+    const placementMode = _deriveCardPlacement(cardBox, window.innerWidth, window.innerHeight);
+    const target = computeFocalTarget(x, y, zoom, source.width, source.height, cardBox, placementMode);
+    if (!target) return null;
+    const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
+    return { rect, placement: framePlacement(target, zoom, rect) };
+  }
+  function _applyPlacement(viewerCard, rect, { s, anchorImg, anchorPx: F }, immediate) {
+    const vp = viewerCard.osdViewer.viewport;
+    const OSD = window.OpenSeadragon;
     const visW = rect.width / s;
     const visH = rect.height / s;
-    const topLeft = { x: focalImg.x - F.x / s, y: focalImg.y - F.y / s };
+    const topLeft = { x: anchorImg.x - F.x / s, y: anchorImg.y - F.y / s };
     const targetVp = vp.imageToViewportRectangle(
       new OSD.Rect(topLeft.x, topLeft.y, visW, visH)
     );
     vp.fitBounds(targetVp, immediate);
+  }
+  function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
+    const live = _livePlacement(viewerCard, x, y, zoom);
+    if (!live) return false;
+    _applyPlacement(viewerCard, live.rect, live.placement, immediate);
+    return true;
+  }
+  function _applyBetween(viewerCard, a, b, t) {
+    const from = _livePlacement(viewerCard, a.x, a.y, a.zoom);
+    const to = _livePlacement(viewerCard, b.x, b.y, b.zoom);
+    if (!from || !to) return false;
+    _applyPlacement(viewerCard, to.rect, blendPlacements(from.placement, to.placement, t), true);
     return true;
   }
   function snapIiifToPosition(viewerCard, x, y, zoom) {
@@ -602,19 +633,24 @@
     const b = _authoredFraming(stepB);
     if (!a || !b) return;
     const atRest = progress < 1e-3;
-    const between = (from, to) => atRest ? from : from + (to - from) * progress;
-    const x = between(a.x, b.x);
-    const y = between(a.y, b.y);
-    const zoom = between(a.zoom, b.zoom);
     const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
     if (!viewerCard || !viewerCard.isReady) return;
     if (atRest) {
-      if (_restsAt(viewerCard.settledAt, stepIndex, x, y, zoom)) return;
-      viewerCard.settledAt = { step: stepIndex, x, y, zoom };
-    } else {
-      viewerCard.settledAt = null;
+      if (_restsAt(viewerCard.settledAt, stepIndex, a.x, a.y, a.zoom)) return;
+      viewerCard.settledAt = { step: stepIndex, ...a };
+      snapIiifToPosition(viewerCard, a.x, a.y, a.zoom);
+      return;
     }
-    snapIiifToPosition(viewerCard, x, y, zoom);
+    viewerCard.settledAt = null;
+    _travel(viewerCard, a, b, progress);
+  }
+  function _travel(viewerCard, a, b, t) {
+    if (a.zoom <= 1 !== b.zoom <= 1) {
+      _applyBetween(viewerCard, a, b, t);
+      return;
+    }
+    const along = (from, to) => from + (to - from) * t;
+    snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), along(a.zoom, b.zoom));
   }
   function reSnapActiveViewer() {
     const viewerCard = Object.values(state.viewerPlates).find(

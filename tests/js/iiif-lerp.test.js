@@ -20,7 +20,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
-import { makePlate } from './iiif-plate-helpers.js';
+import { makePlate, FAKE_CONTAINER } from './iiif-plate-helpers.js';
 
 let fitBounds;
 
@@ -88,6 +88,56 @@ describe('lerpIiifPosition — moving between two steps on one object', () => {
     const late = framedCentre();
 
     expect(late.x).toBeGreaterThan(early.x);
+  });
+});
+
+// ── Across zoom 1 ───────────────────────────────────────────────────────────
+
+describe('lerpIiifPosition — between an overview and a detail', () => {
+  // An overview places the image centre and a detail its focal point, so the
+  // viewer is moved between the two settled placements. Traced on motion-check
+  // with this pair, placing the interpolated x/y/zoom moved the image 119 px in
+  // the one frame where the zoom crossed 1.
+  const stepsData = [makeStep('fig1', 0.2, 0.3, 0.8), makeStep('fig1', 0.32, 0.38, 3.2)];
+
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
+  });
+
+  /** The image's top-left corner on screen and its scale, from the last frame. */
+  function framedImage() {
+    const rect = fitBounds.mock.calls.at(-1)[0];
+    const s = FAKE_CONTAINER.width / rect.width;
+    return { x: -rect.x * s, y: -rect.y * s, s };
+  }
+
+  function frameAt(stepIndex, progress, steps = stepsData) {
+    state.viewerPlates[0].settledAt = null;
+    lerpIiifPosition(stepIndex, progress, steps);
+    return framedImage();
+  }
+
+  it('moves the image by under a pixel per thousandth of the scroll, whichever way', () => {
+    for (const steps of [stepsData, [...stepsData].reverse()]) {
+      let prev = frameAt(0, 0, steps);
+      let worst = 0;
+      for (let i = 1; i <= 1000; i++) {
+        const cur = i < 1000 ? frameAt(0, i / 1000, steps) : frameAt(0, 0, [steps[1], steps[1]]);
+        worst = Math.max(worst, Math.hypot(cur.x - prev.x, cur.y - prev.y));
+        prev = cur;
+      }
+      expect(worst).toBeLessThan(1);
+    }
+  });
+
+  it('arrives at each step on the framing the step settles on', () => {
+    const settledA = frameAt(0, 0);
+    const settledB = frameAt(0, 0, [stepsData[1], stepsData[1]]);
+    const nearA = frameAt(0, 0.001);
+    const nearB = frameAt(0, 0.999);
+    expect(Math.hypot(nearA.x - settledA.x, nearA.y - settledA.y)).toBeLessThan(1);
+    expect(Math.hypot(nearB.x - settledB.x, nearB.y - settledB.y)).toBeLessThan(1);
   });
 });
 

@@ -25,6 +25,9 @@
  *   the scroll engine's rAF loop. For step pairs that share the same object,
  *   it linearly interpolates x/y/zoom between the two steps based on scroll
  *   progress and applies the result via snapIiifToPosition (immediate=true).
+ *   A pair either side of zoom 1 is blended between the two steps' settled
+ *   placements instead, because an overview and a detail place different
+ *   image points at the region centre.
  *   Smoothness comes from Lenis's animatedScroll, not from OSD animations.
  *   Different-object pairs are skipped — the viewer freezes at its last
  *   position while the new plate slides in on top.
@@ -185,7 +188,7 @@ const FOCAL_DIAMETER_FRAC = 0.90;   // focal circle diameter as a fraction of au
  *   4. Return the inputs the OSD apply recipe needs: focal point in
  *      image px and diameter in image px (zoom is computed live in the apply step).
  *
- * Title-card skip is NOT applied here — it lives in _applyFocalTarget
+ * Title-card skip is NOT applied here — it lives in _livePlacement
  * so the pure function remains reusable.
  *
  * @param {number} x            Authored focal-point x in [0, 1].
@@ -264,11 +267,13 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
  *       the detail scale at 2. This keeps scale continuous without changing
  *       either overview or zoom ≥ 2 framing.
  *     No OSD-zoom calibration (no `k`): fitBounds derives the zoom from the rect.
- *   - FOCAL: move the focal image point to the uncovered-region centre, clamped to
- *     the keep-circle bound (_clampFocalPx) — keep scale, hold the focal at least the
+ *   - FOCAL: move the anchor to the uncovered-region centre, clamped to the
+ *     keep-circle bound (_clampFocalPx) — keep scale, hold the anchor at least the
  *     circle's radius from every region edge. Does NOT rely on OSD's visibilityRatio.
+ *     The anchor is the image centre at zoom ≤ 1 (an overview is centred whatever
+ *     its x/y) and the authored focal point at every zoom above 1.
  *   - APPLY: build the image-px rectangle that fills the viewer at scale s with the
- *     focal at the clamped position, then vp.fitBounds(rect, immediate). Because the
+ *     anchor at the clamped position, then vp.fitBounds(rect, immediate). Because the
  *     target is a rectangle (not a delta off the live zoom), it is correct even on the
  *     animate path where the zoom is still springing — the fix for the mid-animation
  *     mis-scaling bug.
@@ -386,44 +391,21 @@ export function _clampFocalPx(region, edges, ideal, radius) {
   };
 }
 
-function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
-  const v  = viewerCard.osdViewer;
-  const av = viewerCard.osdWrapper;
-
-  // Source dims required; leave viewer at home if unavailable
-  const source = v.world.getItemAt(0)?.source;
-  if (!source?.width || !source?.height) return false;
-  const imgW = source.width;
-  const imgH = source.height;
-
-  // Title-card skip: when a title card is active, do not apply compensation
-  if (state.activeTitleCardIndex != null) return false;
-
-  // Resolve card geometry
-  const viewportW = window.innerWidth;
-  const viewportH = window.innerHeight;
-  const r = state.cardOverlayRect;
-  const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
-  const placementMode = _deriveCardPlacement(cardBox, viewportW, viewportH);
-
-  // Compute focal target (pure — no OSD calls)
-  const target = computeFocalTarget(x, y, zoom, imgW, imgH, cardBox, placementMode);
-  if (!target) return false;
-  const { focalImg, diameterImg, region } = target;
-
-  // ── OSD apply recipe (fitBounds form) ────────────────────────────────────────
-  // The target is expressed as a viewport rectangle and applied with fitBounds, so
-  // the apply path reads NO live OSD zoom. This is what makes it robust on the
-  // animate path (immediate=false): the prior zoomTo + panBy recipe computed the pan
-  // from `cur` and `deltaPointsFromPixels` at the TRANSIENT mid-animation zoom, so the
-  // focal mis-scaled. fitBounds reaches the requested settled endpoint — the scale
-  // chosen below and focal at the clamped region centre (keep-circle clamp) —
-  // by delegating the scale→zoom and centre conversion to
-  // OSD's own coordinate transform, with no transient sample and no hand-rolled `k`.
-  const vp   = v.viewport;
-  const OSD  = window.OpenSeadragon;
-  // Container rect from the wrapper's container element (IiifViewer.containerEl)
-  const rect = av.containerEl.getBoundingClientRect();
+/**
+ * Where a step puts the image (pure): the applied scale, the image point that is
+ * placed, and the element-px position it is placed at.
+ *
+ * @param {{focalImg:{x:number,y:number}, diameterImg:number,
+ *          region:{x:number,y:number,w:number,h:number},
+ *          imageW:number, imageH:number}} target  From computeFocalTarget.
+ * @param {number} zoom  Authored zoom (> 0).
+ * @param {{width:number,height:number}} container  Viewer container size, element px.
+ * @returns {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}
+ *   `s` in element px per image px; `anchorImg` (image px) lands at `anchorPx`.
+ */
+export function framePlacement(target, zoom, container) {
+  const { focalImg, diameterImg, region, imageW: imgW, imageH: imgH } = target;
+  const rect = container;
 
   // SCALE — radius match (Circle A→B) with the Rule A overview cap. `s` is element px
   // per image px; z_tgt/k reduces to exactly this, so no OSD-zoom calibration is needed.
@@ -466,14 +448,25 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
       ? s_fit + (zoom - 1) * (Math.max(s_tgt * (2 / zoom), s_fit) - s_fit)
       : Math.max(s_tgt, s_fit);  // applied scale (px / img px)
 
+  // ANCHOR — the image point placed at the uncovered-region centre. An overview
+  // shows the whole object, so it is centred in the region and the authored x/y
+  // do not move it: the anchor is the image centre at zoom ≤ 1. Above 1 a step
+  // frames a detail, and the anchor is exactly the authored focal point, so
+  // the x/y an author captured is the point the reader sees at the centre.
+  // The settled framing of a focal off centre therefore changes at zoom 1.
+  // Motion between two steps on either side of 1 does not pass through this
+  // function at intermediate zooms: lerpIiifPosition blends the two settled
+  // placements instead (blendPlacements).
+  const anchorImg = _placedPoint(focalImg, imgW, imgH, zoom);
+
   // FOCAL POSITION — uncovered-region centre, clamped by the keep-circle rule. The
-  // edges are the focal→image-edge distances at the applied scale `s`; all element px.
+  // edges are the anchor→image-edge distances at the applied scale `s`; all element px.
   const CB    = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
   const edges = {
-    eLeft:   focalImg.x          * s,
-    eRight:  (imgW - focalImg.x) * s,
-    eTop:    focalImg.y          * s,
-    eBottom: (imgH - focalImg.y) * s,
+    eLeft:   anchorImg.x          * s,
+    eRight:  (imgW - anchorImg.x) * s,
+    eTop:    anchorImg.y          * s,
+    eBottom: (imgH - anchorImg.y) * s,
   };
   // The circle stands for the detail the author framed, and detail only exists
   // where there is image. A focal near a corner carries a circle that reaches
@@ -481,7 +474,7 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
   // 106.6 image px against 60 to the edge — and the part that overhangs holds
   // nothing. Reserving room for it put background on screen; requiring it on
   // screen asked for the impossible. Capped at the largest circle centred on
-  // the focal that lies inside the image, which is scale-free: the overhang
+  // the anchor that lies inside the image, which is scale-free: the overhang
   // is a property of where the focal sits, not of how far in the viewer is.
   const radiusPx = Math.min(
     (diameterImg * s) / 2,
@@ -489,18 +482,134 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
   );
   const F = _clampFocalPx(region, edges, CB, radiusPx);  // focal target position, element px
 
+  return { s, anchorImg, anchorPx: F };
+}
+
+/**
+ * The image point a step places at the region centre (pure): the image centre
+ * at zoom ≤ 1, the authored focal point, as given, at any zoom above 1.
+ *
+ * @param {{x:number,y:number}} focalImg  Authored focal point, image px.
+ * @param {number} imgW
+ * @param {number} imgH
+ * @param {number} zoom
+ * @returns {{x:number,y:number}} Image px.
+ */
+function _placedPoint(focalImg, imgW, imgH, zoom) {
+  return zoom <= 1 ? { x: imgW / 2, y: imgH / 2 } : focalImg;
+}
+
+/**
+ * A placement part of the way from one settled placement to another (pure).
+ *
+ * The scale and the image's top-left corner on screen each move in a straight
+ * line, so t = 0 and t = 1 are the two placements exactly and every frame
+ * between is continuous in t whatever the two steps' zooms. The conditions
+ * that matter on screen — the image covering the region on an axis, or lying
+ * inside it — are linear in the corner and the scale, so a condition both
+ * placements meet is met on every frame between them.
+ *
+ * @param {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}} from
+ * @param {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}} to
+ * @param {number} t  0 at `from`, 1 at `to`.
+ * @returns {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}
+ *   Anchored at the image's top-left corner.
+ */
+export function blendPlacements(from, to, t) {
+  const corner = (p) => ({
+    x: p.anchorPx.x - p.anchorImg.x * p.s,
+    y: p.anchorPx.y - p.anchorImg.y * p.s,
+  });
+  const a = corner(from);
+  const b = corner(to);
+  const mix = (u, v) => u + (v - u) * t;
+  return {
+    s: mix(from.s, to.s),
+    anchorImg: { x: 0, y: 0 },
+    anchorPx: { x: mix(a.x, b.x), y: mix(a.y, b.y) },
+  };
+}
+
+/**
+ * Where a live viewer puts the image for a framing: the viewer's container
+ * rect and the placement framePlacement gives for it there, or null when the
+ * viewer is to be left where it is (no source size yet, a title card active,
+ * or a framing that computeFocalTarget refuses).
+ *
+ * @returns {{rect: DOMRect, placement: {s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}|null}
+ */
+function _livePlacement(viewerCard, x, y, zoom) {
+  // Source dims required; leave viewer at home if unavailable
+  const source = viewerCard.osdViewer.world.getItemAt(0)?.source;
+  if (!source?.width || !source?.height) return null;
+
+  // Title-card skip: when a title card is active, do not apply compensation
+  if (state.activeTitleCardIndex != null) return null;
+
+  // Resolve card geometry
+  const r = state.cardOverlayRect;
+  const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
+  const placementMode = _deriveCardPlacement(cardBox, window.innerWidth, window.innerHeight);
+
+  // Compute focal target (pure — no OSD calls)
+  const target = computeFocalTarget(x, y, zoom, source.width, source.height, cardBox, placementMode);
+  if (!target) return null;
+
+  // Container rect from the wrapper's container element (IiifViewer.containerEl)
+  const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
+  return { rect, placement: framePlacement(target, zoom, rect) };
+}
+
+/**
+ * Put a placement on the viewer.
+ *
+ * The target is expressed as a viewport rectangle and applied with fitBounds, so
+ * the apply path reads NO live OSD zoom. This is what makes it robust on the
+ * animate path (immediate=false): a pan computed from the live zoom is taken at
+ * the TRANSIENT mid-animation zoom and mis-scales. fitBounds reaches the requested
+ * settled endpoint by delegating the scale→zoom and centre conversion to OSD's own
+ * coordinate transform, with no transient sample and no hand-rolled `k`.
+ */
+function _applyPlacement(viewerCard, rect, { s, anchorImg, anchorPx: F }, immediate) {
+  const vp  = viewerCard.osdViewer.viewport;
+  const OSD = window.OpenSeadragon;
+
   // TARGET RECT — the image-px rectangle that fills the viewer at scale `s`, placed so
-  // focalImg lands at element px F. Its aspect equals the container's, so fitBounds maps
+  // anchorImg lands at element px F. Its aspect equals the container's, so fitBounds maps
   // it 1:1 (no letterbox growth). After fitBounds the rect centre maps to the container
-  // centre, so focalImg (offset F − centre at scale s) lands exactly at F.
+  // centre, so anchorImg (offset F − centre at scale s) lands exactly at F.
   const visW    = rect.width  / s;   // visible image-px width  at scale s
   const visH    = rect.height / s;   // visible image-px height at scale s
-  const topLeft = { x: focalImg.x - F.x / s, y: focalImg.y - F.y / s };
+  const topLeft = { x: anchorImg.x - F.x / s, y: anchorImg.y - F.y / s };
   const targetVp = vp.imageToViewportRectangle(
     new OSD.Rect(topLeft.x, topLeft.y, visW, visH)
   );
   vp.fitBounds(targetVp, immediate);
+}
 
+function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
+  const live = _livePlacement(viewerCard, x, y, zoom);
+  if (!live) return false;
+  _applyPlacement(viewerCard, live.rect, live.placement, immediate);
+  return true;
+}
+
+/**
+ * Put a viewer part of the way between two steps' settled placements.
+ *
+ * Used where the two steps sit either side of zoom 1. An overview places the
+ * image centre and a detail places its focal point, so interpolating x/y/zoom
+ * and placing each frame would move the image by the focal's offset from
+ * centre in the one frame the zoom crosses 1. Both placements are computed
+ * from the live geometry, so t = 0 and t = 1 are what each step settles on.
+ *
+ * @returns {boolean} false when either step cannot be placed.
+ */
+function _applyBetween(viewerCard, a, b, t) {
+  const from = _livePlacement(viewerCard, a.x, a.y, a.zoom);
+  const to   = _livePlacement(viewerCard, b.x, b.y, b.zoom);
+  if (!from || !to) return false;
+  _applyPlacement(viewerCard, to.rect, blendPlacements(from.placement, to.placement, t), true);
   return true;
 }
 
@@ -688,7 +797,9 @@ function _restsAt(settled, stepIndex, x, y, zoom) {
  * step B based on the fractional scroll progress (0.0 = at step A, 1.0 =
  * at step B). Applies the interpolated position via snapIiifToPosition
  * with immediate=true, so OSD does not add its own spring animation on top
- * of the per-frame updates.
+ * of the per-frame updates. Where one step is at zoom 1 or below and the
+ * other above it, the frame is the two settled placements blended
+ * (blendPlacements), applied the same way.
  *
  * Different-object pairs are skipped entirely (the viewer freezes at
  * its last position while the new plate slides in on top). Progress values
@@ -715,15 +826,9 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // own, stated rather than approached. The interpolation stops a fraction of
   // a step short — the scroll settles and the last frame written is the one
   // before the boundary — so a step reached this way would otherwise keep the
-  // framing of a position just outside it. The scale is continuous across the
-  // overview boundary now, so this no longer rescues a step from the wrong side
-  // of a cliff; it still states the authored endpoint exactly, which is what a
-  // reader resting on a step is owed.
+  // framing of a position just outside it. Stating the authored endpoint
+  // exactly is what a reader resting on a step is owed.
   const atRest = progress < 0.001;
-  const between = (from, to) => (atRest ? from : from + (to - from) * progress);
-  const x    = between(a.x, b.x);
-  const y    = between(a.y, b.y);
-  const zoom = between(a.zoom, b.zoom);
 
   // Keyed by scene, not by objectId: an object appearing in several scenes has
   // a plate for each, and an objectId lookup finds the wrong one on backward
@@ -736,13 +841,30 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // layout in OSD, so the resting write happens once per arrival rather than
   // for as long as the reader stays on the step.
   if (atRest) {
-    if (_restsAt(viewerCard.settledAt, stepIndex, x, y, zoom)) return;
-    viewerCard.settledAt = { step: stepIndex, x, y, zoom };
-  } else {
-    viewerCard.settledAt = null;
+    if (_restsAt(viewerCard.settledAt, stepIndex, a.x, a.y, a.zoom)) return;
+    viewerCard.settledAt = { step: stepIndex, ...a };
+    snapIiifToPosition(viewerCard, a.x, a.y, a.zoom);
+    return;
   }
 
-  snapIiifToPosition(viewerCard, x, y, zoom);
+  viewerCard.settledAt = null;
+  _travel(viewerCard, a, b, progress);
+}
+
+/**
+ * Put a viewer part of the way from one step's framing to the next.
+ *
+ * Either side of zoom 1 the two steps place different image points (the
+ * centre and the focal point), so the frame is the two settled placements
+ * blended rather than a placement of the blended x/y/zoom.
+ */
+function _travel(viewerCard, a, b, t) {
+  if ((a.zoom <= 1) !== (b.zoom <= 1)) {
+    _applyBetween(viewerCard, a, b, t);
+    return;
+  }
+  const along = (from, to) => from + (to - from) * t;
+  snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), along(a.zoom, b.zoom));
 }
 
 // ── Recompute on resize / layout change ──────────────────────────────────────
