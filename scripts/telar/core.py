@@ -53,7 +53,7 @@ import yaml
 
 from telar.csv_utils import (sanitize_dataframe, normalize_column_names,
                              is_header_row, read_sheet, text_column_dtypes,
-                             OBJECT_FIELDS,
+                             GLOSSARY_COLUMN_ALIASES, OBJECT_FIELDS,
                              ColumnCollisionError, ReservedColumnError)
 from telar.processors.project import process_project_setup
 from telar.processors.objects import process_objects
@@ -65,7 +65,7 @@ from telar.search import generate_search_data
 
 
 def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None,
-                refusals=None, failures=None):
+                refusals=None, failures=None, sheet_aliases=None):
     """
     Convert CSV file to JSON.
 
@@ -79,6 +79,8 @@ def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None,
         refusals: A list that receives `(source, message)` when the sheet is
             refused, or when a sheet it reads (the glossary) is. The caller
             decides the exit; without a list a refusal is only printed.
+        sheet_aliases: Aliases only this sheet reads, as the glossary's own,
+            used for its column names and for its second header row.
         failures: A list that receives `(source, message)` when any other
             error stops the conversion. Passed for the sheets every page
             depends on (project, objects), whose loss fails the build. A
@@ -125,12 +127,12 @@ def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None,
         # Check if first data row is actually a duplicate header row (bilingual CSVs)
         if len(df) > 0:
             first_row = df.iloc[0]
-            if is_header_row(first_row.values):
+            if is_header_row(first_row.values, sheet_aliases=sheet_aliases):
                 print(f"  [WARN] Detected duplicate header row - skipping row 2")
                 df = df.iloc[1:].reset_index(drop=True)
 
         # Normalize column names (Spanish -> English) for bilingual support
-        df = normalize_column_names(df, canonical_fields)
+        df = normalize_column_names(df, canonical_fields, sheet_aliases=sheet_aliases)
 
         # Sanitize user data - remove Christmas tree emoji to prevent accidental triggering
         df = sanitize_dataframe(df)
@@ -513,6 +515,10 @@ def main():
     # Convert story files (with optional Christmas Tree mode)
     # v0.6.0+: Process ALL CSVs except system files
     system_csvs = {'project.csv', 'proyecto.csv', 'objects.csv', 'objetos.csv'}
+    # The glossary sheet the glossary readers take is read here with the
+    # glossary's aliases too, so its bilingual second header row is judged
+    # as they judge it (telar.glossary.read_glossary_sheet).
+    glossary_sheet = Path(find_csv_with_fallback(str(structures_dir / 'glossary'), 'glosario'))
 
     for csv_file in structures_dir.glob('*.csv'):
         if csv_file.name not in system_csvs:
@@ -532,7 +538,8 @@ def main():
                     christmas_tree=christmas_tree_mode,
                     story_name=name
                 ),
-                refusals=refusals
+                refusals=refusals,
+                sheet_aliases=(GLOSSARY_COLUMN_ALIASES if csv_file == glossary_sheet else None)
             )
 
     # Merge demo content if available

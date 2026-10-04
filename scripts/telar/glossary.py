@@ -65,7 +65,8 @@ from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
                                   kind_text, resolve_kind)
 from telar.story_pages import jekyll_slug
-from telar.csv_utils import ColumnCollisionError, ReservedColumnError, read_sheet
+from telar.csv_utils import (GLOSSARY_COLUMN_ALIASES, ColumnCollisionError, ReservedColumnError,
+                             is_header_row, normalize_column_names, read_sheet)
 
 
 class GlossaryTerms(dict):
@@ -77,6 +78,38 @@ class GlossaryTerms(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.kinds = {}
+
+
+def read_glossary_sheet(csv_path):
+    """glossary.csv as the build reads it, for every reader of it: the link
+    map, the pages, and the conversion that reads it as a story sheet.
+
+    In order: a row whose first cell starts with `#` is a comment and goes;
+    instruction columns (`#` in the header) go; the columns take their
+    English names, the glossary's own aliases included, and are folded to
+    lower case, so a sheet headed `Term_ID` is found; and a first row left
+    that is a second, bilingual header row goes, judged with the glossary's
+    aliases. A comment row is gone before that judgement, so it can never
+    be taken for the header row, or kept as a term when it is not one.
+
+    Every column is text the author typed. Left to infer, pandas reads a
+    term titled `null` or `NA` as a missing value, and decides per column.
+    A column collision is refused with the sheet's path, as the page
+    generator and the link map both refuse it.
+    """
+    df = read_sheet(csv_path, dtype=str, keep_default_na=False)
+    if len(df.columns):
+        df = df[~df[df.columns[0]].astype(str).str.strip().str.startswith('#')]
+    df = df[[col for col in df.columns if not col.startswith('#')]]
+    try:
+        df = normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
+    except (ColumnCollisionError, ReservedColumnError) as e:
+        e.source = str(csv_path)
+        raise
+    df.columns = df.columns.str.lower().str.strip()
+    if len(df) > 0 and is_header_row(df.iloc[0].values, sheet_aliases=GLOSSARY_COLUMN_ALIASES):
+        df = df.iloc[1:]
+    return df.reset_index(drop=True)
 
 
 def load_glossary_from_csv(csv_path):
@@ -92,29 +125,7 @@ def load_glossary_from_csv(csv_path):
     glossary_terms = GlossaryTerms()
 
     try:
-        # Every column here is text the author typed. Left to infer, pandas
-        # reads a term titled `null` or `NA` as a missing value and the page
-        # is written `nan`, and it decides per column, so the same title
-        # survives or does not depending on what its neighbours look like.
-        df = read_sheet(csv_path, dtype=str, keep_default_na=False)
-
-        # Normalize column names (bilingual mapping). normalize_column_names
-        # already lowercases internally for lookup, so pre-lowercasing here was
-        # redundant and needlessly mutated the actual header labels, diverging
-        # from every other CSV's column-casing behaviour.
-        from telar.csv_utils import normalize_column_names, GLOSSARY_COLUMN_ALIASES
-        # Instruction columns go first, as in csv_to_json, which reads this
-        # file as a story sheet: they are never read, so two of them cannot
-        # collide.
-        df = df[[col for col in df.columns if not col.startswith('#')]]
-        df = normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
-
-        # A bilingual sheet carries its Spanish header as the first row; the
-        # page generator skips it on the same check, so it is never a term.
-        from telar.csv_utils import is_header_row
-        if len(df) > 0 and is_header_row(df.iloc[0].values,
-                                         sheet_aliases=GLOSSARY_COLUMN_ALIASES):
-            df = df.iloc[1:].reset_index(drop=True)
+        df = read_glossary_sheet(csv_path)
 
         if 'term_id' not in df.columns or 'title' not in df.columns:
             print(f"  ⚠️ glossary.csv missing required columns (term_id, title)")
@@ -139,14 +150,14 @@ def load_glossary_from_csv(csv_path):
                 glossary_terms.kinds[term_id] = resolve_kind(
                     row.get('kind', ''), warn=False)
 
-    except (ColumnCollisionError, ReservedColumnError) as e:
+    except (ColumnCollisionError, ReservedColumnError):
         # The page generator reads this same file and fails the build on
         # these two. A loader that swallowed them handed back an empty link
         # map, so whether the author heard about the sheet at all depended
-        # on which path ran first. Both refuse alike. The path goes with the
-        # error because it surfaces inside each story's conversion, where
-        # the file being converted is the story, not the one to change.
-        e.source = str(csv_path)
+        # on which path ran first. Both refuse alike, with the sheet's path,
+        # which read_glossary_sheet gives the error: it surfaces inside each
+        # story's conversion, where the file being converted is the story,
+        # not the one to change.
         raise
     except Exception as e:
         print(f"  ⚠️ Could not load glossary.csv: {e}")
