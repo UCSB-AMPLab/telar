@@ -880,51 +880,55 @@
 
 // ── Mobile Navigation Buttons ─────────────────────────────────────────────────
 
-// Button-only navigation for viewports < 1024px / narrow aspect and embed mode.
-// Fixed to the right side, centred vertically over the full viewport.
+// The previous/next buttons exist only where button navigation runs: a
+// vertical layout at load, embed mode, and iOS in either layout. An iPad in
+// landscape is a horizontal layout, and a window opened narrow keeps the
+// buttons when widened, so the placement holds in every layout: fixed to the
+// right side, centred vertically over the full viewport, where it covers no
+// text card. Embed mode places them itself (_embed.scss).
+
+.mobile-nav {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));  // -right honours iPhone Pro landscape side-notch; the centred bottom is intentional.
+  bottom: 50%;
+  transform: translateY(50%);
+  z-index: 9900;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobile-nav button {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  color: #333;
+  font-size: 1.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 1);
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+}
 
 @include vertical-layout {
-  .mobile-nav {
-    position: fixed;
-    right: max(1rem, env(safe-area-inset-right));  // -right honours iPhone Pro landscape side-notch; the centred bottom is intentional.
-    bottom: 50%;
-    transform: translateY(50%);
-    z-index: 9900;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .mobile-nav button {
-    width: 66px;
-    height: 66px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.95);
-    border: 2px solid rgba(0, 0, 0, 0.1);
-    color: #333;
-    font-size: 1.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    @media (hover: hover) and (pointer: fine) {
-      &:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 1);
-        transform: scale(1.05);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      }
-    }
-
-    &:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-  }
-
   // Mobile nav button — icon-only circular button
   .btn-nav-back {
     min-height: 44px;
