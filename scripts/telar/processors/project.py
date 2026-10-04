@@ -27,11 +27,40 @@ The function returns a pandas DataFrame wrapping a single dictionary with
 a `stories` key, which `csv_to_json()` in the core module serialises to
 `_data/project.json`.
 
-Version: v1.5.0
+Version: v1.8.0
 """
 
 import re
+
 import pandas as pd
+
+
+def _story_numbers(df):
+    """Each row's order as its story's number, or '' when the cell is empty.
+
+    The number is the story's address when it has no `story_id`: the build
+    looks for `story-<number>.json`, named after the story's own sheet. So a
+    column with no empty cell is read exactly as it always was. An empty
+    cell is NaN, which `str()` made `nan`, a story; and pandas reads a column
+    of whole numbers holding one as floats, so every other number came out
+    `2.0`. Empty cells are skipped, and in a column they widened to float,
+    whole numbers are written as the integer column without them gives them.
+    """
+    if 'order' not in df.columns:
+        return [str(row.get('order', '')).strip() for _, row in df.iterrows()]
+    column = df['order']
+    blank = column.isna()
+    widened = (column.dtype.kind == 'f' and blank.any()
+               and all(float(value).is_integer() for value in column[~blank]))
+    numbers = []
+    for (_, row), value, empty in zip(df.iterrows(), column, blank):
+        if empty:
+            numbers.append('')
+        elif widened:
+            numbers.append(str(int(value)))
+        else:
+            numbers.append(str(row.get('order', '')).strip())
+    return numbers
 
 
 def process_project_setup(df):
@@ -51,8 +80,7 @@ def process_project_setup(df):
     seen_ids = set()  # Track duplicate story_ids
     seen_orders = set()  # Track duplicate order numbers
 
-    for row_idx, row in df.iterrows():
-        order = str(row.get('order', '')).strip()
+    for (row_idx, row), order in zip(df.iterrows(), _story_numbers(df)):
         title = row.get('title', '')
         subtitle = row.get('subtitle', '')
         byline = row.get('byline', '')
