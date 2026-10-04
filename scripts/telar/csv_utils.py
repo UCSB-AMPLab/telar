@@ -436,6 +436,26 @@ def _refuse_colliding_renames(df, rename_map):
         )
 
 
+# Column spellings a published sheet may still carry after the column itself
+# was removed. They are NOT aliases: nothing renames to them and no processor
+# reads them. They exist so `is_header_row` still recognises a header row that
+# names one, because that check scores a row against the column vocabulary and
+# a spelling missing from it drags the whole row's score down.
+#
+# `quoted_in_stories` and its two Spanish spellings shipped in the 1.8.0 test
+# instance and in a Compositor beta between 13 and 17 September 2026, then were
+# removed with the glossary acknowledgement. A four-column glossary header
+# carrying one of them scores 3/4 -- below the 0.8 threshold -- so the bilingual
+# Spanish row was read as a glossary term titled `titulo`. This is why
+# this set can only grow: a column
+# can leave the vocabulary, but a sheet already published with it cannot.
+LEGACY_HEADER_SPELLINGS = frozenset({
+    'quoted_in_stories',
+    'citado_en_historias',
+    'citada_en_historias',
+})
+
+
 def is_header_row(row_values):
     """
     Check if a row contains header names (English or Spanish).
@@ -451,6 +471,9 @@ def is_header_row(row_values):
 
     # Also include common column names not in the mapping
     valid_names.update(['x', 'y', 'zoom'])
+
+    # And spellings a published sheet may carry for a column since removed.
+    valid_names.update(LEGACY_HEADER_SPELLINGS)
 
     # Count how many cells match known column names
     # A blank cell is absent however the file was read. A sheet read with

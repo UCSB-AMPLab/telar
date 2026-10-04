@@ -218,6 +218,25 @@ class TestABlankCellIsAbsentHoweverTheFileWasRead:
 
         assert is_header_row(row) is False
 
+    # A column can leave the vocabulary; a sheet already published with it
+    # cannot. `quoted_in_stories` and its two Spanish spellings shipped for
+    # four days in September 2026 and were removed with the glossary
+    # acknowledgement, which dropped a four-column header to 3/4 -- under the
+    # 0.8 threshold -- so the bilingual Spanish row published as a term.
+    @pytest.mark.parametrize('spelling', [
+        'quoted_in_stories', 'citado_en_historias', 'citada_en_historias'])
+    def test_a_header_naming_a_removed_column_is_still_a_header(self, spelling):
+        row = ['id_termino', 'titulo', 'definicion', spelling]
+
+        assert is_header_row(row) is True
+
+    def test_a_term_row_is_not_rescued_by_a_legacy_spelling(self):
+        """The spellings widen header detection, never data detection."""
+        row = ['encomienda', 'Encomienda', 'Un sistema de trabajo.',
+               'otra-historia']
+
+        assert is_header_row(row) is False
+
     def test_both_readings_of_one_row_agree(self):
         """The same sheet, read either way, gets the same answer."""
         inferred = self.HEADER_WITH_BLANK_TAIL + [None, None]
