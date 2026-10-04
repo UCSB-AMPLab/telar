@@ -70,6 +70,7 @@ import {
   animateIiifToPosition,
   snapIiifToPosition,
   computeFocalTarget,
+  reSnapActiveViewer,
   _deriveCardPlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
@@ -591,21 +592,33 @@ function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH,
   }
 }
 
+// A step that leaves x, y or zoom blank shows the whole object, and the whole
+// object is a framing like any other: the image centre at zoom 1, which the
+// focal target resolves to the whole image fit and centred in the region the
+// text card leaves uncovered. Without these the viewer keeps whatever OSD's home
+// position gives it — the image centred in the VIEWER, so a side card sits over
+// one edge of it.
+const _FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
+
 /**
  * The framing a step asks its viewer for.
  *
- * x, y and zoom are NaN when the step leaves them blank, which every caller
- * reads as "no authored position"; page is 1-indexed in the story data and
- * absent unless the object is a multi-page external manifest.
+ * A blank x, y or zoom falls back to the whole-object framing; page is
+ * 1-indexed in the story data and absent unless the object is a multi-page
+ * external manifest.
  *
  * @param {Object} step - Step data
  * @returns {{ x: number, y: number, zoom: number, page: number|undefined }}
  */
 function _stepFraming(step) {
+  const num = (value, fallback) => {
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
   return {
-    x:    parseFloat(step.x),
-    y:    parseFloat(step.y),
-    zoom: parseFloat(step.zoom),
+    x:    num(step.x,    _FULL_OBJECT_FRAMING.x),
+    y:    num(step.y,    _FULL_OBJECT_FRAMING.y),
+    zoom: num(step.zoom, _FULL_OBJECT_FRAMING.zoom),
     page: step.page ? parseInt(step.page, 10) : undefined,
   };
 }
@@ -1691,6 +1704,24 @@ function _deactivatePreviousTextCard(newIndex, direction) {
 }
 
 /**
+ * Record the card's measured rect, and re-frame the viewer the first time there
+ * is one.
+ *
+ * With no rect the focal target falls back to the CSS-derived default box — the
+ * card's placement rule rather than its rendered geometry — so the first step of
+ * a story is framed against a box a few pixels out, and at an overview those
+ * pixels are image under the card. One re-snap on the first real measurement
+ * puts the opening step on the same geometry every later step is framed in.
+ *
+ * @param {HTMLElement} cardEl - The text card element
+ */
+function _writeCardOverlayRect(cardEl) {
+  const hadRect = state.cardOverlayRect != null;
+  state.cardOverlayRect = cardEl.getBoundingClientRect();
+  if (!hadRect) reSnapActiveViewer();
+}
+
+/**
  * Activate a text card — slide it up from below.
  *
  * @param {HTMLElement} cardEl - The text card element
@@ -1710,7 +1741,7 @@ function _activateTextCard(cardEl) {
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isScrubbing    = document.querySelector('.card-stack')?.classList.contains('is-scrubbing');
   if (prefersReduced || isScrubbing) {
-    state.cardOverlayRect = cardEl.getBoundingClientRect();
+    _writeCardOverlayRect(cardEl);
     return;
   }
   // Ensure at most one pending settle listener per card: rapid re-activation
@@ -1722,7 +1753,7 @@ function _activateTextCard(cardEl) {
     if (ev.target !== cardEl || ev.propertyName !== 'transform') return;
     cardEl.removeEventListener('transitionend', onSettled);
     cardEl._settleHandler = null;
-    state.cardOverlayRect = cardEl.getBoundingClientRect();
+    _writeCardOverlayRect(cardEl);
   };
   cardEl._settleHandler = onSettled;
   cardEl.addEventListener('transitionend', onSettled);

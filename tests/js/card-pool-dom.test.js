@@ -445,7 +445,7 @@ describe('activateCard — framing waits on a viewer that is not ready', () => {
     expect(viewerCard.pendingZoom).toEqual({ x: 0.4, y: 0.6, zoom: 4, snap: false });
   });
 
-  it('leaves the viewer alone for a step that authored no framing', () => {
+  it('queues the whole-object framing for a step that authored none', () => {
     buildStory([
       { step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' },
       { step: '2', object: 'obj-a', question: 'Q2', answer: 'A2' },
@@ -457,7 +457,9 @@ describe('activateCard — framing waits on a viewer that is not ready', () => {
 
     activateCard(2, 'forward');
 
-    expect(viewerCard.pendingZoom).toBeNull();
+    // The whole object is a framing like any other: image centre, zoom 1, which
+    // the focal target resolves to the whole image fit in the uncovered region.
+    expect(viewerCard.pendingZoom).toEqual({ x: 0.5, y: 0.5, zoom: 1, snap: false });
   });
 });
 

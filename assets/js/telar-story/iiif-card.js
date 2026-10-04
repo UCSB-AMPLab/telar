@@ -40,7 +40,7 @@
  *   Per OSD issue #2693, the module calls WEBGL_lose_context.loseContext()
  *   first, then the wrapper's destroy(), then removes the DOM element.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -254,13 +254,15 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
  *
  * Implements the two-circle model via a transient-zoom-free
  * OSD-unit conversion:
- *   - SCALE: s = max(s_tgt, s_cap) — element px per image px, where
+ *   - SCALE: s = max(s_tgt, s_fit) — element px per image px, where
  *       s_tgt = min(region.w, region.h) / diameterImg  (radius match, Circle A→B)
- *       s_cap = min(rect.width/imgW, rect.height/imgH) (Rule A: whole-image fit).
+ *       s_fit = min(region.w/imgW, region.h/imgH)      (Rule A: whole-image fit in
+ *       the uncovered region). At an overview (zoom ≤ 1) s is s_fit itself: the
+ *       step shows the whole object, fit and centred in the region.
  *     No OSD-zoom calibration (no `k`): fitBounds derives the zoom from the rect.
  *   - FOCAL: move the focal image point to the uncovered-region centre, clamped to
- *     image bounds (Rule B, _clampFocalPx) — keep scale, drift focal toward the edge
- *     rather than reveal background. Does NOT rely on OSD's visibilityRatio.
+ *     the keep-circle bound (_clampFocalPx) — keep scale, hold the focal at least the
+ *     circle's radius from every region edge. Does NOT rely on OSD's visibilityRatio.
  *   - APPLY: build the image-px rectangle that fills the viewer at scale s with the
  *     focal at the clamped position, then vp.fitBounds(rect, immediate). Because the
  *     target is a rectangle (not a delta off the live zoom), it is correct even on the
@@ -282,18 +284,24 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
  */
 
 /**
- * Rule B focal clamp (pure). Given the uncovered `region`, the focal-to-image-edge
- * distances in element px at the applied scale (`edges`), and the `ideal` focal
- * position in element px (the uncovered-region centre), return the focal's target
- * position in element px so the image keeps covering the region.
+ * Keep-circle focal clamp (pure). Given the uncovered `region`, the focal-to-image-edge
+ * distances in element px at the applied scale (`edges`), the `ideal` focal position in
+ * element px (the uncovered-region centre) and the focal circle's `radius` in element px,
+ * return the focal's target position in element px.
  *
- * Requiring the image (focal ± edges) to cover the region gives, per axis:
- *   focal − eLeft  ≤ region.x          and   focal + eRight ≥ region.x + region.w
- * ⇒ focal ∈ [region.x + region.w − eRight, region.x + eLeft]
- * We clamp the ideal (centre) position into that interval. When the image is
- * NARROWER than the region on an axis (eLeft + eRight < region.w) the interval
- * inverts — the image cannot cover the region — so we keep the ideal position
- * (focal at the region centre) on that axis instead of clamping.
+ * The rule: the focal stays at least the circle's radius from every region edge, so the
+ * framed detail the author chose is never pushed under the text card or off the viewport.
+ * Each per-axis bound is therefore the image edge or the radius, whichever holds the
+ * focal further inside the region:
+ *   focal ≥ region.x + region.w − max(eRight, radius)
+ *   focal ≤ region.x + max(eLeft, radius)
+ * We clamp the ideal (centre) position into that interval. Where the image is NARROWER
+ * on an axis than the two bounds together (max(eLeft, radius) + max(eRight, radius) <
+ * region.w) the interval inverts, and the ideal position stands on that axis.
+ *
+ * The trade this makes: at a focal closer to an image edge than the radius, the blank
+ * background shows at that edge of the region rather than the circle straddling the
+ * region boundary. Background at a corner is the accepted cost of an intact detail.
  *
  * Note: this returns the target focal POSITION (not a pan delta) and reads no live
  * OSD state, so the apply path is independent of the transient (mid-animation) zoom.
@@ -301,13 +309,15 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
  * @param {{x:number,y:number,w:number,h:number}} region  Uncovered region, element px.
  * @param {{eLeft:number,eRight:number,eTop:number,eBottom:number}} edges  Focal→edge px at applied scale.
  * @param {{x:number,y:number}} ideal   Ideal focal position (the region centre), element px.
+ * @param {number} radius  Focal-circle radius in element px at the applied scale.
  * @returns {{x:number,y:number}} The clamped focal position in element px.
  */
-export function _clampFocalPx(region, edges, ideal) {
-  const loX = region.x + region.w - edges.eRight;  // focal lower bound (cover right edge)
-  const hiX = region.x + edges.eLeft;              // focal upper bound (cover left edge)
-  const loY = region.y + region.h - edges.eBottom;
-  const hiY = region.y + edges.eTop;
+export function _clampFocalPx(region, edges, ideal, radius) {
+  const keep = (edge) => Math.max(edge, radius);   // never nearer than the circle's radius
+  const loX = region.x + region.w - keep(edges.eRight);  // focal lower bound (right side)
+  const hiX = region.x + keep(edges.eLeft);              // focal upper bound (left side)
+  const loY = region.y + region.h - keep(edges.eBottom);
+  const hiY = region.y + keep(edges.eTop);
   return {
     x: loX <= hiX ? Math.max(loX, Math.min(hiX, ideal.x)) : ideal.x,
     y: loY <= hiY ? Math.max(loY, Math.min(hiY, ideal.y)) : ideal.y,
@@ -345,8 +355,9 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
   // animate path (immediate=false): the prior zoomTo + panBy recipe computed the pan
   // from `cur` and `deltaPointsFromPixels` at the TRANSIENT mid-animation zoom, so the
   // focal mis-scaled. fitBounds reaches the identical settled endpoint — scale
-  // = max(scaleCircle, scaleFit) (radius match + Rule A) and focal at the clamped
-  // region centre (Rule B) — by delegating the scale→zoom and centre conversion to
+  // = max(scaleCircle, scaleFit) (radius match + Rule A, the fit against the region)
+  // and focal at the clamped
+  // region centre (keep-circle clamp) — by delegating the scale→zoom and centre conversion to
   // OSD's own coordinate transform, with no transient sample and no hand-rolled `k`.
   const vp   = v.viewport;
   const OSD  = window.OpenSeadragon;
@@ -355,11 +366,24 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
 
   // SCALE — radius match (Circle A→B) with the Rule A overview cap. `s` is element px
   // per image px; z_tgt/k reduces to exactly this, so no OSD-zoom calibration is needed.
-  const s_tgt = Math.min(region.w, region.h) / diameterImg;     // radius match (Circle A→B)
-  const s_cap = Math.min(rect.width / imgW, rect.height / imgH); // Rule A: whole-image fit
-  const s     = Math.max(s_tgt, s_cap);                          // applied scale (px / img px)
+  // Rule A's whole-image fit is measured against the UNCOVERED REGION, the frame every
+  // step is composed into, not the container: an image fit to the container is wider
+  // than the region by the width of the text card, so a quarter of it would sit under
+  // the card. At an overview (zoom ≤ 1, the full-object framing) that fit is also the
+  // ceiling — the whole object is what the step shows, so the image is never scaled
+  // past the size at which all of it fits the region.
+  // A region with no area — a card box that covers the viewport — leaves nothing to
+  // compose into, and both region-derived scales collapse to zero; the container fit
+  // keeps the viewer showing the image rather than a degenerate rectangle.
+  const hasRegion = region.w > 0 && region.h > 0;
+  const isOverview = zoom <= 1;
+  const s_tgt = Math.min(region.w, region.h) / diameterImg;         // radius match (Circle A→B)
+  const s_fit = hasRegion
+    ? Math.min(region.w / imgW, region.h / imgH)                    // Rule A: whole-image fit
+    : Math.min(rect.width / imgW, rect.height / imgH);
+  const s     = isOverview ? s_fit : Math.max(s_tgt, s_fit);        // applied scale (px / img px)
 
-  // FOCAL POSITION — uncovered-region centre, clamped to image bounds (Rule B). The
+  // FOCAL POSITION — uncovered-region centre, clamped by the keep-circle rule. The
   // edges are the focal→image-edge distances at the applied scale `s`; all element px.
   const CB    = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
   const edges = {
@@ -368,7 +392,8 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
     eTop:    focalImg.y          * s,
     eBottom: (imgH - focalImg.y) * s,
   };
-  const F = _clampFocalPx(region, edges, CB);  // focal target position, element px
+  const radiusPx = (diameterImg * s) / 2;      // focal circle radius, element px
+  const F = _clampFocalPx(region, edges, CB, radiusPx);  // focal target position, element px
 
   // TARGET RECT — the image-px rectangle that fills the viewer at scale `s`, placed so
   // focalImg lands at element px F. Its aspect equals the container's, so fitBounds maps
@@ -454,7 +479,7 @@ export function destroyIiifCard(viewerCard) {
  * Applies the two-circle target via _applyFocalTarget: the focal circle is
  * inscribed in the uncovered region (scale = max(scaleCircle, scaleFit)) and placed
  * at the clamped region centre by fitting the corresponding image-px rectangle with
- * vp.fitBounds. Rule A and Rule B are enforced inside _applyFocalTarget.
+ * vp.fitBounds. Rule A and the keep-circle clamp are enforced inside _applyFocalTarget.
  *
  * @param {ViewerCard} viewerCard - The card to position.
  * @param {number} x - Normalised horizontal position (0–1).
@@ -580,9 +605,11 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
  * compensation runs again with the current (post-resize) cardOverlayRect
  * and viewport dimensions.
  *
- * Called by the onViewportResize and onLayoutChange subscribers below.
+ * Called by the onViewportResize and onLayoutChange subscribers below, and by
+ * card-pool.js when the active card's overlay rect is measured for the first
+ * time (until then the focal target works from the CSS-derived default box).
  */
-function _reSnapActiveViewer() {
+export function reSnapActiveViewer() {
   // Find the active viewer card by its plate element's is-active class.
   // (Do not use state.currentObjectRun.objectId — it is not unique when the
   // same object appears in multiple scenes; use the element flag instead.)
@@ -603,12 +630,13 @@ function _reSnapActiveViewer() {
   const step = steps[stepIndex];
   if (!step) return;
 
-  const x    = parseFloat(step.x);
-  const y    = parseFloat(step.y);
-  const zoom = parseFloat(step.zoom);
-  if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-
-  snapIiifToPosition(viewerCard, x, y, zoom);
+  // A step that authored no framing shows the whole object: the image centre at
+  // zoom 1, the same framing card-pool.js gives it on activation.
+  const num = (value, fallback) => {
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  snapIiifToPosition(viewerCard, num(step.x, 0.5), num(step.y, 0.5), num(step.zoom, 1));
 }
 
 // Subscribe to layout-mode events (no new ad-hoc resize listeners).
@@ -618,7 +646,7 @@ function _reSnapActiveViewer() {
 // viewport dimensions and (if card-pool has already recomputed) the updated
 // state.cardOverlayRect.
 onViewportResize(() => {
-  _reSnapActiveViewer();
+  reSnapActiveViewer();
 });
 
 // onLayoutChange: fires on horizontal↔vertical mode flip, BEFORE onViewportResize.
@@ -630,6 +658,6 @@ onLayoutChange(() => {
     // Re-read the active card rect after the CSS reflow has settled.
     const activeCard = document.querySelector('.text-card.is-active');
     state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
-    _reSnapActiveViewer();
+    reSnapActiveViewer();
   });
 });

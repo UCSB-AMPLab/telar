@@ -18,7 +18,7 @@
  *      _defaultCardBox for both layouts, including the CSS-derived vertical
  *      top edge.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -354,44 +354,83 @@ describe('computeFocalTarget — null cardBox fallback', () => {
 
 });
 
-// ── _clampFocalPx — Rule B focal clamp (regression guard for the off-screen bug) ──
+// ── _clampFocalPx — keep-circle focal clamp (guard for the off-screen bug) ──
 //
 // _clampFocalPx returns the focal's target position in element px directly (the apply
 // path is transient-zoom-free: it never reads the live OSD zoom). These cases lock the
-// correct behaviour: the focal lands at the uncovered-region centre when that position
-// covers the region, clamps to the image-bounds edge otherwise, and keeps the ideal
-// (region-centre) position when the image is too small to cover the region.
-describe('_clampFocalPx — Rule B focal clamp', () => {
+// rule: the focal lands at the uncovered-region centre where the whole focal circle
+// fits there, stays at least the circle's radius from every region edge, clamps to the
+// image bound while the circle still fits inside the region, and keeps the ideal
+// (region-centre) position where the image is narrower than that on an axis.
+describe('_clampFocalPx — keep-circle focal clamp', () => {
   it('keeps the region centre when the focal there covers the region (step-3 regression case)', () => {
     // 1440×900 cell, authored 0.486,0.277,zoom10:
     const region = { x: 576, y: 0, w: 864, h: 900 };       // uncovered, side card on left
     const edges = { eLeft: 2867.7, eRight: 3032.9, eTop: 2525.4, eBottom: 6591.5 };
     const ideal = { x: 1008, y: 450 };                     // region centre (576+432, 0+450)
-    const F = _clampFocalPx(region, edges, ideal);
-    // Region centre is coverable → focal lands exactly there, on-screen.
+    const radius = 432;                                    // radius match: min(w, h) / 2
+    const F = _clampFocalPx(region, edges, ideal, radius);
+    // Every edge is further out than the radius → the centre holds, circle whole.
     expect(F.x).toBeCloseTo(1008, 0);
     expect(F.y).toBeCloseTo(450, 0);
   });
 
-  it('clamps to the image-bounds edge when centring would reveal background', () => {
-    // Focal near the image's right edge: little image to its right (eRight small).
+  it('clamps to the image-bounds edge while the circle still fits inside the region', () => {
+    // Focal near the image's right edge: little image to its right (eRight small), but
+    // still further out than the radius, so the image bound is the binding one.
     const region = { x: 0, y: 0, w: 1000, h: 1000 };
     const edges = { eLeft: 3000, eRight: 200, eTop: 3000, eBottom: 3000 };
+    const radius = 150;
     // F.x ∈ [region.x + w − eRight, region.x + eLeft] = [800, 3000]; ideal 500 is below 800.
-    const F = _clampFocalPx(region, edges, { x: 500, y: 500 });
+    const F = _clampFocalPx(region, edges, { x: 500, y: 500 }, radius);
     expect(F.x).toBeCloseTo(800, 1);   // clamped so the right edge still covers the region
     expect(F.y).toBeCloseTo(500, 1);   // y centred (ideal 500 within [−2000, 3000])
     // Image right edge at focal: F.x + eRight = 800 + 200 = 1000 = region right.
     expect(F.x + edges.eRight).toBeCloseTo(region.x + region.w, 0);
+    // Circle whole inside the region: 650 → 950.
+    expect(F.x - radius).toBeGreaterThanOrEqual(region.x);
+    expect(F.x + radius).toBeLessThanOrEqual(region.x + region.w);
   });
 
-  it('keeps the ideal focal when the image is too small to cover the region', () => {
+  it('keeps the ideal focal when the image is narrower than the region on an axis', () => {
     // Image 600 px wide/tall but region is 2000 — cannot cover, so just keep the ideal.
     const region = { x: 0, y: 0, w: 2000, h: 2000 };
     const edges = { eLeft: 300, eRight: 300, eTop: 300, eBottom: 300 };
     const ideal = { x: 877, y: 1045 };
-    const F = _clampFocalPx(region, edges, ideal);
+    const F = _clampFocalPx(region, edges, ideal, 250);
     expect(F.x).toBeCloseTo(877, 5);
     expect(F.y).toBeCloseTo(1045, 5);
+  });
+
+  it('holds the circle a radius clear of the region edge when one axis is nearer (corner step)', () => {
+    // Focal near the image's top edge: eTop is smaller than the circle's radius, so the
+    // image bound would put part of the framed detail outside the region.
+    const region = { x: 576, y: 0, w: 864, h: 900 };
+    const edges = { eLeft: 2867.7, eRight: 3032.9, eTop: 120, eBottom: 6591.5 };
+    const ideal = { x: 1008, y: 450 };
+    const radius = 432;
+    const F = _clampFocalPx(region, edges, ideal, radius);
+    expect(F.x).toBeCloseTo(1008, 0);   // x untouched: both x edges clear the radius
+    expect(F.y).toBeCloseTo(432, 0);    // y held a radius below the region's top edge
+    expect(F.y - radius).toBeGreaterThanOrEqual(region.y);
+    expect(F.y + radius).toBeLessThanOrEqual(region.y + region.h);
+    // The image's top edge sits inside the region: background shows above it.
+    expect(F.y - edges.eTop).toBeGreaterThan(region.y);
+  });
+
+  it('holds the circle clear of both region edges at an extreme corner', () => {
+    // Bottom card: the uncovered region is the strip above it, and the focal sits near
+    // the image's top-left corner — nearer than the radius on both axes.
+    const region = { x: 0, y: 0, w: 900, h: 800 };
+    const edges = { eLeft: 150, eRight: 4000, eTop: 90, eBottom: 5000 };
+    const ideal = { x: 450, y: 400 };
+    const radius = 400;                                    // radius match: min(w, h) / 2
+    const F = _clampFocalPx(region, edges, ideal, radius);
+    expect(F.x).toBeCloseTo(400, 0);
+    expect(F.y).toBeCloseTo(400, 0);
+    expect(F.x - radius).toBeGreaterThanOrEqual(region.x);
+    expect(F.y - radius).toBeGreaterThanOrEqual(region.y);
+    expect(F.x + radius).toBeLessThanOrEqual(region.x + region.w);
+    expect(F.y + radius).toBeLessThanOrEqual(region.y + region.h);
   });
 });

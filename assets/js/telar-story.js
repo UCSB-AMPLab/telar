@@ -953,11 +953,12 @@
     const focalImg = { x: x * imageW, y: y * imageH };
     return { focalImg, diameterImg, region, imageW, imageH };
   }
-  function _clampFocalPx(region, edges, ideal) {
-    const loX = region.x + region.w - edges.eRight;
-    const hiX = region.x + edges.eLeft;
-    const loY = region.y + region.h - edges.eBottom;
-    const hiY = region.y + edges.eTop;
+  function _clampFocalPx(region, edges, ideal, radius) {
+    const keep = (edge) => Math.max(edge, radius);
+    const loX = region.x + region.w - keep(edges.eRight);
+    const hiX = region.x + keep(edges.eLeft);
+    const loY = region.y + region.h - keep(edges.eBottom);
+    const hiY = region.y + keep(edges.eTop);
     return {
       x: loX <= hiX ? Math.max(loX, Math.min(hiX, ideal.x)) : ideal.x,
       y: loY <= hiY ? Math.max(loY, Math.min(hiY, ideal.y)) : ideal.y
@@ -982,9 +983,11 @@
     const vp = v.viewport;
     const OSD = window.OpenSeadragon;
     const rect = av.containerEl.getBoundingClientRect();
+    const hasRegion = region.w > 0 && region.h > 0;
+    const isOverview = zoom <= 1;
     const s_tgt = Math.min(region.w, region.h) / diameterImg;
-    const s_cap = Math.min(rect.width / imgW, rect.height / imgH);
-    const s = Math.max(s_tgt, s_cap);
+    const s_fit = hasRegion ? Math.min(region.w / imgW, region.h / imgH) : Math.min(rect.width / imgW, rect.height / imgH);
+    const s = isOverview ? s_fit : Math.max(s_tgt, s_fit);
     const CB = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
     const edges = {
       eLeft: focalImg.x * s,
@@ -992,7 +995,8 @@
       eTop: focalImg.y * s,
       eBottom: (imgH - focalImg.y) * s
     };
-    const F = _clampFocalPx(region, edges, CB);
+    const radiusPx = diameterImg * s / 2;
+    const F = _clampFocalPx(region, edges, CB, radiusPx);
     const visW = rect.width / s;
     const visH = rect.height / s;
     const topLeft = { x: focalImg.x - F.x / s, y: focalImg.y - F.y / s };
@@ -1055,7 +1059,7 @@
     if (!viewerCard || !viewerCard.isReady) return;
     snapIiifToPosition(viewerCard, x, y, zoom);
   }
-  function _reSnapActiveViewer() {
+  function reSnapActiveViewer() {
     const viewerCard = state.viewerCards.find(
       (vc) => vc.element && vc.element.classList.contains("is-active")
     );
@@ -1067,20 +1071,20 @@
     const steps = (window.storyData?.steps || []).filter((s) => !s._metadata);
     const step = steps[stepIndex];
     if (!step) return;
-    const x = parseFloat(step.x);
-    const y = parseFloat(step.y);
-    const zoom = parseFloat(step.zoom);
-    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-    snapIiifToPosition(viewerCard, x, y, zoom);
+    const num = (value, fallback) => {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    snapIiifToPosition(viewerCard, num(step.x, 0.5), num(step.y, 0.5), num(step.zoom, 1));
   }
   onViewportResize(() => {
-    _reSnapActiveViewer();
+    reSnapActiveViewer();
   });
   onLayoutChange(() => {
     requestAnimationFrame(() => {
       const activeCard = document.querySelector(".text-card.is-active");
       state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
-      _reSnapActiveViewer();
+      reSnapActiveViewer();
     });
   });
 
@@ -2456,11 +2460,16 @@
       });
     }
   }
+  var _FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
   function _stepFraming(step) {
+    const num = (value, fallback) => {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : fallback;
+    };
     return {
-      x: parseFloat(step.x),
-      y: parseFloat(step.y),
-      zoom: parseFloat(step.zoom),
+      x: num(step.x, _FULL_OBJECT_FRAMING.x),
+      y: num(step.y, _FULL_OBJECT_FRAMING.y),
+      zoom: num(step.zoom, _FULL_OBJECT_FRAMING.zoom),
       page: step.page ? parseInt(step.page, 10) : void 0
     };
   }
@@ -3000,6 +3009,11 @@
       el.classList.add("is-stacked");
     }
   }
+  function _writeCardOverlayRect(cardEl) {
+    const hadRect = state.cardOverlayRect != null;
+    state.cardOverlayRect = cardEl.getBoundingClientRect();
+    if (!hadRect) reSnapActiveViewer();
+  }
   function _activateTextCard(cardEl) {
     const messiness = _readCardMessiness(cardEl);
     cardEl.classList.remove("is-stacked");
@@ -3008,7 +3022,7 @@
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const isScrubbing = document.querySelector(".card-stack")?.classList.contains("is-scrubbing");
     if (prefersReduced || isScrubbing) {
-      state.cardOverlayRect = cardEl.getBoundingClientRect();
+      _writeCardOverlayRect(cardEl);
       return;
     }
     if (cardEl._settleHandler) {
@@ -3018,7 +3032,7 @@
       if (ev.target !== cardEl || ev.propertyName !== "transform") return;
       cardEl.removeEventListener("transitionend", onSettled);
       cardEl._settleHandler = null;
-      state.cardOverlayRect = cardEl.getBoundingClientRect();
+      _writeCardOverlayRect(cardEl);
     };
     cardEl._settleHandler = onSettled;
     cardEl.addEventListener("transitionend", onSettled);
