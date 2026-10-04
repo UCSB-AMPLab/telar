@@ -49,11 +49,11 @@ import sys
 import json
 from pathlib import Path
 
-import pandas as pd
 import yaml
 
 from telar.csv_utils import (sanitize_dataframe, normalize_column_names,
-                             is_header_row, text_column_dtypes, OBJECT_FIELDS,
+                             is_header_row, read_sheet, text_column_dtypes,
+                             OBJECT_FIELDS,
                              ColumnCollisionError, ReservedColumnError)
 from telar.processors.project import process_project_setup
 from telar.processors.objects import process_objects
@@ -110,9 +110,9 @@ def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None,
         # as the glossary readers and the Compositor read them: an object
         # titled `NA` is titled `NA`, and the token counts as a cell in the
         # bilingual header-row test.
-        df = pd.read_csv(csv_path, on_bad_lines='warn',
-                         dtype=text_column_dtypes(),
-                         keep_default_na=False, na_values=[''])
+        df = read_sheet(csv_path, on_bad_lines='warn',
+                        dtype=text_column_dtypes(),
+                        keep_default_na=False, na_values=[''])
 
         # Filter out comment rows (first column value starts with #)
         # This handles both # and "# patterns while preserving markdown headers in multi-line cells

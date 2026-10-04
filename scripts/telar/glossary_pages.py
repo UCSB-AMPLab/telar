@@ -13,12 +13,11 @@ import re
 import shutil
 from pathlib import Path
 
-import pandas as pd
-
 from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
+from telar.csv_utils import read_sheet
 from telar.latex import convert_markdown, has_latex
 from telar.frontmatter import FRONTMATTER_PATTERN, _as_text, _frontmatter_block
 from telar.story_pages import jekyll_slug
@@ -37,7 +36,7 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
     # reads a term titled `null` or `NA` as a missing value and the page
     # is written `nan`, and it decides per column, so the same title
     # survives or does not depending on what its neighbours look like.
-    df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+    df = read_sheet(csv_path, dtype=str, keep_default_na=False)
 
     # Normalize column names (bilingual mapping), then fold what is left.
     # The order is the whole point. Folding first left two spellings of one

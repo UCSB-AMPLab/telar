@@ -16,6 +16,12 @@ to the current "layer1_content". `normalize_column_names()` applies this
 mapping to a DataFrame's columns, printing an info line for each rename
 so the build log shows what happened.
 
+`read_sheet()` is how every site sheet is read. It reads every row to the
+header's width, so a row ending in a trailing comma is neither dropped nor
+turned into a row index that moves every value one column left, and it
+prints a warning naming the sheet and row for any value past the header's
+last column, which is not published.
+
 `is_header_row()` detects duplicate header rows that sometimes appear in
 bilingual CSVs (where the first data row repeats the column names in the
 other language). It checks whether 80% or more of a row's non-empty cells
@@ -43,6 +49,9 @@ rename of the gallery classification column from `object_type` to `medium`
 Version: v1.8.0
 """
 
+import contextlib
+import csv
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -319,6 +328,120 @@ def text_column_dtypes():
     headers.update(alias for alias, canonical in COLUMN_NAME_MAPPING.items()
                    if canonical in TEXT_COLUMNS)
     return {header: str for header in headers}
+
+
+# What `read_sheet` passes on to pandas: the arguments its callers use, and
+# the encoding pair, which the header read and the scan both apply.
+READ_SHEET_ARGUMENTS = frozenset({'on_bad_lines', 'dtype', 'keep_default_na',
+                                  'na_values', 'encoding', 'encoding_errors'})
+
+
+def read_sheet(csv_path, **kwargs):
+    """Read a site sheet into a DataFrame whose columns are the header's.
+
+    Every reader of a site sheet goes through here, and every row is read to
+    the header's width. Left to itself, pandas reads a trailing comma two
+    ways, both of which lose the author's data: in the first data row it
+    takes the first column as the row index, and every value lands one
+    column to the left of its header; in a later row wider than the first
+    it skips the row under `on_bad_lines`, or refuses the sheet where that
+    is left at `error`. `usecols` set to the header's columns reads every
+    row as the header describes it.
+
+    The width is the header pandas itself reads, which is not always the
+    file's first line: pandas skips a line of spaces or tabs. Where pandas
+    cannot read the header, the sheet is read with no column limit, and
+    pandas refuses it as it would have. `usecols` alone already keeps a
+    first row's values under their headers; `index_col=False` states the
+    same for that unlimited read.
+
+    A cut cell that holds a value is text the author typed and the site will
+    not show, so `_report_cells_past_header` names it with its sheet and row.
+
+    Only `READ_SHEET_ARGUMENTS` are accepted. The header is read on its own
+    first, with the encoding arguments alone, so an argument that moves the
+    header or changes how a line splits (`skiprows`, `sep`, `quotechar`,
+    `comment`...) would cut the sheet against a header it does not have.
+
+    Args:
+        csv_path: Path to the sheet
+        **kwargs: Passed to `pd.read_csv`; see `READ_SHEET_ARGUMENTS`
+
+    Returns:
+        pandas.DataFrame
+
+    Raises:
+        TypeError: for an argument not in `READ_SHEET_ARGUMENTS`
+    """
+    refused = sorted(set(kwargs) - READ_SHEET_ARGUMENTS)
+    if refused:
+        raise TypeError(f"read_sheet() does not accept {', '.join(refused)}: "
+                        f"the header it reads the width from would not be the sheet's")
+    encoding = {key: kwargs[key] for key in ('encoding', 'encoding_errors')
+                if key in kwargs}
+    try:
+        width = len(pd.read_csv(csv_path, nrows=0, index_col=False,
+                                **encoding).columns)
+    except (OSError, ValueError):
+        width = 0
+    if width:
+        _report_cells_past_header(csv_path, width, **encoding)
+        kwargs['usecols'] = range(width)
+    return pd.read_csv(csv_path, index_col=False, **kwargs)
+
+
+def _report_cells_past_header(csv_path, width, encoding=None, encoding_errors=None):
+    """Print a warning for each value past the header's `width`.
+
+    `width` is the header pandas reads, so no row of it is past the width,
+    whichever line it sits on; nor is a line of spaces or tabs that pandas
+    skips and `csv` reads as a row of one cell. A row whose first cell
+    starts with `#` is a comment the build drops, so its cells are not
+    reported. Rows are numbered as a spreadsheet numbers them, blank rows
+    included.
+
+    It decodes as pandas does, with the caller's `encoding` and
+    `encoding_errors`, so a sheet pandas reads is one the scan reads. The
+    scan is a report and never a reason to fail: where `csv` cannot
+    read a file, the rows from that point on are left unreported.
+    """
+    sheet = Path(csv_path).name
+    try:
+        with open(csv_path, encoding=encoding or 'utf-8-sig', newline='',
+                  errors=encoding_errors or 'strict') as f, \
+                _field_limit_lifted():
+            for number, row in enumerate(csv.reader(f), start=1):
+                if not row or row[0].strip().startswith('#'):
+                    continue
+                values = [cell.strip() for cell in row[width:] if cell.strip()]
+                if values:
+                    shown = ', '.join(f'"{value}"' for value in values)
+                    print(f"  [WARN] {sheet} row {number} has more cells than the "
+                          f"header row; {shown} past the last column is not published")
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return
+
+
+@contextlib.contextmanager
+def _field_limit_lifted():
+    """Let `csv` read a cell as long as pandas reads, then put the limit back.
+
+    The module refuses a field over 131,072 characters by default; pandas
+    has no such limit. The largest limit the platform accepts is found by
+    halving from `sys.maxsize`.
+    """
+    previous = csv.field_size_limit()
+    limit = sys.maxsize
+    while True:
+        try:
+            csv.field_size_limit(limit)
+            break
+        except OverflowError:
+            limit //= 2
+    try:
+        yield
+    finally:
+        csv.field_size_limit(previous)
 
 
 def normalize_column_names(df, canonical_fields=None, sheet_aliases=None):

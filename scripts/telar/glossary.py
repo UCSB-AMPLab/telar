@@ -59,14 +59,13 @@ Version: v1.8.0
 import html
 import re
 from pathlib import Path
-import pandas as pd
 from telar.code_spans import code_elements, code_regions
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
                                   kind_text, resolve_kind)
 from telar.story_pages import jekyll_slug
-from telar.csv_utils import ColumnCollisionError, ReservedColumnError
+from telar.csv_utils import ColumnCollisionError, ReservedColumnError, read_sheet
 
 
 class GlossaryTerms(dict):
@@ -97,7 +96,7 @@ def load_glossary_from_csv(csv_path):
         # reads a term titled `null` or `NA` as a missing value and the page
         # is written `nan`, and it decides per column, so the same title
         # survives or does not depending on what its neighbours look like.
-        df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+        df = read_sheet(csv_path, dtype=str, keep_default_na=False)
 
         # Normalize column names (bilingual mapping). normalize_column_names
         # already lowercases internally for lookup, so pre-lowercasing here was
