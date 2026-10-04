@@ -5113,7 +5113,18 @@
   var cardStackEl;
   var totalPositions = 0;
   var keyboardNavInFlight = false;
-  var navInFlight = false;
+  var navToken = 0;
+  var navSeq = 0;
+  var scrollDirection = 1;
+  var lastPosition = 0;
+  function beginNav() {
+    navToken = ++navSeq;
+    return navToken;
+  }
+  function endNav(token) {
+    if (navToken === token) navToken = 0;
+  }
+  var REST_TOLERANCE = 1e-3;
   function initScrollEngine(stepCount) {
     const surface = document.querySelector(".scroll-surface");
     const cardStack = document.querySelector(".card-stack");
@@ -5180,8 +5191,12 @@
     });
     lenis.on("scroll", (l) => {
       const position = l.animatedScroll / window.innerHeight;
+      if (position !== lastPosition) {
+        scrollDirection = position > lastPosition ? 1 : -1;
+        lastPosition = position;
+      }
       updateScrollPosition(position);
-      if (!navInFlight) armScrubEnd();
+      if (!navToken) armScrubEnd();
     });
     rafId = requestAnimationFrame(function raf(time) {
       lenis.raf(time);
@@ -5201,12 +5216,32 @@
     clearTimeout(scrubEndTimer);
     scrubEndTimer = setTimeout(endScrub, 100);
   }
-  function endScrub() {
+  function endScrub({ carry = true } = {}) {
     clearTimeout(scrubEndTimer);
     scrubEndTimer = null;
     if (!cardStackEl) return;
     cardStackEl.classList.remove("is-scrubbing");
-    if (lenis) settleCards(lenis.animatedScroll / window.innerHeight);
+    if (!lenis) return;
+    const position = lenis.animatedScroll / window.innerHeight;
+    settleCards(position);
+    if (carry) carryToNearestStep(position);
+  }
+  function carryToNearestStep(position) {
+    if (navToken || state.isSnapping) return;
+    const target = scrollDirection < 0 ? Math.floor(position) : Math.ceil(position);
+    if (Math.abs(position - target) < REST_TOLERANCE) return;
+    if (target < 0 || target >= totalPositions) return;
+    const nearest = target;
+    const token = beginNav();
+    lenis.scrollTo(nearest * window.innerHeight, {
+      duration: navSeconds().button,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+      // ease-out cubic
+      onComplete: () => {
+        endNav(token);
+        writeHash();
+      }
+    });
   }
   function registerSnapPoints(count) {
     snapRemovers.forEach((fn) => fn());
@@ -5219,21 +5254,20 @@
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
     const lenisInstance = state.lenis || lenis;
     if (!lenisInstance) return;
-    endScrub();
+    const token = beginNav();
+    endScrub({ carry: false });
     const targetPx = (targetIndex + 1) * window.innerHeight;
-    navInFlight = true;
     lenisInstance.scrollTo(targetPx, {
       duration: navSeconds().button,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
-      onComplete: () => {
-        navInFlight = false;
-      }
+      onComplete: () => endNav(token)
     });
   }
   function keyboardNav(direction) {
     if (!lenis) return;
-    endScrub();
+    const token = beginNav();
+    endScrub({ carry: false });
     if (dwellTimer) {
       clearTimeout(dwellTimer);
       dwellTimer = null;
@@ -5250,7 +5284,10 @@
       target = isExact ? rounded - 1 : Math.floor(position);
     }
     target = Math.max(0, Math.min(target, totalPositions - 1));
-    if (target === rounded && isExact) return;
+    if (target === rounded && isExact) {
+      endNav(token);
+      return;
+    }
     settleCards(target);
     snap.currentSnapIndex = target;
     const targetStep = target - 1;
@@ -5265,7 +5302,6 @@
       goToStep(-1, "backward");
     }
     keyboardNavInFlight = true;
-    navInFlight = true;
     lenis.scrollTo(target * vh, {
       force: true,
       duration: navSeconds().keyboard,
@@ -5273,7 +5309,7 @@
       // ease-out cubic
       onComplete: () => {
         keyboardNavInFlight = false;
-        navInFlight = false;
+        endNav(token);
         writeHash();
       }
     });
