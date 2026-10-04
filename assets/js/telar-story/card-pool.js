@@ -3,12 +3,15 @@
  *
  * This module owns two distinct lifecycles in the card-stack layout:
  *
- *   1. The permanent card registry (state.cardRegistry) — a step→card record
+ *   1. The permanent text cards (state.textCards) — step index → element,
  *      built once at init time. Every card element is created up front and
  *      persists in the DOM for the lifetime of the page; nothing is ever
  *      evicted. Visibility is controlled entirely by CSS transforms, so
  *      slide transitions animate correctly without the jank of DOM
- *      insertion and removal.
+ *      insertion and removal. What a card is for — its step, its object, its
+ *      place in the run — is written on the element, so there is one answer
+ *      to each of those questions rather than a map and a record that can
+ *      disagree.
  *
  *   2. The viewer pool (state.viewerCards) — live viewer instances (IIIF,
  *      video, audio) attached to viewer plates. This one genuinely pools:
@@ -199,6 +202,20 @@ export function getCardMessiness(seed, messinessPercent) {
   const offY = seededRandom(seed * 3 + 3) * maxOffY * 2 - maxOffY;
 
   return { rot, offX, offY };
+}
+
+/**
+ * A card's place in its run, read from the card.
+ *
+ * `_createTextCards` writes it to the element and `_recomputeCardGeometry`
+ * reads it back from there, so the element is where it lives; a parallel copy
+ * is a second answer to a question with one.
+ *
+ * @param {HTMLElement} card
+ * @returns {number}
+ */
+function _cardRunPosition(card) {
+  return parseInt(card?.dataset?.runPosition, 10) || 0;
 }
 
 // ── Peek positioning (pure, unit-tested) ─────────────────────────────────────
@@ -823,14 +840,6 @@ function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
 
     cardStack.appendChild(card);
     state.textCards[stepIdx] = card;
-
-    state.cardRegistry.push({
-      stepIndex: stepIdx,
-      objectId,
-      runPosition: runPos,
-      objectIndex,
-      element: card,
-    });
   }
 }
 
@@ -1294,19 +1303,18 @@ function _restoreBackwardTarget(cardEl) {
 /**
  * Scrolling into a step.
  *
- * Either the object or the framing has changed, and the reader gets a new
- * viewer plate; or neither has, and only the text card moves. The second is
- * much the commoner case and much the cheaper one, which is why the two are
- * distinguished at all.
+ * A changed object or framing gets a new viewer plate. Anything else moves
+ * the text card only and leaves the viewer where it stands, which is what
+ * keeps scrolling within a scene from rebuilding the viewer under the reader.
  */
-function _activateForward(index, direction, card, registryEntry, step, objectId,
+function _activateForward(index, direction, card, step, objectId,
    prevObjectId, needsNewViewer) {
   if (needsNewViewer) {
     // Full card — new viewer plate + new text card
     _activateNewViewerPlate(objectId, index, prevObjectId, step, direction);
 
     // Reset the object run tracker
-    state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
+    state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
 
     // Deactivate previous text card (keep stacked, not slide away)
     _deactivatePreviousTextCard(index, direction);
@@ -1321,7 +1329,7 @@ function _activateForward(index, direction, card, registryEntry, step, objectId,
 
   } else {
     // Text-only on same object
-    state.currentObjectRun.runPosition = registryEntry.runPosition;
+    state.currentObjectRun.runPosition = _cardRunPosition(card);
 
     // Deactivate previous text card (becomes stacked)
     _deactivatePreviousTextCard(index, direction);
@@ -1348,21 +1356,16 @@ function _activateForward(index, direction, card, registryEntry, step, objectId,
 }
 
 /**
- * Scrolling back out of a step.
- *
- * Not the mirror image of going forward: the plate being left is the one
- * ahead, so it is derived from index + 1 rather than from where the reader
- * now is, and the order of revealing and hiding is what keeps a shared
- * plate visible across an intra-scene mode flip.
- */
-/**
  * Slide the plate being left off, and bring the one behind it back.
  *
- * The order matters and is the reason this is not the reverse of going
- * forward: an intra-scene mode flip resolves both plates to the same node,
- * and revealing before hiding is what keeps it on screen. Video plates are
- * snapped rather than transitioned, because an iframe on mobile breaks the
- * compositing the transition needs.
+ * Reveal before hide: an intra-scene mode flip resolves both plates to the
+ * same node, so hiding first takes it off screen and nothing brings it back.
+ * That ordering is also why this is not the forward path reversed — there the
+ * plate being left is the one ahead, derived from index + 1 rather than from
+ * where the reader now is.
+ *
+ * Video plates are snapped rather than transitioned: an iframe on mobile
+ * breaks the compositing a transition needs.
  */
 function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
   // Different DOM elements always — slide current plate down, reveal previous
@@ -1409,7 +1412,7 @@ function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
   }
 }
 
-function _activateBackward(index, direction, card, registryEntry, step, objectId,
+function _activateBackward(index, direction, card, step, objectId,
    prevObjectId, needsNewViewer) {
   // Before anything departs: the card being uncovered has to be in place, so
   // that the only thing the reader sees move is the card leaving.
@@ -1429,7 +1432,7 @@ function _activateBackward(index, direction, card, registryEntry, step, objectId
 
     _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId);
 
-    state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
+    state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
 
     // Slide current text card back down
     _deactivatePreviousTextCard(index, direction);
@@ -1444,7 +1447,7 @@ function _activateBackward(index, direction, card, registryEntry, step, objectId
 
   } else {
     // Same object, backward: text card slides down, previous card reactivated
-    state.currentObjectRun.runPosition = registryEntry.runPosition;
+    state.currentObjectRun.runPosition = _cardRunPosition(card);
 
     _deactivatePreviousTextCard(index, direction);
     _activateTextCard(card);
@@ -1524,17 +1527,15 @@ export function activateCard(index, direction) {
   const card = state.textCards[index];
   if (!card) return;
 
-  const registryEntry = state.cardRegistry.find(c => c.stepIndex === index);
-
   const step = _stepsData[index] || {};
   const prevStep = index > 0 ? _stepsData[index - 1] : null;
 
-  const objectId = registryEntry.objectId;
+  const objectId = card.dataset.object;
   const prevObjectId = state.currentObjectRun.objectId;
 
   const needsNewViewer = _needsNewViewer(step, prevStep, objectId, prevObjectId);
 
-  const args = [index, direction, card, registryEntry, step, objectId,
+  const args = [index, direction, card, step, objectId,
                 prevObjectId, needsNewViewer];
   if (direction === 'forward') {
     _activateForward(...args);
@@ -1704,15 +1705,6 @@ export function onCardsSettle(hook) {
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
-/**
- * Point the plate's viewer at this step.
- *
- * Three kinds of plate and four states between them: audio and video are
- * initialised on first use, an IIIF plate with no viewer card yet is built
- * from scratch, and one that already has a ready viewer is asked to move.
- * A viewer that is not ready gets the position stored for it to apply when
- * it is.
- */
 /**
  * Put a IIIF viewer where a step's framing says, now or when it is ready.
  *
@@ -2190,10 +2182,9 @@ function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
  * @param {'forward'|'backward'} direction
  */
 function _deactivatePreviousTextCard(newIndex, direction) {
-  const prevCard = state.cardRegistry.find(c => c.element.classList.contains('is-active'));
-  if (!prevCard || prevCard.stepIndex === newIndex) return;
+  const el = document.querySelector('.text-card.is-active');
+  if (!el || Number(el.dataset.stepIndex) === newIndex) return;
 
-  const el = prevCard.element;
   el.classList.remove('is-active');
 
   // Backward the card is the one above the step being arrived at, and travels
@@ -2204,7 +2195,7 @@ function _deactivatePreviousTextCard(newIndex, direction) {
   // transform is written here rather than left to the stylesheet because a
   // card's transform is inline and a rule for it would lose the cascade.
   el.classList.toggle('is-stacked', direction !== 'backward');
-  placeCard(el, cardBaseFor(prevCard.stepIndex, newIndex));
+  placeCard(el, cardBaseFor(Number(el.dataset.stepIndex), newIndex));
 }
 
 /**

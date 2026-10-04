@@ -84,7 +84,6 @@
      * built once at initCardPool time and never evicted. Not a pool — the
      * capped, evicting structure is `viewerCards` above.
      */
-    cardRegistry: [],
     /** Map of sceneIndex -> viewer plate element (one plate per scene). */
     viewerPlates: {},
     /** Map of stepIndex -> text card element. */
@@ -2393,6 +2392,9 @@
     const offY = seededRandom(seed * 3 + 3) * maxOffY * 2 - maxOffY;
     return { rot, offX, offY };
   }
+  function _cardRunPosition(card) {
+    return parseInt(card?.dataset?.runPosition, 10) || 0;
+  }
   function computeCardTop(viewportH, cardH, runPosition, peekHeightPx) {
     const centred = (viewportH - cardH) / 2;
     return centred + runPosition * peekHeightPx;
@@ -2628,13 +2630,6 @@
       }
       cardStack.appendChild(card);
       state.textCards[stepIdx] = card;
-      state.cardRegistry.push({
-        stepIndex: stepIdx,
-        objectId,
-        runPosition: runPos,
-        objectIndex,
-        element: card
-      });
     }
   }
   var _FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
@@ -2822,16 +2817,16 @@
       cardBaseFor(idx, idx + 1)
     ));
   }
-  function _activateForward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
+  function _activateForward(index2, direction, card, step, objectId, prevObjectId, needsNewViewer) {
     if (needsNewViewer) {
       _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
-      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
+      state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
       _deactivatePreviousTextCard(index2, direction);
       _clearActiveTitleCard(direction);
       _activateTextCard(card);
       updateObjectCredits(objectId);
     } else {
-      state.currentObjectRun.runPosition = registryEntry.runPosition;
+      state.currentObjectRun.runPosition = _cardRunPosition(card);
       _deactivatePreviousTextCard(index2, direction);
       _activateTextCard(card);
       const plate = _plateForScene(getSceneIndex(index2));
@@ -2878,20 +2873,20 @@
       }
     }
   }
-  function _activateBackward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
+  function _activateBackward(index2, direction, card, step, objectId, prevObjectId, needsNewViewer) {
     _restoreBackwardTarget(card);
     if (needsNewViewer) {
       const currentSceneIndex = getSceneIndex(index2 + 1);
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
       const prevPlate = state.viewerPlates[getSceneIndex(index2)];
       _swapPlatesBackward(currentPlate, prevPlate, index2, prevObjectId);
-      state.currentObjectRun = { objectId, runPosition: registryEntry.runPosition };
+      state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
       _deactivatePreviousTextCard(index2, direction);
       _clearActiveTitleCard(direction);
       _activateTextCard(card);
       updateObjectCredits(objectId);
     } else {
-      state.currentObjectRun.runPosition = registryEntry.runPosition;
+      state.currentObjectRun.runPosition = _cardRunPosition(card);
       _deactivatePreviousTextCard(index2, direction);
       _activateTextCard(card);
       _retargetPlateForStep(_plateForScene(getSceneIndex(index2)), objectId, step, index2);
@@ -2918,17 +2913,15 @@
     }
     const card = state.textCards[index2];
     if (!card) return;
-    const registryEntry = state.cardRegistry.find((c) => c.stepIndex === index2);
     const step = _stepsData[index2] || {};
     const prevStep2 = index2 > 0 ? _stepsData[index2 - 1] : null;
-    const objectId = registryEntry.objectId;
+    const objectId = card.dataset.object;
     const prevObjectId = state.currentObjectRun.objectId;
     const needsNewViewer = _needsNewViewer(step, prevStep2, objectId, prevObjectId);
     const args = [
       index2,
       direction,
       card,
-      registryEntry,
       step,
       objectId,
       prevObjectId,
@@ -3236,12 +3229,11 @@
     });
   }
   function _deactivatePreviousTextCard(newIndex, direction) {
-    const prevCard = state.cardRegistry.find((c) => c.element.classList.contains("is-active"));
-    if (!prevCard || prevCard.stepIndex === newIndex) return;
-    const el = prevCard.element;
+    const el = document.querySelector(".text-card.is-active");
+    if (!el || Number(el.dataset.stepIndex) === newIndex) return;
     el.classList.remove("is-active");
     el.classList.toggle("is-stacked", direction !== "backward");
-    placeCard(el, cardBaseFor(prevCard.stepIndex, newIndex));
+    placeCard(el, cardBaseFor(Number(el.dataset.stepIndex), newIndex));
   }
   function _writeCardOverlayRect(cardEl) {
     const hadRect = state.cardOverlayRect != null;

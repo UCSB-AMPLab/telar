@@ -153,7 +153,6 @@ export const state = {
    * built once at initCardPool time and never evicted. Not a pool — the
    * capped, evicting structure is `viewerCards` above.
    */
-  cardRegistry: [],
   /** Map of sceneIndex -> viewer plate element (one plate per scene). */
   viewerPlates: {},
   /** Map of stepIndex -> text card element. */

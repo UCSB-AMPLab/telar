@@ -52,7 +52,6 @@ describe('setCardProgress — title card fallback', () => {
   beforeEach(() => {
     state.textCards  = {};
     state.titleCards = {};
-    state.cardRegistry = [];
   });
 
   it('is exported and does not throw when progress < 0.001', () => {
@@ -123,9 +122,12 @@ describe('cardOverlayRect — rect populated in reduced-motion synchronous branc
     // Mock getBoundingClientRect to return a known rect
     mockCard.getBoundingClientRect = vi.fn().mockReturnValue(MOCK_RECT);
 
-    // Wire minimal card-pool state: text card + registry entry for step 0, same object as currentObjectRun
+    // Wire minimal card-pool state. The card carries its own step, object and
+    // run position, as _createTextCards writes them.
+    mockCard.dataset.stepIndex = '0';
+    mockCard.dataset.object = 'obj-a';
+    mockCard.dataset.runPosition = '0';
     state.textCards = { 0: mockCard };
-    state.cardRegistry = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: mockCard }];
 
     activateCard(0, 'forward');
 
@@ -167,8 +169,10 @@ describe('activateCard — same-object jump re-shows a hidden viewer plate', () 
     const card = document.createElement('div');
     card.getBoundingClientRect = vi.fn().mockReturnValue(
       { top: 0, left: 0, width: 1, height: 1, bottom: 1, right: 1 });
+    card.dataset.stepIndex = '0';
+    card.dataset.object = 'obj-a';
+    card.dataset.runPosition = '0';
     state.textCards = { 0: card };
-    state.cardRegistry = [{ stepIndex: 0, objectId: 'obj-a', runPosition: 0, element: card }];
   }
 
   it('re-adds is-active to the scene plate that a jump had hidden', () => {
@@ -203,7 +207,6 @@ describe('cardOverlayRect — null on title-card activation', () => {
 
     state.viewerPlates  = {};
     state.viewerCards   = [];
-    state.cardRegistry  = [];
     state.textCards     = {};
     state.activeTitleCardIndex = null;
   });
@@ -260,10 +263,10 @@ describe('initCardPool — a run starts where its scene starts', () => {
   it('restarts the run position when the story returns to an object', () => {
     buildStory(steps);
 
-    const runPositions = state.cardRegistry
-      .slice()
-      .sort((x, y) => x.stepIndex - y.stepIndex)
-      .map((c) => c.runPosition);
+    const runPositions = Object.keys(state.textCards)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((i) => Number(state.textCards[i].dataset.runPosition));
 
     // not [0, 1, 0, 2, 3], which is what a per-object counter produces
     expect(runPositions).toEqual([0, 1, 0, 0, 1]);
@@ -272,11 +275,13 @@ describe('initCardPool — a run starts where its scene starts', () => {
   it('gives every card that begins a scene run position zero', () => {
     buildStory(steps);
 
-    for (const entry of state.cardRegistry) {
+    for (const [key, card] of Object.entries(state.textCards)) {
+      const stepIndex = Number(key);
       const beginsScene =
-        state.sceneFirstStep[state.stepToScene[entry.stepIndex]] === entry.stepIndex;
+        state.sceneFirstStep[state.stepToScene[stepIndex]] === stepIndex;
       if (beginsScene) {
-        expect(entry.runPosition, `step ${entry.stepIndex} begins its run`).toBe(0);
+        expect(Number(card.dataset.runPosition),
+               `step ${stepIndex} begins its run`).toBe(0);
       }
     }
   });
@@ -296,14 +301,12 @@ describe('initCardPool — built card content escapes author text', () => {
     state.objectsIndex = {};
     state.viewerPlates = {};
     state.textCards = {};
-    state.cardRegistry = [];
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
     state.viewerPlates = {};
     state.textCards = {};
-    state.cardRegistry = [];
     state.titleCards = {};
   });
 
@@ -364,7 +367,6 @@ function resetPoolState() {
   state.viewerCards = [];
   state.textCards = {};
   state.titleCards = {};
-  state.cardRegistry = [];
   state.activeTitleCardIndex = null;
   state.currentObjectRun = { objectId: null, runPosition: 0 };
   state.cardOverlayRect = null;
