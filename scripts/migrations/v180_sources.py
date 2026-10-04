@@ -323,6 +323,75 @@ def _into_flow(text: str, start: int, missing: List[str]) -> Optional[str]:
     return text[:last] + lead + ', '.join(missing) + text[last:]
 
 
+def _scalar_split(rest: str) -> Tuple[str, str]:
+    """The scalar written after `exclude:` and the comment that follows it
+    on the line, if any. A quoted value ends at its closing quote, where
+    `''` inside single quotes and a backslash inside double quotes do not
+    close it; after that, a comment starts at a `#` preceded by a space."""
+    end = 0
+    if rest[:1] in ('"', "'"):
+        quote, end = rest[0], len(rest)
+        index = 1
+        while index < len(rest):
+            if quote == '"' and rest[index] == '\\':
+                index += 2
+            elif rest[index] == quote and quote == "'" and rest[index + 1:index + 2] == "'":
+                index += 2
+            elif rest[index] == quote:
+                end = index + 1
+                break
+            else:
+                index += 1
+    comment = re.compile(r'(^|\s)#').search(rest, end)
+    if not comment:
+        return rest, ''
+    return rest[:comment.start()].rstrip(), rest[comment.start():].strip()
+
+
+def _same_value(one, other) -> bool:
+    return type(one) is type(other) and one == other
+
+
+def _continuation_count(lines: List[str], start: int) -> int:
+    """How many lines after *start* continue it: indented ones, and blank
+    ones between them."""
+    count = 0
+    for index in range(start + 1, len(lines)):
+        body = _body(lines[index])
+        if not body.strip():
+            continue
+        if not body[:1].isspace():
+            break
+        count = index - start
+    return count
+
+
+def _from_scalar(text: str, start: int, value, missing: List[str]) -> Optional[str]:
+    """*text* with the scalar *value* under the key on line *start* moved to
+    the first item of a block list, followed by *missing*. The key line
+    keeps the comment. A value written on the key line alone keeps its text,
+    quoting included; one continued onto further lines is written
+    double-quoted in place of those lines, and one of those that is not a
+    string is not rewritten. The Compositor's `yaml_list_add` writes the
+    same bytes."""
+    lines, newline = text.splitlines(keepends=True), _newline_of(text)
+    ending = _ending(lines[start]) or newline
+    rest = _EXCLUDE_LINE.match(_body(lines[start])).group('rest').strip()
+    written, comment = _scalar_split(rest)
+    try:
+        alone = yaml.safe_load(f'exclude: {rest}')
+        alone = isinstance(alone, dict) and _same_value(alone.get('exclude'), value)
+    except yaml.YAMLError:
+        alone = False
+    if not alone and not isinstance(value, str):
+        return None
+    item = written if alone else json.dumps(value, ensure_ascii=False)
+    replaced = 1 if alone else 1 + _continuation_count(lines, start)
+    key = f'exclude: {comment}' if comment else 'exclude:'
+    lines[start:start + replaced] = [f'{key}{ending}', f'  - {item}{ending}']
+    return _into_block(''.join(lines), start, missing)
+
+
 def _new_exclude_key(text: str, missing: List[str]) -> str:
     newline = _newline_of(text)
     lines = _ended(text.splitlines(keepends=True), newline)
@@ -348,12 +417,17 @@ def _with_exclude_entries(text: str, value, missing: List[str]) -> Optional[str]
             updated = _into_flow(text, starts[-1], missing)
         elif not rest or rest.startswith('#'):
             updated = _into_block(text, starts[-1], missing)
+        elif not isinstance(value, (list, dict)):
+            updated = _from_scalar(text, starts[-1], value, missing)
         else:
             return None
     return updated if updated and _only_exclude_grew(text, updated, missing) else None
 
 
 def _only_exclude_grew(before: str, after: str, missing: List[str]) -> bool:
+    """Whether *after* reads as *before* with *missing* appended to its
+    `exclude:` list, a scalar counting as a list of itself, and nothing
+    else in the file changed."""
     try:
         old, new = yaml.safe_load(before) or {}, yaml.safe_load(after)
     except yaml.YAMLError:
@@ -363,9 +437,19 @@ def _only_exclude_grew(before: str, after: str, missing: List[str]) -> bool:
     new_list = new.get('exclude')
     if not isinstance(new_list, list):
         return False
-    if [value for value in new_list if value not in (old.get('exclude') or [])] != missing:
+    if new_list != _as_list(old.get('exclude')) + missing:
         return False
     return _without_exclude(old) == _without_exclude(new)
+
+
+def _as_list(value) -> list:
+    """The entries `exclude:` holds: a list as written, a scalar as a list
+    of itself, and nothing for a missing key, a null or a mapping."""
+    if isinstance(value, list):
+        return value
+    if value is None or value is _ABSENT or isinstance(value, dict):
+        return []
+    return [value]
 
 
 def _without_exclude(config: dict) -> dict:
@@ -399,15 +483,16 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
 
     The same shapes as the Compositor's `yaml_list_add`: a block list gets
     the entries appended at its own indentation, a flow list gets them
-    inside its brackets, a missing key is added as a block list, and a
-    scalar or mapping is left alone and fails. Present means present in the
-    parsed list, with or without a trailing slash, so an entry the owner
-    added by hand is not added again and one elsewhere in the file does not
-    count.
+    inside its brackets, a missing key is added as a block list, a scalar
+    is rewritten as a block list with the value first, and a mapping is
+    left alone and fails. Present means present in the parsed list (a
+    scalar reading as a list of itself), with or without a trailing slash,
+    so an entry the owner added by hand is not added again and one
+    elsewhere in the file does not count.
     """
     path = os.path.join(repo_root, _CONFIG)
     text, value = _read_config(path)
-    listed = value if isinstance(value, list) else []
+    listed = _as_list(value)
     # An item that is not a string cannot be a path, and cannot be hashed
     # if it is a mapping or list, so it is never one of the entries.
     present = {_normalise_entry(entry) for entry in listed if isinstance(entry, str)}
@@ -415,7 +500,7 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
     if not missing:
         return [_record(lang, 'v180_exclude_present', ', '.join(EXCLUDE_ENTRIES),
                         category=ChangeCategory.CONFIGURATION)]
-    shaped = value is _ABSENT or value is None or isinstance(value, list)
+    shaped = not isinstance(value, dict)
     updated = _with_exclude_entries(text, value, missing) if text is not None and shaped else None
     if updated is None:
         return _exclude_failures(lang, missing)

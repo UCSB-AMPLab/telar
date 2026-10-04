@@ -131,6 +131,23 @@ exclude:
 defaults: []
 '''
 
+TESTS_GROUP = (
+    "  # Telar's own test suite and the configuration that runs it. Nothing on a\n"
+    "  # site links to any of it, and a fixture is content written to be wrong in\n"
+    "  # a particular way — published, it is indistinguishable from the site's own.\n"
+    '  - tests/\n'
+    '  - pytest.ini\n'
+    '  - vitest.config.js\n'
+)
+TEXTS_GROUP = (
+    '  # Page, story and glossary sources. The build reads them and generates the\n'
+    '  # published pages from them; Jekyll rendering them as well puts a raw,\n'
+    '  # unprocessed copy of every one at a second URL, and a source that declares\n'
+    '  # its own permalink lands on top of the page generated from it.\n'
+    '  - telar-content/texts/\n'
+)
+ALL_FOUR = TESTS_GROUP + TEXTS_GROUP
+
 
 def _config(tmp_path, text):
     _write(tmp_path, '_config.yml', text)
@@ -286,12 +303,84 @@ class TestExcludeEntries:
         assert text.startswith('title: x\n\nexclude:\n  # Telar')
         assert text.endswith('  - telar-content/texts/\n')
 
+    @pytest.mark.parametrize('text, written, expected', [
+        ('exclude: vendor\ntitle: x\n',
+         'exclude:\n  - vendor\n' + ALL_FOUR + 'title: x\n', ['vendor']),
+        ("exclude: 'vendor'\ntitle: x\n",
+         "exclude:\n  - 'vendor'\n" + ALL_FOUR + 'title: x\n', ['vendor']),
+        ('exclude: "vendor"\ntitle: x\n',
+         'exclude:\n  - "vendor"\n' + ALL_FOUR + 'title: x\n', ['vendor']),
+        ('exclude: vendor  # built gems\ntitle: x\n',
+         'exclude: # built gems\n  - vendor\n' + ALL_FOUR + 'title: x\n', ['vendor']),
+        ('exclude: "a #b" # note\n',
+         'exclude: # note\n  - "a #b"\n' + ALL_FOUR, ['a #b']),
+        ('exclude: 3\n', 'exclude:\n  - 3\n' + ALL_FOUR, [3]),
+        ('title: x\r\nexclude: vendor\r\n',
+         'title: x\r\nexclude:\r\n  - vendor\r\n' + ALL_FOUR.replace('\n', '\r\n'),
+         ['vendor']),
+        ('exclude: >\n  vendor\ntitle: x\n',
+         'exclude:\n  - "vendor\\n"\n' + ALL_FOUR + 'title: x\n', ['vendor\n']),
+        ('exclude: two\n  lines # c\ntitle: x\n',
+         'exclude:\n  - "two lines"\n' + ALL_FOUR + 'title: x\n', ['two lines']),
+    ], ids=['plain', 'single-quoted', 'double-quoted', 'comment', 'hash-in-quotes',
+            'number', 'crlf', 'folded', 'continued'])
+    def test_a_scalar_becomes_a_block_list_with_it_first(self, tmp_path, text, written,
+                                                          expected):
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == written
+        assert _excluded(tmp_path) == expected + list(v180_sources.EXCLUDE_ENTRIES)
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
+        again = v180_sources.add_exclude_entries(str(tmp_path), 'en')
+        assert _read(tmp_path, '_config.yml') == written
+        assert 'already excludes' in again[0].description
+
+    @pytest.mark.parametrize('text, written', [
+        ('exclude: telar-content/texts\n',
+         'exclude:\n  - telar-content/texts\n' + TESTS_GROUP),
+        ("exclude: 'tests/'\n",
+         "exclude:\n  - 'tests/'\n  - pytest.ini\n  - vitest.config.js\n" + TEXTS_GROUP),
+    ], ids=['texts', 'tests'])
+    def test_a_scalar_that_is_an_entry_counts_as_present(self, tmp_path, text, written):
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == written
+        config = yaml.safe_load(written)['exclude']
+        assert config[0] == yaml.safe_load(text)['exclude']
+        assert sorted(entry.rstrip('/') for entry in config) == sorted(
+            entry.rstrip('/') for entry in v180_sources.EXCLUDE_ENTRIES)
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
+        added = [entry for entry in v180_sources.EXCLUDE_ENTRIES
+                 if entry.rstrip('/') != config[0].rstrip('/')]
+        assert records[0].description.startswith(f"Added {', '.join(added)} to")
+
+    def test_a_scalar_on_further_lines_that_is_not_a_string_fails(self, tmp_path):
+        """Only a string can be written again double-quoted."""
+        text = 'a: &n 3\nexclude: *n\n'
+
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == text
+        assert [(r.status, r.severity) for r in records] == [
+            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+
+    def test_a_rewrite_that_loses_the_scalar_is_refused(self, tmp_path, monkeypatch):
+        """The parse afterwards has to find the scalar first and the
+        entries after it, not only the entries."""
+        monkeypatch.setattr(v180_sources, '_from_scalar',
+                            lambda text, start, value, missing: 'exclude:\n' + ALL_FOUR)
+        text = 'exclude: vendor\n'
+
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == text
+        assert records[0].severity == 'hard'
+
     @pytest.mark.parametrize('text', [
-        'exclude: vendor\n',
         'exclude:\n  vendor: true\n',
-        'exclude: 3\n',
-    ], ids=['scalar', 'map', 'number'])
-    def test_a_scalar_or_map_is_left_alone_and_fails(self, tmp_path, text):
+        'exclude: {vendor: true}\n',
+    ], ids=['map', 'flow-map'])
+    def test_a_map_is_left_alone_and_fails(self, tmp_path, text):
         """Hard for the texts entry only; twice, with the same answer."""
         for _ in range(2):
             records = _config(tmp_path, text)

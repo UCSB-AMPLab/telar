@@ -368,8 +368,8 @@ MESSAGES = {
                               'publish them as pages of your site',
         'v180_exclude_present': '_config.yml already excludes {}',
         'v180_exclude_texts_failed': '_config.yml has no `exclude:` list this upgrade can add '
-                                     '`telar-content/texts/` to: `exclude:` holds a single value '
-                                     'or a mapping, or the file could not be read. Make '
+                                     '`telar-content/texts/` to: `exclude:` holds a mapping, '
+                                     'or the file could not be read. Make '
                                      '`exclude:` a list with `- telar-content/texts/` in it '
                                      'by hand and run the upgrade again. '
                                      'Without it, Jekyll publishes an unprocessed copy of every '
@@ -788,15 +788,15 @@ MESSAGES = {
         'v180_exclude_added': 'Se agregaron a la lista `exclude:` de _config.yml estas entradas: '
             '{}. Así Jekyll no las publica como páginas del sitio',
         'v180_exclude_present': '_config.yml ya excluye {}',
-        'v180_exclude_texts_failed': 'Esta actualización no pudo agregar `telar-content/texts/` a '
-            'la lista `exclude:` de _config.yml: `exclude:` tiene un solo'
-            ' valor o un conjunto de claves y valores en vez de una '
-            'lista, o no se pudo leer el archivo. Convierte `exclude:` a '
-            'mano en una lista que incluya `- telar-content/texts/` y '
-            'vuelve a ejecutar la actualización. Sin esa entrada, Jekyll '
-            'publica una copia sin procesar de los archivos de cada '
-            'página, historia y entrada del glosario, y si una página '
-            'fija su propia dirección, la construcción se detiene.',
+        'v180_exclude_texts_failed': 'Esta actualización no pudo agregar `telar-content/texts/` '
+            'a la lista `exclude:` de _config.yml: `exclude:` tiene un '
+            'conjunto de claves y valores en vez de una lista, o no se '
+            'pudo leer el archivo. Convierte `exclude:` a mano en una '
+            'lista que incluya `- telar-content/texts/` y vuelve a '
+            'ejecutar la actualización. Sin esa entrada, Jekyll publica'
+            ' una copia sin procesar de los archivos de cada página, '
+            'historia y entrada del glosario, y si una página fija su '
+            'propia dirección, la construcción se detiene.',
         'v180_exclude_others_failed': 'Esta actualización no pudo agregar {} a la lista `exclude:`'
             ' de _config.yml. Agrega esas entradas a mano debajo de '
             '`exclude:`: corresponden a las pruebas propias de Telar, y '
