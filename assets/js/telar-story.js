@@ -1452,6 +1452,7 @@
   }
   function destroyVideoPlayer(wrapper) {
     if (!wrapper) return;
+    wrapper._destroyed = true;
     try {
       if (wrapper.type === "youtube" && wrapper.player) {
         if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
@@ -1573,6 +1574,7 @@
     container.className = "video-iframe";
     plateEl.appendChild(container);
     detectYouTubeAspect(videoId).then((aspect) => {
+      if (wrapper._destroyed) return;
       if (aspect) {
         plateEl.dataset.aspectRatio = String(aspect);
         delete plateEl.dataset.videoLetterbox;
@@ -1592,11 +1594,13 @@
       _rafId: null,
       _autoplayTimeout: null,
       _playReceived: false,
+      _destroyed: false,
       destroy() {
         destroyVideoPlayer(this);
       }
     };
     loadYouTubeAPI().then(() => {
+      if (wrapper._destroyed) return;
       const cfg = buildYouTubeEmbedConfig(videoId, clipStart, clipEnd, loop);
       wrapper.player = new window.YT.Player(container, {
         videoId: cfg.videoId,
@@ -1669,11 +1673,13 @@
       clipStart,
       clipEnd,
       loop,
+      _destroyed: false,
       destroy() {
         destroyVideoPlayer(this);
       }
     };
     loadVimeoAPI().then(() => {
+      if (wrapper._destroyed) return;
       const playerOpts = {
         autoplay: false,
         loop: false,
@@ -1743,6 +1749,7 @@
       element: plateEl,
       player: null,
       sceneIndex,
+      _destroyed: false,
       destroy() {
         destroyVideoPlayer(this);
       }
@@ -1764,6 +1771,7 @@
     }
   }
   function _evictPlayer(wrapper) {
+    wrapper._destroyed = true;
     try {
       if (wrapper.type === "youtube" && wrapper.player) {
         if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
@@ -1778,6 +1786,7 @@
     } catch (e) {
       console.warn("_evictPlayer: error during evict", e);
     }
+    wrapper.element?.querySelector(".video-iframe")?.remove();
   }
   function _getWrapperForPlate(plateEl) {
     return _videoPlayers.find((w) => w.element === plateEl) || null;
@@ -2220,20 +2229,19 @@
     }
     const idx = _audioPlayers.indexOf(wrapper);
     if (idx !== -1) _audioPlayers.splice(idx, 1);
-    const plateEl = wrapper.element;
-    if (plateEl) {
-      [
-        ".waveform-container",
-        ".audio-controls",
-        ".audio-elapsed",
-        ".audio-play-overlay",
-        ".audio-clip-end-overlay",
-        ".telar-alert"
-      ].forEach((sel) => {
-        const el = plateEl.querySelector(sel);
-        if (el) el.remove();
-      });
-    }
+    _clearPlate(wrapper.element);
+  }
+  var _INJECTED_SELECTORS = [
+    ".waveform-container",
+    ".audio-controls",
+    ".audio-elapsed",
+    ".audio-play-overlay",
+    ".audio-clip-end-overlay",
+    ".telar-alert"
+  ];
+  function _clearPlate(plateEl) {
+    if (!plateEl) return;
+    _INJECTED_SELECTORS.forEach((sel) => plateEl.querySelector(sel)?.remove());
   }
   function updateAudioClip(plateEl, clipStart, clipEnd, loop) {
     const wrapper = _getAudioWrapperForPlate(plateEl);
@@ -2314,6 +2322,7 @@
     } catch (e) {
       console.warn("_evictAudioPlayer: error during evict", e);
     }
+    _clearPlate(wrapper.element);
   }
   function _getAudioWrapperForPlate(plateEl) {
     return _audioPlayers.find((w) => w.element === plateEl) || null;

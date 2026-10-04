@@ -734,21 +734,32 @@ export function destroyAudioPlayer(wrapper) {
   const idx = _audioPlayers.indexOf(wrapper);
   if (idx !== -1) _audioPlayers.splice(idx, 1);
 
-  // Clean up DOM elements injected by this module
-  const plateEl = wrapper.element;
-  if (plateEl) {
-    [
-      ".waveform-container",
-      ".audio-controls",
-      ".audio-elapsed",
-      ".audio-play-overlay",
-      ".audio-clip-end-overlay",
-      ".telar-alert",
-    ].forEach((sel) => {
-      const el = plateEl.querySelector(sel);
-      if (el) el.remove();
-    });
-  }
+  _clearPlate(wrapper.element);
+}
+
+/** Everything this module appends to a plate, so both teardowns clear the same set. */
+const _INJECTED_SELECTORS = [
+  ".waveform-container",
+  ".audio-controls",
+  ".audio-elapsed",
+  ".audio-play-overlay",
+  ".audio-clip-end-overlay",
+  ".telar-alert",
+];
+
+/**
+ * Take this module's nodes back out of a plate.
+ *
+ * Both teardowns owe this. An evicted plate that keeps its waveform container
+ * is one the card pool reads as still holding a player, so the scene is never
+ * rebuilt; and if it were, `_ensureWaveformContainer` would hand the new player
+ * the container the dead one left.
+ *
+ * @param {HTMLElement|null} plateEl
+ */
+function _clearPlate(plateEl) {
+  if (!plateEl) return;
+  _INJECTED_SELECTORS.forEach((sel) => plateEl.querySelector(sel)?.remove());
 }
 
 /**
@@ -888,6 +899,8 @@ function _evictAudioPlayer(wrapper) {
   } catch (e) {
     console.warn("_evictAudioPlayer: error during evict", e);
   }
+
+  _clearPlate(wrapper.element);
 }
 
 /**
@@ -898,6 +911,28 @@ function _evictAudioPlayer(wrapper) {
  */
 function _getAudioWrapperForPlate(plateEl) {
   return _audioPlayers.find((w) => w.element === plateEl) || null;
+}
+
+/**
+ * Whether this plate still has a player in the pool.
+ *
+ * The question a caller asks before building one, and the pool is the only
+ * place that can answer it. A plate's DOM is not: the pool is capped, and
+ * eviction destroys the WaveSurfer instance while leaving every node this
+ * module injected, so `.waveform-container` outlives the player it was built
+ * for. A caller testing the DOM sees a container and declines to rebuild.
+ *
+ * True while a build is still in flight, because the wrapper is pooled before
+ * the file loads. Two callers arriving within milliseconds of each other is
+ * the ordinary case when a reader crosses several steps at once, and the
+ * second must be turned away.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {boolean}
+ */
+export function hasAudioPlayer(plateEl) {
+  const wrapper = _getAudioWrapperForPlate(plateEl);
+  return Boolean(wrapper) && !wrapper._destroyed;
 }
 
 /**

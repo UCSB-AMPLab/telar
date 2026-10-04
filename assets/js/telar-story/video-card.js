@@ -37,7 +37,7 @@
  * Google Drive embeds have no player API, so they receive no clip control
  * or autoplay detection.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -452,6 +452,8 @@ export function createVideoPlayer(plateEl, cardType, videoId, options = {}) {
 export function destroyVideoPlayer(wrapper) {
   if (!wrapper) return;
 
+  wrapper._destroyed = true;
+
   try {
     if (wrapper.type === 'youtube' && wrapper.player) {
       if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
@@ -655,6 +657,7 @@ function _createYouTubePlayer(plateEl, videoId, opts) {
   // maxres thumbnail is missing (old videos), fall back to the dark letterbox
   // frame. Async; re-applies the layout once it resolves.
   detectYouTubeAspect(videoId).then((aspect) => {
+    if (wrapper._destroyed) return;
     if (aspect) {
       plateEl.dataset.aspectRatio = String(aspect);
       delete plateEl.dataset.videoLetterbox;
@@ -675,10 +678,16 @@ function _createYouTubePlayer(plateEl, videoId, opts) {
     _rafId: null,
     _autoplayTimeout: null,
     _playReceived: false,
+    _destroyed: false,
     destroy() { destroyVideoPlayer(this); },
   };
 
   loadYouTubeAPI().then(() => {
+    // The pool may have evicted this wrapper while the API was loading. Build
+    // the player anyway and it answers to nothing: every control path runs
+    // through _getWrapperForPlate, which no longer finds it, so the video
+    // cannot be paused when the reader leaves the step.
+    if (wrapper._destroyed) return;
     const cfg = buildYouTubeEmbedConfig(videoId, clipStart, clipEnd, loop);
 
     wrapper.player = new window.YT.Player(container, {
@@ -776,11 +785,15 @@ function _createVimeoPlayer(plateEl, videoId, opts) {
     clipStart,
     clipEnd,
     loop,
+    _destroyed: false,
     destroy() { destroyVideoPlayer(this); },
   };
 
   // Load Vimeo API from CDN on demand, then create the player
   loadVimeoAPI().then(() => {
+    // Evicted while the CDN load was in flight — see the note in
+    // _createYouTubePlayer.
+    if (wrapper._destroyed) return;
     // For unlisted videos, pass the full player URL (contains the privacy
     // hash as ?h= parameter). For public videos, pass the numeric ID.
     const playerOpts = {
@@ -872,6 +885,7 @@ function _createGDriveEmbed(plateEl, videoId, sceneIndex) {
     element: plateEl,
     player: null,
     sceneIndex,
+    _destroyed: false,
     destroy() { destroyVideoPlayer(this); },
   };
 }
@@ -903,6 +917,10 @@ function _enforcePoolLimit(currentScene) {
  * (used during pool enforcement where the splice already handles removal).
  */
 function _evictPlayer(wrapper) {
+  // Raised before the teardown, so a build still in flight bails instead of
+  // finishing into a plate this wrapper no longer speaks for.
+  wrapper._destroyed = true;
+
   try {
     if (wrapper.type === 'youtube' && wrapper.player) {
       if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
@@ -917,6 +935,14 @@ function _evictPlayer(wrapper) {
   } catch (e) {
     console.warn('_evictPlayer: error during evict', e);
   }
+
+  // Leave the plate empty, so re-entering the scene builds one player rather
+  // than appending a second container beside the first. What each provider's
+  // teardown removes differs — YouTube's destroy() takes the iframe carrying
+  // the class, Vimeo's leaves the container div that holds it — so the plate
+  // is cleared here rather than relied on above. Same contract card-pool.js's
+  // _evictOsdInstance keeps for .viewer-instance.
+  wrapper.element?.querySelector('.video-iframe')?.remove();
 }
 
 /**
@@ -927,6 +953,22 @@ function _evictPlayer(wrapper) {
  */
 function _getWrapperForPlate(plateEl) {
   return _videoPlayers.find(w => w.element === plateEl) || null;
+}
+
+/**
+ * Whether this plate still has a player in the pool.
+ *
+ * Counterpart of audio-card.js's `hasAudioPlayer`, and for the same reason:
+ * the pool is capped, and eviction destroys the provider's player while
+ * leaving the `.video-iframe` container in place, so a caller testing the DOM
+ * sees a container and declines to rebuild a plate that holds nothing.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {boolean}
+ */
+export function hasVideoPlayer(plateEl) {
+  const wrapper = _getWrapperForPlate(plateEl);
+  return Boolean(wrapper) && !wrapper._destroyed;
 }
 
 /**
