@@ -473,3 +473,134 @@ describe('keyboardNav — arriving at the intro', () => {
     expect(mocks.mockGoToStep).not.toHaveBeenCalled();
   });
 });
+
+// ── keyboardNav: a press arriving while a move is still travelling ────────────
+//
+// The move takes 1.2 s, so a reader moving at any ordinary pace presses again
+// before it lands. The position mid-move is one the engine is driving towards
+// a landing it already chose, so reading it as a place the reader left the
+// scroll makes the press re-issue the move already running — the reader presses
+// and nothing happens, and waiting does not recover it. A press therefore steps
+// from the landing while the keyboard owns the move, and from the position
+// whenever the scroll is the reader's.
+//
+// Lenis calls onComplete through the scrollTo mock's own caller, so a move
+// started here stays in flight for the rest of the test, which is the state
+// these cases are about.
+
+describe('keyboardNav — a press while a move is in flight', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="scroll-surface"></div>
+      <div class="card-stack">
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+      </div>
+    `;
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    mocks.mockGoToStep.mockClear();
+    resetState({ currentIndex: -1 });
+
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
+      matches: false, media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    try {
+      Object.defineProperty(history, 'scrollRestoration',
+        { writable: true, value: 'auto', configurable: true });
+    } catch (_) { /* already writable here */ }
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Where the last scroll the engine asked for was going, in viewports. */
+  function lastTarget() {
+    const calls = mocks.lenisScrollTo.mock.calls;
+    return calls.length ? calls[calls.length - 1][0] / window.innerHeight : null;
+  }
+
+  /** Park Lenis part way through a move, as it is when a second press lands. */
+  function partWayTo(position) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = (position - 0.02) * window.innerHeight;
+  }
+
+  it('takes the second press to the step after the one in flight', () => {
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(1);
+
+    partWayTo(1);
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(2);
+  });
+
+  it('counts every press of a burst', () => {
+    for (let i = 0; i < 4; i++) {
+      keyboardNav('forward');
+      partWayTo(i + 1);
+    }
+    expect(lastTarget()).toBe(4);
+  });
+
+  it('activates each step the burst passes, so none is skipped', () => {
+    for (let i = 0; i < 4; i++) {
+      keyboardNav('forward');
+      partWayTo(i + 1);
+    }
+    const activated = mocks.mockActivateCard.mock.calls.map(([index]) => index);
+    expect(activated).toEqual([0, 1, 2, 3]);
+  });
+
+  it('turns a burst around from its landing, not from the scroll behind it', () => {
+    // Pressed fast enough that the scroll is still most of three steps behind
+    // the landing, which is where the two readings part company: back from the
+    // landing is step 2, back from the position is the intro.
+    keyboardNav('forward');
+    keyboardNav('forward');
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(3);
+
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.4 * window.innerHeight;
+    keyboardNav('backward');
+    expect(lastTarget()).toBe(2);
+  });
+
+  it('leaves the move running when the press cannot go further', () => {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 4 * window.innerHeight;
+    keyboardNav('forward');          // to position 5, the last
+    expect(lastTarget()).toBe(5);
+
+    partWayTo(5);
+    const before = mocks.lenisScrollTo.mock.calls.length;
+    keyboardNav('forward');
+    expect(mocks.lenisScrollTo.mock.calls.length).toBe(before);
+  });
+
+  it('reads the position again once the scroll is the reader\'s', () => {
+    keyboardNav('forward');
+    partWayTo(1);
+
+    // The reader's own input takes the scroll, so the landing the keyboard
+    // chose is no longer an account of where the story is going.
+    const onVirtualScroll = mocks.lenisOn.mock.calls
+      .find(([event]) => event === 'virtual-scroll')[1];
+    onVirtualScroll();
+
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 2.4 * window.innerHeight;
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(3);   // completes the step the reader stopped in
+  });
+});

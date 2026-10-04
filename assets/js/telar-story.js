@@ -5141,6 +5141,8 @@
   var keyboardNavInFlight = false;
   var navToken = 0;
   var navSeq = 0;
+  var navTarget = null;
+  var navTargetToken = 0;
   var scrollDirection = 1;
   var lastPosition = 0;
   function beginNav() {
@@ -5149,6 +5151,9 @@
   }
   function endNav(token) {
     if (navToken === token) navToken = 0;
+  }
+  function _clampPosition(position) {
+    return Math.max(0, Math.min(position, totalPositions - 1));
   }
   var REST_TOLERANCE = 1e-3;
   function initScrollEngine(stepCount) {
@@ -5170,6 +5175,10 @@
       clearTimeout(scrubEndTimer);
       scrubEndTimer = null;
     }
+    navToken = 0;
+    navTarget = null;
+    navTargetToken = 0;
+    keyboardNavInFlight = false;
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     history.scrollRestoration = "manual";
     totalPositions = stepCount + 1;
@@ -5213,6 +5222,7 @@
     cardStackEl = cardStack;
     lenis.on("virtual-scroll", () => {
       cardStack.classList.add("is-scrubbing");
+      navTarget = null;
       armScrubEnd();
     });
     lenis.on("scroll", (l) => {
@@ -5292,7 +5302,12 @@
   }
   function keyboardNav(direction) {
     if (!lenis) return;
+    const inFlight = navTargetToken === navToken ? navTarget : null;
+    if (inFlight !== null && _clampPosition(inFlight + (direction === "forward" ? 1 : -1)) === inFlight) {
+      return;
+    }
     const token = beginNav();
+    navTargetToken = token;
     endScrub({ carry: false });
     if (dwellTimer) {
       clearTimeout(dwellTimer);
@@ -5304,16 +5319,19 @@
     const isExact = Math.abs(position - Math.round(position)) < 0.01;
     const rounded = Math.round(position);
     let target;
-    if (direction === "forward") {
+    if (inFlight !== null) {
+      target = inFlight + (direction === "forward" ? 1 : -1);
+    } else if (direction === "forward") {
       target = isExact ? rounded + 1 : Math.ceil(position);
     } else {
       target = isExact ? rounded - 1 : Math.floor(position);
     }
-    target = Math.max(0, Math.min(target, totalPositions - 1));
-    if (target === rounded && isExact) {
+    target = _clampPosition(target);
+    if (inFlight === null && target === rounded && isExact) {
       endNav(token);
       return;
     }
+    navTarget = target;
     settleCards(target);
     snap.currentSnapIndex = target;
     const targetStep = target - 1;
@@ -5334,7 +5352,10 @@
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
-        keyboardNavInFlight = false;
+        if (navToken === token) {
+          keyboardNavInFlight = false;
+          navTarget = null;
+        }
         endNav(token);
         writeHash();
       }
@@ -5357,7 +5378,7 @@
       if (state.currentIndex >= 0 && !keyboardNavInFlight) {
         goToStep(-1, "backward");
       }
-      settleCards(position);
+      if (!keyboardNavInFlight) settleCards(position);
       return;
     }
     const clamped = Math.min(maxContent, contentPos);

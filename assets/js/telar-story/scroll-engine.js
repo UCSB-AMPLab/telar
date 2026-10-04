@@ -77,6 +77,22 @@ let keyboardNavInFlight = false;
 let navToken = 0;
 let navSeq = 0;
 
+// Where the keyboard's own move is going, held beside the token that owns it.
+//
+// A press arriving mid-move steps from here rather than from the scroll. The
+// position mid-move is one this engine is driving towards a landing it already
+// chose, so reading it as a place the reader left the scroll makes the press
+// re-issue the move already running: the reader presses and nothing happens,
+// and nothing ever will. The fractional position is still the right reading
+// for a scroll the reader did leave part way, which is what it was written for.
+//
+// Held against a token so that only the move that is still current can be
+// stepped from. Every other programmatic path takes a token of its own, which
+// drops this one without having to say so; the reader's raw input is the one
+// takeover that begins no move, so it clears this itself.
+let navTarget = null;
+let navTargetToken = 0;
+
 // Which way the reader's scroll was last travelling, and where it was. A
 // gesture that stops between steps is carried the way it was already going.
 let scrollDirection = 1;
@@ -91,6 +107,17 @@ function beginNav() {
 /** End a programmatic move, unless a later one has taken over. */
 function endNav(token) {
   if (navToken === token) navToken = 0;
+}
+
+/**
+ * Hold a scroll position inside the story: 0 is the intro, and the last step
+ * is the end of it.
+ *
+ * @param {number} position
+ * @returns {number}
+ */
+function _clampPosition(position) {
+  return Math.max(0, Math.min(position, totalPositions - 1));
 }
 
 // How near a whole step counts as resting on it. A scroll lands on fractions
@@ -125,9 +152,17 @@ export function initScrollEngine(stepCount) {
   // timer so a second initScrollEngine() (e.g. a layout-mode switch) cannot
   // leave a second rAF loop double-driving Lenis or an orphaned timer firing.
   // (The dwell-restart itself is already guarded by `if (!state.isPanelOpen)`.)
+  // A move in flight belongs to the engine being replaced, and its completion
+  // is on a Lenis this one does not own: the token that would stand it down
+  // never arrives, so a target left here would be stepped from by the first
+  // press against the new engine and a suppressed settle would stay suppressed.
   if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
   if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
   if (scrubEndTimer) { clearTimeout(scrubEndTimer); scrubEndTimer = null; }
+  navToken = 0;
+  navTarget = null;
+  navTargetToken = 0;
+  keyboardNavInFlight = false;
 
   // Build steps array (navigation.js initializeStepController normally does this)
   state.steps = Array.from(document.querySelectorAll('.story-step'));
@@ -200,6 +235,10 @@ export function initScrollEngine(stepCount) {
   cardStackEl = cardStack;
   lenis.on('virtual-scroll', () => {
     cardStack.classList.add('is-scrubbing');
+    // A scroll the reader is driving has no landing the keyboard chose, so the
+    // next press reads the position. Every other takeover begins a move, whose
+    // token drops the target on its own; raw input begins none, so it says so.
+    navTarget = null;
     armScrubEnd();
   });
 
@@ -394,7 +433,22 @@ export function keyboardNav(direction) {
   // of its own as it starts again — and a frame arriving while the scroll still
   // looks like the reader's arms the settle, which then fires part way through
   // this move and states a position the move has already left behind.
+
+  // Read before beginNav takes a token of its own, which would drop it.
+  const inFlight = navTargetToken === navToken ? navTarget : null;
+
+  // A press that cannot take an in-flight move any further leaves it running,
+  // and returns before anything below is touched. Restarting it would settle
+  // its cards a second time — a transform written over a transition running
+  // towards it restarts that transition from wherever it has reached — and
+  // would orphan the token its completion clears.
+  if (inFlight !== null &&
+      _clampPosition(inFlight + (direction === 'forward' ? 1 : -1)) === inFlight) {
+    return;
+  }
+
   const token = beginNav();
+  navTargetToken = token;
 
   // The keyboard is not the reader's scroll: close any scrub still open so the
   // move animates on the CSS transitions rather than being written per frame,
@@ -414,23 +468,32 @@ export function keyboardNav(direction) {
   const isExact = Math.abs(position - Math.round(position)) < 0.01;
   const rounded = Math.round(position);
 
+  // A move of the keyboard's own is stepped from where it is going, not from
+  // where it has reached. Anything else — a scroll at rest, or one the reader
+  // left part way — is read from the position, which is the only account of it
+  // there is.
   let target;
-  if (direction === 'forward') {
+  if (inFlight !== null) {
+    target = inFlight + (direction === 'forward' ? 1 : -1);
+  } else if (direction === 'forward') {
     target = isExact ? rounded + 1 : Math.ceil(position);
   } else {
     target = isExact ? rounded - 1 : Math.floor(position);
   }
 
   // Clamp to valid range
-  target = Math.max(0, Math.min(target, totalPositions - 1));
-  if (target === rounded && isExact) {
+  target = _clampPosition(target);
+  if (inFlight === null && target === rounded && isExact) {
     endNav(token);   // nothing to move; the scroll is the reader's again
     return;
   }
 
+  // Where the next press steps from, for as long as this move owns the token.
+  navTarget = target;
+
   // State the target before the scroll starts for it: the keyboard knows its
   // landing, so the cards can slide to it on their own transitions over the
-  // same 0.8s, whatever a scrub left half-placed on the way in. Both directions
+  // same move, whatever a scrub left half-placed on the way in. Both directions
   // go through it — a backward move's departing card is the card the target
   // position puts a viewport down.
   settleCards(target);
@@ -439,7 +502,7 @@ export function keyboardNav(direction) {
   snap.currentSnapIndex = target;
 
   // Activate card immediately so it swaps on keypress — the IIIF lerp
-  // then runs during the 0.8s scroll animation for simultaneous effect.
+  // then runs during the scroll animation for simultaneous effect.
   // target is scroll position (intro=0, step0=1, step1=2…); stepIndex
   // is target-1.
   const targetStep = target - 1;
@@ -470,7 +533,13 @@ export function keyboardNav(direction) {
     duration: navSeconds().keyboard,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
-      keyboardNavInFlight = false;
+      // Only the move still current may stand itself down. Lenis calls this
+      // straight away for a scrollTo whose target it is already holding, so a
+      // superseded move can reach here while a later one is still travelling.
+      if (navToken === token) {
+        keyboardNavInFlight = false;
+        navTarget = null;
+      }
       endNav(token);
       writeHash();
     },
@@ -527,7 +596,13 @@ export function updateScrollPosition(position) {
     // The first card and the first viewer plate slide up over the intro in
     // proportion to the position, which is the settle's own intro branch —
     // the same writes, and the same place any other path states them.
-    settleCards(position);
+    //
+    // Except under the keyboard, which states its own landing and animates to
+    // it on the cards' transitions. A move from the intro to any step past the
+    // first passes through here, and settling these frames from the position
+    // the scroll has reached would put the arriving card back at the foot of
+    // the screen, a viewport below where the move has already sent it.
+    if (!keyboardNavInFlight) settleCards(position);
     return;
   }
 
