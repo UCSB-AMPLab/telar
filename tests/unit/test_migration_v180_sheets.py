@@ -606,6 +606,154 @@ class TestTheFileKeepsItsForm:
             get_message('en', 'v180_sheets_clean')]
 
 
+# ---------- The lines pandas skips ----------
+
+def _scope(site, name):
+    """The `canonical_fields` the build converts *name* with, as
+    `sheets_to_check` scopes it."""
+    from telar import csv_utils
+    scope = dict(v180_sheets.sheets_to_check(str(site), csv_utils))[name]
+    return {key: value for key, value in scope.items() if key == 'canonical_fields'}
+
+
+def _built(site, name):
+    """The records the build publishes from *name*, which it must accept."""
+    ok, refusals = _converts(site, name, **_scope(site, name))
+    assert ok and refusals == []
+    import json
+    records = json.loads((site / 'out.json').read_text(encoding='utf-8'))
+    return [r for r in records if not r.get('_metadata')]
+
+
+def _rows_read(path):
+    """How many rows the build's reader takes from the file at *path*."""
+    from telar.csv_utils import read_sheet
+    return len(read_sheet(str(path), dtype=str, keep_default_na=False))
+
+
+class TestTheLinesPandasSkips:
+    """pandas skips a line holding nothing but spaces or tabs, before the
+    header and between rows alike, so the header is the first line it does
+    not skip, and a line it skips is not a row."""
+
+    @pytest.mark.parametrize('lead', ['\n', '  \t\n'], ids=['blank', 'whitespace'])
+    def test_a_skipped_first_line_before_a_colliding_header(self, tmp_path, lead):
+        site = _site(tmp_path, {'story1.csv': lead + 'note,Note,step\n,v,1\n'})
+        assert _converts(site, 'story1.csv')[1] != []
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == lead + 'Note,step\nv,1\n'
+        assert [r.description for r in records] == [get_message(
+            'en', 'v180_column_dropped', 'note', 'story1.csv', 'Note')]
+        assert [(s['step'], s['Note']) for s in _built(site, 'story1.csv')] == [(1, 'v')]
+
+    def test_a_bom_and_a_blank_line(self, tmp_path):
+        site = _site(tmp_path, {'objects.csv':
+                                '﻿\nobject_id,title,medium,object_type\nm,M,Ink,\n'})
+
+        _repair(site)
+
+        assert _raw(site, 'objects.csv') == (
+            '﻿\nobject_id,title,medium\nm,M,Ink\n').encode('utf-8')
+        assert [(o['object_id'], o['medium']) for o in _built(site, 'objects.csv')] == [
+            ('m', 'Ink')]
+
+    def test_crlf_with_skipped_lines_before_and_between_rows(self, tmp_path):
+        """The first column goes, and the line of a space and a tab between
+        the rows keeps its bytes rather than losing its only field."""
+        site = _site(tmp_path, {'story1.csv':
+                                '\r\n\r\nnote,Note,step\r\n,v,1\r\n \t\r\n,w,2\r\n'})
+
+        _repair(site)
+
+        assert _raw(site, 'story1.csv') == (
+            b'\r\n\r\nNote,step\r\nv,1\r\n \t\r\nw,2\r\n')
+        assert [(s['step'], s['Note']) for s in _built(site, 'story1.csv')] == [
+            (1, 'v'), (2, 'w')]
+
+    def test_a_removal_that_empties_a_row_is_not_made(self, tmp_path):
+        """Without `paso` the row `,` is an empty line, which pandas skips:
+        the build would read one row fewer, so the column stays."""
+        text = 'step,paso\n1,\n,\n'
+        site = _site(tmp_path, {'story1.csv': text})
+        edit = tmp_path / 'edit.csv'
+        edit.write_text('step\n1\n\n', encoding='utf-8')
+        assert _rows_read(site / 'telar-content' / 'spreadsheets' / 'story1.csv') == 2
+        assert _rows_read(edit) == 1
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == text
+        assert [(r.description, r.status) for r in records] == [(get_message(
+            'en', 'v180_column_not_removed', 'paso', 'story1.csv'), ChangeStatus.FAILED)]
+
+    def test_a_first_column_whose_removal_empties_a_row_is_marked(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': 'paso,step\n,1\n,\n'})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == '#paso,step\n,1\n,\n'
+        assert [r.description for r in records] == [get_message(
+            'en', 'v180_column_marked_note', 'paso', 'story1.csv', '#paso')]
+        assert len(_built(site, 'story1.csv')) == 2
+
+    def test_a_row_wider_than_the_header_keeps_its_extra_cell(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': '\nstep,answer,note,Note\n1,Here.,,x,extra\n'})
+
+        _repair(site)
+
+        assert _sheet(site, 'story1.csv') == '\nstep,answer,Note\n1,Here.,x,extra\n'
+        assert [(s['step'], s['Note']) for s in _built(site, 'story1.csv')] == [(1, 'x')]
+
+    def test_a_wider_first_row_in_a_repaired_sheet(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': 'step,answer,note,Note\n1,Here.,,x,extra\n'})
+
+        _repair(site)
+
+        assert _sheet(site, 'story1.csv') == 'step,answer,Note\n1,Here.,x,extra\n'
+        assert [(s['step'], s['Note']) for s in _built(site, 'story1.csv')] == [(1, 'x')]
+
+    def test_a_row_left_as_a_quoted_empty_cell_is_still_a_row(self, tmp_path):
+        """`""` is a quoted empty cell, which pandas reads as a row, not a
+        blank line, so the removal leaves the rows the build reads as they
+        were."""
+        site = _site(tmp_path, {'story1.csv': 'step,paso\n1,\n"",\n'})
+
+        _repair(site)
+
+        assert _sheet(site, 'story1.csv') == 'step\n1\n""\n'
+        assert len(_built(site, 'story1.csv')) == 2
+
+    def test_a_removal_that_would_blank_the_header_is_not_made(self, tmp_path):
+        """Without its second column the header is a line of one space,
+        which pandas skips, and the file would have no header at all."""
+        text = ' ,\t\n'
+        site = _site(tmp_path, {'story1.csv': text})
+        assert _converts(site, 'story1.csv')[1] != []
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == text
+        assert [(r.description, r.status) for r in records] == [(get_message(
+            'en', 'v180_column_not_removed', '\t', 'story1.csv'), ChangeStatus.FAILED)]
+
+    def test_a_header_pandas_does_not_read_as_the_sheets_is_never_written(
+            self, tmp_path, monkeypatch):
+        """The labels are pandas' own read of the whole sheet, and must be
+        as many as the cells taken for the header: had the skipped lines
+        been judged differently from pandas, the sheet is only reported."""
+        text = '  \t\nnote,Note,step\n,v,1\n'
+        site = _site(tmp_path, {'story1.csv': text})
+        monkeypatch.setattr(v180_sheets, '_skipped_fields', lambda fields: False)
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == text
+        assert [r.status for r in records] == [ChangeStatus.FAILED]
+        assert 'story1.csv' in records[0].description
+
+
 # ---------- What the repair cannot do ----------
 
 class TestReportsWithoutRepair:

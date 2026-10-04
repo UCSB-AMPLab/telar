@@ -92,12 +92,15 @@ def _record(lang, key, *args, status=ChangeStatus.APPLIED) -> ChangeRecord:
 class Sheet:
     """One CSV as the build reads it, and as the bytes it is stored in.
 
-    `rows` are the cells as `csv` reads them and `labels` the column names
-    as pandas gives them to the build, suffixes for repeated headers
-    included. `records` holds each record's fields as the exact text they
-    were written in, with the terminator that ended the record, so a repair
-    can take one field and its delimiter out of a record and leave every
-    other byte as it was: quoting, spacing, CR, LF or CRLF, a BOM.
+    `rows` are the cells of every record as `csv` reads them, and `skipped`
+    says which of them pandas skips as a blank line. The header is the
+    first record pandas does not skip, and `body` the records after it that
+    it does not skip. `labels` are the column names as pandas gives them to
+    the build, suffixes for repeated headers included. `records` holds each
+    record's fields as the exact text they were written in, with the
+    terminator that ended the record, so a repair can take one field and
+    its delimiter out of a record and leave every other byte as it was:
+    quoting, spacing, CR, LF or CRLF, a BOM, a skipped line.
 
     `records` is None when the file cannot be split that way with
     certainty, which is when the split does not read back as the same
@@ -113,33 +116,47 @@ class Sheet:
         text = text[len(_BOM):] if self.bom else text
         with _field_limit_lifted():
             self.rows = list(csv.reader(io.StringIO(text, newline='')))
-        self.labels = pandas_labels(self.header)
         self.records = split_records(text)
         if self.records is not None and [_cells(f) for f, _ in self.records] != self.rows:
             self.records = None
+        if self.records is None:
+            self.skipped = [_skipped_row(row) for row in self.rows]
+        else:
+            self.skipped = [_skipped_fields(fields) for fields, _ in self.records]
+        self.header_at = next((index for index, skipped in enumerate(self.skipped)
+                               if not skipped), len(self.rows))
+        self.labels = pandas_labels(self.header, text)
 
     @property
     def header(self) -> List[str]:
-        return self.rows[0] if self.rows else []
+        return self.rows[self.header_at] if self.header_at < len(self.rows) else []
+
+    @property
+    def body(self) -> List[List[str]]:
+        """The records after the header that pandas reads as rows."""
+        return [row for index, row in enumerate(self.rows)
+                if index > self.header_at and not self.skipped[index]]
 
     def edited(self, indices=(), mark_first=False) -> Optional[str]:
         """The file's text with the fields at *indices* gone from every
-        record, and with `#` put before the first header's text when
-        *mark_first* is set, or None when it cannot be edited that safely.
+        record pandas reads, and with `#` put before the header's first
+        field when *mark_first* is set, or None when it cannot be edited
+        that safely. A line pandas skips is written back as it was.
 
         The mark goes inside the quotes of a quoted field, so `"note"`
         becomes `"#note"` and `note` becomes `#note`; no other byte moves.
         """
-        if self.records is None or (mark_first and (not self.records or 0 in indices)):
+        if self.records is None or not self.header or (mark_first and 0 in indices):
             return None
         doomed = set(indices)
         records = [(list(fields), ending) for fields, ending in self.records]
         if mark_first:
-            first = records[0][0][0]
-            records[0][0][0] = '"#' + first[1:] if first.startswith('"') else '#' + first
+            first = records[self.header_at][0][0]
+            records[self.header_at][0][0] = (
+                '"#' + first[1:] if first.startswith('"') else '#' + first)
         body = ''.join(','.join(field for index, field in enumerate(fields)
-                                if index not in doomed) + ending
-                       for fields, ending in records)
+                                if skipped or index not in doomed) + ending
+                       for (fields, ending), skipped in zip(records, self.skipped))
         return (_BOM if self.bom else '') + body
 
     def write(self, text: str) -> None:
@@ -228,23 +245,54 @@ def _cells(fields: List[str]) -> List[str]:
     return [f[1:-1].replace('""', '"') if f.startswith('"') else f for f in fields]
 
 
-def pandas_labels(header: List[str]) -> List[str]:
+# pandas' C tokenizer skips a line of these characters alone as blank;
+# a form feed or a vertical tab is a cell.
+_BLANK_LINE_CHARACTERS = ' \t'
+
+
+def _skipped_fields(fields: List[str]) -> bool:
+    """Whether pandas skips the record written as *fields*: one unquoted
+    field of spaces and tabs, or nothing. A quoted `""` is a cell."""
+    return len(fields) == 1 and not fields[0].strip(_BLANK_LINE_CHARACTERS)
+
+
+def _skipped_row(row: List[str]) -> bool:
+    """`_skipped_fields` judged on cells `csv` has read, for a file that
+    cannot be split: a quoted `""` or `"  "` line reads as the blank line
+    it is not, so a sheet judged this way is only reported on."""
+    return len(row) <= 1 and not ''.join(row).strip(_BLANK_LINE_CHARACTERS)
+
+
+def pandas_labels(header: List[str], text: Optional[str] = None) -> List[str]:
     """The column labels the build's pandas read gives this sheet.
 
     Read from pandas itself rather than imitated: a repeated header gains
     `.1`, `.2` and a blank one `Unnamed: <position>`, and pandas steps past
     a suffix another header already holds, so `note,note,note.1` is read as
-    `note,note.2,note.1`, three names the build does not refuse. Only the
-    header row is given to pandas, so a later row it cannot parse does not
-    keep the header from being read.
+    `note,note.2,note.1`, three names the build does not refuse.
+
+    With *text*, the whole sheet is read as `read_sheet` reads its width,
+    past the lines pandas skips and with `index_col=False`, and the labels
+    must be as many as the *header* cells. Where pandas cannot read that
+    header, as when a later quote never closes, only the header row is
+    given to it, so the sheet's columns can still be reported.
     """
     if not header:
         return []
     import pandas as pd
-    line = io.StringIO(newline='')
-    csv.writer(line).writerow(header)
-    line.seek(0)
-    labels = [str(label) for label in pd.read_csv(line, nrows=0).columns]
+    labels = None
+    if text is not None:
+        try:
+            labels = pd.read_csv(io.StringIO(text, newline=''), nrows=0,
+                                 index_col=False).columns
+        except ValueError:
+            labels = None
+    if labels is None:
+        line = io.StringIO(newline='')
+        csv.writer(line).writerow(header)
+        line.seek(0)
+        labels = pd.read_csv(line, nrows=0, index_col=False).columns
+    labels = [str(label) for label in labels]
     if len(labels) != len(header):
         raise ValueError('pandas reads a different number of columns')
     return labels
@@ -253,12 +301,13 @@ def pandas_labels(header: List[str]) -> List[str]:
 def data_rows(sheet: Sheet, rules, sheet_aliases=None) -> List[List[str]]:
     """The rows the build treats as data.
 
-    A row whose first cell, trimmed, starts with `#` is a comment. The
-    first row left is dropped when it is a second, bilingual header row,
-    judged on the cells of the columns the build keeps.
+    A line pandas skips as blank is not a row, so a removal that leaves a
+    row with nothing but spaces or tabs takes it out of the data. A row
+    whose first cell, trimmed, starts with `#` is a comment. The first row
+    left is dropped when it is a second, bilingual header row, judged on
+    the cells of the columns the build keeps.
     """
-    rows = [row for row in sheet.rows[1:]
-            if not (row and row[0].strip().startswith('#'))]
+    rows = [row for row in sheet.body if not row[0].strip().startswith('#')]
     if _header_row_skipped(sheet, rows, rules, sheet_aliases):
         rows = rows[1:]
     return rows
@@ -275,8 +324,7 @@ def _header_row_skipped(sheet: Sheet, rows, rules, sheet_aliases=None) -> bool:
 
 
 def _skips_header_row(sheet: Sheet, rules, sheet_aliases=None) -> bool:
-    rows = [row for row in sheet.rows[1:]
-            if not (row and row[0].strip().startswith('#'))]
+    rows = [row for row in sheet.body if not row[0].strip().startswith('#')]
     return _header_row_skipped(sheet, rows, rules, sheet_aliases)
 
 
@@ -405,6 +453,8 @@ def _try_edit(sheet: Sheet, rules, aliases, removed, mark) -> Tuple[Optional[str
     try:
         after = Sheet(sheet.path, text)
     except (csv.Error, ValueError):
+        return None, UNSAFE
+    if after.header_at != sheet.header_at:
         return None, UNSAFE
     if mark and after.header[:1] != ['#' + sheet.header[0]]:
         return None, UNSAFE
