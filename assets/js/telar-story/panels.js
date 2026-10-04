@@ -272,6 +272,11 @@ export function closeAllPanels() {
  * driven separately by telar.js writing directly into
  * #panel-glossary-content, not through openPanel()/getPanelContent().
  *
+ * A panel with no title of its own is headed by the label of the button that
+ * opened it, and a blank button carries the site language's default label, so
+ * the fallback is that same translated string. The heading is not left empty:
+ * an empty <h1> is still announced as a heading, with nothing to read.
+ *
  * @param {string} panelType - 'layer1' or 'layer2'.
  * @param {string} contentId - The step number.
  * @returns {{ title: string, html: string, demo?: boolean }|null}
@@ -295,13 +300,13 @@ function getPanelContent(panelType, contentId) {
     }
 
     return {
-      title: step.layer1_title || step.layer1_button || 'Layer 1',
+      title: step.layer1_title || step.layer1_button || window.telarLang.learnMore,
       html: html,
       demo: step.layer1_demo || false,
     };
   } else if (panelType === 'layer2') {
     return {
-      title: step.layer2_title || step.layer2_button || 'Layer 2',
+      title: step.layer2_title || step.layer2_button || window.telarLang.goDeeper,
       html: formatPanelContent({
         text: step.layer2_text,
         media: step.layer2_media,

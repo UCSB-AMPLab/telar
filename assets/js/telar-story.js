@@ -5090,13 +5090,13 @@
         html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${escapeHtml(buttonLabel)} \u2192</button></p>`;
       }
       return {
-        title: step.layer1_title || step.layer1_button || "Layer 1",
+        title: step.layer1_title || step.layer1_button || window.telarLang.learnMore,
         html,
         demo: step.layer1_demo || false
       };
     } else if (panelType === "layer2") {
       return {
-        title: step.layer2_title || step.layer2_button || "Layer 2",
+        title: step.layer2_title || step.layer2_button || window.telarLang.goDeeper,
         html: formatPanelContent({
           text: step.layer2_text,
           media: step.layer2_media
