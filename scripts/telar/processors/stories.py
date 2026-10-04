@@ -453,8 +453,13 @@ def _load_objects_data():
     try:
         with open(objects_json_path, 'r', encoding='utf-8') as f:
             objects_list = json.load(f)
-            # Create lookup dictionary by object_id
-            return {obj['object_id']: obj for obj in objects_list}
+            # Keyed by id, and only by records that have one. The objects
+            # build drops a blank id before it writes this file, so its own
+            # output never carries a null here; the guard is because this
+            # reads a file from disk rather than a frame it produced, and the
+            # matcher lowercases every key, which a null does not survive.
+            return {obj['object_id']: obj for obj in objects_list
+                    if isinstance(obj.get('object_id'), str) and obj['object_id']}
     except Exception as e:
         print(f"  [WARN] Could not load objects.json for validation: {e}")
         return None

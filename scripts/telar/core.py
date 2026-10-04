@@ -52,7 +52,7 @@ import pandas as pd
 import yaml
 
 from telar.csv_utils import (sanitize_dataframe, normalize_column_names,
-                             is_header_row, OBJECT_FIELDS)
+                             is_header_row, text_column_dtypes, OBJECT_FIELDS)
 from telar.processors.project import process_project_setup
 from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
@@ -86,7 +86,12 @@ def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None):
         # Read CSV file with pandas
         # Note: We can't use pandas' comment parameter because it treats # anywhere as a comment,
         # which breaks hex color codes like #2c3e50 and markdown headers (## Title) in multi-line cells
-        df = pd.read_csv(csv_path, on_bad_lines='warn')
+        # The columns matched against a fixed vocabulary are pinned to text:
+        # dtype inference reads the whole column, so a flag would otherwise
+        # mean one thing in a column with a blank cell and another in a column
+        # without one. See TEXT_COLUMNS in telar.csv_utils.
+        df = pd.read_csv(csv_path, on_bad_lines='warn',
+                         dtype=text_column_dtypes())
 
         # Filter out comment rows (first column value starts with #)
         # This handles both # and "# patterns while preserving markdown headers in multi-line cells

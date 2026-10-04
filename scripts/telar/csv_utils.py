@@ -262,6 +262,38 @@ OBJECT_FIELDS = {
 }
 
 
+# Columns whose cells are read as the author typed them. pandas infers a
+# column's dtype from the whole column, so a cell's meaning would otherwise
+# depend on what its neighbours contain: `1` in a numeric column with a blank
+# cell arrives as "1.0" and misses the vocabulary a flag is matched against,
+# while the same `1` in a column with no blank arrives as "1" and matches; and
+# a year typed as 1890 is published as "1890.0" on the strength of a blank
+# cell in another row. The two cases differ in where the damage lands — a flag
+# fails to match, a year is published wrong — and have the same cause, so they
+# have the same remedy.
+#
+# An object id is the third kind: it is a key, matched across two sheets that
+# pandas reads separately and can therefore infer differently from each other,
+# so a numeric id could be `1` in one sheet and "1.0" in the other and a step
+# would lose the object it names. Read as text, both sides hold what the
+# author typed, and a step naming something the site does not have is reported
+# by the reference check rather than silently losing its image.
+TEXT_COLUMNS = frozenset({'featured', 'year', 'object_id', 'object'})
+
+
+def text_column_dtypes():
+    """The pandas dtype map pinning `TEXT_COLUMNS` to text.
+
+    Keyed on the headers as authors write them, English and Spanish alike,
+    because the reader runs before `normalize_column_names()`. pandas ignores
+    keys for columns a given sheet does not have.
+    """
+    headers = set(TEXT_COLUMNS)
+    headers.update(alias for alias, canonical in COLUMN_NAME_MAPPING.items()
+                   if canonical in TEXT_COLUMNS)
+    return {header: str for header in headers}
+
+
 def normalize_column_names(df, canonical_fields=None):
     """
     Normalize column names to English using bilingual mapping.

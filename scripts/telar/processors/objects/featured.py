@@ -1,6 +1,6 @@
 """Choosing which objects the homepage samples.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import hashlib
@@ -46,7 +46,9 @@ def _select_featured_objects(df):
     if not show_sample:
         return df
 
-    # Check for explicitly featured objects (case-insensitive yes/true/si)
+    # Check for explicitly featured objects (case-insensitive yes/true/si).
+    # The cell is matched as the author typed it: the reader pins this
+    # column to text so `1` is never a number that stringifies to "1.0".
     featured_values = {'yes', 'true', 'si', 'sí', '1'}
     if 'featured' in df.columns:
         featured_mask = df['featured'].astype(str).str.lower().str.strip().isin(featured_values)
