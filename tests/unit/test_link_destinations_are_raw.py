@@ -152,3 +152,26 @@ class TestANomarkdownExtension:
     def test_pipes_still_escaped(self):
         assert (_answer_pipes_for_kramdown('a {::nomarkdown}x|y{:/} b')
                 == 'a {::nomarkdown}x&#124;y{:/} b')
+
+
+class TestPipesInImageText:
+    """An image's text is its `alt` as written: no maths is rendered there,
+    so a pipe is escaped as in prose, never as `\\vert `."""
+
+    @pytest.mark.parametrize('written, expected', [
+        ('![$$a|b$$](c)', '![$$a&#124;b$$](c)'),
+        ('![x|y](c)', '![x&#124;y](c)'),
+        ('![x\\|y](c)', '![x&#124;y](c)'),
+        ('![$$a\\|b$$](c)', '![$$a&#124;b$$](c)'),
+        ('![a<![CDATA[b|c]]>](c)', '![a<![CDATA[b&#124;c]]>](c)'),
+        ('![`a|b` and x|y](c)', '![`a|b` and x&#124;y](c)'),
+        ('![`a|b`](c)', '![`a|b`](c)'),
+        ('![$$a|b$$](c) then $$p|q$$', '![$$a&#124;b$$](c) then $$p\\vert q$$'),
+        ('$$p|q$$ then ![$$a|b$$](c)', '$$p\\vert q$$ then ![$$a&#124;b$$](c)'),
+    ], ids=['maths', 'prose', 'escaped-pipe', 'maths-escaped-pipe', 'cdata',
+            'code-and-prose', 'code-only', 'maths-after', 'maths-before'])
+    def test_pipes(self, written, expected):
+        assert _answer_pipes_for_kramdown(written) == expected
+
+    def test_destination_pipe_is_prose(self):
+        assert _answer_pipes_for_kramdown('[x](c|d "t|u")') == '[x](c&#124;d "t&#124;u")'

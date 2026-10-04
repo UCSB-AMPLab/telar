@@ -1282,6 +1282,11 @@ _REGION_PIPES = {
 }
 
 
+def _escape_pipes(text):
+    """*text* with each `|` and `\\|` as `&#124;`."""
+    return text.replace('\\|', '&#124;').replace('|', '&#124;')
+
+
 def _answer_pipes_for_kramdown(text):
     """*text* with every pipe kramdown would read as a table cell escaped.
 
@@ -1296,16 +1301,25 @@ def _answer_pipes_for_kramdown(text):
     prints an entity as written, so the CDATA is closed around the pipe
     and the entity put between. All of these are found as kramdown finds
     them (`telar.code_spans`).
+
+    An image's text becomes its `alt` attribute as written, and no maths is
+    rendered or CDATA closed there, so `\\vert ` would reach a screen reader
+    as written. A pipe in maths or CDATA inside an image's text is escaped
+    as in prose. Code and raw HTML there stay as written: kramdown's table
+    parser skips them and the `alt` reads as written.
     """
     if '|' not in text:
         return text
+    alts = [(start, end) for kind, start, end in unread_regions(text) if kind == 'alt']
     out = []
     pos = 0
     for kind, start, end in answer_regions(text):
-        out.append(text[pos:start].replace('\\|', '&#124;').replace('|', '&#124;'))
-        out.append(_REGION_PIPES.get(kind, str)(text[start:end]))
+        out.append(_escape_pipes(text[pos:start]))
+        in_alt = kind in ('maths', 'cdata') and any(a <= start and end <= b for a, b in alts)
+        out.append(_escape_pipes(text[start:end]) if in_alt
+                   else _REGION_PIPES.get(kind, str)(text[start:end]))
         pos = end
-    out.append(text[pos:].replace('\\|', '&#124;').replace('|', '&#124;'))
+    out.append(_escape_pipes(text[pos:]))
     return ''.join(out)
 
 
