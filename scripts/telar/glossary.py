@@ -110,6 +110,13 @@ def load_glossary_from_csv(csv_path):
         df = df[[col for col in df.columns if not col.startswith('#')]]
         df = normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
 
+        # A bilingual sheet carries its Spanish header as the first row; the
+        # page generator skips it on the same check, so it is never a term.
+        from telar.csv_utils import is_header_row
+        if len(df) > 0 and is_header_row(df.iloc[0].values,
+                                         sheet_aliases=GLOSSARY_COLUMN_ALIASES):
+            df = df.iloc[1:].reset_index(drop=True)
+
         if 'term_id' not in df.columns or 'title' not in df.columns:
             print(f"  ⚠️ glossary.csv missing required columns (term_id, title)")
             return glossary_terms

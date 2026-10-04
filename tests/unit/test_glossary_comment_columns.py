@@ -1,5 +1,6 @@
 """
-Instruction columns in the glossary sheet are ignored by every reader.
+Every glossary reader reads glossary.csv the same way: instruction columns
+and a bilingual second header row are ignored by all of them.
 
 A column whose header starts with `#` is the author's note. `csv_to_json`,
 which reads glossary.csv as a story sheet, drops such columns before it
@@ -43,3 +44,26 @@ class TestCommentColumnsAreIgnored:
         out.mkdir()
         _generate_glossary_from_csv(_write(tmp_path), out, {})
         assert (out / 'encomienda.md').exists()
+
+
+class TestTheSecondHeaderRowIsNotATerm:
+    """A bilingual glossary.csv carries its Spanish header as the first row;
+    the link map skips it as the page generator does."""
+
+    SHEET = ('term_id,title,definition\n'
+             'id_término,titulo,definición\n'
+             'encomienda,Encomienda,A grant of labour from a community\n')
+
+    def test_the_link_map_holds_only_the_terms(self, tmp_path):
+        path = tmp_path / 'glossary.csv'
+        path.write_text(self.SHEET, encoding='utf-8')
+        assert load_glossary_from_csv(path) == {'encomienda': 'Encomienda'}
+
+    def test_the_page_generator_agrees(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / 'glossary.csv'
+        path.write_text(self.SHEET, encoding='utf-8')
+        out = tmp_path / 'pages'
+        out.mkdir()
+        _generate_glossary_from_csv(path, out, {})
+        assert sorted(p.name for p in out.iterdir()) == ['encomienda.md']
