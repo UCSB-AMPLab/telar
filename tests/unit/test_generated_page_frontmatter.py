@@ -123,13 +123,26 @@ class TestJekyllDoesNotRenderTheSourcesItself:
     the Spanish page at /telar-content/texts/pages/acerca/.
     """
 
-    def test_the_text_sources_are_excluded(self):
+    def _exclude(self):
         config_path = os.path.join(
             os.path.dirname(__file__), '..', '..', '_config.yml')
         with open(config_path, encoding='utf-8') as handle:
-            config = yaml.safe_load(handle)
+            return yaml.safe_load(handle).get('exclude', [])
 
-        assert 'telar-content/texts/' in config.get('exclude', [])
+    def test_the_text_sources_are_excluded(self):
+        assert 'telar-content/texts/' in self._exclude()
+
+    def test_the_test_suite_is_not_published(self):
+        """A fixture is content written to be wrong in a particular way.
+
+        Published beside the site's own, it is indistinguishable from it —
+        and nothing on a site links to any of it, so the whole tree was
+        served to no one.
+        """
+        excluded = self._exclude()
+
+        for path in ('tests/', 'pytest.ini', 'vitest.config.js'):
+            assert path in excluded, path
 
     def test_the_spreadsheets_passthrough_is_left_alone(self):
         """The encryptor's sentinel sweep skips _site/telar-content/ by design.
@@ -139,11 +152,6 @@ class TestJekyllDoesNotRenderTheSourcesItself:
         served, so the skip still has something to skip and the reasoning in
         `encrypt_protected_stories` does not silently become stale.
         """
-        config_path = os.path.join(
-            os.path.dirname(__file__), '..', '..', '_config.yml')
-        with open(config_path, encoding='utf-8') as handle:
-            config = yaml.safe_load(handle)
-
-        excluded = config.get('exclude', [])
+        excluded = self._exclude()
         assert 'telar-content/' not in excluded
         assert 'telar-content/spreadsheets/' not in excluded

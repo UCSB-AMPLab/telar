@@ -10,7 +10,7 @@ The tests here ensure backward compatibility (e.g., legacy iiif_manifest
 column support) and correct handling of edge cases (empty values, malformed
 HTML, Unicode content).
 
-Version: v1.5.0
+Version: v1.8.0
 """
 
 import sys
@@ -28,7 +28,8 @@ from csv_to_json import (
     clean_metadata_value,
 )
 
-from telar.csv_utils import normalize_column_names, COLUMN_NAME_MAPPING
+from telar.csv_utils import (normalize_column_names, COLUMN_NAME_MAPPING,
+                             OBJECT_FIELDS)
 
 
 class TestSanitizeDataframe:
@@ -283,3 +284,61 @@ class TestImageExtensionsAndStemIndex:
     def test_build_stem_index_missing_dir_returns_empty(self, tmp_path):
         from telar.csv_utils import build_stem_index
         assert build_stem_index(tmp_path / 'does-not-exist') == {}
+
+
+class TestTheAliasMapIsScopedToTheSheetItRunsOn:
+    """One table serves every spreadsheet the build reads.
+
+    So a rule written for the project sheet renamed a column on the
+    objects sheet: an author's own `privado` column — a note that a piece
+    is in a private collection — became `protected`, the name the project
+    sheet uses to mean "encrypt this story". Nothing reads `protected` on
+    an object, so it reached `extra_metadata`, where the object layout
+    prints the key as the label. A Spanish site showed an English heading
+    the author never wrote.
+
+    The scope is the canonical names that sheet's own consumer reads, so
+    it cannot drift from the thing it describes.
+    """
+
+    def _columns(self, headers, **kwargs):
+        return list(normalize_column_names(
+            pd.DataFrame({h: ['x'] for h in headers}), **kwargs).columns)
+
+    def test_an_objects_sheet_keeps_the_authors_own_column(self):
+        columns = self._columns(['id_objeto', 'privado'],
+                                canonical_fields=OBJECT_FIELDS)
+
+        assert columns == ['object_id', 'privado']
+
+    def test_a_story_sheet_still_reads_it_as_the_protection_flag(self):
+        """The rename is right where the canonical name means something."""
+        assert self._columns(['paso', 'privado']) == ['step', 'protected']
+
+    @pytest.mark.parametrize('alias,canonical', [
+        ('titulo', 'title'), ('fuente', 'source'), ('medio', 'medium'),
+        ('creador', 'creator'), ('a\u00f1o', 'year'),
+        ('descripcion', 'description'), ('cr\u00e9dito', 'credit'),
+    ])
+    def test_the_aliases_an_objects_sheet_needs_still_apply(self, alias, canonical):
+        """The danger in scoping is silently refusing a header that works.
+
+        Every one of these has been accepted since v0.6.0, and a site
+        using it would lose the column with no message.
+        """
+        assert self._columns([alias], canonical_fields=OBJECT_FIELDS) == [canonical]
+
+    def test_nothing_the_objects_path_reads_is_left_out_of_the_scope(self):
+        """The set is the scope, so a field missing from it is dropped.
+
+        Read off the frontmatter writer rather than listed here: a second
+        list would be the drift this change exists to remove.
+        """
+        from generate_collections import KNOWN_OBJECT_FIELDS
+
+        assert KNOWN_OBJECT_FIELDS is OBJECT_FIELDS
+
+    def test_an_unscoped_call_is_unchanged(self):
+        """Every sheet but objects still gets the whole map."""
+        assert self._columns(['id_termino', 'definicion']) == ['term_id',
+                                                               'definition']

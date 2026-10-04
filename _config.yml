@@ -86,6 +86,12 @@ exclude:
   - README.md
   - docs/
   - scripts/
+  # Telar's own test suite and the configuration that runs it. Nothing on a
+  # site links to any of it, and a fixture is content written to be wrong in
+  # a particular way — published, it is indistinguishable from the site's own.
+  - tests/
+  - pytest.ini
+  - vitest.config.js
   # Page, story and glossary sources. The build reads them and generates the
   # published pages from them; Jekyll rendering them as well puts a raw,
   # unprocessed copy of every one at a second URL, and a source that declares

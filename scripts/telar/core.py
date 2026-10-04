@@ -51,7 +51,8 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from telar.csv_utils import sanitize_dataframe, normalize_column_names, is_header_row
+from telar.csv_utils import (sanitize_dataframe, normalize_column_names,
+                             is_header_row, OBJECT_FIELDS)
 from telar.processors.project import process_project_setup
 from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
@@ -61,7 +62,7 @@ from telar.media_type import AUDIO_EXTENSIONS
 from telar.search import generate_search_data
 
 
-def csv_to_json(csv_path, json_path, process_func=None):
+def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None):
     """
     Convert CSV file to JSON.
 
@@ -69,6 +70,9 @@ def csv_to_json(csv_path, json_path, process_func=None):
         csv_path: Path to input CSV file
         json_path: Path to output JSON file
         process_func: Optional function to process the dataframe before conversion
+        canonical_fields: The canonical column names this sheet's consumer
+            reads, scoping the bilingual alias map to them. None applies the
+            whole map, which is the behaviour for every sheet not yet scoped.
 
     Returns:
         bool: True if the JSON was written, False on skip (missing input) or error.
@@ -100,7 +104,7 @@ def csv_to_json(csv_path, json_path, process_func=None):
                 df = df.iloc[1:].reset_index(drop=True)
 
         # Normalize column names (Spanish -> English) for bilingual support
-        df = normalize_column_names(df)
+        df = normalize_column_names(df, canonical_fields)
 
         # Sanitize user data - remove Christmas tree emoji to prevent accidental triggering
         df = sanitize_dataframe(df)
@@ -418,7 +422,8 @@ def main():
     objects_ok = csv_to_json(
         objects_path,
         '_data/objects.json',
-        process_objects_func
+        process_objects_func,
+        canonical_fields=OBJECT_FIELDS
     )
 
     # The audio manifest and search index both read _data/objects.json. If the

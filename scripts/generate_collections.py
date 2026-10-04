@@ -48,6 +48,7 @@ from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
+from telar.csv_utils import OBJECT_FIELDS
 from telar.latex import convert_markdown, has_latex
 from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
 from telar.story_pages import (
@@ -57,15 +58,12 @@ from telar.story_pages import (
 
 # Fields already handled explicitly in generate_objects() frontmatter.
 # Any key NOT in this set is treated as a custom field and written to extra_metadata.
-KNOWN_OBJECT_FIELDS = {
-    'object_id', 'title', 'creator', 'period', 'medium', 'dimensions',
-    'location', 'credit', 'thumbnail', 'iiif_manifest', 'source_url',
-    'source', 'object_warning', 'object_warning_short', 'year',
-    'object_type', 'subjects', 'is_featured_sample', '_demo',
-    'description', 'featured', 'alt_text',
-    # v0.10.0: auto-detected media type and audio metadata
-    'media_type', 'audio_duration', 'audio_filesize', 'audio_format',
-}
+# The object fields the build knows about. Two consumers, one meaning:
+# anything outside it is the author's own column and goes to
+# extra_metadata, and a bilingual alias is only applied to an objects
+# sheet when its canonical name is in here. Defined beside the alias map
+# so the scope is derived from the field set rather than listed twice.
+KNOWN_OBJECT_FIELDS = OBJECT_FIELDS
 
 
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
