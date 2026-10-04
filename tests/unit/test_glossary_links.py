@@ -682,6 +682,10 @@ class TestAPanelsAnchorsAreReadByAnHTMLTokenizer:
         ('<a/>y', ['y']),
         ('<code><a>x</a></code><a>y</a>', ['y']),
         ('<a-b>x</a-b>', []),
+        ('&# &# <a>x</a>;', ['x']),
+        ('&#5a<a>x</a>;', ['x']),
+        ('&#x <a>y</a>', ['y']),
+        ('a &#60 <a>z</a> &amp; <a href="?a=1&b=2">w</a>', ['z', 'w']),
     ])
     def test_offsets(self, text, anchors):
         regions = _link_text_regions(text, False)

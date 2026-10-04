@@ -600,7 +600,12 @@ class _PanelHTML(HTMLParser):
         self.line_starts = [0] + [match.end() for match in re.finditer('\n', text)]
         self.regions, self.content = [], None
         self.raw_texts, self.raw_text = [], None
-        self.feed(text)
+        # A character reference never starts or ends a tag, and how the
+        # tokenizer reads a malformed one (`&#`, `&#5a`) differs between
+        # Python versions and moves the positions it reports. Each `&` is
+        # read as a space, which keeps every offset and the same tags in
+        # every version the build may run.
+        self.feed(text.replace('&', ' '))
         self.close()
         if self.content is not None:
             self.regions.append((self.content, len(text)))
