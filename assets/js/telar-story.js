@@ -5226,6 +5226,8 @@
     lenis.on("virtual-scroll", () => {
       cardStack.classList.add("is-scrubbing");
       navTarget = null;
+      keyboardNavInFlight = false;
+      navToken = 0;
       armScrubEnd();
     });
     lenis.on("scroll", (l) => {

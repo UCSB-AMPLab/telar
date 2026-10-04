@@ -239,6 +239,14 @@ export function initScrollEngine(stepCount) {
     // next press reads the position. Every other takeover begins a move, whose
     // token drops the target on its own; raw input begins none, so it says so.
     navTarget = null;
+    // The same takeover stands the move itself down, because the move cannot.
+    // Lenis answers raw input either by stopping the running animation, which
+    // calls neither of its callbacks, or by replacing it with the reader's own
+    // scroll, which carries the callbacks away with it — so the onComplete
+    // holding these is unreachable from the moment this fires, and the guards
+    // it would lower stay up for the rest of the reader's session.
+    keyboardNavInFlight = false;
+    navToken = 0;
     armScrubEnd();
   });
 

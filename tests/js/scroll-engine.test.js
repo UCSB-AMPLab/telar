@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => {
   }
 
   const mockActivateCard = vi.fn();
+  const mockSettleCards = vi.fn();
   const mockGoToStep = vi.fn();
   const mockInitKeyboardNavigation = vi.fn();
   const mockInitializeLoadingShimmer = vi.fn();
@@ -70,6 +71,7 @@ const mocks = vi.hoisted(() => {
     lenisConstructorArgs,
     snapConstructorArgs,
     mockActivateCard,
+    mockSettleCards,
     mockGoToStep,
     mockInitKeyboardNavigation,
     mockInitializeLoadingShimmer,
@@ -82,7 +84,7 @@ vi.mock('lenis/snap', () => ({ default: mocks.MockSnap }));
 vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
   activateCard: mocks.mockActivateCard,
   setCardProgress: vi.fn(),
-  settleCards: vi.fn(),
+  settleCards: mocks.mockSettleCards,
 }));
 
 vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
@@ -602,5 +604,117 @@ describe('keyboardNav — a press while a move is in flight', () => {
     lenis.animatedScroll = 2.4 * window.innerHeight;
     keyboardNav('forward');
     expect(lastTarget()).toBe(3);   // completes the step the reader stopped in
+  });
+});
+
+// ── The reader taking the scroll back from a move in flight ───────────────────
+//
+// A keyboard move raises three guards for as long as it travels: the cards are
+// activated by the move rather than by the scroll, the intro is not settled,
+// and the scrub does not close. All three come down in the move's onComplete,
+// which is the only place they can come down from — and Lenis never calls it
+// when raw input arrives mid-move. `onVirtualScroll` either stops the running
+// animation outright (`animate.stop()`, which calls neither callback) or
+// replaces it with the reader's own `scrollTo`, and a superseded animation's
+// onComplete is gone with it.
+//
+// So the engine stands the move down where the takeover is seen, or the guards
+// stay up for the rest of the reader's session: cards that never change with
+// the scroll, an intro that never settles, and a gesture that stops wherever
+// its last frame left it.
+
+describe('a move the reader interrupts with the scroll', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="scroll-surface"></div>
+      <div class="card-stack">
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+      </div>
+    `;
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    mocks.mockSettleCards.mockClear();
+    resetState({ currentIndex: -1 });
+
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
+      matches: false, media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    try {
+      Object.defineProperty(history, 'scrollRestoration',
+        { writable: true, value: 'auto', configurable: true });
+    } catch (_) { /* already writable here */ }
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** The listener Lenis calls the moment raw input arrives. */
+  function readerTakesOver() {
+    mocks.lenisOn.mock.calls.find(([event]) => event === 'virtual-scroll')[1]();
+  }
+
+  /** One frame of Lenis's smoothed output, at `position` viewports. */
+  function scrollFrame(position) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = position * window.innerHeight;
+    mocks.lenisOn.mock.calls.find(([event]) => event === 'scroll')[1](lenis);
+  }
+
+  it('gives the cards back to the scroll', () => {
+    keyboardNav('forward');                 // travelling towards position 1
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.98 * window.innerHeight;
+
+    readerTakesOver();
+    mocks.mockActivateCard.mockClear();
+    scrollFrame(3);                         // the reader, two steps further on
+
+    expect(mocks.mockActivateCard).toHaveBeenCalled();
+  });
+
+  it('settles the cards when the reader scrolls back into the intro', () => {
+    keyboardNav('forward');
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.98 * window.innerHeight;
+
+    readerTakesOver();
+    mocks.mockSettleCards.mockClear();
+    scrollFrame(0.4);
+
+    expect(mocks.mockSettleCards).toHaveBeenCalled();
+  });
+
+  it('closes the scrub on every gesture after the one that took over', () => {
+    vi.useFakeTimers();
+    keyboardNav('forward');
+    // Resting on the step the move was going to, so the settle below has
+    // nothing to carry and starts no move of its own — this case is about the
+    // move the reader interrupted, and a carry would supply a token for the
+    // right reason and hide whether the interrupted one let go of its own.
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 1 * window.innerHeight;
+
+    readerTakesOver();
+    vi.advanceTimersByTime(150);            // the gesture's own settle
+    mocks.mockSettleCards.mockClear();
+
+    // A later gesture, tracked frame by frame. Every frame re-arms the settle,
+    // so a scroll that drifts to a stop is settled where it actually stops.
+    scrollFrame(2.2);
+    scrollFrame(2.6);
+    vi.advanceTimersByTime(150);
+
+    expect(mocks.mockSettleCards).toHaveBeenCalled();
   });
 });
