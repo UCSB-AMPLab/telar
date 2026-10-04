@@ -1,0 +1,291 @@
+/**
+ * Tests for the media card below: whether a video or audio step's text card
+ * goes beside the player or below it on a horizontal layout, and where the
+ * player, the waveform and the card go in each case.
+ *
+ * The design table (docs, media-card-below.md) was measured with 64px kept
+ * clear at the top and a 16:9 video; its chosen column is reproduced here from
+ * its card heights.
+ *
+ * @version v1.8.0
+ */
+
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  chooseVideoArrangement, computeVideoLayout, computeVideoLetterboxRegion,
+  computeBelowCardTop, mediaPadding,
+} from '../../assets/js/telar-story/video-layout.js';
+import {
+  chooseAudioArrangement, computeAudioBelowLayout, computeAudioBesideWave,
+  AUDIO_CONTROLS_HEIGHT, AUDIO_CONTROLS_GAP,
+} from '../../assets/js/telar-story/audio-layout.js';
+import {
+  arrangeMediaScene, readBelow, placeAudioBelow,
+} from '../../assets/js/telar-story/media-arrangement.js';
+import { state } from '../../assets/js/telar-story/state.js';
+
+const TABLE_BAND = 64;
+
+// [W, H, card height, beside WxH, below WxH, chosen] — the design table.
+const TABLE = [
+  [1100, 900, 115, [616, 346], [1056, 594], 'below'],
+  [1100, 900, 158, [616, 346], [1056, 594], 'below'],
+  [1100, 900, 224, [616, 346], [1010, 568], 'below'],
+  [1100, 900, 289, [616, 346], [894, 503], 'below'],
+  [1280, 720, 125, [732, 412], [880, 495], 'below'],
+  [1280, 720, 173, [732, 412], [795, 447], 'below'],
+  [1280, 720, 246, [732, 412], [665, 374], 'beside'],
+  [1280, 720, 319, [732, 412], [535, 301], 'beside'],
+  [1280, 800, 125, [728, 410], [1015, 571], 'below'],
+  [1280, 800, 173, [728, 410], [930, 523], 'below'],
+  [1280, 800, 246, [728, 410], [800, 450], 'below'],
+  [1280, 800, 319, [728, 410], [670, 377], 'beside'],
+  [1440, 757, 125, [826, 465], [942, 530], 'below'],
+  [1440, 757, 173, [826, 465], [857, 482], 'beside'],
+  [1440, 757, 222, [826, 465], [770, 433], 'beside'],
+  [1440, 757, 295, [826, 465], [640, 360], 'beside'],
+  [1440, 900, 125, [820, 461], [1186, 667], 'below'],
+  [1440, 900, 173, [820, 461], [1100, 619], 'below'],
+  [1440, 900, 222, [820, 461], [1013, 570], 'below'],
+  [1440, 900, 295, [820, 461], [884, 497], 'below'],
+  [1536, 864, 130, [878, 494], [1113, 626], 'below'],
+  [1536, 864, 182, [878, 494], [1020, 574], 'below'],
+  [1536, 864, 233, [878, 494], [930, 523], 'beside'],
+  [1536, 864, 310, [878, 494], [793, 446], 'beside'],
+  [1920, 1080, 130, [1098, 618], [1479, 832], 'below'],
+  [1920, 1080, 156, [1098, 618], [1433, 806], 'below'],
+  [1920, 1080, 207, [1098, 618], [1342, 755], 'below'],
+  [1920, 1080, 258, [1098, 618], [1252, 704], 'below'],
+  [2560, 1440, 130, [1464, 824], [2087, 1174], 'below'],
+  [2560, 1440, 156, [1464, 824], [2041, 1148], 'below'],
+  [2560, 1440, 182, [1464, 824], [1995, 1122], 'below'],
+  [2560, 1440, 233, [1464, 824], [1904, 1071], 'below'],
+];
+
+/** Within 1% of the table's figure: the table rounded its padding by hand. */
+const nearTable = (actual, expected) => Math.abs(actual - expected) <= Math.max(3, expected * 0.01);
+
+afterEach(() => { delete state.layoutMode; state.isEmbed = false; });
+
+describe('chooseVideoArrangement reproduces the design table', () => {
+  it.each(TABLE)('%ix%i, card %ipx', (W, H, cardH, beside, below, chosen) => {
+    expect(chooseVideoArrangement(W, H, 16 / 9, cardH, TABLE_BAND)).toBe(chosen);
+    const side = computeVideoLayout(W, H, 16 / 9).video;
+    expect(nearTable(side.width, beside[0]) && nearTable(side.height, beside[1]),
+      `beside ${side.width}x${side.height}`).toBe(true);
+    const bottom = computeVideoLayout(W, H, 16 / 9, {
+      cardTop: computeBelowCardTop(W, H, cardH), topBand: TABLE_BAND,
+    }).video;
+    expect(nearTable(bottom.width, below[0]) && nearTable(bottom.height, below[1]),
+      `below ${bottom.width}x${bottom.height}`).toBe(true);
+  });
+
+  it('compares at the video\'s own aspect: a portrait video keeps the card beside', () => {
+    expect(chooseVideoArrangement(1440, 900, 16 / 9, 125, TABLE_BAND)).toBe('below');
+    expect(chooseVideoArrangement(1440, 900, 9 / 16, 125, TABLE_BAND)).toBe('beside');
+  });
+
+  it('keeps the card beside when the card leaves no room above it', () => {
+    expect(chooseVideoArrangement(1280, 720, 16 / 9, 700, TABLE_BAND)).toBe('beside');
+  });
+});
+
+describe('the video with the card below', () => {
+  const W = 1440;
+  const H = 900;
+  const pad = mediaPadding(W, H);
+  const cardTop = computeBelowCardTop(W, H, 150);
+  const below = { cardTop, topBand: 77 };
+
+  it('puts the card one padding above the window\'s bottom edge', () => {
+    expect(cardTop).toBe(H - pad - 150);
+  });
+
+  it('fits the space between the top band and the card, centred', () => {
+    for (const aspect of [16 / 9, 4 / 3, 1.4786, 1, 9 / 16]) {
+      const { mode, video, card } = computeVideoLayout(W, H, aspect, below);
+      expect(mode).toBe('below');
+      expect(video.top, `aspect ${aspect}`).toBeGreaterThanOrEqual(77);
+      expect(video.top + video.height, `aspect ${aspect}`).toBeLessThanOrEqual(cardTop - pad);
+      expect(video.left, `aspect ${aspect}`).toBeGreaterThanOrEqual(pad);
+      expect(video.left + video.width, `aspect ${aspect}`).toBeLessThanOrEqual(W - pad);
+      expect(Math.abs(video.left + video.width / 2 - W / 2), `aspect ${aspect}`).toBeLessThanOrEqual(1);
+      const midY = (77 + cardTop - pad) / 2;
+      expect(Math.abs(video.top + video.height / 2 - midY), `aspect ${aspect}`).toBeLessThanOrEqual(1);
+      expect(card).toMatchObject({ left: Math.round(W * 0.03), width: Math.round(W * 0.37), top: cardTop });
+    }
+  });
+
+  it('fills the same space when the aspect is unknown', () => {
+    expect(computeVideoLetterboxRegion(W, H, below)).toEqual({
+      left: pad, top: 77, width: W - pad * 2, height: cardTop - pad - 77,
+    });
+  });
+
+  it('is stacked on a vertical layout whatever the plate says', () => {
+    state.layoutMode = 'vertical';
+    expect(computeVideoLayout(800, 1200, 16 / 9, below).mode).toBe('stacked');
+  });
+});
+
+describe('the threshold comes from the stylesheet', () => {
+  it.each([
+    // +45% in the table: below at 15%, beside at 50%
+    [0.5, 1280, 720, 125, 'beside'],
+    // +8% in the table: beside at 15%, below at 5%
+    [0.05, 1440, 757, 173, 'below'],
+  ])('--telar-media-below-gain: %s', async (gain, W, H, cardH, chosen) => {
+    const sheet = document.createElement('style');
+    sheet.textContent = `:root { --telar-media-below-gain: ${gain}; }`;
+    document.head.appendChild(sheet);
+    try {
+      vi.resetModules();
+      const fresh = await import('../../assets/js/telar-story/video-layout.js');
+      expect(fresh.chooseVideoArrangement(W, H, 16 / 9, cardH, TABLE_BAND)).toBe(chosen);
+    } finally {
+      sheet.remove();
+    }
+  });
+});
+
+describe('audio', () => {
+  const sizes = [[1100, 900], [1280, 720], [1440, 900], [1920, 1080]];
+  const row = AUDIO_CONTROLS_GAP + AUDIO_CONTROLS_HEIGHT;
+
+  it('beside the card, the waveform is the stylesheet\'s: 59% of the width, half the height', () => {
+    expect(computeAudioBesideWave(1440, 900)).toEqual({ width: 850, height: 450 });
+  });
+
+  it.each(sizes)('a short answer at %ix%i puts the card below a full-height waveform', (W, H) => {
+    const pad = mediaPadding(W, H);
+    expect(chooseAudioArrangement(W, H, 150, 77)).toBe('below');
+    const cardTop = computeBelowCardTop(W, H, 150);
+    const { wave, controlsBottom } = computeAudioBelowLayout(W, H, { cardTop, topBand: 77 });
+    expect(wave).toMatchObject({ left: pad, width: W - pad * 2, height: Math.round(H * 0.5) });
+    expect(wave.top).toBeGreaterThanOrEqual(77);
+    const controlsTop = H - controlsBottom - AUDIO_CONTROLS_HEIGHT;
+    expect(controlsTop).toBe(wave.top + wave.height + AUDIO_CONTROLS_GAP);
+    expect(H - controlsBottom).toBeLessThanOrEqual(cardTop - pad);
+  });
+
+  it('shrinks the waveform to the space a long answer on a short window leaves', () => {
+    const W = 1280;
+    const H = 720;
+    const pad = mediaPadding(W, H);
+    const cardTop = computeBelowCardTop(W, H, 319);
+    const { wave } = computeAudioBelowLayout(W, H, { cardTop, topBand: 64 });
+    expect(wave.height).toBe(cardTop - pad - 64 - row);
+    expect(wave.height).toBeLessThan(360);
+  });
+
+  it('keeps the card beside once the waveform below would lose more than the width gains', () => {
+    // 1280x720, band 72: below is chosen while the waveform keeps about 257px
+    // (0.357 of the window) and beside below that.
+    expect(chooseAudioArrangement(1280, 720, 280, 72)).toBe('below');
+    expect(chooseAudioArrangement(1280, 720, 330, 72)).toBe('beside');
+  });
+});
+
+describe('arrangeMediaScene', () => {
+  const W = 1440;
+  const H = 900;
+
+  function makePlate(type) {
+    const el = document.createElement('div');
+    el.className = 'viewer-plate';
+    el.dataset.cardType = type;
+    return el;
+  }
+  function makeCard(height) {
+    const el = document.createElement('div');
+    el.className = 'text-card';
+    Object.defineProperty(el, 'offsetHeight', { value: height });
+    return el;
+  }
+  const how = (over = {}) => ({ W, H, eligible: true, besideTop: () => 333, ...over });
+
+  it('puts every card of a short scene below, bottom edge one padding above the window\'s', () => {
+    const p = makePlate('vimeo');
+    const cards = [makeCard(120), makeCard(150)];
+    expect(arrangeMediaScene(p, cards, how())).toBe('below');
+    const pad = mediaPadding(W, H);
+    expect(cards[0].style.getPropertyValue('top')).toBe(`${H - pad - 120}px`);
+    expect(cards[1].style.getPropertyValue('top')).toBe(`${H - pad - 150}px`);
+    expect(cards[1].style.getPropertyPriority('top')).toBe('important');
+    // The player is placed against the tallest card.
+    expect(p.dataset.mediaCardTop).toBe(String(H - pad - 150));
+    expect(cards.every((c) => c.dataset.mediaArrangement === 'below')).toBe(true);
+  });
+
+  it('decides a scene by its tallest card', () => {
+    const p = makePlate('vimeo');
+    const cards = [makeCard(120), makeCard(560)];
+    expect(arrangeMediaScene(p, cards, how())).toBe('beside');
+    expect(cards[0].style.getPropertyValue('top')).toBe('333px');
+  });
+
+  it('decides with the card height it is given: ignoring it would put a 560px card below', () => {
+    const p = makePlate('audio');
+    expect(arrangeMediaScene(p, [makeCard(560)], how())).toBe('beside');
+    expect(arrangeMediaScene(p, [makeCard(120)], how())).toBe('below');
+  });
+
+  it('leaves a scene alone where the cards were not sized to their content', () => {
+    const p = makePlate('youtube');
+    p.dataset.mediaArrangement = 'below';
+    const cards = [makeCard(120)];
+    expect(arrangeMediaScene(p, cards, how({ eligible: false }))).toBeNull();
+    expect(p.dataset.mediaArrangement).toBeUndefined();
+    expect(cards[0].style.getPropertyValue('top')).toBe('');
+  });
+
+  it('keeps the card beside in embed mode', () => {
+    state.isEmbed = true;
+    expect(arrangeMediaScene(makePlate('vimeo'), [makeCard(120)], how())).toBeNull();
+  });
+
+  it('does not arrange an image scene', () => {
+    expect(arrangeMediaScene(makePlate('iiif'), [makeCard(120)], how())).toBeNull();
+  });
+
+  it('hands the player the card top and band only while the card is below', () => {
+    const p = makePlate('vimeo');
+    arrangeMediaScene(p, [makeCard(120)], how());
+    expect(readBelow(p)).toEqual({
+      cardTop: Number(p.dataset.mediaCardTop), topBand: Number(p.dataset.mediaTopBand),
+    });
+    state.layoutMode = 'vertical';
+    expect(readBelow(p)).toBeNull();
+  });
+
+  it('gives an audio plate its waveform geometry as custom properties, and takes it back', () => {
+    // placeAudioBelow reads the window, which jsdom makes 1024x768.
+    const size = { W: window.innerWidth, H: window.innerHeight };
+    const p = makePlate('audio');
+    arrangeMediaScene(p, [makeCard(120)], how(size));
+    expect(placeAudioBelow(p)).toBe(Math.round(size.H * 0.5));
+    expect(p.style.getPropertyValue('--telar-audio-wave-left')).toBe(`${mediaPadding(size.W, size.H)}px`);
+    arrangeMediaScene(p, [makeCard(120)], how({ ...size, eligible: false }));
+    expect(placeAudioBelow(p)).toBeNull();
+    expect(p.style.getPropertyValue('--telar-audio-wave-left')).toBe('');
+  });
+});
+
+describe('the stylesheet', () => {
+  const readSource = (f) => readFileSync(resolve(process.cwd(), f), 'utf8');
+
+  it('mirrors the threshold and the waveform\'s side geometry to :root', () => {
+    const sheet = readSource('_sass/_responsive.scss');
+    expect(sheet).toMatch(/--telar-media-below-gain:\s+#\{\$telar-media-below-gain\};/);
+    expect(sheet).toMatch(/--telar-audio-wave-side-left:\s+#\{\$telar-audio-wave-side-left\};/);
+    expect(sheet).toMatch(/--telar-audio-wave-side-width:\s+#\{\$telar-audio-wave-side-width\};/);
+  });
+
+  it('places the waveform beside the card from those variables', () => {
+    const rule = readSource('_sass/_story.scss').match(/\n\.waveform-container \{([^}]*)\}/);
+    expect(rule[1]).toMatch(/left: \$telar-audio-wave-side-left;/);
+    expect(rule[1]).toMatch(/width: \$telar-audio-wave-side-width;/);
+  });
+});

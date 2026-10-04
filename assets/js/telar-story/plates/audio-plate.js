@@ -19,6 +19,7 @@ import {
   updateAudioClip,
   hasAudioPlayer,
   applyAudioClipEndDim,
+  layoutAudioPlate,
 } from '../audio-card.js';
 
 export class AudioPlate extends MediaPlate {
@@ -37,6 +38,9 @@ export class AudioPlate extends MediaPlate {
     const clip = stepClip(step);
     updateAudioClip(this.container, clip.start, clip.end || undefined, clip.loop);
   }
+
+  /** Re-place the player for the scene's arrangement after a geometry pass. */
+  resize() { layoutAudioPlate(this.container); }
 
   _hasPlayer() { return hasAudioPlayer(this.container); }
 

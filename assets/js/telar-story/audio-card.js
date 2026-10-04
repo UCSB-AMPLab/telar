@@ -19,6 +19,12 @@
  * start, and mute/unmute. An elapsed time display sits alongside them.
  * All icons are inline Lucide SVGs.
  *
+ * Layout — beside the side text card the waveform is the stylesheet's; when
+ * media-arrangement.js has placed the scene's cards below it, the waveform
+ * spans the width above them, placed by `placeAudioBelow`. card-pool.js
+ * re-places the waveforms through `layoutAudioPlate` after every geometry
+ * pass, since the arrangement depends on the cards' measured heights.
+ *
  * Player pool — at most three WaveSurfer instances exist at once. When a
  * fourth is needed, the player farthest by scene distance is destroyed.
  * All players share a single AudioContext (module-level singleton) to
@@ -45,8 +51,8 @@
  */
 
 import { state } from './state.js';
-import { onViewportResize } from './layout-mode.js';
 import { getBasePath } from './utils.js';
+import { placeAudioBelow } from './media-arrangement.js';
 
 // ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
 const _cs = getComputedStyle(document.documentElement);
@@ -60,6 +66,16 @@ function _audioHeightFraction() {
   return (state.layoutMode === 'vertical' || state.isEmbed)
     ? audioHeightMobile
     : audioHeightResize;
+}
+
+/**
+ * A plate's waveform height in px, having placed it for its scene's
+ * arrangement: below the player's geometry when media-arrangement.js says
+ * so, else its layout's fraction of the window.
+ */
+function _placeAudio(plateEl) {
+  const belowHeight = placeAudioBelow(plateEl);
+  return belowHeight ?? Math.round(window.innerHeight * _audioHeightFraction());
 }
 
 // ── Module-level player pool ──────────────────────────────────────────────────
@@ -396,7 +412,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * _audioHeightFraction()),
+          height: _placeAudio(plateEl),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -630,7 +646,7 @@ export function activateAudioCard(plateEl, sceneIndex) {
 
   // Re-render waveform to match current viewport
   try {
-    wrapper.ws.setOptions({ height: Math.round(window.innerHeight * _audioHeightFraction()) });
+    wrapper.ws.setOptions({ height: _placeAudio(plateEl) });
   } catch (e) {
     // ws may still be initialising — ignore
   }
@@ -963,21 +979,19 @@ function _injectAudioError(plateEl) {
   plateEl.appendChild(alertEl);
 }
 
-// ── Viewport-resize subscription ─────────────────────────────────────────────
-
-onViewportResize(({ viewport }) => {
-  const newHeight = Math.round(viewport.h * _audioHeightFraction());
-  for (const wrapper of _audioPlayers) {
-    if (
-      wrapper.element &&
-      wrapper.element.classList.contains("is-active") &&
-      wrapper.ws
-    ) {
-      try {
-        wrapper.ws.setOptions({ height: newHeight });
-      } catch (e) {
-        // Ignore resize errors
-      }
-    }
+/**
+ * Re-place a plate's waveform after a geometry pass; card-pool.js calls it,
+ * since the arrangement depends on the cards' heights, measured there.
+ *
+ * @param {HTMLElement} plateEl
+ */
+export function layoutAudioPlate(plateEl) {
+  const height = _placeAudio(plateEl);
+  const wrapper = _getAudioWrapperForPlate(plateEl);
+  if (!wrapper || !wrapper.ws) return;
+  try {
+    wrapper.ws.setOptions({ height });
+  } catch (e) {
+    // ws may still be initialising
   }
-});
+}

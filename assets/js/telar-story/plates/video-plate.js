@@ -20,6 +20,7 @@ import {
   hasVideoPlayer,
   applyClipEndDim,
   showVideoPlayOverlay,
+  layoutVideoPlate,
 } from '../video-card.js';
 
 export class VideoPlate extends MediaPlate {
@@ -40,6 +41,9 @@ export class VideoPlate extends MediaPlate {
     const clip = stepClip(step);
     updateVideoClip(this.container, clip.start, clip.end || undefined, clip.loop);
   }
+
+  /** Re-place the player for the scene's arrangement after a geometry pass. */
+  resize() { layoutVideoPlate(this.container); }
 
   _hasPlayer() { return hasVideoPlayer(this.container); }
 

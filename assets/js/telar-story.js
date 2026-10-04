@@ -699,6 +699,287 @@
     return false;
   }
 
+  // assets/js/telar-story/video-layout.js
+  var _cs = getComputedStyle(document.documentElement);
+  var videoPadFactor = parseFloat(_cs.getPropertyValue("--telar-video-pad-factor").trim()) || 0.025;
+  var videoStackMaxH = parseFloat(_cs.getPropertyValue("--telar-video-stack-max-h").trim()) || 0.58;
+  var cardSideLeft = readFraction("--telar-card-side-left", 0.03);
+  var cardSideWidth = readFraction("--telar-card-side-width", 0.37);
+  var mediaBelowGain = _readNumber("--telar-media-below-gain", 0.15);
+  var COMPARISON_ASPECT = 16 / 9;
+  function _readNumber(name, fallback) {
+    const value = parseFloat(_cs.getPropertyValue(name).trim());
+    return Number.isFinite(value) ? value : fallback;
+  }
+  function readFraction(name, fallback) {
+    const raw = _cs.getPropertyValue(name).trim();
+    const value = parseFloat(raw);
+    if (!Number.isFinite(value)) return fallback;
+    return raw.endsWith("%") ? value / 100 : value;
+  }
+  function _sideCardRight(W) {
+    return Math.round(W * (cardSideLeft + cardSideWidth));
+  }
+  function mediaPadding(W, H) {
+    return Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
+  }
+  function computeBelowCardTop(W, H, cardH) {
+    return Math.round(H - mediaPadding(W, H) - cardH);
+  }
+  function prefersBelow(besideArea, belowArea) {
+    return belowArea >= besideArea * (1 + mediaBelowGain);
+  }
+  function chooseVideoArrangement(W, H, aspectRatio, cardH, topBand) {
+    const beside = _computeSideBySideLayout(W, H, aspectRatio).video;
+    const below = _computeBelowLayout(W, H, aspectRatio, {
+      cardTop: computeBelowCardTop(W, H, cardH),
+      topBand
+    }).video;
+    return prefersBelow(beside.width * beside.height, below.width * below.height) ? "below" : "beside";
+  }
+  function computeVideoLayout(W, H, aspectRatio, below = null) {
+    if (state.layoutMode === "vertical") {
+      return _computeStackedLayout(W, H, aspectRatio);
+    }
+    if (below) return _computeBelowLayout(W, H, aspectRatio, below);
+    return _computeSideBySideLayout(W, H, aspectRatio);
+  }
+  function _belowRegion(W, pad, below) {
+    return {
+      left: pad,
+      top: below.topBand,
+      width: W - pad * 2,
+      height: Math.max(0, below.cardTop - pad - below.topBand)
+    };
+  }
+  function _computeBelowLayout(W, H, aspectRatio, below) {
+    const pad = mediaPadding(W, H);
+    const region = _belowRegion(W, pad, below);
+    let vidW = region.width;
+    let vidH = vidW / aspectRatio;
+    if (vidH > region.height) {
+      vidH = region.height;
+      vidW = vidH * aspectRatio;
+    }
+    vidW = Math.round(vidW);
+    vidH = Math.round(vidH);
+    const cardW = Math.round(W * cardSideWidth);
+    return {
+      mode: "below",
+      video: {
+        left: Math.round(region.left + (region.width - vidW) / 2),
+        top: Math.round(region.top + (region.height - vidH) / 2),
+        width: vidW,
+        height: vidH
+      },
+      card: {
+        left: Math.round(W * cardSideLeft),
+        top: below.cardTop,
+        width: cardW,
+        height: Math.max(0, H - pad - below.cardTop)
+      },
+      padding: cardW > 300 ? 24 : cardW > 200 ? 16 : 10
+    };
+  }
+  function _computeSideBySideLayout(W, H, aspectRatio) {
+    const pad = mediaPadding(W, H);
+    const vidLeft = _sideCardRight(W) + pad;
+    const sideVideoMaxW = W - vidLeft - pad;
+    const sideVideoMaxH = H - pad * 2;
+    let sideVidW = sideVideoMaxW;
+    let sideVidH = sideVidW / aspectRatio;
+    if (sideVidH > sideVideoMaxH) {
+      sideVidH = sideVideoMaxH;
+      sideVidW = sideVidH * aspectRatio;
+    }
+    return _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH);
+  }
+  function _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH) {
+    const vidW = Math.round(sideVidW);
+    const vidH = Math.round(sideVidH);
+    const vidTop = Math.round((H - vidH) / 2);
+    const cardW = Math.round(W * cardSideWidth);
+    const cardH = Math.round(H - pad * 2);
+    const cardLeft = Math.round(W * cardSideLeft);
+    const cardTop = pad;
+    const cardPad = cardW > 300 ? 24 : cardW > 200 ? 16 : 10;
+    return {
+      mode: "side-by-side",
+      video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
+      card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
+      padding: cardPad
+    };
+  }
+  function _buildStackedResult(W, H, pad, stackVidW, stackVidH) {
+    const vidW = Math.round(stackVidW);
+    const vidH = Math.round(stackVidH);
+    const vidLeft = Math.round((W - vidW) / 2);
+    const vidTop = pad;
+    const cardTop = vidTop + vidH + pad;
+    const cardH = Math.max(60, H - cardTop - pad);
+    const cardW = Math.round(W - pad * 2);
+    const cardLeft = pad;
+    const cardPad = cardH > 200 ? 22 : cardH > 120 ? 14 : 8;
+    return {
+      mode: "stacked",
+      video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
+      card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
+      padding: cardPad
+    };
+  }
+  function computeVideoLetterboxRegion(W, H, below = null) {
+    const pad = mediaPadding(W, H);
+    if (state.layoutMode === "vertical") {
+      return {
+        left: pad,
+        top: pad,
+        width: Math.round(W - pad * 2),
+        height: Math.round(H * videoStackMaxH)
+      };
+    }
+    if (below) return _belowRegion(W, pad, below);
+    const left = _sideCardRight(W) + pad;
+    return {
+      left,
+      top: pad,
+      width: W - left - pad,
+      height: Math.round(H - pad * 2)
+    };
+  }
+  function _computeStackedLayout(W, H, aspectRatio) {
+    const pad = mediaPadding(W, H);
+    const stackVideoMaxW = W - pad * 2;
+    const stackVideoMaxH = H * videoStackMaxH;
+    let stackVidW = stackVideoMaxW;
+    let stackVidH = stackVidW / aspectRatio;
+    if (stackVidH > stackVideoMaxH) {
+      stackVidH = stackVideoMaxH;
+      stackVidW = stackVidH * aspectRatio;
+    }
+    return _buildStackedResult(W, H, pad, stackVidW, stackVidH);
+  }
+  function buildYouTubeEmbedConfig(videoId, clipStart, clipEnd, loop) {
+    return {
+      videoId,
+      playerVars: {
+        start: clipStart || 0,
+        autoplay: 0,
+        mute: 0,
+        // loop/playlist omitted — segment looping handled by rAF polling
+        // (YouTube loop playerVar loops the whole video, not the clip)
+        controls: 1,
+        rel: 0,
+        modestbranding: 1
+      }
+    };
+  }
+  function buildGDriveEmbedUrl(fileId) {
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
+
+  // assets/js/telar-story/audio-layout.js
+  var _cs2 = getComputedStyle(document.documentElement);
+  var audioHeightResize = parseFloat(_cs2.getPropertyValue("--telar-audio-height-resize").trim()) || 0.5;
+  var waveSideWidth = readFraction("--telar-audio-wave-side-width", 0.59);
+  var AUDIO_CONTROLS_HEIGHT = 44;
+  var AUDIO_CONTROLS_GAP = 4;
+  function computeAudioBesideWave(W, H) {
+    return {
+      width: Math.round(W * waveSideWidth),
+      height: Math.round(H * audioHeightResize)
+    };
+  }
+  function computeAudioBelowLayout(W, H, below) {
+    const pad = mediaPadding(W, H);
+    const row = AUDIO_CONTROLS_GAP + AUDIO_CONTROLS_HEIGHT;
+    const space = Math.max(0, below.cardTop - pad - below.topBand);
+    const height = Math.max(0, Math.min(Math.round(H * audioHeightResize), space - row));
+    const top = Math.round(below.topBand + (space - height - row) / 2);
+    return {
+      wave: { left: pad, top, width: W - pad * 2, height },
+      controlsBottom: Math.round(H - (top + height + row))
+    };
+  }
+  function chooseAudioArrangement(W, H, cardH, topBand) {
+    const beside = computeAudioBesideWave(W, H);
+    const below = computeAudioBelowLayout(W, H, {
+      cardTop: computeBelowCardTop(W, H, cardH),
+      topBand
+    }).wave;
+    return prefersBelow(beside.width * beside.height, below.width * below.height) ? "below" : "beside";
+  }
+
+  // assets/js/telar-story/media-arrangement.js
+  var TOP_CONTROLS = [".btn-nav-back", ".share-button", ".step-counter"];
+  var VIDEO_TYPES = /* @__PURE__ */ new Set(["youtube", "vimeo", "google-drive"]);
+  function _isEmbed() {
+    return state.isEmbed || Boolean(window.telarEmbed?.enabled);
+  }
+  function measureTopBand(W, H) {
+    let bottom = 0;
+    for (const selector of TOP_CONTROLS) {
+      const el = document.querySelector(selector);
+      if (!el) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width > 0 && box.height > 0) bottom = Math.max(bottom, box.bottom);
+    }
+    return Math.round(bottom) + mediaPadding(W, H);
+  }
+  function _plateAspect(plateEl) {
+    if (plateEl.dataset.videoLetterbox === "true") return COMPARISON_ASPECT;
+    return parseFloat(plateEl.dataset.aspectRatio) || COMPARISON_ASPECT;
+  }
+  function _clear(plateEl, cards) {
+    delete plateEl.dataset.mediaArrangement;
+    delete plateEl.dataset.mediaCardTop;
+    delete plateEl.dataset.mediaTopBand;
+    for (const card of cards) delete card.dataset.mediaArrangement;
+  }
+  function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop }) {
+    const type = plateEl.dataset.cardType;
+    const isMedia = VIDEO_TYPES.has(type) || type === "audio";
+    if (!isMedia || !eligible || _isEmbed() || cards.length === 0) {
+      _clear(plateEl, cards);
+      return null;
+    }
+    const cardH = Math.max(...cards.map((card) => card.offsetHeight));
+    const topBand = measureTopBand(W, H);
+    const arrangement = type === "audio" ? chooseAudioArrangement(W, H, cardH, topBand) : chooseVideoArrangement(W, H, _plateAspect(plateEl), cardH, topBand);
+    plateEl.dataset.mediaArrangement = arrangement;
+    plateEl.dataset.mediaCardTop = String(computeBelowCardTop(W, H, cardH));
+    plateEl.dataset.mediaTopBand = String(topBand);
+    for (const card of cards) {
+      card.dataset.mediaArrangement = arrangement;
+      const top = arrangement === "below" ? computeBelowCardTop(W, H, card.offsetHeight) : besideTop(card);
+      card.style.setProperty("top", `${top}px`, "important");
+    }
+    return arrangement;
+  }
+  function readBelow(plateEl) {
+    if (plateEl.dataset.mediaArrangement !== "below") return null;
+    if (state.layoutMode === "vertical") return null;
+    const cardTop = parseFloat(plateEl.dataset.mediaCardTop);
+    const topBand = parseFloat(plateEl.dataset.mediaTopBand);
+    if (!Number.isFinite(cardTop) || !Number.isFinite(topBand)) return null;
+    return { cardTop, topBand };
+  }
+  var AUDIO_BELOW_PROPS = [
+    "--telar-audio-wave-top",
+    "--telar-audio-wave-left",
+    "--telar-audio-wave-width",
+    "--telar-audio-controls-bottom"
+  ];
+  function placeAudioBelow(plateEl) {
+    const below = readBelow(plateEl);
+    if (!below) {
+      for (const prop of AUDIO_BELOW_PROPS) plateEl.style.removeProperty(prop);
+      return null;
+    }
+    const { wave, controlsBottom } = computeAudioBelowLayout(window.innerWidth, window.innerHeight, below);
+    [wave.top, wave.left, wave.width, controlsBottom].forEach((px, i) => plateEl.style.setProperty(AUDIO_BELOW_PROPS[i], `${px}px`));
+    return wave.height;
+  }
+
   // assets/js/telar-story/plates/base-plate.js
   var Plate = class {
     static containerClass = "base-plate";
@@ -827,122 +1108,6 @@
     _deactivatePlayer() {
     }
   };
-
-  // assets/js/telar-story/video-layout.js
-  var _cs = getComputedStyle(document.documentElement);
-  var videoPadFactor = parseFloat(_cs.getPropertyValue("--telar-video-pad-factor").trim()) || 0.025;
-  var videoStackMaxH = parseFloat(_cs.getPropertyValue("--telar-video-stack-max-h").trim()) || 0.58;
-  var cardSideLeft = _readFraction("--telar-card-side-left", 0.03);
-  var cardSideWidth = _readFraction("--telar-card-side-width", 0.37);
-  function _readFraction(name, fallback) {
-    const raw = _cs.getPropertyValue(name).trim();
-    const value = parseFloat(raw);
-    if (!Number.isFinite(value)) return fallback;
-    return raw.endsWith("%") ? value / 100 : value;
-  }
-  function _sideCardRight(W) {
-    return Math.round(W * (cardSideLeft + cardSideWidth));
-  }
-  function computeVideoLayout(W, H, aspectRatio) {
-    if (state.layoutMode === "vertical") {
-      return _computeStackedLayout(W, H, aspectRatio);
-    }
-    return _computeSideBySideLayout(W, H, aspectRatio);
-  }
-  function _computeSideBySideLayout(W, H, aspectRatio) {
-    const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-    const vidLeft = _sideCardRight(W) + pad;
-    const sideVideoMaxW = W - vidLeft - pad;
-    const sideVideoMaxH = H - pad * 2;
-    let sideVidW = sideVideoMaxW;
-    let sideVidH = sideVidW / aspectRatio;
-    if (sideVidH > sideVideoMaxH) {
-      sideVidH = sideVideoMaxH;
-      sideVidW = sideVidH * aspectRatio;
-    }
-    return _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH);
-  }
-  function _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH) {
-    const vidW = Math.round(sideVidW);
-    const vidH = Math.round(sideVidH);
-    const vidTop = Math.round((H - vidH) / 2);
-    const cardW = Math.round(W * cardSideWidth);
-    const cardH = Math.round(H - pad * 2);
-    const cardLeft = Math.round(W * cardSideLeft);
-    const cardTop = pad;
-    const cardPad = cardW > 300 ? 24 : cardW > 200 ? 16 : 10;
-    return {
-      mode: "side-by-side",
-      video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
-      card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
-      padding: cardPad
-    };
-  }
-  function _buildStackedResult(W, H, pad, stackVidW, stackVidH) {
-    const vidW = Math.round(stackVidW);
-    const vidH = Math.round(stackVidH);
-    const vidLeft = Math.round((W - vidW) / 2);
-    const vidTop = pad;
-    const cardTop = vidTop + vidH + pad;
-    const cardH = Math.max(60, H - cardTop - pad);
-    const cardW = Math.round(W - pad * 2);
-    const cardLeft = pad;
-    const cardPad = cardH > 200 ? 22 : cardH > 120 ? 14 : 8;
-    return {
-      mode: "stacked",
-      video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
-      card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
-      padding: cardPad
-    };
-  }
-  function computeVideoLetterboxRegion(W, H) {
-    const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-    if (state.layoutMode === "vertical") {
-      return {
-        left: pad,
-        top: pad,
-        width: Math.round(W - pad * 2),
-        height: Math.round(H * videoStackMaxH)
-      };
-    }
-    const left = _sideCardRight(W) + pad;
-    return {
-      left,
-      top: pad,
-      width: W - left - pad,
-      height: Math.round(H - pad * 2)
-    };
-  }
-  function _computeStackedLayout(W, H, aspectRatio) {
-    const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-    const stackVideoMaxW = W - pad * 2;
-    const stackVideoMaxH = H * videoStackMaxH;
-    let stackVidW = stackVideoMaxW;
-    let stackVidH = stackVidW / aspectRatio;
-    if (stackVidH > stackVideoMaxH) {
-      stackVidH = stackVideoMaxH;
-      stackVidW = stackVidH * aspectRatio;
-    }
-    return _buildStackedResult(W, H, pad, stackVidW, stackVidH);
-  }
-  function buildYouTubeEmbedConfig(videoId, clipStart, clipEnd, loop) {
-    return {
-      videoId,
-      playerVars: {
-        start: clipStart || 0,
-        autoplay: 0,
-        mute: 0,
-        // loop/playlist omitted — segment looping handled by rAF polling
-        // (YouTube loop playerVar loops the whole video, not the clip)
-        controls: 1,
-        rel: 0,
-        modestbranding: 1
-      }
-    };
-  }
-  function buildGDriveEmbedUrl(fileId) {
-    return `https://drive.google.com/file/d/${fileId}/preview`;
-  }
 
   // assets/js/telar-story/video-card.js
   var _videoPlayers = [];
@@ -1194,7 +1359,7 @@
       } else {
         plateEl.dataset.videoLetterbox = "true";
       }
-      _applyVideoLayout(plateEl);
+      _aspectLearned(plateEl);
     });
     const wrapper = {
       type: "youtube",
@@ -1313,7 +1478,7 @@
         ]).then(([w, h]) => {
           if (w && h) {
             plateEl.dataset.aspectRatio = String(w / h);
-            _applyVideoLayout(plateEl);
+            _aspectLearned(plateEl);
           }
         });
       }).then(() => {
@@ -1416,8 +1581,9 @@
     const H = window.innerHeight;
     const videoEl = plateEl.querySelector(".video-iframe");
     if (!videoEl) return;
+    const below = readBelow(plateEl);
     if (plateEl.dataset.videoLetterbox === "true") {
-      const region = computeVideoLetterboxRegion(W, H);
+      const region = computeVideoLetterboxRegion(W, H, below);
       videoEl.classList.add("video-iframe--letterbox");
       videoEl.style.position = "absolute";
       videoEl.style.left = `${region.left}px`;
@@ -1428,20 +1594,17 @@
     }
     videoEl.classList.remove("video-iframe--letterbox");
     const aspectRatio = parseFloat(plateEl.dataset.aspectRatio) || 16 / 9;
-    const layout = computeVideoLayout(W, H, aspectRatio);
+    const layout = computeVideoLayout(W, H, aspectRatio, below);
     videoEl.style.position = "absolute";
     videoEl.style.left = `${layout.video.left}px`;
     videoEl.style.top = `${layout.video.top}px`;
     videoEl.style.width = `${layout.video.width}px`;
     videoEl.style.height = `${layout.video.height}px`;
   }
-  onViewportResize(() => {
-    for (const wrapper of _videoPlayers) {
-      if (wrapper.element && wrapper.element.classList.contains("is-active")) {
-        _applyVideoLayout(wrapper.element);
-      }
-    }
-  });
+  function _aspectLearned(plateEl) {
+    _applyVideoLayout(plateEl);
+    plateEl.dispatchEvent(new CustomEvent("telar:media-aspect"));
+  }
 
   // assets/js/telar-story/plates/video-plate.js
   var VideoPlate = class extends MediaPlate {
@@ -1456,6 +1619,10 @@
     goToStep(step) {
       const clip = stepClip(step);
       updateVideoClip(this.container, clip.start, clip.end || void 0, clip.loop);
+    }
+    /** Re-place the player for the scene's arrangement after a geometry pass. */
+    resize() {
+      _applyVideoLayout(this.container);
     }
     _hasPlayer() {
       return hasVideoPlayer(this.container);
@@ -1498,11 +1665,15 @@
   };
 
   // assets/js/telar-story/audio-card.js
-  var _cs2 = getComputedStyle(document.documentElement);
-  var audioHeightMobile = parseFloat(_cs2.getPropertyValue("--telar-audio-height-mobile").trim()) || 0.35;
-  var audioHeightResize = parseFloat(_cs2.getPropertyValue("--telar-audio-height-resize").trim()) || 0.5;
+  var _cs3 = getComputedStyle(document.documentElement);
+  var audioHeightMobile = parseFloat(_cs3.getPropertyValue("--telar-audio-height-mobile").trim()) || 0.35;
+  var audioHeightResize2 = parseFloat(_cs3.getPropertyValue("--telar-audio-height-resize").trim()) || 0.5;
   function _audioHeightFraction() {
-    return state.layoutMode === "vertical" || state.isEmbed ? audioHeightMobile : audioHeightResize;
+    return state.layoutMode === "vertical" || state.isEmbed ? audioHeightMobile : audioHeightResize2;
+  }
+  function _placeAudio(plateEl) {
+    const belowHeight = placeAudioBelow(plateEl);
+    return belowHeight ?? Math.round(window.innerHeight * _audioHeightFraction());
   }
   var _audioPlayers = [];
   var MAX_AUDIO_PLAYERS = 3;
@@ -1659,7 +1830,7 @@
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * _audioHeightFraction()),
+          height: _placeAudio(plateEl),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -1832,7 +2003,7 @@
       }
     }
     try {
-      wrapper.ws.setOptions({ height: Math.round(window.innerHeight * _audioHeightFraction()) });
+      wrapper.ws.setOptions({ height: _placeAudio(plateEl) });
     } catch (e) {
     }
     if (state.layoutMode === "vertical" || state.isEmbed) {
@@ -2018,17 +2189,15 @@
 <p>This audio file could not be loaded. Continue scrolling to read the story.</p>`;
     plateEl.appendChild(alertEl);
   }
-  onViewportResize(({ viewport }) => {
-    const newHeight = Math.round(viewport.h * _audioHeightFraction());
-    for (const wrapper of _audioPlayers) {
-      if (wrapper.element && wrapper.element.classList.contains("is-active") && wrapper.ws) {
-        try {
-          wrapper.ws.setOptions({ height: newHeight });
-        } catch (e) {
-        }
-      }
+  function layoutAudioPlate(plateEl) {
+    const height = _placeAudio(plateEl);
+    const wrapper = _getAudioWrapperForPlate(plateEl);
+    if (!wrapper || !wrapper.ws) return;
+    try {
+      wrapper.ws.setOptions({ height });
+    } catch (e) {
     }
-  });
+  }
 
   // assets/js/telar-story/plates/audio-plate.js
   var AudioPlate = class extends MediaPlate {
@@ -2043,6 +2212,10 @@
     goToStep(step) {
       const clip = stepClip(step);
       updateAudioClip(this.container, clip.start, clip.end || void 0, clip.loop);
+    }
+    /** Re-place the player for the scene's arrangement after a geometry pass. */
+    resize() {
+      layoutAudioPlate(this.container);
     }
     _hasPlayer() {
       return hasAudioPlayer(this.container);
@@ -2988,6 +3161,31 @@
         card.style.height = `${cardH}px`;
       }
     }
+    const contentSized = (fitSideCard || landscapeSideCard) && getLayoutMode() !== "vertical";
+    _arrangeMediaScenes(cards, viewportW, viewportH, contentSized);
+  }
+  function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized) {
+    const cardsByScene = {};
+    for (const card of cards) {
+      const scene = getSceneIndex(parseInt(card.dataset.stepIndex, 10));
+      (cardsByScene[scene] ||= []).push(card);
+    }
+    const besideTop = (card) => computeCardTop(
+      viewportH,
+      card.offsetHeight,
+      _cardRunPosition(card),
+      _config.peekHeight
+    );
+    for (const [scene, plate] of Object.entries(state.viewerPlates)) {
+      if (!(plate instanceof MediaPlate)) continue;
+      arrangeMediaScene(plate.container, cardsByScene[scene] || [], {
+        W: viewportW,
+        H: viewportH,
+        eligible: contentSized,
+        besideTop
+      });
+      plate.resize();
+    }
   }
   function _detectStepCardType(objectId, step, audioObjects) {
     const objectData = state.objectsIndex[objectId] || {};
@@ -3035,6 +3233,11 @@
       plate.style.transform = "translateY(100%)";
       _markMediaPlate(plate, sceneCardType, firstStep);
       cardStack.appendChild(plate);
+      if (_PLATE_TYPES[sceneCardType]) {
+        plate.addEventListener("telar:media-aspect", () => {
+          _recomputeCardGeometry(window.innerWidth, window.innerHeight);
+        });
+      }
       const PlateClass = _plateClassFor(sceneCardType);
       state.viewerPlates[sceneIdx] = new PlateClass(
         plate,

@@ -52,6 +52,18 @@ $telar-audio-height-resize:  0.5;   // audio-card.js:829     — window.innerHei
 $telar-video-pad-factor:     0.025; // video-card.js:139,214 — Math.min(W,H) * 0.025
 $telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
 
+// ── Media card below ─────────────────────────────────────────────────────────
+// On a horizontal layout a video or audio step puts its text card below the
+// player, at the side card's left edge and width, when the player's area there
+// is at least this fraction larger than beside the card. video-layout.js reads
+// the mirrored property; the Compositor's framing stage mirrors the figure.
+// The waveform's side geometry is what _story.scss places the waveform with
+// beside the card, and what audio-layout.js compares the arrangement below
+// against.
+$telar-media-below-gain:          0.15;
+$telar-audio-wave-side-left:      41%;
+$telar-audio-wave-side-width:     59%;
+
 // ── :root CSS custom property mirror ─────────────────────────────────────────
 // Every Sass variable above is mirrored here so both compile-time Sass and
 // runtime JS (via getComputedStyle(document.documentElement)) can derive
@@ -80,6 +92,11 @@ $telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
   --telar-audio-height-resize:  #{$telar-audio-height-resize};
   --telar-video-pad-factor:     #{$telar-video-pad-factor};
   --telar-video-stack-max-h:    #{$telar-video-stack-max-h};
+
+  // Media card below
+  --telar-media-below-gain:      #{$telar-media-below-gain};
+  --telar-audio-wave-side-left:  #{$telar-audio-wave-side-left};
+  --telar-audio-wave-side-width: #{$telar-audio-wave-side-width};
 }
 
 // ── @mixin vertical-layout ───────────────────────────────────────────────────

@@ -224,11 +224,13 @@
   // background applied inline by audio-card.js
 }
 
+// Beside the side card. audio-layout.js compares the arrangement with the
+// card below against this geometry, through the mirrored custom properties.
 .waveform-container {
   position: absolute;
   top: 50%;
-  left: 41%;
-  width: 59%;
+  left: $telar-audio-wave-side-left;
+  width: $telar-audio-wave-side-width;
   transform: translateY(-50%);
   pointer-events: none; // display-only
   z-index: 1; // above telar weave pattern (CSS background)
@@ -295,6 +297,30 @@
   pointer-events: none;
   bottom: calc(25% - 48px);
   right: 16px;
+}
+
+// With the card below the waveform, which media-arrangement.js decides on a
+// horizontal layout, the waveform spans the width above the controls row and
+// the row is centred under it. The plate carries the geometry, computed by
+// audio-layout.js, as custom properties.
+.viewer-plate.audio-plate[data-media-arrangement="below"] {
+  .waveform-container {
+    top: var(--telar-audio-wave-top);
+    left: var(--telar-audio-wave-left);
+    width: var(--telar-audio-wave-width);
+    transform: none;
+  }
+
+  .audio-controls {
+    bottom: var(--telar-audio-controls-bottom);
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .audio-elapsed {
+    bottom: var(--telar-audio-controls-bottom);
+  }
 }
 
 .audio-play-overlay {

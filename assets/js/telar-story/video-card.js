@@ -7,12 +7,15 @@
  * Video cards follow the same DOM-at-init, visibility-via-transforms
  * pattern as IIIF cards but use iframe embeds instead of IIIF viewers.
  *
- * Layout — when a video step activates, the module calculates the optimal
- * arrangement by comparing how many pixels the video would occupy in a
- * side-by-side layout (video left, text right) versus a stacked layout
- * (video top, text below). Whichever arrangement gives the video more
- * screen area wins. On mobile viewports the layout is always stacked,
- * since side-by-side is too narrow to be useful.
+ * Layout — the player is placed by video-layout.js's arithmetic. On a
+ * horizontal layout it goes beside the side text card, or above the card when
+ * media-arrangement.js has placed the scene's cards below the player and
+ * written so on the plate; on a vertical layout it is stacked above the
+ * bottom card. card-pool.js re-places the players through `layoutVideoPlate`
+ * after every geometry pass, since the arrangement depends on the cards'
+ * heights and those are measured there. When a player learns its video's
+ * aspect, the plate is sent `telar:media-aspect`, because the arrangement is
+ * compared at that aspect.
  *
  * Player pool — at most three video players exist at once (the current
  * card, plus one or two preloaded ahead). When a fourth is needed, the
@@ -41,7 +44,7 @@
  */
 
 import { state } from './state.js';
-import { onViewportResize } from './layout-mode.js';
+import { readBelow } from './media-arrangement.js';
 
 // Layout and embed arithmetic, in video-layout.js. Used here, and re-exported
 // so the plates and the tests import it from this module as before.
@@ -477,7 +480,7 @@ function _createYouTubePlayer(plateEl, videoId, opts) {
     } else {
       plateEl.dataset.videoLetterbox = 'true';
     }
-    _applyVideoLayout(plateEl);
+    _aspectLearned(plateEl);
   });
 
   const wrapper = {
@@ -634,7 +637,7 @@ function _createVimeoPlayer(plateEl, videoId, opts) {
       ]).then(([w, h]) => {
         if (w && h) {
           plateEl.dataset.aspectRatio = String(w / h);
-          _applyVideoLayout(plateEl);
+          _aspectLearned(plateEl);
         }
       });
     }).then(() => {
@@ -796,10 +799,12 @@ export function hasVideoPlayer(plateEl) {
 }
 
 /**
- * Apply the auto-layout algorithm to a video plate.
- * Positions the video iframe within the plate. (The text card is positioned by
- * card-pool.js / CSS, not here — `computeVideoLayout`'s `card`/`padding` slots
- * are intentionally unused by this function.)
+ * Place a video plate's player for its scene's arrangement.
+ *
+ * Positions the video iframe within the plate. The text card is positioned by
+ * card-pool.js / media-arrangement.js and the stylesheet, not here —
+ * `computeVideoLayout`'s `card`/`padding` slots are intentionally unused by
+ * this function.
  *
  * @param {HTMLElement} plateEl - The video plate element
  */
@@ -809,13 +814,14 @@ function _applyVideoLayout(plateEl) {
 
   const videoEl = plateEl.querySelector('.video-iframe');
   if (!videoEl) return;
+  const below = readBelow(plateEl);
 
   // Unknown-aspect path: when the true aspect ratio could not be determined
   // (old YouTube videos without a maxres thumbnail; all Google Drive embeds),
   // fill the whole available region on a dark frame and let the provider's
   // player letterbox the video itself, instead of guessing an aspect ratio.
   if (plateEl.dataset.videoLetterbox === 'true') {
-    const region = computeVideoLetterboxRegion(W, H);
+    const region = computeVideoLetterboxRegion(W, H, below);
     videoEl.classList.add('video-iframe--letterbox');
     videoEl.style.position = 'absolute';
     videoEl.style.left = `${region.left}px`;
@@ -830,7 +836,7 @@ function _applyVideoLayout(plateEl) {
   // succeeded). Default 16:9 only as a last resort.
   videoEl.classList.remove('video-iframe--letterbox');
   const aspectRatio = parseFloat(plateEl.dataset.aspectRatio) || 16 / 9;
-  const layout = computeVideoLayout(W, H, aspectRatio);
+  const layout = computeVideoLayout(W, H, aspectRatio, below);
   videoEl.style.position = 'absolute';
   videoEl.style.left = `${layout.video.left}px`;
   videoEl.style.top = `${layout.video.top}px`;
@@ -838,13 +844,14 @@ function _applyVideoLayout(plateEl) {
   videoEl.style.height = `${layout.video.height}px`;
 }
 
-// ── Viewport-resize subscription ─────────────────────────────────────────────
+/**
+ * Re-place a plate's player once its video's aspect is known, and tell the
+ * card pool, which compares the arrangement at that aspect.
+ */
+function _aspectLearned(plateEl) {
+  _applyVideoLayout(plateEl);
+  plateEl.dispatchEvent(new CustomEvent('telar:media-aspect'));
+}
 
-onViewportResize(() => {
-  // Recompute layout for all active video plates
-  for (const wrapper of _videoPlayers) {
-    if (wrapper.element && wrapper.element.classList.contains('is-active')) {
-      _applyVideoLayout(wrapper.element);
-    }
-  }
-});
+/** @public card-pool.js re-places the players through this after a geometry pass. */
+export { _applyVideoLayout as layoutVideoPlate };

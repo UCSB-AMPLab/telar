@@ -83,6 +83,7 @@ import {
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
 import { isFitHeight, applyCardMotionDuration } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
+import { arrangeMediaScene } from './media-arrangement.js';
 import { MediaPlate } from './plates/media-plate.js';
 import { VideoPlate } from './plates/video-plate.js';
 import { AudioPlate } from './plates/audio-plate.js';
@@ -637,6 +638,42 @@ function _recomputeCardGeometry(viewportW, viewportH) {
       card.style.height = `${cardH}px`;
     }
   }
+
+  // A media scene's cards can go below its player only where they were just
+  // sized to their content on a horizontal layout: the arrangement is decided
+  // from those heights.
+  const contentSized = (fitSideCard || landscapeSideCard) && getLayoutMode() !== 'vertical';
+  _arrangeMediaScenes(cards, viewportW, viewportH, contentSized);
+}
+
+/**
+ * Arrange every media scene's cards beside or below its player, then re-place
+ * each media plate's player, which reads the arrangement from the plate.
+ *
+ * The players are re-placed here rather than on their own resize subscription
+ * because the arrangement is only known once the cards have been measured.
+ *
+ * @param {NodeListOf<HTMLElement>} cards - Every text card, already sized
+ * @param {number} viewportW - Current viewport width in px
+ * @param {number} viewportH - Current viewport height in px
+ * @param {boolean} contentSized - Whether the cards were sized to their content
+ *   on a horizontal layout
+ */
+function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized) {
+  const cardsByScene = {};
+  for (const card of cards) {
+    const scene = getSceneIndex(parseInt(card.dataset.stepIndex, 10));
+    (cardsByScene[scene] ||= []).push(card);
+  }
+  const besideTop = (card) => computeCardTop(
+    viewportH, card.offsetHeight, _cardRunPosition(card), _config.peekHeight);
+  for (const [scene, plate] of Object.entries(state.viewerPlates)) {
+    if (!(plate instanceof MediaPlate)) continue;
+    arrangeMediaScene(plate.container, cardsByScene[scene] || [], {
+      W: viewportW, H: viewportH, eligible: contentSized, besideTop,
+    });
+    plate.resize();
+  }
 }
 
 /**
@@ -734,6 +771,14 @@ function _createViewerPlates(steps, cardStack, audioObjects) {
     _markMediaPlate(plate, sceneCardType, firstStep);
 
     cardStack.appendChild(plate);
+
+    // A player that learns its video's aspect changes what its scene's
+    // arrangement is compared at.
+    if (_PLATE_TYPES[sceneCardType]) {
+      plate.addEventListener('telar:media-aspect', () => {
+        _recomputeCardGeometry(window.innerWidth, window.innerHeight);
+      });
+    }
 
     const PlateClass = _plateClassFor(sceneCardType);
     state.viewerPlates[sceneIdx] = new PlateClass(
