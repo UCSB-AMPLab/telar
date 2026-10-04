@@ -310,11 +310,13 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
             term_url = glossary_term_url(term_id, base_url)
             # Escape the canonical term id, the URL and the display text so a
             # quote or angle bracket in any of them cannot break out of the
-            # link markup.
+            # link markup. The display text is decoded first: an entity the
+            # author wrote (&#93; for a bracket) is the character it names,
+            # and in a panel markdown has already turned & into &amp;.
             return (f'<a href="#" class="glossary-inline-link"'
                     f' data-term-id="{html.escape(term_id, quote=True)}"'
                     f' data-term-url="{html.escape(term_url, quote=True)}"{demo_attr}>'
-                    f'{html.escape(display_text)}</a>')
+                    f'{html.escape(html.unescape(display_text))}</a>')
         else:
             # Invalid term - create error indicator (author's original casing preserved)
             if warnings_list is not None:
@@ -326,6 +328,18 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
                     'layer': layer_name,
                     'message': warning_msg
                 })
-            return f'<span class="glossary-link-error" data-term-id="{html.escape(raw_term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(match.group(1))}]]</span>'
+            return f'<span class="glossary-link-error" data-term-id="{html.escape(raw_term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(html.unescape(match.group(1)))}]]</span>'
 
-    return re.sub(pattern, replace_glossary_link, text)
+    # Text is linked, a tag never: [[term]] inside an attribute (an image's
+    # alt text) stays literal, or the link it made would end the attribute.
+    # A quoted attribute value may hold '>', so it does not end the tag.
+    tags = [m.span() for m in re.finditer(
+        r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
+
+    def link_outside_tags(match):
+        start = match.start()
+        if any(a < start < b for a, b in tags):
+            return match.group(0)
+        return replace_glossary_link(match)
+
+    return re.sub(pattern, link_outside_tags, text)

@@ -335,3 +335,65 @@ class TestPublishedTermUrl:
     def test_strip_still_unwraps_a_link_with_a_url(self):
         linked = process_glossary_links('See [[IIIF]].', {'IIIF': 'IIIF'}, base_url='/telar')
         assert strip_glossary_links(linked) == 'See IIIF.'
+
+
+class TestGlossaryLinksAndEscaping:
+    """A link is made in text only, and its display
+    text is decoded before it is escaped, on both paths."""
+
+    TERMS = {'loom': 'Loom', 'IIIF': 'IIIF'}
+
+    def _panel(self, markdown_text):
+        from telar.markdown import process_inline_content
+        out = process_inline_content(markdown_text, [])
+        html_text = out.get('content') if isinstance(out, dict) else out
+        return process_glossary_links(html_text, self.TERMS, base_url='')
+
+    def test_glossary_syntax_in_alt_text_stays_literal(self):
+        result = self._panel('![a [[IIIF]] b](b.jpg)')
+        assert 'glossary-inline-link' not in result
+        assert 'alt="a [[IIIF]] b"' in result
+
+    def test_an_escaped_double_bracket_in_alt_text_stays_literal(self):
+        result = self._panel('![&#91;&#91;loom&#93;&#93;](a.jpg)')
+        assert 'glossary-inline-link' not in result
+        assert 'alt="[[loom]]"' in result
+
+    def test_a_link_beside_an_image_is_still_made(self):
+        result = self._panel('See [[loom]] here.\n\n![a](a.jpg)')
+        assert result.count('glossary-inline-link') == 1
+
+    def test_a_link_after_a_less_than_sign_in_prose_is_made(self):
+        result = process_glossary_links('x < [[loom]] > y', self.TERMS,
+                                        base_url='')
+        assert 'glossary-inline-link' in result
+
+    @pytest.mark.parametrize('markup', [
+        '<span title="x > [[loom]]">t</span>',
+        "<span title='x > [[loom]]'>t</span>",
+    ])
+    def test_a_quoted_attribute_holding_a_greater_than_sign_stays_literal(
+            self, markup):
+        assert process_glossary_links(markup, self.TERMS, base_url='') == markup
+
+    def test_text_after_a_tag_with_a_quoted_greater_than_is_linked(self):
+        result = process_glossary_links("<span title='a > b'>[[loom]]</span>",
+                                        self.TERMS, base_url='')
+        assert '>Loom</a></span>' in result
+
+    @pytest.mark.parametrize('display,shown', [
+        ('a &#93; b', 'a ] b'),
+        ('a &#124; b', 'a | b'),
+        ('x &amp; y', 'x &amp; y'),
+    ])
+    def test_display_text_is_decoded_then_escaped_once_on_the_answer_path(
+            self, display, shown):
+        result = process_glossary_links(f'A [[loom|{display}]] c.',
+                                        self.TERMS, base_url='')
+        assert f'>{shown}</a>' in result
+
+    def test_an_ampersand_in_display_text_is_escaped_once_in_a_panel(self):
+        assert '>x &amp; y</a>' in self._panel('A [[loom|x & y]] c.')
+
+    def test_an_entity_in_display_text_is_its_character_in_a_panel(self):
+        assert '>a ] b</a>' in self._panel('A [[loom|a &#93; b]] c.')
