@@ -188,11 +188,11 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     }
   }
 
-  const wheel = (deltaY) => () => window.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+  const wheelDispatch = (deltaY) => () => window.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
 
   it('equal notches after a pause are a new gesture, let in at the dwell\'s minimum', () => {
     const t = snapped();
-    const notches = Array.from({ length: 30 }, (_, i) => [950 + i * 100, wheel(100)]);
+    const notches = Array.from({ length: 30 }, (_, i) => [950 + i * 100, wheelDispatch(100)]);
     runUntil(t, 1300, notches);
     expect(state.lenis.isStopped).toBe(false);
     runUntil(t, 3950, notches.filter(([at]) => at >= 1300));
@@ -209,7 +209,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
       Object.defineProperty(e, 'targetTouches', { value: [{ clientX: 640, clientY }] });
       window.dispatchEvent(e);
     };
-    const events = [...flick, ...tail].map(([at, d]) => [at, wheel(d)]);
+    const events = [...flick, ...tail].map(([at, d]) => [at, wheelDispatch(d)]);
     events.push([3000, finger('touchstart', 300)], [3016, finger('touchmove', 299)],
       [3032, finger('touchmove', 298)]);
     runUntil(now, 3850, events.sort((x, y) => x[0] - y[0]));
@@ -220,8 +220,8 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     // The flick's snap starts at 1.47 s and lands at 2.59 s; equal notches
     // begin 50 ms before it lands, after a pause, and never stop.
     const t = now;
-    const events = [...flick.map(([at, d]) => [at, wheel(d)]),
-      ...Array.from({ length: 40 }, (_, i) => [2542 + i * 100, wheel(100)])];
+    const events = [...flick.map(([at, d]) => [at, wheelDispatch(d)]),
+      ...Array.from({ length: 40 }, (_, i) => [2542 + i * 100, wheelDispatch(100)])];
     runUntil(t, 2542 + 40 * 100, events);
     frames(6000);
     expect(state.lenis.animatedScroll / H).toBeGreaterThan(4);
@@ -236,7 +236,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     const slow = Array.from({ length: 52 }, (_, i) => [1700 + i * 100, Math.round(60 * 0.99 ** i)]);
     const spaced = Array.from({ length: 6 }, (_, i) => [6880 + i * 180, 30 - i]);
     const t = now;
-    const events = [...flick, ...slow, ...spaced].map(([at, d]) => [at, wheel(d)]);
+    const events = [...flick, ...slow, ...spaced].map(([at, d]) => [at, wheelDispatch(d)]);
     runUntil(t, 3900, events);
     expect(state.lenis.isStopped, 'the tail holds snap A').toBe(true);
     getScrollEngineState().lenis.destroy();
@@ -249,7 +249,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     expect(state.lenis.isStopped, 'snap B stopped the scroll').toBe(true);
     // A notch after a pause, no smaller than the last, inside B's minimum.
     const landed = now;
-    runUntil(landed, 400, [[250, wheel(100)]]);
+    runUntil(landed, 400, [[250, wheelDispatch(100)]]);
     expect(state.lenis.isStopped).toBe(true);
   });
 
@@ -258,7 +258,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     // to start (150 ms), short of a pause (200 ms), and never smaller.
     const steady = Array.from({ length: 30 }, (_, i) => [1480 + i * 180, 100]);
     const t = now;
-    runUntil(t, 1480 + 30 * 180, [...flick, ...steady].map(([at, d]) => [at, wheel(d)]));
+    runUntil(t, 1480 + 30 * 180, [...flick, ...steady].map(([at, d]) => [at, wheelDispatch(d)]));
     frames(6000);
     expect(state.lenis.animatedScroll / H).toBeGreaterThan(4);
   });
@@ -271,7 +271,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     let startedAt = null;
     const t = now;
     const events = [...slowFlick, ...lateTail].map(([at, d]) => [at, () => {
-      wheel(d)();
+      wheelDispatch(d)();
       if (startedAt === null && state.isSnapping) startedAt = at;
     }]);
     runUntil(t, 2470 + 24 * 150, events);
@@ -285,7 +285,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     // than a tail would be by more than half a pixel, never a pause, never a rise.
     const under = Array.from({ length: 40 }, (_, i) => [1480 + i * 180, i < 20 ? 99 : 99.5]);
     const t = now;
-    const due = [...flick, ...under].map(([at, d]) => [at, wheel(d)]);
+    const due = [...flick, ...under].map(([at, d]) => [at, wheelDispatch(d)]);
     const runTo = (ms) => {
       while (now - t < ms) {
         while (due.length && due[0][0] <= now - t) due.shift()[1]();

@@ -45,8 +45,7 @@ import { state, navSeconds } from './state.js';
 import { onViewportResize } from './layout-mode.js';
 import { activateCard, setCardProgress, settleCards } from './card-pool.js';
 import { writeHash } from './deep-link.js';
-import { followEngine, goToStep, updateViewerInfo } from './navigation.js';
-import { initKeyboardNavigation } from './navigation.js';
+import { followEngine, goToStep, updateViewerInfo, initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
 import { cardHoldsGesture, WHEEL_GESTURE_GAP_MS } from './card-scroll.js';
@@ -206,11 +205,10 @@ function _isInsidePanel(node) {
  * @param {{deltaX?: number, deltaY?: number, event?: Event}} payload
  * @returns {boolean}
  */
-function _isStoryInput({ deltaX, deltaY, event } = {}) {
+function _isStoryInput({ deltaY, event } = {}) {
   if (!event) return true;
   if (event.ctrlKey) return false;                 // pinch or browser zoom
-  if (deltaX === 0 && deltaY === 0) return false;  // a tap, or a click
-  if (deltaY === 0) return false;                  // across the story's axis
+  if (deltaY === 0) return false;                  // a tap, a click, or across the story's axis
   const path = event.composedPath ? event.composedPath() : [];
   return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
 }
@@ -231,13 +229,18 @@ function _endDwell() {
   if (!dwellTimer && !state.isPanelOpen) lenis.start();
 }
 
+/** Whether an input of this size begins a new gesture, against the recent history. */
+function _beginsGesture(event, now, size) {
+  if (event?.type?.startsWith('touch')) return true;
+  if (runStart === snapRun && !state.isSnapping && size >= snapRef) return true;
+  return now - lastInputAt >= WHEEL_GESTURE_GAP_MS
+    ? !(size < (recentSizes.at(-1) ?? 0)) : size > Math.max(0, ...recentSizes) + RISE_PX;
+}
+
 /** Record a story input; one that begins a new gesture ends a held dwell. */
 function _noteInput({ deltaY = 0, event } = {}) {
   const now = performance.now(), size = Math.abs(deltaY);
-  const newGesture = event?.type?.startsWith('touch') || (runStart === snapRun
-    && !state.isSnapping && size >= snapRef) || (now - lastInputAt >= WHEEL_GESTURE_GAP_MS
-      ? !(size < (recentSizes.at(-1) ?? 0)) : size > Math.max(0, ...recentSizes) + RISE_PX);
-  if (newGesture) [runStart, recentSizes] = [now, []];
+  if (_beginsGesture(event, now, size)) [runStart, recentSizes] = [now, []];
   [recentSizes, lastInputAt] = [[...recentSizes.slice(-2), size], now];
   if (dwellHeld && runStart !== snapRun) _clearDwell();
 }
@@ -260,7 +263,6 @@ function _noteInput({ deltaY = 0, event } = {}) {
 export function initScrollEngine(stepCount) {
   const surface = document.querySelector('.scroll-surface');
   const cardStack = document.querySelector('.card-stack');
-
   if (!surface || !cardStack) {
     console.error('scroll-engine: .scroll-surface or .card-stack not found in DOM');
     return;
@@ -285,15 +287,13 @@ export function initScrollEngine(stepCount) {
   // Prevent browser from restoring scroll position on back/forward nav
   history.scrollRestoration = 'manual';
 
-  // Total positions = intro + stepCount content steps
   totalPositions = stepCount + 1;
 
   // Set scroll surface height so browser has real scrollable overflow
   state.scrollStepPx = window.innerHeight;
   surface.style.height = `${totalPositions * state.scrollStepPx}px`;
 
-  // Create Lenis instance — owns scroll physics
-  // Reduced-motion users: skip Lenis smooth-wheel interpolation; snap to native scroll.
+  // Lenis owns scroll physics. Reduced-motion users: skip Lenis smooth-wheel interpolation; snap to native scroll.
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   lenis = new Lenis({
     lerp: 0.06,              // lower = heavier, more contemplative feel

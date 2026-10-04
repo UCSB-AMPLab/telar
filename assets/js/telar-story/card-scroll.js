@@ -510,7 +510,7 @@ export function cardTakesKey(direction, kind) {
   const edge = sign > 0 ? max : 0;
   const rendered = card.scrollTop;
   const moving = Math.abs(e.target - rendered) > EDGE_SLACK;
-  const amount = kind === 'full' ? max : kind === 'page' ? _pageAmount(card) : LINE_PX;
+  const amount = _keyAmount(card, kind, max);
 
   if (moving && Math.sign(e.target - rendered) === sign) {
     if (Math.abs(e.target - edge) <= EDGE_SLACK) {
@@ -519,18 +519,25 @@ export function cardTakesKey(direction, kind) {
       e.target = e.written;
       return 'scrolled';
     }
-    e.velocity = 0;
-    e.target = _clamp(card, e.target + sign * amount);
-    _run(card, e);
-    return 'scrolled';
+    return _stepTarget(card, e, e.target + sign * amount);
   }
 
   const atEdge = sign > 0 ? rendered >= max - EDGE_SLACK : rendered <= EDGE_SLACK;
   if (!moving && atEdge) return 'at-edge';
 
-  const from = moving ? rendered : e.target;
+  return _stepTarget(card, e, (moving ? rendered : e.target) + sign * amount);
+}
+
+/** How far a key of this kind moves the card: a line, a page, or the whole extent. */
+function _keyAmount(card, kind, max) {
+  if (kind === 'full') return max;
+  return kind === 'page' ? _pageAmount(card) : LINE_PX;
+}
+
+/** Aim the card's eased scroll at `to`, from rest, and run it. */
+function _stepTarget(card, e, to) {
   e.velocity = 0;
-  e.target = _clamp(card, from + sign * amount);
+  e.target = _clamp(card, to);
   _run(card, e);
   return 'scrolled';
 }

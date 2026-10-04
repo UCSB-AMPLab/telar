@@ -2402,10 +2402,9 @@
   function _isInsidePanel(node) {
     return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
   }
-  function _isStoryInput({ deltaX, deltaY, event } = {}) {
+  function _isStoryInput({ deltaY, event } = {}) {
     if (!event) return true;
     if (event.ctrlKey) return false;
-    if (deltaX === 0 && deltaY === 0) return false;
     if (deltaY === 0) return false;
     const path = event.composedPath ? event.composedPath() : [];
     return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
@@ -2419,10 +2418,14 @@
     dwellTimer = dwellHeld ? setTimeout(_endDwell, wait) : null;
     if (!dwellTimer && !state.isPanelOpen) lenis.start();
   }
+  function _beginsGesture(event, now, size) {
+    if (event?.type?.startsWith("touch")) return true;
+    if (runStart === snapRun && !state.isSnapping && size >= snapRef) return true;
+    return now - lastInputAt >= WHEEL_GESTURE_GAP_MS ? !(size < (recentSizes.at(-1) ?? 0)) : size > Math.max(0, ...recentSizes) + RISE_PX;
+  }
   function _noteInput({ deltaY = 0, event } = {}) {
     const now = performance.now(), size = Math.abs(deltaY);
-    const newGesture = event?.type?.startsWith("touch") || runStart === snapRun && !state.isSnapping && size >= snapRef || (now - lastInputAt >= WHEEL_GESTURE_GAP_MS ? !(size < (recentSizes.at(-1) ?? 0)) : size > Math.max(0, ...recentSizes) + RISE_PX);
-    if (newGesture) [runStart, recentSizes] = [now, []];
+    if (_beginsGesture(event, now, size)) [runStart, recentSizes] = [now, []];
     [recentSizes, lastInputAt] = [[...recentSizes.slice(-2), size], now];
     if (dwellHeld && runStart !== snapRun) _clearDwell();
   }
@@ -3831,7 +3834,7 @@
     const edge = sign > 0 ? max : 0;
     const rendered = card.scrollTop;
     const moving = Math.abs(e.target - rendered) > EDGE_SLACK;
-    const amount = kind === "full" ? max : kind === "page" ? _pageAmount(card) : LINE_PX;
+    const amount = _keyAmount(card, kind, max);
     if (moving && Math.sign(e.target - rendered) === sign) {
       if (Math.abs(e.target - edge) <= EDGE_SLACK) {
         _stop(e);
@@ -3839,16 +3842,19 @@
         e.target = e.written;
         return "scrolled";
       }
-      e.velocity = 0;
-      e.target = _clamp(card, e.target + sign * amount);
-      _run(card, e);
-      return "scrolled";
+      return _stepTarget(card, e, e.target + sign * amount);
     }
     const atEdge = sign > 0 ? rendered >= max - EDGE_SLACK : rendered <= EDGE_SLACK;
     if (!moving && atEdge) return "at-edge";
-    const from = moving ? rendered : e.target;
+    return _stepTarget(card, e, (moving ? rendered : e.target) + sign * amount);
+  }
+  function _keyAmount(card, kind, max) {
+    if (kind === "full") return max;
+    return kind === "page" ? _pageAmount(card) : LINE_PX;
+  }
+  function _stepTarget(card, e, to) {
     e.velocity = 0;
-    e.target = _clamp(card, from + sign * amount);
+    e.target = _clamp(card, to);
     _run(card, e);
     return "scrolled";
   }

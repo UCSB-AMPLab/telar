@@ -131,17 +131,21 @@ def _literal_single(text, start, end, block_starts):
             and end < len(text) and text[end] in _SPACE)
 
 
-def _read_content(name, attributes, inside_raw):
-    """Whether kramdown reads the content of the element *name*, opened with
-    *attributes* inside raw content or not."""
-    markdown = attributes.get('markdown')
+def _element_reading(match, inside_raw):
+    """The name of the element the opening tag *match* begins, whether kramdown
+    reads its content, inside raw content or not, and the tag that closes it."""
+    name, known = _tag_name(match)
+    source = match.group(2)
+    markdown = (_attributes(source, known) if 'markdown' in source.lower() else {}).get('markdown')
     if markdown == '0':
-        return False
-    if markdown == 'span':
-        return True
-    if markdown == '1':
-        return name in _READ_MODEL
-    return name in _READ_MODEL and not inside_raw
+        read = False
+    elif markdown == 'span':
+        read = True
+    elif markdown == '1':
+        read = name in _READ_MODEL
+    else:
+        read = name in _READ_MODEL and not inside_raw
+    return name, read, _closing_tag(name, known)
 
 
 # What a walk's reader returns: go on reading the same frame; and a child
@@ -208,9 +212,7 @@ class _Index:
         for match in _BACKTICKS.finditer(self.text):
             starts.append(match.start())
             lengths.append(match.end() - match.start())
-        size = 1
-        while size < len(lengths):
-            size *= 2
+        size = 1 << max(len(lengths) - 1, 0).bit_length()
         longest = [0] * size + lengths + [0] * (size - len(lengths))
         for node in range(size - 1, 0, -1):
             longest[node] = max(longest[2 * node], longest[2 * node + 1])
@@ -293,42 +295,36 @@ class _Scan:
 
     def __init__(self, text):
         self.text = text
-        self.regions = []
         # The stretches read for spans, and where each ends: nothing here
         # crosses one. What kramdown reads none of is skipped.
         blocks = _Blocks(text)
+        self.regions = list(blocks.regions)
         self.ends = sorted(end for _, end in blocks.units) + [len(text)]
         self.blocks = sorted(blocks.skips)
-        self.regions.extend(blocks.regions)
         self.definitions = blocks.definitions
         # What a link holds that is read for nothing: each destination,
         # title or reference id, and each link definition line.
         self.destinations = list(blocks.definition_lines)
         # Each `nomarkdown` extension, whose body kramdown prints as written;
         # and the extension `extension_end` last read, as (name, start, end).
-        self.nomarkdown = []
-        self.extension = None
+        self.nomarkdown, self.extension = [], None
         self.definition_lengths = {len(key) for key in self.definitions}
         # For each needle and paragraph, the lowest start from which the
         # needle has been searched for and not found.
         self.no_close = {}
         # The elements open in this paragraph, innermost last, as
         # (name, raw, closing tag); and where the raw content began.
-        self.open = []
-        self.paragraph_end = None
-        self.raw_from = None
+        self.open, self.paragraph_end, self.raw_from = [], None, None
         # The links and images whose text is being read, innermost last, as
         # (the `]` ending the text, where the link ends, how many elements
         # were open when it began); and the text of each image.
-        self.links = []
-        self.images = []
+        self.links, self.images = [], []
         # The end of the last token read, and whether it made an element,
         # which a span IAL needs just before it.
         self.last = (0, False)
         # The walks' memos: where a text read from a position ends, and
         # where an element opened at a position ends.
-        self.closes = {}
-        self.element_ends = {}
+        self.closes, self.element_ends = {}, {}
         self.index = _Index(text)
         self.dropped = self.dropped_backslashes(blocks.boundary_starts)
         # Where each stretch's text starts, leading spaces off, as kramdown
@@ -344,9 +340,7 @@ class _Scan:
         dropped = set()
         for start in starts:
             match = _ESCAPED_BLOCK_MATHS.match(text, start)
-            if not match:
-                continue
-            close = text.find('$$', match.end())
+            close = text.find('$$', match.end()) if match else -1
             if close != -1 and _LINE_END.match(text, close + 2):
                 dropped.add(match.start(1))
         return dropped
@@ -382,9 +376,7 @@ class _Scan:
         if self.raw():
             return self.raw_step(i)
         found = _NEXT.search(self.text, i)
-        if not found:
-            return None
-        return self.token(found.start())
+        return self.token(found.start()) if found else None
 
     def token(self, i):
         """Read the token at *i*, unless a block that is not read holds it."""
@@ -436,11 +428,10 @@ class _Scan:
         or, when it is not one, read its opening as text."""
         close = self.text_end(start)
         end = None if close is None else self.link_end(close, start)
-        if end is None:
-            return self.mark(start, False)
-        self.links.append((close, end, len(self.open)))
-        if image:
-            self.images.append((start, close))
+        if end is not None:
+            self.links.append((close, end, len(self.open)))
+            if image:
+                self.images.append((start, close))
         return self.mark(start, False)
 
     def close_bracket(self, i):
@@ -488,11 +479,10 @@ class _Scan:
         unless it was opened before the link whose text this is, where
         its closing tag is text; a comment, CDATA, a tag read as text, or
         an opening tag."""
-        text = self.text
         limit = self.limit(i)
         depth = self.links[-1][2] if self.links else 0
         if len(self.open) > depth:
-            match = self.open[-1][2].match(text, i, limit)
+            match = self.open[-1][2].match(self.text, i, limit)
             if match:
                 self.close_element(i, match.end())
                 return self.mark(match.end(), True)
@@ -504,11 +494,7 @@ class _Scan:
         return self.mark(end, kind in ('comment', 'tag'))
 
     def open_element(self, i, match, limit):
-        name, known = _tag_name(match)
-        source = match.group(2)
-        attributes = _attributes(source, known) if 'markdown' in source.lower() else {}
-        read = _read_content(name, attributes, self.raw())
-        closing = _closing_tag(name, known)
+        name, read, closing = _element_reading(match, self.raw())
         if not self.open:
             self.paragraph_end = limit
         if self.raw() and read:
@@ -626,9 +612,7 @@ class _Scan:
             read = self.extension_end(i, before, limit)
             if read is not _NOT_EXTENSION:
                 return read
-        elif _EXTENSION_STOP.match(text, i, limit):
-            return None
-        if not before:
+        if not before or _EXTENSION_STOP.match(text, i, limit):
             return None
         close = self.brace_close(i + 2, limit)
         return None if close is None else (close + 1, True)
@@ -789,8 +773,8 @@ class _Scan:
         frame to read first."""
         if frame.fresh:
             frame.fresh = False
-            memo = self.closes if frame.key is None else self.element_ends
-            key = frame.start if frame.key is None else frame.key
+            memo, key = ((self.closes, frame.start) if frame.key is None
+                         else (self.element_ends, frame.key))
             if key in memo:
                 return memo[key]
         text, limit = self.text, frame.limit
@@ -866,12 +850,8 @@ class _Scan:
         kind, end, match = self.markup(i, frame.limit, frame.raw)
         if kind != 'open':
             return self.advance(frame, end, kind in ('comment', 'tag'))
-        name, known = _tag_name(match)
-        source = match.group(2)
-        attributes = _attributes(source, known) if 'markdown' in source.lower() else {}
-        read = _read_content(name, attributes, frame.raw)
-        child = _Frame(end, frame.limit, key=(i, frame.raw), raw=not read,
-                       closing=_closing_tag(name, known))
+        _, read, closing = _element_reading(match, frame.raw)
+        child = _Frame(end, frame.limit, key=(i, frame.raw), raw=not read, closing=closing)
         frame.waiting = 'element'
         return child
 
@@ -892,10 +872,7 @@ class _Scan:
         if waiting in ('element', 'bracket'):
             if value is None:
                 return None
-            if waiting == 'element':
-                self.advance(frame, value, True)
-            else:
-                self.advance(frame, value + 1, False)
+            self.advance(frame, *((value, True) if waiting == 'element' else (value + 1, False)))
             return _PENDING
         end = None if value is None else self.link_end(value, waiting + 2)
         if end is not None:
