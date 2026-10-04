@@ -271,7 +271,10 @@ OBJECT_FIELDS = {
     'source', 'object_warning', 'object_warning_short', 'year',
     'object_type', 'subjects', 'is_featured_sample', '_demo',
     'description', 'featured', 'alt_text',
-    # v0.10.0: auto-detected media type and audio metadata
+    # Auto-detected media type and audio metadata. Nothing writes
+    # audio_duration: it stays reserved, so a column of that name is not shown
+    # as custom metadata, while the Compositor's FRAMEWORK_OBJECT_FIELDS holds
+    # it. Its tests/import.server.test.ts reads this set and must agree.
     'media_type', 'audio_duration', 'audio_filesize', 'audio_format',
 }
 

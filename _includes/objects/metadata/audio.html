@@ -1,6 +1,7 @@
 {%- comment -%}
-Duration, file size and format, all written into the object's front matter by
-generate_collections.py from the file on disk.
+File size and format are written into the object's front matter by
+generate_collections.py from the file on disk. Duration is filled in by the
+player once it has read the audio.
 {%- endcomment -%}
         <dl class="row mt-3 border-top pt-3">
           {% if page.audio_format %}

@@ -126,23 +126,6 @@ def _object_flags(obj, is_demo):
     return flags
 
 
-def _audio_duration(object_id):
-    """Duration from the peaks file process_audio.py writes, if it is there.
-
-    Stays a number: the template formats it arithmetically.
-    """
-    peaks_path = Path(f'assets/audio/peaks/{object_id}.json')
-    if not peaks_path.exists():
-        return {}
-    try:
-        with open(peaks_path, 'r') as pf:
-            peaks_data = json.load(pf)
-        duration = peaks_data.get('duration', 0)
-    except (json.JSONDecodeError, KeyError):
-        return {}
-    return {'audio_duration': duration} if duration else {}
-
-
 def _audio_file_details(object_id):
     """Size and format from the first matching file on disk.
 
@@ -241,7 +224,6 @@ def _object_page(obj):
     fields.update(_object_flags(obj, obj.get('_demo', False)))
 
     if media_type == 'Audio':
-        fields.update(_audio_duration(object_id))
         fields.update(_audio_file_details(object_id))
 
     fields.update(_extra_metadata(obj))
