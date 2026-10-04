@@ -830,15 +830,27 @@
   var _cs = getComputedStyle(document.documentElement);
   var videoPadFactor = parseFloat(_cs.getPropertyValue("--telar-video-pad-factor").trim()) || 0.025;
   var videoStackMaxH = parseFloat(_cs.getPropertyValue("--telar-video-stack-max-h").trim()) || 0.58;
-  var videoCardFracSide = parseFloat(_cs.getPropertyValue("--telar-video-card-frac-side").trim()) || 0.35;
+  var cardSideLeft = _readFraction("--telar-card-side-left", 0.03);
+  var cardSideWidth = _readFraction("--telar-card-side-width", 0.37);
+  function _readFraction(name, fallback) {
+    const raw = _cs.getPropertyValue(name).trim();
+    const value = parseFloat(raw);
+    if (!Number.isFinite(value)) return fallback;
+    return raw.endsWith("%") ? value / 100 : value;
+  }
+  function _sideCardRight(W) {
+    return Math.round(W * (cardSideLeft + cardSideWidth));
+  }
   function computeVideoLayout(W, H, aspectRatio) {
     if (state.layoutMode === "vertical") {
       return _computeStackedLayout(W, H, aspectRatio);
     }
+    return _computeSideBySideLayout(W, H, aspectRatio);
+  }
+  function _computeSideBySideLayout(W, H, aspectRatio) {
     const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-    const cardFracSide = videoCardFracSide;
-    const sideCardW = Math.round(W * cardFracSide);
-    const sideVideoMaxW = W - sideCardW - pad * 3;
+    const vidLeft = _sideCardRight(W) + pad;
+    const sideVideoMaxW = W - vidLeft - pad;
     const sideVideoMaxH = H - pad * 2;
     let sideVidW = sideVideoMaxW;
     let sideVidH = sideVidW / aspectRatio;
@@ -846,30 +858,15 @@
       sideVidH = sideVideoMaxH;
       sideVidW = sideVidH * aspectRatio;
     }
-    const sideVideoArea = sideVidW * sideVidH;
-    const stackVideoMaxW = W - pad * 2;
-    const stackVideoMaxH = H * videoStackMaxH;
-    let stackVidW = stackVideoMaxW;
-    let stackVidH = stackVidW / aspectRatio;
-    if (stackVidH > stackVideoMaxH) {
-      stackVidH = stackVideoMaxH;
-      stackVidW = stackVidH * aspectRatio;
-    }
-    const stackVideoArea = stackVidW * stackVidH;
-    if (sideVideoArea >= stackVideoArea) {
-      return _buildSideBySideResult(W, H, pad, sideCardW, sideVidW, sideVidH);
-    } else {
-      return _buildStackedResult(W, H, pad, stackVidW, stackVidH);
-    }
+    return _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH);
   }
-  function _buildSideBySideResult(W, H, pad, sideCardW, sideVidW, sideVidH) {
+  function _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH) {
     const vidW = Math.round(sideVidW);
     const vidH = Math.round(sideVidH);
-    const vidLeft = sideCardW + pad * 2;
     const vidTop = Math.round((H - vidH) / 2);
-    const cardW = sideCardW;
+    const cardW = Math.round(W * cardSideWidth);
     const cardH = Math.round(H - pad * 2);
-    const cardLeft = pad;
+    const cardLeft = Math.round(W * cardSideLeft);
     const cardTop = pad;
     const cardPad = cardW > 300 ? 24 : cardW > 200 ? 16 : 10;
     return {
@@ -906,11 +903,11 @@
         height: Math.round(H * videoStackMaxH)
       };
     }
-    const cardW = Math.round(W * videoCardFracSide);
+    const left = _sideCardRight(W) + pad;
     return {
-      left: cardW + pad * 2,
+      left,
       top: pad,
-      width: Math.round(W - cardW - pad * 3),
+      width: W - left - pad,
       height: Math.round(H - pad * 2)
     };
   }

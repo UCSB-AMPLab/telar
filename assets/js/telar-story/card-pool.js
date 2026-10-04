@@ -589,8 +589,9 @@ function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
 function _recomputeCardGeometry(viewportW, viewportH) {
   const peekHeight = _config.peekHeight;
   const landscapeSideCard = isLandscapeSideCard();
-  // The fit model governs the desktop side card and nothing else: a landscape
-  // phone already sizes its side card to content through the stylesheet, and
+  // The fit model governs the desktop side card and nothing else: a window no
+  // taller than the side-card threshold (a landscape phone, or a short desktop
+  // window) already sizes its side card to content through the stylesheet, and
   // the portrait bottom card keeps its own geometry.
   const fitSideCard = isFitHeight()
     && !landscapeSideCard
@@ -601,8 +602,9 @@ function _recomputeCardGeometry(viewportW, viewportH) {
     const runPos = parseInt(card.dataset.runPosition, 10) || 0;
 
     if (landscapeSideCard) {
-      // Landscape phone: the CSS rule sets `height: auto !important`, so the card
-      // is sized to its content. Clear any stale inline height, measure the real
+      // A window no taller than the side-card threshold, at any width: the CSS
+      // rule sets `height: auto !important` and the ceiling, so the card is
+      // sized to its content. Clear any stale inline height, measure the real
       // rendered height, and centre by that — the portrait `viewportH * 0.80`
       // model oversizes the card and jams it against the top on a short landscape
       // viewport. Inline !important top beats the

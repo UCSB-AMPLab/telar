@@ -395,12 +395,13 @@
 
 // ── Text Card ─────────────────────────────────────────────────────────────────
 
-// Floating card over the viewer. Left-aligned at 4%, 42% wide.
+// Floating card over the viewer, on the left. Its left edge and width are the
+// side-card geometry video-layout.js reads to place a video player beside it.
 .text-card {
   container-type: inline-size; // enables @container queries below
   position: absolute;
-  left: 3%;
-  width: 37%;
+  left: $telar-card-side-left;
+  width: $telar-card-side-width;
   // height set by JS: viewportH * 0.85
   // top set by JS: centred + peek offset
   background: #fff;
@@ -981,59 +982,6 @@
     }
   }
 
-  // ── Landscape-phone side card override ─────────────────────────────────────
-  // EN: When the viewport is too short for a bottom card (landscape phones,
-  //     height ≤ 480px), the side-card geometry applies instead.
-  //     Threshold 480px catches all modern landscape phones (≤ 430px tall) and
-  //     misses all portrait phones (iPhone SE 667px, SE 1st-gen 568px).
-  //     card-pool.js controls `top` via inline style with !important;
-  //     bottom: auto releases the bottom anchor so the side card positions correctly.
-  // ES: Cuando el viewport es demasiado corto para una tarjeta inferior (teléfonos
-  //     en horizontal, altura ≤ 480px), se aplica la geometría de tarjeta lateral.
-  //     El umbral de 480px captura todos los teléfonos modernos en horizontal
-  //     (≤ 430px de alto) y excluye los teléfonos en vertical (iPhone SE 667px,
-  //     SE 1.ª gen. 568px). card-pool.js
-  //     controla `top` mediante estilo inline con !important; bottom: auto libera
-  //     el ancla inferior para que la tarjeta lateral se posicione correctamente.
-  @media (max-height: $telar-card-landscape-max-height) {
-    .text-card {
-      left: 3%;
-      width: 37%;
-      top: auto !important;     // seam: card-pool sets top via style.setProperty('top', ..., 'important')
-      bottom: auto;
-      // EN: content-height side card — override the inline `height: viewportH*0.80`
-      //     that card-pool.js sets for the tall portrait/desktop card; the short
-      //     landscape viewport must size the card to its content, and card-pool
-      //     then centres it by the measured height.
-      // ES: tarjeta lateral de altura según contenido — anula el `height` en línea
-      //     (viewportH*0.80) que card-pool.js asigna a la tarjeta vertical/escritorio;
-      //     el viewport corto en horizontal debe ajustar la tarjeta a su contenido y
-      //     card-pool la centra según la altura medida.
-      height: auto !important;
-      // EN: The cap is the viewport less the card's inset at top and bottom, so
-      //     the landscape card can use nearly the whole short viewport and
-      //     scrolls inside above it. A cap of 40dvh is the portrait bottom
-      //     card's share of a tall viewport and leaves a landscape card far too
-      //     short; no cap at all lets the content-height card grow past both
-      //     edges of a 430px viewport, from where nothing brings it back.
-      // ES: El tope es el viewport menos la separación de la tarjeta arriba y
-      //     abajo, así que la tarjeta en horizontal puede ocupar casi todo el
-      //     viewport corto y, a partir de ese tope, se desplaza por dentro. Un
-      //     tope de 40dvh es la porción que le corresponde a la tarjeta inferior
-      //     en vertical dentro de un viewport alto, y a la tarjeta en horizontal
-      //     la deja demasiado corta; sin tope alguno, la tarjeta de altura según
-      //     contenido crece más allá de ambos bordes de un viewport de 430px, de
-      //     donde no la devuelve nada.
-      max-height: calc(100vh - 2rem);
-
-      // The dvh value sits inside the landscape block, in the same shape as the
-      // vh-then-dvh pattern above, so the cap and its fallback stay together.
-      @supports (height: 100dvh) {
-        max-height: calc(100dvh - 2rem);
-      }
-    }
-  }
-
   // Per-card-type height — video/audio need less space for controls
   .viewer-plate[data-card-type="youtube"] + .text-card,
   .viewer-plate[data-card-type="vimeo"] + .text-card,
@@ -1094,6 +1042,77 @@
     top: 25%;
   }
 
+}
+
+// ── Short-window side card ────────────────────────────────────────────────────
+// EN: When the viewport is too short for a bottom card (height ≤ 480px), the
+//     side-card geometry applies instead, at any width: on a landscape phone,
+//     which is in vertical layout, and on a short desktop window, which is not.
+//     isLandscapeSideCard() in layout-mode.js tests the same height alone, and
+//     card-pool.js sizes the card to its content on that test, so this rule is
+//     outside the vertical-layout block and carries the ceiling to both. It
+//     comes after that block so that, on a landscape phone, it overrides the
+//     bottom card's rules of the same specificity.
+//     Threshold 480px catches all modern landscape phones (≤ 430px tall) and
+//     misses all portrait phones (iPhone SE 667px, SE 1st-gen 568px).
+//     card-pool.js controls `top` via inline style with !important;
+//     bottom: auto releases the bottom anchor so the side card positions correctly.
+// ES: Cuando el viewport es demasiado bajo para una tarjeta inferior (altura
+//     ≤ 480px), se aplica en su lugar la geometría de tarjeta lateral, sea cual
+//     sea el ancho: en un teléfono en horizontal, que usa el diseño vertical
+//     (vertical-layout), y en una ventana de escritorio baja, que no lo usa.
+//     isLandscapeSideCard() de layout-mode.js comprueba únicamente esa altura,
+//     y card-pool.js ajusta la tarjeta a su contenido cuando esa comprobación
+//     se cumple, así que esta regla va por fuera del bloque vertical-layout y
+//     aplica el tope de altura en los dos casos. Va después de ese bloque para
+//     que, en un teléfono en horizontal, anule las reglas de la tarjeta
+//     inferior que tienen la misma especificidad.
+//     El umbral de 480px captura todos los teléfonos modernos en horizontal
+//     (≤ 430px de alto) y excluye los teléfonos en vertical (iPhone SE 667px,
+//     SE 1.ª gen. 568px). card-pool.js controla `top` mediante estilo en línea
+//     con !important; bottom: auto libera el ancla inferior para que la
+//     tarjeta lateral se posicione correctamente.
+@media (max-height: $telar-card-landscape-max-height) {
+  .text-card {
+    left: $telar-card-side-left;
+    width: $telar-card-side-width;
+    top: auto !important;     // seam: card-pool sets top via style.setProperty('top', ..., 'important')
+    bottom: auto;
+    // EN: content-height side card — override the inline `height: viewportH*0.80`
+    //     that card-pool.js sets for the tall portrait/desktop card; the short
+    //     landscape viewport must size the card to its content, and card-pool
+    //     then centres it by the measured height.
+    // ES: tarjeta lateral de altura según contenido — anula el `height` en línea
+    //     (viewportH*0.80) que card-pool.js asigna a la tarjeta vertical/escritorio;
+    //     el viewport corto en horizontal debe ajustar la tarjeta a su contenido y
+    //     card-pool la centra según la altura medida.
+    height: auto !important;
+    // EN: The cap is the viewport less the card's inset at top and bottom, so
+    //     the side card can use nearly the whole short viewport. Above the cap
+    //     a landscape phone's card scrolls inside, and a desktop card clips
+    //     from the bottom, as it does at any height. A cap of 40dvh is the
+    //     portrait bottom card's share of a tall viewport and leaves a
+    //     landscape card far too short; no cap at all lets the content-height
+    //     card grow past both edges of a 430px viewport, from where nothing
+    //     brings it back.
+    // ES: El tope es la altura del viewport menos la separación de la tarjeta
+    //     arriba y abajo, así que la tarjeta lateral puede ocupar casi todo el
+    //     viewport bajo. Si el contenido supera el tope, en un teléfono en
+    //     horizontal se desplaza dentro de la tarjeta, y en escritorio se corta
+    //     por abajo, como ocurre a cualquier altura. Un tope de 40dvh es la
+    //     porción que le corresponde a la tarjeta inferior en vertical dentro de
+    //     un viewport alto, y con él la tarjeta en horizontal queda demasiado
+    //     corta; sin tope alguno, la tarjeta de altura según contenido crece
+    //     hasta salirse por arriba y por abajo de un viewport de 430px, y nada
+    //     la devuelve al área visible.
+    max-height: calc(100vh - 2rem);
+
+    // The dvh value sits inside the landscape block, in the same shape as the
+    // vh-then-dvh pattern above, so the cap and its fallback stay together.
+    @supports (height: 100dvh) {
+      max-height: calc(100dvh - 2rem);
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -11,7 +11,7 @@
  * Consumers: import this partial as `@use 'responsive' as *` (namespace-free)
  * so that $vars and @mixin vertical-layout are available unqualified.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 // Layer order declaration — documentation duplicate of the HTML-level
@@ -28,8 +28,9 @@ $telar-vertical-min-width:   1024px;
 $telar-vertical-min-aspect:  0.75;
 
 // ── Card geometry ─────────────────────────────────────────────────────────────
-// Values sourced from _story.scss:335-338 (side card left/width) and the
-// existing mobile media query geometry.
+// The side card's left edge and width are what _story.scss builds the text
+// card from and what video-layout.js places a video player beside.
+// The mobile values are the existing mobile media query geometry.
 $telar-card-side-left:               3%;
 $telar-card-side-width:              37%;
 $telar-card-mobile-bottom:           max(1rem, env(safe-area-inset-bottom));
@@ -49,7 +50,6 @@ $telar-density-comfortable: 1;
 $telar-audio-height-mobile:  0.35;  // audio-card.js:330,545 — window.innerHeight * 0.35
 $telar-audio-height-resize:  0.5;   // audio-card.js:829     — window.innerHeight * 0.5
 $telar-video-pad-factor:     0.025; // video-card.js:139,214 — Math.min(W,H) * 0.025
-$telar-video-card-frac-side: 0.35;  // video-card.js:142     — cardFracSide
 $telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
 
 // ── :root CSS custom property mirror ─────────────────────────────────────────
@@ -79,7 +79,6 @@ $telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
   --telar-audio-height-mobile:  #{$telar-audio-height-mobile};
   --telar-audio-height-resize:  #{$telar-audio-height-resize};
   --telar-video-pad-factor:     #{$telar-video-pad-factor};
-  --telar-video-card-frac-side: #{$telar-video-card-frac-side};
   --telar-video-stack-max-h:    #{$telar-video-stack-max-h};
 }
 

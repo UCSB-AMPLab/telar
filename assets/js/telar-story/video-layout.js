@@ -2,11 +2,12 @@
  * Telar Story -- Video Layout
  *
  * Where a video plate's player and its text card go, and what the players are
- * given to embed. When a video step activates, the side-by-side arrangement
- * (card left, video right) and the stacked one (video top, card below) are
- * both worked out, and whichever gives the video more rendered pixels wins; a
- * vertical layout is always stacked. The proportions are read once, when this
- * module loads, from the CSS custom properties in _sass/_responsive.scss.
+ * given to embed. On a horizontal layout the text card is the stylesheet's
+ * side card, so the player goes beside it (side-by-side); on a vertical layout
+ * the card is at the bottom, so the player goes above it (stacked). The
+ * proportions, the side card's included, are read once, when this module
+ * loads, from the CSS custom properties in _sass/_responsive.scss, which the
+ * stylesheet builds the card from.
  *
  * The embed builders and the clip-time format are here because, like the
  * layout, they are arithmetic on their arguments with nothing to tear down.
@@ -20,22 +21,43 @@ import { state } from './state.js';
 
 // ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
 const _cs = getComputedStyle(document.documentElement);
-const videoPadFactor    = parseFloat(_cs.getPropertyValue('--telar-video-pad-factor').trim())    || 0.025;
-const videoStackMaxH    = parseFloat(_cs.getPropertyValue('--telar-video-stack-max-h').trim())   || 0.58;
-const videoCardFracSide = parseFloat(_cs.getPropertyValue('--telar-video-card-frac-side').trim()) || 0.35;
+const videoPadFactor = parseFloat(_cs.getPropertyValue('--telar-video-pad-factor').trim())  || 0.025;
+const videoStackMaxH = parseFloat(_cs.getPropertyValue('--telar-video-stack-max-h').trim()) || 0.58;
+const cardSideLeft   = _readFraction('--telar-card-side-left', 0.03);
+const cardSideWidth  = _readFraction('--telar-card-side-width', 0.37);
+
+/**
+ * A custom property as a fraction of the window: the side card's geometry is
+ * declared in percent, because the stylesheet positions the card with it.
+ */
+function _readFraction(name, fallback) {
+  const raw = _cs.getPropertyValue(name).trim();
+  const value = parseFloat(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return raw.endsWith('%') ? value / 100 : value;
+}
+
+/** The side text card's right edge, in px, as the stylesheet places it. */
+function _sideCardRight(W) {
+  return Math.round(W * (cardSideLeft + cardSideWidth));
+}
 
 // ── Pure functions (unit-tested) ──────────────────────────────────────────────
 
 /**
- * Compute the optimal video + card layout for the given viewport dimensions
- * and video aspect ratio.
+ * Compute the video + card layout for the given viewport dimensions and video
+ * aspect ratio.
  *
- * Algorithm:
- *   Two candidates are computed:
- *   - Side-by-side: card left (35% of W), video right in remaining space.
- *   - Stacked: video top (max 58% of H), card below.
- *   The candidate that gives the video more rendered pixels wins.
- *   Mobile override: W < --telar-vertical-min-width always returns stacked.
+ * The arrangement follows the text card, which card-pool.js and the
+ * stylesheet place by layout mode:
+ *   - Vertical layout (state.layoutMode === 'vertical', which layout-mode.js
+ *     sets for a window no wider than --telar-vertical-min-width or no wider
+ *     than --telar-vertical-min-aspect of its height): the card is at the
+ *     bottom, so the video is stacked above it (max 58% of H).
+ *   - Horizontal layout: the card is the side card, from
+ *     --telar-card-side-left to --telar-card-side-left + --telar-card-side-width
+ *     of W, so the video starts one padding past the card's right edge and
+ *     fits the space that leaves. A stacked video would be drawn over the card.
  *
  * @param {number} W - Viewport width in px
  * @param {number} H - Viewport height in px
@@ -48,13 +70,14 @@ export function computeVideoLayout(W, H, aspectRatio) {
   if (state.layoutMode === 'vertical') {
     return _computeStackedLayout(W, H, aspectRatio);
   }
+  return _computeSideBySideLayout(W, H, aspectRatio);
+}
 
+/** Compute the side-by-side layout: the video right of the side card. */
+function _computeSideBySideLayout(W, H, aspectRatio) {
   const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-
-  // ── Side-by-side candidate ──
-  const cardFracSide = videoCardFracSide;
-  const sideCardW = Math.round(W * cardFracSide);
-  const sideVideoMaxW = W - sideCardW - pad * 3;
+  const vidLeft = _sideCardRight(W) + pad;
+  const sideVideoMaxW = W - vidLeft - pad;
   const sideVideoMaxH = H - pad * 2;
   let sideVidW = sideVideoMaxW;
   let sideVidH = sideVidW / aspectRatio;
@@ -62,35 +85,17 @@ export function computeVideoLayout(W, H, aspectRatio) {
     sideVidH = sideVideoMaxH;
     sideVidW = sideVidH * aspectRatio;
   }
-  const sideVideoArea = sideVidW * sideVidH;
-
-  // ── Stacked candidate ──
-  const stackVideoMaxW = W - pad * 2;
-  const stackVideoMaxH = H * videoStackMaxH;
-  let stackVidW = stackVideoMaxW;
-  let stackVidH = stackVidW / aspectRatio;
-  if (stackVidH > stackVideoMaxH) {
-    stackVidH = stackVideoMaxH;
-    stackVidW = stackVidH * aspectRatio;
-  }
-  const stackVideoArea = stackVidW * stackVidH;
-
-  if (sideVideoArea >= stackVideoArea) {
-    return _buildSideBySideResult(W, H, pad, sideCardW, sideVidW, sideVidH);
-  } else {
-    return _buildStackedResult(W, H, pad, stackVidW, stackVidH);
-  }
+  return _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH);
 }
 
 /** Build side-by-side layout result object. */
-function _buildSideBySideResult(W, H, pad, sideCardW, sideVidW, sideVidH) {
+function _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH) {
   const vidW = Math.round(sideVidW);
   const vidH = Math.round(sideVidH);
-  const vidLeft = sideCardW + pad * 2;
   const vidTop = Math.round((H - vidH) / 2);
-  const cardW = sideCardW;
+  const cardW = Math.round(W * cardSideWidth);
   const cardH = Math.round(H - pad * 2);
-  const cardLeft = pad;
+  const cardLeft = Math.round(W * cardSideLeft);
   const cardTop = pad;
   const cardPad = cardW > 300 ? 24 : cardW > 200 ? 16 : 10;
 
@@ -128,8 +133,8 @@ function _buildStackedResult(W, H, pad, stackVidW, stackVidH) {
  * expose no dimensions API). Rather than guess an aspect and letterbox inside a
  * mis-shaped box, we fill the whole available region and let the provider's own
  * player letterbox the video centred on its black background — a cohesive dark
- * "cinematic frame" instead of a small mis-proportioned box. Mirrors
- * computeVideoLayout's mode choice but returns the un-fitted bounding region.
+ * "cinematic frame" instead of a small mis-proportioned box. Follows
+ * computeVideoLayout's arrangement but returns the un-fitted bounding region.
  *
  * @param {number} W - Viewport width in px
  * @param {number} H - Viewport height in px
@@ -145,11 +150,11 @@ export function computeVideoLetterboxRegion(W, H) {
       height: Math.round(H * videoStackMaxH),
     };
   }
-  const cardW = Math.round(W * videoCardFracSide);
+  const left = _sideCardRight(W) + pad;
   return {
-    left: cardW + pad * 2,
+    left,
     top: pad,
-    width: Math.round(W - cardW - pad * 3),
+    width: W - left - pad,
     height: Math.round(H - pad * 2),
   };
 }
