@@ -17,7 +17,9 @@
  * Only a horizontal layout outside embed mode is arranged, and only where the
  * side card takes the height of its content: the fixed-height model keeps its
  * 80% card beside the player. Embed mode keeps the card beside because its
- * previous and next buttons sit over the bottom of the card's column.
+ * previous and next buttons sit over the bottom of the card's column. Every
+ * media plate carries the top band, arranged or not, because the player
+ * beside the card keeps it clear too.
  *
  * @version v1.8.0
  */
@@ -92,13 +94,18 @@ function _clear(plateEl, cards) {
 export function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop }) {
   const type = plateEl.dataset.cardType;
   const isMedia = VIDEO_TYPES.has(type) || type === 'audio';
-  if (!isMedia || !eligible || _isEmbed() || cards.length === 0) {
+  if (!isMedia) {
     _clear(plateEl, cards);
+    return null;
+  }
+  const topBand = measureTopBand(W, H);
+  if (!eligible || _isEmbed() || cards.length === 0) {
+    _clear(plateEl, cards);
+    plateEl.dataset.mediaTopBand = String(topBand);
     return null;
   }
 
   const cardH = Math.max(...cards.map((card) => card.offsetHeight));
-  const topBand = measureTopBand(W, H);
   const arrangement = type === 'audio'
     ? chooseAudioArrangement(W, H, cardH, topBand)
     : chooseVideoArrangement(W, H, _plateAspect(plateEl), cardH, topBand);
@@ -131,6 +138,19 @@ export function readBelow(plateEl) {
   const topBand = parseFloat(plateEl.dataset.mediaTopBand);
   if (!Number.isFinite(cardTop) || !Number.isFinite(topBand)) return null;
   return { cardTop, topBand };
+}
+
+/**
+ * The band a plate's player keeps clear for the top controls, in px from the
+ * top; 0 on a vertical layout, or before a geometry pass has measured it.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {number}
+ */
+export function readTopBand(plateEl) {
+  if (state.layoutMode === 'vertical') return 0;
+  const topBand = parseFloat(plateEl.dataset.mediaTopBand);
+  return Number.isFinite(topBand) ? topBand : 0;
 }
 
 /** The custom properties an audio plate carries while its card is below. */

@@ -44,7 +44,7 @@
  */
 
 import { state } from './state.js';
-import { readBelow } from './media-arrangement.js';
+import { readBelow, readTopBand } from './media-arrangement.js';
 
 // Layout and embed arithmetic, in video-layout.js. Used here, and re-exported
 // so the plates and the tests import it from this module as before.
@@ -815,13 +815,14 @@ function _applyVideoLayout(plateEl) {
   const videoEl = plateEl.querySelector('.video-iframe');
   if (!videoEl) return;
   const below = readBelow(plateEl);
+  const topBand = readTopBand(plateEl);
 
   // Unknown-aspect path: when the true aspect ratio could not be determined
   // (old YouTube videos without a maxres thumbnail; all Google Drive embeds),
   // fill the whole available region on a dark frame and let the provider's
   // player letterbox the video itself, instead of guessing an aspect ratio.
   if (plateEl.dataset.videoLetterbox === 'true') {
-    const region = computeVideoLetterboxRegion(W, H, below);
+    const region = computeVideoLetterboxRegion(W, H, below, topBand);
     videoEl.classList.add('video-iframe--letterbox');
     videoEl.style.position = 'absolute';
     videoEl.style.left = `${region.left}px`;
@@ -836,7 +837,7 @@ function _applyVideoLayout(plateEl) {
   // succeeded). Default 16:9 only as a last resort.
   videoEl.classList.remove('video-iframe--letterbox');
   const aspectRatio = parseFloat(plateEl.dataset.aspectRatio) || 16 / 9;
-  const layout = computeVideoLayout(W, H, aspectRatio, below);
+  const layout = computeVideoLayout(W, H, aspectRatio, below, topBand);
   videoEl.style.position = 'absolute';
   videoEl.style.left = `${layout.video.left}px`;
   videoEl.style.top = `${layout.video.top}px`;

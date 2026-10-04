@@ -773,19 +773,19 @@
     return belowArea >= besideArea * (1 + mediaBelowGain);
   }
   function chooseVideoArrangement(W, H, aspectRatio, cardH, topBand) {
-    const beside = _computeSideBySideLayout(W, H, aspectRatio).video;
+    const beside = _computeSideBySideLayout(W, H, aspectRatio, topBand).video;
     const below = _computeBelowLayout(W, H, aspectRatio, {
       cardTop: computeBelowCardTop(W, H, cardH),
       topBand
     }).video;
     return prefersBelow(beside.width * beside.height, below.width * below.height) ? "below" : "beside";
   }
-  function computeVideoLayout(W, H, aspectRatio, below = null) {
+  function computeVideoLayout(W, H, aspectRatio, below = null, topBand = 0) {
     if (state.layoutMode === "vertical") {
       return _computeStackedLayout(W, H, aspectRatio);
     }
     if (below) return _computeBelowLayout(W, H, aspectRatio, below);
-    return _computeSideBySideLayout(W, H, aspectRatio);
+    return _computeSideBySideLayout(W, H, aspectRatio, topBand);
   }
   function _belowRegion(W, pad, below) {
     return {
@@ -824,23 +824,32 @@
       padding: cardW > 300 ? 24 : cardW > 200 ? 16 : 10
     };
   }
-  function _computeSideBySideLayout(W, H, aspectRatio) {
+  function _besideRegion(W, H, pad, topBand) {
+    const left = _sideCardRight(W) + pad;
+    const top = Math.max(pad, Math.round(topBand) || 0);
+    return {
+      left,
+      top,
+      width: W - left - pad,
+      height: Math.max(0, Math.round(H - pad - top))
+    };
+  }
+  function _computeSideBySideLayout(W, H, aspectRatio, topBand) {
     const pad = mediaPadding(W, H);
-    const vidLeft = _sideCardRight(W) + pad;
-    const sideVideoMaxW = W - vidLeft - pad;
-    const sideVideoMaxH = H - pad * 2;
-    let sideVidW = sideVideoMaxW;
+    const region = _besideRegion(W, H, pad, topBand);
+    let sideVidW = region.width;
     let sideVidH = sideVidW / aspectRatio;
-    if (sideVidH > sideVideoMaxH) {
-      sideVidH = sideVideoMaxH;
+    if (sideVidH > region.height) {
+      sideVidH = region.height;
       sideVidW = sideVidH * aspectRatio;
     }
-    return _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH);
+    return _buildSideBySideResult(W, H, pad, region, sideVidW, sideVidH);
   }
-  function _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH) {
+  function _buildSideBySideResult(W, H, pad, region, sideVidW, sideVidH) {
     const vidW = Math.round(sideVidW);
     const vidH = Math.round(sideVidH);
-    const vidTop = Math.round((H - vidH) / 2);
+    const vidLeft = region.left;
+    const vidTop = Math.max(region.top, Math.round((H - vidH) / 2));
     const cardW = Math.round(W * cardSideWidth);
     const cardH = Math.round(H - pad * 2);
     const cardLeft = Math.round(W * cardSideLeft);
@@ -870,7 +879,7 @@
       padding: cardPad
     };
   }
-  function computeVideoLetterboxRegion(W, H, below = null) {
+  function computeVideoLetterboxRegion(W, H, below = null, topBand = 0) {
     const pad = mediaPadding(W, H);
     if (state.layoutMode === "vertical") {
       return {
@@ -881,13 +890,7 @@
       };
     }
     if (below) return _belowRegion(W, pad, below);
-    const left = _sideCardRight(W) + pad;
-    return {
-      left,
-      top: pad,
-      width: W - left - pad,
-      height: Math.round(H - pad * 2)
-    };
+    return _besideRegion(W, H, pad, topBand);
   }
   function _computeStackedLayout(W, H, aspectRatio) {
     const pad = mediaPadding(W, H);
@@ -981,12 +984,17 @@
   function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop }) {
     const type = plateEl.dataset.cardType;
     const isMedia = VIDEO_TYPES.has(type) || type === "audio";
-    if (!isMedia || !eligible || _isEmbed() || cards.length === 0) {
+    if (!isMedia) {
       _clear(plateEl, cards);
       return null;
     }
-    const cardH = Math.max(...cards.map((card) => card.offsetHeight));
     const topBand = measureTopBand(W, H);
+    if (!eligible || _isEmbed() || cards.length === 0) {
+      _clear(plateEl, cards);
+      plateEl.dataset.mediaTopBand = String(topBand);
+      return null;
+    }
+    const cardH = Math.max(...cards.map((card) => card.offsetHeight));
     const arrangement = type === "audio" ? chooseAudioArrangement(W, H, cardH, topBand) : chooseVideoArrangement(W, H, _plateAspect(plateEl), cardH, topBand);
     plateEl.dataset.mediaArrangement = arrangement;
     plateEl.dataset.mediaCardTop = String(computeBelowCardTop(W, H, cardH));
@@ -1005,6 +1013,11 @@
     const topBand = parseFloat(plateEl.dataset.mediaTopBand);
     if (!Number.isFinite(cardTop) || !Number.isFinite(topBand)) return null;
     return { cardTop, topBand };
+  }
+  function readTopBand(plateEl) {
+    if (state.layoutMode === "vertical") return 0;
+    const topBand = parseFloat(plateEl.dataset.mediaTopBand);
+    return Number.isFinite(topBand) ? topBand : 0;
   }
   var AUDIO_BELOW_PROPS = [
     "--telar-audio-wave-top",
@@ -1625,8 +1638,9 @@
     const videoEl = plateEl.querySelector(".video-iframe");
     if (!videoEl) return;
     const below = readBelow(plateEl);
+    const topBand = readTopBand(plateEl);
     if (plateEl.dataset.videoLetterbox === "true") {
-      const region = computeVideoLetterboxRegion(W, H, below);
+      const region = computeVideoLetterboxRegion(W, H, below, topBand);
       videoEl.classList.add("video-iframe--letterbox");
       videoEl.style.position = "absolute";
       videoEl.style.left = `${region.left}px`;
@@ -1637,7 +1651,7 @@
     }
     videoEl.classList.remove("video-iframe--letterbox");
     const aspectRatio = parseFloat(plateEl.dataset.aspectRatio) || 16 / 9;
-    const layout = computeVideoLayout(W, H, aspectRatio, below);
+    const layout = computeVideoLayout(W, H, aspectRatio, below, topBand);
     videoEl.style.position = "absolute";
     videoEl.style.left = `${layout.video.left}px`;
     videoEl.style.top = `${layout.video.top}px`;

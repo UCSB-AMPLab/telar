@@ -10,7 +10,7 @@
  * @version v1.8.0
  */
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -22,7 +22,7 @@ import {
   AUDIO_CONTROLS_HEIGHT, AUDIO_CONTROLS_GAP,
 } from '../../assets/js/telar-story/audio-layout.js';
 import {
-  arrangeMediaScene, readBelow, placeAudioBelow,
+  arrangeMediaScene, readBelow, readTopBand, placeAudioBelow,
 } from '../../assets/js/telar-story/media-arrangement.js';
 import { state } from '../../assets/js/telar-story/state.js';
 
@@ -127,6 +127,56 @@ describe('the video with the card below', () => {
   it('is stacked on a vertical layout whatever the plate says', () => {
     state.layoutMode = 'vertical';
     expect(computeVideoLayout(800, 1200, 16 / 9, below).mode).toBe('stacked');
+  });
+});
+
+describe('the video with the card beside', () => {
+  const SIZES = [[1100, 900], [1280, 720], [1440, 900], [1920, 1080]];
+  const ASPECTS = [16 / 9, 4 / 3, 1.4786, 1, 9 / 16];
+  const BAND = 77;
+
+  it.each(SIZES)('fills the space under the top band when the aspect is unknown, at %ix%i', (W, H) => {
+    const pad = mediaPadding(W, H);
+    const left = Math.round(W * 0.4) + pad;
+    expect(computeVideoLetterboxRegion(W, H, null, BAND)).toEqual({
+      left, top: BAND, width: W - left - pad, height: H - pad - BAND,
+    });
+  });
+
+  it.each(SIZES)('keeps a known-aspect video under the top band at %ix%i', (W, H) => {
+    const pad = mediaPadding(W, H);
+    for (const aspect of ASPECTS) {
+      const { mode, video } = computeVideoLayout(W, H, aspect, null, BAND);
+      expect(mode).toBe('side-by-side');
+      expect(video.top, `aspect ${aspect}`).toBeGreaterThanOrEqual(BAND);
+      expect(video.top + video.height, `aspect ${aspect}`).toBeLessThanOrEqual(H - pad);
+      expect(video.left, `aspect ${aspect}`).toBe(Math.round(W * 0.4) + pad);
+    }
+  });
+
+  it.each(SIZES)('places a video that already cleared the band as before, at %ix%i', (W, H) => {
+    let cleared = 0;
+    for (const aspect of [...ASPECTS, 1.2, 1.1, 0.9, 0.8]) {
+      const before = computeVideoLayout(W, H, aspect);
+      if (before.video.top < BAND) continue;
+      cleared += 1;
+      expect(computeVideoLayout(W, H, aspect, null, BAND), `aspect ${aspect}`).toEqual(before);
+    }
+    expect(cleared).toBeGreaterThan(0);
+  });
+
+  it('keeps one padding at the top where the band is narrower, and no height where it fills the window', () => {
+    const pad = mediaPadding(1440, 900);
+    expect(computeVideoLetterboxRegion(1440, 900, null, 0).top).toBe(pad);
+    expect(computeVideoLetterboxRegion(1440, 900, null, 2000).height).toBe(0);
+  });
+
+  it('shortens a tall video to the space under the band', () => {
+    const pad = mediaPadding(1440, 900);
+    const without = computeVideoLayout(1440, 900, 9 / 16).video;
+    const withBand = computeVideoLayout(1440, 900, 9 / 16, null, 300).video;
+    expect(without.height).toBe(900 - pad * 2);
+    expect(withBand).toMatchObject({ top: 300, height: 900 - pad - 300 });
   });
 });
 
@@ -258,6 +308,48 @@ describe('arrangeMediaScene', () => {
     });
     state.layoutMode = 'vertical';
     expect(readBelow(p)).toBeNull();
+  });
+
+  describe('the top band', () => {
+    let counter;
+    beforeEach(() => {
+      counter = document.createElement('div');
+      counter.className = 'step-counter';
+      counter.getBoundingClientRect = () => ({ top: 12, bottom: 45, left: 1347, right: 1428, width: 81, height: 33 });
+      document.body.appendChild(counter);
+    });
+    afterEach(() => { counter.remove(); });
+
+    it('hands the player the band while the card is beside it', () => {
+      const p = makePlate('vimeo');
+      expect(arrangeMediaScene(p, [makeCard(560)], how())).toBe('beside');
+      expect(readTopBand(p)).toBe(45 + mediaPadding(W, H));
+    });
+
+    it.each([
+      ['the fixed-height model', { eligible: false }, false],
+      ['embed mode', {}, true],
+      ['a scene with no cards', { cards: [] }, false],
+    ])('hands the player the band where the scene is not arranged: %s', (_, over, embed) => {
+      state.isEmbed = embed;
+      const p = makePlate('google-drive');
+      p.dataset.mediaArrangement = 'below';
+      const cards = over.cards ?? [makeCard(120)];
+      expect(arrangeMediaScene(p, cards, how({ eligible: over.eligible ?? true }))).toBeNull();
+      expect(p.dataset.mediaArrangement).toBeUndefined();
+      expect(readBelow(p)).toBeNull();
+      expect(readTopBand(p)).toBe(45 + mediaPadding(W, H));
+    });
+
+    it('hands no band to an image plate, or on a vertical layout', () => {
+      const image = makePlate('iiif');
+      arrangeMediaScene(image, [makeCard(120)], how());
+      expect(readTopBand(image)).toBe(0);
+      const p = makePlate('vimeo');
+      arrangeMediaScene(p, [makeCard(560)], how());
+      state.layoutMode = 'vertical';
+      expect(readTopBand(p)).toBe(0);
+    });
   });
 
   it('gives an audio plate its waveform geometry as custom properties, and takes it back', () => {

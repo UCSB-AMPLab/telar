@@ -6,7 +6,8 @@
  * side card, so the player goes beside it (side-by-side), unless the card is
  * placed below the player (below): the card keeps the side card's left edge
  * and width and sits one padding above the window's bottom edge, and the
- * player fills the width above it, under the band the top controls occupy.
+ * player fills the width above it. Either way the player stays under the band
+ * the top controls occupy.
  * `chooseVideoArrangement` decides between the two; media-arrangement.js
  * calls it with the card's measured height and writes the answer on the
  * plate, where the player and the card both read it. On a vertical layout the
@@ -114,7 +115,7 @@ export function prefersBelow(besideArea, belowArea) {
  * @returns {'below'|'beside'}
  */
 export function chooseVideoArrangement(W, H, aspectRatio, cardH, topBand) {
-  const beside = _computeSideBySideLayout(W, H, aspectRatio).video;
+  const beside = _computeSideBySideLayout(W, H, aspectRatio, topBand).video;
   const below = _computeBelowLayout(W, H, aspectRatio, {
     cardTop: computeBelowCardTop(W, H, cardH), topBand,
   }).video;
@@ -135,7 +136,10 @@ export function chooseVideoArrangement(W, H, aspectRatio, cardH, topBand) {
  *   - Horizontal layout: the card is the side card, from
  *     --telar-card-side-left to --telar-card-side-left + --telar-card-side-width
  *     of W, so the video starts one padding past the card's right edge and
- *     fits the space that leaves. A stacked video would be drawn over the card.
+ *     fits the space that leaves, from the top band (`topBand`) to one padding
+ *     above the window's bottom edge. It is centred on the window's height
+ *     unless that would put its top above the band. A stacked video would be
+ *     drawn over the card.
  *   - Horizontal layout with the card below (`below` given): the video fits
  *     the width less a padding each side, and the height from the top band to
  *     one padding above the card's top, centred in that space.
@@ -145,16 +149,18 @@ export function chooseVideoArrangement(W, H, aspectRatio, cardH, topBand) {
  * @param {number} aspectRatio - Video width / height (e.g. 16/9)
  * @param {{cardTop: number, topBand: number}|null} [below] - The card's top and
  *   the top band, when the card is below the player
+ * @param {number} [topBand=0] - The band kept clear for the top controls, in px
+ *   from the top, when the card is beside the player; one padding at least
  * @returns {{ mode: 'side-by-side'|'below'|'stacked', video: {left,top,width,height}, card: {left,top,width,height}, padding: number }}
  */
-export function computeVideoLayout(W, H, aspectRatio, below = null) {
+export function computeVideoLayout(W, H, aspectRatio, below = null, topBand = 0) {
   // Layout mode is determined by state.layoutMode (set by layout-mode.js at boot and on
   // every resize/orientationchange). On vertical layouts, always use stacked.
   if (state.layoutMode === 'vertical') {
     return _computeStackedLayout(W, H, aspectRatio);
   }
   if (below) return _computeBelowLayout(W, H, aspectRatio, below);
-  return _computeSideBySideLayout(W, H, aspectRatio);
+  return _computeSideBySideLayout(W, H, aspectRatio, topBand);
 }
 
 /** The space above a card placed below the player: the whole width, under the top band. */
@@ -198,26 +204,41 @@ function _computeBelowLayout(W, H, aspectRatio, below) {
   };
 }
 
+/**
+ * The space beside the side card: from one padding past its right edge to one
+ * padding inside the window's, and from the top band to one padding above the
+ * window's bottom edge.
+ */
+function _besideRegion(W, H, pad, topBand) {
+  const left = _sideCardRight(W) + pad;
+  const top = Math.max(pad, Math.round(topBand) || 0);
+  return {
+    left,
+    top,
+    width: W - left - pad,
+    height: Math.max(0, Math.round(H - pad - top)),
+  };
+}
+
 /** Compute the side-by-side layout: the video right of the side card. */
-function _computeSideBySideLayout(W, H, aspectRatio) {
+function _computeSideBySideLayout(W, H, aspectRatio, topBand) {
   const pad = mediaPadding(W, H);
-  const vidLeft = _sideCardRight(W) + pad;
-  const sideVideoMaxW = W - vidLeft - pad;
-  const sideVideoMaxH = H - pad * 2;
-  let sideVidW = sideVideoMaxW;
+  const region = _besideRegion(W, H, pad, topBand);
+  let sideVidW = region.width;
   let sideVidH = sideVidW / aspectRatio;
-  if (sideVidH > sideVideoMaxH) {
-    sideVidH = sideVideoMaxH;
+  if (sideVidH > region.height) {
+    sideVidH = region.height;
     sideVidW = sideVidH * aspectRatio;
   }
-  return _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH);
+  return _buildSideBySideResult(W, H, pad, region, sideVidW, sideVidH);
 }
 
 /** Build side-by-side layout result object. */
-function _buildSideBySideResult(W, H, pad, vidLeft, sideVidW, sideVidH) {
+function _buildSideBySideResult(W, H, pad, region, sideVidW, sideVidH) {
   const vidW = Math.round(sideVidW);
   const vidH = Math.round(sideVidH);
-  const vidTop = Math.round((H - vidH) / 2);
+  const vidLeft = region.left;
+  const vidTop = Math.max(region.top, Math.round((H - vidH) / 2));
   const cardW = Math.round(W * cardSideWidth);
   const cardH = Math.round(H - pad * 2);
   const cardLeft = Math.round(W * cardSideLeft);
@@ -264,9 +285,10 @@ function _buildStackedResult(W, H, pad, stackVidW, stackVidH) {
  * @param {number} W - Viewport width in px
  * @param {number} H - Viewport height in px
  * @param {{cardTop: number, topBand: number}|null} [below] - As computeVideoLayout
+ * @param {number} [topBand=0] - As computeVideoLayout
  * @returns {{ left: number, top: number, width: number, height: number }}
  */
-export function computeVideoLetterboxRegion(W, H, below = null) {
+export function computeVideoLetterboxRegion(W, H, below = null, topBand = 0) {
   const pad = mediaPadding(W, H);
   if (state.layoutMode === 'vertical') {
     return {
@@ -277,13 +299,7 @@ export function computeVideoLetterboxRegion(W, H, below = null) {
     };
   }
   if (below) return _belowRegion(W, pad, below);
-  const left = _sideCardRight(W) + pad;
-  return {
-    left,
-    top: pad,
-    width: W - left - pad,
-    height: Math.round(H - pad * 2),
-  };
+  return _besideRegion(W, H, pad, topBand);
 }
 
 /** Compute stacked layout for mobile. */
