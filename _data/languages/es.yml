@@ -161,7 +161,7 @@ index_page:
 
     Tres formas de empezar:
 
-    - **Sin código:** configura y gestiona tu sitio desde una interfaz visual con el **[Telar Compositor](https://compositor.telar.org)**
+    - **Sin código:** configura y gestiona tu sitio desde una interfaz visual con el **[Compositor de Telar](https://compositor.telar.org)**
     - **Asistida:** copia la **[plantilla de GitHub](https://github.com/UCSB-AMPLab/telar)** y edita tu contenido en Google Sheets
     - **Manual:** clona la plantilla y edita los archivos CSV y markdown localmente
 

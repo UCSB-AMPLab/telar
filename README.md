@@ -173,7 +173,7 @@ Agradecemos el apoyo del [Caribbean Digital Scholarship Collective](https://cdsc
 - **Interfaz multilingüe**: Soporte completo de interfaz para inglés y español
 - **Galería de objetos**: Cuadrícula navegable con filtro por tipo (Imagen/Video/Audio), miniaturas por tipo de medio y páginas de detalle con selectores de clips
 - **Accesibilidad**: Texto alternativo en todos los tipos de medio con cadena de respaldo automática
-- **Telar Compositor**: Herramienta web complementaria para gestionar objetos — sube imágenes, agrega metadatos y envía los cambios directamente al repositorio. Actualmente en desarrollo; ya se puede utilizar
+- **Compositor de Telar**: Herramienta web complementaria para gestionar objetos — sube imágenes, agrega metadatos y envía los cambios directamente al repositorio. Actualmente en desarrollo; ya se puede utilizar
 - **Computación mínima**: Texto plano, generación estática, alojamiento sin dependencias externas en GitHub Pages
 
 ---
@@ -213,9 +213,9 @@ Planifica tu estructura narrativa antes de construir. Esboza tus historias, iden
 
 ---
 
-## Telar Compositor
+## Compositor de Telar
 
-[Telar Compositor](https://compositor.telar.org) es una herramienta web complementaria que simplifica la gestión de objetos. En lugar de subir imágenes y editar archivos CSV a mano, el Compositor permite agregar objetos al sitio mediante una interfaz visual: se encarga de subir las imágenes, registrar los metadatos y enviar los cambios directamente al repositorio de GitHub.
+El [Compositor de Telar](https://compositor.telar.org) es una herramienta web complementaria que simplifica la gestión de objetos. En lugar de subir imágenes y editar archivos CSV a mano, el Compositor permite agregar objetos al sitio mediante una interfaz visual: se encarga de subir las imágenes, registrar los metadatos y enviar los cambios directamente al repositorio de GitHub.
 
 El Compositor está en desarrollo activo y ya se puede utilizar. Visita **[compositor.telar.org](https://compositor.telar.org)** para comenzar.
 
