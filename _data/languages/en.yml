@@ -196,6 +196,13 @@ panels:
   glossary_term_prefix: "Key term"
   glossary_term_title: "Glossary Term"
 
+# Footnote backlinks. The tooltip on the arrow that returns a reader to
+# where the note was cited. %d is the note's number and is interpolated by
+# Python Markdown, not by Telar: a string without exactly one %d is
+# discarded silently and the library's own English default comes back.
+footnotes:
+  backlink_title: "Jump back to footnote %d in the text"
+
 # Glossary term pages
 glossary:
   related_terms: "Related Terms"

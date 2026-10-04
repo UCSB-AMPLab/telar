@@ -34,16 +34,25 @@ size class. It supports both local files (via Pillow) and remote URLs
 (fetched with urllib). Failures are silent — dimension detection is
 a nice-to-have, not a build blocker.
 
-Version: v1.5.0
+Version: v1.8.0
 """
 
 from html import escape as html_escape
 import re
 from pathlib import Path
 import urllib.request
-import markdown
 from PIL import Image as PILImage
 from io import BytesIO
+from telar.latex import convert_markdown
+
+
+def _unwrap_paragraph(rendered_html):
+    """Drop the <p> wrapper Python Markdown puts around a one-line caption.
+
+    Runs as `convert_markdown`'s post-processing step: anything that
+    rewrites the converted HTML has to see the maths as a placeholder.
+    """
+    return re.sub(r'^<p>(.*)</p>$', r'\1', rendered_html.strip())
 
 
 def process_images(text):
@@ -116,8 +125,8 @@ def process_images(text):
             img_tag = f'<img src="{html_escape(src, quote=True)}" alt="{html_escape(alt, quote=True)}"{class_attr}>'
             if caption:
                 # Convert caption markdown to HTML (strip wrapping <p> tags)
-                caption_html = markdown.markdown(caption)
-                caption_html = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
+                caption_html = convert_markdown(
+                    caption, post_process=_unwrap_paragraph)
                 html = f'<figure class="telar-image-figure">{img_tag}<figcaption class="telar-image-caption">{caption_html}</figcaption></figure>'
             else:
                 html = f'<figure class="telar-image-figure">{img_tag}</figure>'

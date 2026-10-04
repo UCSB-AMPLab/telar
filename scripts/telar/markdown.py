@@ -26,7 +26,7 @@ the spreadsheet cell produce `<br>` tags in the output.
 
 Content trust model (raw-HTML pass-through is intentional)
 ----------------------------------------------------------
-`markdown.markdown()` is called WITHOUT an HTML sanitiser, so raw HTML
+Markdown is converted WITHOUT an HTML sanitiser, so raw HTML
 embedded in author markdown/CSV content passes straight through to the
 rendered page. This is by design: Telar is a minimal-computing static-site
 framework whose content is authored by trusted contributors (the same
@@ -42,13 +42,12 @@ A multi-author deployment where untrusted users can write story content
 DOMPurify on the injected panel/glossary HTML in the JS runtime, where the
 untrusted boundary actually is.
 
-Version: v1.6.0
+Version: v1.8.0
 """
 
 import re
-import markdown
 from telar.images import process_images, resolve_path_case_insensitive
-from telar.latex import protect_latex, restore_latex
+from telar.latex import convert_markdown
 from telar.widgets import process_widgets
 
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
@@ -86,9 +85,9 @@ def _split_frontmatter(content, require_title=False):
 
 def _process_pipeline(body, widget_source, widget_warnings):
     """
-    Run the widget/image/LaTeX/markdown pipeline shared by file-based and
-    inline panel content: process_widgets -> process_images -> protect_latex
-    -> markdown.markdown(extensions=['extra', 'nl2br']) -> restore_latex.
+    Run the widget/image/markdown pipeline shared by file-based and inline
+    panel content: process_widgets -> process_images -> convert_markdown
+    (extensions=['extra', 'nl2br']).
 
     Raw HTML passes through unsanitised by design (trusted-author model) —
     see the module docstring.
@@ -103,10 +102,7 @@ def _process_pipeline(body, widget_source, widget_warnings):
     """
     body = process_widgets(body, widget_source, widget_warnings)
     body = process_images(body)
-    body, latex_replacements = protect_latex(body)
-    html_content = markdown.markdown(body, extensions=['extra', 'nl2br'])
-    html_content = restore_latex(html_content, latex_replacements)
-    return html_content
+    return convert_markdown(body, extensions=['extra', 'nl2br'])
 
 
 def read_markdown_file(file_path, widget_warnings=None):

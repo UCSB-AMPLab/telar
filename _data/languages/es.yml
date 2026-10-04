@@ -197,6 +197,14 @@ panels:
   glossary_term_prefix: "Palabra clave"
   glossary_term_title: "Término del glosario"
 
+# Notas al pie. El texto que aparece al pasar el cursor sobre la flecha que
+# devuelve a quien lee al punto donde se citó la nota. El %d es el número de
+# la nota y lo reemplaza Python Markdown, no Telar: una cadena que no tenga
+# exactamente un %d se descarta sin avisar y vuelve el texto en inglés que
+# trae la librería.
+footnotes:
+  backlink_title: "Volver a la nota %d"
+
 # Páginas de términos del glosario
 glossary:
   related_terms: "Términos relacionados"

@@ -36,16 +36,16 @@ Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
 `subjects`, `featured`, and `source`. Both formats are supported — new fields
 are populated when present, old fields are ignored gracefully.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import json
 from pathlib import Path
 
-import markdown as md_lib
 import pandas as pd
 
 from telar.images import process_images
+from telar.latex import convert_markdown
 from telar.widgets import process_widgets
 from telar.glossary import process_glossary_links
 
@@ -278,7 +278,7 @@ def _add_demo_layers(step_data, step, story_id, glossary_terms):
                 content = process_images(content)
 
                 # Convert markdown to HTML
-                content = md_lib.markdown(content, extensions=['extra', 'nl2br'])
+                content = convert_markdown(content, extensions=['extra', 'nl2br'])
 
                 # Process glossary links AFTER markdown conversion
                 content = process_glossary_links(content, glossary_terms)

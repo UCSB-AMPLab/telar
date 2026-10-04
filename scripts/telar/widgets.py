@@ -46,12 +46,12 @@ Version: v1.7.0
 
 import html
 import re
-import markdown
 from html.parser import HTMLParser
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from telar.config import get_lang_string
 from telar.images import validate_image_path, get_image_dimensions
+from telar.latex import convert_markdown
 
 
 # Widget instance counter for unique IDs within a build
@@ -119,6 +119,16 @@ def sanitize_caption_html(rendered_html):
     parser.feed(rendered_html)
     parser.close()
     return parser.get_html()
+
+
+def _caption_html(rendered_html):
+    """Unwrap a one-paragraph caption and sanitise what is left.
+
+    Runs as `convert_markdown`'s post-processing step, so it sees LaTeX as
+    a placeholder rather than as a formula the sanitiser would re-parse.
+    """
+    stripped = re.sub(r'^<p>(.*)</p>$', r'\1', rendered_html.strip())
+    return sanitize_caption_html(stripped)
 
 
 def get_widget_id():
@@ -238,14 +248,11 @@ def parse_carousel_widget(content, file_path, warnings_list):
         # Process caption/credit through markdown (for italics, etc.), then
         # sanitise the result so an author-supplied <script>/<img onerror>/etc.
         # cannot reach the rendered page through these fields.
-        if 'caption' in data:
-            caption_html = markdown.markdown(data['caption'])
-            stripped = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
-            data['caption'] = sanitize_caption_html(stripped)
-        if 'credit' in data:
-            credit_html = markdown.markdown(data['credit'])
-            stripped = re.sub(r'^<p>(.*)</p>$', r'\1', credit_html.strip())
-            data['credit'] = sanitize_caption_html(stripped)
+        for field in ('caption', 'credit'):
+            if field in data:
+                data[field] = convert_markdown(
+                    data[field], post_process=_caption_html,
+                    restore_as_text=True)
 
         items.append(data)
 
@@ -308,7 +315,8 @@ def parse_markdown_sections(content):
     for section in sections:
         content_text = '\n'.join(section['content']).strip()
         # Convert markdown to HTML
-        section['content_html'] = markdown.markdown(content_text, extensions=['extra', 'nl2br'])
+        section['content_html'] = convert_markdown(
+            content_text, extensions=['extra', 'nl2br'])
 
     return sections
 
@@ -421,7 +429,7 @@ def parse_bibliography_widget(content, file_path, warnings_list):
         block = block.strip()
         if not block:
             continue
-        html = markdown.markdown(block, extensions=['extra', 'nl2br'])
+        html = convert_markdown(block, extensions=['extra', 'nl2br'])
         entries.append({'content_html': html})
 
     if not entries:
@@ -486,7 +494,7 @@ def render_widget_html(widget_type, widget_data, widget_id):
 def process_widgets(text, file_path, warnings_list):
     """
     Find and process :::widget::: blocks in markdown text.
-    Must be called BEFORE markdown.markdown() conversion.
+    Must be called BEFORE the text is converted to HTML.
 
     Args:
         text: Raw markdown text

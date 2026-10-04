@@ -30,7 +30,7 @@ skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import argparse
@@ -39,7 +39,6 @@ import re
 import shutil
 from pathlib import Path
 
-import markdown
 import pandas as pd
 import yaml
 
@@ -49,7 +48,7 @@ from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
-from telar.latex import has_latex
+from telar.latex import convert_markdown, has_latex
 from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
 from telar.story_pages import (
     ManifestError, build_manifest, remove_manifest, stories_permalink,
@@ -400,7 +399,7 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
         processed = process_images(body)
 
         # 2. Convert markdown to HTML
-        processed = markdown.markdown(
+        processed = convert_markdown(
             processed,
             extensions=['extra', 'nl2br', 'sane_lists']
         )
@@ -859,7 +858,7 @@ def generate_pages(telar_language='en'):
         processed = process_images(processed)
 
         # 3. Convert markdown to HTML
-        processed = markdown.markdown(
+        processed = convert_markdown(
             processed,
             extensions=['extra', 'nl2br', 'sane_lists']
         )
