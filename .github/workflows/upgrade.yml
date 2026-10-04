@@ -22,7 +22,7 @@ name: Upgrade Telar
 #      fetched tooling or CI bookkeeping files) and open an issue to review and
 #      merge.
 #
-# Version: v1.7.0
+# Version: v1.8.0
 
 on:
   workflow_dispatch:
@@ -131,7 +131,15 @@ jobs:
         id: check_version
         run: |
           set -euo pipefail
-          CURRENT_VERSION=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('telar', {}).get('version', '0.2.0-beta'))")
+          # Canonicalised through the engine's own grammar rather than read
+          # raw. This value names the version in the commit message, the
+          # upgrade issue and the job summary, and the engine normalises what
+          # it puts in UPGRADE_SUMMARY.md — so a second unnormalised reader
+          # here is how a site ends up told two different versions of where
+          # it started. The tooling in $TMP is the verified copy the next step
+          # runs, so the grammar is the same one that decides the chain.
+          TMP="${{ steps.fetch.outputs.tmp }}"
+          CURRENT_VERSION=$(python3 -c "import sys, yaml; sys.path.insert(0, '$TMP/scripts'); from telar_upgrade import _canonical_version; raw = (yaml.safe_load(open('_config.yml')) or {}).get('telar', {}).get('version', '0.2.0-beta'); print(_canonical_version(raw) or raw)")
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "Current version: $CURRENT_VERSION"
 

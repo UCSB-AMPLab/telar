@@ -12,7 +12,27 @@ scripts on the path of every run, to answer a question that only changes
 when someone edits an import. A literal that a test pins is cheaper at
 runtime and louder at edit time.
 
-Version: v1.7.0
+**The derivation used to be a second hand-kept list.** It globbed
+`scripts/telar/*.py` — one directory, one level — which is an enumeration
+of the graph rather than the graph. It missed the whole
+`telar/processors/` subpackage, eight files that `telar/__init__.py`
+imports on the first `import telar.anything`, and it included
+`build_conflicts.py`, which data regeneration never loads. Neither error
+showed, because the names in those files happened to be names the list
+already had. A test that pins a list against an enumeration pins it
+against the same mistake.
+
+It now follows the imports from the two entry points, and counts the
+`__init__.py` of every package it passes through, because that is what
+Python runs.
+
+**Where the derivation stops.** A local module imported inside a `try`
+still contributes its own unconditional imports as required. Nothing in
+this graph does that, and resolving it properly means modelling which
+failures the guard was written for — so the boundary is stated rather
+than guessed at.
+
+Version: v1.8.0
 """
 
 import ast
@@ -27,20 +47,41 @@ sys.path.insert(0, str(SCRIPTS))
 
 import telar_upgrade as upgrade
 
-# What data regeneration runs, and the package they pull in behind them.
+# What data regeneration runs. Everything else is reached from here.
 REGENERATION_ENTRY_POINTS = ('csv_to_json.py', 'generate_collections.py')
 
 
-def _top_level_names():
-    """The names that resolve locally with scripts/ on sys.path.
+def _module_files(name):
+    """The files under scripts/ that Python runs to satisfy `import name`.
 
-    Not the package's own submodule names: `scripts/telar/markdown.py` is
+    Empty when the name is not local, which is how a third-party name is
+    told from a first-party one: `scripts/telar/markdown.py` is
     `telar.markdown`, and a bare `import markdown` in that package reaches
     the third-party library. Treating the submodule as local hides the
     dependency — which it did, in the first draft of this test.
+
+    Every package on the way counts. `import telar.processors.objects`
+    runs `telar/__init__.py` and `telar/processors/__init__.py` first, and
+    the first of those is where this package wires its subpackages
+    together.
     """
-    return ({path.stem for path in SCRIPTS.glob('*.py')}
-            | {entry.name for entry in SCRIPTS.iterdir() if entry.is_dir()})
+    files, parts = [], name.split('.')
+    for depth in range(1, len(parts) + 1):
+        base = SCRIPTS.joinpath(*parts[:depth])
+        if (base / '__init__.py').is_file():
+            files.append(base / '__init__.py')
+        elif base.with_suffix('.py').is_file():
+            files.append(base.with_suffix('.py'))
+        else:
+            return []
+    return files
+
+
+def _absolute_name(path, level, module):
+    """What `from ..x import y` means, written from where it was written."""
+    package = path.relative_to(SCRIPTS).with_suffix('').parts[:-1]
+    base = package[:len(package) - (level - 1)] if level > 1 else package
+    return '.'.join(base + ((module,) if module else ()))
 
 
 def _imports_at_module_level(path):
@@ -59,31 +100,65 @@ def _imports_at_module_level(path):
             target, nodes = guarded, list(ast.walk(node))
         for sub in nodes:
             if isinstance(sub, ast.Import):
-                target |= {alias.name.split('.')[0] for alias in sub.names}
-            elif isinstance(sub, ast.ImportFrom) and sub.level == 0 and sub.module:
-                target.add(sub.module.split('.')[0])
+                target |= {alias.name for alias in sub.names}
+            elif isinstance(sub, ast.ImportFrom):
+                if sub.level == 0 and sub.module:
+                    target.add(sub.module)
+                    # `from telar import x` may import the module
+                    # `telar.x` rather than a name inside `telar`, and
+                    # resolving only `telar` walks the package's
+                    # __init__ and stops -- so a helper reached that way,
+                    # and whatever it imports, was never read.
+                    target |= {'%s.%s' % (sub.module, alias.name)
+                               for alias in sub.names}
+                elif sub.level:
+                    target.add(_absolute_name(path, sub.level, sub.module))
 
     return unconditional, guarded
 
 
-def _third_party(names):
-    local = _top_level_names()
-    return {name for name in names
-            if name not in sys.stdlib_module_names and name not in local}
+def _walk_regeneration_graph():
+    """(required, optional, files) — third-party names and what was read.
 
+    Third-party is what does not resolve to a file under scripts/, minus
+    the standard library. Local names are followed instead of recorded.
+    """
+    required, optional, seen = set(), set(), set()
+    queue = [SCRIPTS / name for name in REGENERATION_ENTRY_POINTS]
 
-def _regeneration_files():
-    return ([SCRIPTS / name for name in REGENERATION_ENTRY_POINTS]
-            + sorted((SCRIPTS / 'telar').glob('*.py')))
+    while queue:
+        path = queue.pop()
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+
+        unconditional, guarded = _imports_at_module_level(path)
+        for names, bucket in ((unconditional, required), (guarded, optional)):
+            for name in names:
+                local = _module_files(name)
+                if local:
+                    queue.extend(local)
+                    continue
+                top = name.split('.')[0]
+                # A candidate that does not resolve is only third-party if
+                # its package does not either. `from telar import x` offers
+                # `telar.x` whether x is a module or a function, and the
+                # function spelling must not be reported as a missing
+                # dependency called `telar`.
+                if _module_files(top) or top in sys.stdlib_module_names:
+                    continue
+                bucket.add(top)
+
+    return required, optional, seen
 
 
 def _required_and_optional():
-    required, optional = set(), set()
-    for path in _regeneration_files():
-        unconditional, guarded = _imports_at_module_level(path)
-        required |= unconditional
-        optional |= guarded
-    return _third_party(required), _third_party(optional)
+    required, optional, _ = _walk_regeneration_graph()
+    return required, optional
+
+
+def _regeneration_files():
+    return sorted(_walk_regeneration_graph()[2])
 
 
 class TestTheProbeListMatchesTheGraph:
@@ -123,11 +198,37 @@ class TestTheDerivationItself:
         files = _regeneration_files()
 
         assert all(path.is_file() for path in files)
-        assert len(files) > len(REGENERATION_ENTRY_POINTS)
+        assert len(files) > 20
+
+    def test_it_reaches_the_subpackage_a_directory_glob_missed(self):
+        """The gap that made this derivation worth rewriting.
+
+        `telar/__init__.py` imports `telar.processors.objects`, so those
+        files run on the first `import telar.anything`. A glob of
+        `telar/*.py` never saw them.
+        """
+        reached = {path.relative_to(SCRIPTS).as_posix()
+                   for path in _regeneration_files()}
+
+        assert 'telar/processors/objects/local.py' in reached
+        assert 'telar/processors/stories.py' in reached
+        assert 'telar/__init__.py' in reached
+
+    def test_it_does_not_read_what_regeneration_never_loads(self):
+        """The other direction: an over-broad set can only over-declare.
+
+        `build_conflicts.py` sits in the same directory and is imported by
+        the conflict checker, not by anything regeneration runs.
+        """
+        reached = {path.relative_to(SCRIPTS).as_posix()
+                   for path in _regeneration_files()}
+
+        assert 'telar/build_conflicts.py' not in reached
 
     def test_the_package_submodules_are_not_taken_for_local_names(self):
         assert (SCRIPTS / 'telar' / 'markdown.py').is_file()
-        assert 'markdown' not in _top_level_names()
+        assert _module_files('markdown') == []
+        assert _module_files('telar.markdown') != []
         assert 'markdown' in set(upgrade._REGENERATION_IMPORTS)
 
     def test_a_function_level_import_is_not_eager(self, tmp_path):
@@ -149,11 +250,28 @@ class TestTheDerivationItself:
         assert unconditional == set()
         assert guarded == {'optpkg'}
 
-    def test_a_relative_import_is_not_a_third_party_name(self, tmp_path):
-        module = tmp_path / 'sample.py'
-        module.write_text('from . import sibling\nfrom .other import thing\n')
+    def test_a_name_imported_from_a_package_is_tried_as_a_module(self):
+        """`from telar import glossary` and `from telar import X` are the
+        same syntax, and only one of them is a module. Both candidates are
+        offered; the one that is not a file resolves to nothing."""
+        module = SCRIPTS / 'sample_from_package.py'
+        module.write_text('from telar import glossary, NOT_A_MODULE\n',
+                          encoding='utf-8')
+        try:
+            unconditional, _ = _imports_at_module_level(module)
+        finally:
+            module.unlink()
 
-        unconditional, guarded = _imports_at_module_level(module)
+        assert 'telar.glossary' in unconditional
+        assert _module_files('telar.glossary') != []
+        assert _module_files('telar.NOT_A_MODULE') == []
 
-        assert unconditional == set()
-        assert guarded == set()
+    def test_a_relative_import_resolves_to_its_package(self):
+        """Nothing in this graph writes one, so it is checked on a file
+        that does: a relative import read as a bare name would be
+        classified third-party and demand a package nobody ships."""
+        path = SCRIPTS / 'migrations' / 'discovery.py'
+
+        assert _absolute_name(path, 1, 'base') == 'migrations.base'
+        assert _absolute_name(path, 1, None) == 'migrations'
+        assert _module_files('migrations.base') != []

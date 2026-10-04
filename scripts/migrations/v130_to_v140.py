@@ -117,6 +117,7 @@ class Migration130to140(BaseMigration):
 
     from_version = "1.3.0"
     to_version = "1.4.0"
+    release_date = "2026-05-26"  # tag v1.4.0
     description = "Responsive system overhaul and custom IIIF viewer (Tify removed); runtime-only"
 
     # Pin framework-file fetches to the v1.4.0 release tag, not the moving

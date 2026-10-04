@@ -20,9 +20,11 @@ line as a completed checklist item.
 
 `apply_config_version()` is the single source of truth for rewriting the
 `telar.version` / `telar.release_date` stamp in `_config.yml`. It edits
-text rather than round-tripping YAML so comments and formatting survive,
-and both `BaseMigration` (per migration) and `upgrade.py` (the final
-stamp) call it so the parsing rules cannot drift between two copies.
+text rather than round-tripping YAML, so the rest of the file keeps its
+comments and formatting — the two lines it rewrites are the exception and
+are rewritten whole. Both `BaseMigration` (per migration) and `upgrade.py`
+(the final stamp) call it so the parsing rules cannot drift between two
+copies.
 
 `BaseMigration` itself groups its helpers by concern. File primitives
 (`_read_file`, `_write_file`, `_move_file`, `_file_exists`) work relative
@@ -240,9 +242,24 @@ MANUAL_STEP_AUDIENCES = ('all', 'local', 'google-sheets', 'compositor')
 UPGRADE_STATE_FILE = "UPGRADE_STATE.json"
 
 
+# What opens the block this writer edits: a top-level `telar:` and nothing
+# else on the line but whitespace or a comment. `startswith('telar:')` also
+# matched `telar:custom:`, a valid key of its own, and `telar: {version: x}`,
+# an inline mapping that cannot take block entries -- writing into either
+# produced a file no parser would read.
+_TELAR_SECTION = re.compile(r'telar:[ \t]*(#.*)?$')
+
+
 def apply_config_version(content, new_version, new_date):
     """Rewrite telar.version / telar.release_date in _config.yml *content*,
-    preserving comments and formatting (text edit, not a YAML round-trip).
+    a text edit rather than a YAML round-trip, so the rest of the file keeps
+    its comments, ordering and spacing exactly.
+
+    The two lines it rewrites are the exception, and they are rewritten
+    whole: a trailing comment on `version` or `release_date` does not
+    survive, and the value comes back double-quoted whatever quoting it had.
+    Both are measured, not intended -- worth knowing before anyone relies on
+    a note written on those lines.
 
     Single source of truth for the version stamp — both BaseMigration (per
     migration) and upgrade.py (the final stamp in main()) call this, so the
@@ -254,6 +271,12 @@ def apply_config_version(content, new_version, new_date):
         a single-space indent does not truncate it.
       - Inserts a release_date line right after version if the section has a
         version but no release_date.
+      - Writes both lines at the top of the section if it declares neither.
+        A `telar:` section with no version reads as 0.2.0-beta upstream, so
+        the site runs the whole chain; leaving the stamp unwritten sends it
+        through the chain again on the next run. A section that does not
+        exist is still left alone -- inventing it would guess at a file
+        this writer cannot see the shape of.
 
     Args:
         content: Full text of _config.yml.
@@ -266,24 +289,48 @@ def apply_config_version(content, new_version, new_date):
     lines = content.split('\n')
     modified = False
     in_telar_section = False
+    telar_idx = None
+    section_indent = None
     version_idx = None
     release_date_seen = False
 
     for i, line in enumerate(lines):
         stripped = line.strip()
 
-        if not in_telar_section:
-            if line.startswith('telar:'):
+        # A top-level key closes any open section; `telar:` then opens one.
+        # Both are decided on the same line, because a second `telar:`
+        # header does both at once -- checking only while outside a section
+        # meant the header that closed one was never seen as opening the
+        # next, and a file with two sections had the first one stamped
+        # while PyYAML read the second.
+        indent_len = len(line) - len(line.lstrip())
+        at_top_level = bool(stripped) and indent_len == 0
+
+        # A comment at column 0 is not the end of the section: YAML does not
+        # close a block mapping on one, and treating it as the end left the
+        # stamp outside the section it belongs to.
+        if at_top_level and not stripped.startswith('#'):
+            in_telar_section = False
+            if _TELAR_SECTION.match(line):
+                # A new header resets what was learned from an earlier one.
+                # Duplicate top-level keys are legal input and PyYAML keeps
+                # the last, so the last section is the one a reader sees and
+                # the one worth stamping.
                 in_telar_section = True
+                telar_idx = i
+                section_indent = None
+                version_idx = None
+                release_date_seen = False
             continue
 
-        # Inside the telar section. `telar:` is a top-level key, so the section
-        # ends at the next non-blank line back at column 0 (any indentation —
-        # one space, two, or a tab — keeps us inside).
-        indent_len = len(line) - len(line.lstrip())
-        if stripped and indent_len == 0:
-            in_telar_section = False
+        if not in_telar_section:
             continue
+
+        # Indentation is learned from a real entry. A comment can sit at any
+        # column without being wrong, so taking the indent from one produced
+        # a stamp that did not line up with the section's own keys.
+        if stripped and not stripped.startswith('#') and section_indent is None:
+            section_indent = line[:indent_len]
 
         if stripped.startswith('version:'):
             lines[i] = f'{line[:indent_len]}version: "{new_version}"'
@@ -299,6 +346,17 @@ def apply_config_version(content, new_version, new_date):
         vline = lines[version_idx]
         indent = vline[:len(vline) - len(vline.lstrip())]
         lines.insert(version_idx + 1, f'{indent}release_date: "{new_date}"')
+        modified = True
+    elif version_idx is None and telar_idx is not None:
+        # The section is there but never says which version the site is on.
+        # Written at the top rather than the end because the section ends at
+        # the next column-0 line, and a trailing blank line inside it would
+        # put the stamp outside the block it belongs to.
+        indent = section_indent if section_indent else '  '
+        stamp = [f'{indent}version: "{new_version}"']
+        if not release_date_seen:
+            stamp.append(f'{indent}release_date: "{new_date}"')
+        lines[telar_idx + 1:telar_idx + 1] = stamp
         modified = True
 
     return '\n'.join(lines), modified
@@ -622,7 +680,8 @@ class BaseMigration(ABC):
         """
         Update telar.version and telar.release_date in _config.yml.
 
-        Uses text-based editing to preserve formatting and comments.
+        Text-based editing, so the file keeps its comments and formatting
+        everywhere except the two lines rewritten -- see apply_config_version.
 
         Args:
             new_version: New version string (e.g., "0.3.4-beta")

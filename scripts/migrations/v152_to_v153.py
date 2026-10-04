@@ -85,6 +85,7 @@ class Migration152to153(BaseMigration):
 
     from_version = "1.5.2"
     to_version = "1.5.3"
+    release_date = "2026-06-23"  # tag v1.5.3
     description = "Localise built-in chrome strings on translated sites; display-only"
 
     # Pin framework-file fetches to the v1.5.3 release tag, not the moving

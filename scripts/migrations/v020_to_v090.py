@@ -18,7 +18,6 @@ files to the ones the replaced chain would have written from here.
 Version: v1.8.0
 """
 
-from datetime import date
 from typing import Dict, List
 
 from .messages import get_message
@@ -354,6 +353,7 @@ class Migration020to090(BaseMigration):
     from_version = "0.2.0-beta"
     from_versions = list(ENTRY_VERSIONS)
     to_version = "0.9.0-beta"
+    release_date = "2026-03-03"  # tag v0.9.0-beta
     description = "Consolidated upgrade from the pre-v0.9.0 betas"
 
     # The one tag every framework file now comes from.
@@ -431,10 +431,10 @@ class Migration020to090(BaseMigration):
             return records
 
         # The one stamp, written only once every step has completed.
-        today = date.today().strftime('%Y-%m-%d')
-        if self._stamp_version(self.to_version, today):
+        stamped = self.release_date
+        if self._stamp_version(self.to_version, stamped):
             records.append(coerce_change(
-                f'Updated _config.yml: version {self.to_version} ({today})'))
+                f'Updated _config.yml: version {self.to_version} ({stamped})'))
 
         return records
 
@@ -457,9 +457,9 @@ class Migration020to090(BaseMigration):
                 for path, (description, last_writer) in FRAMEWORK_FILES_090.items()
                 if last_writer >= entry or not self._file_exists(path)}
 
-    def _stamp_version(self, version, today):
+    def _stamp_version(self, version, stamped):
         """Write the single version stamp this hop is entitled to."""
-        return self._update_config_version(version, today)
+        return self._update_config_version(version, stamped)
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
         """What the owner has to do by hand, in their own language.

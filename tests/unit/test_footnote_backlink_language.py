@@ -38,6 +38,10 @@ LANGUAGES = os.path.join(ROOT, '_data', 'languages')
 
 SOURCE = 'Text[^a] and more[^b].\n\n[^a]: First note.\n[^b]: Second *note*.\n'
 
+# The same notes with their definitions in the opposite order to their
+# references, which is the input Telar's renumbering exists for.
+REORDERED = 'Text[^b] and more[^a].\n\n[^a]: Second *note*.\n[^b]: First note.\n'
+
 TITLES = re.compile(r'title="([^"]*)"')
 
 
@@ -121,13 +125,29 @@ class TestWhatEachSiteRenders:
 
         assert ours == theirs
 
-    def test_the_numbers_follow_the_notes(self, site):
-        """The tooltip names a number, so it has to be the right one."""
+    def test_the_numbers_are_right_when_the_notes_are_reordered(self, site):
+        """Renumbering cannot put a wrong number in this tooltip, and the
+        reason is worth writing down rather than testing around.
+
+        An adversarial review reported that these tests pass with
+        Telar's renumbering disabled, and they do. Measured: the library
+        numbers each backlink by its position in the notes list, and the
+        renumbering works by reordering that list. So the tooltip on the
+        first note says 1 whichever order the definitions were written
+        in -- the number is a property of the list, not of the pass that
+        rearranges it.
+
+        What reordering changes is which note is first, and that belongs
+        to `test_footnote_reading_order.py`. Held here only so the claim
+        is on the record where someone would look for it.
+        """
         site('es')
 
-        html = convert_markdown(SOURCE, extensions=['extra', 'nl2br'])
+        html = convert_markdown(REORDERED, extensions=['extra', 'nl2br'])
 
-        assert 'Volver a la nota 2' in html.split('Volver a la nota 1')[1]
+        assert TITLES.findall(html) == ['Volver a la nota 1',
+                                        'Volver a la nota 2']
+        assert re.findall(r'<li id="fn:([^"]+)"', html) == ['b', 'a']
 
 
 class TestTheExtensionListItBuilds:

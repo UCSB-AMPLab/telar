@@ -82,6 +82,7 @@ class Migration161to162(BaseMigration):
 
     from_version = "1.6.1"
     to_version = "1.6.2"
+    release_date = "2026-07-17"  # tag v1.6.2
     description = "Upgrade-environment repair — refresh package.json/package-lock.json, remove .github/dependabot.yml"
 
     # Pin framework-file fetches to the v1.6.2 release tag/branch, not the

@@ -202,9 +202,13 @@ MESSAGES = {
         'config_note_kept_list_entries': "Kept this site's own {} entries: {}",
         'config_note_unwritable_not_carried': '{} could not be written back as '
                                              'YAML and was not carried across',
-        'config_note_carried_into': 'Se llev\u00f3 {} al archivo nuevo, dentro de {}',
+        'config_note_carried_into': 'Carried {} across into {}',
+        'manual_step_record_version': 'Record the version in `_config.yml`. This site has no `telar:` section for the upgrade to write it in, and the upgrade rewrites that section rather than creating it, because it cannot tell what else your site keeps there. Add `telar:` at the top of the file, and under it, indented, `version: "{}"` and `release_date: "{}"`. Everything else is already done; without these lines the next upgrade will not know which release this site is on, and will run the whole thing again over content that is already current.',
         'config_note_carried_top_level': 'Carried {} across \u2014 the release '
                                         'does not have it',
+        'stamp_date_unknown': 'Telar {} has no release date recorded yet, so '
+                               'the upgrade is stamping today. This happens only '
+                               'before a release is tagged.',
         'record_protected_unencryptable': (
             'This site has stories marked protected, and '
             '.github/workflows/build.yml does not run '
@@ -489,9 +493,15 @@ MESSAGES = {
         'config_note_unwritable_not_carried': '{} no se pudo escribir en YAML, '
                                               'as\u00ed que no se llev\u00f3 al '
                                               'archivo nuevo',
-        'config_note_carried_into': 'Carried {} across into {}',
+        'config_note_carried_into': 'Se llev\u00f3 {} al archivo nuevo, dentro de {}',
+        'manual_step_record_version': 'Escribe la versi\u00f3n en `_config.yml`. Este sitio no tiene una secci\u00f3n `telar:` donde escribirla: la actualizaci\u00f3n reescribe esa secci\u00f3n, pero no la crea, porque no sabe qu\u00e9 m\u00e1s guardas ah\u00ed. Agrega `telar:` al principio del archivo y, debajo, con sangr\u00eda, `version: "{}"` y `release_date: "{}"`. Lo dem\u00e1s ya qued\u00f3 hecho. Sin esas l\u00edneas, la pr\u00f3xima actualizaci\u00f3n no sabr\u00e1 en qu\u00e9 versi\u00f3n est\u00e1 este sitio y repetir\u00e1 todo el trabajo sobre contenido que ya est\u00e1 al d\u00eda.',
         'config_note_carried_top_level': 'Se llev\u00f3 {} al archivo nuevo: '
                                          'esta versi\u00f3n de Telar no lo trae',
+        'stamp_date_unknown': 'La versi\u00f3n {} de Telar todav\u00eda no tiene '
+                              'fecha de lanzamiento registrada, as\u00ed que la '
+                              'actualizaci\u00f3n escribe la de hoy. Esto solo '
+                              'pasa antes de que el lanzamiento tenga su '
+                              'etiqueta de git.',
         'record_protected_unencryptable': (
             'Este sitio tiene historias marcadas como protegidas, y '
             '.github/workflows/build.yml no ejecuta '

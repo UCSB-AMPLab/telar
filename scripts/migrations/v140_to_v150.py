@@ -161,6 +161,7 @@ class Migration140to150(BaseMigration):
 
     from_version = "1.4.0"
     to_version = "1.5.0"
+    release_date = "2026-06-06"  # tag v1.5.0
     description = "Robustness & security hardening (pipeline, viewer, upgrade workflow); runtime-only"
 
     # Pin framework-file fetches to the v1.5.0 release tag, not the moving

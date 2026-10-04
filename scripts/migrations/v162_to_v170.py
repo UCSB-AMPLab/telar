@@ -198,6 +198,7 @@ class Migration162to170(BaseMigration):
 
     from_version = "1.6.2"
     to_version = "1.7.0"
+    release_date = "2026-09-09"  # tag v1.7.0
     description = "v1.7.0 framework files (layouts, bundles, build scripts, upgrade launcher), removal of two superseded files, and the _data/telar-build/ gitignore entry"
 
     # Pin framework-file fetches to the v1.7.0 release tag, not the moving

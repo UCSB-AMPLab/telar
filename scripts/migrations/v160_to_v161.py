@@ -48,6 +48,7 @@ class Migration160to161(BaseMigration):
 
     from_version = "1.6.0"
     to_version = "1.6.1"
+    release_date = "2026-07-11"  # tag v1.6.1
     description = "Register the missing v1.5.4 -> v1.6.0 migration and repair the upgrade chain; tooling-only, no site changes"
 
     def check_applicable(self) -> bool:

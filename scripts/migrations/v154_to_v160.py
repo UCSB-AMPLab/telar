@@ -229,6 +229,7 @@ class Migration154to160(BaseMigration):
 
     from_version = "1.5.4"
     to_version = "1.6.0"
+    release_date = "2026-07-10"  # tag v1.6.0
     description = "Code Health release — signposting/cleanup, post-build protected-story encryption, IIIF fallback tile backend"
 
     # Pin framework-file fetches to the v1.6.0 release tag/branch, not the

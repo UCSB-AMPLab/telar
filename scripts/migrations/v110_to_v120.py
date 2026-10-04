@@ -26,6 +26,7 @@ class Migration110to120(BaseMigration):
 
     from_version = "1.1.0"
     to_version = "1.2.0"
+    release_date = "2026-04-16"  # tag v1.2.0
     _TARGET_TAG = "v1.2.0"  # pin framework fetches to the release tag
     description = "Section card TOC, ordinal removal, Back to Start button, deep link fixes"
 
@@ -52,9 +53,9 @@ class Migration110to120(BaseMigration):
         # Phase 4: Update version
         print("  Phase 4: Updating version...")
         from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.2.0", today):
-            changes.append(f"Updated _config.yml: version 1.2.0 ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.2.0", stamped):
+            changes.append(f"Updated _config.yml: version 1.2.0 ({stamped})")
 
         return changes
 

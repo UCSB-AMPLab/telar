@@ -28,6 +28,7 @@ class Migration092to093(BaseMigration):
 
     from_version = "0.9.2-beta"
     to_version = "0.9.3-beta"
+    release_date = "2026-03-14"  # tag v0.9.3-beta
     _TARGET_TAG = "v0.9.3-beta"  # pin framework fetches to the release tag
     description = "IIIF tile fixes, coordinate panel restyle, multi-page page switching"
 
@@ -46,9 +47,9 @@ class Migration092to093(BaseMigration):
         # Phase 2: Update version
         print("  Phase 2: Updating version...")
         from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("0.9.3-beta", today):
-            changes.append(f"Updated _config.yml: version 0.9.3-beta ({today})")
+        stamped = self.release_date
+        if self._update_config_version("0.9.3-beta", stamped):
+            changes.append(f"Updated _config.yml: version 0.9.3-beta ({stamped})")
 
         return changes
 

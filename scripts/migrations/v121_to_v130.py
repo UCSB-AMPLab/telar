@@ -252,6 +252,7 @@ class Migration121to130(BaseMigration):
 
     from_version = "1.2.1"
     to_version = "1.3.0"
+    release_date = "2026-05-10"  # tag v1.3.0
     _TARGET_TAG = "v1.3.0"  # pin framework fetches to the release tag
     description = "i18n hygiene: wire existing lang keys, sister-file localization, multimedia welcome update"
 
@@ -289,9 +290,9 @@ class Migration121to130(BaseMigration):
         # Phase 3: Version bump
         print("  Phase 3: Updating version...")
         from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.3.0", today):
-            changes.append(f"Updated _config.yml: version 1.3.0 ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.3.0", stamped):
+            changes.append(f"Updated _config.yml: version 1.3.0 ({stamped})")
 
         return changes
 

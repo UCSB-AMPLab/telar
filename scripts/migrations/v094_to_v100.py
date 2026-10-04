@@ -29,6 +29,7 @@ class Migration094to100(BaseMigration):
 
     from_version = "0.9.4-beta"
     to_version = "1.0.0-beta"
+    release_date = "2026-03-25"  # tag v1.0.0-beta
     _TARGET_TAG = "v1.0.0-beta"  # pin framework fetches to the release tag
     description = "Card-stack architecture, video/audio support, Lucide icons, scroll engine"
 
@@ -55,9 +56,9 @@ class Migration094to100(BaseMigration):
         # Phase 4: Update version
         print("  Phase 4: Updating version...")
         from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.0.0-beta", today):
-            changes.append(f"Updated _config.yml: version 1.0.0-beta ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.0.0-beta", stamped):
+            changes.append(f"Updated _config.yml: version 1.0.0-beta ({stamped})")
 
         return changes
 

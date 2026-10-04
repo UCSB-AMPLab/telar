@@ -21,6 +21,7 @@ class Migration090to091(BaseMigration):
 
     from_version = "0.9.0-beta"
     to_version = "0.9.1-beta"
+    release_date = "2026-03-05"  # tag v0.9.1-beta
     _TARGET_TAG = "v0.9.1-beta"  # pin framework fetches to the release tag
     description = "LaTeX math rendering (KaTeX), case-insensitive extension fix"
 
@@ -43,9 +44,9 @@ class Migration090to091(BaseMigration):
         # Phase 3: Update version
         print("  Phase 3: Updating version...")
         from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("0.9.1-beta", today):
-            changes.append(f"Updated _config.yml: version 0.9.1-beta ({today})")
+        stamped = self.release_date
+        if self._update_config_version("0.9.1-beta", stamped):
+            changes.append(f"Updated _config.yml: version 0.9.1-beta ({stamped})")
 
         return changes
 

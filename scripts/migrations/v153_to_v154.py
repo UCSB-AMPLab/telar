@@ -46,6 +46,7 @@ class Migration153to154(BaseMigration):
 
     from_version = "1.5.3"
     to_version = "1.5.4"
+    release_date = "2026-06-29"  # tag v1.5.4
     description = "Add a GitHub Pages concurrency group to the build workflow; no content changes"
 
     def check_applicable(self) -> bool:

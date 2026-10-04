@@ -55,6 +55,7 @@ class Migration150to151(BaseMigration):
 
     from_version = "1.5.0"
     to_version = "1.5.1"
+    release_date = "2026-06-10"  # tag v1.5.1
     description = "Glossary links in story step text and case-insensitive term matching; runtime-only"
 
     # Pin framework-file fetches to the v1.5.1 release tag, not the moving

@@ -62,6 +62,7 @@ class Migration151to152(BaseMigration):
 
     from_version = "1.5.1"
     to_version = "1.5.2"
+    release_date = "2026-06-13"  # tag v1.5.2
     description = "Validation banner message fixes and homepage warning localisation; display-only"
 
     # Pin framework-file fetches to the v1.5.2 release tag, not the moving

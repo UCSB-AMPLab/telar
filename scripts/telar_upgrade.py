@@ -77,6 +77,18 @@ MIGRATIONS = discover_migrations()
 # Where a completed upgrade lands, which is where the chain ends.
 LATEST_VERSION = MIGRATIONS[-1].to_version
 
+# And when that release was published. `telar.release_date` means the date
+# of the release the site is on, which is what the Compositor has always
+# written; the engine used to write the day the upgrade ran, so two sites
+# on one version disagreed and the key answered neither question. Reading
+# it from the release also makes an upgrade reproducible: the same site
+# upgraded twice now produces the same file.
+#
+# None while a release is still being built, since its date is not a fact
+# until it is tagged. `_stamp_date` says so rather than quietly reaching
+# for the clock.
+LATEST_RELEASE_DATE = getattr(MIGRATIONS[-1], 'release_date', None)
+
 
 # The exact grammar for a Telar version in _config.yml: an optional single
 # git-tag prefix over MAJOR.MINOR.PATCH, with the -beta suffix preserved
@@ -128,7 +140,12 @@ def detect_current_version(repo_root: str) -> Optional[str]:
         repo_root: Path to repository root
 
     Returns:
-        Canonical version string (e.g., "0.2.0-beta") or None if not found
+        One of three things, and callers that only handle two will be wrong
+        about the third: the canonical version string (e.g. "0.2.0-beta");
+        None when there is no _config.yml to read, which is a precondition
+        failure rather than a version; or the raw value unchanged — of any
+        type YAML produced — when it is outside the grammar. The annotation
+        cannot say this, since the third case is not Optional[str] at all.
     """
     config_path = os.path.join(repo_root, '_config.yml')
 
@@ -369,6 +386,7 @@ def generate_checklist(
     soft_warnings: Optional[List[str]] = None,
     lang: str = 'en',
     sheets_enabled: bool = True,
+    extra_manual_steps: Optional[List[dict]] = None,
 ) -> str:
     """
     Generate UPGRADE_SUMMARY.md content (without YAML frontmatter).
@@ -393,6 +411,10 @@ def generate_checklist(
             which decides whether the spreadsheet manual steps are addressed
             to its owner. Defaults to True so a caller that does not know
             shows every step rather than hiding one.
+        extra_manual_steps: Steps the run discovered rather than a migration
+            declaring them. They are not filtered by audience: the run found
+            this site in this state, so the step is addressed to whoever is
+            reading this summary.
 
     Returns:
         Markdown content for summary
@@ -409,6 +431,7 @@ def generate_checklist(
                if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
 
     manual_steps = _visible_manual_steps(migrations, sheets_enabled)
+    manual_steps = manual_steps + list(extra_manual_steps or [])
 
     # Categorize applied changes
     categorized = _categorize_changes(applied)
@@ -488,7 +511,7 @@ title: {summary_title}
     return checklist
 
 
-def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool]:
+def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool, bool]:
     """
     Regenerate JSON data files and IIIF tiles from CSV sources with validation.
 
@@ -750,9 +773,27 @@ def _visible_manual_steps(migrations: List[BaseMigration],
 
 
 def _get_date() -> str:
-    """Get current date in YYYY-MM-DD format."""
+    """Today, for the things that are genuinely about now.
+
+    The summary's own date and the state file's timestamp record when this
+    run happened. The version stamp does not — see `_stamp_date`.
+    """
     from datetime import datetime
     return datetime.now().strftime('%Y-%m-%d')
+
+
+def _stamp_date(lang: str) -> str:
+    """The date to write beside the version in `_config.yml`.
+
+    The release's date, so that both upgrade routes write the same value
+    and a site upgraded twice produces the same file. Falls back to the
+    clock only for a release that is not tagged yet, and says so, because
+    a silent clock stamp is the behaviour being removed.
+    """
+    if LATEST_RELEASE_DATE:
+        return LATEST_RELEASE_DATE
+    print('  ' + get_message(lang, 'stamp_date_unknown', LATEST_VERSION))
+    return _get_date()
 
 
 def _state_file_path(repo_root: str) -> str:
@@ -961,6 +1002,13 @@ def main():
     if not from_version:
         return EXIT_PRECONDITION
 
+    # from_version is canonical, or it is a value outside the grammar passed
+    # through unchanged. The second case is deliberate and is not repaired
+    # here: it matches no migration's entry version and no LATEST_VERSION, so
+    # it reaches `no_migrations` below, which names the value and stops. The
+    # alternative -- guessing at what the site meant -- can name a different
+    # real version and upgrade a site along a chain it is not on.
+
     print(get_message(lang, 'current_version', from_version))
     print(get_message(lang, 'target_version', LATEST_VERSION))
 
@@ -1062,10 +1110,27 @@ def main():
 
     # All required steps succeeded — stamp the version exactly once.
     print('\n' + get_message(lang, 'updating_config'))
-    if _update_config_version(repo_root, LATEST_VERSION, _get_date()):
+    stamp_date = _stamp_date(lang)
+    _update_config_version(repo_root, LATEST_VERSION, stamp_date)
+
+    # Read the stamp back rather than trusting the writer's return value.
+    # The writer reports whether it changed the file, which is not the same
+    # question: a _config.yml with no `telar:` section is left alone by
+    # design, and every artefact below signs the run as complete at
+    # LATEST_VERSION whether or not the file says so.
+    stamp_steps = []
+    if detect_current_version(repo_root) == LATEST_VERSION:
         print(get_message(lang, 'config_updated', LATEST_VERSION))
     else:
         print(get_message(lang, 'config_update_warning'))
+        # A manual step rather than a failure: the content is upgraded and a
+        # re-run would redo all of it. Manual steps are also the part of the
+        # summary the Actions route copies into the issue the user reads.
+        stamp_steps.append({
+            'description': get_message(lang, 'manual_step_record_version',
+                                       LATEST_VERSION, stamp_date),
+            'audience': 'all',
+        })
 
     # Only now, with the whole upgrade behind us. See _retire_local_migrations.
     all_changes.extend(_retire_local_migrations(repo_root, lang))
@@ -1074,7 +1139,8 @@ def main():
     summary = generate_checklist(
         migrations, all_changes, from_version, LATEST_VERSION,
         soft_warnings=soft_warnings, lang=lang,
-        sheets_enabled=_site_uses_google_sheets(repo_root))
+        sheets_enabled=_site_uses_google_sheets(repo_root),
+        extra_manual_steps=stamp_steps)
     summary_path = os.path.join(repo_root, 'UPGRADE_SUMMARY.md')
     with open(summary_path, 'w') as f:
         f.write(summary)
