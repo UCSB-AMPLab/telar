@@ -1047,7 +1047,7 @@ function buildTextCardContent(step) {
 
   return `
     <div class="step-question">${question}</div>
-    <div class="step-answer">${answer}</div>
+    <div class="step-answer${step.answer_long ? ' step-answer--long' : ''}">${answer}</div>
     ${layerButtons ? `<div class="step-actions">${layerButtons}</div>` : ''}
   `;
 }

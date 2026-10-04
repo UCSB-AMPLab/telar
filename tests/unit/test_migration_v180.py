@@ -584,7 +584,7 @@ SITE = {
     'scripts/telar_upgrade.py': RELEASED_ENGINE,
     'telar-content/spreadsheets/objects.csv': 'object_id,title,medium,object_type\nm,M,Ink,\n',
     'telar-content/spreadsheets/my-story.csv': ('step,object,question,answer\n'
-                                                '1,m,Q?,' + ' '.join(['w'] * 201) + '\n'),
+                                                '1,m,Q?,' + ' '.join(['word'] * 300) + '\n'),
     'telar-content/texts/pages/about.md': '---\ntitle: About\nlayout: page\npermalink: /about/\n---\nB\n',
     'telar-content/texts/glossary/cord.md': '---\nterm_id: cord\nrelated_terms: a, b\n---\nC\n',
 }

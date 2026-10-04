@@ -31,8 +31,9 @@ from one story CSV and performs several passes over the data:
    (widgets, media, tables, code blocks, rules and footnotes come out;
    headings, quotes and lists become paragraphs), gets glossary links, and
    is held to the budget in `telar.answer_budget`, the length that fits the
-   side card without scrolling. An answer over it is cut. The `question`
-   is a heading and is left as written.
+   side card without scrolling. An answer over it is cut, and `answer_long`
+   says whether the answer is set in the smaller type. The `question` is a
+   heading and is left as written.
 
 4. **Coordinates** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
@@ -63,8 +64,8 @@ from typing import NamedTuple
 
 import pandas as pd
 
-from telar.answer_budget import (ANSWER_BUDGET, MAX_PARAGRAPHS, PARAGRAPH_COST, Measure,
-                                 cut_to_budget, html_tokens, measure_answer, within_budget)
+from telar.answer_budget import (ANSWER_BUDGET, MAX_PARAGRAPHS, Measure, cut_to_budget,
+                                 html_tokens, measure_answer, small_type, within_budget)
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import process_inline_content, read_markdown_file, render_markdown
@@ -245,13 +246,15 @@ class RenderedAnswer(NamedTuple):
 
     `html` is the published answer. `kinds` names what came out of it, in
     ANSWER_KINDS order. `measure` is the answer's words, paragraphs and
-    cost before any cut (`telar.answer_budget`), and `cut` says whether it
-    was over ANSWER_BUDGET and so cut.
+    lines before any cut (`telar.answer_budget`), `cut` says whether it
+    was over ANSWER_BUDGET and so cut, and `long` whether the published
+    answer is set in the smaller type.
     """
     html: str
     kinds: list
     measure: Measure
     cut: bool
+    long: bool
 
 
 def render_answer(text, glossary_terms=None, glossary_warnings=None, step=None,
@@ -289,7 +292,8 @@ def render_answer(text, glossary_terms=None, glossary_warnings=None, step=None,
     published = render_markdown(text, source, post_process=to_prose)
     kinds = found['kinds'] | ({ANSWER_WIDGETS} if widgets else set())
     return RenderedAnswer(published, [kind for kind in ANSWER_KINDS if kind in kinds],
-                          found['measure'], not within_budget(found['measure']))
+                          found['measure'], not within_budget(found['measure']),
+                          small_type(measure_answer(published)))
 
 
 def _render_answers(df, story_name, glossary_terms, glossary_warnings, warnings,
@@ -304,6 +308,7 @@ def _render_answers(df, story_name, glossary_terms, glossary_warnings, warnings,
     if 'answer' not in df.columns:
         return df
 
+    df['answer_long'] = False
     story = story_name or 'unknown'
     for idx, row in df.iterrows():
         raw = str(row['answer'])
@@ -319,10 +324,11 @@ def _render_answers(df, story_name, glossary_terms, glossary_warnings, warnings,
         if rendered.cut:
             counted = rendered.measure
             _report_answer('answer_over_hard_limit', step, answer_warnings, warnings,
-                           story=story, step_label=label, count=counted.cost,
-                           limit=ANSWER_BUDGET, max_paragraphs=MAX_PARAGRAPHS, words=counted.words,
-                           paragraphs=counted.paragraphs, paragraph_cost=PARAGRAPH_COST)
+                           story=story, step_label=label, lines=counted.lines,
+                           limit=ANSWER_BUDGET, max_paragraphs=MAX_PARAGRAPHS,
+                           paragraphs=counted.paragraphs)
         df.at[idx, 'answer'] = rendered.html
+        df.at[idx, 'answer_long'] = rendered.long
     return df
 
 

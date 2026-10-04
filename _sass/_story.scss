@@ -534,6 +534,24 @@
     font-size: var(--telar-answer-base-size);
     line-height: 1.6;
     color: var(--color-body);
+
+    p {
+      margin: 0;
+    }
+
+    p + p {
+      margin-top: 10px;
+    }
+  }
+
+  // EN: The build marks an answer of more than 15 lines (`answer_budget`);
+  //     the 18 lines it may have fit every side card only at this size and
+  //     with 10px between paragraphs.
+  // ES: El build marca la respuesta de más de 15 líneas (`answer_budget`);
+  //     las 18 líneas que puede tener caben en todas las tarjetas laterales
+  //     solo con este tamaño y 10px entre párrafos.
+  .step-answer--long {
+    font-size: calc(var(--telar-answer-base-size) * 0.9);
   }
 
   .step-actions {

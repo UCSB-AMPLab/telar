@@ -1,18 +1,19 @@
 """
 Answer Budget
 
-The length rule a step's answer is held to, so that it fits the smallest
-side card without scrolling. The Compositor implements the same rule from
-this docstring and from the shared fixture `tests/fixtures/answer-budget.json`
-(answer HTML -> words, paragraphs, cost, cut HTML), so the rule is stated
-here in full and nothing below adds to it.
+The length rule a step's answer is held to, so that it fits every side card
+without scrolling. The Compositor implements the same rule from this
+docstring and from the shared fixture `tests/fixtures/answer-budget.json`
+(answer HTML -> words, paragraphs, lines, small type, cut HTML), so the rule
+is stated here in full and nothing below adds to it.
 
 **Input.** The answer as the build renders it: HTML, after widgets, media,
 tables, code blocks, rules and footnotes are removed and headings, quotes
 and lists are made paragraphs. Maths is held out of the HTML as a
 placeholder with no whitespace in it (`telar.latex.convert_markdown` passes
 the HTML to its `post_process` that way), so a formula counts as part of
-one word, and a cut never lands inside one.
+one word, with the placeholder's characters, and a cut never lands inside
+one.
 
 **Words.** The answer's text is every text node in document order, with
 character references decoded, joined with nothing between them, except
@@ -22,15 +23,19 @@ reads whitespace (the no-break space is whitespace).
 
 **Paragraphs.** The number of `<p>` start tags.
 
-**Cost.** words + PARAGRAPH_COST x (paragraphs - 1), and just the words when
-there is one paragraph or none. Read along the answer, each word costs 1 and
-each `<p>` after the first costs PARAGRAPH_COST where it opens. The answer
-fits when its cost is at most ANSWER_BUDGET and it has at most
-MAX_PARAGRAPHS paragraphs.
+**Lines.** Lines are counted as on the reference side card, LINE_CHARS
+characters to a line. Each `<p>` and each `<br>` starts a new segment of
+text, and a segment's characters are its words joined by single spaces. A
+segment with characters counts ceil(characters / LINE_CHARS) lines; an
+empty segment counts one line when a `<br>` ends it and none otherwise.
+Each `<p>` after the first adds BREAK_LINES, for the space between
+paragraphs. The answer's lines are the sum. It fits when it has at most
+ANSWER_BUDGET lines and at most MAX_PARAGRAPHS paragraphs, and it is set in
+the smaller type when it has more than SMALL_TYPE_LINES lines.
 
 **Cut.** An answer that does not fit keeps the longest run of words from its
-start whose running cost -- every word, and every paragraph opened, up to
-and including the last word kept -- is at most ANSWER_BUDGET, and which
+start that fits with the ellipsis joined to its last word -- counted as
+above, the ellipsis one more character of that word's segment -- and which
 lies within the first MAX_PARAGRAPHS paragraphs (no word of the sixth
 `<p>` or any later one is kept; words before the first `<p>` are kept):
 whole paragraphs while they fit, then words of the next while they fit. The cut
@@ -56,14 +61,20 @@ import html
 import re
 from typing import NamedTuple
 
-ANSWER_BUDGET = 85
-"""The most an answer may cost and still fit the smallest side card."""
+ANSWER_BUDGET = 18
+"""The most lines an answer may count and still fit every side card."""
 
-PARAGRAPH_COST = 15
-"""What each paragraph after the first costs, in words."""
+LINE_CHARS = 53
+"""Characters to a line on the reference side card."""
+
+BREAK_LINES = 2
+"""What the space between two paragraphs counts, in lines."""
 
 MAX_PARAGRAPHS = 5
 """The most paragraphs an answer may have and still fit, however short."""
+
+SMALL_TYPE_LINES = 15
+"""The most lines an answer may count and still be set in the normal type."""
 
 ELLIPSIS = '…'
 
@@ -85,11 +96,11 @@ class Token(NamedTuple):
 
 
 class Measure(NamedTuple):
-    """An answer's words, paragraphs and cost, as the module docstring
+    """An answer's words, paragraphs and lines, as the module docstring
     defines them."""
     words: int
     paragraphs: int
-    cost: int
+    lines: int
 
 
 def html_tokens(text):
@@ -120,21 +131,29 @@ def _tag_token(raw):
 class _Word(NamedTuple):
     token: int
     end: int
-    cost: int
+    lines: int
     anchors: tuple
 
 
+def _segment_lines(characters, ended_by_br):
+    if characters:
+        return -(-characters // LINE_CHARS)
+    return 1 if ended_by_br else 0
+
+
 class _Reading:
-    """An answer read once for its words: where each ends, its running
-    cost, and the `<a>` elements open at its end; and for each `<a>`, the
-    first and last word with text inside it."""
+    """An answer read once for its words: where each ends, the lines the
+    answer counts if cut there with the ellipsis, and the `<a>` elements open
+    at its end; and for each `<a>`, the first and last word with text inside
+    it."""
 
     def __init__(self, text):
         self.tokens = html_tokens(text)
         self.words = []
         self.paragraphs = 0
         self.words_in_paragraph_limit = None
-        self.cost = 0
+        self.lines = 0
+        self._characters = 0
         self.first_in, self.last_in = {}, {}
         self._anchors, self._next_anchor, self._in_word = [], 0, False
         for index, token in enumerate(self.tokens):
@@ -142,16 +161,20 @@ class _Reading:
                 self._read_text(index, token.raw)
             else:
                 self._read_tag(token)
+        self.lines += _segment_lines(self._characters, False)
 
     def _read_tag(self, token):
         if token.name in _BREAKS:
             self._in_word = False
+        if token.name == 'br' or (token.kind == 'start' and token.name == 'p'):
+            self.lines += _segment_lines(self._characters, token.name == 'br')
+            self._characters = 0
         if token.kind == 'start' and token.name == 'p':
             self.paragraphs += 1
             if self.paragraphs == MAX_PARAGRAPHS + 1:
                 self.words_in_paragraph_limit = len(self.words)
             if self.paragraphs > 1:
-                self.cost += PARAGRAPH_COST
+                self.lines += BREAK_LINES
         if token.name == 'a' and token.kind == 'start':
             self._anchors.append(self._next_anchor)
             self._next_anchor += 1
@@ -160,25 +183,29 @@ class _Reading:
 
     def _read_text(self, index, raw):
         for unit in _UNIT.finditer(raw):
-            if html.unescape(unit.group()).isspace():
+            character = html.unescape(unit.group())
+            if character.isspace():
                 self._in_word = False
                 continue
             if not self._in_word:
                 self._in_word = True
-                self.cost += 1
+                if self._characters:
+                    self._characters += 1
                 self.words.append(None)
+            self._characters += len(character)
             number = len(self.words) - 1
-            self.words[number] = _Word(index, unit.end(), self.cost, tuple(self._anchors))
+            with_ellipsis = self.lines + _segment_lines(self._characters + 1, False)
+            self.words[number] = _Word(index, unit.end(), with_ellipsis, tuple(self._anchors))
             for anchor in self._anchors:
                 self.first_in.setdefault(anchor, number)
                 self.last_in[anchor] = number
 
     def measure(self):
-        return Measure(len(self.words), self.paragraphs, self.cost)
+        return Measure(len(self.words), self.paragraphs, self.lines)
 
     def last_word_to_keep(self):
         """The index of the last word a cut keeps, or -1 for none."""
-        kept = bisect.bisect_right([word.cost for word in self.words], ANSWER_BUDGET) - 1
+        kept = bisect.bisect_right([word.lines for word in self.words], ANSWER_BUDGET) - 1
         if self.words_in_paragraph_limit is not None:
             kept = min(kept, self.words_in_paragraph_limit - 1)
         while kept >= 0:
@@ -197,7 +224,12 @@ def measure_answer(text):
 
 def within_budget(measure):
     """Whether a Measure is within ANSWER_BUDGET and MAX_PARAGRAPHS."""
-    return measure.cost <= ANSWER_BUDGET and measure.paragraphs <= MAX_PARAGRAPHS
+    return measure.lines <= ANSWER_BUDGET and measure.paragraphs <= MAX_PARAGRAPHS
+
+
+def small_type(measure):
+    """Whether a Measure is over SMALL_TYPE_LINES, so set in the smaller type."""
+    return measure.lines > SMALL_TYPE_LINES
 
 
 def _open_elements(tokens):

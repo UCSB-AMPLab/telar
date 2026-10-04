@@ -138,7 +138,7 @@ class TestABundleWithTheNewerFields:
         merge_demo_content(_bundle(stories=stories))
 
         answer = _read(site, 'demo-story.json')[0]['answer']
-        assert answer == '<p>' + ' '.join(['word'] * 85) + '…</p>'
+        assert answer == '<p>' + ' '.join(['word'] * 190) + '…</p>'
 
     @pytest.mark.parametrize('related', [['demo-other', 'demo-third'], 'demo-other|demo-third'],
                              ids=['list', 'pipe-separated'])

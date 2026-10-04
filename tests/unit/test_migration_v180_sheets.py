@@ -826,19 +826,19 @@ def _answers(tmp_path, lang='en'):
 class TestStepAnswers:
 
     def test_an_answer_at_the_budget_is_not_reported(self, tmp_path):
-        site = _site(tmp_path, {'my-story.csv': _story(_words(85))})
+        site = _site(tmp_path, {'my-story.csv': _story(_words(191))})
 
         records = _answers(site)
 
         assert [r.description for r in records] == [get_message('en', 'v180_answers_clean')]
 
     def test_an_answer_over_the_budget_is(self, tmp_path):
-        site = _site(tmp_path, {'my-story.csv': _story(_words(86))})
+        site = _site(tmp_path, {'my-story.csv': _story(_words(200))})
 
         records = _answers(site)
 
         assert [r.description for r in records] == [
-            get_message('en', 'v180_answer_over_limit', 'my-story', '1', 5, 85)]
+            get_message('en', 'v180_answer_over_limit', 'my-story', '1', 5, 18)]
         assert records[0].status == ChangeStatus.APPLIED
         assert records[0].severity == 'soft'
 
@@ -874,12 +874,12 @@ class TestStepAnswers:
 
     def test_respuesta_is_the_answer(self, tmp_path):
         site = _site(tmp_path, {'mi-historia.csv': _story(
-            _words(90), header='paso,objeto,pregunta,respuesta')})
+            _words(200), header='paso,objeto,pregunta,respuesta')})
 
         records = _answers(site)
 
         assert [r.description for r in records] == [
-            get_message('en', 'v180_answer_over_limit', 'mi-historia', '1', 5, 85)]
+            get_message('en', 'v180_answer_over_limit', 'mi-historia', '1', 5, 18)]
 
     def test_the_system_sheets_are_not_stories(self, tmp_path):
         site = _site(tmp_path, {'project.csv': (
@@ -914,7 +914,7 @@ class TestStepAnswers:
         assert records[0].severity == 'soft'
         assert 'names every answer it cuts' in records[0].description
 
-    @pytest.mark.parametrize('count', [85, 86])
+    @pytest.mark.parametrize('count', [191, 192])
     def test_the_report_agrees_with_the_build(self, tmp_path, count):
         """The build's own rendering of the same answer: reported if and
         only if the build cuts it."""
