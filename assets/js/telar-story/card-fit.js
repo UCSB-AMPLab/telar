@@ -3,10 +3,18 @@
  *
  * The side card on a horizontal layout takes the height its content needs,
  * under a ceiling, and clears the controls at the top of the window. This
- * module holds that geometry, for the fit model (card-height.js) at every
- * window height; the portrait bottom card and the fixed model keep their own,
- * in card-pool.js. A landscape phone's card is placed in the same band, sized
+ * module holds that geometry at every window height; the portrait bottom
+ * card keeps its own, in card-pool.js. A landscape phone's card is placed in the same band, sized
  * by its content and scrolled by the browser.
+ *
+ * Width. The card is sized from both window dimensions: the larger of 37% of
+ * the width and 1544 − 1.6·H px, that line held to 718px, and never more than
+ * 52% of the width. The terms are declared in _sass/_responsive.scss, which
+ * also generates the vertical layout's short-window clauses from them, and
+ * read here from their :root mirror. A shorter window gets a wider card, so its answer
+ * keeps the room it needs on fewer lines. The width is published once per
+ * pass as `--telar-card-side-width` on the root element, where the stylesheet
+ * and every placement beside the card read it (sideCardWidth).
  *
  * Ceiling. The card's top clears the lowest of the top controls, the embed
  * banner included, by one padding, and its bottom stays one padding above the
@@ -15,20 +23,15 @@
  * but never below its value at T, so that it cannot fall as the window grows
  * through the threshold (sideCardCeiling).
  *
- * Fit. Where the answer does not fit under the ceiling its text shrinks, from
- * the size the stylesheet gives it down to a floor of 0.75rem; where it does
- * not fit even at the floor, the card stays at the floor and scrolls inside
- * itself, driven by card-scroll.js. Only the answer shrinks: the question,
- * the panel buttons and the viewer warning keep their size. The mode and the
- * size are written on the card as `data-card-fit` and
- * `--telar-answer-fit-size`, which the stylesheet reads.
+ * Content only. The card is sized by its content and the answer keeps the
+ * size the stylesheet gives it; the card never scrolls and its text is never
+ * shrunk. Under the ceiling the card shows all of its content; past it the
+ * card's max-height clips.
  *
  * Re-measuring. Anything that changes a card's content height (an image
  * loading, KaTeX rendering, a web font arriving) is seen by one
  * ResizeObserver on each card's content wrapper, and a font that finishes
- * loading invalidates every card's fit whether or not a height changed, since
- * a swap can change which size is the largest that fits with the height the
- * same. The embed banner's arrival and dismissal move the controls the card
+ * loading re-places every card whether or not a height changed. The embed banner's arrival and dismissal move the controls the card
  * clears, and embed.js says so with `telar:embed-banner`.
  *
  * @version v1.8.0
@@ -37,34 +40,75 @@
 import { measureControlsBottom, TOP_CONTROLS } from './media-arrangement.js';
 import { mediaPadding, unroundedMediaPadding } from './video-layout.js';
 import { getCardLandscapeMaxHeight } from './layout-mode.js';
-import { syncCardScroll } from './card-scroll.js';
 
 /** The controls the side card's top clears: the top controls and the embed banner. */
 export const SIDE_CARD_CONTROLS = [...TOP_CONTROLS, '.telar-embed-banner'];
 
-/** The size the answer does not shrink below, in rem, so a reader's default font raises it. */
-export const FLOOR_REM = 0.75;
-
-/** How close the search comes to the largest size that fits, in px. */
-export const FIT_STEP_PX = 0.1;
-
-/** Half the width of the bracket the search tries first around its estimate, in px. */
-const SEED_BRACKET_PX = 0.6;
-
 /**
  * How far a content wrapper's reported height may differ from the height
- * recorded after its fit and still be the fit's own write, in px. Exact up to
- * float noise: a change of 0.4px can still change the size that fits.
+ * recorded after its placement and still be the pass's own write, in px. Exact
+ * up to float noise.
  */
 export const CONTENT_TOLERANCE_PX = 0.01;
 
-/** The custom property the fitted answer size is written to. */
-const FIT_SIZE = '--telar-answer-fit-size';
-
-/** The custom property each answer tier's stylesheet size is declared in. */
-const BASE_SIZE = '--telar-answer-base-size';
-
 // ── Geometry (pure, unit-tested) ─────────────────────────────────────────────
+
+/**
+ * The side card's width terms, from the :root mirror of _sass/_responsive.scss:
+ * its share of the window's width at least and at most, and the line in the
+ * window's height it follows between them, with that line's largest value.
+ * The fallbacks stand where the stylesheet is absent; the unit tests hold
+ * them to the stylesheet's values.
+ */
+export const SIDE_CARD_WIDTH = _readWidthTerms();
+
+function _readWidthTerms() {
+  const cs = getComputedStyle(document.documentElement);
+  const term = (name, fallback) => {
+    const value = parseFloat(cs.getPropertyValue(`--telar-card-side-${name}`));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return {
+    minShare: term('min-share', 0.37),
+    maxShare: term('max-share', 0.52),
+    base: term('base', 1544),
+    slope: term('slope', 1.6),
+    maxByHeight: term('max-by-height', 718),
+  };
+}
+
+/**
+ * The side card's width, in px:
+ *
+ *   min( maxShare·W,  max( minShare·W,  min( maxByHeight,  base − slope·H ) ) )
+ *
+ * The vertical layout's short-window clauses (_sass/_responsive.scss) take
+ * the windows where the line would pass the cap.
+ *
+ * @param {number} W - Viewport width in px
+ * @param {number} H - Viewport height in px
+ * @returns {number}
+ */
+export function sideCardWidth(W, H) {
+  const { minShare, maxShare, base, slope, maxByHeight } = SIDE_CARD_WIDTH;
+  const byHeight = Math.min(maxByHeight, base - slope * H);
+  return Math.round(Math.min(maxShare * W, Math.max(minShare * W, byHeight)));
+}
+
+/**
+ * Publish the side card's width for this window on the root element, or
+ * clear it, so the stylesheet's 37% holds, on a vertical layout, whose side
+ * card (a landscape phone's) keeps that share.
+ *
+ * @param {number} W - Viewport width in px
+ * @param {number} H - Viewport height in px
+ * @param {boolean} horizontal - The window is a horizontal layout
+ */
+export function publishSideCardWidth(W, H, horizontal) {
+  const root = document.documentElement.style;
+  if (horizontal) root.setProperty('--telar-card-side-width', `${sideCardWidth(W, H)}px`);
+  else root.removeProperty('--telar-card-side-width');
+}
 
 /**
  * The side card's ceiling, in px.
@@ -112,155 +156,22 @@ export function sideCardTop({ H, cardH, runPos, peek, band, pad }) {
   return Math.max(band, Math.min(centred, H - pad - cardH));
 }
 
-/**
- * The largest answer size that fits, to within `step`.
- *
- * The search tries a bracket of ±SEED_BRACKET_PX around the estimate first,
- * which on a card near its fit takes about four layouts, and widens to the
- * whole range once where the estimate misses.
- *
- * @param {Object} s
- * @param {number} s.base - The stylesheet's size in px
- * @param {number} s.floor - The smallest size allowed in px
- * @param {number} [s.step] - Precision in px
- * @param {(size: number) => boolean} s.fits - Whether the card fits at a size
- * @param {number} [s.seed] - The estimate to start from
- * @param {boolean} [s.baseFits] - The answer at `base`, where already measured
- * @returns {{ mode: 'natural'|'shrunk'|'scroll', size: number }}
- */
-export function searchFitSize({ base, floor, step = FIT_STEP_PX, fits, seed, baseFits }) {
-  if (baseFits ?? fits(base)) return { mode: 'natural', size: base };
-  const lowest = Math.min(floor, base);
-  if (lowest >= base) return { mode: 'scroll', size: base };
-
-  const s0 = Math.min(base, Math.max(lowest, Number.isFinite(seed) ? seed : (lowest + base) / 2));
-  let lo = Math.max(lowest, s0 - SEED_BRACKET_PX);
-  let hi = Math.min(base, s0 + SEED_BRACKET_PX);
-
-  if (!fits(lo)) {
-    if (lo === lowest) return { mode: 'scroll', size: lowest };
-    hi = lo;
-    lo = lowest;
-    if (!fits(lo)) return { mode: 'scroll', size: lowest };
-  } else if (hi < base && fits(hi)) {
-    lo = hi;
-    hi = base;
-  }
-
-  while (hi - lo > step) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) lo = mid;
-    else hi = mid;
-  }
-  return { mode: 'shrunk', size: Math.floor(lo * 1000) / 1000 };
-}
-
-// ── Fitting a card ───────────────────────────────────────────────────────────
-
-const _fitCache = new WeakMap();
-const _revisions = new WeakMap();
-const _recordedHeights = new WeakMap();
-
-/** The root font size in px, which rem is measured in. */
-function _rootPx() {
-  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-}
+// ── Placing a card ───────────────────────────────────────────────────────────
 
 /**
- * The answer's stylesheet size in px, whatever the fit has written: the
- * container-query tier declares it in BASE_SIZE, which the fit never touches,
- * so it can be read without undoing the fit first.
- */
-function _baseSize(answer, rootPx) {
-  const raw = getComputedStyle(answer).getPropertyValue(BASE_SIZE).trim();
-  const m = /^(-?[\d.]+)(rem|px)?$/.exec(raw);
-  if (!m) return rootPx;
-  const n = parseFloat(m[1]);
-  return m[2] === 'rem' ? n * rootPx : n;
-}
-
-/** Raise a card's content revision, so its cached fit is measured again. */
-export function bumpContentRevision(card) {
-  _revisions.set(card, (_revisions.get(card) || 0) + 1);
-}
-
-/** Whether the card fits at its current settings. */
-function _fits(card) {
-  return card.scrollHeight <= card.clientHeight;
-}
-
-/**
- * Fit a card's answer under a ceiling, and write the result on the card.
- *
- * Cached by card width, ceiling, the answer's stylesheet size, the floor and
- * the card's content revision: the stylesheet size and the floor change
- * without the width where the answer's tier or the root font size does. A
- * cache hit writes nothing.
+ * Cap a card at the ceiling and let its content set the height under it.
  *
  * @param {HTMLElement} card
  * @param {number} ceilingPx
- * @param {WeakMap} [cache]
- * @returns {{ mode: 'natural'|'shrunk'|'scroll', size: number }}
  */
-export function fitAnswerText(card, ceilingPx, cache = _fitCache) {
-  const answer = card.querySelector('.step-answer');
-  const rootPx = _rootPx();
-  const floor = FLOOR_REM * rootPx;
-  const base = answer ? _baseSize(answer, rootPx) : rootPx;
-  const key = [card.offsetWidth, ceilingPx, base, floor, _revisions.get(card) || 0].join('|');
-  const hit = cache.get(card);
-  if (hit && hit.key === key) return hit;
-
-  // With the attribute present and the property cleared, the answer's
-  // font-size would inherit rather than take its tier's size, so both go.
-  delete card.dataset.cardFit;
-  card.style.removeProperty(FIT_SIZE);
+function _capCard(card, ceilingPx) {
   card.style.height = '';
   card.style.maxHeight = `${ceilingPx}px`;
-
-  const naturalH = card.scrollHeight;
-  let result;
-  if (!answer || naturalH <= card.clientHeight) {
-    result = { mode: 'natural', size: base };
-  } else {
-    const fixedPart = naturalH - answer.offsetHeight;
-    const seed = base * Math.sqrt(Math.max(0, ceilingPx - fixedPart)
-      / Math.max(1, naturalH - fixedPart));
-    card.dataset.cardFit = 'shrunk';
-    result = searchFitSize({
-      base, floor, seed, baseFits: false,
-      fits: (size) => {
-        card.style.setProperty(FIT_SIZE, `${size}px`);
-        return _fits(card);
-      },
-    });
-  }
-
-  card.dataset.cardFit = result.mode;
-  card.style.setProperty(FIT_SIZE, `${result.size}px`);
-  const entry = { key, ...result };
-  cache.set(card, entry);
-  return entry;
 }
 
 /**
- * Take a card out of the fit: the layouts that do not fit it (the vertical
- * layout, the fixed model) give the answer its stylesheet size back.
- *
- * @param {HTMLElement} card
- * @param {WeakMap} [cache]
- */
-export function clearAnswerFit(card, cache = _fitCache) {
-  cache.delete(card);
-  if (card.dataset.cardFit === undefined && !card.style.getPropertyValue(FIT_SIZE)) return;
-  delete card.dataset.cardFit;
-  card.style.removeProperty(FIT_SIZE);
-  syncCardScroll(card);
-}
-
-/**
- * The cards a pass fits first: the active one and two either side, which a
- * reader can reach before the rest could be fitted.
+ * The cards a pass places first: the active one and two either side, which a
+ * reader can reach before the rest could be placed.
  *
  * @param {Iterable<HTMLElement>} cards
  * @param {number} activeIndex
@@ -277,9 +188,9 @@ export function fitOrder(cards, activeIndex) {
 }
 
 /**
- * Fit and place the side cards for one geometry pass.
+ * Cap and place the side cards for one geometry pass.
  *
- * @param {Iterable<HTMLElement>} cards - The cards to fit: every card, or the
+ * @param {Iterable<HTMLElement>} cards - The cards to place: every card, or the
  *   ones whose content changed
  * @param {Object} how
  * @param {number} how.W - Viewport width in px
@@ -299,9 +210,8 @@ export function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
     peek, band, pad,
   });
   for (const card of fitOrder(cards, activeIndex)) {
-    fitAnswerText(card, ceiling);
+    _capCard(card, ceiling);
     recordContentHeight(card);
-    syncCardScroll(card);
     card.style.setProperty('top', `${topOf(card)}px`, 'important');
   }
   return { band, pad, ceiling, topOf };
@@ -309,8 +219,8 @@ export function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
 
 /**
  * The band under the top controls and the ceiling above it, for one window.
- * The fit model and a landscape phone's card, which is sized by its content
- * and scrolls itself, are placed by the same band.
+ * The side card and a landscape phone's card, which is sized by its content
+ * and scrolled by the browser, are placed by the same band.
  *
  * @param {Object} g
  * @param {number} g.W - Viewport width in px
@@ -345,6 +255,8 @@ export function timeGeometryPass(pass) {
 
 // ── Watching card content ────────────────────────────────────────────────────
 
+const _recordedHeights = new WeakMap();
+
 /**
  * The card's content wrapper: the cloned `.step-content`, the card's only
  * child. It is a flex item and not a scroll container, so its height is its
@@ -367,8 +279,8 @@ function _contentHeight(el) {
 }
 
 /**
- * Record a card's content height after its fit, so the observer can tell the
- * fit's own write from a change of content.
+ * Record a card's content height after its placement, so the observer can tell
+ * the pass's own write from a change of content.
  *
  * @param {HTMLElement} card
  */
@@ -378,14 +290,13 @@ export function recordContentHeight(card) {
 }
 
 /**
- * Re-fit the cards whose content changes, at most once per animation frame.
+ * Re-place the cards whose content changes, at most once per animation frame.
  *
- * An entry at the height recorded after the card's last fit, within
- * CONTENT_TOLERANCE_PX, is the fit's own write, or the entry every element
- * gets when first observed, and starts nothing. Any other raises that card's
- * content revision and schedules a pass for the changed cards. A font that
- * finishes loading raises every card's revision and schedules a pass for all
- * of them; so does the embed banner's arrival or dismissal.
+ * An entry at the height recorded after the card's last placement, within
+ * CONTENT_TOLERANCE_PX, is the pass's own write, or the entry every element
+ * gets when first observed, and starts nothing. Any other schedules a pass for
+ * the changed cards. A font that finishes loading schedules a pass for all of
+ * them; so does the embed banner's arrival or dismissal.
  *
  * jsdom has no ResizeObserver, and a browser without one keeps the other two
  * triggers.
@@ -425,7 +336,6 @@ export function watchCardContent(cards, refit, { raf = (cb) => requestAnimationF
         if (recorded === undefined) continue;
         if (Math.abs(entry.contentRect.height - recorded) <= CONTENT_TOLERANCE_PX) continue;
         const card = entry.target.parentElement;
-        bumpContentRevision(card);
         pending.add(card);
       }
       if (pending.size) schedule();
@@ -436,13 +346,12 @@ export function watchCardContent(cards, refit, { raf = (cb) => requestAnimationF
     }
   }
 
-  // A load is refit once, by whichever of `loadingdone` and `fonts.ready`
+  // A load is re-placed once, by whichever of `loadingdone` and `fonts.ready`
   // comes first: WebKit settles `ready` but never fires `loadingdone`, and
   // the other browsers fire both for the same load.
   let loadOpen = false;
   const onFonts = () => {
     loadOpen = false;
-    for (const card of list) bumpContentRevision(card);
     all = true;
     schedule();
   };

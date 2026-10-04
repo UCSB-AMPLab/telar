@@ -413,6 +413,20 @@ describe('computeFocalTarget — null cardBox fallback', () => {
     expect(result.region.h).toBeCloseTo(667 * 0.60, 0); // ≈ 400
   });
 
+  it('null cardBox horizontal: region starts at the right edge of the published side-card width', () => {
+    // 3% of 1280 (38.4) plus the 560px card-fit.js publishes for 1280x600
+    setDesktopViewport(1280, 600);
+    state.layoutMode = 'horizontal';
+    document.documentElement.style.setProperty('--telar-card-side-width', '560px');
+    try {
+      const result = computeFocalTarget(0.5, 0.5, 5, IMAGE_W, IMAGE_H, null, 'horizontal');
+      expect(result.region.x).toBeCloseTo(598.4, 5);
+      expect(result.region.w).toBeCloseTo(1280 - 598.4, 5);
+    } finally {
+      document.documentElement.style.removeProperty('--telar-card-side-width');
+    }
+  });
+
 });
 
 // ── _clampFocalPx — keep-circle focal clamp (guard for the off-screen bug) ──

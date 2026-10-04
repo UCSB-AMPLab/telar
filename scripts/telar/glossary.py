@@ -32,8 +32,7 @@ Demo glossary terms (those prefixed with `demo-`) get an extra
 The page path is not the stored key. Jekyll publishes each glossary page at
 `/glossary/:name/`, where `:name` is its slugified filename, lowercased: the
 page for `IIIF` is at `/glossary/iiif/`. `glossary_term_slug()` reproduces
-that rule; a legacy page whose front matter has a `permalink` is at that
-path instead (`GlossaryTerms.addresses`), and the path is joined to the site's configured baseurl here
+that rule, and the path is joined to the site's configured baseurl here
 because story text reaches the browser through `story.html`'s `jsonify`,
 which does not resolve Liquid inside it.
 
@@ -60,6 +59,7 @@ Version: v1.8.0
 import bisect
 import datetime
 import html
+import itertools
 import math
 import re
 from html.parser import HTMLParser
@@ -67,10 +67,6 @@ from typing import NamedTuple, Optional
 
 import yaml
 
-from telar.jekyll_urls import (disk_name, front_matter_mapping, glossary_index_addresses,
-                               glossary_output_file, resolve_permalink, sanitize_url)
-from telar.code_spans import (anchor_texts, answer_regions, code_elements, code_regions,
-                              link_texts, overlaps, unread_regions)
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
@@ -84,14 +80,11 @@ class GlossaryTerms(dict):
     """A glossary's term ids mapped to their titles, with each entry's kind
     id in `kinds`, which a glossary callout shows. An entry missing from
     `kinds` is of the default kind, so a plain dict works where no callout
-    is drawn. `addresses` holds the site-relative path (no baseurl) of each
-    entry whose page is published somewhere other than `/glossary/<slug>/`;
-    a term absent from it is linked at its slug."""
+    is drawn."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.kinds = {}
-        self.addresses = {}
 
 
 def read_glossary_sheet(csv_path):
@@ -209,150 +202,46 @@ def glossary_link_map(pages):
     for term_id, (title, kind) in pages.items():
         glossary_terms[term_id] = title
         glossary_terms.kinds[term_id] = kind
-    glossary_terms.addresses.update(getattr(pages, 'addresses', {}))
     return glossary_terms
 
 
-def markdown_glossary_permalink(frontmatter_text):
-    """The `permalink` of a legacy glossary file's front matter as written,
-    read as a site-relative path as Jekyll reads it, or None when it has
-    none. The page copies the front matter verbatim, so a permalink there
-    moves the page. Placeholders are left in; `markdown_glossary_address`
-    resolves them."""
-    fields = front_matter_mapping(frontmatter_text)
-    if fields is None:
-        return None
-    permalink = fields.get('permalink')
-    if permalink is None or not str(permalink).strip():
-        return None
-    return sanitize_url(str(permalink).strip())
-
-
-def resolve_glossary_permalink(permalink, term_id, fields):
-    """(address, unresolved) of a legacy glossary page's `permalink`: the
-    URL Jekyll gives the document `_glossary/<term_id>.md` in the glossary
-    collection (`jekyll_urls.resolve_permalink`)."""
-    return resolve_permalink(permalink, term_id, fields, 'glossary')
-
-
-def markdown_glossary_address(frontmatter_text, term_id):
-    """(permalink, unresolved) of a legacy glossary file: the address its
-    front matter's `permalink` publishes the page at, placeholders
-    resolved (`resolve_glossary_permalink`), or (None, []) when it has
-    none."""
-    permalink = markdown_glossary_permalink(frontmatter_text)
-    if permalink is None:
-        return None, []
-    return resolve_glossary_permalink(permalink, term_id,
-                                      front_matter_mapping(frontmatter_text))
-
-
-def glossary_term_address(term_id, permalink=None):
+def glossary_term_address(term_id):
     """The site-relative path (no baseurl) a glossary term's page is
-    published at: its own permalink when the front matter gives one, else
-    `/glossary/<slug>/`, sanitized as Jekyll sanitizes a URL, so an id
-    with an empty slug is at `/glossary/`."""
-    return permalink or sanitize_url(f'/glossary/{glossary_term_slug(term_id)}/')
-
-
-def glossary_page_file(term_id):
-    """The file a glossary page is written to, `<term_id>.md`, as a case-
-    and normalization-insensitive disk names it: `Viewer.md` and
-    `viewer.md`, `Straße.md` and `Strasse.md`, and `é` written as one
-    character or as `e` and an accent, are one file there."""
-    return disk_name(f'{term_id}.md')
-
-
-class _PageClaims:
-    """The output files and `_glossary/` files the glossary pages written so
-    far hold, each with the entry of the page that holds it. The output
-    file of each of the site's glossary pages (`glossary_index_addresses`)
-    is held from the start. The one test of whether
-    a page can be written: the site's pages and the demo bundle's are
-    placed by it."""
-
-    def __init__(self):
-        self._indexes = {}
-        for address in glossary_index_addresses():
-            self._indexes.setdefault(glossary_output_file(address), address)
-        self._outputs, self._files = {}, {}
-
-    def holder(self, term_id, address):
-        """(reason, entry) of what holds the output file of `address`: a
-        glossary page ('index', with that page's address as the entry) or
-        another entry ('address'), else
-        the entry holding the file of `term_id` ('file'); (None, None) when
-        both are free."""
-        output = glossary_output_file(address)
-        if output in self._indexes:
-            return 'index', self._indexes[output]
-        entry = self._outputs.get(output)
-        if entry is not None:
-            return 'address', entry
-        entry = self._files.get(glossary_page_file(term_id))
-        if entry is not None:
-            return 'file', entry
-        return None, None
-
-    def claim(self, term_id, address, entry):
-        self._outputs[glossary_output_file(address)] = entry
-        self._files[glossary_page_file(term_id)] = entry
-
-
-def _report_site_collision(reason, owner, term_id):
-    if reason == 'index':
-        print(f"  ⚠️ Glossary entry '{term_id}' would be published at "
-              f"{owner}, the glossary page's own address. "
-              f"'{term_id}' is not published and cannot be linked.")
-    elif reason == 'address':
-        print(f"  ⚠️ Glossary entries '{owner[0]}' and '{term_id}' would both "
-              f"be published at {owner[1]}. '{owner[0]}' keeps that address; "
-              f"'{term_id}' is not published and cannot be linked.")
-    else:
-        print(f"  ⚠️ Glossary entries '{owner[0]}' and '{term_id}' would both "
-              f"be written to the same file, _glossary/{owner[0]}.md. '{owner[0]}' "
-              f"keeps that file; '{term_id}' is not published and cannot be linked.")
+    published at, `/glossary/<slug>/`."""
+    return f'/glossary/{glossary_term_slug(term_id)}/'
 
 
 def first_at_each_address(entries, warn=True):
-    """The entries that are written, in order, as [(term_id, address, item)].
+    """The entries that are written, in order, as [(term_id, item)] of the
+    `entries` given as (term_id, item).
 
-    Jekyll writes one file for each output path, and the build writes each
-    page to `_glossary/<term_id>.md`; both are compared as a case- and
-    normalization-insensitive disk names them (`glossary_output_file`,
-    `glossary_page_file`). Of the entries that share either, the first is
-    kept and the others are not published or linkable; an entry at a
-    glossary page's own address is never published. Ids that differ only
-    in case or punctuation share a slug. `warn` says whether each dropped
-    entry is reported.
+    Ids that share a slug share an address, and Jekyll writes one page for
+    each; the first is kept and the others are not published or linkable.
+    `warn` says whether each dropped entry is reported.
     """
-    kept, claims = [], _PageClaims()
-    for term_id, address, item in entries:
-        reason, owner = claims.holder(term_id, address)
-        if reason is None:
-            claims.claim(term_id, address, (term_id, address))
-            kept.append((term_id, address, item))
+    kept, held = [], {}
+    for term_id, item in entries:
+        address = glossary_term_address(term_id)
+        if address not in held:
+            held[address] = term_id
+            kept.append((term_id, item))
         elif warn:
-            _report_site_collision(reason, owner, term_id)
+            print(f"  ⚠️ Glossary entries '{held[address]}' and '{term_id}' would both "
+                  f"be published at {address}. '{held[address]}' keeps that address; "
+                  f"'{term_id}' is not published and cannot be linked.")
     return kept
 
 
 class DemoTermPlacement(NamedTuple):
     """What becomes of one demo glossary term (`place_demo_terms`).
 
-    `written` is True when the term's own page is written, at `address` in
-    `_glossary/<term_id>.md`. Otherwise `reason` is 'index' (the term's
-    address is the glossary page's own), 'address' (another page is written
-    to the term's output file) or 'file' (another page is written to the
-    term's file). For 'address' and 'file', `owner` is the term whose page
-    holds it, with `owner_is_site` saying whose, and the demo id links to
-    the owner's page at `address`, the owner's address; for 'index' it has
-    no owner, is not linked, and `address` is that glossary page's.
+    `written` is True when the term's own page is written at
+    `/glossary/<slug>/` in `_glossary/<term_id>.md`. Otherwise `owner` is
+    the term whose page holds that address, `owner_is_site` says whose, and
+    the demo id links to the owner's page.
     """
     term_id: str
     written: bool
-    address: str
-    reason: Optional[str]
     owner: Optional[str]
     owner_is_site: bool
 
@@ -362,37 +251,22 @@ def place_demo_terms(site_pages, demo_ids):
     each demo id links to, as a DemoTermPlacement per id, in order.
 
     `site_pages` is the site's glossary pages in the order they are written
-    (a mapping of term ids, with `addresses` for any published away from
-    its slug), already placed by `first_at_each_address`. `demo_ids` is the
-    bundle's glossary ids in order. Only a written page claims its output
-    file and its `_glossary/` file (`_PageClaims`), so a term skipped
-    earlier leaves both free for a later one. A demo term is skipped when
-    its output file is taken, else when its `_glossary/` file is. A skipped
-    id is linked to the page that holds it, so a demo story never shows a
-    term its bundle defines as missing, unless that is the glossary page.
+    (a mapping of term ids), already placed by `first_at_each_address`.
+    `demo_ids` is the bundle's glossary ids in order. Only a written page
+    holds its address, so a term skipped earlier leaves it free for a later
+    one. A skipped id is linked to the page that holds its address.
     """
-    site_addresses = getattr(site_pages, 'addresses', {})
-    claims = _PageClaims()
+    held = {}
     for term_id in site_pages:
-        address = site_addresses.get(term_id) or glossary_term_address(term_id)
-        if claims.holder(term_id, address)[0] is None:
-            claims.claim(term_id, address, (term_id, address, True))
+        held.setdefault(glossary_term_address(term_id), (term_id, True))
 
     placements = []
     for term_id in demo_ids:
-        address = glossary_term_address(term_id)
-        reason, owner = claims.holder(term_id, address)
-        if reason is None:
-            claims.claim(term_id, address, (term_id, address, False))
-            placements.append(DemoTermPlacement(term_id, True, address, None, None,
-                                                False))
-        elif reason == 'index':
-            placements.append(DemoTermPlacement(term_id, False, owner,
-                                                reason, None, False))
+        owner = held.setdefault(glossary_term_address(term_id), (term_id, False))
+        if owner == (term_id, False):
+            placements.append(DemoTermPlacement(term_id, True, None, False))
         else:
-            owner_id, owner_address, owner_is_site = owner
-            placements.append(DemoTermPlacement(
-                term_id, False, owner_address, reason, owner_id, owner_is_site))
+            placements.append(DemoTermPlacement(term_id, False, *owner))
     return placements
 
 
@@ -408,13 +282,11 @@ def glossary_term_slug(term_id):
     return jekyll_slug(str(term_id))
 
 
-def glossary_term_url(term_id, base_url=None, address=None):
-    """The site-relative URL of a glossary term's page, baseurl included.
-    `address` is the path the page is published at when it is not the
-    slug's (`GlossaryTerms.addresses`)."""
+def glossary_term_url(term_id, base_url=None):
+    """The site-relative URL of a glossary term's page, baseurl included."""
     if base_url is None:
         base_url = site_base_url()
-    return base_url + glossary_term_address(term_id, address)
+    return base_url + glossary_term_address(term_id)
 
 
 # Matches the markup that process_glossary_links emits: a resolved inline link
@@ -494,8 +366,7 @@ def _glossary_callout(match, glossary_terms, lower_map, warnings_list,
     kind = getattr(glossary_terms, 'kinds', {}).get(term_id, default_kind())
     rendered = render_widget_html('glossary', {
         'term_id': term_id,
-        'term_url': glossary_term_url(
-            term_id, base_url, getattr(glossary_terms, 'addresses', {}).get(term_id)),
+        'term_url': glossary_term_url(term_id, base_url),
         'demo': term_id.startswith('demo-'),
         'kind': kind,
         'icon': kind_icon(kind),
@@ -655,19 +526,13 @@ _TEXT_ONLY_TAG_RE = re.compile(
     re.IGNORECASE | re.ASCII)
 
 
-def _text_only_regions(text, markdown):
+def _text_only_regions(text):
     """The content of each element in *text* whose content a browser takes
     as text (`script`, `style`, `textarea` and the others `_PanelHTML`
-    reads so), as (start, end) offsets: in a panel, read over the whole
-    HTML; in an answer, over each stretch of raw HTML kramdown prints as
-    written."""
+    reads so), as (start, end) offsets."""
     if not _TEXT_ONLY_TAG_RE.search(text):
         return []
-    if not markdown:
-        return _PanelHTML(text, _no_range).raw_texts
-    return [(start + first, start + last)
-            for kind, start, end in answer_regions(text) if kind == 'raw'
-            for first, last in _PanelHTML(text[start:end], _no_range).raw_texts]
+    return _PanelHTML(text, _no_range).raw_texts
 
 
 def _no_range(start, end):
@@ -686,14 +551,35 @@ def _merged(regions):
     return merged
 
 
-def _link_text_regions(text, markdown):
-    """Where the text of a link is in *text*, as sorted, non-overlapping
-    (start, end) offsets: in an answer's markdown, kramdown's link texts
-    and the content of the raw `<a>` elements it reads; in a panel's HTML,
-    the content of an `<a>` element as an HTML tokenizer reads it, outside
-    code elements."""
-    if markdown:
-        return _merged(link_texts(text) + anchor_texts(text))
+# A code element: its content stops at the next opening of the same
+# element, so one that is never closed does not make the search rescan the
+# rest of the text.
+_CODE_ELEMENT = re.compile(r'<(code|pre|kbd|samp)\b[^>]*>(?:(?!<\1\b).)*?</\1\s*>',
+                           re.DOTALL | re.IGNORECASE)
+
+
+def code_elements(text):
+    """Every code element in HTML *text*, as (start, end) offsets."""
+    return [match.span() for match in _CODE_ELEMENT.finditer(text)]
+
+
+def overlaps(regions):
+    """A test of whether (start, end) overlaps any of *regions*, which may
+    overlap each other: a search, not a pass over every region."""
+    ordered = sorted(regions)
+    starts = [start for start, _ in ordered]
+    reach = list(itertools.accumulate((end for _, end in ordered), max))
+
+    def test(start, end):
+        count = bisect.bisect_left(starts, end)
+        return count > 0 and reach[count - 1] > start
+    return test
+
+
+def _link_text_regions(text):
+    """Where the text of a link is in HTML *text*, as sorted,
+    non-overlapping (start, end) offsets: the content of each `<a>`
+    element as an HTML tokenizer reads it, outside code elements."""
     return _merged(_PanelHTML(text, overlaps(code_elements(text))).regions)
 
 
@@ -714,9 +600,8 @@ def _term_in_link_text(link, text, regions, starts):
     (link, True); (link, False) when it does not lie in one; or
     (None, True) when there is nothing to replace.
 
-    In `[[[term]]](url)` kramdown reads the outer brackets as the link
-    and `[[term]]` as its text, while the syntax reads `[term` as the
-    term; the term is the inner link there.
+    Where a link's text is `[[term]]` with a bracket before it, the
+    syntax reads `[term` as the term; the term is the inner link there.
     """
     region = _region_around(regions, starts, link.start)
     if region is None:
@@ -730,23 +615,8 @@ def _term_in_link_text(link, text, regions, starts):
                         inner.display), True
 
 
-# What markdown reads in span text, which a title or display text must not
-# be read as: written as a numeric character reference, a character is text.
-_MARKDOWN_ACTIVE_RE = re.compile(r'[\\\[\]*_`{}$|~]')
-
-
-def _as_literal_text(shown, markdown):
-    """*shown* as text that reads as written: escaped for HTML, and in
-    markdown also with each character kramdown could read as syntax made a
-    character reference."""
-    escaped = html.escape(html.unescape(shown))
-    if not markdown:
-        return escaped
-    return _MARKDOWN_ACTIVE_RE.sub(lambda match: f'&#{ord(match.group())};', escaped)
-
-
 def _plain_term(raw_term_id, display_text, canonical_id, glossary_terms,
-                warnings_list, step_num, layer_name, markdown):
+                warnings_list, step_num, layer_name):
     """A term inside the text of a link, as the plain text it shows.
 
     A link cannot hold a link, so the term is not linked: it shows its
@@ -769,25 +639,23 @@ def _plain_term(raw_term_id, display_text, canonical_id, glossary_terms,
             'layer': layer_name,
             'message': message,
         })
-    return _as_literal_text(shown, markdown)
+    return html.escape(html.unescape(shown))
 
 
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None,
-                           base_url=None, markdown=False):
+                           base_url=None):
     """
     Transform [[term]] or [[display|term]] syntax into glossary link HTML.
 
     Args:
-        text: HTML text to process (already converted from markdown)
+        text: HTML text to process (already converted from markdown, with
+            its maths still held out as placeholders)
         glossary_terms: Dictionary mapping term_id to term title
         warnings_list: Optional list to append warning messages
         step_num: Optional step number for warning messages
         layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
         base_url: The site's baseurl for the term page URL; read from
             _config.yml when omitted
-        markdown: True when *text* is a step answer's markdown, whose code
-            is backtick spans as kramdown reads them; otherwise it is HTML,
-            whose code is elements and whose backticks are characters
 
     Returns:
         str: Text with glossary links transformed to HTML
@@ -825,7 +693,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
 
         if in_link_text:
             return _plain_term(raw_term_id, display_text, canonical_id, glossary_terms,
-                               warnings_list, step_num, layer_name, markdown)
+                               warnings_list, step_num, layer_name)
 
         # Check if term exists in glossary (case-insensitive)
         if canonical_id is not None:
@@ -834,8 +702,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
                 # Use the glossary title as display text
                 display_text = glossary_terms[term_id]
             demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
-            term_url = glossary_term_url(
-                term_id, base_url, getattr(glossary_terms, 'addresses', {}).get(term_id))
+            term_url = glossary_term_url(term_id, base_url)
             # Escape the canonical term id, the URL and the display text so a
             # quote or angle bracket in any of them cannot break out of the
             # link markup. The display text is decoded first: an entity the
@@ -853,30 +720,21 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # Text is linked, a tag never: [[term]] inside an attribute (an image's
     # alt text) stays literal, or the link it made would end the attribute.
     # A quoted attribute value may hold '>', so it does not end the tag.
-    # Code is shown as written, so [[term]] in code is the syntax, not a
-    # link: a code span or element in an answer's markdown, a code element in
-    # a panel's HTML. So is the content of a `script`, `style` or other
-    # element whose content is text only.
+    # Code is shown as written, so [[term]] in a code element is the syntax,
+    # not a link. So is the content of a `script`, `style` or other element
+    # whose content is text only.
     tags = [m.span() for m in re.finditer(
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
-    literal = overlaps(tags + (code_regions(text) if markdown else code_elements(text))
-                       + _text_only_regions(text, markdown))
-    # In markdown, what kramdown puts into an attribute, prints as written or
-    # reads for nothing is left as written if any of the link touches it: a
-    # link's destination, title or id, a link definition, an image's text
-    # (its alt), and a `nomarkdown` extension. In a panel's HTML these are
-    # already inside tags or gone.
-    unread = overlaps([(start, end) for _, start, end in unread_regions(text)]
-                      if markdown else [])
+    literal = overlaps(tags + code_elements(text) + _text_only_regions(text))
 
     # A link cannot hold a link: a term in a link's text is shown, not linked.
-    link_regions = _link_text_regions(text, markdown)
+    link_regions = _link_text_regions(text)
     link_starts = [start for start, _ in link_regions]
 
     if glossary_terms:
         pieces, written = [], 0
         for found in find_glossary_links(text):
-            if literal(found.start, found.start + 1) or unread(found.start, found.end):
+            if literal(found.start, found.start + 1):
                 continue
             link, in_link_text = _term_in_link_text(found, text, link_regions, link_starts)
             if link is None:

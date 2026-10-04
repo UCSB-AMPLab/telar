@@ -30,8 +30,6 @@ from telar.latex import convert_markdown
 from telar.markdown import process_inline_content
 
 
-PANEL = ['extra', 'nl2br']
-
 
 class _Elements(HTMLParser):
     """Every start tag, as (tag, attributes), in document order."""
@@ -55,7 +53,7 @@ def _references(html):
 
 
 def _convert(text):
-    return convert_markdown(text, PANEL)
+    return convert_markdown(text)
 
 
 class TestTheTagStaysIntact:

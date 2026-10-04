@@ -23,7 +23,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from telar import latex
-from telar.latex import latex_spans, protect_latex, restore_latex
+from telar.latex import protect_latex, restore_latex
 
 # The expressions the finders stand for, in the same order.
 EXPRESSIONS = [
@@ -84,11 +84,6 @@ def test_each_finder_matches_its_expression():
             assert finder(text) == [m.span() for m in expression.finditer(text)], (text, expression)
 
 
-def test_spans_are_the_expressions_spans():
-    for text in _random_texts(2000, seed=575):
-        assert latex_spans(text) == [m.span() for e in EXPRESSIONS for m in e.finditer(text)]
-
-
 def test_detection_is_unchanged():
     for text in _random_texts(5000, seed=577):
         assert latex.has_latex(text) == _has_latex_by_expressions(text), text
@@ -113,6 +108,5 @@ def test_many_distinct_blocks():
                                   '\\ce{ ', '$$x$$ '])
 def test_bounded(unit):
     started = time.perf_counter()
-    latex_spans(unit * 20000)
     protect_latex('\\(x\\) ' + unit * 20000)
     assert time.perf_counter() - started < 1.0

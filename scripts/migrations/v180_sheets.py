@@ -658,15 +658,14 @@ def _column_for(labels, rules, name: str) -> Optional[int]:
 def _answer_records(lang, story, step, answer, stories) -> List[ChangeRecord]:
     if not answer.strip():
         return []
-    prose, kinds = stories._reduce_answer_to_prose(answer)
+    rendered = stories.render_answer(answer)
     records = []
-    if kinds:
-        removed = ', '.join(get_message(lang, _KIND_KEYS[kind]) for kind in kinds)
+    if rendered.kinds:
+        removed = ', '.join(get_message(lang, _KIND_KEYS[kind]) for kind in rendered.kinds)
         records.append(_record(lang, 'v180_answer_content_removed', story, step, removed))
-    count = stories._count_answer_words(prose)
-    if count > stories.ANSWER_WORD_LIMIT:
-        records.append(_record(lang, 'v180_answer_over_limit', story, step, count,
-                               stories.ANSWER_WORD_LIMIT))
+    if rendered.cut:
+        records.append(_record(lang, 'v180_answer_over_limit', story, step,
+                               stories.MAX_PARAGRAPHS, stories.ANSWER_BUDGET))
     return records
 
 

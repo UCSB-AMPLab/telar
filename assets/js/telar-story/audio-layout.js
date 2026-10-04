@@ -3,8 +3,9 @@
  *
  * Where an audio plate's waveform and controls go on a horizontal layout.
  * Beside the card, the waveform is the stylesheet's: from
- * --telar-audio-wave-side-left, --telar-audio-wave-side-width of the window
- * wide, --telar-audio-height-resize of its height tall, centred. With the card
+ * --telar-audio-wave-side-gap of the window past the side card's right edge
+ * to the window's right edge, --telar-audio-height-resize of its height tall,
+ * centred. With the card
  * below, the waveform spans the width less a padding each side, above the
  * controls row, which sits above the card; it keeps the same height unless
  * the space above the card is shorter. `chooseAudioArrangement` decides
@@ -19,11 +20,13 @@
  * @version v1.8.0
  */
 
-import { mediaPadding, prefersBelow, computeBelowCardTop, readFraction } from './video-layout.js';
+import {
+  mediaPadding, prefersBelow, computeBelowCardTop, readFraction, sideCardRight,
+} from './video-layout.js';
 
 const _cs = getComputedStyle(document.documentElement);
 const audioHeightResize = parseFloat(_cs.getPropertyValue('--telar-audio-height-resize').trim()) || 0.5;
-const waveSideWidth = readFraction('--telar-audio-wave-side-width', 0.59);
+const waveSideGap = readFraction('--telar-audio-wave-side-gap', 0.01);
 
 /**
  * The controls row under the waveform: its buttons' height (.audio-btn) and
@@ -43,7 +46,7 @@ export const AUDIO_CONTROLS_GAP = 4;
  */
 export function computeAudioBesideWave(W, H) {
   return {
-    width: Math.round(W * waveSideWidth),
+    width: Math.round(W - sideCardRight(W) - W * waveSideGap),
     height: Math.round(H * audioHeightResize),
   };
 }

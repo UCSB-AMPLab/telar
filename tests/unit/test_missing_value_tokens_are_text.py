@@ -24,7 +24,7 @@ from telar.core import csv_to_json
 from telar.csv_utils import OBJECT_FIELDS
 from telar.processors.objects import process_objects
 from telar.processors.project import process_project_setup
-from telar.processors.stories import process_story
+from telar.processors.stories import process_story, render_answer
 
 TOKENS = ['NA', 'N/A', 'n/a', 'NULL', 'null', 'NaN', 'nan', 'None', '#N/A', '<NA>']
 
@@ -101,7 +101,9 @@ class TestAStorySheet:
     def test_text_columns_keep_the_token(self, convert, token):
         steps = self._steps(convert, f'1,map,0.5,0.5,1,"{token}","{token}"\n')
 
-        assert (steps[0]['question'], steps[0]['answer']) == (token, token)
+        # The answer is published rendered, so the token reaches the renderer
+        # as the text it is.
+        assert (steps[0]['question'], steps[0]['answer']) == (token, render_answer(token).html)
 
     def test_a_blank_coordinate_still_takes_its_default(self, convert):
         steps = self._steps(convert, '1,map,,,,Q,A\n')
@@ -125,4 +127,4 @@ class TestATokenInTheFirstColumn:
         steps = convert('step,object,question,answer\n#N/A,map,Q,A\n1,map,Q,B\n',
                         lambda df: process_story(df, story_name='sheet'))
 
-        assert [s['answer'] for s in steps] == ['B']
+        assert [s['answer'] for s in steps] == ['<p>B</p>']

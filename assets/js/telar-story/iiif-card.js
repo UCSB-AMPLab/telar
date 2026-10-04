@@ -45,6 +45,7 @@ import { state } from './state.js';
 import { onViewportResize, onLayoutChange, isLandscapeSideCard } from './layout-mode.js';
 import { authoringHomeZoom } from './authoring-frame.js';
 import { stepFraming } from './plates/framing.js';
+import { sideCardWidthPx } from './video-layout.js';
 
 // ── Type definition ──────────────────────────────────────────────────────────
 
@@ -91,17 +92,17 @@ function _isSane(imageW, imageH, viewportW, viewportH, x, y, zoom) {
 }
 
 // CSS geometry constants derived from _story.scss card layout rules.
-// Horizontal: .text-card { left: 3%; width: 37%; }  → card spans 3–40% of viewport
+// Horizontal: .text-card { left: 3%; width: --telar-card-side-width }, the
+//             width card-fit.js publishes for the window
 // Vertical:   bottom card: height 40vh → top edge = viewportH × (100-40)/100
 const _CSS_HORIZ_CARD_LEFT    = 3 / 100;    // left:  3%
-const _CSS_HORIZ_CARD_WIDTH   = 37 / 100;   // width: 37%
 const _CSS_VERT_CARD_H_VH     = 40 / 100;   // height: 40vh
 const _CSS_VERT_CARD_TOP_FRAC = 1 - _CSS_VERT_CARD_H_VH;  // top at (100-40)vh/100vh
 
 /**
  * CSS-derived default card box used when state.cardOverlayRect is null.
  *
- * horizontal: _story.scss left:3%, width:37%
+ * horizontal: _story.scss left:3%, width: the published side-card width
  * vertical:   _story.scss bottom 40vh (top edge at 60% viewport height)
  *
  * @param {'horizontal'|'vertical'} placement
@@ -114,7 +115,7 @@ function _defaultCardBox(placement, viewportW, viewportH) {
     return {
       x: viewportW * _CSS_HORIZ_CARD_LEFT,
       y: 0,
-      w: viewportW * _CSS_HORIZ_CARD_WIDTH,
+      w: sideCardWidthPx(viewportW),
       h: viewportH,
     };
   }
@@ -137,8 +138,8 @@ function _defaultCardBox(placement, viewportW, viewportH) {
  *
  * Heuristic: if the card's right edge is left of 60% of the viewport width,
  * it is a side card (horizontal placement). The horizontal side card
- * (_story.scss: left:3%, width:37%) always ends at ~40% of viewport width;
- * the bottom card (width:100%) always ends at 100%.
+ * (_story.scss: left:3%, at most 52% wide, card-fit.js) ends at 55% of the
+ * viewport width at most; the bottom card (width:100%) always ends at 100%.
  *
  * @param {{ x: number, y: number, w: number, h: number }|null} cardBox
  * @param {number} viewportW
@@ -739,7 +740,7 @@ const PAN_ZOOM_STIFFNESS = 0.8;
  * so a mistyped switch cannot stall the viewer for a minute or snap it in a
  * frame. Resolved once, and only for as long as the duration is being
  * settled — it goes when the number does, the same standing as the
- * card-height switch.
+ * card-motion switch.
  *
  * @returns {{ seconds: number, stiffness: number }}
  */

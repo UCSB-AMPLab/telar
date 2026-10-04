@@ -2,19 +2,27 @@
  * Tests for Telar Story – Side-card fit: what re-runs it
  *
  * watchCardContent against a stubbed ResizeObserver and a hand-driven
- * animation frame: an entry at the height recorded after a card's fit is the
- * fit's own and starts nothing; any other re-fits that card, once per frame
- * however many entries arrive; a font that finishes loading invalidates every
- * card's fit; the embed banner's arrival re-runs the pass.
+ * animation frame: an entry at the height recorded after a card's placement
+ * is the pass's own and starts nothing; any other re-places that card, once
+ * per frame however many entries arrive; a font that finishes loading re-places
+ * every card; the embed banner's arrival re-runs the pass.
  *
  * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  watchCardContent, recordContentHeight, fitAnswerText,
-} from '../../assets/js/telar-story/card-fit.js';
-import { modelCard } from './card-fit-model.js';
+import { watchCardContent, recordContentHeight } from '../../assets/js/telar-story/card-fit.js';
+
+/** A text card with its single content wrapper, in the document. */
+function modelCard() {
+  const card = document.createElement('div');
+  card.className = 'text-card';
+  const content = document.createElement('div');
+  content.className = 'step-content';
+  card.append(content);
+  document.body.append(card);
+  return { card, content };
+}
 
 class FakeResizeObserver {
   constructor(callback) {
@@ -39,7 +47,7 @@ function flushFrames() {
 
 let fonts;
 
-/** A card whose content wrapper is `height` px tall, recorded as fitted. */
+/** A card whose content wrapper is `height` px tall, recorded after its placement. */
 function fittedCard(height = 200) {
   const m = modelCard();
   m.content.style.height = `${height}px`;
@@ -98,7 +106,7 @@ describe('watchCardContent', () => {
     expect(refit).not.toHaveBeenCalled();
   });
 
-  it('re-fits a card whose content moved by 0.4px', () => {
+  it('re-places a card whose content moved by 0.4px', () => {
     const { card, content } = fittedCard(200);
     const refit = vi.fn();
     watchCardContent([card], refit, { raf: queueFrame });
@@ -110,7 +118,7 @@ describe('watchCardContent', () => {
     expect(refit).toHaveBeenCalledWith([card]);
   });
 
-  it('re-fits the changed card only, once per frame however many entries arrive', () => {
+  it('re-places the changed card only, once per frame however many entries arrive', () => {
     const a = fittedCard(200);
     const b = fittedCard(300);
     const c = fittedCard(400);
@@ -128,14 +136,14 @@ describe('watchCardContent', () => {
     expect(refit).toHaveBeenCalledWith([a.card]);
   });
 
-  it('does not loop on the entry its own re-fit causes', () => {
+  it('does not loop on the entry its own re-placement causes', () => {
     const { card, content } = fittedCard(200);
     const ro = () => FakeResizeObserver.last;
     const refit = vi.fn(() => {
-      // The re-fit shrinks the answer, and records the height it leaves.
-      content.style.height = '185.25px';
+      // The re-placement records the height it leaves.
+      content.style.height = '230px';
       recordContentHeight(card);
-      ro().deliver([content, 185.25]);
+      ro().deliver([content, 230]);
     });
     watchCardContent([card], refit, { raf: queueFrame });
 
@@ -147,12 +155,9 @@ describe('watchCardContent', () => {
     expect(frames).toHaveLength(0);
   });
 
-  it('invalidates every card on a font load that changes no height, in one pass', () => {
+  it('re-places every card on a font load that changes no height, in one pass', () => {
     const a = fittedCard(200);
     const b = fittedCard(300);
-    const cache = new WeakMap();
-    fitAnswerText(a.card, 380, cache);
-    fitAnswerText(b.card, 380, cache);
     const refit = vi.fn();
     watchCardContent([a.card, b.card], refit, { raf: queueFrame });
 
@@ -162,14 +167,9 @@ describe('watchCardContent', () => {
 
     expect(refit).toHaveBeenCalledTimes(1);
     expect(refit).toHaveBeenCalledWith(null);
-    for (const { card } of [a, b]) {
-      const set = vi.spyOn(card.style, 'setProperty');
-      fitAnswerText(card, 380, cache);
-      expect(set, 'the cached fit is measured again').toHaveBeenCalled();
-    }
   });
 
-  it('refits on `fonts.ready` after a `loading` with no `loadingdone`, as WebKit behaves', async () => {
+  it('re-places on `fonts.ready` after a `loading` with no `loadingdone`, as WebKit behaves', async () => {
     const { card } = fittedCard(200);
     const refit = vi.fn();
     let settle;

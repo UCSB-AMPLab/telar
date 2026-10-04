@@ -85,7 +85,6 @@ describe('a landscape phone card under the top controls', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     delete document.fonts;
-    delete window.__TELAR_CARD_HEIGHT__;
     delete HTMLElement.prototype.offsetHeight;
     document.body.innerHTML = '';
   });
@@ -109,12 +108,13 @@ describe('a landscape phone card under the top controls', () => {
     expect(parseFloat(card.style.top)).toBeCloseTo((480 - CONTENT_H) / 2, 0);
   });
 
-  it('the phone ceiling does not survive a resize into the fixed desktop model', async () => {
-    window.__TELAR_CARD_HEIGHT__ = 'fixed';
+  it('the phone ceiling does not survive a resize into a desktop window', async () => {
     const card = await openPhone(932, 430, CONTENT_H);
-    expect(card.style.maxHeight).not.toBe('');
+    const phoneCeiling = card.style.maxHeight;
+    expect(phoneCeiling).not.toBe('');
     resizeViewport(1280, 800);
-    expect(card.style.maxHeight).toBe('');
-    expect(card.style.height).toBe('640px');
+    expect(card.style.maxHeight).toBe('640px');
+    expect(card.style.maxHeight).not.toBe(phoneCeiling);
+    expect(card.style.height).toBe('');
   });
 });

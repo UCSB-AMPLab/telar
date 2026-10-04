@@ -23,19 +23,16 @@ from one story CSV and performs several passes over the data:
    references are loaded by `read_markdown_file()` from the markdown
    module; inline text is processed by `process_inline_content()`. Both
    paths run through the same pipeline: widgets first, then images, then
-   markdown-to-HTML conversion. After HTML conversion, glossary links
-   (`[[term_id]]` syntax) are resolved by `process_glossary_links()`. The
-   step's `answer` prose is glossary-processed too (the `question` is a
-   heading and is left alone), so `[[term]]` works in the main story text,
-   not only in layer panels.
+   markdown-to-HTML conversion, during which glossary links (`[[term_id]]`
+   syntax) are resolved by `process_glossary_links()`.
 
-3. **Answer limits** — the step's `answer` is prose read on a card that
-   does not scroll, so it is held to plain prose and to a length that
-   fits. `ANSWER_PROSE_RULES` says what comes out of it and what is
-   flattened, and an answer still above `ANSWER_WORD_LIMIT` words is cut
-   at a word boundary that does not land inside markup. This pass runs
-   on the answer as the author wrote it, before glossary anchors go into
-   it.
+3. **Answers** -- the step's `answer` is rendered to the HTML the story
+   publishes, by `render_answer()`: it renders as panels do, is made prose
+   (widgets, media, tables, code blocks, rules and footnotes come out;
+   headings, quotes and lists become paragraphs), gets glossary links, and
+   is held to the budget in `telar.answer_budget`, the length that fits the
+   side card without scrolling. An answer over it is cut. The `question`
+   is a heading and is left as written.
 
 4. **Coordinates** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
@@ -56,26 +53,23 @@ the intro panel's error display can be visually tested.
 Version: v1.8.0
 """
 
-import bisect
 import html
-import itertools
 import math
 import numbers
 import re
 import json
-from collections import namedtuple
 from pathlib import Path
+from typing import NamedTuple
 
 import pandas as pd
 
+from telar.answer_budget import (ANSWER_BUDGET, MAX_PARAGRAPHS, PARAGRAPH_COST, Measure,
+                                 cut_to_budget, html_tokens, measure_answer, within_budget)
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
-from telar.markdown import read_markdown_file, process_inline_content
-from telar.code_spans import (answer_regions, code_elements, code_spans, overlaps, raw_regions,
-                              stray_dollars, unread_regions)
+from telar.markdown import process_inline_content, read_markdown_file, render_markdown
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
-from telar.kramdown_blocks import escaped_dollar_openings
-from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
+from telar.latex import has_latex
 from telar.media_type import AUDIO_EXTENSIONS
 
 
@@ -86,132 +80,12 @@ def _warn(msg, warnings):
 
 
 
-ANSWER_WORD_LIMIT = 200
-"""Words a step's answer may hold before the build cuts it.
-
-Above this the answer is unreadable rather than merely long: on the desktop
-layout the side card never scrolls, so everything past the card's edge is
-clipped and no reader can reach it. The tightest common laptop cells hold
-225 words at 1280x720, 264 at 1366x768 and 275 at 1440x757, and this limit
-sits under that floor with a margin for a larger type size.
-
-The Compositor reads this constant by name, from this module, for a parity
-test against its own editor-side limit, so the name and the module path are
-part of that shared contract and cannot move quietly.
-"""
-
 ANSWER_MEDIA = 'media'
 ANSWER_WIDGETS = 'widgets'
 ANSWER_FOOTNOTES = 'footnotes'
 ANSWER_MARKUP = 'markup'
 
-_ProseRule = namedtuple('_ProseRule', 'name kind pattern replacement')
-
-ANSWER_PROSE_RULES = (
-    _ProseRule(
-        'widget', ANSWER_WIDGETS,
-        re.compile(r'^[ \t]*:::[A-Za-z0-9_]+[ \t]*\n[\s\S]*?^[ \t]*:::[ \t]*$\n?',
-                   re.MULTILINE),
-        ''),
-    _ProseRule(
-        'fenced code block', ANSWER_MARKUP,
-        re.compile(r'^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*\n?',
-                   re.MULTILINE),
-        ''),
-    _ProseRule(
-        'table', ANSWER_MARKUP,
-        re.compile(r'^[^\n|]*\|[^\n]*\n'
-                   r'[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*'
-                   r'(?:\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*\n'
-                   r'(?:[^\n]*\|[^\n]*\n?)*',
-                   re.MULTILINE),
-        ''),
-    _ProseRule(
-        'image or embed', ANSWER_MEDIA,
-        re.compile(r'!\[(?:[^\[\]]|\[[^\[\]]*\])*\]\([^)]*\)'
-                   r'|<(img|iframe|video|audio|embed|object)\b[^>]*>'
-                   r'(?:.*?</\1\s*>)?',
-                   re.IGNORECASE | re.DOTALL),
-        ''),
-    _ProseRule(
-        'footnote definition', ANSWER_FOOTNOTES,
-        re.compile(r'^[ \t]*\[\^[^\]]*\]:.*(?:\n[ \t]+\S.*)*\n?',
-                   re.MULTILINE),
-        ''),
-    _ProseRule(
-        'footnote reference', ANSWER_FOOTNOTES,
-        re.compile(r'\[\^[^\]]*\]'),
-        ''),
-    _ProseRule(
-        'horizontal rule', ANSWER_MARKUP,
-        re.compile(r'^[ \t]{0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}'
-                   r'|(?:_[ \t]*){3,})$\n?',
-                   re.MULTILINE),
-        ''),
-    _ProseRule(
-        'blockquote mark', ANSWER_MARKUP,
-        re.compile(r'^[ \t]*(?:>[ \t]?)+', re.MULTILINE),
-        ''),
-    _ProseRule(
-        'heading mark', ANSWER_MARKUP,
-        re.compile(r'^[ \t]*#{1,6}[ \t]+(.*?)[ \t]*#*[ \t]*$', re.MULTILINE),
-        r'\1'),
-    _ProseRule(
-        'list marker', ANSWER_MARKUP,
-        re.compile(r'^[ \t]*(?:[-*+]|[0-9]+[.)])[ \t]+', re.MULTILINE),
-        ''),
-)
-"""Everything a step's answer is not allowed to be, in the order applied.
-
-A step's answer is plain prose. The Compositor mirrors this set on the
-editor side and reads this list as the contract, so both the expressions
-and their order are part of it.
-
-Removed outright, with the words inside them:
-
-  - **widget** -- a `:::name` line through the next line that is `:::`
-    alone, which is the block the widget pass renders in a panel. It runs
-    first, so a carousel's images and a callout's lines go with it and
-    are reported once, as a widget. Widgets do not go in a step's answer;
-    they belong in a layer panel.
-  - **fenced code block** -- ``` or ~~~ through its matching fence.
-  - **table** -- a pipe-table block: a row carrying a pipe, a delimiter
-    row, and the body rows that follow while they carry one.
-  - **image or embed** -- markdown image syntax, and the HTML elements
-    that bring their own media (img, iframe, video, audio, embed,
-    object), opening tag through closing tag where one exists.
-  - **footnote definition** -- a line opening `[^n]:`, through the
-    indented continuation lines that belong to it.
-  - **footnote reference** -- `[^n]` in the prose. It runs after the
-    definition rule, which would otherwise be left holding a bare colon.
-  - **horizontal rule** -- a line of three or more dashes, asterisks or
-    underscores. It runs before the list rule, which would read `* * *`
-    as a bullet.
-
-Flattened, losing their marks and keeping their words:
-
-  - **blockquote mark** -- the leading `>`, every level of it. It runs
-    before the heading and list rules, so a quoted heading or bullet
-    reaches them.
-  - **heading mark** -- the ATX `#` marks, leading and closing.
-  - **list marker** -- the bullet or number opening a list item.
-
-Untouched, because they are prose: bold, italics, inline links,
-`[[term]]`, inline LaTeX, code spans, paragraph breaks.
-
-Detection runs on the raw markdown with no awareness of code spans, so
-image syntax inside backticks goes too. The rules have to be expressions
-the Compositor can implement identically, and a step's answer is prose
-about an object rather than a markdown tutorial. A bare image URL is
-text and stays.
-
-Nothing repairs the whitespace a removal leaves behind: each rule takes
-out what it matched and nothing else, so an answer carrying none of these
-comes back byte for byte and markdown decides what the rest means.
-"""
-
-# The order warnings are reported in, one per answer per kind, whatever
-# order the rules that fired sit in.
+# The order warnings are reported in, one per answer per kind.
 ANSWER_KINDS = (ANSWER_MEDIA, ANSWER_WIDGETS, ANSWER_FOOTNOTES, ANSWER_MARKUP)
 
 # What each kind is called in the message catalogue.
@@ -221,108 +95,6 @@ _ANSWER_KIND_KEYS = {
     ANSWER_FOOTNOTES: 'answer_footnotes_dropped',
     ANSWER_MARKUP: 'answer_markup_flattened',
 }
-
-# Markup a cut must not land inside. Each of these is one thing to a reader
-# and to the renderer, so half of one publishes as broken syntax rather than
-# as a shortened answer. LaTeX comes from telar.latex, which owns the
-# question of what maths looks like, and code spans from telar.code_spans,
-# which reads them as the template does. A footnote reference is absent
-# because the prose rules have already taken it out.
-#
-# Each is read as the pattern after it matches with `finditer`, finding
-# each close once in a sorted list of where that character stands: the
-# pattern searches the rest of the text again from every opening that has
-# no close.
-#   glossary reference  \[\[[^\]]*\]\]
-#   markdown link       \[[^\]]*\]\([^)]*\)
-#   inline HTML tag     <[^>]+>
-
-
-class _Closes:
-    """Where each closing character stands in a text, and the first of
-    one at or after a position, or -1. Each reader asks about later and
-    later positions, so a cursor moves forward instead of searching; it
-    goes back only when a reader starts again from the beginning."""
-
-    def __init__(self, text):
-        self.at = {char: [m.start() for m in re.finditer(re.escape(char), text)]
-                   for char in ']>)'}
-        self.cursor = dict.fromkeys(self.at, 0)
-
-    def after(self, char, pos):
-        positions = self.at[char]
-        index = self.cursor[char]
-        if index and positions[index - 1] >= pos:
-            index = bisect.bisect_left(positions, pos)
-        while index < len(positions) and positions[index] < pos:
-            index += 1
-        self.cursor[char] = index
-        return positions[index] if index < len(positions) else -1
-
-
-def _glossary_references(text, closes):
-    spans, pos = [], 0
-    while (start := text.find('[[', pos)) != -1:
-        close = closes.after(']', start + 2)
-        if close == -1:
-            break
-        if text.startswith(']]', close):
-            spans.append((start, close + 2))
-            pos = close + 2
-        else:
-            pos = start + 1
-    return spans
-
-
-def _markdown_links(text, closes):
-    spans, pos = [], 0
-    while (start := text.find('[', pos)) != -1:
-        close = closes.after(']', start + 1)
-        if close == -1:
-            break
-        paren = closes.after(')', close + 2) if text.startswith('(', close + 1) else None
-        if paren == -1:
-            break
-        if paren is None:
-            pos = start + 1
-        else:
-            spans.append((start, paren + 1))
-            pos = paren + 1
-    return spans
-
-
-def _html_tags(text, closes):
-    spans, pos = [], 0
-    while (start := text.find('<', pos)) != -1:
-        close = closes.after('>', start + 1)
-        if close == -1:
-            break
-        if close == start + 1:
-            pos = start + 1
-        else:
-            spans.append((start, close + 1))
-            pos = close + 1
-    return spans
-
-
-_ANSWER_ATOMIC = (_glossary_references, _markdown_links, _html_tags)
-
-# The token that ends a cut answer. One character, so the count of words
-# before it stays the count this module reports.
-_ANSWER_ELLIPSIS = '…'
-
-
-def _count_answer_words(text):
-    """The number of words in *text*, by the rule the Compositor shares.
-
-    Trim, split on Unicode whitespace, count the non-empty tokens. Markup
-    and URLs are words, because they take up the card like any other text,
-    and a non-breaking space separates words like any other whitespace.
-    """
-    return len(str(text).split())
-
-
-_FENCE_LEAD = re.compile(r'[ \t]*(`+|~+)')
 
 
 def _line_starts(text):
@@ -334,87 +106,6 @@ def _line_starts(text):
         pos = text.find('\n', pos + 1)
     return starts
 
-
-def _fence_line_openings(text, starts):
-    """For each line, its fence marker, the run of it, and the blanks before."""
-    total = len(starts)
-    marker = [None] * total
-    run = [0] * total
-    lead = [0] * total
-    for i in range(total):
-        found = _FENCE_LEAD.match(text, starts[i])
-        if found:
-            marker[i] = found.group(1)[0]
-            run[i] = len(found.group(1))
-            lead[i] = found.start(1) - starts[i]
-    return marker, run, lead
-
-
-def _longest_runs_after(marker, run):
-    """after[c][i] is the longest run of marker c on any line from i on."""
-    total = len(marker)
-    after = {'`': [0] * (total + 1), '~': [0] * (total + 1)}
-    for i in range(total - 1, -1, -1):
-        for longest in after.values():
-            longest[i] = longest[i + 1]
-        if marker[i]:
-            longest = after[marker[i]]
-            longest[i] = max(longest[i], run[i])
-    return after
-
-
-def _closing_line(marker, run, i, fence):
-    """The first line after *i* with a run of *fence* or more of its marker."""
-    j = i + 1
-    while marker[j] != marker[i] or run[j] < fence:
-        j += 1
-    return j
-
-
-def _fence_block_end(text, end):
-    """*end* moved past trailing blanks and one optional newline."""
-    while end < len(text) and text[end] in ' \t':
-        end += 1
-    if end < len(text) and text[end] == '\n':
-        end += 1
-    return end
-
-
-def _remove_fenced_blocks(text):
-    """*text* without its fenced code blocks, and how many were removed.
-
-    An opening is a line of optional blanks and a run of m >= 3 of one
-    marker, with a newline after the line. Its fence is k markers: the
-    smaller of m and the longest run of that marker opening any later
-    line, and it needs k >= 3 or the line opens nothing. The block ends
-    after the first later line whose run is at least k markers, then that
-    line's trailing blanks and one optional newline. A closing line may
-    carry more markers than k. Reading resumes on the first line start
-    after the block.
-    """
-    starts = _line_starts(text)
-    total = len(starts)
-    marker, run, lead = _fence_line_openings(text, starts)
-    after = _longest_runs_after(marker, run)
-
-    pieces = []
-    kept = 0
-    removed = 0
-    i = 0
-    while i < total:
-        if run[i] >= 3 and i < total - 1:
-            fence = min(run[i], after[marker[i]][i + 1])
-            if fence >= 3:
-                j = _closing_line(marker, run, i, fence)
-                end = _fence_block_end(text, starts[j] + lead[j] + fence)
-                pieces.append(text[kept:starts[i]])
-                kept = end
-                removed += 1
-                i = j + 1
-                continue
-        i += 1
-    pieces.append(text[kept:])
-    return ''.join(pieces), removed
 
 
 _WIDGET_OPEN = re.compile(r'[ \t]*:::[A-Za-z0-9_]+[ \t]*\n')
@@ -458,373 +149,180 @@ def _remove_widget_blocks(text):
     return ''.join(pieces), removed
 
 
-_TABLE_LINEAR = re.compile(
-    r'^[^\n|]*\|[^\n]*\n'
-    r'[ \t]*(?:\|[ \t]*)?:?-{2,}:?[ \t]*'
-    r'(?:\|[ \t]*:?-{2,}:?[ \t]*)*(?:\|[ \t]*)?\n'
-    r'(?:[^\n]*\|[^\n]*\n?)*',
-    re.MULTILINE)
-
-
-def _remove_tables(text):
-    """*text* without its tables, and how many were removed.
-
-    The table rule's language, with each run of blanks and each pipe
-    written once: the rule allows a blank run on both sides of an optional
-    pipe, so a long run of blanks that fails to end the delimiter row can
-    be split between them in as many ways as it has blanks.
-    """
-    return _TABLE_LINEAR.subn('', text)
-
-
-_MEDIA_START = re.compile(
-    r'!\[|<(?:img|iframe|video|audio|embed|object)\b', re.IGNORECASE)
-_MEDIA_TAG = re.compile(r'<(img|iframe|video|audio|embed|object)\b',
-                        re.IGNORECASE)
-_MEDIA_CLOSE = re.compile(r'</(img|iframe|video|audio|embed|object)\s*>',
-                          re.IGNORECASE)
-def _backreference_key(name):
-    """*name* as a case-insensitive backreference compares it: each
-    character by the first character of its lowercase. So `IMG` and `İMG`
-    close `<img>`, and `ımg`, which the name's own pattern matches, does
-    not."""
-    return ''.join(char.lower()[0] for char in name)
-
-
-def _media_index(text):
-    """The positions of brackets, parentheses, angle closes and closing tags."""
-    brackets = [i for i, char in enumerate(text) if char in '[]']
-    parens = [i for i, char in enumerate(text) if char == ')']
-    angles = [i for i, char in enumerate(text) if char == '>']
-    closes = {}
-    for found in _MEDIA_CLOSE.finditer(text):
-        closes.setdefault(_backreference_key(found.group(1)), []).append(
-            (found.start(), found.end()))
-    close_starts = {name: [start for start, _ in spans]
-                    for name, spans in closes.items()}
-    return brackets, parens, angles, closes, close_starts
-
-
-def _alt_end(text, brackets, ends, pos):
-    """Where the alt text that begins at *pos* stops."""
-    size = len(text)
-    path = []
-    while pos not in ends:
-        path.append(pos)
-        at = bisect.bisect_left(brackets, pos)
-        if at == len(brackets):
-            ends[pos] = size
-            break
-        bracket = brackets[at]
-        if text[bracket] == ']':
-            ends[pos] = bracket
-            break
-        nxt = bisect.bisect_left(brackets, bracket + 1)
-        if nxt < len(brackets) and text[brackets[nxt]] == ']':
-            pos = brackets[nxt] + 1
-        else:
-            ends[pos] = bracket
-            break
-    stop = ends[pos]
-    for seen in path:
-        ends[seen] = stop
-    return stop
-
-
-def _image_end(text, s, index, ends):
-    """Where the image starting at *s* ends, or None when it does not."""
-    brackets, parens = index[0], index[1]
-    stop = _alt_end(text, brackets, ends, s + 2)
-    if not text.startswith('](', stop):
-        return None
-    at = bisect.bisect_left(parens, stop + 2)
-    return parens[at] + 1 if at < len(parens) else None
-
-
-def _embed_end(text, s, index):
-    """Where the embed starting at *s* ends, or None when it does not."""
-    angles, closes, close_starts = index[2], index[3], index[4]
-    tag = _MEDIA_TAG.match(text, s)
-    at = bisect.bisect_left(angles, tag.end())
-    if at == len(angles):
-        return None
-    end = angles[at] + 1
-    name = _backreference_key(tag.group(1))
-    starts = close_starts.get(name, [])
-    later = bisect.bisect_left(starts, end)
-    return closes[name][later][1] if later < len(starts) else end
-
-
-def _remove_images_and_embeds(text):
-    """*text* without its images and embeds, and how many were removed.
-
-    An image is `![`, alt text holding balanced single brackets, `](`, and
-    the next `)`. An embed is an opening tag of img, iframe, video, audio,
-    embed or object, up to the next `>`, and through the first later
-    closing tag of the same name (case aside, blanks allowed before its
-    `>`) when there is one. Every search is a lookup in the positions of
-    the bracket, parenthesis and angle characters found in one pass, so a
-    start that fails costs a lookup rather than a rescan of the rest.
-    """
-    if not _MEDIA_START.search(text):
-        return text, 0
-    index = _media_index(text)
-    ends = {}
-
-    pieces = []
-    kept = 0
-    removed = 0
-    pos = 0
-    while True:
-        start = _MEDIA_START.search(text, pos)
-        if not start:
-            break
-        s = start.start()
-        end = _image_end(text, s, index, ends) if text[s] == '!' \
-            else _embed_end(text, s, index)
-        if end is None:
-            pos = s + 1
-            continue
-        pieces.append(text[kept:s])
-        kept = end
-        removed += 1
-        pos = end
-    pieces.append(text[kept:])
-    return ''.join(pieces), removed
-
-
-_NOTE_OPEN = re.compile(r'[ \t]*\[\^')
-_NOTE_CONTINUATION = re.compile(r'\n[ \t]+\S.*')
-
-
-def _remove_footnote_definitions(text):
-    """*text* without its footnote definitions, and how many were removed.
-
-    A definition is a line of optional blanks, `[^`, a label running to
-    the next `]` (which may lie on a later line), `:`, the rest of that
-    line, and any following lines that begin with blanks and then a
-    non-blank character, and one optional newline. Reading resumes on the
-    first line start after it.
-    """
-    closers = [i for i, char in enumerate(text) if char == ']']
-    size = len(text)
-    pieces = []
-    kept = 0
-    removed = 0
-    pos = 0
-    while pos < size:
-        opening = _NOTE_OPEN.match(text, pos)
-        if opening:
-            at = bisect.bisect_left(closers, opening.end())
-            if at == len(closers):
-                break
-            closer = closers[at]
-            if text.startswith(':', closer + 1):
-                end = text.find('\n', closer + 2)
-                end = size if end == -1 else end
-                more = _NOTE_CONTINUATION.match(text, end)
-                while more:
-                    end = more.end()
-                    more = _NOTE_CONTINUATION.match(text, end)
-                if text.startswith('\n', end):
-                    end += 1
-                pieces.append(text[kept:pos])
-                kept = end
-                removed += 1
-                pos = end
-                continue
-        line_end = text.find('\n', pos)
-        if line_end == -1:
-            break
-        pos = line_end + 1
-    pieces.append(text[kept:])
-    return ''.join(pieces), removed
-
-
-def _remove_footnote_references(text):
-    """*text* without its footnote references, and how many were removed.
-
-    A reference is `[^`, a label of anything but `]`, and the next `]`.
-    """
-    pieces = []
-    kept = 0
-    removed = 0
-    pos = text.find('[^')
-    while pos != -1:
-        close = text.find(']', pos + 2)
-        if close == -1:
-            break
-        pieces.append(text[kept:pos])
-        kept = close + 1
-        removed += 1
-        pos = text.find('[^', kept)
-    pieces.append(text[kept:])
-    return ''.join(pieces), removed
-
-
-_HEADING_OPEN = re.compile(r'[ \t]*#{1,6}[ \t]+')
-
-
-def _strip_heading_marks(text):
-    """*text* with each heading line reduced to its title, and how many.
-
-    A heading is a line of optional blanks, one to six `#`, and blanks.
-    Its title is what follows, less the longest tail made of blanks, `#`
-    and blanks that ends the line.
-    """
-    size = len(text)
-    pieces = []
-    kept = 0
-    changed = 0
-    pos = 0
-    while pos <= size:
-        line_end = text.find('\n', pos)
-        line_end = size if line_end == -1 else line_end
-        opening = _HEADING_OPEN.match(text, pos)
-        if opening and opening.end() <= line_end:
-            begin = opening.end()
-            end = line_end
-            while end > begin and text[end - 1] in ' \t':
-                end -= 1
-            while end > begin and text[end - 1] == '#':
-                end -= 1
-            while end > begin and text[end - 1] in ' \t':
-                end -= 1
-            pieces.append(text[kept:pos])
-            pieces.append(text[begin:end])
-            kept = line_end
-            changed += 1
-        pos = line_end + 1
-    pieces.append(text[kept:])
-    return ''.join(pieces), changed
-
-
-# Rules whose expression takes more than linear time on some input carry
-# a reader here that gives the same result in linear time. The expression
-# stays in the tuple because the Compositor compares its text.
-_ANSWER_PROSE_READERS = {
-    'widget': _remove_widget_blocks,
-    'fenced code block': _remove_fenced_blocks,
-    'table': _remove_tables,
-    'image or embed': _remove_images_and_embeds,
-    'footnote definition': _remove_footnote_definitions,
-    'footnote reference': _remove_footnote_references,
-    'heading mark': _strip_heading_marks,
+# Elements a step's answer loses with everything inside them, by the kind
+# each is reported as. A void element among them has nothing inside.
+_ANSWER_DROPPED = {
+    'img': ANSWER_MEDIA, 'iframe': ANSWER_MEDIA, 'video': ANSWER_MEDIA,
+    'audio': ANSWER_MEDIA, 'embed': ANSWER_MEDIA, 'object': ANSWER_MEDIA,
+    'table': ANSWER_MARKUP, 'pre': ANSWER_MARKUP, 'hr': ANSWER_MARKUP,
 }
+_ANSWER_HEADINGS = frozenset(f'h{level}' for level in range(1, 7))
+_ANSWER_UNWRAPPED = frozenset({'blockquote', 'ul', 'ol'})
+# The two pieces the footnotes extension writes: a reference's `<sup>` and
+# the notes' `<div>`.
+_FOOTNOTE_PART = re.compile(r'<(?:sup\b[^>]*\bid="fnref|div\b[^>]*\bclass="footnote")')
+_EMPTY_PARAGRAPH = re.compile(r'<p\b[^>]*>\s*</p>\n?')
 
 
-def _reduce_answer_to_prose(text):
-    """*text* as plain prose, and the kinds of thing that came out of it.
+class _AnswerProse:
+    """A step's rendered answer as prose: `html`, and the `kinds` of thing
+    that came out of it.
 
-    Applies ANSWER_PROSE_RULES in order; that constant's docstring is the
-    whole of what the rules are and why they run in that order. The kinds
-    come back in ANSWER_KINDS order rather than in the order the rules
-    fired, so one answer earns one warning per kind and always the same
-    sequence of them.
+    Media, tables, code blocks, horizontal rules and footnotes are removed
+    with what is inside them. A heading becomes a paragraph, a quote and a
+    list lose their container, and each list item becomes a paragraph, so
+    their words stay. A paragraph left empty is removed. Everything else --
+    emphasis, links, code spans, line breaks, raw inline HTML -- is kept as
+    rendered.
     """
-    fired = set()
-    for rule in ANSWER_PROSE_RULES:
-        reader = _ANSWER_PROSE_READERS.get(rule.name)
-        if reader:
-            text, count = reader(text)
+
+    def __init__(self, rendered):
+        self.out, self.kinds = [], set()
+        self._dropping = None
+        self._items = []
+        for token in html_tokens(rendered):
+            self._take(token)
+        self.html = _EMPTY_PARAGRAPH.sub('', ''.join(self.out))
+
+    def _take(self, token):
+        if self._dropping:
+            self._skip(token)
+        elif self._drops(token):
+            return
+        elif token.name in _ANSWER_HEADINGS:
+            self.kinds.add(ANSWER_MARKUP)
+            self._end_item()
+            self.out.append('<p>' if token.kind == 'start' else '</p>')
+        elif token.name in _ANSWER_UNWRAPPED:
+            self.kinds.add(ANSWER_MARKUP)
+            self._end_item()
+        elif token.name == 'li':
+            self._list_item(token)
         else:
-            text, count = rule.pattern.subn(rule.replacement, text)
-        if count:
-            fired.add(rule.kind)
+            if token.name == 'p' and token.kind == 'start':
+                self._end_item()
+            self.out.append(token.raw)
 
-    return text, [kind for kind in ANSWER_KINDS if kind in fired]
+    def _drops(self, token):
+        """Whether *token* opens or is something the answer loses."""
+        if token.kind not in ('start', 'void', 'end'):
+            return False
+        kind = _ANSWER_DROPPED.get(token.name)
+        if kind is None and token.kind == 'start' and _FOOTNOTE_PART.match(token.raw):
+            kind = ANSWER_FOOTNOTES
+        if kind is None:
+            return False
+        self.kinds.add(kind)
+        if token.kind == 'start':
+            self._dropping = [token.name, 1]
+        return True
+
+    def _skip(self, token):
+        name, depth = self._dropping
+        if token.name != name:
+            return
+        depth += 1 if token.kind == 'start' else -1 if token.kind == 'end' else 0
+        self._dropping = [name, depth] if depth else None
+
+    def _list_item(self, token):
+        self.kinds.add(ANSWER_MARKUP)
+        if token.kind == 'start':
+            self._end_item()
+            self.out.append('<p>')
+            self._items.append(True)
+        elif self._items and self._items.pop():
+            self.out.append('</p>')
+
+    def _end_item(self):
+        """Close the paragraph a list item opened, before a block inside it."""
+        if self._items and self._items[-1]:
+            self.out.append('</p>')
+            self._items[-1] = False
 
 
-def _answer_atomic_spans(text):
-    """Every span in *text* a cut must fall outside of."""
-    closes = _Closes(text)
-    spans = [span for markup in _ANSWER_ATOMIC for span in markup(text, closes)]
-    spans.extend(latex_spans(text))
-    spans.extend(code_spans(text))
-    return spans
+class RenderedAnswer(NamedTuple):
+    """A step's answer as the build publishes it (`render_answer`).
 
-
-def _cut_answer(text, limit):
-    """*text* shortened to at most *limit* words, closed with an ellipsis.
-
-    The cut lands on a word boundary, and never inside markup. A boundary
-    that falls within a link, a glossary or footnote reference, a code
-    span, a LaTeX span or an HTML tag moves back to the start of that
-    markup and then back to the nearest earlier boundary, repeating until
-    it is clear -- so an answer that ends near markup publishes shorter
-    than the limit rather than broken at it.
-
-    A token holding no whitespace cannot be split this way, because a word
-    boundary never falls inside one.
+    `html` is the published answer. `kinds` names what came out of it, in
+    ANSWER_KINDS order. `measure` is the answer's words, paragraphs and
+    cost before any cut (`telar.answer_budget`), and `cut` says whether it
+    was over ANSWER_BUDGET and so cut.
     """
-    boundaries = [match.end() for match in re.finditer(r'\S+', text)]
-    if len(boundaries) <= limit:
-        return text
-
-    # The spans by start, and the furthest any of the first k reaches: the
-    # first whose reach passes the cut is the earliest span over it.
-    spans = sorted(_answer_atomic_spans(text))
-    starts = [start for start, _ in spans]
-    reach = list(itertools.accumulate((end for _, end in spans), max))
-    cut = boundaries[limit - 1]
-    while True:
-        first = bisect.bisect_right(reach, cut)
-        if first >= len(spans) or starts[first] >= cut:
-            break
-        cut = starts[first]
-        earlier = bisect.bisect_right(boundaries, cut)
-        cut = boundaries[earlier - 1] if earlier else 0
-
-    return text[:cut] + _ANSWER_ELLIPSIS
+    html: str
+    kinds: list
+    measure: Measure
+    cut: bool
 
 
-def _limit_answers(df, story_name, warnings, answer_warnings):
-    """Hold every step's answer to text only, and to a readable length.
+def render_answer(text, glossary_terms=None, glossary_warnings=None, step=None,
+                  source='answer'):
+    """A step's answer, as written, rendered to the HTML the build publishes.
 
-    Runs on the answer exactly as the author typed it, ahead of the
-    glossary pass, so the word count is the author's own words and the
-    markup the cut protects is the markup they wrote rather than the
-    anchors Telar injects.
+    Widget blocks are removed from the text. The rest renders as every
+    piece of author markdown does (`render_markdown`), and then, while its
+    maths is still held out of the HTML: it is made prose (`_AnswerProse`),
+    `[[term]]` becomes a glossary link as in a panel, and an answer over
+    ANSWER_BUDGET is cut (`telar.answer_budget`). The cut runs last, so it
+    counts the words a reader sees and never splits a glossary link.
 
-    An answer over ANSWER_WORD_LIMIT is cut and reported. Length on its
-    own earns no report: the build speaks where it has changed the
-    author's words and stays quiet where it has not.
+    Args:
+        text: The answer as the author wrote it.
+        glossary_terms: The glossary's term ids and titles, or None.
+        glossary_warnings: A list for glossary reports, or None.
+        step: The step, for glossary reports.
+        source: What a warning about unclosed HTML calls the answer.
 
-    The prose rules run first, so the count is of the words that survive
-    them: a list of two hundred bulleted words is two hundred words, and a
-    footnote the rules removed weighs nothing.
+    Returns:
+        RenderedAnswer
+    """
+    text = str(text).replace('\r\n', '\n').replace('\r', '\n').strip()
+    text, widgets = _remove_widget_blocks(text)
+    found = {}
+
+    def to_prose(rendered):
+        prose = _AnswerProse(rendered)
+        linked = process_glossary_links(prose.html, glossary_terms,
+                                        glossary_warnings, step, None)
+        found['kinds'], found['measure'] = prose.kinds, measure_answer(linked)
+        return cut_to_budget(linked)
+
+    published = render_markdown(text, source, post_process=to_prose)
+    kinds = found['kinds'] | ({ANSWER_WIDGETS} if widgets else set())
+    return RenderedAnswer(published, [kind for kind in ANSWER_KINDS if kind in kinds],
+                          found['measure'], not within_budget(found['measure']))
+
+
+def _render_answers(df, story_name, glossary_terms, glossary_warnings, warnings,
+                    answer_warnings):
+    """Every step's answer rendered to the HTML published in its `answer`.
+
+    What `render_answer` took out of an answer is reported once per kind,
+    and an answer over the budget is reported with its count, naming the
+    story and step: the build speaks where it has changed the author's
+    words and stays quiet where it has not.
     """
     if 'answer' not in df.columns:
         return df
 
     story = story_name or 'unknown'
-
     for idx, row in df.iterrows():
         raw = str(row['answer'])
         if not raw.strip():
             continue
-
         step = row.get('step', 'unknown')
         label = _step_label(step)
-        answer = raw
-
-        answer, kinds = _reduce_answer_to_prose(answer)
-        for kind in kinds:
-            _report_answer(
-                _ANSWER_KIND_KEYS[kind], step, answer_warnings, warnings,
-                story=story, step_label=label)
-
-        count = _count_answer_words(answer)
-        if count > ANSWER_WORD_LIMIT:
-            answer = _cut_answer(answer, ANSWER_WORD_LIMIT)
-            _report_answer(
-                'answer_over_hard_limit', step, answer_warnings, warnings,
-                story=story, step_label=label, count=count,
-                limit=ANSWER_WORD_LIMIT)
-
-        if answer != raw:
-            df.at[idx, 'answer'] = answer
-
+        rendered = render_answer(raw, glossary_terms, glossary_warnings, step,
+                                 source=f'the answer to step {label} of {story}')
+        for kind in rendered.kinds:
+            _report_answer(_ANSWER_KIND_KEYS[kind], step, answer_warnings, warnings,
+                           story=story, step_label=label)
+        if rendered.cut:
+            counted = rendered.measure
+            _report_answer('answer_over_hard_limit', step, answer_warnings, warnings,
+                           story=story, step_label=label, count=counted.cost,
+                           limit=ANSWER_BUDGET, max_paragraphs=MAX_PARAGRAPHS, words=counted.words,
+                           paragraphs=counted.paragraphs, paragraph_cost=PARAGRAPH_COST)
+        df.at[idx, 'answer'] = rendered.html
     return df
 
 
@@ -1076,7 +574,7 @@ def _validate_object_references(df, objects_data, warnings):
     return df
 
 
-def _layer_content_for(cell_value, widget_warnings):
+def _layer_content_for(cell_value, widget_warnings, post_process=None):
     """One layer cell as content, from a file or from the cell itself.
 
     A value ending in `.md` names a file; anything else is prose typed
@@ -1098,12 +596,19 @@ def _layer_content_for(cell_value, widget_warnings):
         else:
             # Try to load as markdown file
             file_path = f"stories/{cell_value}"
-            content_data = read_markdown_file(file_path, widget_warnings)
+            content_data = read_markdown_file(file_path, widget_warnings, post_process)
 
     # If not a file reference or file not found, treat as inline content
     if content_data is None:
-        content_data = process_inline_content(cell_value, widget_warnings)
+        content_data = process_inline_content(cell_value, widget_warnings, post_process)
     return content_data
+
+def _glossary_linker(glossary_terms, glossary_warnings, step_num, layer):
+    """The pass that makes a panel's glossary links, given its rendered
+    HTML while the maths is still held out of it."""
+    return lambda rendered: process_glossary_links(
+        rendered, glossary_terms, glossary_warnings, step_num, layer)
+
 
 def _process_content_columns(df, glossary_terms, glossary_warnings, widget_warnings):
     """Turn every layer column into HTML, from a file or from the cell.
@@ -1141,258 +646,16 @@ def _process_content_columns(df, glossary_terms, glossary_warnings, widget_warni
                     step_num = row.get('step', 'unknown')
 
                     content_data = _layer_content_for(
-                        cell_value, widget_warnings)
+                        cell_value, widget_warnings,
+                        _glossary_linker(glossary_terms, glossary_warnings,
+                                         step_num, base_name))
 
                     if content_data:
                         df.at[idx, title_col] = content_data['title']
-                        # Apply glossary link transformation to content
-                        content_with_glossary = process_glossary_links(
-                            content_data['content'],
-                            glossary_terms,
-                            glossary_warnings,
-                            step_num,
-                            base_name
-                        )
-                        df.at[idx, text_col] = content_with_glossary
+                        df.at[idx, text_col] = content_data['content']
 
             # Drop the _content/_file column: it is not part of the JSON output
             df = df.drop(columns=[col])
-    return df
-
-
-def _resolve_answer_glossary(df, glossary_terms, glossary_warnings):
-    """Resolve [[term]] in the step's answer prose.
-
-    The answer only. The question is the step's heading, and an inline
-    link does not belong in one, so [[term]] there is left literal. The
-    answer is still markdown at this point -- Liquid renders it later --
-    so the transform runs on the markdown string, and the anchor it
-    injects passes through markdownify unchanged.
-    """
-    # None because this is step prose, not a layer panel.
-    if 'answer' in df.columns:
-        for idx, row in df.iterrows():
-            cell_value = row['answer']
-            if cell_value and str(cell_value).strip():
-                step_num = row.get('step', 'unknown')
-                df.at[idx, 'answer'] = process_glossary_links(
-                    str(cell_value),
-                    glossary_terms,
-                    glossary_warnings,
-                    step_num,
-                    None,
-                    markdown=True
-                )
-    return df
-
-
-# Maths in an answer, in the forms KaTeX draws, and whether each keeps its
-# delimiters. kramdown, which renders the answer, eats the backslash of
-# \( \) \[ \] and reads `*` and `_` inside $...$ as emphasis; its own $$...$$
-# is the one form whose content it prints as written, as \(...\) inside a
-# paragraph and \[...\] as a paragraph of its own. Earliest match wins, and at
-# one position the first pattern listed. Single $ follows `has_latex`: a
-# LaTeX character inside, no space inside either dollar, neither escaped.
-_ANSWER_MATHS = (
-    (re.compile(r'\$\$.+?\$\$', re.DOTALL), None),
-    # An opening that is never closed must not pair with a later formula, and
-    # stopping at the next opening keeps the search linear in the answer.
-    (re.compile(r'\\begin\{(align\*?|cases|pmatrix|bmatrix|equation\*?)\}'
-                r'(?:(?!\\begin\{\1\}).)*?\\end\{\1\}', re.DOTALL), 0),
-    (re.compile(r'\\\[((?:(?!\\\[).)+?)\\\]', re.DOTALL), 1),
-    (re.compile(r'\\\(((?:(?!\\\().)+?)\\\)', re.DOTALL), 1),
-    (re.compile(r'(?<![\\$])\$(?!\$)(\S(?:[^$]*?[^\s\\])?)\$(?!\$)'), 1),
-)
-
-
-def _escape_stray_dollars(text, openings=()):
-    """*text* with each `$$` kramdown prints as it is written `\\$\\$`, which
-    it still prints as `$$` but which cannot pair with a formula written as
-    `$$…$$` after it in the same paragraph. A backslash kramdown drops
-    before one goes with it. Each of *openings*, the backslash of a `\\$$`
-    opening a block, is written the same way; where a third dollar
-    follows, only its `\\$` is rewritten, as the entity `&#36;`, since the
-    second dollar and the third make a `$$` of their own. Also returned:
-    the offset of each dollar written, none of which opens or closes a
-    formula, as none of the dollars they stand for does.
-
-    Next to a quote the escape changes: kramdown's smart quotes read a
-    quote after a dollar as closing and after an escape as opening, and a
-    quote before a `$$` as closing, as before an escape, but as opening
-    before an entity. So before a quote a `$$` is written `&#36;$`, and
-    `\\$$` when a quote comes before it as well: the dollar before the
-    quote stays plain, and the first one written is a punctuation mark.
-    Neither is read as maths, since kramdown's inline maths starts at the
-    dollar after the escape, which is followed by the quote, and only a
-    block's start reads the raw `$$`, which a quote before it is not.
-    """
-    edits = sorted(stray_dollars(text)
-                   + [(backslash, backslash + (2 if text.startswith('$', backslash + 3) else 3))
-                      for backslash in openings])
-    out, dollars, pos, length = [], [], 0, 0
-    for start, end in edits:
-        written = _escaped_dollars(text, start, end)
-        length += start - pos
-        out += [text[pos:start], written]
-        dollars += [length + index for index, char in enumerate(written) if char == '$']
-        length += len(written)
-        pos = end
-    out.append(text[pos:])
-    return ''.join(out), dollars
-
-
-_QUOTES = ('"', "'")
-
-
-def _escaped_dollars(text, start, end):
-    """How `_escape_stray_dollars` writes the dollars from *start* to *end*."""
-    if text[start:end] == '\\$':
-        return '&#36;'
-    if not text.startswith(_QUOTES, end):
-        return '\\$\\$'
-    return '\\$$' if text.startswith(_QUOTES, start - 1) and start else '&#36;$'
-
-
-def _answer_maths_for_kramdown(text):
-    """*text* with each maths span written as kramdown's $$...$$.
-
-    Left as written: maths inside a code span, a code element, an HTML
-    element kramdown leaves raw, an HTML tag, a link's destination, title
-    or id, a link definition, an image's text, which becomes its alt
-    attribute as written, or a `nomarkdown` extension, printed as written,
-    since none of those is maths on the page; a
-    $...$ with no LaTeX character, which is currency; and a span holding
-    another dollar, which is one formula inside another and has no single
-    reading.
-
-    A `\\$$` opening a block that kramdown reads as an escaped dollar and
-    then a dollar is escaped too wherever anything else changes, as
-    `_escape_stray_dollars` writes it: a `$$` written after it could end
-    kramdown's block maths start there, which then drops the backslash and
-    opens a formula. No block maths start reads the escaped form.
-    """
-    prepared = _formulas_for_kramdown(text)
-    openings = escaped_dollar_openings(text) if prepared != text else ()
-    return _formulas_for_kramdown(text, openings) if openings else prepared
-
-
-def _formulas_for_kramdown(text, openings=()):
-    """*text* with each stray `$$` and each of *openings* escaped, and each
-    formula written as kramdown's `$$…$$`, as `_answer_maths_for_kramdown`
-    describes."""
-    text, dollars = _escape_stray_dollars(text, openings)
-    guarded = overlaps(raw_regions(text) + code_elements(text)
-                       + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
-                       + [(start, end) for _, start, end in unread_regions(text)]
-                       + [(dollar, dollar + 1) for dollar in dollars])
-    # Each pattern's next match from the current position, searched again
-    # only once the position passes it, so a long answer is scanned once
-    # per pattern rather than once per formula.
-    upcoming = [pattern.search(text) for pattern, _ in _ANSWER_MATHS]
-    out = []
-    pos = 0
-    while True:
-        for order, (pattern, _) in enumerate(_ANSWER_MATHS):
-            if upcoming[order] is not None and upcoming[order].start() < pos:
-                upcoming[order] = pattern.search(text, pos)
-        found = [(match.start(), order) for order, match in enumerate(upcoming) if match]
-        if not found:
-            break
-        _, order = min(found)
-        match, group = upcoming[order], _ANSWER_MATHS[order][1]
-        start, end = match.span()
-        out.append(text[pos:start])
-        if guarded(start, start + 1):
-            # A dollar inside an unread region is not an opener, and a match
-            # from it, `$$` included, must not take the opener of a formula
-            # after it.
-            out.append(text[start])
-            pos = start + 1
-            continue
-        span = text[start:end]
-        if group is not None and not guarded(start, end):
-            inner = match.group(group)
-            if '$' not in inner and (group == 0 or not span.startswith('$')
-                                     or _LATEX_CHARS.search(inner)):
-                span = f'$${inner}$$'
-        out.append(span)
-        pos = end
-    out.append(text[pos:])
-    return ''.join(out)
-
-
-def _maths_pipes(maths):
-    """A `$$…$$` span with each `|` as `\\vert `, which KaTeX draws as the
-    same glyph; TeX's double bar `\\|` stays."""
-    return '\\|'.join(part.replace('|', '\\vert ') for part in maths.split('\\|'))
-
-
-_REGION_PIPES = {
-    'maths': _maths_pipes,
-    'cdata': lambda cdata: cdata.replace('|', ']]>&#124;<![CDATA['),
-}
-
-
-def _escape_pipes(text):
-    """*text* with each `|` and `\\|` as `&#124;`."""
-    return text.replace('\\|', '&#124;').replace('|', '&#124;')
-
-
-def _answer_pipes_for_kramdown(text):
-    """*text* with every pipe kramdown would read as a table cell escaped.
-
-    kramdown reads a line holding a `|` as a table row. So a pipe in prose,
-    and an author's `\\|`, becomes `&#124;`, which prints a bare pipe. Code
-    and `$$…$$` are printed as written, so an entity there would reach the
-    reader as text: a pipe in code is left alone, and one in maths becomes
-    `\\vert `. kramdown does not look for a table row inside an HTML
-    element, and an element it leaves raw is printed as written, so a pipe
-    there is left alone too: in a `<script>` an entity would change the
-    code. CDATA is the exception: its text counts as the line's, and it
-    prints an entity as written, so the CDATA is closed around the pipe
-    and the entity put between. All of these are found as kramdown finds
-    them (`telar.code_spans`).
-
-    An image's text becomes its `alt` attribute as written, and no maths is
-    rendered or CDATA closed there, so `\\vert ` would reach a screen reader
-    as written. A pipe in maths or CDATA inside an image's text is escaped
-    as in prose. Code and raw HTML there stay as written: kramdown's table
-    parser skips them and the `alt` reads as written.
-    """
-    if '|' not in text:
-        return text
-    alts = [(start, end) for kind, start, end in unread_regions(text) if kind == 'alt']
-    out = []
-    pos = 0
-    for kind, start, end in answer_regions(text):
-        out.append(_escape_pipes(text[pos:start]))
-        in_alt = kind in ('maths', 'cdata') and any(a <= start and end <= b for a, b in alts)
-        out.append(_escape_pipes(text[start:end]) if in_alt
-                   else _REGION_PIPES.get(kind, str)(text[start:end]))
-        pos = end
-    out.append(_escape_pipes(text[pos:]))
-    return ''.join(out)
-
-
-def _prepare_answer_maths(df):
-    """Add `answer_kramdown` where an answer needs rewriting for kramdown.
-
-    Two rewrites, in order: each formula as `$$…$$`, then each pipe
-    escaped for its place (prose, code or maths). `answer` stays the
-    build's reading of the cell: title cards and the card fallback show it
-    as text, and the Compositor mirrors it. Only story-step.html renders the
-    rewritten form. The column is added only to a story where some answer
-    changes, so a story without maths or pipes publishes the same data as
-    before.
-    """
-    if 'answer' not in df.columns:
-        return df
-    answers = [value if isinstance(value, str) else '' for value in df['answer']]
-    rewritten = [_answer_pipes_for_kramdown(_answer_maths_for_kramdown(answer))
-                 for answer in answers]
-    if rewritten != answers:
-        df['answer_kramdown'] = [new if new != answer else ''
-                                 for new, answer in zip(rewritten, answers)]
     return df
 
 
@@ -1586,13 +849,12 @@ def process_story(df, christmas_tree=False, story_name=''):
     answer_warnings = []
 
     df = _normalise_frame(df)
-    df = _limit_answers(df, story_name, warnings, answer_warnings)
     df = _validate_page_column(df, warnings)
     df = _validate_object_references(df, _load_objects_data(), warnings)
     df = _process_content_columns(df, glossary_terms, glossary_warnings,
                                   widget_warnings)
-    df = _resolve_answer_glossary(df, glossary_terms, glossary_warnings)
-    df = _prepare_answer_maths(df)
+    df = _render_answers(df, story_name, glossary_terms, glossary_warnings,
+                         warnings, answer_warnings)
     df = _apply_coordinate_defaults(df)
     coordinate_warnings = []
     df = _check_coordinates(df, story_name, warnings, coordinate_warnings)

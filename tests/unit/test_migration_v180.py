@@ -618,7 +618,7 @@ class TestOneRunOverASite:
         assert b'telar-content/texts/' in after['_config.yml']
         assert b'layout' not in after['telar-content/texts/pages/about.md']
         assert b'["a", "b"]' in after['telar-content/texts/glossary/cord.md']
-        assert any('201 words' in r.description for r in records)
+        assert any('too long' in r.description for r in records)
 
         self._run(tmp_path, monkeypatch)
 

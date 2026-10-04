@@ -324,8 +324,7 @@ def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
         for field in ('caption', 'credit'):
             if field in data:
                 data[field] = convert_markdown(
-                    data[field], post_process=_caption_html,
-                    restore_as_text=True)
+                    data[field], post_process=_caption_html)
 
         items.append(data)
 
@@ -400,8 +399,7 @@ def parse_markdown_sections(content, footnote_scope=None):
     for number, section in enumerate(sections, 1):
         content_text = '\n'.join(section['content']).strip()
         section['content_html'] = convert_markdown(
-            content_text, extensions=['extra', 'nl2br'],
-            footnote_scope=_section_scope(footnote_scope, number))
+            content_text, footnote_scope=_section_scope(footnote_scope, number))
 
     return sections
 
@@ -522,8 +520,7 @@ def parse_bibliography_widget(content, file_path, warnings_list, widget_id=None)
         if not block:
             continue
         html = convert_markdown(
-            block, extensions=['extra', 'nl2br'],
-            footnote_scope=_section_scope(widget_id, len(entries) + 1))
+            block, footnote_scope=_section_scope(widget_id, len(entries) + 1))
         entries.append({'content_html': html})
 
     if not entries:

@@ -57,10 +57,6 @@ function _cancelDeepLinkTimers() {
   window.removeEventListener('touchstart', _cancelDeepLinkTimers);
 }
 
-// A wheel the side card scrolls itself never reaches the window listeners
-// below, so card-scroll.js cancels the ladder through this name instead.
-export { _cancelDeepLinkTimers as cancelDeepLinkLadder };
-
 /**
  * Cancel the deep-link timer ladder on the first genuine user interaction.
  * Listens for wheel / keydown / touchstart — all user-initiated. We deliberately

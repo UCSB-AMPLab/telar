@@ -208,6 +208,17 @@ describe('audio', () => {
     expect(computeAudioBesideWave(1440, 900)).toEqual({ width: 850, height: 450 });
   });
 
+  it('beside a card card-fit.js has widened, the waveform starts past its right edge', () => {
+    const root = document.documentElement.style;
+    root.setProperty('--telar-card-side-width', '624px');
+    try {
+      // 1440 − (43.2 + 624, rounded to 667) − 1% of 1440 = 758.6
+      expect(computeAudioBesideWave(1440, 560)).toEqual({ width: 759, height: 280 });
+    } finally {
+      root.removeProperty('--telar-card-side-width');
+    }
+  });
+
   it.each(sizes)('a short answer at %ix%i puts the card below a full-height waveform', (W, H) => {
     const pad = mediaPadding(W, H);
     expect(chooseAudioArrangement(W, H, 150, 77)).toBe('below');
@@ -327,7 +338,7 @@ describe('arrangeMediaScene', () => {
     });
 
     it.each([
-      ['the fixed-height model', { eligible: false }, false],
+      ['a layout the cards are not content-sized on', { eligible: false }, false],
       ['embed mode', {}, true],
       ['a scene with no cards', { cards: [] }, false],
     ])('hands the player the band where the scene is not arranged: %s', (_, over, embed) => {
@@ -379,5 +390,12 @@ describe('the stylesheet', () => {
     const rule = readSource('_sass/_story.scss').match(/\n\.waveform-container \{([^}]*)\}/);
     expect(rule[1]).toMatch(/left: \$telar-audio-wave-side-left;/);
     expect(rule[1]).toMatch(/width: \$telar-audio-wave-side-width;/);
+  });
+
+  it('builds the waveform\'s side geometry from the card\'s, past the gap audio-layout.js reads', () => {
+    const sheet = readSource('_sass/_responsive.scss');
+    expect(sheet).toMatch(/\$telar-audio-wave-side-left:\s+calc\(var\(--telar-card-side-left\) \+ var\(--telar-card-side-width\) \+ #\{\$telar-audio-wave-side-gap\}\);/);
+    expect(sheet).toMatch(/\$telar-audio-wave-side-width:\s+calc\(100% - var\(--telar-card-side-left\) - var\(--telar-card-side-width\) - #\{\$telar-audio-wave-side-gap\}\);/);
+    expect(sheet).toMatch(/--telar-audio-wave-side-gap:\s+#\{\$telar-audio-wave-side-gap\};/);
   });
 });

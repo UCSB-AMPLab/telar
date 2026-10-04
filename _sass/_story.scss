@@ -64,9 +64,8 @@
   //     restating the figure. The figure here is only what stands until the
   //     card pool writes over it at init with the pace of a move to a step,
   //     which is the same movement measured at the scroll; `?cardmotion=0.9`
-  //     is a tuning switch for the release cycle, of the same standing as
-  //     `?cardheight=fixed`, for a card duration deliberately out of step
-  //     with the move.
+  //     is a tuning switch for the release cycle, for a card duration
+  //     deliberately out of step with the move.
   // ES: El deslizamiento de una tarjeta, el ascenso de una tarjeta cubierta y
   //     el recorrido de una placa son un mismo movimiento visto desde tres
   //     puntos, así que duran lo mismo. Todas las transiciones de tarjeta o de
@@ -74,9 +73,8 @@
   //     cifra. La cifra que está aquí solo rige hasta que el card pool la
   //     sobrescribe al arrancar con el ritmo de un desplazamiento a un paso,
   //     que es ese mismo movimiento medido en el scroll; `?cardmotion=0.9` es
-  //     un control de ajuste para este ciclo de versiones, de la misma índole
-  //     que `?cardheight=fixed`, para una duración de tarjeta que se aparte
-  //     del desplazamiento a propósito.
+  //     un control de ajuste para este ciclo de versiones, para una duración
+  //     de tarjeta que se aparte del desplazamiento a propósito.
   --card-motion-duration: 0.5s;
 
   // EN: The same movement also runs on one curve, for the same reason it runs
@@ -243,7 +241,10 @@
   align-items: center;
   gap: 12px;
   bottom: calc(25% - 48px);
-  right: calc(40% + 16px);
+  // 40% plus 16px from the right, or further right where that would put the
+  // row's left edge less than 16px inside the waveform beside a wider card.
+  // The row is three 44px buttons (.audio-btn) and two 12px gaps.
+  right: min(calc(40% + 16px), calc(100% - #{$telar-audio-wave-side-left} - 16px - 156px));
 }
 
 .audio-btn {
@@ -380,9 +381,10 @@
   position: absolute;
   z-index: 2;
   text-align: center;
-  // Desktop: centre in the right 60% (visible area beside the text card)
+  // Desktop: centre in the visible area beside the text card, from its right
+  // edge to the window's
   top: 50%;
-  left: 70%;
+  left: calc((var(--telar-card-side-left) + var(--telar-card-side-width) + 100%) / 2);
   transform: translate(-50%, -50%);
   width: 50%;
   max-width: 400px;
@@ -422,12 +424,14 @@
 // ── Text Card ─────────────────────────────────────────────────────────────────
 
 // Floating card over the viewer, on the left. Its left edge and width are the
-// side-card geometry video-layout.js reads to place a video player beside it.
+// side-card geometry video-layout.js reads to place a video player beside it;
+// the width is the one card-fit.js writes for the window on a horizontal
+// layout.
 .text-card {
   container-type: inline-size; // enables @container queries below
   position: absolute;
   left: $telar-card-side-left;
-  width: $telar-card-side-width;
+  width: var(--telar-card-side-width);
   // height set by JS: viewportH * 0.85
   // top set by JS: centred + peek offset
   background: #fff;
@@ -447,13 +451,11 @@
   //     have supported flex auto margins since flexbox shipped, whereas `safe
   //     center` needs Safari 16 and below it drops silently to top alignment.
   //     `overflow: hidden` keeps the card's content inside it: in horizontal
-  //     the card never overflows onto the image and the browser never
-  //     scrolls it. Under the fit model the answer shrinks until the card
-  //     fits (card-fit.js); where it does not fit even at the smallest size,
-  //     card-scroll.js moves the card's content by writing `scrollTop`, which
-  //     a box that hides its overflow allows, so a wheel or a swipe at the
-  //     card's end never passes to the page. Long content is top-aligned, so
-  //     the question is always where the card starts.
+  //     the card never overflows onto the image and nothing scrolls it,
+  //     so a wheel or a swipe over the card belongs to the story. The card
+  //     takes the height its content needs under the ceiling card-fit.js
+  //     writes; past the ceiling the content is clipped. Long content is
+  //     top-aligned, so the question is always where the card starts.
   // ES: La tarjeta tiene altura fija, así que centrar el contenido solo es
   //     seguro mientras quepa. `justify-content: center` reparte el espacio
   //     libre incluso cuando es negativo, lo que empuja la pregunta por encima
@@ -468,13 +470,10 @@
   //     anteriores pasa en silencio a la alineación superior.
   //     `overflow: hidden` mantiene el contenido dentro de la tarjeta: en el
   //     diseño horizontal la tarjeta nunca se desborda sobre la imagen y el
-  //     navegador nunca la desplaza. Con el ajuste de tamaño (card-fit.js), la
-  //     letra de la respuesta se reduce hasta que todo cabe en la tarjeta; si
-  //     no cabe ni con el tamaño mínimo, card-scroll.js mueve el contenido de
-  //     la tarjeta escribiendo `scrollTop`, lo cual sí se puede hacer en una
-  //     caja con el desbordamiento oculto; así, un giro de la rueda del mouse
-  //     o un deslizamiento del dedo al final de la tarjeta nunca se transmite
-  //     a la página. El contenido largo se alinea arriba, así que la pregunta
+  //     navegador nunca la desplaza, así que un giro de la rueda del mouse o
+  //     un deslizamiento del dedo sobre la tarjeta es de la historia. La tarjeta toma la altura que su contenido necesita, hasta
+  //     el límite que escribe card-fit.js; si el contenido lo supera, se
+  //     recorta. El contenido largo se alinea arriba, así que la pregunta
   //     queda siempre al comienzo de la tarjeta.
   justify-content: flex-start;
   overflow: hidden;
@@ -532,14 +531,10 @@
   //     ni un `overflow` propio surten efecto aquí. Es la tarjeta la que se
   //     desplaza en el diseño vertical y la que recorta en el horizontal.
   // EN: Each width tier declares the answer's size in
-  //     `--telar-answer-base-size`, and card-fit.js reads it there: the fit
-  //     writes its own size over `font-size` and never over this property, so
-  //     the tier's size can be read while a fit is in place.
+  //     `--telar-answer-base-size`; the answer keeps that size on every card.
   // ES: Cada nivel de ancho declara el tamaño de la respuesta en
-  //     `--telar-answer-base-size`, y card-fit.js lo lee ahí: el ajuste
-  //     sobrescribe `font-size` con su propio tamaño y nunca toca esta
-  //     propiedad, así que el tamaño del nivel se puede leer aunque el ajuste
-  //     esté activo.
+  //     `--telar-answer-base-size`; la respuesta conserva ese tamaño en
+  //     todas las tarjetas.
   .step-answer {
     --telar-answer-base-size: 1rem;
     font-size: var(--telar-answer-base-size);
@@ -580,9 +575,9 @@
 // Card-width-driven padding and font-size scaling. Values chosen so there
 // is no visual jump at the most common phone widths.
 //
-// In horizontal mode, .text-card is 37% wide ≈ 360-420px on typical phones —
-// so (max-width: 480px) fires broadly and (max-width: 360px) fires on
-// very narrow cards (small phones, ~375px viewport).
+// In horizontal mode, .text-card is 37% to 52% of the window wide
+// (card-fit.js), so (max-width: 480px) fires on the narrower windows; a
+// landscape phone's side card is 37% wide, where (max-width: 360px) fires.
 // In vertical mode, .text-card is calc(100% - 2rem) wide — both breakpoints
 // fire on all mobile viewports, so the user gets Tier-3 density by default.
 @container (max-width: 480px) {
@@ -613,19 +608,6 @@
       --telar-answer-base-size: 0.85rem;
     }
   }
-}
-
-// EN: The fitted answer size. card-fit.js writes `data-card-fit` and
-//     `--telar-answer-fit-size` on a side card on a horizontal layout; the
-//     rule outweighs the width tiers above (0,3,0 against 0,2,0), so only the
-//     answer takes the fitted size and the question keeps its own.
-// ES: El tamaño ajustado de la respuesta. card-fit.js escribe `data-card-fit`
-//     y `--telar-answer-fit-size` en la tarjeta lateral del diseño horizontal;
-//     esta regla tiene más especificidad que la de los niveles de ancho de
-//     arriba (0,3,0 frente a 0,2,0), así que solo la respuesta toma el tamaño
-//     ajustado y la pregunta conserva el suyo.
-.text-card[data-card-fit] .step-answer {
-  font-size: var(--telar-answer-fit-size);
 }
 
 // ── Story Intro ───────────────────────────────────────────────────────────────
@@ -1123,27 +1105,26 @@
 
 // ── Short-window side card ────────────────────────────────────────────────────
 // EN: When the viewport is too short for a bottom card (height ≤ 480px), the
-//     side-card geometry applies instead, at any width: on a landscape phone,
-//     which is in vertical layout, and on a short desktop window, which is not.
+//     side-card geometry applies instead, at any width. The same height is the
+//     vertical layout's height clause, so a landscape phone and a short desktop
+//     window are both in vertical layout here.
 //     isLandscapeSideCard() in layout-mode.js tests the same height alone, and
-//     card-pool.js sizes the card to its content on that test, so this rule is
-//     outside the vertical-layout block and carries the ceiling to both. It
-//     comes after that block so that, on a landscape phone, it overrides the
-//     bottom card's rules of the same specificity.
+//     card-pool.js sizes the card to its content on that test. The rule comes
+//     after the vertical-layout block so that it overrides the bottom card's
+//     rules of the same specificity.
 //     Threshold 480px catches all modern landscape phones (≤ 430px tall) and
 //     misses all portrait phones (iPhone SE 667px, SE 1st-gen 568px).
 //     card-pool.js controls `top` via inline style with !important;
 //     bottom: auto releases the bottom anchor so the side card positions correctly.
 // ES: Cuando el viewport es demasiado bajo para una tarjeta inferior (altura
 //     ≤ 480px), se aplica en su lugar la geometría de tarjeta lateral, sea cual
-//     sea el ancho: en un teléfono en horizontal, que usa el diseño vertical
-//     (vertical-layout), y en una ventana de escritorio baja, que no lo usa.
-//     isLandscapeSideCard() de layout-mode.js comprueba únicamente esa altura,
-//     y card-pool.js ajusta la tarjeta a su contenido cuando esa comprobación
-//     se cumple, así que esta regla va por fuera del bloque vertical-layout y
-//     aplica el tope de altura en los dos casos. Va después de ese bloque para
-//     que, en un teléfono en horizontal, anule las reglas de la tarjeta
-//     inferior que tienen la misma especificidad.
+//     sea el ancho. Ese mismo umbral es la condición de altura del diseño
+//     vertical (vertical-layout), así que aquí tanto un teléfono en horizontal
+//     como una ventana de escritorio baja usan el diseño vertical.
+//     isLandscapeSideCard() de layout-mode.js comprueba solo esa misma
+//     altura, y card-pool.js se basa en esa comprobación para ajustar la
+//     tarjeta a su contenido. La regla va después del bloque vertical-layout para anular
+//     las reglas de la tarjeta inferior que tienen la misma especificidad.
 //     El umbral de 480px captura todos los teléfonos modernos en horizontal
 //     (≤ 430px de alto) y excluye los teléfonos en vertical (iPhone SE 667px,
 //     SE 1.ª gen. 568px). card-pool.js controla `top` mediante estilo en línea
@@ -1167,11 +1148,9 @@
     // EN: The cap is the viewport less the card's inset at top and bottom, so the
     //     side card can use nearly the whole short viewport. It is the fallback
     //     before card-pool.js has run its geometry: once it has, an inline
-    //     max-height overrides it. On a horizontal layout card-fit.js writes the
-    //     ceiling that keeps the card clear of the top controls and shrinks the
-    //     answer to fit, and card-scroll.js scrolls the card itself where even
-    //     that is not enough. On a landscape phone card-pool.js writes the same
-    //     ceiling and the card scrolls inside itself past it. A cap of 40dvh is
+    //     max-height overrides it. card-pool.js writes the ceiling that keeps
+    //     the card clear of the top controls, the side card's ceiling from
+    //     card-fit.js, and the card scrolls inside itself past it. A cap of 40dvh is
     //     the portrait bottom card's share of a tall viewport and leaves a
     //     landscape card far too short; no cap at all lets the content-height card
     //     grow past both edges of a 430px viewport, from where nothing brings it
@@ -1180,14 +1159,11 @@
     //     arriba y abajo, así que la tarjeta lateral puede ocupar casi toda la
     //     altura de un viewport tan bajo. Es el valor de reserva mientras
     //     card-pool.js no ha calculado la geometría; después, un `max-height`
-    //     en línea lo reemplaza. En el diseño horizontal, card-fit.js escribe
-    //     el límite que mantiene la tarjeta por debajo de los controles
-    //     superiores y reduce la letra de la respuesta para que quepa, y
-    //     card-scroll.js desplaza el contenido dentro de la propia tarjeta
-    //     cuando ni así alcanza. En un teléfono en horizontal, card-pool.js
-    //     escribe ese mismo límite, y si el contenido lo supera, se desplaza
-    //     dentro de la tarjeta. Un tope de 40dvh es la porción de un viewport
-    //     alto que le toca a la tarjeta inferior en vertical, y deja la
+    //     en línea lo reemplaza. card-pool.js escribe el límite que mantiene la
+    //     tarjeta por debajo de los controles superiores (el de la tarjeta
+    //     lateral, que sale de card-fit.js), y si el contenido lo supera, se
+    //     desplaza dentro de la tarjeta. Un tope de 40dvh es la porción de un
+    //     viewport alto que le toca a la tarjeta inferior en vertical, y deja la
     //     tarjeta lateral demasiado corta; sin tope alguno, la tarjeta de
     //     altura según contenido crece hasta salirse por arriba y por abajo
     //     de un viewport de 430px, de donde nada la devuelve al área visible.

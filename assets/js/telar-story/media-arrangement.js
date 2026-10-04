@@ -14,9 +14,8 @@
  * module places the cards. A scene is arranged by its tallest card, so the
  * player does not move between two steps of the same scene.
  *
- * Only a horizontal layout outside embed mode is arranged, and only where the
- * side card takes the height of its content: the fixed-height model keeps its
- * 80% card beside the player. Embed mode keeps the card beside because its
+ * Only a horizontal layout outside embed mode is arranged. Embed mode keeps
+ * the card beside because its
  * previous and next buttons sit over the bottom of the card's column. Every
  * media plate carries the top band, arranged or not, because the player
  * beside the card keeps it clear too.

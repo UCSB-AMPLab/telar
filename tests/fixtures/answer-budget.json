@@ -1,0 +1,207 @@
+{
+  "budget": 85,
+  "paragraph_cost": 15,
+  "cases": [
+    {
+      "name": "a short answer",
+      "html": "<p>one two three</p>",
+      "words": 3,
+      "paragraphs": 1,
+      "cost": 3,
+      "cut": "<p>one two three</p>"
+    },
+    {
+      "name": "nothing",
+      "html": "",
+      "words": 0,
+      "paragraphs": 0,
+      "cost": 0,
+      "cut": ""
+    },
+    {
+      "name": "one word over",
+      "html": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86</p>",
+      "words": 86,
+      "paragraphs": 1,
+      "cost": 86,
+      "cut": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85…</p>"
+    },
+    {
+      "name": "the cut keeps the first paragraph and words of the second",
+      "html": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40</p>\n<p>w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80</p>",
+      "words": 80,
+      "paragraphs": 2,
+      "cost": 95,
+      "cut": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40</p>\n<p>w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70…</p>"
+    },
+    {
+      "name": "a paragraph that cannot start is dropped",
+      "html": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80</p>\n<p>w81 w82 w83 w84 w85 w86 w87 w88 w89 w90</p>",
+      "words": 90,
+      "paragraphs": 2,
+      "cost": 105,
+      "cut": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80…</p>"
+    },
+    {
+      "name": "a link across the cut is dropped whole",
+      "html": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 <a href=\"x\">a b</a> end</p>",
+      "words": 87,
+      "paragraphs": 1,
+      "cost": 87,
+      "cut": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84…</p>"
+    },
+    {
+      "name": "a link that ends at the cut is kept whole",
+      "html": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 <a href=\"x\">a b</a> end</p>",
+      "words": 86,
+      "paragraphs": 1,
+      "cost": 86,
+      "cut": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 <a href=\"x\">a b</a>…</p>"
+    },
+    {
+      "name": "an inline element across the cut is closed",
+      "html": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 <em>x y</em></p>",
+      "words": 86,
+      "paragraphs": 1,
+      "cost": 86,
+      "cut": "<p>w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 <em>x…</em></p>"
+    },
+    {
+      "name": "a line break separates words",
+      "html": "<p>a<br />\nb</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "cost": 2,
+      "cut": "<p>a<br />\nb</p>"
+    },
+    {
+      "name": "references are characters, and a no-break space is whitespace",
+      "html": "<p>it&rsquo;s&nbsp;fine</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "cost": 2,
+      "cut": "<p>it&rsquo;s&nbsp;fine</p>"
+    },
+    {
+      "name": "a tag inside a word does not split it",
+      "html": "<p>wo<em>rd</em></p>",
+      "words": 1,
+      "paragraphs": 1,
+      "cost": 1,
+      "cut": "<p>wo<em>rd</em></p>"
+    },
+    {
+      "name": "paragraph tags separate words",
+      "html": "<p>a</p><p>b</p>",
+      "words": 2,
+      "paragraphs": 2,
+      "cost": 17,
+      "cut": "<p>a</p><p>b</p>"
+    },
+    {
+      "name": "a formula placeholder is one word",
+      "html": "<p>see TLATEX0123456789abEND here</p>",
+      "words": 3,
+      "paragraphs": 1,
+      "cost": 3,
+      "cut": "<p>see TLATEX0123456789abEND here</p>"
+    },
+    {
+      "name": "a link holding the whole budget leaves the ellipsis alone",
+      "html": "<p><a href=\"x\">w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 w31 w32 w33 w34 w35 w36 w37 w38 w39 w40 w41 w42 w43 w44 w45 w46 w47 w48 w49 w50 w51 w52 w53 w54 w55 w56 w57 w58 w59 w60 w61 w62 w63 w64 w65 w66 w67 w68 w69 w70 w71 w72 w73 w74 w75 w76 w77 w78 w79 w80 w81 w82 w83 w84 w85 w86 w87 w88 w89 w90</a></p>",
+      "words": 90,
+      "paragraphs": 1,
+      "cost": 90,
+      "cut": "…"
+    },
+    {
+      "name": "a comment is not text",
+      "html": "<p>a <!-- b c --> d</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "cost": 2,
+      "cut": "<p>a <!-- b c --> d</p>"
+    },
+    {
+      "name": "a quoted attribute may hold a greater-than sign",
+      "html": "<p><span title=\"a > b\">x</span> y</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "cost": 2,
+      "cut": "<p><span title=\"a > b\">x</span> y</p>"
+    },
+    {
+      "name": "five one-word paragraphs fit",
+      "html": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>",
+      "words": 5,
+      "paragraphs": 5,
+      "cost": 65,
+      "cut": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>"
+    },
+    {
+      "name": "six one-word paragraphs fit the words but not the count",
+      "html": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>\n<p>w6_1</p>",
+      "words": 6,
+      "paragraphs": 6,
+      "cost": 81,
+      "cut": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1…</p>"
+    },
+    {
+      "name": "seven one-word paragraphs keep the first five",
+      "html": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>\n<p>w6_1</p>\n<p>w7_1</p>",
+      "words": 7,
+      "paragraphs": 7,
+      "cost": 97,
+      "cut": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1…</p>"
+    },
+    {
+      "name": "five short paragraphs fit",
+      "html": "<p>w1_1 w1_2 w1_3</p>\n<p>w2_1 w2_2 w2_3</p>\n<p>w3_1 w3_2 w3_3</p>\n<p>w4_1 w4_2 w4_3</p>\n<p>w5_1 w5_2 w5_3</p>",
+      "words": 15,
+      "paragraphs": 5,
+      "cost": 75,
+      "cut": "<p>w1_1 w1_2 w1_3</p>\n<p>w2_1 w2_2 w2_3</p>\n<p>w3_1 w3_2 w3_3</p>\n<p>w4_1 w4_2 w4_3</p>\n<p>w5_1 w5_2 w5_3</p>"
+    },
+    {
+      "name": "six short paragraphs keep the first five",
+      "html": "<p>w1_1 w1_2 w1_3</p>\n<p>w2_1 w2_2 w2_3</p>\n<p>w3_1 w3_2 w3_3</p>\n<p>w4_1 w4_2 w4_3</p>\n<p>w5_1 w5_2 w5_3</p>\n<p>w6_1 w6_2 w6_3</p>",
+      "words": 18,
+      "paragraphs": 6,
+      "cost": 93,
+      "cut": "<p>w1_1 w1_2 w1_3</p>\n<p>w2_1 w2_2 w2_3</p>\n<p>w3_1 w3_2 w3_3</p>\n<p>w4_1 w4_2 w4_3</p>\n<p>w5_1 w5_2 w5_3…</p>"
+    },
+    {
+      "name": "seven short paragraphs keep the first five",
+      "html": "<p>w1_1 w1_2 w1_3</p>\n<p>w2_1 w2_2 w2_3</p>\n<p>w3_1 w3_2 w3_3</p>\n<p>w4_1 w4_2 w4_3</p>\n<p>w5_1 w5_2 w5_3</p>\n<p>w6_1 w6_2 w6_3</p>\n<p>w7_1 w7_2 w7_3</p>",
+      "words": 21,
+      "paragraphs": 7,
+      "cost": 111,
+      "cut": "<p>w1_1 w1_2 w1_3</p>\n<p>w2_1 w2_2 w2_3</p>\n<p>w3_1 w3_2 w3_3</p>\n<p>w4_1 w4_2 w4_3</p>\n<p>w5_1 w5_2 w5_3…</p>"
+    },
+    {
+      "name": "six long paragraphs keep what the word budget allows",
+      "html": "<p>w1_1 w1_2 w1_3 w1_4 w1_5 w1_6 w1_7 w1_8 w1_9 w1_10 w1_11 w1_12</p>\n<p>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7 w2_8 w2_9 w2_10 w2_11 w2_12</p>\n<p>w3_1 w3_2 w3_3 w3_4 w3_5 w3_6 w3_7 w3_8 w3_9 w3_10 w3_11 w3_12</p>\n<p>w4_1 w4_2 w4_3 w4_4 w4_5 w4_6 w4_7 w4_8 w4_9 w4_10 w4_11 w4_12</p>\n<p>w5_1 w5_2 w5_3 w5_4 w5_5 w5_6 w5_7 w5_8 w5_9 w5_10 w5_11 w5_12</p>\n<p>w6_1 w6_2 w6_3 w6_4 w6_5 w6_6 w6_7 w6_8 w6_9 w6_10 w6_11 w6_12</p>",
+      "words": 72,
+      "paragraphs": 6,
+      "cost": 147,
+      "cut": "<p>w1_1 w1_2 w1_3 w1_4 w1_5 w1_6 w1_7 w1_8 w1_9 w1_10 w1_11 w1_12</p>\n<p>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7 w2_8 w2_9 w2_10 w2_11 w2_12</p>\n<p>w3_1 w3_2 w3_3 w3_4 w3_5 w3_6 w3_7 w3_8 w3_9 w3_10 w3_11 w3_12</p>\n<p>w4_1 w4_2 w4_3 w4_4…</p>"
+    },
+    {
+      "name": "seven long paragraphs keep what the word budget allows",
+      "html": "<p>w1_1 w1_2 w1_3 w1_4 w1_5 w1_6 w1_7 w1_8 w1_9 w1_10 w1_11 w1_12</p>\n<p>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7 w2_8 w2_9 w2_10 w2_11 w2_12</p>\n<p>w3_1 w3_2 w3_3 w3_4 w3_5 w3_6 w3_7 w3_8 w3_9 w3_10 w3_11 w3_12</p>\n<p>w4_1 w4_2 w4_3 w4_4 w4_5 w4_6 w4_7 w4_8 w4_9 w4_10 w4_11 w4_12</p>\n<p>w5_1 w5_2 w5_3 w5_4 w5_5 w5_6 w5_7 w5_8 w5_9 w5_10 w5_11 w5_12</p>\n<p>w6_1 w6_2 w6_3 w6_4 w6_5 w6_6 w6_7 w6_8 w6_9 w6_10 w6_11 w6_12</p>\n<p>w7_1 w7_2 w7_3 w7_4 w7_5 w7_6 w7_7 w7_8 w7_9 w7_10 w7_11 w7_12</p>",
+      "words": 84,
+      "paragraphs": 7,
+      "cost": 174,
+      "cut": "<p>w1_1 w1_2 w1_3 w1_4 w1_5 w1_6 w1_7 w1_8 w1_9 w1_10 w1_11 w1_12</p>\n<p>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7 w2_8 w2_9 w2_10 w2_11 w2_12</p>\n<p>w3_1 w3_2 w3_3 w3_4 w3_5 w3_6 w3_7 w3_8 w3_9 w3_10 w3_11 w3_12</p>\n<p>w4_1 w4_2 w4_3 w4_4…</p>"
+    },
+    {
+      "name": "five long paragraphs are cut by words alone",
+      "html": "<p>w1_1 w1_2 w1_3 w1_4 w1_5 w1_6 w1_7 w1_8 w1_9 w1_10 w1_11 w1_12 w1_13 w1_14 w1_15 w1_16 w1_17 w1_18 w1_19 w1_20</p>\n<p>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7 w2_8 w2_9 w2_10 w2_11 w2_12 w2_13 w2_14 w2_15 w2_16 w2_17 w2_18 w2_19 w2_20</p>\n<p>w3_1 w3_2 w3_3 w3_4 w3_5 w3_6 w3_7 w3_8 w3_9 w3_10 w3_11 w3_12 w3_13 w3_14 w3_15 w3_16 w3_17 w3_18 w3_19 w3_20</p>\n<p>w4_1 w4_2 w4_3 w4_4 w4_5 w4_6 w4_7 w4_8 w4_9 w4_10 w4_11 w4_12 w4_13 w4_14 w4_15 w4_16 w4_17 w4_18 w4_19 w4_20</p>\n<p>w5_1 w5_2 w5_3 w5_4 w5_5 w5_6 w5_7 w5_8 w5_9 w5_10 w5_11 w5_12 w5_13 w5_14 w5_15 w5_16 w5_17 w5_18 w5_19 w5_20</p>",
+      "words": 100,
+      "paragraphs": 5,
+      "cost": 160,
+      "cut": "<p>w1_1 w1_2 w1_3 w1_4 w1_5 w1_6 w1_7 w1_8 w1_9 w1_10 w1_11 w1_12 w1_13 w1_14 w1_15 w1_16 w1_17 w1_18 w1_19 w1_20</p>\n<p>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6 w2_7 w2_8 w2_9 w2_10 w2_11 w2_12 w2_13 w2_14 w2_15 w2_16 w2_17 w2_18 w2_19 w2_20</p>\n<p>w3_1 w3_2 w3_3 w3_4 w3_5 w3_6 w3_7 w3_8 w3_9 w3_10 w3_11 w3_12 w3_13 w3_14 w3_15…</p>"
+    }
+  ],
+  "max_paragraphs": 5
+}

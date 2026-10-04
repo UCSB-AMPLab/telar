@@ -42,7 +42,7 @@ def _list_order(html):
 
 
 def _convert(text):
-    return convert_markdown(text, extensions=['extra'])
+    return convert_markdown(text)
 
 
 OUT_OF_ORDER = """Primero el zorro[^z] y luego el perro[^old].

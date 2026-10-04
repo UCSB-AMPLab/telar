@@ -79,7 +79,7 @@ def _render(block, glossary=GLOSSARY, warnings=None):
     """A panel's markdown through the widget, markdown and glossary passes."""
     warnings = [] if warnings is None else warnings
     text = process_widgets(f'Before.\n\n{block}\n\nAfter.', 'test', warnings)
-    text = convert_markdown(text, extensions=['extra', 'nl2br', 'sane_lists'])
+    text = convert_markdown(text, extra_extensions=('sane_lists',))
     return process_glossary_links(text, glossary, warnings)
 
 
@@ -301,10 +301,11 @@ class TestWhereItWorks:
 
 class TestAStepsAnswer:
 
-    def test_the_answer_rules_remove_it(self):
-        from telar.processors.stories import _reduce_answer_to_prose
+    def test_the_answer_rendering_removes_it(self):
+        from telar.processors.stories import render_answer
         answer = 'Before.\n\n:::glossary\nentry: carta\n:::\n\nAfter.'
 
-        prose, _kinds = _reduce_answer_to_prose(answer)
+        rendered = render_answer(answer)
 
-        assert ':::glossary' not in prose
+        assert rendered.html == '<p>Before.</p>\n<p>After.</p>'
+        assert rendered.kinds == ['widgets']

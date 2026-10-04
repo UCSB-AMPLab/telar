@@ -185,6 +185,19 @@ describe('the player beside the side text card', () => {
       sheet.remove();
     }
   });
+
+  it('places the player beside the width card-fit.js publishes for the window', () => {
+    const root = document.documentElement.style;
+    root.setProperty('--telar-card-side-width', '600px');
+    try {
+      // The card spans 3% of 1280 (38.4) plus 600px; pad = round(720 * 0.025) = 18
+      expect(computeVideoLetterboxRegion(1280, 720).left).toBe(638 + 18);
+      expect(computeVideoLayout(1280, 720, 16 / 9).card).toMatchObject({ left: 38, width: 600 });
+    } finally {
+      root.removeProperty('--telar-card-side-width');
+    }
+    expect(computeVideoLetterboxRegion(1280, 720).left).toBe(cardRight(1280) + pad(1280, 720));
+  });
 });
 
 // The stylesheet cannot share a constant with the script, so this holds the
@@ -196,7 +209,7 @@ describe('the side card geometry in the stylesheet', () => {
     const rule = read('_sass/_story.scss').match(/\n\.text-card \{([^}]*)\}/);
     expect(rule, 'the base .text-card rule').not.toBeNull();
     expect(rule[1]).toMatch(/\n\s*left: \$telar-card-side-left;/);
-    expect(rule[1]).toMatch(/\n\s*width: \$telar-card-side-width;/);
+    expect(rule[1]).toMatch(/\n\s*width: var\(--telar-card-side-width\);/);
   });
 
   it('mirrors those variables on :root', () => {

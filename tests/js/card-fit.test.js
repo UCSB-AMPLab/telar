@@ -1,24 +1,27 @@
 /**
  * Tests for Telar Story – Side-card fit
  *
- * The ceiling formula against its exact values and its monotony, the card's
+ * The width formula against its exact values and its bounds, the width's
+ * publication on the root element, the ceiling formula against its exact
+ * values and its monotony, the card's
  * placement between the band under the controls and one padding above the
- * window's bottom, the size search, and the fit written on a card whose
- * geometry is modelled (card-fit-model.js): what it writes, what it leaves
- * alone, and when its cache answers.
+ * window's bottom, and the pass that caps and places a card: it writes a
+ * max-height and a top and leaves the answer's text size alone.
  *
  * @version v1.8.0
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
-  sideCardCeiling, sideCardTop, searchFitSize, fitAnswerText, SIDE_CARD_CONTROLS,
+  sideCardCeiling, sideCardTop, fitSideCards, SIDE_CARD_CONTROLS,
+  sideCardWidth, publishSideCardWidth, SIDE_CARD_WIDTH,
 } from '../../assets/js/telar-story/card-fit.js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import {
   measureTopBand, measureControlsBottom,
 } from '../../assets/js/telar-story/media-arrangement.js';
 import { mediaPadding, computeBelowCardTop } from '../../assets/js/telar-story/video-layout.js';
-import { modelCard } from './card-fit-model.js';
 
 const T = 480;
 const FRACTION = 0.8;
@@ -45,6 +48,65 @@ const CONTROL_SETS = {
   'controls at 54': { back: 54, share: 52, counter: 50 },
   'controls at 54, banner at 110': { back: 54, share: 52, counter: 50, banner: 110 },
 };
+
+describe('sideCardWidth', () => {
+  it('equals the exact values of the ruling', () => {
+    const exact = [
+      // 37% of the width where the height's line is lower
+      [1920, 1080, 710], [1440, 900, 533], [1280, 720, 474],
+      // 1544 − 1.6·H between the shares
+      [1280, 600, 584], [1440, 560, 648], [1920, 600, 710], [1600, 640, 592],
+      // the line held to 718px in the shortest windows
+      [1440, 481, 718], [1920, 500, 718],
+      // 52% of the width at most
+      [1366, 481, 710], [1025, 601, 533],
+    ];
+    for (const [W, H, value] of exact) {
+      expect(sideCardWidth(W, H), `${W}x${H}`).toBe(value);
+    }
+  });
+
+  it('stays between 37% and 52% of the width and never grows with the height', () => {
+    for (let W = 1025; W <= 1920; W += 15) {
+      let previous = Infinity;
+      for (let H = 481; H <= 1200; H += 7) {
+        const w = sideCardWidth(W, H);
+        expect(w).toBeGreaterThanOrEqual(Math.round(0.37 * W));
+        expect(w).toBeLessThanOrEqual(Math.round(0.52 * W));
+        expect(w, `${W}x${H}`).toBeLessThanOrEqual(previous);
+        previous = w;
+      }
+    }
+  });
+});
+
+describe('the width terms', () => {
+  it('fall back to the stylesheet\'s values, which the :root mirror carries', () => {
+    const sheet = readFileSync(resolve(process.cwd(), '_sass/_responsive.scss'), 'utf8');
+    const sass = (name) => parseFloat(sheet.match(new RegExp(`\\$telar-card-side-${name}:\\s*([0-9.]+)`))[1]);
+    expect(SIDE_CARD_WIDTH).toEqual({
+      minShare: sass('min-share'), maxShare: sass('max-share'), base: sass('base'),
+      slope: sass('slope'), maxByHeight: sass('max-by-height'),
+    });
+    for (const name of ['min-share', 'max-share', 'base', 'slope', 'max-by-height']) {
+      expect(sheet).toMatch(new RegExp(`--telar-card-side-${name}:\\s+#\\{\\$telar-card-side-${name}\\};`));
+    }
+  });
+});
+
+describe('publishSideCardWidth', () => {
+  const readPublished = () => document.documentElement.style.getPropertyValue('--telar-card-side-width');
+  afterEach(() => { document.documentElement.style.removeProperty('--telar-card-side-width'); });
+
+  it('writes the width on a horizontal layout and clears it on a vertical one', () => {
+    publishSideCardWidth(1280, 600, true);
+    expect(readPublished()).toBe('584px');
+    publishSideCardWidth(1440, 900, true);
+    expect(readPublished()).toBe('533px');
+    publishSideCardWidth(900, 400, false);
+    expect(readPublished()).toBe('');
+  });
+});
 
 describe('sideCardCeiling', () => {
   afterEach(() => { document.body.innerHTML = ''; });
@@ -106,118 +168,26 @@ describe('sideCardCeiling', () => {
   }
 });
 
-describe('searchFitSize', () => {
-  it('keeps the base size where the answer fits', () => {
-    expect(searchFitSize({ base: 16, floor: 12, fits: () => true })).toEqual({ mode: 'natural', size: 16 });
-  });
+describe('fitSideCards', () => {
+  afterEach(() => { document.body.innerHTML = ''; });
 
-  it('finds the largest size that fits, to 0.1px', () => {
-    const r = searchFitSize({ base: 16, floor: 12, seed: 13.5, fits: (s) => s <= 13.37 });
-    expect(r.mode).toBe('shrunk');
-    expect(r.size).toBeLessThanOrEqual(13.37);
-    expect(r.size).toBeGreaterThan(13.27);
-  });
+  it('caps the card at the ceiling and places it, leaving its text size alone', () => {
+    const C = controls(CONTROL_SETS['controls at 54']);
+    const card = document.createElement('div');
+    card.className = 'text-card';
+    card.dataset.stepIndex = '0';
+    card.style.height = '500px';
+    document.body.append(card);
 
-  it('scrolls at the floor where even the floor does not fit', () => {
-    expect(searchFitSize({ base: 16, floor: 12, seed: 12.5, fits: (s) => s <= 11 }))
-      .toEqual({ mode: 'scroll', size: 12 });
-  });
+    const { ceiling } = fitSideCards([card], {
+      W: 1280, H: 800, peek: 1, fraction: FRACTION, activeIndex: 0,
+    });
 
-  it('widens once where the fit is below the seed bracket', () => {
-    const r = searchFitSize({ base: 16, floor: 12, seed: 15.9, fits: (s) => s <= 12.5 });
-    expect(r.mode).toBe('shrunk');
-    expect(r.size).toBeGreaterThan(12.4);
-    expect(r.size).toBeLessThanOrEqual(12.5);
-  });
-
-  it('widens once where the fit is above the seed bracket', () => {
-    const r = searchFitSize({ base: 16, floor: 12, seed: 12.1, fits: (s) => s <= 15 });
-    expect(r.mode).toBe('shrunk');
-    expect(r.size).toBeGreaterThan(14.9);
-    expect(r.size).toBeLessThanOrEqual(15);
-  });
-});
-
-describe('fitAnswerText on a modelled card', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    document.documentElement.style.fontSize = '16px';
-  });
-  afterEach(() => {
-    document.documentElement.style.fontSize = '';
-    vi.restoreAllMocks();
-  });
-
-  it('leaves an answer that fits at its size, marked natural', () => {
-    const { card, size } = modelCard();
-    const r = fitAnswerText(card, 500, new WeakMap());
-    expect(r.mode).toBe('natural');
-    expect(card.dataset.cardFit).toBe('natural');
-    expect(size()).toBe(16);
-  });
-
-  it('shrinks the answer to the largest size that fits and writes it on the card', () => {
-    // 100 + 20·s ≤ 380 holds up to s = 14.
-    const { card, question } = modelCard();
-    const r = fitAnswerText(card, 380, new WeakMap());
-    expect(r.mode).toBe('shrunk');
-    expect(card.dataset.cardFit).toBe('shrunk');
-    const written = parseFloat(card.style.getPropertyValue('--telar-answer-fit-size'));
-    expect(written).toBe(r.size);
-    expect(written).toBeGreaterThan(13.9);
-    expect(written).toBeLessThanOrEqual(14);
-    expect(card.style.maxHeight).toBe('380px');
-    expect(question.getAttribute('style')).toBeNull();
-    expect(question.dataset.cardFit).toBeUndefined();
-  });
-
-  it('scrolls at 0.75rem where the answer does not fit at that size', () => {
-    const { card } = modelCard();
-    const r = fitAnswerText(card, 300, new WeakMap());
-    expect(r).toMatchObject({ mode: 'scroll', size: 12 });
-    expect(card.dataset.cardFit).toBe('scroll');
-    expect(card.style.getPropertyValue('--telar-answer-fit-size')).toBe('12px');
-  });
-
-  it('writes nothing when the cache answers', () => {
-    const cache = new WeakMap();
-    const { card } = modelCard();
-    fitAnswerText(card, 380, cache);
-    const style = card.getAttribute('style');
-    const set = vi.spyOn(card.style, 'setProperty');
-    const remove = vi.spyOn(card.style, 'removeProperty');
-
-    const r = fitAnswerText(card, 380, cache);
-
-    expect(r.mode).toBe('shrunk');
-    expect(set).not.toHaveBeenCalled();
-    expect(remove).not.toHaveBeenCalled();
-    expect(card.getAttribute('style')).toBe(style);
-  });
-
-  it('measures again when the answer tier changes at the same width, from 13.6px', () => {
-    // A card at most 360px wide takes 0.85rem, 13.6px: 100 + 20 × 13.6 = 372.
-    const cache = new WeakMap();
-    const { card, answer } = modelCard();
-    expect(fitAnswerText(card, 380, cache).mode).toBe('shrunk');
-
-    answer.style.setProperty('--telar-answer-base-size', '0.85rem');
-    const r = fitAnswerText(card, 380, cache);
-
-    expect(r).toMatchObject({ mode: 'natural', size: 13.6 });
-    expect(card.style.getPropertyValue('--telar-answer-fit-size')).toBe('13.6px');
-  });
-
-  it('measures again when the root font size moves the floor at the same width', () => {
-    const cache = new WeakMap();
-    const { card } = modelCard({ base: '16px' });
-    expect(fitAnswerText(card, 300, cache)).toMatchObject({ mode: 'scroll', size: 12 });
-
-    document.documentElement.style.fontSize = '12px';   // the floor is now 9px
-    const r = fitAnswerText(card, 300, cache);
-
-    expect(r.mode).toBe('shrunk');
-    expect(r.size).toBeGreaterThan(9.9);
-    expect(r.size).toBeLessThanOrEqual(10);
+    expect(ceiling).toBe(sideCardCeiling({ H: 800, W: 1280, C, T, fraction: FRACTION }));
+    expect(card.style.maxHeight).toBe(`${ceiling}px`);
+    expect(card.style.height).toBe('');
+    expect(card.style.getPropertyValue('top')).not.toBe('');
+    expect(card.dataset.cardFit).toBeUndefined();
+    expect(card.style.getPropertyValue('--telar-answer-fit-size')).toBe('');
   });
 });

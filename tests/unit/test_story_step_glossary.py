@@ -9,13 +9,12 @@ layer content, so brackets in the step text published literally.
 
 Scope is the `answer` only. The `question` is the step's title/heading (rendered in
 an <h2>), and inline links do not belong in a heading, so a [[term]] left in the
-question is intentionally not linked. The `answer` is rendered later through Liquid's
-`markdownify`, so the glossary transform runs on the raw markdown string; the injected
-inline <a class="glossary-inline-link"> survives markdownify unchanged. Unknown terms
+question is intentionally not linked. The `answer` is rendered to HTML in the build,
+and the glossary transform runs on that HTML as it does on a panel's. Unknown terms
 in the step text produce the same glossary build warning as unknown terms in layer
 panels.
 
-Version: v1.5.1
+Version: v1.8.0
 """
 
 import sys
@@ -108,4 +107,4 @@ class TestStepGlossaryLinks:
         ])
         out = process_story(df)
         assert out.iloc[0]['question'] == 'A plain question'
-        assert out.iloc[0]['answer'] == 'A plain answer.'
+        assert out.iloc[0]['answer'] == '<p>A plain answer.</p>'

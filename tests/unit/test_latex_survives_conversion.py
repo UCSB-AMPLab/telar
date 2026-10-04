@@ -22,6 +22,7 @@ Version: v1.8.0
 """
 
 import ast
+from html import escape
 import sys
 from pathlib import Path
 
@@ -197,7 +198,7 @@ class TestThePageAndGlossaryBodies:
         published = (tmp_path / '_jekyll-files' / '_pages' / 'probe.md').read_text(
             encoding='utf-8')
 
-        assert source in published, published
+        assert escape(source, quote=False) in published, published
 
     @pytest.mark.parametrize('source', EXPRESSIONS)
     def test_a_glossary_definition_keeps_its_maths(self, tmp_path, monkeypatch,
@@ -215,7 +216,7 @@ class TestThePageAndGlossaryBodies:
         published = (tmp_path / '_jekyll-files' / '_glossary' / 'probe.md').read_text(
             encoding='utf-8')
 
-        assert source in published, published
+        assert escape(source, quote=False) in published, published
 
 
 class TestNothingConvertsMarkdownOnItsOwn:
@@ -258,11 +259,11 @@ class TestTheHelperItself:
 
         assert '$$x^2$$' not in seen[0]
 
-    def test_restore_as_text_escapes_and_the_default_does_not(self):
-        source = '$$a <b$$'
+    def test_restored_maths_is_escaped(self):
+        published = convert_markdown('$$x^2<img src=x onerror=alert(1)>$$ and $$a <b & c$$')
 
-        assert '<b' in convert_markdown(source)
-        assert '&lt;b' in convert_markdown(source, restore_as_text=True)
+        assert '<img' not in published
+        assert '$$a &lt;b &amp; c$$' in published
 
 
 # Maths written inside other maths. The patterns hold the maths out one
@@ -302,12 +303,11 @@ class TestNestedMathsReachesThePageAsWritten:
 class TestNestedMathsFromTheHelper:
 
     def test_the_issue_case_publishes_the_source(self):
-        assert (convert_markdown('Price $x $$y$$ z$ end', extensions=['extra'])
+        assert (convert_markdown('Price $x $$y$$ z$ end')
                 == '<p>Price $x $$y$$ z$ end</p>')
 
-    def test_restored_as_text_the_inner_maths_is_escaped_once(self):
-        published = convert_markdown(r'$\ce{A<B}$ and $x $$a<b$$ z$',
-                                     restore_as_text=True)
+    def test_the_inner_maths_is_escaped_once(self):
+        published = convert_markdown(r'$\ce{A<B}$ and $x $$a<b$$ z$')
 
         assert published == r'<p>$\ce{A&lt;B}$ and $x $$a&lt;b$$ z$</p>'
 
@@ -316,3 +316,18 @@ class TestNestedMathsFromTheHelper:
         published = convert_markdown(r'$x $$y$$ z$ or $x $$y$$ z$')
 
         assert published == r'<p>$x $$y$$ z$ or $x $$y$$ z$</p>'
+
+
+class TestMathsIsEscapedOnce:
+
+    def test_a_formula_in_a_widget_section_is_escaped_once(self):
+        published = process_inline_content(':::accordion\n## One\nSum $$a < b$$\n:::')['content']
+
+        assert '$$a &lt; b$$' in published
+        assert '&amp;lt;' not in published
+
+    def test_a_bare_ampersand_is_escaped_and_a_reference_kept(self):
+        published = convert_markdown(r'$$\begin{aligned} a &= b \end{aligned}$$ and $$x &lt; y$$')
+
+        assert r'a &amp;= b' in published
+        assert '$$x &lt; y$$' in published

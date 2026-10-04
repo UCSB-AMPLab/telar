@@ -1,12 +1,12 @@
 """
-A Glossary Link Goes to the Address Its Page Is Published At
+Term Ids That Share a Slug Share One Address
 
-A legacy glossary file with a `permalink` of its own is published there,
-not at `/glossary/<slug>/`, and two term ids that make one slug claim one
-address. The link map and the pages the generator writes agree on both: a
-link uses the page's own address, and of ids sharing an address the first
-(sheet order, or file-name order for markdown) is published and linkable
-while the later ones are neither, with one warning naming both.
+Every glossary page is published at `/glossary/<slug>/`, so two term ids
+that make one slug claim one address. The link map and the pages the
+generator writes agree: of ids sharing an address the first (sheet order,
+or file-name order for markdown) is published and linkable while the later
+ones are neither, with one warning naming both. A demo term whose address a
+site page holds is skipped and linked to that page.
 
 Version: v1.8.0
 """
@@ -56,57 +56,17 @@ def _written(tmp_path):
     return sorted(p.name for p in (tmp_path / '_jekyll-files/_glossary').glob('*.md'))
 
 
-class TestALegacyPermalinkIsTheLinkAddress:
-    def test_the_link_goes_to_the_permalink(self, tmp_path, monkeypatch, capsys):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /other/')
-
-        terms = generate_glossary()
-
-        assert 'data-term-url="/other/"' in _link('old', terms)
-        page = (tmp_path / '_jekyll-files/_glossary/old.md').read_text(encoding='utf-8')
-        assert 'permalink: /other/' in page
-
-    def test_the_link_map_read_per_story_agrees(self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /other/')
-        assert 'data-term-url="/other/"' in _link('old', load_glossary_terms())
-
-    def test_the_baseurl_is_put_in_front_of_the_permalink(self, tmp_path, monkeypatch):
+class TestALegacyPageIsLinkedAtItsSlug:
+    def test_the_baseurl_is_put_in_front_of_the_slug(self, tmp_path, monkeypatch):
         _site(tmp_path, monkeypatch, baseurl='/site')
         _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /other/')
         html = _link('old', load_glossary_terms(), base_url='/site')
-        assert 'data-term-url="/site/other/"' in html
-
-    @pytest.mark.parametrize('written', ['other/', '/other/', '//other/', '"/other/"'])
-    def test_a_permalink_without_the_leading_slash_is_read_as_jekyll_does(
-            self, tmp_path, monkeypatch, written):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'old.md', f'term_id: old\ntitle: Old\npermalink: {written}')
-        assert 'data-term-url="/other/"' in _link('old', load_glossary_terms())
+        assert 'data-term-url="/site/glossary/old/"' in html
 
     def test_a_file_without_a_permalink_is_linked_at_its_slug(self, tmp_path, monkeypatch):
         _site(tmp_path, monkeypatch)
         _legacy(tmp_path, 'plain.md', 'term_id: Plain_Term\ntitle: Plain')
         assert 'data-term-url="/glossary/plain-term/"' in _link('Plain_Term', load_glossary_terms())
-
-    def test_a_callout_uses_the_permalink_too(self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /other/')
-        terms = load_glossary_terms()
-        assert terms.addresses == {'old': '/other/'}
-
-    def test_two_files_at_one_permalink_keep_the_first_by_file_name(
-            self, tmp_path, monkeypatch, capsys):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'b.md', 'term_id: b\ntitle: B\npermalink: /same/')
-        _legacy(tmp_path, 'a.md', 'term_id: a\ntitle: A\npermalink: /same/')
-
-        terms = generate_glossary()
-
-        assert list(terms) == ['a']
-        assert _written(tmp_path) == ['a.md']
-        assert "'a' and 'b' would both be published at /same/" in capsys.readouterr().out
 
 
 class TestIdsThatShareASlug:
@@ -162,34 +122,25 @@ class TestIdsThatShareASlug:
         assert _written(tmp_path) == ['a_b.md']
         assert "'a_b' and 'a-b'" in capsys.readouterr().out
 
-    def test_a_permalinked_page_does_not_take_a_slug_address(self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'a.md', 'term_id: a_b\ntitle: First\npermalink: /elsewhere/')
-        _legacy(tmp_path, 'b.md', 'term_id: a-b\ntitle: Second')
-        terms = generate_glossary()
-        assert list(terms) == ['a_b', 'a-b']
-
 
 class TestTheDemoPathFollowsTheSameRule:
     def _bundle(self, *ids):
         return {'glossary': {i: {'term': i.upper()} for i in ids}}
 
-    def test_a_legacy_permalink_is_the_address_of_the_site_term(
+    def _demo(self, tmp_path, term_id):
+        import json
+        (tmp_path / '_data').mkdir()
+        (tmp_path / '_data/demo-glossary.json').write_text(json.dumps(
+            [{'term_id': term_id, 'title': 'Demo', 'content': 'demo text'}]),
+            encoding='utf-8')
+
+    def test_a_legacy_page_is_at_its_slug_in_a_demo_story_too(
             self, tmp_path, monkeypatch):
         _site(tmp_path, monkeypatch)
         _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /other/')
         terms = _demo_link_terms(self._bundle('demo-x'))
-        assert 'data-term-url="/other/"' in _link('old', terms)
+        assert 'data-term-url="/glossary/old/"' in _link('old', terms)
         assert 'data-term-url="/glossary/demo-x/"' in _link('demo-x', terms)
-
-    def test_a_demo_id_at_a_permalinked_site_term_slug_stays_its_own(
-            self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /other/')
-        terms = _demo_link_terms(self._bundle('old'))
-        # The site's page is at /other/, so nothing of the demo's is at
-        # /glossary/old/ to displace: the id names the site's page.
-        assert 'data-term-url="/other/"' in _link('old', terms)
 
     def test_demo_ids_sharing_a_slug_link_to_the_first(self, tmp_path, monkeypatch):
         _site(tmp_path, monkeypatch)
@@ -203,112 +154,36 @@ class TestTheDemoPathFollowsTheSameRule:
         terms = _demo_link_terms(self._bundle('viewer'))
         assert terms['viewer'] == 'Site viewer'
 
-    def test_the_generator_skips_a_demo_term_at_a_site_permalink(
-            self, tmp_path, monkeypatch):
-        import json
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'old.md', 'term_id: old\ntitle: Old\npermalink: /glossary/viewer/')
-        (tmp_path / '_data').mkdir()
-        (tmp_path / '_data/demo-glossary.json').write_text(json.dumps(
-            [{'term_id': 'viewer', 'title': 'V', 'content': 'x'}]), encoding='utf-8')
-        generate_glossary()
-        assert _written(tmp_path) == ['old.md']
-
-
-class TestADemoTermDoesNotReplaceASitePageFile:
-    """A demo term is written to `_glossary/<term_id>.md`, so a site page in
-    that file is replaced even when the site page is published elsewhere
-    by its own permalink. The file name is compared as a case-insensitive
-    disk holds it."""
-
-    def _demo(self, tmp_path, term_id):
-        import json
-        (tmp_path / '_data').mkdir()
-        (tmp_path / '_data/demo-glossary.json').write_text(json.dumps(
-            [{'term_id': term_id, 'title': 'Demo', 'content': 'demo text'}]),
-            encoding='utf-8')
-
     @pytest.mark.parametrize('site_id,demo_id', [('old', 'old'), ('Old', 'old')])
-    def test_the_site_page_is_kept_and_linked(
+    def test_the_generator_skips_a_demo_term_at_a_site_slug_and_links_the_site_page(
             self, tmp_path, monkeypatch, capsys, site_id, demo_id):
         _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, f'{site_id}.md',
-                f'term_id: {site_id}\ntitle: Old\npermalink: /other/')
+        _legacy(tmp_path, f'{site_id}.md', f'term_id: {site_id}\ntitle: Old')
         self._demo(tmp_path, demo_id)
 
         terms = generate_glossary()
 
         assert _written(tmp_path) == [f'{site_id}.md']
-        page = (tmp_path / f'_jekyll-files/_glossary/{site_id}.md').read_text(encoding='utf-8')
-        assert 'permalink: /other/' in page
-        assert 'demo text' not in page
-        assert 'data-term-url="/other/"' in _link(site_id, terms)
-        assert (f"Demo glossary term '{demo_id}' skipped: the site's glossary "
-                f"term '{site_id}' is written to the same file, "
-                f"_glossary/{site_id}.md, which is kept.") in capsys.readouterr().out
-
-    def test_a_name_the_disk_folds_to_a_site_file_is_skipped_and_linked_there(
-            self, tmp_path, monkeypatch, capsys):
-        # A case-insensitive disk (APFS here) holds Straße.md and Strasse.md
-        # as one file, and glossary/straße/ and glossary/strasse/ as one
-        # folder, so the output file is taken first.
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'Straße.md', 'term_id: Straße\ntitle: Street')
-        self._demo(tmp_path, 'Strasse')
-
-        generate_glossary()
-
-        assert _written(tmp_path) == ['Straße.md']
-        assert ("Demo glossary term 'Strasse' skipped: another glossary term is "
-                "published at /glossary/straße/, which is kept."
-                ) in capsys.readouterr().out
-        terms = _demo_link_terms({'glossary': {'Strasse': {'term': 'Demo'}}})
-        assert terms['Strasse'] == 'Street'
-
-    def test_of_two_demo_terms_in_one_file_the_first_is_kept_and_named(
-            self, tmp_path, monkeypatch, capsys):
-        import json
-        _site(tmp_path, monkeypatch)
-        (tmp_path / '_data').mkdir()
-        (tmp_path / '_data/demo-glossary.json').write_text(json.dumps(
-            [{'term_id': 'Straße', 'title': 'Street', 'content': 'a'},
-             {'term_id': 'Strasse', 'title': 'Other', 'content': 'b'}]),
-            encoding='utf-8')
-
-        generate_glossary()
-
-        assert _written(tmp_path) == ['Straße.md']
-        assert ("Demo glossary term 'Strasse' skipped: another glossary term is "
-                "published at /glossary/straße/, which is kept."
-                ) in capsys.readouterr().out
-        terms = _demo_link_terms({'glossary': {'Straße': {'term': 'Street'},
-                                               'Strasse': {'term': 'Other'}}})
-        assert terms['Strasse'] == 'Street'
-        assert terms.addresses['Strasse'] == terms.addresses.get(
-            'Straße', '/glossary/straße/')
-
-    def test_a_demo_story_links_the_demo_id_to_the_site_page(
-            self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'Old.md', 'term_id: Old\ntitle: Old\npermalink: /other/')
-        terms = _demo_link_terms({'glossary': {'old': {'term': 'Demo'}}})
-        # [[old]] is looked up case-insensitively and the site's key is
-        # entered last, so the link names the site's page.
-        assert 'data-term-url="/other/"' in _link('old', terms)
+        assert 'demo text' not in (
+            tmp_path / f'_jekyll-files/_glossary/{site_id}.md').read_text(encoding='utf-8')
+        assert (f"Demo glossary term '{demo_id}' skipped: another glossary term is "
+                f"published at /glossary/old/, which is kept.") in capsys.readouterr().out
+        assert '>Old<' in _link(demo_id, _demo_link_terms(
+            {'glossary': {demo_id: {'term': 'Demo'}}}))
+        assert 'data-term-url="/glossary/old/"' in _link(site_id, terms)
 
 
 def _published(tmp_path):
     """{address: (term_id, title)} of the pages the generator wrote, each at
     the address Jekyll publishes it at."""
     import yaml
-    from telar.glossary import glossary_term_address, markdown_glossary_permalink
+    from telar.glossary import glossary_term_address
     pages = {}
     for path in (tmp_path / '_jekyll-files/_glossary').glob('*.md'):
         front_matter = path.read_text(encoding='utf-8').split('---\n')[1]
         fields = yaml.safe_load(front_matter)
         term_id = str(fields['term_id'])
-        address = glossary_term_address(term_id, markdown_glossary_permalink(front_matter))
-        pages[address] = (term_id, str(fields.get('title') or term_id))
+        pages[glossary_term_address(term_id)] = (term_id, str(fields.get('title') or term_id))
     return pages
 
 
@@ -332,10 +207,9 @@ _SITES = {
 }
 
 _DEMOS = [
-    ('Strasse',), ('Straße', 'Strasse'), ('Strasse', 'Straße'),
-    ('a_b', 'a-b'), ('a-b', 'a_b'), ('demo-x',), ('old',), ('Old', 'old'),
-    ('demo-a b', 'demo-a-b'), ('viewer',), ('viewer', 'Viewer'),
-    ('a_b',), ('strasse', 'Strasse', 'Straße'),
+    ('Strasse',), ('a_b', 'a-b'), ('a-b', 'a_b'), ('demo-x',), ('old',),
+    ('Old', 'old'), ('demo-a b', 'demo-a-b'), ('viewer',), ('viewer', 'Viewer'),
+    ('a_b',),
 ]
 
 
@@ -377,45 +251,3 @@ class TestTheLinkMapNamesOnlyPagesTheGeneratorWrote:
             assert f'>{html.escape(published[address][1])}<' in link, (demo_id, link, published)
             if demo_id in own:
                 assert address == own[demo_id], (demo_id, address, published)
-
-
-class TestASkippedDemoTermLeavesItsAddressAndFileFree:
-    """Only a page that is written holds its address and its file, so a demo
-    term skipped for one of them does not keep a later demo term out."""
-
-    def _run(self, tmp_path, demo_ids):
-        import json
-        (tmp_path / '_data').mkdir()
-        (tmp_path / '_data/demo-glossary.json').write_text(json.dumps(
-            [{'term_id': i, 'title': f'Demo {i}', 'content': i} for i in demo_ids]),
-            encoding='utf-8')
-        generate_glossary()
-        return _demo_link_terms({'glossary': {i: {'term': f'Demo {i}'} for i in demo_ids}})
-
-    def test_a_term_skipped_for_its_file_leaves_its_address(self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'a.md', 'term_id: a_b\ntitle: Site AB\npermalink: /elsewhere/')
-        terms = self._run(tmp_path, ['a_b', 'a-b'])
-        assert _written(tmp_path) == ['a-b.md', 'a_b.md']
-        assert 'data-term-url="/elsewhere/"' in _link('a_b', terms)
-        assert 'data-term-url="/glossary/a-b/"' in _link('a-b', terms)
-
-    def test_ids_sharing_a_file_share_an_output_folder_too(self, tmp_path, monkeypatch):
-        # Ids that casefold alike make slugs that casefold alike, so a demo
-        # term skipped for its address cannot leave a file another demo id
-        # could take: glossary/strasse/ is the folder glossary/straße/ is.
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'x.md', 'term_id: X\ntitle: Site X\npermalink: /glossary/straße/')
-        terms = self._run(tmp_path, ['Straße', 'Strasse'])
-        assert _written(tmp_path) == ['X.md']
-        assert 'data-term-url="/glossary/straße/"' in _link('Straße', terms)
-        assert 'data-term-url="/glossary/straße/"' in _link('Strasse', terms)
-        assert '>Site X<' in _link('Strasse', terms)
-
-    def test_a_term_skipped_for_a_site_file_links_at_the_site_pages_slug(
-            self, tmp_path, monkeypatch):
-        _site(tmp_path, monkeypatch)
-        _legacy(tmp_path, 'Straße.md', 'term_id: Straße\ntitle: Street')
-        terms = self._run(tmp_path, ['Strasse'])
-        assert _written(tmp_path) == ['Straße.md']
-        assert 'data-term-url="/glossary/straße/"' in _link('Strasse', terms)

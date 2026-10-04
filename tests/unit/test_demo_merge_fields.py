@@ -73,9 +73,9 @@ class TestAReleasedBundle:
         merge_demo_content(_bundle())
 
         step = _read(site, 'demo-story.json')[0]
-        for key in ('alt_text', 'page', 'clip_start', 'clip_end', 'loop', 'answer_kramdown'):
+        for key in ('alt_text', 'page', 'clip_start', 'clip_end', 'loop'):
             assert key not in step, key
-        assert step['answer'] == 'Plain answer.'
+        assert step['answer'] == '<p>Plain answer.</p>'
 
     def test_a_story_without_maths_has_no_metadata_row(self, site):
         merge_demo_content(_bundle())
@@ -117,8 +117,7 @@ class TestABundleWithTheNewerFields:
 
         rows = _read(site, 'demo-story.json')
         assert rows[0] == {'_metadata': True, 'has_latex': True}
-        assert rows[1]['answer'] == 'Area \\(x^2\\).'
-        assert rows[1]['answer_kramdown'] == 'Area $$x^2$$.'
+        assert rows[1]['answer'] == '<p>Area \\(x^2\\).</p>'
 
     def test_a_glossary_link_in_an_answer_is_resolved(self, site):
         stories = {'demo-story': {'steps': [
@@ -139,8 +138,7 @@ class TestABundleWithTheNewerFields:
         merge_demo_content(_bundle(stories=stories))
 
         answer = _read(site, 'demo-story.json')[0]['answer']
-        assert answer.endswith('…')
-        assert len(answer.split()) < 400
+        assert answer == '<p>' + ' '.join(['word'] * 85) + '…</p>'
 
     @pytest.mark.parametrize('related', [['demo-other', 'demo-third'], 'demo-other|demo-third'],
                              ids=['list', 'pipe-separated'])

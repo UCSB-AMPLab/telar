@@ -12,9 +12,10 @@
  * calls it with the card's measured height and writes the answer on the
  * plate, where the player and the card both read it. On a vertical layout the
  * card is at the bottom, so the player goes above it (stacked). The
- * proportions, the side card's included, are read once, when this module
- * loads, from the CSS custom properties in _sass/_responsive.scss, which the
- * stylesheet builds the card from.
+ * proportions are read once, when this module loads, from the CSS custom
+ * properties in _sass/_responsive.scss, which the stylesheet builds the card
+ * from. The side card's width is read at each call, because card-fit.js
+ * publishes it per window on the root element (`--telar-card-side-width`).
  *
  * The embed builders and the clip-time format are here because, like the
  * layout, they are arithmetic on their arguments with nothing to tear down.
@@ -31,7 +32,6 @@ const _cs = getComputedStyle(document.documentElement);
 const videoPadFactor = parseFloat(_cs.getPropertyValue('--telar-video-pad-factor').trim())  || 0.025;
 const videoStackMaxH = parseFloat(_cs.getPropertyValue('--telar-video-stack-max-h').trim()) || 0.58;
 const cardSideLeft   = readFraction('--telar-card-side-left', 0.03);
-const cardSideWidth  = readFraction('--telar-card-side-width', 0.37);
 const mediaBelowGain = _readNumber('--telar-media-below-gain', 0.15);
 
 /**
@@ -58,9 +58,28 @@ export function readFraction(name, fallback) {
   return raw.endsWith('%') ? value / 100 : value;
 }
 
-/** The side text card's right edge, in px, as the stylesheet places it. */
-function _sideCardRight(W) {
-  return Math.round(W * (cardSideLeft + cardSideWidth));
+/**
+ * The side text card's width, in px: the width card-fit.js publishes for the
+ * window on the root element's own style, or the stylesheet's share of W
+ * where none is published.
+ *
+ * @param {number} W - Viewport width in px
+ * @returns {number}
+ */
+export function sideCardWidthPx(W) {
+  const published = parseFloat(document.documentElement.style.getPropertyValue('--telar-card-side-width'));
+  if (Number.isFinite(published)) return published;
+  return W * readFraction('--telar-card-side-width', 0.37);
+}
+
+/**
+ * The side text card's right edge, in px, as the stylesheet places it.
+ *
+ * @param {number} W - Viewport width in px
+ * @returns {number}
+ */
+export function sideCardRight(W) {
+  return Math.round(W * cardSideLeft + sideCardWidthPx(W));
 }
 
 // ── Pure functions (unit-tested) ──────────────────────────────────────────────
@@ -146,8 +165,7 @@ export function chooseVideoArrangement(W, H, aspectRatio, cardH, topBand) {
  *     than --telar-vertical-min-aspect of its height): the card is at the
  *     bottom, so the video is stacked above it (max 58% of H).
  *   - Horizontal layout: the card is the side card, from
- *     --telar-card-side-left to --telar-card-side-left + --telar-card-side-width
- *     of W, so the video starts one padding past the card's right edge and
+ *     --telar-card-side-left of W to that plus --telar-card-side-width, so the video starts one padding past the card's right edge and
  *     fits the space that leaves, from the top band (`topBand`) to one padding
  *     above the window's bottom edge. It is centred on the window's height
  *     unless that would put its top above the band. A stacked video would be
@@ -197,7 +215,7 @@ function _computeBelowLayout(W, H, aspectRatio, below) {
   }
   vidW = Math.round(vidW);
   vidH = Math.round(vidH);
-  const cardW = Math.round(W * cardSideWidth);
+  const cardW = Math.round(sideCardWidthPx(W));
   return {
     mode: 'below',
     video: {
@@ -222,7 +240,7 @@ function _computeBelowLayout(W, H, aspectRatio, below) {
  * window's bottom edge.
  */
 function _besideRegion(W, H, pad, topBand) {
-  const left = _sideCardRight(W) + pad;
+  const left = sideCardRight(W) + pad;
   const top = Math.max(pad, Math.round(topBand) || 0);
   return {
     left,
@@ -251,7 +269,7 @@ function _buildSideBySideResult(W, H, pad, region, sideVidW, sideVidH) {
   const vidH = Math.round(sideVidH);
   const vidLeft = region.left;
   const vidTop = Math.max(region.top, Math.round((H - vidH) / 2));
-  const cardW = Math.round(W * cardSideWidth);
+  const cardW = Math.round(sideCardWidthPx(W));
   const cardH = Math.round(H - pad * 2);
   const cardLeft = Math.round(W * cardSideLeft);
   const cardTop = pad;

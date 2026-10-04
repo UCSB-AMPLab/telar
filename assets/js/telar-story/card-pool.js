@@ -83,11 +83,12 @@ import {
   framePlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
-import { isFitHeight, applyCardMotionDuration } from './card-height.js';
+import { applyCardMotionDuration } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
 import { arrangeMediaScene, measureTopBand } from './media-arrangement.js';
-import { fitSideCards, sideCardBand, sideCardTop, clearAnswerFit, timeGeometryPass, watchCardContent } from './card-fit.js';
-import { attachCardScroll, resetCardScroll } from './card-scroll.js';
+import {
+  fitSideCards, publishSideCardWidth, sideCardBand, sideCardTop, timeGeometryPass, watchCardContent,
+} from './card-fit.js';
 import { MediaPlate } from './plates/media-plate.js';
 import { VideoPlate } from './plates/video-plate.js';
 import { AudioPlate } from './plates/audio-plate.js';
@@ -401,7 +402,7 @@ function _liftBase(progress) {
   return progress ? `translateY(${-progress * 100}vh)` : 'translateY(0)';
 }
 
-// A viewport's worth of travel clears any card the fit model builds: its
+// A viewport's worth of travel clears any side card: its
 // lower edge rests at most one padding above the viewport's bottom
 // (card-fit.js, sideCardTop). The card's own rotation and offset ride along,
 // so a lifted card is the same sheet at a different height rather than a
@@ -448,7 +449,6 @@ function _liftProgress() {
  * @returns {boolean}
  */
 function _coveredCardLifts(stepIndex) {
-  if (!isFitHeight()) return false;
   const over = stepIndex + 1;
   if (stepIndex < 0 || over >= _stepsData.length) return false;
   if (getSceneIndex(stepIndex) === getSceneIndex(over)) return true;
@@ -546,8 +546,8 @@ function _readCardMessiness(el) {
 // ── Geometry recompute on resize / layout change ─────────────────────────────
 
 /**
- * The side card's share of a tall viewport: its height under the fixed model,
- * and its ceiling under the fit model.
+ * The side card's share of a tall viewport: its ceiling, and the height of the
+ * portrait bottom card before the stylesheet's max-height caps it.
  */
 const SIDE_CARD_VIEWPORT_FRACTION = 0.80;
 
@@ -600,18 +600,19 @@ function _recomputeCardGeometry(viewportW, viewportH, changed = null) {
 function _geometryPass(viewportW, viewportH, changed) {
   const peekHeight = _config.peekHeight;
   const landscapeSideCard = isLandscapeSideCard();
-  // The fit model governs the side card on a horizontal layout, at any
-  // height (card-fit.js). A landscape phone and the portrait bottom card keep
-  // their own geometry below.
-  const sideFit = isFitHeight() && getLayoutMode() !== 'vertical';
+  // The side card on a horizontal layout is sized by its content
+  // (card-fit.js). A window at or below the side-card height and the portrait
+  // bottom card are on a vertical layout and keep their own geometry below.
+  const horizontal = getLayoutMode() !== 'vertical';
+  publishSideCardWidth(viewportW, viewportH, horizontal);
 
   const cards = document.querySelectorAll('.text-card');
-  const side = sideFit ? fitSideCards(changed || cards, { W: viewportW, H: viewportH,
+  const side = horizontal ? fitSideCards(changed || cards, { W: viewportW, H: viewportH,
     peek: peekHeight, fraction: SIDE_CARD_VIEWPORT_FRACTION, activeIndex: state.currentIndex }) : null;
 
-  const phoneBand = _phoneBandFor(landscapeSideCard && !sideFit, viewportW, viewportH);
+  const phoneBand = _phoneBandFor(landscapeSideCard, viewportW, viewportH);
 
-  if (!sideFit) {
+  if (!horizontal) {
     for (const card of cards) {
       _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand);
     }
@@ -620,8 +621,7 @@ function _geometryPass(viewportW, viewportH, changed) {
   // A media scene's cards can go below its player only where they were just
   // sized to their content on a horizontal layout: the arrangement is decided
   // from those heights.
-  const contentSized = (sideFit || landscapeSideCard) && getLayoutMode() !== 'vertical';
-  _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side);
+  _arrangeMediaScenes(cards, viewportW, viewportH, horizontal, side);
 }
 
 /**
@@ -629,7 +629,7 @@ function _geometryPass(viewportW, viewportH, changed) {
  * short portrait window is not a phone held sideways and keeps the card the
  * CSS rule gives it.
  *
- * @param {boolean} eligible - A landscape side card that the fit model does not govern
+ * @param {boolean} eligible - The window is a landscape side card
  * @param {number} viewportW - Current viewport width in px
  * @param {number} viewportH - Current viewport height in px
  * @returns {{ band: number, pad: number, ceiling: number }|null}
@@ -641,9 +641,9 @@ function _phoneBandFor(eligible, viewportW, viewportH) {
 }
 
 /**
- * Size and place one text card by the layout it is in: sized to its content
- * for a landscape side card, bottom-anchored by CSS on a portrait layout, or
- * a tall centred side card on a desktop horizontal layout.
+ * Size and place one text card on a vertical layout: sized to its content
+ * for a landscape side card, bottom-anchored by CSS on a portrait layout. The
+ * side card on a horizontal layout is placed by card-fit.js.
  *
  * @param {HTMLElement} card
  * @param {number} viewportH - Current viewport height in px
@@ -652,35 +652,22 @@ function _phoneBandFor(eligible, viewportW, viewportH) {
  * @param {{ band: number, pad: number, ceiling: number }|null} phoneBand
  */
 function _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand) {
-  clearAnswerFit(card);
   const runPos = parseInt(card.dataset.runPosition, 10) || 0;
 
   if (landscapeSideCard) {
-    // A landscape phone, a short portrait window, or a short window under the
-    // fixed model: the CSS rule sets `height: auto !important` and the
-    // ceiling, so the card is sized to its content and centred by the height
-    // it renders at. A phone's ceiling and top come from the band under the
-    // top controls.
+    // A window at or below the side-card height (a landscape phone, a short
+    // desktop window or a short portrait window): the CSS rule sets
+    // `height: auto !important` and the ceiling, so the card is sized to its
+    // content and centred by the height it renders at. A phone's ceiling and
+    // top come from the band under the top controls.
     _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
-  } else if (getLayoutMode() === 'vertical') {
-    // getLayoutMode() reads the live matchMedia (self-initialising), so this is
-    // correct even when geometry runs at init — before layout-mode.js has
-    // written state.layoutMode (which defaults to 'horizontal' and would wrongly
-    // pick the desktop branch, jamming the portrait card at the top).
+  } else {
     // Portrait mobile: the card is bottom-anchored by CSS (`top: auto !important`,
     // `max-height: 40vh`). Remove any inline top so the CSS anchor wins — do NOT
     // force an !important top here, or the card detaches from the bottom on resize.
     card.style.removeProperty('top');
     card.style.removeProperty('max-height');
     card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;  // capped by the CSS max-height: 40vh
-  } else {
-    // Desktop horizontal: tall side card sized to 80% of the (tall) viewport,
-    // vertically centred. No base CSS `top`, so the inline value drives placement.
-    const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
-    const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
-    card.style.setProperty('top', `${topPx}px`, 'important');
-    card.style.removeProperty('max-height');
-    card.style.height = `${cardH}px`;
   }
 }
 
@@ -696,7 +683,8 @@ function _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneB
  * @param {number} viewportH - Current viewport height in px
  * @param {boolean} contentSized - Whether the cards were sized to their content
  *   on a horizontal layout
- * @param {{ topOf: (card: HTMLElement) => number }|null} side - The fit's placement
+ * @param {{ topOf: (card: HTMLElement) => number }|null} side - The fit's placement;
+ *   null on a vertical layout, where no scene is arranged
  */
 function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side) {
   const cardsByScene = {};
@@ -704,8 +692,7 @@ function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side) {
     const scene = getSceneIndex(parseInt(card.dataset.stepIndex, 10));
     (cardsByScene[scene] ||= []).push(card);
   }
-  const besideTop = side?.topOf ?? ((card) => computeCardTop(
-    viewportH, card.offsetHeight, _cardRunPosition(card), _config.peekHeight));
+  const besideTop = side?.topOf;
   const topBand = measureTopBand(viewportW, viewportH);
   for (const [scene, plate] of Object.entries(state.viewerPlates)) {
     if (!(plate instanceof MediaPlate)) continue;
@@ -885,11 +872,11 @@ function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
     card.dataset.messinessOffY = messiness.offY;
 
     // `.step-data` is a hidden block the story layout renders every step into
-    // at build time, with markdownify, panel triggers and layer conditions
-    // already applied. Cloning out of it is what lets a card carry authored
-    // markup the client cannot produce: Liquid has run, and the browser has no
-    // markdown renderer. A step with no node there falls back to building the
-    // content from the step data, which loses that processing.
+    // at build time, with panel triggers and layer conditions already
+    // applied. Cloning out of it is what lets a card carry markup only Liquid
+    // produces. A step with no node there falls back to building the content
+    // from the step data, which carries the rendered answer but not that
+    // markup.
     const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
     if (hiddenStep) {
       const content = hiddenStep.querySelector('.step-content');
@@ -904,7 +891,6 @@ function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
 
     cardStack.appendChild(card);
     state.textCards[stepIdx] = card;
-    attachCardScroll(card);
   }
 }
 
@@ -1057,8 +1043,9 @@ export function initCardPool(storyData, config) {
  * Must stay selector-compatible with the server-rendered step markup that
  * downstream code keys on: .step-question, .step-answer, and
  * .panel-trigger[data-panel][data-step] (panels.js delegates on [data-panel]).
- * Intentional divergences from the server markup: content renders as escaped
- * flat text (no markdown), headings use div not h2, no viewer-warning block,
+ * The question is escaped text and the answer is the HTML the build rendered,
+ * as in the server markup. Intentional divergences from it: headings use div
+ * not h2, no viewer-warning block,
  * and layer triggers render only when layer*_button is non-empty (the server
  * falls back to a default label whenever layer content exists).
  *
@@ -1067,7 +1054,7 @@ export function initCardPool(storyData, config) {
  */
 function buildTextCardContent(step) {
   const question = escapeHtml(step.question || '');
-  const answer   = escapeHtml(step.answer   || '');
+  const answer   = step.answer || '';
 
   const hasLayer1 = step.layer1_button && step.layer1_button.trim();
   const hasLayer2 = step.layer2_button && step.layer2_button.trim();
@@ -1090,22 +1077,21 @@ function buildTextCardContent(step) {
 /**
  * Build the inner HTML for a title card from step data.
  *
- * question/answer carry author CSV text whose documented contract is plain
- * text only, so both are escaped, matching buildTextCardContent. Escaping
- * here is display consistency, not an injection boundary — the same strings
- * flow unescaped through the Liquid intro TOC and the server-rendered step
- * pool.
+ * The question is author CSV text, escaped as plain text; the answer is the
+ * HTML the build rendered, inserted as the server-rendered step prints it,
+ * matching buildTextCardContent. The answer's paragraphs sit in a div, since
+ * a paragraph cannot hold one.
  *
  * @param {Object} step - Step data object
  * @returns {string} HTML string
  */
 function _buildTitleCardContent(step) {
   const heading = escapeHtml(step.question || '');
-  const body    = escapeHtml(step.answer   || '');
+  const body    = step.answer || '';
   return `
     <div class="title-card-inner">
       <h2 class="title-card-heading">${heading}</h2>
-      ${body ? '<p class="title-card-body">' + body + '</p>' : ''}
+      ${body ? '<div class="title-card-body">' + body + '</div>' : ''}
     </div>
   `;
 }
@@ -1912,7 +1898,8 @@ function _writeCardOverlayRect(cardEl) {
  */
 function _activateTextCard(cardEl) {
   const messiness = _readCardMessiness(cardEl);
-  resetCardScroll(cardEl);
+  // A card scrolled inside the vertical layout arrives at its question.
+  if (cardEl.scrollTop !== 0) cardEl.scrollTop = 0;
   cardEl.classList.remove('is-stacked');
   cardEl.classList.add('is-active');
 

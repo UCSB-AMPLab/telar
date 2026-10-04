@@ -32,7 +32,7 @@ ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 
 from telar import config
-from telar.latex import _with_localised_footnotes, convert_markdown
+from telar.latex import convert_markdown
 
 LANGUAGES = os.path.join(ROOT, '_data', 'languages')
 
@@ -107,7 +107,7 @@ class TestWhatEachSiteRenders:
     def test_a_spanish_site_gets_spanish(self, site):
         site('es')
 
-        html = convert_markdown(SOURCE, extensions=['extra', 'nl2br'])
+        html = convert_markdown(SOURCE)
 
         assert TITLES.findall(html) == ['Volver a la nota 1',
                                         'Volver a la nota 2']
@@ -120,8 +120,8 @@ class TestWhatEachSiteRenders:
         """
         site('en')
 
-        ours = convert_markdown(SOURCE, extensions=['extra', 'nl2br'])
-        theirs = markdown.markdown(SOURCE, extensions=['extra', 'nl2br'])
+        ours = convert_markdown(SOURCE)
+        theirs = markdown.markdown(SOURCE, extensions=['extra', 'nl2br', 'smarty'])
 
         assert ours == theirs
 
@@ -143,7 +143,7 @@ class TestWhatEachSiteRenders:
         """
         site('es')
 
-        html = convert_markdown(REORDERED, extensions=['extra', 'nl2br'])
+        html = convert_markdown(REORDERED)
 
         assert TITLES.findall(html) == ['Volver a la nota 1',
                                         'Volver a la nota 2']
@@ -151,14 +151,6 @@ class TestWhatEachSiteRenders:
 
 
 class TestTheExtensionListItBuilds:
-
-    def test_extra_gains_footnotes_by_name(self):
-        """The config is keyed on the extension name, and `extra` has none
-        of its own — so the name has to be there for the key to bind."""
-        extensions, configs = _with_localised_footnotes(['extra', 'nl2br'])
-
-        assert 'footnotes' in extensions
-        assert 'footnotes' in configs
 
     def test_naming_it_alongside_extra_changes_nothing_else(self):
         """Measured rather than assumed: the reason this is safe to do."""
@@ -168,22 +160,3 @@ class TestTheExtensionListItBuilds:
         assert (markdown.markdown(source, extensions=['extra', 'nl2br'])
                 == markdown.markdown(source,
                                      extensions=['extra', 'nl2br', 'footnotes']))
-
-    def test_a_conversion_without_footnotes_is_left_alone(self):
-        """A carousel caption converts with no extensions at all.
-
-        Adding the extension there would start emitting footnote markup
-        from fields that have never had any.
-        """
-        extensions, configs = _with_localised_footnotes([])
-
-        assert extensions == []
-        assert configs == {}
-
-    def test_the_callers_list_is_not_mutated(self):
-        """It is the caller's own list, documented as passed through."""
-        caller = ['extra']
-
-        _with_localised_footnotes(caller)
-
-        assert caller == ['extra']

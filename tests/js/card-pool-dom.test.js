@@ -291,14 +291,16 @@ describe('initCardPool — a run starts where its scene starts', () => {
   });
 });
 
-// ── Built card content escapes author text ───────────────────────────────────
-// question/answer are documented as plain text; both JS builders must escape
-// them identically. Runs the real initCardPool build phase in jsdom: title
-// cards exercise _buildTitleCardContent (the live path), and omitting the
+// ── Built card content: escaped question, rendered answer ───────────────────
+// The question is plain text and both JS builders escape it; the answer is
+// the HTML the build rendered, which both insert as the server-rendered step
+// prints it. Runs the real initCardPool build phase in jsdom: title cards
+// exercise _buildTitleCardContent (the live path), and omitting the
 // .step-data markup forces the clone miss that exercises buildTextCardContent.
 
-describe('initCardPool — built card content escapes author text', () => {
+describe('initCardPool — built card content', () => {
   const HTMLY = '<b onmouseover="x()">Coleccion</b> & "quotes"';
+  const ANSWER = '<p>One <em>rendered</em> answer.</p>\n<p>Two &ldquo;paragraphs&rdquo;.</p>';
 
   beforeEach(() => {
     document.body.innerHTML = '<div class="card-stack"></div>';
@@ -314,31 +316,38 @@ describe('initCardPool — built card content escapes author text', () => {
     state.titleCards = {};
   });
 
-  it('escapes question and answer in title cards (live path)', () => {
-    initCardPool({ steps: [{ step: '1', object: '', question: HTMLY, answer: HTMLY }] }, {});
+  it('escapes the question and inserts the rendered answer in title cards (live path)', () => {
+    initCardPool({ steps: [{ step: '1', object: '', question: HTMLY, answer: ANSWER }] }, {});
     const heading = document.querySelector('.title-card .title-card-heading');
     const body = document.querySelector('.title-card .title-card-body');
     expect(heading).not.toBeNull();
     expect(heading.textContent).toBe(HTMLY);
     expect(heading.querySelector('b')).toBeNull();
-    expect(body.textContent).toBe(HTMLY);
-    expect(body.querySelector('b')).toBeNull();
+    expect(body.tagName).toBe('DIV');
+    expect(body.querySelectorAll('p')).toHaveLength(2);
+    expect(body.querySelector('em').textContent).toBe('rendered');
+    expect(body.textContent).toBe('One rendered answer.\nTwo \u201cparagraphs\u201d.');
   });
 
-  it('escapes question and answer in the fallback text-card builder (clone miss)', () => {
+  it('escapes the question and inserts the rendered answer in the fallback text-card builder (clone miss)', () => {
     // Leading title step keeps scene 0 plate-free, so initCardPool's IIIF
     // preload tail (which needs OpenSeadragon) never runs in jsdom.
     initCardPool({ steps: [
       { step: '1', object: '', question: 'intro', answer: '' },
-      { step: '2', object: 'obj-a', question: HTMLY, answer: HTMLY },
+      { step: '2', object: 'obj-a', question: HTMLY, answer: ANSWER },
     ] }, {});
     const q = document.querySelector('.text-card .step-question');
     const a = document.querySelector('.text-card .step-answer');
     expect(q).not.toBeNull();
     expect(q.textContent).toBe(HTMLY);
     expect(q.querySelector('b')).toBeNull();
-    expect(a.textContent).toBe(HTMLY);
-    expect(a.querySelector('b')).toBeNull();
+    expect(a.querySelectorAll('p')).toHaveLength(2);
+    expect(a.querySelector('em').textContent).toBe('rendered');
+  });
+
+  it('builds no title card body for an empty answer', () => {
+    initCardPool({ steps: [{ step: '1', object: '', question: 'Q', answer: '' }] }, {});
+    expect(document.querySelector('.title-card .title-card-body')).toBeNull();
   });
 });
 
@@ -949,11 +958,11 @@ describe('reconcilePlatesForJump — closing the plates a jump crossed', () => {
   });
 });
 
-// ── The side card's fit and its scroll ───────────────────────────────────────
-// The fit itself is card-fit.test.js's; here, only that the pool runs it on a
-// horizontal layout and that an activated card arrives at its question.
+// ── The side card's placement and its scroll ─────────────────────────────────
+// The geometry itself is card-fit.test.js's; here, only that an activated
+// card arrives at its question.
 
-describe('card pool — the side card is fitted and arrives at its top', () => {
+describe('card pool — an activated card arrives at its top', () => {
   beforeEach(() => {
     resetPoolState();
     vi.stubGlobal('matchMedia', vi.fn().mockImplementation(REDUCED_MOTION));
@@ -972,17 +981,9 @@ describe('card pool — the side card is fitted and arrives at its top', () => {
     { step: '2', object: 'A', question: 'q', answer: 'a' },
   ];
 
-  it('writes a fit on every text card of a horizontal layout', () => {
-    buildStory(steps);
-    for (const card of Object.values(state.textCards)) {
-      expect(card.dataset.cardFit).toBe('natural');
-    }
-  });
-
   it('puts a card back at its question when it is activated', () => {
     buildStory(steps);
     const card = state.textCards[1];
-    card.dataset.cardFit = 'scroll';
     card.scrollTop = 240;
     state.currentObjectRun = { objectId: 'A', runPosition: 0 };
 

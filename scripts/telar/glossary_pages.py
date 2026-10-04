@@ -15,24 +15,13 @@ from pathlib import Path
 
 from telar.images import process_images
 from telar.glossary import (first_at_each_address, glossary_link_map, glossary_term_address,
-                            markdown_glossary_address, place_demo_terms,
-                            markdown_glossary_title,
+                            place_demo_terms, markdown_glossary_title,
                             process_glossary_links, read_glossary_sheet)
-from telar.markdown import read_markdown_file, process_inline_content
+from telar.markdown import process_inline_content, read_markdown_file, render_markdown
 from telar.core import find_csv_with_fallback
-from telar.latex import convert_markdown, has_latex
+from telar.latex import has_latex
 from telar.frontmatter import FRONTMATTER_PATTERN, _as_text, _frontmatter_block
 from telar.glossary_kinds import front_matter_kind, resolve_kind, write_site_kinds
-
-
-class GlossaryPages(dict):
-    """`site_glossary_pages()`'s {term_id: (title, kind id)}, with the
-    site-relative path of each page that is not published at its slug in
-    `addresses`."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.addresses = {}
 
 
 def _csv_page_rows(csv_path, warn_missing=True):
@@ -61,14 +50,13 @@ def _csv_page_rows(csv_path, warn_missing=True):
             continue
         rows.append((term_id, title, row))
     kept = first_at_each_address(
-        [(term_id, glossary_term_address(term_id), (term_id, title, row))
-         for term_id, title, row in rows], warn_missing)
-    return [item for _id, _address, item in kept]
+        [(term_id, (term_id, title, row)) for term_id, title, row in rows], warn_missing)
+    return [item for _id, item in kept]
 
 
 def _csv_pages(rows):
     """The `site_glossary_pages` entries of `_csv_page_rows`' rows."""
-    pages = GlossaryPages()
+    pages = {}
     for term_id, title, row in rows:
         pages[term_id] = (title, resolve_kind(row.get('kind', ''), warn=False))
     return pages
@@ -86,29 +74,34 @@ def _split_markdown_term(content):
             term_id_match.group(1) if term_id_match else None)
 
 
-def _markdown_term_permalink(frontmatter_text, term_id, source_file, warn):
-    """The address a legacy file's `permalink` publishes its page at, or
-    None without one. A placeholder the build cannot resolve is reported
-    when `warn` is set, with the remedy, and the page is linked at the
-    permalink as written."""
-    permalink, unresolved = markdown_glossary_address(frontmatter_text, term_id)
-    if unresolved and warn:
-        named = ' and '.join(filter(None, [', '.join(unresolved[:-1]), unresolved[-1]]))
+# A top-level `permalink` key with its value, which may run over indented
+# continuation lines.
+_PERMALINK_KEY = re.compile(r'^["\']?permalink["\']?[ \t]*:.*(?:\n[ \t]+.*)*', re.MULTILINE)
+
+
+def _pin_permalink(frontmatter_text, term_id, source_file, warn):
+    """`frontmatter_text` with its `permalink`, if any, replaced by the
+    term's own address, which is where every glossary page is published.
+    The replacement is reported when `warn` is set."""
+    address = glossary_term_address(term_id)
+    pinned, count = _PERMALINK_KEY.subn(lambda _match: f'permalink: {address}',
+                                        frontmatter_text)
+    if count and warn:
         print(f"  ⚠️ Glossary entry '{term_id}' ({source_file.name}): its permalink "
-              f"uses {named}, which the build cannot work out, so links to it may not "
-              f"reach its page. Write the permalink without {named}.")
-    return permalink
+              f"is replaced by {address}, where every glossary page is published. "
+              f"Remove the permalink line from the file.")
+    return pinned
 
 
 def _markdown_terms(md_path, warn=True):
     """The legacy glossary files that become pages, in file-name order, as
-    (source_file, frontmatter_text, body, term_id, permalink).
+    (source_file, frontmatter_text, body, term_id).
 
     A file without front matter or a `term_id` is not a term. A page is
-    published at its front matter's `permalink` when it has one, its
-    placeholders resolved, so that is its address, and of files whose pages
-    share an output file or a `_glossary/` file the first keeps it
-    (`first_at_each_address`). `warn` says whether these are reported.
+    always published at `/glossary/<slug>/`, so a `permalink` in its front
+    matter is replaced (`_pin_permalink`), and of files whose ids share a
+    slug the first keeps it (`first_at_each_address`). `warn` says whether
+    these are reported.
     """
     terms = []
     for source_file in sorted(md_path.glob('*.md')):
@@ -122,21 +115,18 @@ def _markdown_terms(md_path, warn=True):
             if warn:
                 print(f"Warning: No term_id found in {source_file}")
             continue
-        permalink = _markdown_term_permalink(frontmatter_text, term_id, source_file, warn)
-        terms.append((term_id, glossary_term_address(term_id, permalink),
-                      (source_file, frontmatter_text, body, term_id, permalink)))
-    return [item for _id, _address, item in first_at_each_address(terms, warn)]
+        frontmatter_text = _pin_permalink(frontmatter_text, term_id, source_file, warn)
+        terms.append((term_id, (source_file, frontmatter_text, body, term_id)))
+    return [item for _id, item in first_at_each_address(terms, warn)]
 
 
 def _markdown_pages(terms):
     """The `site_glossary_pages` entries of `_markdown_terms`' files. A page
     without a `title` shows its term id."""
-    pages = GlossaryPages()
-    for _source, frontmatter_text, _body, term_id, permalink in terms:
+    pages = {}
+    for _source, frontmatter_text, _body, term_id in terms:
         pages[term_id] = (markdown_glossary_title(frontmatter_text) or term_id,
                           resolve_kind(front_matter_kind(frontmatter_text), warn=False))
-        if permalink:
-            pages.addresses[term_id] = permalink
     return pages
 
 
@@ -144,8 +134,7 @@ def site_glossary_pages(warn_missing=True):
     """The site's own glossary pages as {term_id: (title, kind id)}, the
     title and kind as the page shows them, chosen as `generate_glossary`
     chooses its source: glossary.csv when present, else the legacy markdown
-    files. The `addresses` of the result holds each page published away
-    from its slug. `warn_missing` is passed to `_csv_page_rows` and
+    files. `warn_missing` is passed to `_csv_page_rows` and
     `_markdown_terms`.
     """
     csv_path = Path(find_csv_with_fallback('telar-content/spreadsheets/glossary', 'glosario'))
@@ -154,7 +143,7 @@ def site_glossary_pages(warn_missing=True):
         return _csv_pages(_csv_page_rows(csv_path, warn_missing))
     if md_path.exists():
         return _markdown_pages(_markdown_terms(md_path, warn_missing))
-    return GlossaryPages()
+    return {}
 
 
 def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms, rows=None):
@@ -178,6 +167,13 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms, rows=Non
         if related_terms_raw and related_terms_raw != 'nan':
             related_terms = [t.strip() for t in related_terms_raw.split('|') if t.strip()]
 
+        # Glossary-to-glossary links are made while the definition renders,
+        # with its maths held out of the HTML.
+        warnings_list = []
+
+        def link_terms(rendered):
+            return process_glossary_links(rendered, glossary_terms, warnings_list)
+
         # Process definition: file reference or inline content
         # If definition looks like a filename (short, no spaces/newlines), try as file first
         looks_like_filename = ('\n' not in definition and ' ' not in definition
@@ -185,20 +181,16 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms, rows=Non
         if looks_like_filename:
             file_def = definition if definition.endswith('.md') else f'{definition}.md'
             glossary_path = file_def if file_def.startswith('glossary/') else f'glossary/{file_def}'
-            content_data = read_markdown_file(glossary_path)
+            content_data = read_markdown_file(glossary_path, post_process=link_terms)
         else:
             content_data = None
 
         if content_data:
-            body = content_data['content']
+            processed = content_data['content']
         else:
             # No file found or inline content — treat as inline
-            content_data = process_inline_content(definition)
-            body = content_data['content'] if content_data else ''
-
-        # Process glossary-to-glossary links
-        warnings_list = []
-        processed = process_glossary_links(body, glossary_terms, warnings_list)
+            content_data = process_inline_content(definition, post_process=link_terms)
+            processed = content_data['content'] if content_data else ''
 
         for warning in warnings_list:
             print(f"  Warning: {warning}")
@@ -239,7 +231,7 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms, term
     """
     if terms is None:
         terms = _markdown_terms(md_path)
-    for source_file, frontmatter_text, body, term_id, _permalink in terms:
+    for source_file, frontmatter_text, body, term_id in terms:
         # The front matter is copied verbatim. Normalising it means cutting
         # lines out of the author's text or reading their frontmatter and
         # writing it back, and both decide what a file means: a cut is
@@ -264,14 +256,13 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms, term
         # 1. Process images (size syntax and captions)
         processed = process_images(body)
 
-        # 2. Convert markdown to HTML
-        processed = convert_markdown(
-            processed,
-            extensions=['extra', 'nl2br', 'sane_lists']
-        )
-
-        # 3. Process glossary links ([[term]] syntax)
-        processed = process_glossary_links(processed, glossary_terms, warnings_list)
+        # 2. Convert markdown to HTML, with glossary links ([[term]] syntax)
+        # made while maths is held out of the HTML
+        processed = render_markdown(
+            processed, str(source_file),
+            post_process=lambda rendered: process_glossary_links(
+                rendered, glossary_terms, warnings_list),
+            extra_extensions=('sane_lists',))
 
         # Print any warnings
         for warning in warnings_list:
@@ -323,19 +314,9 @@ def _demo_glossary_fields(term, term_id):
 def _report_demo_skip(placement):
     """Print why `place_demo_terms` did not write a demo term's page."""
     term_id = placement.term_id
-    if placement.reason == 'index':
-        print(f"  ⚠️ Demo glossary term '{term_id}' skipped: it would be "
-              f"published at {placement.address}, the glossary page's "
-              f"own address.")
-    elif placement.reason == 'address':
-        print(f"  ⚠️ Demo glossary term '{term_id}' skipped: another "
-              f"glossary term is published at {placement.address}, "
-              f"which is kept.")
-    else:
-        whose = "site's" if placement.owner_is_site else 'demo'
-        print(f"  ⚠️ Demo glossary term '{term_id}' skipped: the "
-              f"{whose} glossary term '{placement.owner}' is written to "
-              f"the same file, _glossary/{placement.owner}.md, which is kept.")
+    print(f"  ⚠️ Demo glossary term '{term_id}' skipped: another "
+          f"glossary term is published at {glossary_term_address(term_id)}, "
+          f"which is kept.")
 
 
 def generate_glossary():
@@ -379,7 +360,7 @@ def generate_glossary():
         markdown_terms = _markdown_terms(md_path)
         site_pages = _markdown_pages(markdown_terms)
     else:
-        site_pages = GlossaryPages()
+        site_pages = {}
     glossary_terms = glossary_link_map(site_pages)
 
     # 1. Process user glossary from CSV (preferred) or markdown (legacy)
@@ -400,9 +381,7 @@ def generate_glossary():
             demo_glossary = json.load(f)
 
         # Jekyll publishes `Viewer.md` and `viewer.md` both at
-        # /glossary/viewer/, a legacy page may sit at a permalink of its
-        # own, and a case-insensitive disk holds `Viewer.md` and
-        # `viewer.md` as one file. `place_demo_terms` decides which demo
+        # /glossary/viewer/. `place_demo_terms` decides which demo
         # terms are written, as the demo stories' link map does.
         demo_terms = [term for term in demo_glossary if term.get('term_id', '')]
         placements = place_demo_terms(site_pages,

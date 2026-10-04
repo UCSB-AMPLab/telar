@@ -47,14 +47,13 @@ from pathlib import Path
 import pandas as pd
 
 from telar.images import process_images
-from telar.latex import convert_markdown
+from telar.markdown import render_markdown
 from telar.widgets import process_widgets
 from telar.glossary import (GlossaryTerms, place_demo_terms,
                             process_glossary_links)
 from telar.glossary_kinds import resolve_kind
 from telar.media_type import detect_media_type
-from telar.processors.stories import (_detect_latex, _limit_answers,
-                                      _prepare_answer_maths, _resolve_answer_glossary)
+from telar.processors.stories import _detect_latex, render_answer
 
 # Fields a bundle object or step may carry, copied only when it has a value:
 # the step template emits an attribute for any value Liquid finds, and to
@@ -276,9 +275,7 @@ def _demo_link_terms(bundle):
     """The link map a demo story resolves [[term]] against: the bundle's
     glossary and the site's published pages together. Which demo terms
     have pages, and what a skipped demo id links to, is `place_demo_terms`'
-    decision, the one the glossary pages are written from. A site term
-    without a page is not linked: nothing is published for it, and neither
-    is a demo term whose address is the glossary page's own.
+    decision, the one the glossary pages are written from.
     """
     # Imported here: glossary_pages loads the package this module is part of.
     from telar.glossary_pages import site_glossary_pages
@@ -291,9 +288,6 @@ def _demo_link_terms(bundle):
 
     terms = GlossaryTerms()
     for placement in placements:
-        if placement.reason == 'index':
-            # Published at the glossary page's own address: no page of its own.
-            continue
         if placement.written:
             term_data = glossary[placement.term_id]
             title = term_data.get('term', placement.term_id)
@@ -305,34 +299,24 @@ def _demo_link_terms(bundle):
             title = owner_data.get('term', placement.owner)
             kind = resolve_kind(owner_data.get('kind', ''), warn=False)
         terms[placement.term_id], terms.kinds[placement.term_id] = title, kind
-        terms.addresses[placement.term_id] = placement.address
     for term_id, (title, kind) in pages.items():
         terms[term_id], terms.kinds[term_id] = title, kind
-        if term_id in pages.addresses:
-            terms.addresses[term_id] = pages.addresses[term_id]
     return terms
 
 
 def _process_demo_answers(steps, story_id, glossary_terms):
-    """Run a demo story's answers through the passes a site's own answers
-    take, in the same order: the text-only rules and word limit, glossary
-    links, and the maths kramdown would misread.
+    """Render a demo story's answers as a site's own answers are rendered
+    (`render_answer`): prose only, glossary links, and the budget.
 
-    What the passes report is discarded: the demo bundle's text is not
+    What the rendering reports is discarded: the demo bundle's text is not
     something a site's author can change.
     """
-    frame = pd.DataFrame({
-        'step': [str(step.get('step', '')) for step in steps],
-        'answer': [step.get('answer') or '' for step in steps],
-    })
     with contextlib.redirect_stdout(io.StringIO()):
-        frame = _limit_answers(frame, f'demo-{story_id}', [], [])
-        frame = _resolve_answer_glossary(frame, glossary_terms, [])
-        frame = _prepare_answer_maths(frame)
-    for index, step in enumerate(steps):
-        step['answer'] = frame.at[index, 'answer']
-        if 'answer_kramdown' in frame.columns and frame.at[index, 'answer_kramdown']:
-            step['answer_kramdown'] = frame.at[index, 'answer_kramdown']
+        for step in steps:
+            answer = step.get('answer') or ''
+            if answer.strip():
+                step['answer'] = render_answer(answer, glossary_terms,
+                                               source=f'demo-{story_id}').html
 
 
 def _add_demo_layers(step_data, step, story_id, glossary_terms):
@@ -368,11 +352,12 @@ def _add_demo_layers(step_data, step, story_id, glossary_terms):
                 # Process images (sizes and captions) BEFORE markdown conversion
                 content = process_images(content)
 
-                # Convert markdown to HTML
-                content = convert_markdown(content, extensions=['extra', 'nl2br'])
-
-                # Process glossary links AFTER markdown conversion
-                content = process_glossary_links(content, glossary_terms)
+                # Convert markdown to HTML, making glossary links in the
+                # rendered HTML while its maths is held out
+                content = render_markdown(
+                    content, f'demo-{story_id}',
+                    post_process=lambda rendered: process_glossary_links(
+                        rendered, glossary_terms))
 
             step_data[f'{layer_key}_text'] = content
             step_data[f'{layer_key}_demo'] = True  # All demo bundle layers are demo content

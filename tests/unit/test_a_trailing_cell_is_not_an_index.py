@@ -101,7 +101,7 @@ class TestATrailingCommaInTheFirstRow:
                          lambda df: process_story(df, story_name='story'))
 
         assert [(s['step'], s['object'], s['answer']) for s in steps] == \
-            [(1, 'map', 'Here'), (2, 'map', 'Then')]
+            [(1, 'map', '<p>Here</p>'), (2, 'map', '<p>Then</p>')]
 
     def test_the_glossary_link_map_keys_by_term_id(self, tmp_path, monkeypatch):
         assert _terms(tmp_path, monkeypatch, GLOSSARY) == \
@@ -224,7 +224,7 @@ class TestALaterRowWiderThanTheFirst:
                          '2,map,When?,Then,\n',
                          lambda df: process_story(df, story_name='story'))
 
-        assert [(s['step'], s['answer']) for s in steps] == [(1, 'Here'), (2, 'Then')]
+        assert [(s['step'], s['answer']) for s in steps] == [(1, '<p>Here</p>'), (2, '<p>Then</p>')]
         assert '.csv row' not in capsys.readouterr().out
 
     def test_a_row_with_a_value_past_the_header_is_kept_and_reported(

@@ -17,7 +17,7 @@ import yaml
 from telar.widgets import process_widgets
 from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
-from telar.latex import convert_markdown
+from telar.markdown import render_markdown
 from telar.frontmatter import FRONTMATTER_LOAD_ERRORS, FRONTMATTER_PATTERN
 
 
@@ -207,14 +207,13 @@ def generate_pages(telar_language='en', glossary_terms=None):
         # 2. Process images (size syntax and captions)
         processed = process_images(processed)
 
-        # 3. Convert markdown to HTML
-        processed = convert_markdown(
-            processed,
-            extensions=['extra', 'nl2br', 'sane_lists']
-        )
-
-        # 4. Process glossary links ([[term]] syntax)
-        processed = process_glossary_links(processed, glossary_terms, warnings_list)
+        # 3. Convert markdown to HTML, with glossary links ([[term]] syntax)
+        # made while maths is held out of the HTML
+        processed = render_markdown(
+            processed, str(source_file),
+            post_process=lambda rendered: process_glossary_links(
+                rendered, glossary_terms, warnings_list),
+            extra_extensions=('sane_lists',))
 
         # Print any warnings
         for warning in warnings_list:

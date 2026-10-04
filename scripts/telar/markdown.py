@@ -20,9 +20,15 @@ pipeline. Files are expected under `telar-content/texts/`.
 cells. It normalises line endings (spreadsheets may use `\\r\\n` or
 `\\r`), checks for optional YAML frontmatter (only treated as frontmatter
 if it contains a `title:` key, to avoid false matches with `---` used
-as horizontal rules), and then runs the same pipeline. The markdown
-library's `nl2br` extension is enabled so that single line breaks in
-the spreadsheet cell produce `<br>` tags in the output.
+as horizontal rules), and then runs the same pipeline.
+
+`render_markdown()` is the conversion every whole body of author text goes
+through -- panels, step answers, pages and glossary pages: it closes any
+HTML container the text leaves open, then converts with
+`telar.latex.convert_markdown`, whose extensions (`extra`, `nl2br`,
+`smarty`) are the same for every conversion, so a single line break is a
+line break and quotes and ellipses are typographic wherever an author
+writes them.
 
 Content trust model (raw-HTML pass-through is intentional)
 ----------------------------------------------------------
@@ -53,7 +59,7 @@ from markdown.extensions.md_in_html import HTMLExtractorExtra
 
 from telar.frontmatter import FRONTMATTER_LOAD_ERRORS
 from telar.images import process_images, resolve_path_case_insensitive
-from telar.latex import convert_markdown, protect_latex
+from telar.latex import MARKDOWN_EXTENSIONS, convert_markdown, protect_latex
 from telar.widgets import process_widgets
 
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
@@ -168,7 +174,7 @@ def _unclosed_html_blocks(body):
     a formula is not read as a tag.
     """
     protected, _ = protect_latex(body)
-    md = markdown.Markdown(extensions=['extra', 'nl2br'])
+    md = markdown.Markdown(extensions=list(MARKDOWN_EXTENSIONS))
     html_block = md.preprocessors['html_block']
     lines = protected.split('\n')
     for preprocessor in md.preprocessors:
@@ -200,36 +206,54 @@ def _close_html_blocks(body, source):
     return body + '\n' + closers
 
 
-def _process_pipeline(body, widget_source, widget_warnings):
+def render_markdown(body, source='inline-content', post_process=None,
+                    extra_extensions=()):
+    """*body*, a whole piece of author markdown, as HTML.
+
+    Containers *body* leaves open are closed at its end, with a warning
+    naming *source*, and the text is converted by `convert_markdown`.
+    *post_process* receives the HTML while maths is still a placeholder:
+    whatever reads or rewrites the rendered HTML -- glossary links, an
+    answer's flattening and cut -- runs there. *extra_extensions* are
+    Python Markdown extensions a caller needs beyond the shared ones.
+
+    Raw HTML passes through unsanitised by design (trusted-author model) --
+    see the module docstring.
+    """
+    body = _close_html_blocks(body, source)
+    return convert_markdown(body, post_process=post_process,
+                            extra_extensions=extra_extensions)
+
+
+def _process_pipeline(body, widget_source, widget_warnings, post_process=None):
     """
     Run the widget/image/markdown pipeline shared by file-based and inline
-    panel content: process_widgets -> process_images -> convert_markdown
-    (extensions=['extra', 'nl2br']).
-
-    Raw HTML passes through unsanitised by design (trusted-author model) —
-    see the module docstring.
+    panel content: process_widgets -> process_images -> render_markdown.
 
     Args:
         body: Markdown text to process
         widget_source: Identifier passed to process_widgets (file_path or 'inline-content')
         widget_warnings: List to collect widget warnings
+        post_process: Optional callable given the rendered HTML (see
+            render_markdown)
 
     Returns:
         str: Rendered HTML
     """
     body = process_widgets(body, widget_source, widget_warnings)
     body = process_images(body)
-    body = _close_html_blocks(body, widget_source)
-    return convert_markdown(body, extensions=['extra', 'nl2br'])
+    return render_markdown(body, widget_source, post_process)
 
 
-def read_markdown_file(file_path, widget_warnings=None):
+def read_markdown_file(file_path, widget_warnings=None, post_process=None):
     """
     Read a markdown file and parse frontmatter
 
     Args:
         file_path: Path to markdown file relative to telar-content/texts/
         widget_warnings: Optional list to collect widget warnings
+        post_process: Optional callable given the rendered HTML (see
+            render_markdown)
 
     Returns:
         dict with 'title' and 'content' keys, or None if file doesn't exist
@@ -249,7 +273,7 @@ def read_markdown_file(file_path, widget_warnings=None):
             content = f.read()
 
         title, body = _split_frontmatter(content, source=file_path)
-        html_content = _process_pipeline(body, file_path, widget_warnings)
+        html_content = _process_pipeline(body, file_path, widget_warnings, post_process)
 
         return {
             'title': title,
@@ -261,7 +285,7 @@ def read_markdown_file(file_path, widget_warnings=None):
         return None
 
 
-def process_inline_content(text, widget_warnings=None):
+def process_inline_content(text, widget_warnings=None, post_process=None):
     """
     Process inline panel content (text written directly in spreadsheet).
 
@@ -272,6 +296,8 @@ def process_inline_content(text, widget_warnings=None):
     Args:
         text: Raw text from spreadsheet cell
         widget_warnings: Optional list to collect widget warnings
+        post_process: Optional callable given the rendered HTML (see
+            render_markdown)
 
     Returns:
         dict with 'title' and 'content' (HTML) keys
@@ -287,7 +313,8 @@ def process_inline_content(text, widget_warnings=None):
 
     title, content = _split_frontmatter(content, source='inline content')
 
-    html_content = _process_pipeline(content, 'inline-content', widget_warnings)
+    html_content = _process_pipeline(content, 'inline-content', widget_warnings,
+                                     post_process)
 
     return {
         'title': title,

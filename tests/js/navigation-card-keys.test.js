@@ -1,12 +1,9 @@
 /**
- * Tests for Telar Story – Navigation: the story keys and a side card that
- * scrolls inside itself
+ * Tests for Telar Story – Navigation: the story keys
  *
- * cardTakesKey (card-scroll.js) is replaced by a spy whose answer each test
- * sets. The keys pass it their direction and reach; a card that scrolled
- * cancels the key and nothing steps; a card at its edge hands the key to the
- * story, with Lenis and on the button path; a held key over a scroll-mode
- * card is cancelled and never steps; an open panel still takes the key first.
+ * A step key moves the step at once, with Lenis and on the button path; a held
+ * key is cancelled and never steps again; Home and End go to the ends of the
+ * story; an open panel or dialog still takes the key first.
  *
  * @version v1.8.0
  */
@@ -14,7 +11,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  cardTakesKey: vi.fn(() => 'none'),
   keyboardNav: vi.fn(),
   activateCard: vi.fn(),
   navigateToIntro: vi.fn(),
@@ -25,9 +21,6 @@ vi.mock('../../assets/js/telar-story/deep-link.js', () => ({
   writeHash: vi.fn(),
   navigateToIntro: mocks.navigateToIntro,
   navigateToStep: mocks.navigateToStep,
-}));
-vi.mock('../../assets/js/telar-story/card-scroll.js', () => ({
-  cardTakesKey: mocks.cardTakesKey,
 }));
 vi.mock('../../assets/js/telar-story/panels.js', () => ({
   openPanel: vi.fn(),
@@ -85,96 +78,11 @@ function storyOnStep(index, { lenis = true } = {}) {
 }
 
 beforeEach(() => {
-  mocks.cardTakesKey.mockReset();
-  mocks.cardTakesKey.mockReturnValue('none');
   mocks.keyboardNav.mockClear();
   mocks.activateCard.mockClear();
   mocks.navigateToIntro.mockClear();
   mocks.navigateToStep.mockClear();
   storyOnStep(2);
-});
-
-describe('the reach each key asks the card for', () => {
-  const cases = [
-    ['ArrowDown', {}, 'forward', 'line'],
-    ['PageDown', {}, 'forward', 'page'],
-    ['ArrowUp', {}, 'backward', 'line'],
-    ['PageUp', {}, 'backward', 'page'],
-    [' ', {}, 'forward', 'page'],
-    [' ', { shiftKey: true }, 'backward', 'page'],
-  ];
-  for (const [key, extras, direction, kind] of cases) {
-    it(`${JSON.stringify(key)}${extras.shiftKey ? ' with Shift' : ''} asks for a ${kind} ${direction}`, () => {
-      pressCardKey(key, extras);
-      expect(mocks.cardTakesKey).toHaveBeenCalledWith(direction, kind);
-    });
-  }
-});
-
-describe('a card that scrolled', () => {
-  beforeEach(() => { mocks.cardTakesKey.mockReturnValue('scrolled'); });
-
-  for (const key of ['ArrowDown', 'PageDown', ' ', 'ArrowUp']) {
-    it(`cancels ${JSON.stringify(key)} and moves no step, with Lenis`, () => {
-      const ev = pressCardKey(key);
-      expect(ev.defaultPrevented).toBe(true);
-      expect(mocks.keyboardNav).not.toHaveBeenCalled();
-    });
-  }
-
-  it('moves no step on the button path either', () => {
-    storyOnStep(2, { lenis: false });
-    const ev = pressCardKey('ArrowDown');
-    expect(ev.defaultPrevented).toBe(true);
-    expect(mocks.activateCard).not.toHaveBeenCalled();
-    expect(state.currentIndex).toBe(2);
-  });
-});
-
-describe('a card at its edge', () => {
-  beforeEach(() => { mocks.cardTakesKey.mockReturnValue('at-edge'); });
-
-  it('hands ArrowDown to the story, with Lenis', () => {
-    const ev = pressCardKey('ArrowDown');
-    expect(ev.defaultPrevented).toBe(true);
-    expect(mocks.keyboardNav).toHaveBeenCalledWith('forward');
-  });
-
-  it('hands ArrowUp at the top back a step', () => {
-    pressCardKey('ArrowUp');
-    expect(mocks.keyboardNav).toHaveBeenCalledWith('backward');
-  });
-
-  it('hands the key to the buttons\' move without Lenis', () => {
-    storyOnStep(2, { lenis: false });
-    pressCardKey('PageDown');
-    expect(mocks.activateCard).toHaveBeenCalledWith(3, 'forward');
-    expect(state.currentIndex).toBe(3);
-  });
-});
-
-describe('a held key', () => {
-  it('is cancelled at the card\'s edge and moves no step', () => {
-    mocks.cardTakesKey.mockReturnValue('at-edge');
-    const ev = pressCardKey('ArrowDown', { repeat: true });
-    expect(mocks.cardTakesKey).toHaveBeenCalledWith('forward', 'line');
-    expect(ev.defaultPrevented).toBe(true);
-    expect(mocks.keyboardNav).not.toHaveBeenCalled();
-  });
-
-  it('scrolls the card and is cancelled while the card has room', () => {
-    mocks.cardTakesKey.mockReturnValue('scrolled');
-    const ev = pressCardKey(' ', { repeat: true });
-    expect(mocks.cardTakesKey).toHaveBeenCalledWith('forward', 'page');
-    expect(ev.defaultPrevented).toBe(true);
-    expect(mocks.keyboardNav).not.toHaveBeenCalled();
-  });
-
-  it('is cancelled where no card scrolls, and moves no step', () => {
-    const ev = pressCardKey('ArrowDown', { repeat: true });
-    expect(ev.defaultPrevented).toBe(true);
-    expect(mocks.keyboardNav).not.toHaveBeenCalled();
-  });
 });
 
 describe('a key held down', () => {
@@ -262,7 +170,6 @@ describe('a key held down', () => {
     select.dispatchEvent(ev);
     dialog.remove();
     expect(ev.defaultPrevented).toBe(false);
-    expect(mocks.cardTakesKey).not.toHaveBeenCalled();
   });
 
   for (const [name, make] of [
@@ -272,10 +179,9 @@ describe('a key held down', () => {
       `a ${type} input`, () => Object.assign(document.createElement('input'), { type }),
     ]),
   ]) {
-    it(`cancels ArrowDown held on ${name}, which does not read arrows, and offers it to the card`, () => {
+    it(`cancels ArrowDown held on ${name}, which does not read arrows`, () => {
       const ev = heldOn(make(), 'ArrowDown');
       expect(ev.defaultPrevented).toBe(true);
-      expect(mocks.cardTakesKey).toHaveBeenCalled();
       expect(mocks.keyboardNav).not.toHaveBeenCalled();
     });
   }
@@ -291,7 +197,6 @@ describe('a key held down', () => {
     inner.dispatchEvent(ev);
     dialog.remove();
     expect(ev.defaultPrevented).toBe(false);
-    expect(mocks.cardTakesKey).not.toHaveBeenCalled();
   });
 
   it('leaves a key the story does not read to the browser', () => {
@@ -302,7 +207,7 @@ describe('a key held down', () => {
 });
 
 describe('an open panel', () => {
-  it('takes the key before the card', () => {
+  it('takes the key before the story', () => {
     const panel = document.createElement('div');
     panel.id = 'panel-layer1';
     const body = document.createElement('div');
@@ -316,7 +221,6 @@ describe('an open panel', () => {
     pressCardKey('ArrowDown');
 
     expect(body.scrollBy).toHaveBeenCalled();
-    expect(mocks.cardTakesKey).not.toHaveBeenCalled();
     panel.remove();
   });
 });
@@ -399,56 +303,6 @@ describe('Home and End', () => {
   }
 });
 
-describe('Home and End over a side card', () => {
-  it('ask the card for a full move, backward for Home and forward for End', () => {
-    pressCardKey('Home');
-    expect(mocks.cardTakesKey).toHaveBeenLastCalledWith('backward', 'full');
-    pressCardKey('End');
-    expect(mocks.cardTakesKey).toHaveBeenLastCalledWith('forward', 'full');
-  });
-
-  for (const [key, go] of [['Home', 'navigateToIntro'], ['End', 'navigateToStep']]) {
-    it(`${key} scrolls a card with room, is cancelled, and goes nowhere`, () => {
-      mocks.cardTakesKey.mockReturnValue('scrolled');
-      const ev = pressCardKey(key);
-      expect(ev.defaultPrevented).toBe(true);
-      expect(mocks[go]).not.toHaveBeenCalled();
-    });
-
-    it(`${key} at the card's edge goes to the intro or the last step`, () => {
-      mocks.cardTakesKey.mockReturnValue('at-edge');
-      const ev = pressCardKey(key);
-      expect(ev.defaultPrevented).toBe(true);
-      expect(mocks[go]).toHaveBeenCalledTimes(1);
-    });
-
-    it(`a held ${key} scrolls the card, is cancelled, and never moves the story`, () => {
-      mocks.cardTakesKey.mockReturnValue('scrolled');
-      const ev = pressCardKey(key, { repeat: true });
-      expect(mocks.cardTakesKey).toHaveBeenCalledWith(key === 'Home' ? 'backward' : 'forward', 'full');
-      expect(ev.defaultPrevented).toBe(true);
-      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
-      expect(mocks.navigateToStep).not.toHaveBeenCalled();
-    });
-
-    it(`a held ${key} at the card's edge is cancelled and never moves the story`, () => {
-      mocks.cardTakesKey.mockReturnValue('at-edge');
-      const ev = pressCardKey(key, { repeat: true });
-      expect(ev.defaultPrevented).toBe(true);
-      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
-      expect(mocks.navigateToStep).not.toHaveBeenCalled();
-    });
-
-    it(`${key} in an open dialog never asks the card`, () => {
-      const { dialog, inner } = openDialogTarget();
-      pressOn(inner, key);
-      pressOn(inner, key, { repeat: true });
-      dialog.remove();
-      expect(mocks.cardTakesKey).not.toHaveBeenCalled();
-    });
-  }
-});
-
 describe('the first press inside an open dialog', () => {
   for (const [key, extras] of [
     ['ArrowDown', {}], ['ArrowUp', {}], ['PageDown', {}], ['PageUp', {}],
@@ -460,8 +314,7 @@ describe('the first press inside an open dialog', () => {
       dialog.remove();
       expect(ev.defaultPrevented).toBe(false);
       expect(mocks.keyboardNav).not.toHaveBeenCalled();
-      expect(mocks.cardTakesKey).not.toHaveBeenCalled();
-    });
+      });
   }
 
   it('leaves ArrowDown on a select in the dialog to the select', () => {

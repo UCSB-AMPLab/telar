@@ -569,7 +569,7 @@ class TestTheFileKeepsItsForm:
 
         records = v180_sheets.report_step_answers(str(site), 'en')
 
-        assert any('30000 words' in r.description for r in records)
+        assert any('too long' in r.description for r in records)
 
     def test_a_symlink_inside_the_site_is_repaired(self, tmp_path):
         site = _site(tmp_path)
@@ -825,34 +825,34 @@ def _answers(tmp_path, lang='en'):
 
 class TestStepAnswers:
 
-    def test_two_hundred_words_are_not_reported(self, tmp_path):
-        site = _site(tmp_path, {'my-story.csv': _story(_words(200))})
+    def test_an_answer_at_the_budget_is_not_reported(self, tmp_path):
+        site = _site(tmp_path, {'my-story.csv': _story(_words(85))})
 
         records = _answers(site)
 
         assert [r.description for r in records] == [get_message('en', 'v180_answers_clean')]
 
-    def test_two_hundred_and_one_are(self, tmp_path):
-        site = _site(tmp_path, {'my-story.csv': _story(_words(201))})
+    def test_an_answer_over_the_budget_is(self, tmp_path):
+        site = _site(tmp_path, {'my-story.csv': _story(_words(86))})
 
         records = _answers(site)
 
         assert [r.description for r in records] == [
-            get_message('en', 'v180_answer_over_limit', 'my-story', '1', 201, 200)]
+            get_message('en', 'v180_answer_over_limit', 'my-story', '1', 5, 85)]
         assert records[0].status == ChangeStatus.APPLIED
         assert records[0].severity == 'soft'
 
-    def test_the_count_is_taken_after_the_prose_rules(self, tmp_path):
-        """Two hundred bulleted words are two hundred words: the markers go
-        before the count, and the flattening is reported on its own."""
-        bullets = '\n'.join(f'- word{index}' for index in range(200))
+    def test_the_flattening_is_reported_on_its_own(self, tmp_path):
+        """A short bulleted answer is within the budget: the flattening of
+        its list is reported, and no cut."""
+        bullets = '\n'.join(f'- word{index}' for index in range(3))
         site = _site(tmp_path, {'my-story.csv': _story(bullets)})
 
         records = _answers(site)
 
         assert len(records) == 1
         assert 'marks of lists' in records[0].description
-        assert '200' not in records[0].description
+        assert 'limit' not in records[0].description
 
     def test_content_the_answer_cannot_show_is_reported_whatever_the_length(self, tmp_path):
         site = _site(tmp_path, {'my-story.csv': _story('Short. ![map](map.jpg)')})
@@ -874,12 +874,12 @@ class TestStepAnswers:
 
     def test_respuesta_is_the_answer(self, tmp_path):
         site = _site(tmp_path, {'mi-historia.csv': _story(
-            _words(204), header='paso,objeto,pregunta,respuesta')})
+            _words(90), header='paso,objeto,pregunta,respuesta')})
 
         records = _answers(site)
 
         assert [r.description for r in records] == [
-            get_message('en', 'v180_answer_over_limit', 'mi-historia', '1', 204, 200)]
+            get_message('en', 'v180_answer_over_limit', 'mi-historia', '1', 5, 85)]
 
     def test_the_system_sheets_are_not_stories(self, tmp_path):
         site = _site(tmp_path, {'project.csv': (
@@ -914,16 +914,14 @@ class TestStepAnswers:
         assert records[0].severity == 'soft'
         assert 'names every answer it cuts' in records[0].description
 
-    @pytest.mark.parametrize('count', [200, 201])
+    @pytest.mark.parametrize('count', [85, 86])
     def test_the_report_agrees_with_the_build(self, tmp_path, count):
-        """The build's own limit pass on the same answer: reported if and
+        """The build's own rendering of the same answer: reported if and
         only if the build cuts it."""
         from telar.processors import stories
         site = _site(tmp_path, {'my-story.csv': _story(_words(count))})
-        frame = pd.DataFrame({'step': ['1'], 'answer': [_words(count)]})
-        warnings = []
 
-        stories._limit_answers(frame, 'my-story', warnings, [])
+        cut = stories.render_answer(_words(count)).cut
 
-        reported = [r for r in _answers(site) if 'words' in r.description]
-        assert bool(reported) == bool(warnings)
+        reported = [r for r in _answers(site) if 'too long' in r.description]
+        assert bool(reported) == cut

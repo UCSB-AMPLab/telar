@@ -48,7 +48,6 @@ import { writeHash } from './deep-link.js';
 import { followEngine, goToStep, updateViewerInfo, initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
-import { cardHoldsGesture, WHEEL_GESTURE_GAP_MS } from './card-scroll.js';
 import { isInsidePanel, isStoryInput } from './story-input.js';
 
 // ── Module-level references ───────────────────────────────────────────────────
@@ -189,6 +188,8 @@ const REST_TOLERANCE = 0.001;
 // touch, an input RISE_PX over the largest of the last three (tail jitter, 24 18
 // 12 6 12 wheel px, stays under), one no smaller than the last after a 200 ms
 // pause, or, once the snap has landed, than the last before it began.
+/** The quiet, in ms, after which the next wheel event starts a new gesture. */
+const WHEEL_GESTURE_GAP_MS = 200;
 const RISE_PX = 2, MAX_HOLD_MS = 3000;
 function _endDwell() {
   const now = performance.now();
@@ -316,12 +317,8 @@ export function initScrollEngine(stepCount) {
   // input to the frame the scroll stops on: the scroll outlives the input by
   // the smoothing tail and the snap's lerp, and the cards track it throughout,
   // so input and frames re-arm one timer that lapses 100 ms after the last.
-  // A gesture the side card owns (card-scroll.js) is stopped before Lenis sees
-  // it; its owner is read all the same, so that one arriving here neither
-  // scrubs nor takes over, and the engine and the card cannot disagree.
   cardStackEl = cardStack;
   lenis.on('virtual-scroll', (payload) => {
-    if (cardHoldsGesture()) return;
     const readerInput = isStoryInput(payload);
     if (readerInput) _noteInput(payload);
     cardStack.classList.add('is-scrubbing');

@@ -98,7 +98,7 @@ def test_span_level_markdown_attribute_is_not_a_container(capsys):
 
 def test_latex_holds_a_tag_out_of_the_block_pass(capsys):
     text = '$$<div markdown="1">$$'
-    assert '<div' in content(text)
+    assert '$$&lt;div markdown="1"&gt;$$' in content(text)
     assert capsys.readouterr().out == ''
 
 

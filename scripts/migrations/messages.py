@@ -395,8 +395,11 @@ MESSAGES = {
                                       'it as a list, such as `related_terms: ["term-one", '
                                       '"term-two"]`, or the page will not link those terms.',
         'v180_glossary_clean': 'No glossary entry needed its `related_terms` rewritten',
-        'v180_answer_over_limit': 'Story `{}`, step {}: the answer has {} words, and the build '
-                                  'cuts it to {}. Shorten it to keep its ending.',
+        'v180_answer_over_limit': 'Story `{}`, step {}: the answer is too long for the story '
+                                  'card. An answer may have up to {} paragraphs and {} words, '
+                                  'counting each paragraph after the first as 15 more words. '
+                                  'This one is over, so the build cuts it. Shorten it to keep '
+                                  'its ending.',
         'v180_answer_content_removed': 'Story `{}`, step {}: the build removes {} from the '
                                        'answer, which shows text only. Move it to a panel to '
                                        'keep it.',
@@ -821,9 +824,10 @@ MESSAGES = {
             ' no enlazará esos términos.',
         'v180_glossary_clean': 'No hubo que reescribir `related_terms` en ninguna entrada del '
             'glosario',
-        'v180_answer_over_limit': 'Historia `{}`, paso {}: la respuesta tiene {} palabras y la '
-            'construcción la recorta a {}. Acórtala para que no se pierda el'
-            ' final.',
+        'v180_answer_over_limit': 'Historia `{}`, paso {}: la respuesta es demasiado larga y no '
+            'cabe en la tarjeta de la historia. Una respuesta puede tener hasta {} párrafos y {} '
+            'palabras, contando cada párrafo después del primero como 15 palabras más. Esta se '
+            'pasa del límite, así que la construcción la recorta. Acórtala para que no se pierda el final.',
         'v180_answer_content_removed': 'Historia `{}`, paso {}: la respuesta solo muestra texto, '
             'así que la construcción le quita {}. Si quieres conservar '
             'ese contenido, pásalo a un panel.',

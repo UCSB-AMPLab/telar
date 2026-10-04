@@ -15,9 +15,11 @@
  * returns a controllable MediaQueryList — test can set .matches and invoke the
  * stored 'change' callback.
  *
- * @version v1.4.0
+ * @version v1.8.0
  */
 
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── matchMedia mock factory ────────────────────────────────────────────────────
@@ -57,11 +59,13 @@ function setViewport(width, height) {
   Object.defineProperty(window, 'innerHeight', { value: height, configurable: true, writable: true });
 }
 
-function stubComputedStyle() {
+function stubComputedStyle(landscapeMaxHeight = '480px', shortWindows = '') {
   vi.spyOn(window, 'getComputedStyle').mockReturnValue({
     getPropertyValue: (name) => {
       if (name === '--telar-vertical-min-width')  return '1024px';
       if (name === '--telar-vertical-min-aspect') return '0.75';
+      if (name === '--telar-card-landscape-max-height') return landscapeMaxHeight;
+      if (name === '--telar-vertical-short-windows') return shortWindows;
       return '';
     },
   });
@@ -118,6 +122,46 @@ describe('getLayoutMode — mode resolution', () => {
     fakeMql.matches = false;
     const { getLayoutMode } = await import('../../assets/js/telar-story/layout-mode.js');
     expect(getLayoutMode()).toBe('horizontal');
+  });
+});
+
+describe('matchMedia query — clauses', () => {
+  it('builds the query from the width, aspect and side-card height thresholds', async () => {
+    // A height other than the 480px fallback shows the clause reads the property.
+    vi.resetModules();
+    stubComputedStyle('470px');
+    setViewport(1440, 900);
+    const mq = vi.fn(() => makeFakeMql(false));
+    Object.defineProperty(window, 'matchMedia', { value: mq, writable: true, configurable: true });
+    const { getLayoutMode } = await import('../../assets/js/telar-story/layout-mode.js');
+    getLayoutMode();
+    expect(mq).toHaveBeenCalledWith(
+      '(max-width: 1024px), (max-aspect-ratio: 0.75), (max-height: 470px)'
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('adds a clause for each short window the stylesheet lists', async () => {
+    vi.resetModules();
+    stubComputedStyle('480px', ' 488px 1380px, 520px 1344px, 616px 1049px');
+    setViewport(1440, 900);
+    const mq = vi.fn(() => makeFakeMql(false));
+    Object.defineProperty(window, 'matchMedia', { value: mq, writable: true, configurable: true });
+    const { getLayoutMode } = await import('../../assets/js/telar-story/layout-mode.js');
+    getLayoutMode();
+    expect(mq).toHaveBeenCalledWith(
+      '(max-width: 1024px), (max-aspect-ratio: 0.75), (max-height: 480px), '
+      + '(max-height: 488px) and (max-width: 1380px), (max-height: 520px) and (max-width: 1344px), '
+      + '(max-height: 616px) and (max-width: 1049px)'
+    );
+    vi.restoreAllMocks();
+  });
+
+  it('reads the stylesheet\'s generated list, which the vertical-layout mixin builds its clauses from', () => {
+    const sheet = readFileSync(resolve(process.cwd(), '_sass/_responsive.scss'), 'utf8');
+    expect(sheet).toMatch(/\$telar-vertical-short-windows:\s*_short-windows\(\);/);
+    expect(sheet).toMatch(/--telar-vertical-short-windows:\s+#\{\$telar-vertical-short-windows\};/);
+    expect(sheet).toMatch(/@each \$h, \$w in \$telar-vertical-short-windows/);
   });
 });
 
