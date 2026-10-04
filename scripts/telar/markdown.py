@@ -46,25 +46,52 @@ Version: v1.8.0
 """
 
 import re
+
+import yaml
+
 from telar.images import process_images, resolve_path_case_insensitive
 from telar.latex import convert_markdown
 from telar.widgets import process_widgets
 
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
-TITLE_PATTERN = re.compile(r'title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
+# Anchored, because `subtitle:` ends in `title:` and an unanchored search
+# matches inside it. A top-level YAML key sits at column 0, so no leading
+# whitespace is allowed either: an indented `title:` belongs to the mapping
+# above it, and the parse that reads the value would not find it there.
+TITLE_PATTERN = re.compile(r'^title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
 
 
-def _split_frontmatter(content, require_title=False):
+def _split_frontmatter(content, source='content'):
     """
     Split optional YAML frontmatter from content, returning (title, body).
 
-    If require_title is True, a frontmatter match is only honored when it
-    contains a `title:` key — this avoids false matches with horizontal
-    rules or other standalone `---` usage in pasted inline content.
+    A leading `---` block counts as front matter only when it carries a
+    `title:` key. `---` is also the markdown horizontal rule, and a rule at
+    the top of a panel is an ordinary thing to write: without the
+    condition, everything up to the author's next rule is read as metadata
+    and discarded, silently, and the panel still renders — just shorter.
+
+    `title` is the only key anything reads out of these blocks, so a block
+    without one has nothing any caller would have used. Of the two ways to
+    be wrong, this is the loud one: front matter mistaken for content puts
+    visible YAML on the page, where its author can see it, while content
+    mistaken for front matter simply disappears.
+
+    A block that does parse as a YAML mapping and still has no title is the
+    case that is now shown rather than swallowed, so it is worth saying so
+    — otherwise its author sees their metadata on the page and no reason
+    for it. Ordinary prose under a rule does not parse as a mapping and so
+    says nothing, which is the common case and stays quiet.
+
+    A single prose line containing a colon does parse as a mapping, so it
+    is warned about when it was only ever a sentence. That is the right
+    direction for the warning to be wrong in: it is advisory, the text is
+    kept either way, and the remedy it suggests — separate the block from
+    the text below it — is good advice for a line that ambiguous.
 
     Args:
         content: Raw text that may begin with a `---`-delimited frontmatter block
-        require_title: Whether a `title:` key is required to treat the block as frontmatter
+        source: Name used in the warning, when there is one
 
     Returns:
         tuple: (title, body) — title is '' when absent, body is stripped
@@ -74,13 +101,54 @@ def _split_frontmatter(content, require_title=False):
         return '', content.strip()
 
     frontmatter_text = match.group(1)
+    body = match.group(2).strip()
     title_match = TITLE_PATTERN.search(frontmatter_text)
 
-    if require_title and not title_match:
+    if not title_match:
+        if _looks_like_metadata(frontmatter_text):
+            print(f"  Warning: {source} opens with a block that looks like "
+                  "front matter but has no title: key, so it is being shown "
+                  "as content. Add a title: key, or separate it from the "
+                  "text below it.")
         return '', content.strip()
 
-    title = title_match.group(1) if title_match else ''
-    return title, match.group(2).strip()
+    # TITLE_PATTERN only gates whether this block carries a title: key; the
+    # value itself is read by parsing the block as YAML, not by the regex
+    # match above. An escape inside a quoted title (`\"`, `\n`, `\N`) is
+    # YAML's to interpret, not plain text the regex's quote-stripping can
+    # approximate — it only trims the outer quote characters and leaves
+    # whatever is between them untouched, backslashes included.
+    try:
+        parsed = yaml.safe_load(frontmatter_text)
+    except yaml.YAMLError:
+        parsed = None
+
+    if isinstance(parsed, dict) and 'title' in parsed:
+        title = parsed['title']
+        if isinstance(title, str):
+            return title, body
+        # A title is text, and YAML types it: `yes` is a boolean, `~` and
+        # `null` are null, `[a]` a list. `str()` on those puts a Python
+        # literal on the page -- `True`, `None`, `['a']` -- which is neither
+        # what the author typed nor anything they can search for. The gate
+        # has already matched the line, so its reading is the text as typed.
+        return title_match.group(1).strip(), body
+
+    print(f"  Warning: {source}'s front matter could not be parsed as "
+          "YAML, so the title was read as plain text.")
+    return title_match.group(1), body
+
+
+def _looks_like_metadata(block):
+    """Whether a leading block is a YAML mapping rather than prose.
+
+    Prose under a horizontal rule parses as a string, or does not parse at
+    all; only a mapping could have been anyone's front matter.
+    """
+    try:
+        return isinstance(yaml.safe_load(block), dict)
+    except yaml.YAMLError:
+        return False
 
 
 def _process_pipeline(body, widget_source, widget_warnings):
@@ -130,7 +198,7 @@ def read_markdown_file(file_path, widget_warnings=None):
         with open(full_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        title, body = _split_frontmatter(content)
+        title, body = _split_frontmatter(content, source=file_path)
         html_content = _process_pipeline(body, file_path, widget_warnings)
 
         return {
@@ -167,9 +235,7 @@ def process_inline_content(text, widget_warnings=None):
     # Normalize line endings (spreadsheets may use \r\n or \r)
     content = text.replace('\r\n', '\n').replace('\r', '\n').strip()
 
-    # Only treat as frontmatter if it contains a title: key to avoid
-    # false matches with horizontal rules or other --- usage
-    title, content = _split_frontmatter(content, require_title=True)
+    title, content = _split_frontmatter(content, source='inline content')
 
     html_content = _process_pipeline(content, 'inline-content', widget_warnings)
 
