@@ -446,10 +446,14 @@
   //     Auto margins rather than `justify-content: safe center`: both engines
   //     have supported flex auto margins since flexbox shipped, whereas `safe
   //     center` needs Safari 16 and below it drops silently to top alignment.
-  //     `overflow: hidden` keeps inside the card whatever the build's answer
-  //     limit lets through: the card in horizontal neither scrolls nor
-  //     overflows onto the image, and what does not fit is cut from the
-  //     bottom, never from the top, where the question is.
+  //     `overflow: hidden` keeps the card's content inside it: in horizontal
+  //     the card never overflows onto the image and the browser never
+  //     scrolls it. Under the fit model the answer shrinks until the card
+  //     fits (card-fit.js); where it does not fit even at the smallest size,
+  //     card-scroll.js moves the card's content by writing `scrollTop`, which
+  //     a box that hides its overflow allows, so a wheel or a swipe at the
+  //     card's end never passes to the page. Long content is top-aligned, so
+  //     the question is always where the card starts.
   // ES: La tarjeta tiene altura fija, así que centrar el contenido solo es
   //     seguro mientras quepa. `justify-content: center` reparte el espacio
   //     libre incluso cuando es negativo, lo que empuja la pregunta por encima
@@ -459,13 +463,19 @@
   //     el contenido largo, porque los márgenes automáticos solo absorben
   //     espacio libre mientras lo haya.
   //     Se usan márgenes automáticos y no `justify-content: safe center`:
-  //     ambos motores admiten los márgenes automáticos de flexbox desde que
-  //     existe flexbox, mientras que `safe center` exige Safari 16 y por debajo
-  //     de esa versión pasa en silencio a la alineación superior.
-  //     `overflow: hidden` mantiene dentro de la tarjeta lo que el límite de
-  //     respuesta del build deje pasar: la tarjeta en horizontal no se desplaza
-  //     ni se desborda sobre la imagen, y lo que no quepa se corta por abajo,
-  //     nunca por arriba, donde va la pregunta.
+  //     los dos motores admiten márgenes automáticos en flexbox desde sus
+  //     inicios, mientras que `safe center` exige Safari 16, y en versiones
+  //     anteriores pasa en silencio a la alineación superior.
+  //     `overflow: hidden` mantiene el contenido dentro de la tarjeta: en el
+  //     diseño horizontal la tarjeta nunca se desborda sobre la imagen y el
+  //     navegador nunca la desplaza. Con el ajuste de tamaño (card-fit.js), la
+  //     letra de la respuesta se reduce hasta que todo cabe en la tarjeta; si
+  //     no cabe ni con el tamaño mínimo, card-scroll.js mueve el contenido de
+  //     la tarjeta escribiendo `scrollTop`, lo cual sí se puede hacer en una
+  //     caja con el desbordamiento oculto; así, un giro de la rueda del mouse
+  //     o un deslizamiento del dedo al final de la tarjeta nunca se transmite
+  //     a la página. El contenido largo se alinea arriba, así que la pregunta
+  //     queda siempre al comienzo de la tarjeta.
   justify-content: flex-start;
   overflow: hidden;
 
@@ -516,13 +526,23 @@
   //     the card's only flex item. So neither `flex` nor an overflow of its own
   //     takes effect here. The card is what scrolls in vertical and what clips
   //     in horizontal.
-  // ES: `.step-answer` es nieto de la tarjeta: card-pool.js clona dentro de ella
-  //     el contenedor `.step-content` renderizado en el servidor, y ese
+  // ES: `.step-answer` es nieto de la tarjeta: card-pool.js clona dentro de él
+  //     el contenedor `.step-content` que genera el servidor, y ese
   //     contenedor es el único elemento flex de la tarjeta. Por eso, ni `flex`
-  //     ni un overflow propio surten efecto aquí. La tarjeta es la que se
-  //     desplaza en vertical y la que recorta en horizontal.
+  //     ni un `overflow` propio surten efecto aquí. Es la tarjeta la que se
+  //     desplaza en el diseño vertical y la que recorta en el horizontal.
+  // EN: Each width tier declares the answer's size in
+  //     `--telar-answer-base-size`, and card-fit.js reads it there: the fit
+  //     writes its own size over `font-size` and never over this property, so
+  //     the tier's size can be read while a fit is in place.
+  // ES: Cada nivel de ancho declara el tamaño de la respuesta en
+  //     `--telar-answer-base-size`, y card-fit.js lo lee ahí: el ajuste
+  //     sobrescribe `font-size` con su propio tamaño y nunca toca esta
+  //     propiedad, así que el tamaño del nivel se puede leer aunque el ajuste
+  //     esté activo.
   .step-answer {
-    font-size: 1rem;
+    --telar-answer-base-size: 1rem;
+    font-size: var(--telar-answer-base-size);
     line-height: 1.6;
     color: var(--color-body);
   }
@@ -575,7 +595,7 @@
     }
 
     .step-answer {
-      font-size: 0.95rem;
+      --telar-answer-base-size: 0.95rem;
     }
   }
 }
@@ -590,9 +610,22 @@
     }
 
     .step-answer {
-      font-size: 0.85rem;
+      --telar-answer-base-size: 0.85rem;
     }
   }
+}
+
+// EN: The fitted answer size. card-fit.js writes `data-card-fit` and
+//     `--telar-answer-fit-size` on a side card on a horizontal layout; the
+//     rule outweighs the width tiers above (0,3,0 against 0,2,0), so only the
+//     answer takes the fitted size and the question keeps its own.
+// ES: El tamaño ajustado de la respuesta. card-fit.js escribe `data-card-fit`
+//     y `--telar-answer-fit-size` en la tarjeta lateral del diseño horizontal;
+//     esta regla tiene más especificidad que la de los niveles de ancho de
+//     arriba (0,3,0 frente a 0,2,0), así que solo la respuesta toma el tamaño
+//     ajustado y la pregunta conserva el suyo.
+.text-card[data-card-fit] .step-answer {
+  font-size: var(--telar-answer-fit-size);
 }
 
 // ── Story Intro ───────────────────────────────────────────────────────────────
@@ -1133,22 +1166,29 @@
     height: auto !important;
     // EN: The cap is the viewport less the card's inset at top and bottom, so
     //     the side card can use nearly the whole short viewport. Above the cap
-    //     a landscape phone's card scrolls inside, and a desktop card clips
-    //     from the bottom, as it does at any height. A cap of 40dvh is the
-    //     portrait bottom card's share of a tall viewport and leaves a
-    //     landscape card far too short; no cap at all lets the content-height
-    //     card grow past both edges of a 430px viewport, from where nothing
-    //     brings it back.
+    //     a landscape phone's card scrolls inside. On a horizontal layout the
+    //     cap stands only until card-pool.js runs: card-fit.js then writes the
+    //     ceiling that keeps the card clear of the top controls and shrinks
+    //     the answer to fit, and card-scroll.js scrolls the card itself where
+    //     even that is not enough. A cap of 40dvh is the portrait bottom
+    //     card's share of a tall viewport and leaves a landscape card far too
+    //     short; no cap at all lets the content-height card grow past both
+    //     edges of a 430px viewport, from where nothing brings it back.
     // ES: El tope es la altura del viewport menos la separación de la tarjeta
-    //     arriba y abajo, así que la tarjeta lateral puede ocupar casi todo el
-    //     viewport bajo. Si el contenido supera el tope, en un teléfono en
-    //     horizontal se desplaza dentro de la tarjeta, y en escritorio se corta
-    //     por abajo, como ocurre a cualquier altura. Un tope de 40dvh es la
-    //     porción que le corresponde a la tarjeta inferior en vertical dentro de
-    //     un viewport alto, y con él la tarjeta en horizontal queda demasiado
-    //     corta; sin tope alguno, la tarjeta de altura según contenido crece
-    //     hasta salirse por arriba y por abajo de un viewport de 430px, y nada
-    //     la devuelve al área visible.
+    //     arriba y abajo, así que la tarjeta lateral puede ocupar casi toda la
+    //     altura de un viewport tan bajo. Si el contenido supera el tope, en
+    //     un teléfono en horizontal se desplaza dentro de la tarjeta. En el
+    //     diseño horizontal, este tope rige solo hasta que se ejecuta
+    //     card-pool.js: luego card-fit.js escribe el límite que mantiene la
+    //     tarjeta por debajo de los controles superiores, reduce la letra de
+    //     la respuesta para que quepa, y cuando ni así alcanza,
+    //     card-scroll.js desplaza el contenido dentro de la propia tarjeta. Un
+    //     tope de 40dvh es la porción que le toca a la tarjeta inferior con la
+    //     pantalla en vertical, en un viewport alto; con ese tope, la tarjeta
+    //     en un teléfono en horizontal queda demasiado corta; sin tope alguno,
+    //     la tarjeta de altura según contenido crece hasta salirse por arriba
+    //     y por abajo de un viewport de 430px, y nada la devuelve al área
+    //     visible.
     max-height: calc(100vh - 2rem);
 
     // The dvh value sits inside the landscape block, in the same shape as the

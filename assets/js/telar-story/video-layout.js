@@ -78,6 +78,18 @@ export function mediaPadding(W, H) {
 }
 
 /**
+ * The same padding before rounding, for a bound that must not move by the
+ * rounding's half pixel as the window grows.
+ *
+ * @param {number} W - Viewport width in px
+ * @param {number} H - Viewport height in px
+ * @returns {number}
+ */
+export function unroundedMediaPadding(W, H) {
+  return Math.max(8, Math.min(W, H) * videoPadFactor);
+}
+
+/**
  * Where a card placed below the player has its top: one padding above the
  * window's bottom edge.
  *

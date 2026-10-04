@@ -256,3 +256,12 @@ export function resetState(overrides = {}) {
   state.snap = null;
   Object.assign(state, overrides);
 }
+
+/**
+ * A wheel over a side card, as Lenis would report one if it reached it: the
+ * event's target and path are inside the card.
+ */
+export const cardWheelEvent = ({ card, deltaY = 120 } = {}) => ({
+  deltaX: 0, deltaY,
+  event: { type: 'wheel', target: card, ctrlKey: false, composedPath: () => [card, document.body] },
+});

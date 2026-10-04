@@ -31,7 +31,7 @@ import {
 import { chooseAudioArrangement, computeAudioBelowLayout } from './audio-layout.js';
 
 /** The fixed chrome at the top of a story, which the player below has to clear. */
-const TOP_CONTROLS = ['.btn-nav-back', '.share-button', '.step-counter'];
+export const TOP_CONTROLS = ['.btn-nav-back', '.share-button', '.step-counter'];
 
 /** The card types whose scenes this module arranges. */
 const VIDEO_TYPES = new Set(['youtube', 'vimeo', 'google-drive']);
@@ -42,22 +42,34 @@ function _isEmbed() {
 }
 
 /**
+ * The lowest bottom edge, in px from the top of the window, of the elements
+ * the selectors match. An element not displayed has an empty box and is
+ * skipped, so a control that is hidden, or absent from the page, drops out.
+ *
+ * @param {string[]} selectors
+ * @returns {number} 0 where none is displayed
+ */
+export function measureControlsBottom(selectors) {
+  let bottom = 0;
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (!el) continue;
+    const box = el.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) bottom = Math.max(bottom, box.bottom);
+  }
+  return bottom;
+}
+
+/**
  * The band kept clear for the top controls: their lowest bottom edge plus one
- * padding. A control that is not displayed has an empty box and is skipped.
+ * padding.
  *
  * @param {number} W - Viewport width in px
  * @param {number} H - Viewport height in px
  * @returns {number}
  */
 export function measureTopBand(W, H) {
-  let bottom = 0;
-  for (const selector of TOP_CONTROLS) {
-    const el = document.querySelector(selector);
-    if (!el) continue;
-    const box = el.getBoundingClientRect();
-    if (box.width > 0 && box.height > 0) bottom = Math.max(bottom, box.bottom);
-  }
-  return Math.round(bottom) + mediaPadding(W, H);
+  return Math.round(measureControlsBottom(TOP_CONTROLS)) + mediaPadding(W, H);
 }
 
 /** The aspect a video plate's player is compared at. */
@@ -89,16 +101,18 @@ function _clear(plateEl, cards) {
  * @param {boolean} how.eligible - Whether the geometry pass sized these cards
  *   to their content on a horizontal layout
  * @param {(card: HTMLElement) => number} how.besideTop - A card's top beside the player
+ * @param {number} [how.topBand] - The band, where the pass has measured it
+ *   once for every scene
  * @returns {'below'|'beside'|null} null where the scene is not arranged
  */
-export function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop }) {
+export function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop, topBand: band }) {
   const type = plateEl.dataset.cardType;
   const isMedia = VIDEO_TYPES.has(type) || type === 'audio';
   if (!isMedia) {
     _clear(plateEl, cards);
     return null;
   }
-  const topBand = measureTopBand(W, H);
+  const topBand = band ?? measureTopBand(W, H);
   if (!eligible || _isEmbed() || cards.length === 0) {
     _clear(plateEl, cards);
     plateEl.dataset.mediaTopBand = String(topBand);

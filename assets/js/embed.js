@@ -20,11 +20,13 @@
  * `{site_name}` placeholder via a function replacement, so any `$`-sequences in the
  * name are inserted literally. The full-site URL is derived from the current location
  * by stripping everything from `/stories/` onward, falling back to the bare origin.
+ * The banner sits over the story's side card, which keeps clear of it, so the window
+ * is sent `telar:embed-banner` when the banner is added and again when it is removed.
  *
  * The whole file is an IIFE so none of this leaks into the global scope beyond the
  * single `window.telarEmbed` flag.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 (function() {
@@ -96,6 +98,7 @@
 
     // Insert at top of body
     document.body.insertBefore(banner, document.body.firstChild);
+    window.dispatchEvent(new CustomEvent('telar:embed-banner'));
 
     // Handle dismiss
     const closeButton = banner.querySelector('.telar-embed-banner-close');
@@ -104,6 +107,7 @@
         e.preventDefault();
         e.stopPropagation();
         banner.remove();
+        window.dispatchEvent(new CustomEvent('telar:embed-banner'));
         console.log('[Telar Embed] Banner dismissed');
       });
       console.log('[Telar Embed] Banner created with close button');

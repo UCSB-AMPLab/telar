@@ -36,7 +36,7 @@
  * broadcast the initial mode — subscribers that need the current value should
  * call getLayoutMode() at subscribe time.
  *
- * @version v1.4.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -233,8 +233,18 @@ export function getIsEmbed() {
  * @returns {boolean}
  */
 export function isLandscapeSideCard() {
+  return window.matchMedia(`(max-height: ${getCardLandscapeMaxHeight()}px)`).matches;
+}
+
+/**
+ * The side-card height threshold in px, from `--telar-card-landscape-max-height`
+ * (480 where the property is unset). card-fit.js reads it too, as the height
+ * whose room under the top controls the side card's ceiling keeps above it.
+ *
+ * @returns {number}
+ */
+export function getCardLandscapeMaxHeight() {
   const raw = getComputedStyle(document.documentElement)
     .getPropertyValue('--telar-card-landscape-max-height');
-  const maxH = parseFloat(raw) || 480;
-  return window.matchMedia(`(max-height: ${maxH}px)`).matches;
+  return parseFloat(raw) || 480;
 }

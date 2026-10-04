@@ -202,9 +202,11 @@
     return () => viewportResizeSubs.delete(cb);
   }
   function isLandscapeSideCard() {
+    return window.matchMedia(`(max-height: ${getCardLandscapeMaxHeight()}px)`).matches;
+  }
+  function getCardLandscapeMaxHeight() {
     const raw = getComputedStyle(document.documentElement).getPropertyValue("--telar-card-landscape-max-height");
-    const maxH = parseFloat(raw) || 480;
-    return window.matchMedia(`(max-height: ${maxH}px)`).matches;
+    return parseFloat(raw) || 480;
   }
 
   // assets/js/objects-filter/escape.js
@@ -780,6 +782,9 @@
   function mediaPadding(W, H) {
     return Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
   }
+  function unroundedMediaPadding(W, H) {
+    return Math.max(8, Math.min(W, H) * videoPadFactor);
+  }
   function computeBelowCardTop(W, H, cardH) {
     return Math.round(H - mediaPadding(W, H) - cardH);
   }
@@ -975,15 +980,18 @@
   function _isEmbed() {
     return state.isEmbed || Boolean(window.telarEmbed?.enabled);
   }
-  function measureTopBand(W, H) {
+  function measureControlsBottom(selectors) {
     let bottom = 0;
-    for (const selector of TOP_CONTROLS) {
+    for (const selector of selectors) {
       const el = document.querySelector(selector);
       if (!el) continue;
       const box = el.getBoundingClientRect();
       if (box.width > 0 && box.height > 0) bottom = Math.max(bottom, box.bottom);
     }
-    return Math.round(bottom) + mediaPadding(W, H);
+    return bottom;
+  }
+  function measureTopBand(W, H) {
+    return Math.round(measureControlsBottom(TOP_CONTROLS)) + mediaPadding(W, H);
   }
   function _plateAspect(plateEl) {
     if (plateEl.dataset.videoLetterbox === "true") return COMPARISON_ASPECT;
@@ -995,14 +1003,14 @@
     delete plateEl.dataset.mediaTopBand;
     for (const card of cards) delete card.dataset.mediaArrangement;
   }
-  function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop }) {
+  function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop, topBand: band }) {
     const type = plateEl.dataset.cardType;
     const isMedia = VIDEO_TYPES.has(type) || type === "audio";
     if (!isMedia) {
       _clear(plateEl, cards);
       return null;
     }
-    const topBand = measureTopBand(W, H);
+    const topBand = band ?? measureTopBand(W, H);
     if (!eligible || _isEmbed() || cards.length === 0) {
       _clear(plateEl, cards);
       plateEl.dataset.mediaTopBand = String(topBand);
@@ -1048,6 +1056,2965 @@
     const { wave, controlsBottom } = computeAudioBelowLayout(window.innerWidth, window.innerHeight, below);
     [wave.top, wave.left, wave.width, controlsBottom].forEach((px, i) => plateEl.style.setProperty(AUDIO_BELOW_PROPS[i], `${px}px`));
     return wave.height;
+  }
+
+  // node_modules/lenis/dist/lenis.mjs
+  var version = "1.3.26";
+  function clamp(min, input, max) {
+    return Math.max(min, Math.min(input, max));
+  }
+  function lerp(x, y, t) {
+    return (1 - t) * x + t * y;
+  }
+  function damp(x, y, lambda, deltaTime) {
+    return lerp(x, y, 1 - Math.exp(-lambda * deltaTime));
+  }
+  function modulo(n, d) {
+    return (n % d + d) % d;
+  }
+  var Animate = class {
+    isRunning = false;
+    value = 0;
+    from = 0;
+    to = 0;
+    currentTime = 0;
+    lerp;
+    duration;
+    easing;
+    onUpdate;
+    /**
+    * Advance the animation by the given delta time
+    *
+    * @param deltaTime - The time in seconds to advance the animation
+    */
+    advance(deltaTime) {
+      if (!this.isRunning) return;
+      let completed = false;
+      if (this.duration && this.easing) {
+        this.currentTime += deltaTime;
+        const linearProgress = clamp(0, this.currentTime / this.duration, 1);
+        completed = linearProgress >= 1;
+        const easedProgress = completed ? 1 : this.easing(linearProgress);
+        this.value = this.from + (this.to - this.from) * easedProgress;
+      } else if (this.lerp) {
+        this.value = damp(this.value, this.to, this.lerp * 60, deltaTime);
+        if (Math.round(this.value) === Math.round(this.to)) {
+          this.value = this.to;
+          completed = true;
+        }
+      } else {
+        this.value = this.to;
+        completed = true;
+      }
+      if (completed) this.stop();
+      this.onUpdate?.(this.value, completed);
+    }
+    /** Stop the animation */
+    stop() {
+      this.isRunning = false;
+    }
+    /**
+    * Set up the animation from a starting value to an ending value
+    * with optional parameters for lerping, duration, easing, and onUpdate callback
+    *
+    * @param from - The starting value
+    * @param to - The ending value
+    * @param options - Options for the animation
+    */
+    fromTo(from, to, { lerp: lerp2, duration, easing, onStart, onUpdate }) {
+      this.from = this.value = from;
+      this.to = to;
+      this.lerp = lerp2;
+      this.duration = duration;
+      this.easing = easing;
+      this.currentTime = 0;
+      this.isRunning = true;
+      onStart?.();
+      this.onUpdate = onUpdate;
+    }
+  };
+  function debounce(callback, delay) {
+    let timer;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = void 0;
+        callback.apply(this, args);
+      }, delay);
+    };
+  }
+  var Dimensions = class {
+    width = 0;
+    height = 0;
+    scrollHeight = 0;
+    scrollWidth = 0;
+    debouncedResize;
+    wrapperResizeObserver;
+    contentResizeObserver;
+    constructor(wrapper, content, { autoResize = true, debounce: debounceValue = 250 } = {}) {
+      this.wrapper = wrapper;
+      this.content = content;
+      if (autoResize) {
+        this.debouncedResize = debounce(this.resize, debounceValue);
+        if (this.wrapper instanceof Window) window.addEventListener("resize", this.debouncedResize);
+        else {
+          this.wrapperResizeObserver = new ResizeObserver(this.debouncedResize);
+          this.wrapperResizeObserver.observe(this.wrapper);
+        }
+        this.contentResizeObserver = new ResizeObserver(this.debouncedResize);
+        this.contentResizeObserver.observe(this.content);
+      }
+      this.resize();
+    }
+    destroy() {
+      this.wrapperResizeObserver?.disconnect();
+      this.contentResizeObserver?.disconnect();
+      if (this.wrapper === window && this.debouncedResize) window.removeEventListener("resize", this.debouncedResize);
+    }
+    resize = () => {
+      this.onWrapperResize();
+      this.onContentResize();
+    };
+    onWrapperResize = () => {
+      if (this.wrapper instanceof Window) {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+      } else {
+        this.width = this.wrapper.clientWidth;
+        this.height = this.wrapper.clientHeight;
+      }
+    };
+    onContentResize = () => {
+      if (this.wrapper instanceof Window) {
+        this.scrollHeight = this.content.scrollHeight;
+        this.scrollWidth = this.content.scrollWidth;
+      } else {
+        this.scrollHeight = this.wrapper.scrollHeight;
+        this.scrollWidth = this.wrapper.scrollWidth;
+      }
+    };
+    get limit() {
+      return {
+        x: this.scrollWidth - this.width,
+        y: this.scrollHeight - this.height
+      };
+    }
+  };
+  var Emitter = class {
+    events = {};
+    /**
+    * Emit an event with the given data
+    * @param event Event name
+    * @param args Data to pass to the event handlers
+    */
+    emit(event, ...args) {
+      const callbacks = this.events[event] || [];
+      for (let i = 0, length = callbacks.length; i < length; i++) callbacks[i]?.(...args);
+    }
+    /**
+    * Add a callback to the event
+    * @param event Event name
+    * @param cb Callback function
+    * @returns Unsubscribe function
+    */
+    on(event, cb) {
+      if (this.events[event]) this.events[event].push(cb);
+      else this.events[event] = [cb];
+      return () => {
+        this.events[event] = this.events[event]?.filter((i) => cb !== i);
+      };
+    }
+    /**
+    * Remove a callback from the event
+    * @param event Event name
+    * @param callback Callback function
+    */
+    off(event, callback) {
+      this.events[event] = this.events[event]?.filter((i) => callback !== i);
+    }
+    /**
+    * Remove all event listeners and clean up
+    */
+    destroy() {
+      this.events = {};
+    }
+  };
+  var LINE_HEIGHT = 100 / 6;
+  var listenerOptions = { passive: false };
+  function getDeltaMultiplier(deltaMode, size) {
+    if (deltaMode === 1) return LINE_HEIGHT;
+    if (deltaMode === 2) return size;
+    return 1;
+  }
+  var VirtualScroll = class {
+    touchStart = {
+      x: 0,
+      y: 0
+    };
+    lastDelta = {
+      x: 0,
+      y: 0
+    };
+    window = {
+      width: 0,
+      height: 0
+    };
+    emitter = new Emitter();
+    constructor(element, options = {
+      wheelMultiplier: 1,
+      touchMultiplier: 1
+    }) {
+      this.element = element;
+      this.options = options;
+      window.addEventListener("resize", this.onWindowResize);
+      this.onWindowResize();
+      this.element.addEventListener("wheel", this.onWheel, listenerOptions);
+      this.element.addEventListener("touchstart", this.onTouchStart, listenerOptions);
+      this.element.addEventListener("touchmove", this.onTouchMove, listenerOptions);
+      this.element.addEventListener("touchend", this.onTouchEnd, listenerOptions);
+    }
+    /**
+    * Add an event listener for the given event and callback
+    *
+    * @param event Event name
+    * @param callback Callback function
+    */
+    on(event, callback) {
+      return this.emitter.on(event, callback);
+    }
+    /** Remove all event listeners and clean up */
+    destroy() {
+      this.emitter.destroy();
+      window.removeEventListener("resize", this.onWindowResize);
+      this.element.removeEventListener("wheel", this.onWheel, listenerOptions);
+      this.element.removeEventListener("touchstart", this.onTouchStart, listenerOptions);
+      this.element.removeEventListener("touchmove", this.onTouchMove, listenerOptions);
+      this.element.removeEventListener("touchend", this.onTouchEnd, listenerOptions);
+    }
+    /**
+    * Event handler for 'touchstart' event
+    *
+    * @param event Touch event
+    */
+    onTouchStart = (event) => {
+      const { clientX, clientY } = event.targetTouches ? event.targetTouches[0] : event;
+      this.touchStart.x = clientX;
+      this.touchStart.y = clientY;
+      this.lastDelta = {
+        x: 0,
+        y: 0
+      };
+      this.emitter.emit("scroll", {
+        deltaX: 0,
+        deltaY: 0,
+        event
+      });
+    };
+    /** Event handler for 'touchmove' event */
+    onTouchMove = (event) => {
+      const { clientX, clientY } = event.targetTouches ? event.targetTouches[0] : event;
+      const deltaX = -(clientX - this.touchStart.x) * this.options.touchMultiplier;
+      const deltaY = -(clientY - this.touchStart.y) * this.options.touchMultiplier;
+      this.touchStart.x = clientX;
+      this.touchStart.y = clientY;
+      this.lastDelta = {
+        x: deltaX,
+        y: deltaY
+      };
+      this.emitter.emit("scroll", {
+        deltaX,
+        deltaY,
+        event
+      });
+    };
+    onTouchEnd = (event) => {
+      this.emitter.emit("scroll", {
+        deltaX: this.lastDelta.x,
+        deltaY: this.lastDelta.y,
+        event
+      });
+    };
+    /** Event handler for 'wheel' event */
+    onWheel = (event) => {
+      let { deltaX, deltaY, deltaMode } = event;
+      const multiplierX = getDeltaMultiplier(deltaMode, this.window.width);
+      const multiplierY = getDeltaMultiplier(deltaMode, this.window.height);
+      deltaX *= multiplierX;
+      deltaY *= multiplierY;
+      deltaX *= this.options.wheelMultiplier;
+      deltaY *= this.options.wheelMultiplier;
+      this.emitter.emit("scroll", {
+        deltaX,
+        deltaY,
+        event
+      });
+    };
+    onWindowResize = () => {
+      this.window = {
+        width: window.innerWidth,
+        height: window.innerHeight
+      };
+    };
+  };
+  var defaultEasing = (t) => Math.min(1, 1.001 - 2 ** (-10 * t));
+  var Lenis = class {
+    _isScrolling = false;
+    _isStopped = false;
+    _isLocked = false;
+    _preventNextNativeScrollEvent = false;
+    _resetVelocityTimeout = null;
+    _rafId = null;
+    _isDraggingSelection = false;
+    reducedMotionMediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    /**
+    * Whether or not the user is touching the screen
+    */
+    isTouching;
+    /**
+    * Whether or not the device is running iOS
+    */
+    isIos;
+    /**
+    * The time in ms since the lenis instance was created
+    */
+    time = 0;
+    /**
+    * User data that will be forwarded through the scroll event
+    *
+    * @example
+    * lenis.scrollTo(100, {
+    *   userData: {
+    *     foo: 'bar'
+    *   }
+    * })
+    */
+    userData = {};
+    /**
+    * The last velocity of the scroll
+    */
+    lastVelocity = 0;
+    /**
+    * The current velocity of the scroll
+    */
+    velocity = 0;
+    /**
+    * The direction of the scroll
+    */
+    direction = 0;
+    /**
+    * The options passed to the lenis instance
+    */
+    options;
+    /**
+    * The target scroll value
+    */
+    targetScroll;
+    /**
+    * The animated scroll value
+    */
+    animatedScroll;
+    animate = new Animate();
+    emitter = new Emitter();
+    dimensions;
+    virtualScroll;
+    constructor({ wrapper = window, content = document.documentElement, eventsTarget = wrapper, smoothWheel = true, syncTouch = false, syncTouchLerp = 0.075, touchInertiaExponent = 1.7, duration, easing, lerp: lerp2 = 0.1, infinite = false, orientation = "vertical", gestureOrientation = orientation === "horizontal" ? "both" : "vertical", touchMultiplier = 1, wheelMultiplier = 1, autoResize = true, prevent, virtualScroll, overscroll = true, autoRaf = false, anchors = false, autoToggle = false, allowNestedScroll = false, __experimental__naiveDimensions = false, naiveDimensions = __experimental__naiveDimensions, stopInertiaOnNavigate = false, respectReducedMotion = true } = {}) {
+      window.lenisVersion = version;
+      if (!window.lenis) window.lenis = {};
+      window.lenis.version = version;
+      if (orientation === "horizontal") window.lenis.horizontal = true;
+      if (syncTouch === true) window.lenis.touch = true;
+      this.isIos = /(iPad|iPhone|iPod)/g.test(navigator.userAgent);
+      if (!wrapper || wrapper === document.documentElement) wrapper = window;
+      if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
+      else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
+      this.options = {
+        wrapper,
+        content,
+        eventsTarget,
+        smoothWheel,
+        syncTouch,
+        syncTouchLerp,
+        touchInertiaExponent,
+        duration,
+        easing,
+        lerp: lerp2,
+        infinite,
+        gestureOrientation,
+        orientation,
+        touchMultiplier,
+        wheelMultiplier,
+        autoResize,
+        prevent,
+        virtualScroll,
+        overscroll,
+        autoRaf,
+        anchors,
+        autoToggle,
+        allowNestedScroll,
+        naiveDimensions,
+        stopInertiaOnNavigate,
+        respectReducedMotion
+      };
+      this.dimensions = new Dimensions(wrapper, content, { autoResize });
+      this.updateClassName();
+      this.targetScroll = this.animatedScroll = this.actualScroll;
+      this.options.wrapper.addEventListener("scroll", this.onNativeScroll);
+      this.options.wrapper.addEventListener("scrollend", this.onScrollEnd, { capture: true });
+      if (this.options.anchors || this.options.stopInertiaOnNavigate) this.options.wrapper.addEventListener("click", this.onClick);
+      this.options.wrapper.addEventListener("pointerdown", this.onPointerDown);
+      this.virtualScroll = new VirtualScroll(eventsTarget, {
+        touchMultiplier,
+        wheelMultiplier
+      });
+      this.virtualScroll.on("scroll", this.onVirtualScroll);
+      if (this.options.autoToggle) {
+        this.checkOverflow();
+        this.rootElement.addEventListener("transitionend", this.onTransitionEnd);
+      }
+      if (this.options.autoRaf) this._rafId = requestAnimationFrame(this.raf);
+    }
+    /**
+    * Destroy the lenis instance, remove all event listeners and clean up the class name
+    */
+    destroy() {
+      this.emitter.destroy();
+      this.options.wrapper.removeEventListener("scroll", this.onNativeScroll);
+      this.options.wrapper.removeEventListener("scrollend", this.onScrollEnd, { capture: true });
+      this.options.wrapper.removeEventListener("pointerdown", this.onPointerDown);
+      if (this.options.anchors || this.options.stopInertiaOnNavigate) this.options.wrapper.removeEventListener("click", this.onClick);
+      this.virtualScroll.destroy();
+      this.dimensions.destroy();
+      this.cleanUpClassName();
+      if (this._rafId) cancelAnimationFrame(this._rafId);
+    }
+    on(event, callback) {
+      return this.emitter.on(event, callback);
+    }
+    off(event, callback) {
+      return this.emitter.off(event, callback);
+    }
+    onScrollEnd = (e) => {
+      if (!(e instanceof CustomEvent)) {
+        if (this.isScrolling === "smooth" || this.isScrolling === false) e.stopPropagation();
+      }
+    };
+    dispatchScrollendEvent = () => {
+      this.options.wrapper.dispatchEvent(new CustomEvent("scrollend", {
+        bubbles: this.options.wrapper === window,
+        detail: { lenisScrollEnd: true }
+      }));
+    };
+    get overflow() {
+      const property = this.isHorizontal ? "overflow-x" : "overflow-y";
+      return getComputedStyle(this.rootElement)[property];
+    }
+    checkOverflow() {
+      if (["hidden", "clip"].includes(this.overflow)) this.internalStop();
+      else this.internalStart();
+    }
+    onTransitionEnd = (event) => {
+      if (event.propertyName?.includes("overflow") && event.target === this.rootElement) this.checkOverflow();
+    };
+    setScroll(scroll) {
+      if (this.isHorizontal) this.options.wrapper.scrollTo({
+        left: scroll,
+        behavior: "instant"
+      });
+      else this.options.wrapper.scrollTo({
+        top: scroll,
+        behavior: "instant"
+      });
+    }
+    onClick = (event) => {
+      const linkElementsUrls = event.composedPath().filter((node) => node instanceof HTMLAnchorElement && node.href).map((element) => new URL(element.href));
+      const currentUrl = new URL(window.location.href);
+      if (this.options.anchors) {
+        const anchorElementUrl = linkElementsUrls.find((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname === targetUrl.pathname && targetUrl.hash);
+        if (anchorElementUrl) {
+          const options = typeof this.options.anchors === "object" && this.options.anchors ? this.options.anchors : void 0;
+          const target = decodeURIComponent(anchorElementUrl.hash);
+          this.scrollTo(target, options);
+          return;
+        }
+      }
+      if (this.options.stopInertiaOnNavigate) {
+        if (linkElementsUrls.some((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname !== targetUrl.pathname)) {
+          this.reset();
+          return;
+        }
+      }
+    };
+    onPointerDown = (event) => {
+      if (event.button === 1) this.reset();
+    };
+    isTouchOnSelectionHandle(event) {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+      const touch = event.targetTouches[0] ?? event.changedTouches[0];
+      if (!touch) return false;
+      const rects = selection.getRangeAt(0).getClientRects();
+      if (rects.length === 0) return false;
+      const first = rects[0];
+      const last = rects[rects.length - 1];
+      const HANDLE_RADIUS2 = 40;
+      const nearStart = Math.hypot(touch.clientX - first.left, touch.clientY - first.top) <= HANDLE_RADIUS2;
+      const nearEnd = Math.hypot(touch.clientX - last.right, touch.clientY - last.bottom) <= HANDLE_RADIUS2;
+      return nearStart || nearEnd;
+    }
+    onVirtualScroll = (data) => {
+      if (typeof this.options.virtualScroll === "function" && this.options.virtualScroll(data) === false) return;
+      const { deltaX, deltaY, event } = data;
+      this.emitter.emit("virtual-scroll", {
+        deltaX,
+        deltaY,
+        event
+      });
+      if (event.ctrlKey) return;
+      if (event.lenisStopPropagation) return;
+      const isTouch = event.type.includes("touch");
+      const isWheel = event.type.includes("wheel");
+      if (isTouch && this.isIos) {
+        if (event.type === "touchstart") this._isDraggingSelection = this.isTouchOnSelectionHandle(event);
+        if (this._isDraggingSelection) {
+          if (event.type === "touchend") this._isDraggingSelection = false;
+          return;
+        }
+      }
+      this.isTouching = event.type === "touchstart" || event.type === "touchmove";
+      const isClickOrTap = deltaX === 0 && deltaY === 0;
+      if (this.options.syncTouch && isTouch && event.type === "touchstart" && isClickOrTap && !this.isStopped && !this.isLocked) {
+        this.reset();
+        return;
+      }
+      const isUnknownGesture = this.options.gestureOrientation === "vertical" && deltaY === 0 || this.options.gestureOrientation === "horizontal" && deltaX === 0;
+      if (isClickOrTap || isUnknownGesture) return;
+      let composedPath = event.composedPath();
+      composedPath = composedPath.slice(0, composedPath.indexOf(this.rootElement));
+      const prevent = this.options.prevent;
+      const gestureOrientation = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
+      if (composedPath.find((node) => node instanceof HTMLElement && (typeof prevent === "function" && prevent?.(node) || node.hasAttribute?.("data-lenis-prevent") || gestureOrientation === "vertical" && node.hasAttribute?.("data-lenis-prevent-vertical") || gestureOrientation === "horizontal" && node.hasAttribute?.("data-lenis-prevent-horizontal") || isTouch && node.hasAttribute?.("data-lenis-prevent-touch") || isWheel && node.hasAttribute?.("data-lenis-prevent-wheel") || this.options.allowNestedScroll && this.hasNestedScroll(node, {
+        deltaX,
+        deltaY
+      })))) return;
+      if (this.isStopped || this.isLocked) {
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
+      if (!(this.options.syncTouch && isTouch || this.options.smoothWheel && isWheel)) {
+        this.isScrolling = "native";
+        this.animate.stop();
+        event.lenisStopPropagation = true;
+        return;
+      }
+      let delta = deltaY;
+      if (this.options.gestureOrientation === "both") delta = Math.abs(deltaY) > Math.abs(deltaX) ? deltaY : deltaX;
+      else if (this.options.gestureOrientation === "horizontal") delta = deltaX;
+      if (!this.options.overscroll || this.options.infinite || this.options.wrapper !== window && this.limit > 0 && (this.animatedScroll > 0 && this.animatedScroll < this.limit || this.animatedScroll === 0 && deltaY > 0 || this.animatedScroll === this.limit && deltaY < 0)) event.lenisStopPropagation = true;
+      if (event.cancelable) event.preventDefault();
+      const isSyncTouch = isTouch && this.options.syncTouch;
+      const hasTouchInertia = isTouch && event.type === "touchend";
+      if (hasTouchInertia) delta = Math.sign(delta) * Math.abs(this.velocity) ** this.options.touchInertiaExponent;
+      this.scrollTo(this.targetScroll + delta, {
+        programmatic: false,
+        ...isSyncTouch ? { lerp: hasTouchInertia ? this.options.syncTouchLerp : 1 } : {
+          lerp: this.options.lerp,
+          duration: this.options.duration,
+          easing: this.options.easing
+        }
+      });
+    };
+    /**
+    * Force lenis to recalculate the dimensions
+    */
+    resize() {
+      this.dimensions.resize();
+      this.animatedScroll = this.targetScroll = this.actualScroll;
+      this.emit();
+    }
+    emit() {
+      this.emitter.emit("scroll", this);
+    }
+    onNativeScroll = () => {
+      if (this._resetVelocityTimeout !== null) {
+        clearTimeout(this._resetVelocityTimeout);
+        this._resetVelocityTimeout = null;
+      }
+      if (this._preventNextNativeScrollEvent) {
+        this._preventNextNativeScrollEvent = false;
+        return;
+      }
+      if (this.isScrolling === false || this.isScrolling === "native") {
+        const lastScroll = this.animatedScroll;
+        this.animatedScroll = this.targetScroll = this.actualScroll;
+        this.lastVelocity = this.velocity;
+        this.velocity = this.animatedScroll - lastScroll;
+        this.direction = Math.sign(this.animatedScroll - lastScroll);
+        if (!this.isStopped) this.isScrolling = "native";
+        this.emit();
+        if (this.velocity !== 0) this._resetVelocityTimeout = setTimeout(() => {
+          this.lastVelocity = this.velocity;
+          this.velocity = 0;
+          this.isScrolling = false;
+          this.emit();
+        }, 400);
+      }
+    };
+    reset() {
+      this.isLocked = false;
+      this.isScrolling = false;
+      this.animatedScroll = this.targetScroll = this.actualScroll;
+      this.lastVelocity = this.velocity = 0;
+      this.animate.stop();
+    }
+    /**
+    * Start lenis scroll after it has been stopped
+    */
+    start() {
+      if (!this.isStopped) return;
+      if (this.options.autoToggle) {
+        this.rootElement.style.removeProperty("overflow");
+        return;
+      }
+      this.internalStart();
+    }
+    internalStart() {
+      if (!this.isStopped) return;
+      this.reset();
+      this.isStopped = false;
+      this.emit();
+    }
+    /**
+    * Stop lenis scroll
+    */
+    stop() {
+      if (this.isStopped) return;
+      if (this.options.autoToggle) {
+        this.rootElement.style.setProperty("overflow", "clip");
+        return;
+      }
+      this.internalStop();
+    }
+    internalStop() {
+      if (this.isStopped) return;
+      this.reset();
+      this.isStopped = true;
+      this.emit();
+    }
+    /**
+    * RequestAnimationFrame for lenis
+    *
+    * @param time The time in ms from an external clock like `requestAnimationFrame` or Tempus
+    */
+    raf = (time) => {
+      const deltaTime = time - (this.time || time);
+      this.time = time;
+      this.animate.advance(deltaTime * 1e-3);
+      if (this.options.autoRaf) this._rafId = requestAnimationFrame(this.raf);
+    };
+    /**
+    * Scroll to a target value
+    *
+    * @param target The target value to scroll to
+    * @param options The options for the scroll
+    *
+    * @example
+    * lenis.scrollTo(100, {
+    *   offset: 100,
+    *   duration: 1,
+    *   easing: (t) => 1 - Math.cos((t * Math.PI) / 2),
+    *   lerp: 0.1,
+    *   onStart: () => {
+    *     console.log('onStart')
+    *   },
+    *   onComplete: () => {
+    *     console.log('onComplete')
+    *   },
+    * })
+    */
+    scrollTo(_target, { offset = 0, immediate = false, lock = false, programmatic = true, lerp: lerp2 = programmatic ? this.options.lerp : void 0, duration = programmatic ? this.options.duration : void 0, easing = programmatic ? this.options.easing : void 0, onStart, onComplete, force = false, userData } = {}) {
+      if (this.prefersReducedMotion) if (programmatic) immediate = true;
+      else {
+        lerp2 = 1;
+        duration = void 0;
+        easing = void 0;
+      }
+      if ((this.isStopped || this.isLocked) && !force) return;
+      let target = _target;
+      let adjustedOffset = offset;
+      if (typeof target === "string" && [
+        "top",
+        "left",
+        "start",
+        "#"
+      ].includes(target)) target = 0;
+      else if (typeof target === "string" && [
+        "bottom",
+        "right",
+        "end"
+      ].includes(target)) target = this.limit;
+      else {
+        let node = null;
+        if (typeof target === "string") {
+          node = target.startsWith("#") ? document.getElementById(target.slice(1)) : document.querySelector(target);
+          if (!node) if (target === "#top") target = 0;
+          else console.warn("Lenis: Target not found", target);
+        } else if (target instanceof HTMLElement && target?.nodeType) node = target;
+        if (node) {
+          if (this.options.wrapper !== window) {
+            const wrapperRect = this.rootElement.getBoundingClientRect();
+            adjustedOffset -= this.isHorizontal ? wrapperRect.left : wrapperRect.top;
+          }
+          const rect = node.getBoundingClientRect();
+          const targetStyle = getComputedStyle(node);
+          const scrollMargin = this.isHorizontal ? Number.parseFloat(targetStyle.scrollMarginLeft) : Number.parseFloat(targetStyle.scrollMarginTop);
+          const containerStyle = getComputedStyle(this.rootElement);
+          const scrollPadding = this.isHorizontal ? Number.parseFloat(containerStyle.scrollPaddingLeft) : Number.parseFloat(containerStyle.scrollPaddingTop);
+          target = (this.isHorizontal ? rect.left : rect.top) + this.animatedScroll - (Number.isNaN(scrollMargin) ? 0 : scrollMargin) - (Number.isNaN(scrollPadding) ? 0 : scrollPadding);
+        }
+      }
+      if (typeof target !== "number") return;
+      target += adjustedOffset;
+      if (this.options.infinite) {
+        if (programmatic) {
+          this.targetScroll = this.animatedScroll = this.scroll;
+          const distance = target - this.animatedScroll;
+          if (distance > this.limit / 2) target -= this.limit;
+          else if (distance < -this.limit / 2) target += this.limit;
+        }
+      } else target = clamp(0, target, this.limit);
+      if (target === this.targetScroll) {
+        onStart?.(this);
+        onComplete?.(this);
+        return;
+      }
+      this.userData = userData ?? {};
+      if (immediate) {
+        this.animatedScroll = this.targetScroll = target;
+        this.setScroll(this.scroll);
+        this.reset();
+        this.preventNextNativeScrollEvent();
+        this.emit();
+        onComplete?.(this);
+        this.userData = {};
+        requestAnimationFrame(() => {
+          this.dispatchScrollendEvent();
+        });
+        return;
+      }
+      if (!programmatic) this.targetScroll = target;
+      if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
+      else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
+      this.animate.fromTo(this.animatedScroll, target, {
+        duration,
+        easing,
+        lerp: lerp2,
+        onStart: () => {
+          if (lock) this.isLocked = true;
+          this.isScrolling = "smooth";
+          onStart?.(this);
+        },
+        onUpdate: (value, completed) => {
+          this.isScrolling = "smooth";
+          this.lastVelocity = this.velocity;
+          this.velocity = value - this.animatedScroll;
+          this.direction = Math.sign(this.velocity);
+          this.animatedScroll = value;
+          this.setScroll(this.scroll);
+          if (programmatic) this.targetScroll = value;
+          if (!completed) this.emit();
+          if (completed) {
+            this.reset();
+            this.emit();
+            onComplete?.(this);
+            this.userData = {};
+            requestAnimationFrame(() => {
+              this.dispatchScrollendEvent();
+            });
+            this.preventNextNativeScrollEvent();
+          }
+        }
+      });
+    }
+    preventNextNativeScrollEvent() {
+      this._preventNextNativeScrollEvent = true;
+      requestAnimationFrame(() => {
+        this._preventNextNativeScrollEvent = false;
+      });
+    }
+    hasNestedScroll(node, { deltaX, deltaY }) {
+      const time = Date.now();
+      if (!node._lenis) node._lenis = {};
+      const cache = node._lenis;
+      let hasOverflowX;
+      let hasOverflowY;
+      let isScrollableX;
+      let isScrollableY;
+      let hasOverscrollBehaviorX;
+      let hasOverscrollBehaviorY;
+      let scrollWidth;
+      let scrollHeight;
+      let clientWidth;
+      let clientHeight;
+      if (time - (cache.time ?? 0) > 2e3) {
+        cache.time = Date.now();
+        const computedStyle = window.getComputedStyle(node);
+        cache.computedStyle = computedStyle;
+        hasOverflowX = [
+          "auto",
+          "overlay",
+          "scroll"
+        ].includes(computedStyle.overflowX);
+        hasOverflowY = [
+          "auto",
+          "overlay",
+          "scroll"
+        ].includes(computedStyle.overflowY);
+        hasOverscrollBehaviorX = ["auto"].includes(computedStyle.overscrollBehaviorX);
+        hasOverscrollBehaviorY = ["auto"].includes(computedStyle.overscrollBehaviorY);
+        cache.hasOverflowX = hasOverflowX;
+        cache.hasOverflowY = hasOverflowY;
+        if (!(hasOverflowX || hasOverflowY)) return false;
+        scrollWidth = node.scrollWidth;
+        scrollHeight = node.scrollHeight;
+        clientWidth = node.clientWidth;
+        clientHeight = node.clientHeight;
+        isScrollableX = scrollWidth > clientWidth;
+        isScrollableY = scrollHeight > clientHeight;
+        cache.isScrollableX = isScrollableX;
+        cache.isScrollableY = isScrollableY;
+        cache.scrollWidth = scrollWidth;
+        cache.scrollHeight = scrollHeight;
+        cache.clientWidth = clientWidth;
+        cache.clientHeight = clientHeight;
+        cache.hasOverscrollBehaviorX = hasOverscrollBehaviorX;
+        cache.hasOverscrollBehaviorY = hasOverscrollBehaviorY;
+      } else {
+        isScrollableX = cache.isScrollableX;
+        isScrollableY = cache.isScrollableY;
+        hasOverflowX = cache.hasOverflowX;
+        hasOverflowY = cache.hasOverflowY;
+        scrollWidth = cache.scrollWidth;
+        scrollHeight = cache.scrollHeight;
+        clientWidth = cache.clientWidth;
+        clientHeight = cache.clientHeight;
+        hasOverscrollBehaviorX = cache.hasOverscrollBehaviorX;
+        hasOverscrollBehaviorY = cache.hasOverscrollBehaviorY;
+      }
+      if (!(hasOverflowX && isScrollableX || hasOverflowY && isScrollableY)) return false;
+      const orientation = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
+      let scroll;
+      let maxScroll;
+      let delta;
+      let hasOverflow;
+      let isScrollable;
+      let hasOverscrollBehavior;
+      if (orientation === "horizontal") {
+        scroll = Math.round(node.scrollLeft);
+        maxScroll = scrollWidth - clientWidth;
+        delta = deltaX;
+        hasOverflow = hasOverflowX;
+        isScrollable = isScrollableX;
+        hasOverscrollBehavior = hasOverscrollBehaviorX;
+      } else if (orientation === "vertical") {
+        scroll = Math.round(node.scrollTop);
+        maxScroll = scrollHeight - clientHeight;
+        delta = deltaY;
+        hasOverflow = hasOverflowY;
+        isScrollable = isScrollableY;
+        hasOverscrollBehavior = hasOverscrollBehaviorY;
+      } else return false;
+      if (!hasOverscrollBehavior && (scroll >= maxScroll || scroll <= 0)) return true;
+      return (delta > 0 ? scroll < maxScroll : scroll > 0) && hasOverflow && isScrollable;
+    }
+    /**
+    * The root element on which lenis is instanced
+    */
+    get rootElement() {
+      return this.options.wrapper === window ? document.documentElement : this.options.wrapper;
+    }
+    /**
+    * The limit which is the maximum scroll value
+    */
+    get limit() {
+      if (this.options.naiveDimensions) {
+        if (this.isHorizontal) return this.rootElement.scrollWidth - this.rootElement.clientWidth;
+        return this.rootElement.scrollHeight - this.rootElement.clientHeight;
+      }
+      return this.dimensions.limit[this.isHorizontal ? "x" : "y"];
+    }
+    /**
+    * Whether or not the scroll is horizontal
+    */
+    get isHorizontal() {
+      return this.options.orientation === "horizontal";
+    }
+    /**
+    * The actual scroll value
+    */
+    get actualScroll() {
+      const wrapper = this.options.wrapper;
+      return this.isHorizontal ? wrapper.scrollX ?? wrapper.scrollLeft : wrapper.scrollY ?? wrapper.scrollTop;
+    }
+    /**
+    * The current scroll value
+    */
+    get scroll() {
+      return this.options.infinite ? modulo(this.animatedScroll, this.limit) : this.animatedScroll;
+    }
+    /**
+    * The progress of the scroll relative to the limit
+    */
+    get progress() {
+      return this.limit === 0 ? 1 : this.scroll / this.limit;
+    }
+    /**
+    * Current scroll state
+    */
+    get isScrolling() {
+      return this._isScrolling;
+    }
+    set isScrolling(value) {
+      if (this._isScrolling !== value) {
+        this._isScrolling = value;
+        this.updateClassName();
+      }
+    }
+    /**
+    * Check if lenis is stopped
+    */
+    get isStopped() {
+      return this._isStopped;
+    }
+    set isStopped(value) {
+      if (this._isStopped !== value) {
+        this._isStopped = value;
+        this.updateClassName();
+      }
+    }
+    /**
+    * Check if lenis is locked
+    */
+    get isLocked() {
+      return this._isLocked;
+    }
+    set isLocked(value) {
+      if (this._isLocked !== value) {
+        this._isLocked = value;
+        this.updateClassName();
+      }
+    }
+    /**
+    * Check if lenis is smooth scrolling
+    */
+    get isSmooth() {
+      return this.isScrolling === "smooth";
+    }
+    /**
+    * Whether the user prefers reduced motion and lenis is honoring it (see `respectReducedMotion` option)
+    */
+    get prefersReducedMotion() {
+      return this.options.respectReducedMotion && this.reducedMotionMediaQuery.matches;
+    }
+    /**
+    * The class name applied to the wrapper element
+    */
+    get className() {
+      let className = "lenis";
+      if (this.options.autoToggle) className += " lenis-autoToggle";
+      if (this.isStopped) className += " lenis-stopped";
+      if (this.isLocked) className += " lenis-locked";
+      if (this.isScrolling) className += " lenis-scrolling";
+      if (this.isScrolling === "smooth") className += " lenis-smooth";
+      return className;
+    }
+    updateClassName() {
+      this.cleanUpClassName();
+      this.className.split(" ").forEach((className) => {
+        this.rootElement.classList.add(className);
+      });
+    }
+    cleanUpClassName() {
+      for (const className of Array.from(this.rootElement.classList)) if (className === "lenis" || className.startsWith("lenis-")) this.rootElement.classList.remove(className);
+    }
+  };
+
+  // node_modules/lenis/dist/lenis-snap.mjs
+  function debounce2(callback, delay) {
+    let timer;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = void 0;
+        callback.apply(this, args);
+      }, delay);
+    };
+  }
+  function removeParentSticky(element) {
+    if (getComputedStyle(element).position === "sticky") {
+      element.style.setProperty("position", "static");
+      element.dataset.sticky = "true";
+    }
+    if (element.offsetParent) removeParentSticky(element.offsetParent);
+  }
+  function addParentSticky(element) {
+    if (element?.dataset?.sticky === "true") {
+      element.style.removeProperty("position");
+      delete element.dataset.sticky;
+    }
+    if (element.offsetParent) addParentSticky(element.offsetParent);
+  }
+  function offsetTop(element, accumulator = 0) {
+    const top = accumulator + element.offsetTop;
+    if (element.offsetParent) return offsetTop(element.offsetParent, top);
+    return top;
+  }
+  function offsetLeft(element, accumulator = 0) {
+    const left = accumulator + element.offsetLeft;
+    if (element.offsetParent) return offsetLeft(element.offsetParent, left);
+    return left;
+  }
+  function scrollTop(element, accumulator = 0) {
+    const top = accumulator + element.scrollTop;
+    if (element.offsetParent) return scrollTop(element.offsetParent, top);
+    return top + window.scrollY;
+  }
+  function scrollLeft(element, accumulator = 0) {
+    const left = accumulator + element.scrollLeft;
+    if (element.offsetParent) return scrollLeft(element.offsetParent, left);
+    return left + window.scrollX;
+  }
+  var SnapElement = class {
+    element;
+    options;
+    align;
+    rect = {};
+    wrapperResizeObserver;
+    resizeObserver;
+    debouncedWrapperResize;
+    constructor(element, { align = ["start"], ignoreSticky = true, ignoreTransform = false } = {}) {
+      this.element = element;
+      this.options = {
+        align,
+        ignoreSticky,
+        ignoreTransform
+      };
+      this.align = [align].flat();
+      this.debouncedWrapperResize = debounce2(this.onWrapperResize, 500);
+      this.wrapperResizeObserver = new ResizeObserver(this.debouncedWrapperResize);
+      this.wrapperResizeObserver.observe(document.body);
+      this.onWrapperResize();
+      this.resizeObserver = new ResizeObserver(this.onResize);
+      this.resizeObserver.observe(this.element);
+      this.setRect({
+        width: this.element.offsetWidth,
+        height: this.element.offsetHeight
+      });
+    }
+    destroy() {
+      this.wrapperResizeObserver.disconnect();
+      this.resizeObserver.disconnect();
+    }
+    setRect({ top, left, width, height, element } = {}) {
+      top = top ?? this.rect.top;
+      left = left ?? this.rect.left;
+      width = width ?? this.rect.width;
+      height = height ?? this.rect.height;
+      element = element ?? this.rect.element;
+      if (top === this.rect.top && left === this.rect.left && width === this.rect.width && height === this.rect.height && element === this.rect.element) return;
+      this.rect.top = top;
+      this.rect.y = top;
+      this.rect.width = width;
+      this.rect.height = height;
+      this.rect.left = left;
+      this.rect.x = left;
+      this.rect.bottom = top + height;
+      this.rect.right = left + width;
+    }
+    onWrapperResize = () => {
+      let top;
+      let left;
+      if (this.options.ignoreSticky) removeParentSticky(this.element);
+      if (this.options.ignoreTransform) {
+        top = offsetTop(this.element);
+        left = offsetLeft(this.element);
+      } else {
+        const rect = this.element.getBoundingClientRect();
+        top = rect.top + scrollTop(this.element);
+        left = rect.left + scrollLeft(this.element);
+      }
+      if (this.options.ignoreSticky) addParentSticky(this.element);
+      this.setRect({
+        top,
+        left
+      });
+    };
+    onResize = ([entry]) => {
+      if (!entry?.borderBoxSize[0]) return;
+      const width = entry.borderBoxSize[0].inlineSize;
+      const height = entry.borderBoxSize[0].blockSize;
+      this.setRect({
+        width,
+        height
+      });
+    };
+  };
+  var index = 0;
+  function uid() {
+    return index++;
+  }
+  var Snap = class {
+    options;
+    elements = /* @__PURE__ */ new Map();
+    snaps = /* @__PURE__ */ new Map();
+    viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+    isStopped = false;
+    onSnapDebounced;
+    currentSnapIndex;
+    constructor(lenis2, { type = "proximity", lerp: lerp2, easing, duration, distanceThreshold = "50%", debounce: debounceDelay = 500, onSnapStart, onSnapComplete } = {}) {
+      this.lenis = lenis2;
+      if (!window.lenis) window.lenis = {};
+      window.lenis.snap = true;
+      this.options = {
+        type,
+        lerp: lerp2,
+        easing,
+        duration,
+        distanceThreshold,
+        debounce: debounceDelay,
+        onSnapStart,
+        onSnapComplete
+      };
+      this.onWindowResize();
+      window.addEventListener("resize", this.onWindowResize);
+      this.onSnapDebounced = debounce2(this.onSnap, this.options.debounce);
+      this.lenis.on("virtual-scroll", this.onSnapDebounced);
+    }
+    /**
+    * Destroy the snap instance
+    */
+    destroy() {
+      this.lenis.off("virtual-scroll", this.onSnapDebounced);
+      window.removeEventListener("resize", this.onWindowResize);
+      this.elements.forEach((element) => {
+        element.destroy();
+      });
+    }
+    /**
+    * Start the snap after it has been stopped
+    */
+    start() {
+      this.isStopped = false;
+    }
+    /**
+    * Stop the snap
+    */
+    stop() {
+      this.isStopped = true;
+    }
+    /**
+    * Add a snap to the snap instance
+    *
+    * @param value The value to snap to
+    * @param userData User data that will be forwarded through the snap event
+    * @returns Unsubscribe function
+    */
+    add(value) {
+      const id = uid();
+      this.snaps.set(id, { value });
+      return () => this.snaps.delete(id);
+    }
+    /**
+    * Add an element to the snap instance
+    *
+    * @param element The element to add
+    * @param options The options for the element
+    * @returns Unsubscribe function
+    */
+    addElement(element, options = {}) {
+      const id = uid();
+      this.elements.set(id, new SnapElement(element, options));
+      return () => this.elements.delete(id);
+    }
+    addElements(elements, options = {}) {
+      const map = [...elements].map((element) => this.addElement(element, options));
+      return () => {
+        map.forEach((remove) => {
+          remove();
+        });
+      };
+    }
+    onWindowResize = () => {
+      this.viewport.width = window.innerWidth;
+      this.viewport.height = window.innerHeight;
+    };
+    computeSnaps = () => {
+      const { isHorizontal } = this.lenis;
+      let snaps = [...this.snaps.values()];
+      this.elements.forEach(({ rect, align }) => {
+        let value;
+        align.forEach((align2) => {
+          if (align2 === "start") value = rect.top;
+          else if (align2 === "center") value = isHorizontal ? rect.left + rect.width / 2 - this.viewport.width / 2 : rect.top + rect.height / 2 - this.viewport.height / 2;
+          else if (align2 === "end") value = isHorizontal ? rect.left + rect.width - this.viewport.width : rect.top + rect.height - this.viewport.height;
+          if (typeof value === "number") snaps.push({ value: Math.ceil(value) });
+        });
+      });
+      snaps = snaps.sort((a, b) => Math.abs(a.value) - Math.abs(b.value));
+      return snaps;
+    };
+    previous() {
+      this.goTo((this.currentSnapIndex ?? 0) - 1);
+    }
+    next() {
+      this.goTo((this.currentSnapIndex ?? 0) + 1);
+    }
+    goTo(index2) {
+      const snaps = this.computeSnaps();
+      if (snaps.length === 0) return;
+      this.currentSnapIndex = Math.max(0, Math.min(index2, snaps.length - 1));
+      const currentSnap = snaps[this.currentSnapIndex];
+      if (currentSnap === void 0) return;
+      this.lenis.scrollTo(currentSnap.value, {
+        duration: this.options.duration,
+        easing: this.options.easing,
+        lerp: this.options.lerp,
+        lock: this.options.type === "lock",
+        userData: { initiator: "snap" },
+        onStart: () => {
+          this.options.onSnapStart?.({
+            index: this.currentSnapIndex,
+            ...currentSnap
+          });
+        },
+        onComplete: () => {
+          this.options.onSnapComplete?.({
+            index: this.currentSnapIndex,
+            ...currentSnap
+          });
+        }
+      });
+    }
+    get distanceThreshold() {
+      let distanceThreshold = Number.POSITIVE_INFINITY;
+      if (this.options.type === "mandatory") return Number.POSITIVE_INFINITY;
+      const { isHorizontal } = this.lenis;
+      const axis = isHorizontal ? "width" : "height";
+      if (typeof this.options.distanceThreshold === "string" && this.options.distanceThreshold.endsWith("%")) distanceThreshold = Number(this.options.distanceThreshold.replace("%", "")) / 100 * this.viewport[axis];
+      else if (typeof this.options.distanceThreshold === "number") distanceThreshold = this.options.distanceThreshold;
+      else distanceThreshold = this.viewport[axis];
+      return distanceThreshold;
+    }
+    onSnap = (e) => {
+      if (this.isStopped) return;
+      if (e.event.type === "touchmove") return;
+      if (this.options.type === "lock" && this.lenis.userData?.initiator === "snap") return;
+      let { scroll, isHorizontal } = this.lenis;
+      const delta = isHorizontal ? e.deltaX : e.deltaY;
+      scroll = Math.ceil(this.lenis.scroll + delta);
+      const snaps = this.computeSnaps();
+      if (snaps.length === 0) return;
+      let snapIndex;
+      const prevSnapIndex = snaps.findLastIndex(({ value }) => value < scroll);
+      const nextSnapIndex = snaps.findIndex(({ value }) => value > scroll);
+      if (this.options.type === "lock") {
+        if (delta > 0) snapIndex = nextSnapIndex;
+        else if (delta < 0) snapIndex = prevSnapIndex;
+      } else {
+        const prevSnap = snaps[prevSnapIndex];
+        const distanceToPrevSnap = prevSnap ? Math.abs(scroll - prevSnap.value) : Number.POSITIVE_INFINITY;
+        const nextSnap = snaps[nextSnapIndex];
+        snapIndex = distanceToPrevSnap < (nextSnap ? Math.abs(scroll - nextSnap.value) : Number.POSITIVE_INFINITY) ? prevSnapIndex : nextSnapIndex;
+      }
+      if (snapIndex === void 0) return;
+      if (snapIndex === -1) return;
+      snapIndex = Math.max(0, Math.min(snapIndex, snaps.length - 1));
+      const snap2 = snaps[snapIndex];
+      if (Math.abs(scroll - snap2.value) <= this.distanceThreshold) this.goTo(snapIndex);
+    };
+    resize() {
+      this.elements.forEach((element) => {
+        element.onWrapperResize();
+      });
+    }
+  };
+
+  // assets/js/telar-story/scroll-engine.js
+  var lenis;
+  var snap;
+  var snapRemovers = [];
+  var rafId;
+  var dwellTimer;
+  var scrubEndTimer;
+  var cardStackEl;
+  var totalPositions = 0;
+  var keyboardNavInFlight = false;
+  var navToken = 0;
+  var navSeq = 0;
+  var navTarget = null;
+  var navTargetToken = 0;
+  var scrollDirection = 1;
+  var lastPosition = 0;
+  var moveTarget = null;
+  var moveTargetToken = 0;
+  var buttonMoveToken = 0;
+  var remapping = false;
+  function beginNav() {
+    navToken = ++navSeq;
+    return navToken;
+  }
+  function _recordMoveTarget(token, position) {
+    moveTarget = position;
+    moveTargetToken = token;
+  }
+  function _stepPx() {
+    return state.scrollStepPx || window.innerHeight;
+  }
+  function _stateLanding(token, position) {
+    if (navToken === token) state.scrollPosition = position;
+  }
+  function endNav(token) {
+    if (navToken === token) navToken = 0;
+  }
+  function _clampPosition(position) {
+    return Math.max(0, Math.min(position, totalPositions - 1));
+  }
+  var REST_TOLERANCE = 1e-3;
+  function _isInsidePanel(node) {
+    return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
+  }
+  function _isScrollTakeover({ deltaX, deltaY, event } = {}) {
+    if (!event) return true;
+    if (event.ctrlKey) return false;
+    if (deltaX === 0 && deltaY === 0) return false;
+    if (deltaY === 0) return false;
+    if (lenis.isStopped || lenis.isLocked) return false;
+    const path = event.composedPath ? event.composedPath() : [];
+    return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
+  }
+  function initScrollEngine(stepCount) {
+    const surface = document.querySelector(".scroll-surface");
+    const cardStack = document.querySelector(".card-stack");
+    if (!surface || !cardStack) {
+      console.error("scroll-engine: .scroll-surface or .card-stack not found in DOM");
+      return;
+    }
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    if (dwellTimer) {
+      clearTimeout(dwellTimer);
+      dwellTimer = null;
+    }
+    if (scrubEndTimer) {
+      clearTimeout(scrubEndTimer);
+      scrubEndTimer = null;
+    }
+    navToken = 0;
+    navTarget = null;
+    navTargetToken = 0;
+    moveTarget = null;
+    moveTargetToken = 0;
+    buttonMoveToken = 0;
+    remapping = false;
+    keyboardNavInFlight = false;
+    state.steps = Array.from(document.querySelectorAll(".story-step"));
+    history.scrollRestoration = "manual";
+    totalPositions = stepCount + 1;
+    state.scrollStepPx = window.innerHeight;
+    surface.style.height = `${totalPositions * state.scrollStepPx}px`;
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    lenis = new Lenis({
+      lerp: 0.06,
+      // lower = heavier, more contemplative feel
+      smoothWheel: !prefersReduced,
+      wheelMultiplier: 0.5,
+      // scroll sensitivity
+      autoRaf: false,
+      // we drive the rAF loop manually
+      prevent: _isInsidePanel
+      // let wheel events pass through inside open panels
+    });
+    snap = new Snap(lenis, {
+      type: "lock",
+      velocityThreshold: 0.5,
+      debounce: 150,
+      distanceThreshold: "20%",
+      lerp: 0.08,
+      onSnapStart: () => {
+        state.isSnapping = true;
+      },
+      onSnapComplete: () => {
+        state.isSnapping = false;
+        const layoutStale = remapping || window.innerHeight !== _stepPx();
+        const finalPosition = layoutStale && Number.isInteger(snap.currentSnapIndex) ? snap.currentSnapIndex : lenis.animatedScroll / _stepPx();
+        updateScrollPosition(finalPosition);
+        writeHash();
+        lenis.stop();
+        dwellTimer = setTimeout(() => {
+          if (!state.isPanelOpen) {
+            lenis.start();
+          }
+          dwellTimer = null;
+        }, navSeconds().keyboard * 1e3);
+      }
+    });
+    registerSnapPoints(totalPositions);
+    cardStackEl = cardStack;
+    lenis.on("virtual-scroll", (payload) => {
+      if (cardHoldsGesture()) return;
+      cardStack.classList.add("is-scrubbing");
+      if (_isScrollTakeover(payload)) {
+        navTarget = null;
+        keyboardNavInFlight = false;
+        navToken = 0;
+        buttonMoveToken = 0;
+      }
+      armScrubEnd();
+    });
+    lenis.on("scroll", (l) => {
+      if (remapping || window.innerHeight !== _stepPx()) return;
+      const position = l.animatedScroll / _stepPx();
+      if (position !== lastPosition) {
+        scrollDirection = position > lastPosition ? 1 : -1;
+        lastPosition = position;
+      }
+      updateScrollPosition(position);
+      if (!navToken) armScrubEnd();
+    });
+    rafId = requestAnimationFrame(function raf(time) {
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    });
+    onViewportResize(({ viewport }) => {
+      if (viewport.h === _stepPx()) {
+        surface.style.height = `${totalPositions * viewport.h}px`;
+        lenis.resize();
+        registerSnapPoints(totalPositions);
+        return;
+      }
+      _remapToHeight(surface, viewport.h);
+    });
+    state.lenis = lenis;
+    state.snap = snap;
+    initKeyboardNavigation();
+    initializeLoadingShimmer();
+  }
+  function armScrubEnd() {
+    clearTimeout(scrubEndTimer);
+    scrubEndTimer = setTimeout(endScrub, 100);
+  }
+  function endScrub({ carry = true } = {}) {
+    clearTimeout(scrubEndTimer);
+    scrubEndTimer = null;
+    if (!cardStackEl) return;
+    cardStackEl.classList.remove("is-scrubbing");
+    if (!lenis) return;
+    const position = lenis.animatedScroll / _stepPx();
+    settleCards(position);
+    if (carry) carryToNearestStep(position);
+  }
+  function carryToNearestStep(position) {
+    if (navToken || state.isSnapping) return;
+    const target = scrollDirection < 0 ? Math.floor(position) : Math.ceil(position);
+    if (Math.abs(position - target) < REST_TOLERANCE) return;
+    if (target < 0 || target >= totalPositions) return;
+    const nearest = target;
+    const token = beginNav();
+    _recordMoveTarget(token, nearest);
+    lenis.scrollTo(nearest * _stepPx(), {
+      duration: navSeconds().button,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+      // ease-out cubic
+      onComplete: () => {
+        _stateLanding(token, nearest);
+        endNav(token);
+        writeHash();
+      }
+    });
+  }
+  function _positionToKeep() {
+    const px = _stepPx();
+    let position = state.scrollPosition;
+    let moving = false;
+    if (lenis.isScrolling === "smooth") {
+      moving = true;
+      if (navToken && moveTargetToken === navToken && moveTarget !== null) {
+        position = moveTarget;
+      } else if (state.isSnapping && Number.isInteger(snap.currentSnapIndex)) {
+        position = snap.currentSnapIndex;
+      } else {
+        position = lenis.targetScroll / px;
+      }
+    }
+    const rounded = Math.round(position);
+    if (Math.abs(position - rounded) < REST_TOLERANCE) position = rounded;
+    return { position: _clampPosition(position), moving };
+  }
+  function _remapToHeight(surface, height) {
+    const { position, moving } = _positionToKeep();
+    const enteredFrom = state.currentIndex;
+    remapping = true;
+    if (moving && !lenis.isStopped) {
+      lenis.stop();
+      lenis.start();
+    }
+    state.scrollStepPx = height;
+    surface.style.height = `${totalPositions * height}px`;
+    lenis.resize();
+    lenis.scrollTo(position * height, { immediate: true, force: true });
+    remapping = false;
+    registerSnapPoints(totalPositions);
+    if (moving) {
+      navToken = 0;
+      navTarget = null;
+      navTargetToken = 0;
+      buttonMoveToken = 0;
+      keyboardNavInFlight = false;
+      state.isSnapping = false;
+      if (Number.isInteger(position)) snap.currentSnapIndex = position;
+    }
+    lastPosition = position;
+    updateScrollPosition(position);
+    armScrubEnd();
+    if (moving || state.currentIndex !== enteredFrom) writeHash();
+  }
+  function registerSnapPoints(count) {
+    snapRemovers.forEach((fn) => fn());
+    snapRemovers = [];
+    for (let i = 0; i < count; i++) {
+      snapRemovers.push(snap.add(i * _stepPx()));
+    }
+  }
+  function advanceToStep(targetIndex) {
+    if (targetIndex < -1 || targetIndex >= state.steps.length) return false;
+    const lenisInstance = state.lenis || lenis;
+    if (!lenisInstance) return false;
+    _clearDwell();
+    if (lenisInstance.isStopped || lenisInstance.isLocked) return false;
+    const token = beginNav();
+    buttonMoveToken = token;
+    keyboardNavInFlight = false;
+    navTarget = null;
+    _recordMoveTarget(token, targetIndex + 1);
+    endScrub({ carry: false });
+    const targetPx = (targetIndex + 1) * _stepPx();
+    _endMoveHeldAt(lenisInstance, targetPx);
+    lenisInstance.scrollTo(targetPx, {
+      duration: navSeconds().button,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+      // ease-out cubic
+      onComplete: () => {
+        _stateLanding(token, targetIndex + 1);
+        if (buttonMoveToken === token) buttonMoveToken = 0;
+        endNav(token);
+        followEngine(state.currentIndex);
+        writeHash();
+      }
+    });
+    return true;
+  }
+  function buttonHeading() {
+    const ownMove = navToken && (navToken === buttonMoveToken || navToken === navTargetToken);
+    if (ownMove && moveTargetToken === navToken && moveTarget !== null) return moveTarget - 1;
+    return state.currentIndex;
+  }
+  function _endMoveHeldAt(lenisInstance, px) {
+    if (px !== lenisInstance.targetScroll || lenisInstance.isScrolling !== "smooth") return;
+    keyboardNavInFlight = false;
+    lenisInstance.stop();
+    lenisInstance.start();
+  }
+  function jumpScrollTo(px) {
+    standDownMoves();
+    _endMoveHeldAt(state.lenis, px);
+    state.lenis.scrollTo(px, { immediate: true, force: true });
+  }
+  function standDownMoves() {
+    navToken = 0;
+    navTarget = null;
+    navTargetToken = 0;
+    moveTarget = null;
+    moveTargetToken = 0;
+    buttonMoveToken = 0;
+    keyboardNavInFlight = false;
+  }
+  function _clearDwell() {
+    if (dwellTimer) {
+      clearTimeout(dwellTimer);
+      dwellTimer = null;
+      if (!state.isPanelOpen) lenis.start();
+    }
+  }
+  function _keyboardTarget(direction, inFlight, position) {
+    const step = direction === "forward" ? 1 : -1;
+    if (inFlight !== null) return inFlight + step;
+    const rounded = Math.round(position);
+    if (Math.abs(position - rounded) < 0.01) return rounded + step;
+    return direction === "forward" ? Math.ceil(position) : Math.floor(position);
+  }
+  function _activateKeyboardTarget(target, direction) {
+    const targetStep = target - 1;
+    if (targetStep >= 0 && targetStep !== state.currentIndex) {
+      _enterStep(targetStep, direction);
+    } else if (targetStep < 0 && state.currentIndex >= 0) {
+      _enterStep(-1, "backward");
+    }
+  }
+  function _enterStep(stepIndex, direction) {
+    if (stepIndex < 0) {
+      goToStep(-1, "backward");
+    } else {
+      state.scrollDriven = true;
+      activateCard(stepIndex, direction);
+      state.scrollDriven = false;
+      state.currentIndex = stepIndex;
+      updateViewerInfo(stepIndex);
+      if (state.onStepChange) state.onStepChange(stepIndex);
+    }
+    followEngine(stepIndex);
+  }
+  function keyboardNav(direction) {
+    if (!lenis) return;
+    const inFlight = navTargetToken === navToken ? navTarget : null;
+    if (inFlight !== null && _clampPosition(inFlight + (direction === "forward" ? 1 : -1)) === inFlight) {
+      return;
+    }
+    const token = beginNav();
+    navTargetToken = token;
+    endScrub({ carry: false });
+    _clearDwell();
+    const vh = _stepPx();
+    const position = lenis.animatedScroll / vh;
+    const isExact = Math.abs(position - Math.round(position)) < 0.01;
+    const rounded = Math.round(position);
+    const target = _clampPosition(_keyboardTarget(direction, inFlight, position));
+    if (inFlight === null && target === rounded && isExact) {
+      endNav(token);
+      return;
+    }
+    navTarget = target;
+    _recordMoveTarget(token, target);
+    settleCards(target);
+    snap.currentSnapIndex = target;
+    _activateKeyboardTarget(target, direction);
+    keyboardNavInFlight = true;
+    _endMoveHeldAt(lenis, target * vh);
+    lenis.scrollTo(target * vh, {
+      force: true,
+      duration: navSeconds().keyboard,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+      // ease-out cubic
+      onComplete: () => {
+        _stateLanding(token, target);
+        if (navToken === token) {
+          keyboardNavInFlight = false;
+          navTarget = null;
+        }
+        endNav(token);
+        writeHash();
+      }
+    });
+  }
+  function getScrollEngineState() {
+    return {
+      lenis,
+      snap,
+      position: state.scrollPosition,
+      progress: state.scrollProgress
+    };
+  }
+  function updateScrollPosition(position) {
+    const contentPos = position - 1;
+    const maxContent = state.steps.length - 1;
+    state.scrollPosition = position;
+    if (position < 1) {
+      state.scrollProgress = 0;
+      if (state.currentIndex >= 0 && !keyboardNavInFlight) {
+        _enterStep(-1, "backward");
+      }
+      if (!keyboardNavInFlight) settleCards(position);
+      return;
+    }
+    const clamped = Math.min(maxContent, contentPos);
+    const stepIndex = Math.floor(clamped);
+    const progress = clamped - stepIndex;
+    state.scrollProgress = progress;
+    if (!keyboardNavInFlight || progress >= 1e-3) setCardProgress(stepIndex, progress);
+    lerpIiifPosition(stepIndex, progress, state.stepsData || []);
+    if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
+      _enterStep(stepIndex, stepIndex > state.currentIndex ? "forward" : "backward");
+    }
+  }
+
+  // assets/js/telar-story/panels.js
+  var PANEL_TYPES = ["layer1", "layer2", "glossary"];
+  function initializePanels() {
+    document.addEventListener("click", function(e) {
+      const trigger = e.target.closest('[data-panel="layer1"]');
+      if (trigger) {
+        const stepNumber = trigger.dataset.step;
+        document.querySelectorAll(".offcanvas.show").forEach((p) => {
+          const inst = bootstrap.Offcanvas.getInstance(p);
+          if (inst) inst.hide();
+        });
+        state.panelStack = [];
+        openPanel("layer1", stepNumber);
+      }
+    });
+    document.addEventListener("click", function(e) {
+      if (e.target.matches('[data-panel="layer2"]')) {
+        const stepNumber = e.target.dataset.step;
+        openPanel("layer2", stepNumber);
+      }
+    });
+    const layer1Back = document.getElementById("panel-layer1-back");
+    if (layer1Back) {
+      layer1Back.addEventListener("click", function() {
+        closePanel("layer1");
+      });
+    }
+    const layer2Back = document.getElementById("panel-layer2-back");
+    if (layer2Back) {
+      layer2Back.addEventListener("click", function() {
+        closePanel("layer2");
+      });
+    }
+    const glossaryBack = document.getElementById("panel-glossary-back");
+    if (glossaryBack) {
+      glossaryBack.addEventListener("click", function() {
+        closePanel("glossary");
+      });
+    }
+    const glossaryPanel = document.getElementById("panel-glossary");
+    if (glossaryPanel) {
+      glossaryPanel.addEventListener("show.bs.offcanvas", joinGlossaryToStack);
+    }
+    PANEL_TYPES.forEach((panelType) => {
+      const panel = document.getElementById(`panel-${panelType}`);
+      if (!panel) return;
+      panel.addEventListener("hidden.bs.offcanvas", function() {
+        const before = state.panelStack.length;
+        state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
+        if (state.panelStack.length !== before) {
+          writeHash();
+        }
+        if (!anyPanelOpen()) {
+          state.isPanelOpen = false;
+          deactivateScrollLock();
+        }
+      });
+    });
+  }
+  function anyPanelOpen() {
+    return state.panelStack.length > 0 || PANEL_TYPES.some((t) => document.getElementById(`panel-${t}`)?.classList.contains("show"));
+  }
+  function joinGlossaryToStack() {
+    const top = state.panelStack[state.panelStack.length - 1];
+    if (top?.type !== "glossary") {
+      state.panelStack.push({ type: "glossary", id: null });
+    }
+    state.isPanelOpen = true;
+    activateScrollLock();
+  }
+  function openPanel(panelType, contentId) {
+    const panelId = `panel-${panelType}`;
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const content = getPanelContent(panelType, contentId);
+    if (content) {
+      const titleElement = document.getElementById(`${panelId}-title`);
+      titleElement.textContent = content.title;
+      if (content.demo) {
+        const demoBadgeText = window.telarLang?.demoPanelBadge || "Demo content";
+        const badge = document.createElement("span");
+        badge.className = "demo-badge-inline";
+        badge.style.marginLeft = "0.5rem";
+        badge.textContent = demoBadgeText;
+        titleElement.appendChild(badge);
+      }
+      const contentElement = document.getElementById(`${panelId}-content`);
+      contentElement.innerHTML = content.html;
+      const glossaryLinks = contentElement.querySelectorAll(".glossary-inline-link");
+      glossaryLinks.forEach((el, i) => {
+        el.dataset.deepLinkN = i + 1;
+      });
+      glossaryLinks.forEach((el) => {
+        el.addEventListener("click", () => {
+          writeHashWithGlossary(parseInt(el.dataset.deepLinkN, 10));
+        });
+      });
+      if (window.telarRenderLatex) {
+        window.telarRenderLatex(contentElement);
+      }
+      if (panelType === "layer1") {
+        state.panelStack = [{ type: panelType, id: contentId }];
+      } else {
+        state.panelStack.push({ type: panelType, id: contentId });
+      }
+      const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel) || new bootstrap.Offcanvas(panel);
+      bsOffcanvas.show();
+      state.isPanelOpen = true;
+      activateScrollLock();
+      writeHash();
+    }
+  }
+  function closePanel(panelType) {
+    const panelId = `panel-${panelType}`;
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel);
+    if (bsOffcanvas) {
+      bsOffcanvas.hide();
+    }
+    state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
+    writeHash();
+    setTimeout(() => {
+      if (!anyPanelOpen()) {
+        state.isPanelOpen = false;
+        deactivateScrollLock();
+      }
+    }, 350);
+  }
+  function closeTopPanel() {
+    if (state.panelStack.length > 0) {
+      const top = state.panelStack[state.panelStack.length - 1];
+      closePanel(top.type);
+    }
+  }
+  function closeAllPanels() {
+    [...state.panelStack].reverse().forEach((p) => closePanel(p.type));
+  }
+  function getPanelContent(panelType, contentId) {
+    const steps = window.storyData?.steps || [];
+    const step = steps.find((s) => s.step == contentId);
+    if (!step) return null;
+    if (panelType === "layer1") {
+      let html = formatPanelContent({
+        text: step.layer1_text,
+        media: step.layer1_media
+      }, step.object);
+      if (step.layer2_title && step.layer2_title.trim() !== "" || step.layer2_text && step.layer2_text.trim() !== "") {
+        const buttonLabel = step.layer2_button && step.layer2_button.trim() !== "" ? step.layer2_button : window.telarLang.goDeeper;
+        html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${escapeHtml(buttonLabel)} \u2192</button></p>`;
+      }
+      return {
+        title: step.layer1_title || step.layer1_button || window.telarLang.learnMore,
+        html,
+        demo: step.layer1_demo || false
+      };
+    } else if (panelType === "layer2") {
+      return {
+        title: step.layer2_title || step.layer2_button || window.telarLang.goDeeper,
+        html: formatPanelContent({
+          text: step.layer2_text,
+          media: step.layer2_media
+        }, step.object),
+        demo: step.layer2_demo || false
+      };
+    }
+    return null;
+  }
+  function formatPanelContent(panelData, objectId) {
+    let html = "";
+    const basePath = getBasePath();
+    if (panelData.text) {
+      html += fixImageUrls(panelData.text, basePath);
+    }
+    if (panelData.media && panelData.media.trim() !== "") {
+      let mediaUrl = panelData.media;
+      if (mediaUrl.startsWith("/") && !mediaUrl.startsWith("//")) {
+        mediaUrl = basePath + mediaUrl;
+      }
+      const objectsData = window.objectsData || [];
+      const panelObj = objectId ? objectsData.find((o) => o.object_id === objectId) || {} : {};
+      const panelAlt = panelObj.alt_text || panelObj.title || objectId || "Panel image";
+      html += `<img src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(panelAlt)}" class="img-fluid">`;
+    }
+    return html;
+  }
+  function stepHasLayer1Content(step) {
+    if (!step) return false;
+    return step.layer1_title && step.layer1_title.trim() !== "" || step.layer1_text && step.layer1_text.trim() !== "";
+  }
+  function stepHasLayer2Content(step) {
+    if (!step) return false;
+    return step.layer2_title && step.layer2_title.trim() !== "" || step.layer2_text && step.layer2_text.trim() !== "";
+  }
+  function initializeScrollLock() {
+    const backdrop = document.createElement("div");
+    backdrop.id = "panel-backdrop";
+    backdrop.style.cssText = `
+    position: fixed;
+    inset: -50px;
+    background: var(--color-panel-backdrop);
+    z-index: var(--z-panel-backdrop);
+    display: none;
+    pointer-events: none;
+  `;
+    document.body.appendChild(backdrop);
+    const storyContainer = document.querySelector(".story-container");
+    if (storyContainer) {
+      storyContainer.addEventListener("click", function(e) {
+        if (state.isPanelOpen && !e.target.closest(".offcanvas") && !e.target.closest("[data-panel]") && !e.target.closest(".share-button")) {
+          closeTopPanel();
+        }
+      });
+    }
+  }
+  function activateScrollLock() {
+    state.scrollLockActive = true;
+    if (state.lenis) state.lenis.stop();
+    const backdrop = document.getElementById("panel-backdrop");
+    if (backdrop) {
+      backdrop.style.display = "block";
+    }
+  }
+  function deactivateScrollLock() {
+    state.scrollLockActive = false;
+    if (state.lenis) state.lenis.start();
+    const backdrop = document.getElementById("panel-backdrop");
+    if (backdrop) {
+      backdrop.style.display = "none";
+    }
+  }
+
+  // assets/js/telar-story/navigation.js
+  function initKeyboardNavigation() {
+    document.addEventListener("keydown", handleKeyboard);
+  }
+  function goToStep(newIndex, direction = "forward") {
+    if (newIndex < -1 || newIndex >= state.steps.length) return;
+    state.currentIndex = newIndex;
+    if (newIndex === -1) {
+      _restoreIntro();
+      return;
+    }
+    activateCard(newIndex, direction);
+    updateViewerInfo(newIndex);
+    if (state.onStepChange) state.onStepChange(newIndex);
+  }
+  function _restoreIntro() {
+    _showIntroCard();
+    _sendFirstTextCardOffScreen();
+    releaseTitleCardsForIntro();
+    _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
+    state.currentObjectRun = { objectId: null, runPosition: 0 };
+    _hideStepChrome();
+    if (state.onStepChange) state.onStepChange(-1);
+  }
+  function _showIntroCard() {
+    const intro = document.querySelector(".story-intro");
+    if (!intro) return;
+    intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
+    intro.style.transform = "translateY(0)";
+  }
+  function _sendFirstTextCardOffScreen() {
+    const firstCard = state.textCards?.[0];
+    if (!firstCard) return;
+    firstCard.classList.remove("is-active", "is-stacked");
+    const rot = parseFloat(firstCard.dataset.messinessRot || 0);
+    const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
+    const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
+    firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+  }
+  function _sendPlateOffScreen(plate) {
+    if (!plate) return;
+    plate.container.style.transform = "translateY(100%)";
+    plate.container.classList.remove("is-active");
+  }
+  function _hideStepChrome() {
+    updateViewerInfo(-1);
+    const creditBadge = document.getElementById("object-credits-badge");
+    if (creditBadge) creditBadge.classList.add("d-none");
+  }
+  function recordButtonStep(index2) {
+    if (state.lenis) return;
+    state.currentIndex = index2;
+    if (state.onStepChange) state.onStepChange(index2);
+  }
+  function jumpButtonsTo(index2) {
+    state.currentMobileStep = index2;
+    state.mobileInIntro = false;
+    state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === index2));
+    updateMobileButtonStates();
+    recordButtonStep(index2);
+  }
+  function putButtonsOnIntro() {
+    if (!state.mobileNavButtons) return;
+    state.mobileInIntro = true;
+    state.currentMobileStep = 0;
+    state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === 0));
+    updateMobileButtonStates();
+  }
+  function followEngine(index2) {
+    if (!state.mobileNavButtons) return;
+    if (index2 < 0) {
+      putButtonsOnIntro();
+    } else {
+      jumpButtonsTo(index2);
+    }
+  }
+  function createNavigationButtons() {
+    if (document.querySelector(".mobile-nav")) {
+      console.warn("Navigation buttons already exist, skipping creation");
+      return null;
+    }
+    const navContainer = document.createElement("div");
+    navContainer.className = "mobile-nav";
+    const prevButton = document.createElement("button");
+    prevButton.className = "mobile-prev";
+    prevButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
+    prevButton.setAttribute("aria-label", "Previous step");
+    const nextButton = document.createElement("button");
+    nextButton.className = "mobile-next";
+    nextButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z"/></svg>';
+    nextButton.setAttribute("aria-label", "Next step");
+    navContainer.appendChild(prevButton);
+    navContainer.appendChild(nextButton);
+    document.body.appendChild(navContainer);
+    return { container: navContainer, prev: prevButton, next: nextButton };
+  }
+  function initializeButtonNavigation() {
+    document.documentElement.dataset.navigation = "buttons";
+    state.steps = Array.from(document.querySelectorAll(".story-step"));
+    initializeLoadingShimmer();
+    state.steps.forEach((step) => {
+      step.classList.remove("mobile-active");
+    });
+    if (state.steps.length > 0) {
+      state.steps[0].classList.add("mobile-active");
+      state.currentMobileStep = 0;
+    }
+    state.mobileInIntro = !!document.querySelector(".story-intro");
+    const buttons = createNavigationButtons();
+    if (!buttons) return;
+    state.mobileNavButtons = { prev: buttons.prev, next: buttons.next };
+    buttons.prev.addEventListener("click", goToPreviousMobileStep);
+    buttons.next.addEventListener("click", goToNextMobileStep);
+    updateMobileButtonStates();
+    initKeyboardNavigation();
+  }
+  function goToNextMobileStep() {
+    if (state.lenis) {
+      _moveThroughEngine(buttonHeading() + 1);
+      return;
+    }
+    if (state.mobileInIntro) {
+      _dismissMobileIntro();
+      return;
+    }
+    if (state.currentMobileStep >= state.steps.length - 1) {
+      return;
+    }
+    goToMobileStep(state.currentMobileStep + 1);
+  }
+  function goToPreviousMobileStep() {
+    if (state.lenis) {
+      _moveThroughEngine(buttonHeading() - 1);
+      return;
+    }
+    if (state.mobileInIntro) {
+      return;
+    }
+    if (state.currentMobileStep === 0) {
+      _restoreMobileIntro();
+      return;
+    }
+    goToMobileStep(state.currentMobileStep - 1);
+  }
+  function _restoreMobileIntro() {
+    if (state.mobileNavigationCooldown) return;
+    state.mobileNavigationCooldown = true;
+    setTimeout(() => {
+      state.mobileNavigationCooldown = false;
+    }, MOBILE_NAV_COOLDOWN);
+    _showIntroCard();
+    _sendFirstTextCardOffScreen();
+    _sendPlateOffScreen(state.viewerPlates?.[0]);
+    state.currentObjectRun = { objectId: null, runPosition: 0 };
+    _hideStepChrome();
+    putButtonsOnIntro();
+    recordButtonStep(-1);
+    writeHash();
+  }
+  function _dismissMobileIntro() {
+    if (state.mobileNavigationCooldown) return;
+    state.mobileNavigationCooldown = true;
+    setTimeout(() => {
+      state.mobileNavigationCooldown = false;
+    }, MOBILE_NAV_COOLDOWN);
+    state.mobileInIntro = false;
+    const intro = document.querySelector(".story-intro");
+    if (intro) {
+      intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
+      intro.style.transform = "translateY(-100%)";
+    }
+    state.currentMobileStep = 0;
+    activateCard(0, "forward");
+    updateViewerInfo(0);
+    updateMobileButtonStates();
+    recordButtonStep(0);
+    writeHash();
+  }
+  function _moveThroughEngine(newIndex) {
+    if (newIndex < -1 || newIndex >= state.steps.length) return;
+    if (state.mobileNavigationCooldown) return;
+    if (!advanceToStep(newIndex)) return;
+    state.mobileNavigationCooldown = true;
+    setTimeout(() => {
+      state.mobileNavigationCooldown = false;
+    }, MOBILE_NAV_COOLDOWN);
+    if (newIndex >= 0) {
+      const plate = state.viewerPlates[state.stepToScene[newIndex]];
+      if (!plate || !plate.isReady) showViewerSkeletonState();
+    }
+  }
+  function goToMobileStep(newIndex) {
+    if (newIndex < 0 || newIndex >= state.steps.length) {
+      return;
+    }
+    if (state.mobileNavigationCooldown) {
+      return;
+    }
+    const plate = state.viewerPlates[state.stepToScene[newIndex]];
+    if (!plate || !plate.isReady) {
+      showViewerSkeletonState();
+    }
+    state.mobileNavigationCooldown = true;
+    setTimeout(() => {
+      state.mobileNavigationCooldown = false;
+    }, MOBILE_NAV_COOLDOWN);
+    const direction = newIndex > state.currentMobileStep ? "forward" : "backward";
+    state.steps[state.currentMobileStep].classList.remove("mobile-active");
+    state.steps[newIndex].classList.add("mobile-active");
+    state.currentMobileStep = newIndex;
+    updateMobileButtonStates();
+    activateCard(newIndex, direction);
+    updateViewerInfo(newIndex);
+    recordButtonStep(newIndex);
+    writeHash();
+  }
+  function updateMobileButtonStates() {
+    if (!state.mobileNavButtons) return;
+    state.mobileNavButtons.prev.disabled = !!state.mobileInIntro;
+    state.mobileNavButtons.next.disabled = state.currentMobileStep === state.steps.length - 1;
+  }
+  var KEY_ACTIONS = /* @__PURE__ */ new Map([
+    ["ArrowDown", (e) => _stepKey(e, "forward", "line")],
+    ["PageDown", (e) => _stepKey(e, "forward", "page")],
+    ["ArrowUp", (e) => _stepKey(e, "backward", "line")],
+    ["PageUp", (e) => _stepKey(e, "backward", "page")],
+    ["ArrowRight", (e) => {
+      e.preventDefault();
+      _openNextLayer();
+    }],
+    ["ArrowLeft", (e) => {
+      e.preventDefault();
+      _closeTopmostPanel(e);
+    }],
+    ["Escape", (e) => _closeTopmostPanel(e)],
+    [" ", (e) => _spaceKey(e)]
+  ]);
+  var STORY_KEYS = /* @__PURE__ */ new Map([
+    ["ArrowDown", ["forward", "line"]],
+    ["PageDown", ["forward", "page"]],
+    ["ArrowUp", ["backward", "line"]],
+    ["PageUp", ["backward", "page"]]
+  ]);
+  function handleKeyboard(e) {
+    if (e.repeat && !state.isPanelOpen) {
+      _repeatOverCard(e);
+      return;
+    }
+    KEY_ACTIONS.get(e.key)?.(e);
+  }
+  function _repeatOverCard(e) {
+    let motion = STORY_KEYS.get(e.key);
+    if (e.key === " " && !_isSpaceControl(e)) motion = [e.shiftKey ? "backward" : "forward", "page"];
+    if (!motion) return;
+    if (cardTakesKey(...motion) !== "none") e.preventDefault();
+  }
+  function _stepKey(e, direction, kind) {
+    if (_panelTookScroll(direction === "forward" ? 40 : -40)) return;
+    e.preventDefault();
+    if (cardTakesKey(direction, kind) === "scrolled") return;
+    _navigateStep(direction);
+  }
+  var SPACE_CONTROLS = 'button, summary, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])';
+  function _isSpaceControl(e) {
+    const target = e.target;
+    return !!(target && target.closest && target.closest(SPACE_CONTROLS));
+  }
+  function _spaceKey(e) {
+    if (_isSpaceControl(e)) return;
+    e.preventDefault();
+    if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
+    const direction = e.shiftKey ? "backward" : "forward";
+    if (cardTakesKey(direction, "page") === "scrolled") return;
+    _navigateStep(direction);
+  }
+  function _panelTookScroll(delta) {
+    if (!state.isPanelOpen) return false;
+    scrollOpenPanel(delta);
+    return true;
+  }
+  function _navigateStep(direction) {
+    if (state.scrollLockActive) return;
+    if (state.lenis) {
+      keyboardNav(direction);
+      return;
+    }
+    if (direction === "forward") {
+      goToNextMobileStep();
+    } else {
+      goToPreviousMobileStep();
+    }
+  }
+  function _openNextLayer() {
+    if (!state.isPanelOpen) {
+      _openLayerWithContent("layer1", stepHasLayer1Content);
+      return;
+    }
+    if (state.panelStack.length === 1 && state.panelStack[0]?.type === "layer1") {
+      _openLayerWithContent("layer2", stepHasLayer2Content);
+    }
+  }
+  function _openLayerWithContent(type, hasContent) {
+    const step = getCurrentStepData();
+    const stepNumber = getCurrentStepNumber();
+    if (step && hasContent(step)) {
+      openPanel(type, stepNumber);
+    }
+  }
+  function _closeTopmostPanel(e) {
+    if (!state.isPanelOpen) return;
+    e.preventDefault();
+    closeTopPanel();
+  }
+  function scrollOpenPanel(delta) {
+    const top = state.panelStack[state.panelStack.length - 1];
+    if (!top) return;
+    const panel = document.getElementById(`panel-${top.type}`);
+    const body = panel?.querySelector(".offcanvas-body");
+    if (body) body.scrollBy({ top: delta, behavior: "smooth" });
+  }
+  function getCurrentStepNumber() {
+    if (state.currentIndex < 0 || state.currentIndex >= state.steps.length) {
+      return null;
+    }
+    return state.steps[state.currentIndex].dataset.step;
+  }
+  function getCurrentStepData() {
+    const stepNumber = getCurrentStepNumber();
+    if (!stepNumber) return null;
+    const steps = window.storyData?.steps || [];
+    return steps.find((s) => s.step == stepNumber);
+  }
+  function updateViewerInfo(stepIndex) {
+    const counter = document.getElementById("step-counter");
+    const infoElement = document.getElementById("current-object-title");
+    if (!counter || !infoElement) return;
+    if (stepIndex < 0) {
+      counter.classList.add("d-none");
+      return;
+    }
+    counter.classList.remove("d-none");
+    const total = (window.storyData?.steps || []).filter((s) => !s._metadata).length;
+    const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
+    const display = stepTemplate.replace("{{ number }}", stepIndex + 1);
+    infoElement.textContent = total > 0 ? `${display} / ${total}` : display;
+  }
+
+  // assets/js/telar-story/deep-link.js
+  var _deepLinkTimers = [];
+  function _cancelDeepLinkTimers() {
+    _deepLinkTimers.forEach(clearTimeout);
+    _deepLinkTimers = [];
+    window.removeEventListener("wheel", _cancelDeepLinkTimers);
+    window.removeEventListener("keydown", _cancelDeepLinkTimers);
+    window.removeEventListener("touchstart", _cancelDeepLinkTimers);
+  }
+  function _armDeepLinkCancellation() {
+    window.addEventListener("wheel", _cancelDeepLinkTimers, { passive: true });
+    window.addEventListener("keydown", _cancelDeepLinkTimers);
+    window.addEventListener("touchstart", _cancelDeepLinkTimers, { passive: true });
+  }
+  var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g)(\d+))?)?$/;
+  function parseFragment(hash) {
+    if (!hash || hash === "#") return null;
+    const m = FRAGMENT_RE.exec(hash);
+    if (!m) return null;
+    return {
+      step: parseInt(m[1], 10),
+      // 1-based step number
+      layer: m[2] ? parseInt(m[2], 10) : null,
+      subType: m[3] || null,
+      // 'g' or null
+      subN: m[4] ? parseInt(m[4], 10) : null
+    };
+  }
+  function writeHash() {
+    _writeHashFragment(null);
+  }
+  function writeHashWithGlossary(n) {
+    _writeHashFragment(n);
+  }
+  function _writeHashFragment(glossaryN) {
+    const idx = state.currentIndex;
+    let hash = "";
+    if (idx >= 0) {
+      hash = `#s${idx + 1}`;
+      if (state.panelStack.length > 0) {
+        for (let i = state.panelStack.length - 1; i >= 0; i--) {
+          const layerMatch = state.panelStack[i].type.match(/^layer(\d+)$/);
+          if (layerMatch) {
+            hash += `l${layerMatch[1]}`;
+            if (glossaryN !== null) {
+              hash += `g${glossaryN}`;
+            }
+            break;
+          }
+        }
+      }
+    }
+    if (hash) {
+      history.replaceState(null, "", hash);
+    } else {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }
+  function navigateToIntro() {
+    _cancelDeepLinkTimers();
+    closeAllPanels();
+    for (const plate of Object.values(state.viewerPlates)) {
+      plate.container.classList.remove("is-active");
+    }
+    if (state.lenis) {
+      state.currentIndex = -1;
+      state.scrollPosition = 0;
+      jumpScrollTo(0);
+      if (state.snap) state.snap.currentSnapIndex = 0;
+      state.lenis.stop();
+      requestAnimationFrame(() => {
+        if (!state.isPanelOpen) state.lenis.start();
+      });
+    }
+    goToStep(-1, "backward");
+    putButtonsOnIntro();
+    writeHash();
+  }
+  function navigateToStep(stepNumber) {
+    const targetIndex = stepNumber - 1;
+    if (targetIndex < 0 || targetIndex >= state.steps.length) return;
+    _cancelDeepLinkTimers();
+    closeAllPanels();
+    reconcilePlatesForJump(targetIndex);
+    if (state.lenis) {
+      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
+      jumpScrollTo(targetPx);
+      if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
+      reconcileStackForJump(targetIndex);
+      activateCard(targetIndex, "forward");
+      state.currentIndex = targetIndex;
+      state.scrollPosition = targetIndex + 1;
+    } else {
+      reconcileStackForJump(targetIndex);
+      activateCard(targetIndex, "forward");
+      jumpButtonsTo(targetIndex);
+    }
+    writeHash();
+  }
+  function applyDeepLinkOnLoad() {
+    const parsed = parseFragment(window.location.hash);
+    if (!parsed) return;
+    const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
+    if (targetIndex < 0) return;
+    if (state.lenis) {
+      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
+      state.lenis.scrollTo(targetPx, { immediate: true, force: true });
+      if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
+      reconcileStackForJump(targetIndex);
+      activateCard(targetIndex, "forward");
+      state.currentIndex = targetIndex;
+      state.scrollPosition = targetIndex + 1;
+    } else {
+      reconcileStackForJump(targetIndex);
+      activateCard(targetIndex, "forward");
+      jumpButtonsTo(targetIndex);
+    }
+    if (parsed.layer !== null) {
+      const stepNumber = state.steps[targetIndex]?.dataset?.step;
+      if (stepNumber) {
+        let delay = 100;
+        const onTarget = () => state.currentIndex === targetIndex;
+        if (parsed.layer >= 2) {
+          _deepLinkTimers.push(setTimeout(() => {
+            if (onTarget()) openPanel("layer1", stepNumber);
+          }, delay));
+          delay += 200;
+        }
+        _deepLinkTimers.push(setTimeout(() => {
+          if (onTarget()) openPanel("layer" + parsed.layer, stepNumber);
+        }, delay));
+        delay += 200;
+        if (parsed.subType === "g" && parsed.subN !== null) {
+          _deepLinkTimers.push(setTimeout(() => {
+            if (!onTarget()) return;
+            const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
+            if (panelContent) {
+              const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
+              if (target) target.click();
+            }
+          }, delay));
+        }
+        if (_deepLinkTimers.length) _armDeepLinkCancellation();
+      }
+    }
+  }
+
+  // assets/js/telar-story/card-scroll.js
+  var WHEEL_GESTURE_GAP_MS = 200;
+  var EASE = 0.25;
+  var INERTIA_DECAY = 0.95;
+  var VELOCITY_WINDOW_MS = 100;
+  var LINE_PX = 40;
+  var EDGE_SLACK = 0.5;
+  var HANDLE_RADIUS = 40;
+  var FRAME_MS = 1e3 / 60;
+  function createGestureLatch(gapMs = WHEEL_GESTURE_GAP_MS) {
+    return {
+      /** @type {'card'|'story'|null} */
+      owner: null,
+      last: -Infinity,
+      note(timeStamp) {
+        const isNew = timeStamp - this.last >= gapMs;
+        this.last = timeStamp;
+        if (isNew) this.owner = null;
+        return isNew;
+      },
+      claim(decide) {
+        if (this.owner === null) this.owner = decide();
+        return this.owner;
+      },
+      holds(now) {
+        return this.owner === "card" && now - this.last < gapMs;
+      }
+    };
+  }
+  var _attached = /* @__PURE__ */ new WeakSet();
+  var _engines = /* @__PURE__ */ new WeakMap();
+  var _wheel = createGestureLatch();
+  var _wheelCard = null;
+  var _touch = null;
+  var _inertiaCard = null;
+  var _windowRecorder = false;
+  function _engine(card) {
+    let e = _engines.get(card);
+    if (!e) {
+      e = { target: card.scrollTop, written: card.scrollTop, frame: 0, velocity: 0 };
+      _engines.set(card, e);
+    }
+    return e;
+  }
+  function _max(card) {
+    return Math.max(0, card.scrollHeight - card.clientHeight);
+  }
+  function _clamp(card, value) {
+    return Math.min(_max(card), Math.max(0, value));
+  }
+  function _reducedMotion() {
+    return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  }
+  function _write(card, e, value) {
+    card.scrollTop = value;
+    e.written = card.scrollTop;
+  }
+  function _stop(e) {
+    if (e.frame) cancelAnimationFrame(e.frame);
+    e.frame = 0;
+    e.velocity = 0;
+  }
+  function _adoptBrowserScroll(card, e) {
+    if (card.scrollTop === e.written) return false;
+    _stop(e);
+    e.target = e.written = card.scrollTop;
+    return true;
+  }
+  function _tick(card) {
+    const e = _engine(card);
+    e.frame = 0;
+    if (_adoptBrowserScroll(card, e)) return;
+    if (e.velocity) {
+      e.target = _clamp(card, e.target + e.velocity);
+      e.velocity *= INERTIA_DECAY;
+      if (Math.abs(e.velocity) < 0.1 || e.target <= 0 || e.target >= _max(card)) e.velocity = 0;
+    }
+    const from = card.scrollTop;
+    const gap = e.target - from;
+    if (Math.abs(gap) <= EDGE_SLACK) {
+      _write(card, e, e.target);
+      e.target = e.written;
+      if (!e.velocity) return;
+    } else {
+      _write(card, e, from + gap * EASE);
+      if (e.written === from) {
+        _write(card, e, e.target);
+        e.target = e.written;
+      }
+    }
+    e.frame = requestAnimationFrame(() => _tick(card));
+  }
+  function _run(card, e) {
+    if (_reducedMotion()) {
+      _stop(e);
+      _write(card, e, e.target);
+      e.target = e.written;
+      return;
+    }
+    if (!e.frame) e.frame = requestAnimationFrame(() => _tick(card));
+  }
+  function _endInertia() {
+    if (!_inertiaCard) return;
+    const e = _engines.get(_inertiaCard);
+    if (e) e.velocity = 0;
+    _inertiaCard = null;
+  }
+  function _isActiveScrollCard(card) {
+    return !!card && state.textCards?.[state.currentIndex] === card && card.dataset.cardFit === "scroll";
+  }
+  function _scrollBy(card, delta) {
+    if (!_isActiveScrollCard(card)) return;
+    const e = _engine(card);
+    _adoptBrowserScroll(card, e);
+    e.target = _clamp(card, e.target + delta);
+    _run(card, e);
+  }
+  function _cardCanOwn(card, target) {
+    if (!_isActiveScrollCard(card) || !card.contains(target)) return false;
+    if (state.isPanelOpen) return false;
+    const lenis2 = state.lenis;
+    if (!lenis2) return true;
+    return !lenis2.isStopped && Math.abs(state.scrollPosition - (state.currentIndex + 1)) < 1e-3;
+  }
+  function _hasRoom(card, dy) {
+    const top = card.scrollTop;
+    return dy > 0 ? top < _max(card) - EDGE_SLACK : top > EDGE_SLACK;
+  }
+  function _swallow(ev) {
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopPropagation();
+  }
+  function _wheelDelta(ev, card) {
+    if (ev.deltaMode === 1) return ev.deltaY * 16;
+    if (ev.deltaMode === 2) return ev.deltaY * card.clientHeight;
+    return ev.deltaY;
+  }
+  function _wheelExcluded(ev) {
+    return ev.ctrlKey || ev.metaKey || ev.deltaY === 0 || Math.abs(ev.deltaX) > Math.abs(ev.deltaY);
+  }
+  function _cardAt(target) {
+    const card = target instanceof Element ? target.closest(".text-card") : null;
+    return card && _attached.has(card) ? card : null;
+  }
+  function _onWindowWheel(ev) {
+    if (_wheel.note(ev.timeStamp)) {
+      _wheelCard = null;
+      _endInertia();
+    }
+    if (ev.ctrlKey || ev.metaKey) {
+      _wheel.owner = "story";
+      _wheelCard = null;
+      _endInertia();
+      return;
+    }
+    const card = _cardAt(ev.target);
+    if (_wheel.owner === null && !card) _wheel.owner = "story";
+    if (_wheel.owner === "card" && card !== _wheelCard) {
+      _swallow(ev);
+      _scrollBy(_wheelCard, _wheelDelta(ev, _wheelCard));
+    }
+  }
+  function _onCardWheel(ev) {
+    const card = ev.currentTarget;
+    const owner = _wheel.claim(() => !_wheelExcluded(ev) && _cardCanOwn(card, ev.target) && _hasRoom(card, ev.deltaY) ? "card" : "story");
+    if (owner !== "card") return;
+    if (_wheelCard === null) {
+      _wheelCard = card;
+      _cancelDeepLinkTimers();
+    }
+    if (card !== _wheelCard) return;
+    _swallow(ev);
+    _scrollBy(card, _wheelDelta(ev, card));
+  }
+  function _installWindowRecorder() {
+    if (_windowRecorder) return;
+    _windowRecorder = true;
+    window.addEventListener("wheel", _onWindowWheel, { passive: false, capture: true });
+  }
+  function _touchOnSelectionHandle(ev) {
+    const selection = window.getSelection?.();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+    const touch = ev.targetTouches?.[0] ?? ev.changedTouches?.[0];
+    if (!touch) return false;
+    const rects = selection.getRangeAt(0).getClientRects();
+    if (!rects || rects.length === 0) return false;
+    const first = rects[0];
+    const last = rects[rects.length - 1];
+    return Math.hypot(touch.clientX - first.left, touch.clientY - first.top) <= HANDLE_RADIUS || Math.hypot(touch.clientX - last.right, touch.clientY - last.bottom) <= HANDLE_RADIUS;
+  }
+  function _onCardTouchStart(ev) {
+    _endInertia();
+    const t = ev.touches?.[0];
+    _touch = {
+      card: ev.currentTarget,
+      active: true,
+      owner: null,
+      excluded: (ev.touches?.length || 0) > 1 || _touchOnSelectionHandle(ev),
+      x: t ? t.clientX : 0,
+      y: t ? t.clientY : 0,
+      moves: []
+    };
+  }
+  function _onCardTouchMove(ev) {
+    const g = _touch;
+    const card = ev.currentTarget;
+    if (!g || g.card !== card || g.excluded) return;
+    const t = ev.touches?.[0];
+    if (!t) return;
+    const dx = -(t.clientX - g.x);
+    const dy = -(t.clientY - g.y);
+    g.x = t.clientX;
+    g.y = t.clientY;
+    if (g.owner === null) {
+      if (dx === 0 && dy === 0) return;
+      const own = dy !== 0 && Math.abs(dx) <= Math.abs(dy) && ev.touches.length === 1 && _cardCanOwn(card, ev.target) && _hasRoom(card, dy);
+      g.owner = own ? "card" : "story";
+      if (own) _cancelDeepLinkTimers();
+    }
+    if (g.owner !== "card") return;
+    _swallow(ev);
+    g.moves.push({ t: ev.timeStamp, dy });
+    _scrollBy(card, dy);
+  }
+  function _onCardTouchEnd(ev) {
+    const g = _touch;
+    const card = ev.currentTarget;
+    if (!g || g.card !== card) return;
+    if (ev.touches?.length) return;
+    g.active = false;
+    if (g.owner !== "card") return;
+    _swallow(ev);
+    if (_reducedMotion() || !_isActiveScrollCard(card)) return;
+    const recent = g.moves.filter((m) => ev.timeStamp - m.t <= VELOCITY_WINDOW_MS);
+    if (!recent.length) return;
+    const distance = recent.reduce((sum, m) => sum + m.dy, 0);
+    const span = Math.max(FRAME_MS, ev.timeStamp - recent[0].t);
+    const e = _engine(card);
+    e.velocity = distance / span * FRAME_MS;
+    _inertiaCard = card;
+    if (!e.frame) e.frame = requestAnimationFrame(() => _tick(card));
+  }
+  function _onCardTouchCancel() {
+    _touch = null;
+  }
+  function _onCardScroll(ev) {
+    const card = ev.currentTarget;
+    const e = _engines.get(card);
+    if (e) _adoptBrowserScroll(card, e);
+  }
+  function attachCardScroll(card) {
+    if (!card || _attached.has(card)) return;
+    _attached.add(card);
+    _installWindowRecorder();
+    const own = { passive: false, capture: true };
+    card.addEventListener("wheel", _onCardWheel, own);
+    card.addEventListener("touchstart", _onCardTouchStart, own);
+    card.addEventListener("touchmove", _onCardTouchMove, own);
+    card.addEventListener("touchend", _onCardTouchEnd, own);
+    card.addEventListener("touchcancel", _onCardTouchCancel, { passive: true, capture: true });
+    card.addEventListener("scroll", _onCardScroll, { passive: true });
+  }
+  function resetCardScroll(card) {
+    if (!card) return;
+    const e = _engines.get(card);
+    if (e) _stop(e);
+    if (_inertiaCard === card) _inertiaCard = null;
+    if (card.scrollTop !== 0) card.scrollTop = 0;
+    if (e) e.target = e.written = card.scrollTop;
+  }
+  function syncCardScroll(card) {
+    if (!card) return;
+    if (card.dataset.cardFit !== "scroll") {
+      if (card.scrollTop !== 0 || _engines.has(card)) resetCardScroll(card);
+      return;
+    }
+    const e = _engines.get(card);
+    const max = _max(card);
+    if (e) e.target = _clamp(card, e.target);
+    if (card.scrollTop > max) {
+      card.scrollTop = max;
+      if (e) e.written = card.scrollTop;
+    }
+  }
+  function cardTakesKey(direction, kind) {
+    const card = state.textCards?.[state.currentIndex];
+    if (!_isActiveScrollCard(card)) return "none";
+    const e = _engine(card);
+    _adoptBrowserScroll(card, e);
+    const sign = direction === "forward" ? 1 : -1;
+    const max = _max(card);
+    const edge = sign > 0 ? max : 0;
+    const rendered = card.scrollTop;
+    const moving = Math.abs(e.target - rendered) > EDGE_SLACK;
+    const amount = kind === "page" ? _pageAmount(card) : LINE_PX;
+    if (moving && Math.sign(e.target - rendered) === sign) {
+      if (Math.abs(e.target - edge) <= EDGE_SLACK) {
+        _stop(e);
+        _write(card, e, e.target);
+        e.target = e.written;
+        return "scrolled";
+      }
+      e.velocity = 0;
+      e.target = _clamp(card, e.target + sign * amount);
+      _run(card, e);
+      return "scrolled";
+    }
+    const atEdge = sign > 0 ? rendered >= max - EDGE_SLACK : rendered <= EDGE_SLACK;
+    if (!moving && atEdge) return "at-edge";
+    const from = moving ? rendered : e.target;
+    e.velocity = 0;
+    e.target = _clamp(card, from + sign * amount);
+    _run(card, e);
+    return "scrolled";
+  }
+  function _pageAmount(card) {
+    const answer = card.querySelector(".step-answer");
+    const line = answer ? parseFloat(getComputedStyle(answer).lineHeight) || 0 : 0;
+    return Math.max(LINE_PX, card.clientHeight - line);
+  }
+  function cardHoldsGesture(now = performance.now()) {
+    if (_touch?.active && _touch.owner === "card") return true;
+    return _wheel.holds(now);
+  }
+
+  // assets/js/telar-story/card-fit.js
+  var SIDE_CARD_CONTROLS = [...TOP_CONTROLS, ".telar-embed-banner"];
+  var FLOOR_REM = 0.75;
+  var FIT_STEP_PX = 0.1;
+  var SEED_BRACKET_PX = 0.6;
+  var CONTENT_TOLERANCE_PX = 0.01;
+  var FIT_SIZE = "--telar-answer-fit-size";
+  var BASE_SIZE = "--telar-answer-base-size";
+  function sideCardCeiling({ H, W, C, T, fraction, pad = unroundedMediaPadding }) {
+    const room = (h) => h - C - 2 * pad(W, h) - 1;
+    return Math.floor(Math.min(room(H), Math.max(fraction * H, room(T))));
+  }
+  function sideCardTop({ H, cardH, runPos, peek, band, pad }) {
+    const centred = (H - cardH) / 2 + runPos * peek;
+    return Math.max(band, Math.min(centred, H - pad - cardH));
+  }
+  function searchFitSize({ base, floor, step = FIT_STEP_PX, fits, seed, baseFits }) {
+    if (baseFits ?? fits(base)) return { mode: "natural", size: base };
+    const lowest = Math.min(floor, base);
+    if (lowest >= base) return { mode: "scroll", size: base };
+    const s0 = Math.min(base, Math.max(lowest, Number.isFinite(seed) ? seed : (lowest + base) / 2));
+    let lo = Math.max(lowest, s0 - SEED_BRACKET_PX);
+    let hi = Math.min(base, s0 + SEED_BRACKET_PX);
+    if (!fits(lo)) {
+      if (lo === lowest) return { mode: "scroll", size: lowest };
+      hi = lo;
+      lo = lowest;
+      if (!fits(lo)) return { mode: "scroll", size: lowest };
+    } else if (hi < base && fits(hi)) {
+      lo = hi;
+      hi = base;
+    }
+    while (hi - lo > step) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) lo = mid;
+      else hi = mid;
+    }
+    return { mode: "shrunk", size: Math.floor(lo * 1e3) / 1e3 };
+  }
+  var _fitCache = /* @__PURE__ */ new WeakMap();
+  var _revisions = /* @__PURE__ */ new WeakMap();
+  var _recordedHeights = /* @__PURE__ */ new WeakMap();
+  function _rootPx() {
+    return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  }
+  function _baseSize(answer, rootPx) {
+    const raw = getComputedStyle(answer).getPropertyValue(BASE_SIZE).trim();
+    const m = /^(-?[\d.]+)(rem|px)?$/.exec(raw);
+    if (!m) return rootPx;
+    const n = parseFloat(m[1]);
+    return m[2] === "rem" ? n * rootPx : n;
+  }
+  function bumpContentRevision(card) {
+    _revisions.set(card, (_revisions.get(card) || 0) + 1);
+  }
+  function _fits(card) {
+    return card.scrollHeight <= card.clientHeight;
+  }
+  function fitAnswerText(card, ceilingPx, cache = _fitCache) {
+    const answer = card.querySelector(".step-answer");
+    const rootPx = _rootPx();
+    const floor = FLOOR_REM * rootPx;
+    const base = answer ? _baseSize(answer, rootPx) : rootPx;
+    const key = [card.offsetWidth, ceilingPx, base, floor, _revisions.get(card) || 0].join("|");
+    const hit = cache.get(card);
+    if (hit && hit.key === key) return hit;
+    delete card.dataset.cardFit;
+    card.style.removeProperty(FIT_SIZE);
+    card.style.height = "";
+    card.style.maxHeight = `${ceilingPx}px`;
+    const naturalH = card.scrollHeight;
+    let result;
+    if (!answer || naturalH <= card.clientHeight) {
+      result = { mode: "natural", size: base };
+    } else {
+      const fixedPart = naturalH - answer.offsetHeight;
+      const seed = base * Math.sqrt(Math.max(0, ceilingPx - fixedPart) / Math.max(1, naturalH - fixedPart));
+      card.dataset.cardFit = "shrunk";
+      result = searchFitSize({
+        base,
+        floor,
+        seed,
+        baseFits: false,
+        fits: (size) => {
+          card.style.setProperty(FIT_SIZE, `${size}px`);
+          return _fits(card);
+        }
+      });
+    }
+    card.dataset.cardFit = result.mode;
+    card.style.setProperty(FIT_SIZE, `${result.size}px`);
+    const entry = { key, ...result };
+    cache.set(card, entry);
+    return entry;
+  }
+  function clearAnswerFit(card, cache = _fitCache) {
+    cache.delete(card);
+    if (card.dataset.cardFit === void 0 && !card.style.getPropertyValue(FIT_SIZE)) return;
+    delete card.dataset.cardFit;
+    card.style.removeProperty(FIT_SIZE);
+    syncCardScroll(card);
+  }
+  function fitOrder(cards, activeIndex) {
+    const near = [];
+    const rest = [];
+    for (const card of cards) {
+      const i = parseInt(card.dataset.stepIndex, 10);
+      (Math.abs(i - activeIndex) <= 2 ? near : rest).push(card);
+    }
+    return near.concat(rest);
+  }
+  function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
+    const C = Math.round(measureControlsBottom(SIDE_CARD_CONTROLS));
+    const pad = mediaPadding(W, H);
+    const band = C + pad;
+    const ceiling = sideCardCeiling({ H, W, C, T: getCardLandscapeMaxHeight(), fraction });
+    const topOf = (card) => sideCardTop({
+      H,
+      cardH: card.offsetHeight,
+      runPos: parseInt(card.dataset.runPosition, 10) || 0,
+      peek,
+      band,
+      pad
+    });
+    for (const card of fitOrder(cards, activeIndex)) {
+      fitAnswerText(card, ceiling);
+      recordContentHeight(card);
+      syncCardScroll(card);
+      card.style.setProperty("top", `${topOf(card)}px`, "important");
+    }
+    return { band, pad, ceiling, topOf };
+  }
+  function timeGeometryPass(pass) {
+    const perf = typeof performance !== "undefined" ? performance : null;
+    perf?.mark?.("telar-card-geometry-start");
+    pass();
+    if (!perf?.mark || !perf.measure) return;
+    perf.mark("telar-card-geometry-end");
+    try {
+      perf.measure("telar-card-geometry", "telar-card-geometry-start", "telar-card-geometry-end");
+    } catch {
+    }
+  }
+  function _contentWrapper(card) {
+    return card.children.length === 1 ? card.firstElementChild : null;
+  }
+  function _contentHeight(el) {
+    const cs = getComputedStyle(el);
+    let h = parseFloat(cs.height);
+    if (cs.boxSizing === "border-box") {
+      for (const side of ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"]) {
+        h -= parseFloat(cs[side]) || 0;
+      }
+    }
+    return h;
+  }
+  function recordContentHeight(card) {
+    const wrapper = _contentWrapper(card);
+    if (wrapper) _recordedHeights.set(wrapper, _contentHeight(wrapper));
+  }
+  function watchCardContent(cards, refit, { raf = (cb) => requestAnimationFrame(cb) } = {}) {
+    const list = [...cards];
+    const pending = /* @__PURE__ */ new Set();
+    let all = false;
+    let frame = 0;
+    let stopped = false;
+    const schedule = () => {
+      if (frame || stopped) return;
+      frame = raf(() => {
+        frame = 0;
+        if (stopped) return;
+        const changed = all ? null : [...pending];
+        all = false;
+        pending.clear();
+        refit(changed);
+      });
+    };
+    const RO = typeof window !== "undefined" ? window.ResizeObserver : void 0;
+    let observer = null;
+    if (typeof RO === "function") {
+      observer = new RO((entries) => {
+        for (const entry of entries) {
+          const recorded = _recordedHeights.get(entry.target);
+          if (recorded === void 0) continue;
+          if (Math.abs(entry.contentRect.height - recorded) <= CONTENT_TOLERANCE_PX) continue;
+          const card = entry.target.parentElement;
+          bumpContentRevision(card);
+          pending.add(card);
+        }
+        if (pending.size) schedule();
+      });
+      for (const card of list) {
+        const wrapper = _contentWrapper(card);
+        if (wrapper) observer.observe(wrapper);
+      }
+    }
+    const onFonts = () => {
+      for (const card of list) bumpContentRevision(card);
+      all = true;
+      schedule();
+    };
+    const onBanner = () => {
+      all = true;
+      schedule();
+    };
+    const fonts = document.fonts;
+    fonts?.addEventListener?.("loadingdone", onFonts);
+    window.addEventListener("telar:embed-banner", onBanner);
+    return () => {
+      stopped = true;
+      observer?.disconnect();
+      fonts?.removeEventListener?.("loadingdone", onFonts);
+      window.removeEventListener("telar:embed-banner", onBanner);
+    };
   }
 
   // assets/js/telar-story/plates/base-plate.js
@@ -3215,35 +6182,37 @@
     };
   }
   var SIDE_CARD_VIEWPORT_FRACTION = 0.8;
-  function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
+  function _sizeCardToContent(card, viewportH, runPos, peekHeight) {
     card.style.height = "";
-    if (maxHeightPx == null) card.style.removeProperty("max-height");
-    else card.style.maxHeight = `${maxHeightPx}px`;
+    card.style.removeProperty("max-height");
     const cardH = card.offsetHeight;
     const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
     card.style.setProperty("top", `${topPx}px`, "important");
   }
-  function _recomputeCardGeometry(viewportW, viewportH) {
+  function _recomputeCardGeometry(viewportW, viewportH, changed = null) {
+    timeGeometryPass(() => _geometryPass(viewportW, viewportH, changed));
+  }
+  function _geometryPass(viewportW, viewportH, changed) {
     const peekHeight = _config.peekHeight;
     const landscapeSideCard = isLandscapeSideCard();
-    const fitSideCard = isFitHeight() && !landscapeSideCard && getLayoutMode() !== "vertical";
+    const sideFit = isFitHeight() && getLayoutMode() !== "vertical";
     const cards = document.querySelectorAll(".text-card");
-    for (const card of cards) {
+    const side = sideFit ? fitSideCards(changed || cards, {
+      W: viewportW,
+      H: viewportH,
+      peek: peekHeight,
+      fraction: SIDE_CARD_VIEWPORT_FRACTION,
+      activeIndex: state.currentIndex
+    }) : null;
+    for (const card of sideFit ? [] : cards) {
+      clearAnswerFit(card);
       const runPos = parseInt(card.dataset.runPosition, 10) || 0;
       if (landscapeSideCard) {
-        _sizeCardToContent(card, viewportH, runPos, peekHeight, null);
+        _sizeCardToContent(card, viewportH, runPos, peekHeight);
       } else if (getLayoutMode() === "vertical") {
         card.style.removeProperty("top");
         card.style.removeProperty("max-height");
         card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;
-      } else if (fitSideCard) {
-        _sizeCardToContent(
-          card,
-          viewportH,
-          runPos,
-          peekHeight,
-          viewportH * SIDE_CARD_VIEWPORT_FRACTION
-        );
       } else {
         const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
         const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
@@ -3251,28 +6220,30 @@
         card.style.height = `${cardH}px`;
       }
     }
-    const contentSized = (fitSideCard || landscapeSideCard) && getLayoutMode() !== "vertical";
-    _arrangeMediaScenes(cards, viewportW, viewportH, contentSized);
+    const contentSized = (sideFit || landscapeSideCard) && getLayoutMode() !== "vertical";
+    _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side);
   }
-  function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized) {
+  function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side) {
     const cardsByScene = {};
     for (const card of cards) {
       const scene = getSceneIndex(parseInt(card.dataset.stepIndex, 10));
       (cardsByScene[scene] ||= []).push(card);
     }
-    const besideTop = (card) => computeCardTop(
+    const besideTop = side?.topOf ?? ((card) => computeCardTop(
       viewportH,
       card.offsetHeight,
       _cardRunPosition(card),
       _config.peekHeight
-    );
+    ));
+    const topBand = measureTopBand(viewportW, viewportH);
     for (const [scene, plate] of Object.entries(state.viewerPlates)) {
       if (!(plate instanceof MediaPlate)) continue;
       arrangeMediaScene(plate.container, cardsByScene[scene] || [], {
         W: viewportW,
         H: viewportH,
         eligible: contentSized,
-        besideTop
+        besideTop,
+        topBand
       });
       plate.resize();
     }
@@ -3387,6 +6358,7 @@
       }
       cardStack.appendChild(card);
       state.textCards[stepIdx] = card;
+      attachCardScroll(card);
     }
   }
   function _resolveCardConfig(config) {
@@ -3405,9 +6377,17 @@
     plate.load(firstStep);
     _evictBeyondPoolCap(0);
   }
+  var _stopGeometryWatch = null;
+  var _geometryGeneration = 0;
+  function _teardownGeometryWatch() {
+    _stopGeometryWatch?.();
+    _stopGeometryWatch = null;
+  }
   function initCardPool(storyData, config) {
     const cardStack = document.querySelector(".card-stack");
     if (!cardStack) return;
+    _teardownGeometryWatch();
+    const generation = ++_geometryGeneration;
     const steps = (storyData?.steps || []).filter((s) => !s._metadata);
     _stepsData = steps;
     state.stepsData = steps;
@@ -3420,18 +6400,27 @@
     _createViewerPlates(steps, cardStack, audioObjects);
     _createTextCards(steps, cardStack, audioObjects, _config.messiness);
     _preloadFirstScenePlate(steps);
-    onViewportResize(({ viewport }) => {
+    const stopResize = onViewportResize(({ viewport }) => {
       _recomputeCardGeometry(viewport.w, viewport.h);
     });
-    onLayoutChange(({ viewport }) => {
+    const stopLayout = onLayoutChange(({ viewport }) => {
       _recomputeCardGeometry(viewport.w, viewport.h);
     });
     _recomputeCardGeometry(window.innerWidth, window.innerHeight);
     if (document.fonts?.ready) {
       document.fonts.ready.then(() => {
+        if (generation !== _geometryGeneration) return;
         _recomputeCardGeometry(window.innerWidth, window.innerHeight);
       });
     }
+    const stopWatch = watchCardContent(Object.values(state.textCards), (changed) => {
+      _recomputeCardGeometry(window.innerWidth, window.innerHeight, changed);
+    });
+    _stopGeometryWatch = () => {
+      stopResize();
+      stopLayout();
+      stopWatch();
+    };
     applyCardMotionDuration(cardStack);
   }
   function buildTextCardContent(step) {
@@ -3750,6 +6739,7 @@
   }
   function _activateTextCard(cardEl) {
     const messiness = _readCardMessiness(cardEl);
+    resetCardScroll(cardEl);
     cardEl.classList.remove("is-stacked");
     cardEl.classList.add("is-active");
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -3979,2405 +6969,6 @@
     const { region, scale } = _prefetchFraming(shape.imageW, shape.imageH, x, y, zoom, viewer);
     const scaleFactor = _drawnScaleFactor(shape.scaleFactors, scale);
     return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor, _cellBound(shape.tileSize, viewer));
-  }
-
-  // node_modules/lenis/dist/lenis.mjs
-  var version = "1.3.26";
-  function clamp(min, input, max) {
-    return Math.max(min, Math.min(input, max));
-  }
-  function lerp(x, y, t) {
-    return (1 - t) * x + t * y;
-  }
-  function damp(x, y, lambda, deltaTime) {
-    return lerp(x, y, 1 - Math.exp(-lambda * deltaTime));
-  }
-  function modulo(n, d) {
-    return (n % d + d) % d;
-  }
-  var Animate = class {
-    isRunning = false;
-    value = 0;
-    from = 0;
-    to = 0;
-    currentTime = 0;
-    lerp;
-    duration;
-    easing;
-    onUpdate;
-    /**
-    * Advance the animation by the given delta time
-    *
-    * @param deltaTime - The time in seconds to advance the animation
-    */
-    advance(deltaTime) {
-      if (!this.isRunning) return;
-      let completed = false;
-      if (this.duration && this.easing) {
-        this.currentTime += deltaTime;
-        const linearProgress = clamp(0, this.currentTime / this.duration, 1);
-        completed = linearProgress >= 1;
-        const easedProgress = completed ? 1 : this.easing(linearProgress);
-        this.value = this.from + (this.to - this.from) * easedProgress;
-      } else if (this.lerp) {
-        this.value = damp(this.value, this.to, this.lerp * 60, deltaTime);
-        if (Math.round(this.value) === Math.round(this.to)) {
-          this.value = this.to;
-          completed = true;
-        }
-      } else {
-        this.value = this.to;
-        completed = true;
-      }
-      if (completed) this.stop();
-      this.onUpdate?.(this.value, completed);
-    }
-    /** Stop the animation */
-    stop() {
-      this.isRunning = false;
-    }
-    /**
-    * Set up the animation from a starting value to an ending value
-    * with optional parameters for lerping, duration, easing, and onUpdate callback
-    *
-    * @param from - The starting value
-    * @param to - The ending value
-    * @param options - Options for the animation
-    */
-    fromTo(from, to, { lerp: lerp2, duration, easing, onStart, onUpdate }) {
-      this.from = this.value = from;
-      this.to = to;
-      this.lerp = lerp2;
-      this.duration = duration;
-      this.easing = easing;
-      this.currentTime = 0;
-      this.isRunning = true;
-      onStart?.();
-      this.onUpdate = onUpdate;
-    }
-  };
-  function debounce(callback, delay) {
-    let timer;
-    return function(...args) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = void 0;
-        callback.apply(this, args);
-      }, delay);
-    };
-  }
-  var Dimensions = class {
-    width = 0;
-    height = 0;
-    scrollHeight = 0;
-    scrollWidth = 0;
-    debouncedResize;
-    wrapperResizeObserver;
-    contentResizeObserver;
-    constructor(wrapper, content, { autoResize = true, debounce: debounceValue = 250 } = {}) {
-      this.wrapper = wrapper;
-      this.content = content;
-      if (autoResize) {
-        this.debouncedResize = debounce(this.resize, debounceValue);
-        if (this.wrapper instanceof Window) window.addEventListener("resize", this.debouncedResize);
-        else {
-          this.wrapperResizeObserver = new ResizeObserver(this.debouncedResize);
-          this.wrapperResizeObserver.observe(this.wrapper);
-        }
-        this.contentResizeObserver = new ResizeObserver(this.debouncedResize);
-        this.contentResizeObserver.observe(this.content);
-      }
-      this.resize();
-    }
-    destroy() {
-      this.wrapperResizeObserver?.disconnect();
-      this.contentResizeObserver?.disconnect();
-      if (this.wrapper === window && this.debouncedResize) window.removeEventListener("resize", this.debouncedResize);
-    }
-    resize = () => {
-      this.onWrapperResize();
-      this.onContentResize();
-    };
-    onWrapperResize = () => {
-      if (this.wrapper instanceof Window) {
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
-      } else {
-        this.width = this.wrapper.clientWidth;
-        this.height = this.wrapper.clientHeight;
-      }
-    };
-    onContentResize = () => {
-      if (this.wrapper instanceof Window) {
-        this.scrollHeight = this.content.scrollHeight;
-        this.scrollWidth = this.content.scrollWidth;
-      } else {
-        this.scrollHeight = this.wrapper.scrollHeight;
-        this.scrollWidth = this.wrapper.scrollWidth;
-      }
-    };
-    get limit() {
-      return {
-        x: this.scrollWidth - this.width,
-        y: this.scrollHeight - this.height
-      };
-    }
-  };
-  var Emitter = class {
-    events = {};
-    /**
-    * Emit an event with the given data
-    * @param event Event name
-    * @param args Data to pass to the event handlers
-    */
-    emit(event, ...args) {
-      const callbacks = this.events[event] || [];
-      for (let i = 0, length = callbacks.length; i < length; i++) callbacks[i]?.(...args);
-    }
-    /**
-    * Add a callback to the event
-    * @param event Event name
-    * @param cb Callback function
-    * @returns Unsubscribe function
-    */
-    on(event, cb) {
-      if (this.events[event]) this.events[event].push(cb);
-      else this.events[event] = [cb];
-      return () => {
-        this.events[event] = this.events[event]?.filter((i) => cb !== i);
-      };
-    }
-    /**
-    * Remove a callback from the event
-    * @param event Event name
-    * @param callback Callback function
-    */
-    off(event, callback) {
-      this.events[event] = this.events[event]?.filter((i) => callback !== i);
-    }
-    /**
-    * Remove all event listeners and clean up
-    */
-    destroy() {
-      this.events = {};
-    }
-  };
-  var LINE_HEIGHT = 100 / 6;
-  var listenerOptions = { passive: false };
-  function getDeltaMultiplier(deltaMode, size) {
-    if (deltaMode === 1) return LINE_HEIGHT;
-    if (deltaMode === 2) return size;
-    return 1;
-  }
-  var VirtualScroll = class {
-    touchStart = {
-      x: 0,
-      y: 0
-    };
-    lastDelta = {
-      x: 0,
-      y: 0
-    };
-    window = {
-      width: 0,
-      height: 0
-    };
-    emitter = new Emitter();
-    constructor(element, options = {
-      wheelMultiplier: 1,
-      touchMultiplier: 1
-    }) {
-      this.element = element;
-      this.options = options;
-      window.addEventListener("resize", this.onWindowResize);
-      this.onWindowResize();
-      this.element.addEventListener("wheel", this.onWheel, listenerOptions);
-      this.element.addEventListener("touchstart", this.onTouchStart, listenerOptions);
-      this.element.addEventListener("touchmove", this.onTouchMove, listenerOptions);
-      this.element.addEventListener("touchend", this.onTouchEnd, listenerOptions);
-    }
-    /**
-    * Add an event listener for the given event and callback
-    *
-    * @param event Event name
-    * @param callback Callback function
-    */
-    on(event, callback) {
-      return this.emitter.on(event, callback);
-    }
-    /** Remove all event listeners and clean up */
-    destroy() {
-      this.emitter.destroy();
-      window.removeEventListener("resize", this.onWindowResize);
-      this.element.removeEventListener("wheel", this.onWheel, listenerOptions);
-      this.element.removeEventListener("touchstart", this.onTouchStart, listenerOptions);
-      this.element.removeEventListener("touchmove", this.onTouchMove, listenerOptions);
-      this.element.removeEventListener("touchend", this.onTouchEnd, listenerOptions);
-    }
-    /**
-    * Event handler for 'touchstart' event
-    *
-    * @param event Touch event
-    */
-    onTouchStart = (event) => {
-      const { clientX, clientY } = event.targetTouches ? event.targetTouches[0] : event;
-      this.touchStart.x = clientX;
-      this.touchStart.y = clientY;
-      this.lastDelta = {
-        x: 0,
-        y: 0
-      };
-      this.emitter.emit("scroll", {
-        deltaX: 0,
-        deltaY: 0,
-        event
-      });
-    };
-    /** Event handler for 'touchmove' event */
-    onTouchMove = (event) => {
-      const { clientX, clientY } = event.targetTouches ? event.targetTouches[0] : event;
-      const deltaX = -(clientX - this.touchStart.x) * this.options.touchMultiplier;
-      const deltaY = -(clientY - this.touchStart.y) * this.options.touchMultiplier;
-      this.touchStart.x = clientX;
-      this.touchStart.y = clientY;
-      this.lastDelta = {
-        x: deltaX,
-        y: deltaY
-      };
-      this.emitter.emit("scroll", {
-        deltaX,
-        deltaY,
-        event
-      });
-    };
-    onTouchEnd = (event) => {
-      this.emitter.emit("scroll", {
-        deltaX: this.lastDelta.x,
-        deltaY: this.lastDelta.y,
-        event
-      });
-    };
-    /** Event handler for 'wheel' event */
-    onWheel = (event) => {
-      let { deltaX, deltaY, deltaMode } = event;
-      const multiplierX = getDeltaMultiplier(deltaMode, this.window.width);
-      const multiplierY = getDeltaMultiplier(deltaMode, this.window.height);
-      deltaX *= multiplierX;
-      deltaY *= multiplierY;
-      deltaX *= this.options.wheelMultiplier;
-      deltaY *= this.options.wheelMultiplier;
-      this.emitter.emit("scroll", {
-        deltaX,
-        deltaY,
-        event
-      });
-    };
-    onWindowResize = () => {
-      this.window = {
-        width: window.innerWidth,
-        height: window.innerHeight
-      };
-    };
-  };
-  var defaultEasing = (t) => Math.min(1, 1.001 - 2 ** (-10 * t));
-  var Lenis = class {
-    _isScrolling = false;
-    _isStopped = false;
-    _isLocked = false;
-    _preventNextNativeScrollEvent = false;
-    _resetVelocityTimeout = null;
-    _rafId = null;
-    _isDraggingSelection = false;
-    reducedMotionMediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    /**
-    * Whether or not the user is touching the screen
-    */
-    isTouching;
-    /**
-    * Whether or not the device is running iOS
-    */
-    isIos;
-    /**
-    * The time in ms since the lenis instance was created
-    */
-    time = 0;
-    /**
-    * User data that will be forwarded through the scroll event
-    *
-    * @example
-    * lenis.scrollTo(100, {
-    *   userData: {
-    *     foo: 'bar'
-    *   }
-    * })
-    */
-    userData = {};
-    /**
-    * The last velocity of the scroll
-    */
-    lastVelocity = 0;
-    /**
-    * The current velocity of the scroll
-    */
-    velocity = 0;
-    /**
-    * The direction of the scroll
-    */
-    direction = 0;
-    /**
-    * The options passed to the lenis instance
-    */
-    options;
-    /**
-    * The target scroll value
-    */
-    targetScroll;
-    /**
-    * The animated scroll value
-    */
-    animatedScroll;
-    animate = new Animate();
-    emitter = new Emitter();
-    dimensions;
-    virtualScroll;
-    constructor({ wrapper = window, content = document.documentElement, eventsTarget = wrapper, smoothWheel = true, syncTouch = false, syncTouchLerp = 0.075, touchInertiaExponent = 1.7, duration, easing, lerp: lerp2 = 0.1, infinite = false, orientation = "vertical", gestureOrientation = orientation === "horizontal" ? "both" : "vertical", touchMultiplier = 1, wheelMultiplier = 1, autoResize = true, prevent, virtualScroll, overscroll = true, autoRaf = false, anchors = false, autoToggle = false, allowNestedScroll = false, __experimental__naiveDimensions = false, naiveDimensions = __experimental__naiveDimensions, stopInertiaOnNavigate = false, respectReducedMotion = true } = {}) {
-      window.lenisVersion = version;
-      if (!window.lenis) window.lenis = {};
-      window.lenis.version = version;
-      if (orientation === "horizontal") window.lenis.horizontal = true;
-      if (syncTouch === true) window.lenis.touch = true;
-      this.isIos = /(iPad|iPhone|iPod)/g.test(navigator.userAgent);
-      if (!wrapper || wrapper === document.documentElement) wrapper = window;
-      if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
-      else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
-      this.options = {
-        wrapper,
-        content,
-        eventsTarget,
-        smoothWheel,
-        syncTouch,
-        syncTouchLerp,
-        touchInertiaExponent,
-        duration,
-        easing,
-        lerp: lerp2,
-        infinite,
-        gestureOrientation,
-        orientation,
-        touchMultiplier,
-        wheelMultiplier,
-        autoResize,
-        prevent,
-        virtualScroll,
-        overscroll,
-        autoRaf,
-        anchors,
-        autoToggle,
-        allowNestedScroll,
-        naiveDimensions,
-        stopInertiaOnNavigate,
-        respectReducedMotion
-      };
-      this.dimensions = new Dimensions(wrapper, content, { autoResize });
-      this.updateClassName();
-      this.targetScroll = this.animatedScroll = this.actualScroll;
-      this.options.wrapper.addEventListener("scroll", this.onNativeScroll);
-      this.options.wrapper.addEventListener("scrollend", this.onScrollEnd, { capture: true });
-      if (this.options.anchors || this.options.stopInertiaOnNavigate) this.options.wrapper.addEventListener("click", this.onClick);
-      this.options.wrapper.addEventListener("pointerdown", this.onPointerDown);
-      this.virtualScroll = new VirtualScroll(eventsTarget, {
-        touchMultiplier,
-        wheelMultiplier
-      });
-      this.virtualScroll.on("scroll", this.onVirtualScroll);
-      if (this.options.autoToggle) {
-        this.checkOverflow();
-        this.rootElement.addEventListener("transitionend", this.onTransitionEnd);
-      }
-      if (this.options.autoRaf) this._rafId = requestAnimationFrame(this.raf);
-    }
-    /**
-    * Destroy the lenis instance, remove all event listeners and clean up the class name
-    */
-    destroy() {
-      this.emitter.destroy();
-      this.options.wrapper.removeEventListener("scroll", this.onNativeScroll);
-      this.options.wrapper.removeEventListener("scrollend", this.onScrollEnd, { capture: true });
-      this.options.wrapper.removeEventListener("pointerdown", this.onPointerDown);
-      if (this.options.anchors || this.options.stopInertiaOnNavigate) this.options.wrapper.removeEventListener("click", this.onClick);
-      this.virtualScroll.destroy();
-      this.dimensions.destroy();
-      this.cleanUpClassName();
-      if (this._rafId) cancelAnimationFrame(this._rafId);
-    }
-    on(event, callback) {
-      return this.emitter.on(event, callback);
-    }
-    off(event, callback) {
-      return this.emitter.off(event, callback);
-    }
-    onScrollEnd = (e) => {
-      if (!(e instanceof CustomEvent)) {
-        if (this.isScrolling === "smooth" || this.isScrolling === false) e.stopPropagation();
-      }
-    };
-    dispatchScrollendEvent = () => {
-      this.options.wrapper.dispatchEvent(new CustomEvent("scrollend", {
-        bubbles: this.options.wrapper === window,
-        detail: { lenisScrollEnd: true }
-      }));
-    };
-    get overflow() {
-      const property = this.isHorizontal ? "overflow-x" : "overflow-y";
-      return getComputedStyle(this.rootElement)[property];
-    }
-    checkOverflow() {
-      if (["hidden", "clip"].includes(this.overflow)) this.internalStop();
-      else this.internalStart();
-    }
-    onTransitionEnd = (event) => {
-      if (event.propertyName?.includes("overflow") && event.target === this.rootElement) this.checkOverflow();
-    };
-    setScroll(scroll) {
-      if (this.isHorizontal) this.options.wrapper.scrollTo({
-        left: scroll,
-        behavior: "instant"
-      });
-      else this.options.wrapper.scrollTo({
-        top: scroll,
-        behavior: "instant"
-      });
-    }
-    onClick = (event) => {
-      const linkElementsUrls = event.composedPath().filter((node) => node instanceof HTMLAnchorElement && node.href).map((element) => new URL(element.href));
-      const currentUrl = new URL(window.location.href);
-      if (this.options.anchors) {
-        const anchorElementUrl = linkElementsUrls.find((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname === targetUrl.pathname && targetUrl.hash);
-        if (anchorElementUrl) {
-          const options = typeof this.options.anchors === "object" && this.options.anchors ? this.options.anchors : void 0;
-          const target = decodeURIComponent(anchorElementUrl.hash);
-          this.scrollTo(target, options);
-          return;
-        }
-      }
-      if (this.options.stopInertiaOnNavigate) {
-        if (linkElementsUrls.some((targetUrl) => currentUrl.host === targetUrl.host && currentUrl.pathname !== targetUrl.pathname)) {
-          this.reset();
-          return;
-        }
-      }
-    };
-    onPointerDown = (event) => {
-      if (event.button === 1) this.reset();
-    };
-    isTouchOnSelectionHandle(event) {
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
-      const touch = event.targetTouches[0] ?? event.changedTouches[0];
-      if (!touch) return false;
-      const rects = selection.getRangeAt(0).getClientRects();
-      if (rects.length === 0) return false;
-      const first = rects[0];
-      const last = rects[rects.length - 1];
-      const HANDLE_RADIUS = 40;
-      const nearStart = Math.hypot(touch.clientX - first.left, touch.clientY - first.top) <= HANDLE_RADIUS;
-      const nearEnd = Math.hypot(touch.clientX - last.right, touch.clientY - last.bottom) <= HANDLE_RADIUS;
-      return nearStart || nearEnd;
-    }
-    onVirtualScroll = (data) => {
-      if (typeof this.options.virtualScroll === "function" && this.options.virtualScroll(data) === false) return;
-      const { deltaX, deltaY, event } = data;
-      this.emitter.emit("virtual-scroll", {
-        deltaX,
-        deltaY,
-        event
-      });
-      if (event.ctrlKey) return;
-      if (event.lenisStopPropagation) return;
-      const isTouch = event.type.includes("touch");
-      const isWheel = event.type.includes("wheel");
-      if (isTouch && this.isIos) {
-        if (event.type === "touchstart") this._isDraggingSelection = this.isTouchOnSelectionHandle(event);
-        if (this._isDraggingSelection) {
-          if (event.type === "touchend") this._isDraggingSelection = false;
-          return;
-        }
-      }
-      this.isTouching = event.type === "touchstart" || event.type === "touchmove";
-      const isClickOrTap = deltaX === 0 && deltaY === 0;
-      if (this.options.syncTouch && isTouch && event.type === "touchstart" && isClickOrTap && !this.isStopped && !this.isLocked) {
-        this.reset();
-        return;
-      }
-      const isUnknownGesture = this.options.gestureOrientation === "vertical" && deltaY === 0 || this.options.gestureOrientation === "horizontal" && deltaX === 0;
-      if (isClickOrTap || isUnknownGesture) return;
-      let composedPath = event.composedPath();
-      composedPath = composedPath.slice(0, composedPath.indexOf(this.rootElement));
-      const prevent = this.options.prevent;
-      const gestureOrientation = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
-      if (composedPath.find((node) => node instanceof HTMLElement && (typeof prevent === "function" && prevent?.(node) || node.hasAttribute?.("data-lenis-prevent") || gestureOrientation === "vertical" && node.hasAttribute?.("data-lenis-prevent-vertical") || gestureOrientation === "horizontal" && node.hasAttribute?.("data-lenis-prevent-horizontal") || isTouch && node.hasAttribute?.("data-lenis-prevent-touch") || isWheel && node.hasAttribute?.("data-lenis-prevent-wheel") || this.options.allowNestedScroll && this.hasNestedScroll(node, {
-        deltaX,
-        deltaY
-      })))) return;
-      if (this.isStopped || this.isLocked) {
-        if (event.cancelable) event.preventDefault();
-        return;
-      }
-      if (!(this.options.syncTouch && isTouch || this.options.smoothWheel && isWheel)) {
-        this.isScrolling = "native";
-        this.animate.stop();
-        event.lenisStopPropagation = true;
-        return;
-      }
-      let delta = deltaY;
-      if (this.options.gestureOrientation === "both") delta = Math.abs(deltaY) > Math.abs(deltaX) ? deltaY : deltaX;
-      else if (this.options.gestureOrientation === "horizontal") delta = deltaX;
-      if (!this.options.overscroll || this.options.infinite || this.options.wrapper !== window && this.limit > 0 && (this.animatedScroll > 0 && this.animatedScroll < this.limit || this.animatedScroll === 0 && deltaY > 0 || this.animatedScroll === this.limit && deltaY < 0)) event.lenisStopPropagation = true;
-      if (event.cancelable) event.preventDefault();
-      const isSyncTouch = isTouch && this.options.syncTouch;
-      const hasTouchInertia = isTouch && event.type === "touchend";
-      if (hasTouchInertia) delta = Math.sign(delta) * Math.abs(this.velocity) ** this.options.touchInertiaExponent;
-      this.scrollTo(this.targetScroll + delta, {
-        programmatic: false,
-        ...isSyncTouch ? { lerp: hasTouchInertia ? this.options.syncTouchLerp : 1 } : {
-          lerp: this.options.lerp,
-          duration: this.options.duration,
-          easing: this.options.easing
-        }
-      });
-    };
-    /**
-    * Force lenis to recalculate the dimensions
-    */
-    resize() {
-      this.dimensions.resize();
-      this.animatedScroll = this.targetScroll = this.actualScroll;
-      this.emit();
-    }
-    emit() {
-      this.emitter.emit("scroll", this);
-    }
-    onNativeScroll = () => {
-      if (this._resetVelocityTimeout !== null) {
-        clearTimeout(this._resetVelocityTimeout);
-        this._resetVelocityTimeout = null;
-      }
-      if (this._preventNextNativeScrollEvent) {
-        this._preventNextNativeScrollEvent = false;
-        return;
-      }
-      if (this.isScrolling === false || this.isScrolling === "native") {
-        const lastScroll = this.animatedScroll;
-        this.animatedScroll = this.targetScroll = this.actualScroll;
-        this.lastVelocity = this.velocity;
-        this.velocity = this.animatedScroll - lastScroll;
-        this.direction = Math.sign(this.animatedScroll - lastScroll);
-        if (!this.isStopped) this.isScrolling = "native";
-        this.emit();
-        if (this.velocity !== 0) this._resetVelocityTimeout = setTimeout(() => {
-          this.lastVelocity = this.velocity;
-          this.velocity = 0;
-          this.isScrolling = false;
-          this.emit();
-        }, 400);
-      }
-    };
-    reset() {
-      this.isLocked = false;
-      this.isScrolling = false;
-      this.animatedScroll = this.targetScroll = this.actualScroll;
-      this.lastVelocity = this.velocity = 0;
-      this.animate.stop();
-    }
-    /**
-    * Start lenis scroll after it has been stopped
-    */
-    start() {
-      if (!this.isStopped) return;
-      if (this.options.autoToggle) {
-        this.rootElement.style.removeProperty("overflow");
-        return;
-      }
-      this.internalStart();
-    }
-    internalStart() {
-      if (!this.isStopped) return;
-      this.reset();
-      this.isStopped = false;
-      this.emit();
-    }
-    /**
-    * Stop lenis scroll
-    */
-    stop() {
-      if (this.isStopped) return;
-      if (this.options.autoToggle) {
-        this.rootElement.style.setProperty("overflow", "clip");
-        return;
-      }
-      this.internalStop();
-    }
-    internalStop() {
-      if (this.isStopped) return;
-      this.reset();
-      this.isStopped = true;
-      this.emit();
-    }
-    /**
-    * RequestAnimationFrame for lenis
-    *
-    * @param time The time in ms from an external clock like `requestAnimationFrame` or Tempus
-    */
-    raf = (time) => {
-      const deltaTime = time - (this.time || time);
-      this.time = time;
-      this.animate.advance(deltaTime * 1e-3);
-      if (this.options.autoRaf) this._rafId = requestAnimationFrame(this.raf);
-    };
-    /**
-    * Scroll to a target value
-    *
-    * @param target The target value to scroll to
-    * @param options The options for the scroll
-    *
-    * @example
-    * lenis.scrollTo(100, {
-    *   offset: 100,
-    *   duration: 1,
-    *   easing: (t) => 1 - Math.cos((t * Math.PI) / 2),
-    *   lerp: 0.1,
-    *   onStart: () => {
-    *     console.log('onStart')
-    *   },
-    *   onComplete: () => {
-    *     console.log('onComplete')
-    *   },
-    * })
-    */
-    scrollTo(_target, { offset = 0, immediate = false, lock = false, programmatic = true, lerp: lerp2 = programmatic ? this.options.lerp : void 0, duration = programmatic ? this.options.duration : void 0, easing = programmatic ? this.options.easing : void 0, onStart, onComplete, force = false, userData } = {}) {
-      if (this.prefersReducedMotion) if (programmatic) immediate = true;
-      else {
-        lerp2 = 1;
-        duration = void 0;
-        easing = void 0;
-      }
-      if ((this.isStopped || this.isLocked) && !force) return;
-      let target = _target;
-      let adjustedOffset = offset;
-      if (typeof target === "string" && [
-        "top",
-        "left",
-        "start",
-        "#"
-      ].includes(target)) target = 0;
-      else if (typeof target === "string" && [
-        "bottom",
-        "right",
-        "end"
-      ].includes(target)) target = this.limit;
-      else {
-        let node = null;
-        if (typeof target === "string") {
-          node = target.startsWith("#") ? document.getElementById(target.slice(1)) : document.querySelector(target);
-          if (!node) if (target === "#top") target = 0;
-          else console.warn("Lenis: Target not found", target);
-        } else if (target instanceof HTMLElement && target?.nodeType) node = target;
-        if (node) {
-          if (this.options.wrapper !== window) {
-            const wrapperRect = this.rootElement.getBoundingClientRect();
-            adjustedOffset -= this.isHorizontal ? wrapperRect.left : wrapperRect.top;
-          }
-          const rect = node.getBoundingClientRect();
-          const targetStyle = getComputedStyle(node);
-          const scrollMargin = this.isHorizontal ? Number.parseFloat(targetStyle.scrollMarginLeft) : Number.parseFloat(targetStyle.scrollMarginTop);
-          const containerStyle = getComputedStyle(this.rootElement);
-          const scrollPadding = this.isHorizontal ? Number.parseFloat(containerStyle.scrollPaddingLeft) : Number.parseFloat(containerStyle.scrollPaddingTop);
-          target = (this.isHorizontal ? rect.left : rect.top) + this.animatedScroll - (Number.isNaN(scrollMargin) ? 0 : scrollMargin) - (Number.isNaN(scrollPadding) ? 0 : scrollPadding);
-        }
-      }
-      if (typeof target !== "number") return;
-      target += adjustedOffset;
-      if (this.options.infinite) {
-        if (programmatic) {
-          this.targetScroll = this.animatedScroll = this.scroll;
-          const distance = target - this.animatedScroll;
-          if (distance > this.limit / 2) target -= this.limit;
-          else if (distance < -this.limit / 2) target += this.limit;
-        }
-      } else target = clamp(0, target, this.limit);
-      if (target === this.targetScroll) {
-        onStart?.(this);
-        onComplete?.(this);
-        return;
-      }
-      this.userData = userData ?? {};
-      if (immediate) {
-        this.animatedScroll = this.targetScroll = target;
-        this.setScroll(this.scroll);
-        this.reset();
-        this.preventNextNativeScrollEvent();
-        this.emit();
-        onComplete?.(this);
-        this.userData = {};
-        requestAnimationFrame(() => {
-          this.dispatchScrollendEvent();
-        });
-        return;
-      }
-      if (!programmatic) this.targetScroll = target;
-      if (typeof duration === "number" && typeof easing !== "function") easing = defaultEasing;
-      else if (typeof easing === "function" && typeof duration !== "number") duration = 1;
-      this.animate.fromTo(this.animatedScroll, target, {
-        duration,
-        easing,
-        lerp: lerp2,
-        onStart: () => {
-          if (lock) this.isLocked = true;
-          this.isScrolling = "smooth";
-          onStart?.(this);
-        },
-        onUpdate: (value, completed) => {
-          this.isScrolling = "smooth";
-          this.lastVelocity = this.velocity;
-          this.velocity = value - this.animatedScroll;
-          this.direction = Math.sign(this.velocity);
-          this.animatedScroll = value;
-          this.setScroll(this.scroll);
-          if (programmatic) this.targetScroll = value;
-          if (!completed) this.emit();
-          if (completed) {
-            this.reset();
-            this.emit();
-            onComplete?.(this);
-            this.userData = {};
-            requestAnimationFrame(() => {
-              this.dispatchScrollendEvent();
-            });
-            this.preventNextNativeScrollEvent();
-          }
-        }
-      });
-    }
-    preventNextNativeScrollEvent() {
-      this._preventNextNativeScrollEvent = true;
-      requestAnimationFrame(() => {
-        this._preventNextNativeScrollEvent = false;
-      });
-    }
-    hasNestedScroll(node, { deltaX, deltaY }) {
-      const time = Date.now();
-      if (!node._lenis) node._lenis = {};
-      const cache = node._lenis;
-      let hasOverflowX;
-      let hasOverflowY;
-      let isScrollableX;
-      let isScrollableY;
-      let hasOverscrollBehaviorX;
-      let hasOverscrollBehaviorY;
-      let scrollWidth;
-      let scrollHeight;
-      let clientWidth;
-      let clientHeight;
-      if (time - (cache.time ?? 0) > 2e3) {
-        cache.time = Date.now();
-        const computedStyle = window.getComputedStyle(node);
-        cache.computedStyle = computedStyle;
-        hasOverflowX = [
-          "auto",
-          "overlay",
-          "scroll"
-        ].includes(computedStyle.overflowX);
-        hasOverflowY = [
-          "auto",
-          "overlay",
-          "scroll"
-        ].includes(computedStyle.overflowY);
-        hasOverscrollBehaviorX = ["auto"].includes(computedStyle.overscrollBehaviorX);
-        hasOverscrollBehaviorY = ["auto"].includes(computedStyle.overscrollBehaviorY);
-        cache.hasOverflowX = hasOverflowX;
-        cache.hasOverflowY = hasOverflowY;
-        if (!(hasOverflowX || hasOverflowY)) return false;
-        scrollWidth = node.scrollWidth;
-        scrollHeight = node.scrollHeight;
-        clientWidth = node.clientWidth;
-        clientHeight = node.clientHeight;
-        isScrollableX = scrollWidth > clientWidth;
-        isScrollableY = scrollHeight > clientHeight;
-        cache.isScrollableX = isScrollableX;
-        cache.isScrollableY = isScrollableY;
-        cache.scrollWidth = scrollWidth;
-        cache.scrollHeight = scrollHeight;
-        cache.clientWidth = clientWidth;
-        cache.clientHeight = clientHeight;
-        cache.hasOverscrollBehaviorX = hasOverscrollBehaviorX;
-        cache.hasOverscrollBehaviorY = hasOverscrollBehaviorY;
-      } else {
-        isScrollableX = cache.isScrollableX;
-        isScrollableY = cache.isScrollableY;
-        hasOverflowX = cache.hasOverflowX;
-        hasOverflowY = cache.hasOverflowY;
-        scrollWidth = cache.scrollWidth;
-        scrollHeight = cache.scrollHeight;
-        clientWidth = cache.clientWidth;
-        clientHeight = cache.clientHeight;
-        hasOverscrollBehaviorX = cache.hasOverscrollBehaviorX;
-        hasOverscrollBehaviorY = cache.hasOverscrollBehaviorY;
-      }
-      if (!(hasOverflowX && isScrollableX || hasOverflowY && isScrollableY)) return false;
-      const orientation = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
-      let scroll;
-      let maxScroll;
-      let delta;
-      let hasOverflow;
-      let isScrollable;
-      let hasOverscrollBehavior;
-      if (orientation === "horizontal") {
-        scroll = Math.round(node.scrollLeft);
-        maxScroll = scrollWidth - clientWidth;
-        delta = deltaX;
-        hasOverflow = hasOverflowX;
-        isScrollable = isScrollableX;
-        hasOverscrollBehavior = hasOverscrollBehaviorX;
-      } else if (orientation === "vertical") {
-        scroll = Math.round(node.scrollTop);
-        maxScroll = scrollHeight - clientHeight;
-        delta = deltaY;
-        hasOverflow = hasOverflowY;
-        isScrollable = isScrollableY;
-        hasOverscrollBehavior = hasOverscrollBehaviorY;
-      } else return false;
-      if (!hasOverscrollBehavior && (scroll >= maxScroll || scroll <= 0)) return true;
-      return (delta > 0 ? scroll < maxScroll : scroll > 0) && hasOverflow && isScrollable;
-    }
-    /**
-    * The root element on which lenis is instanced
-    */
-    get rootElement() {
-      return this.options.wrapper === window ? document.documentElement : this.options.wrapper;
-    }
-    /**
-    * The limit which is the maximum scroll value
-    */
-    get limit() {
-      if (this.options.naiveDimensions) {
-        if (this.isHorizontal) return this.rootElement.scrollWidth - this.rootElement.clientWidth;
-        return this.rootElement.scrollHeight - this.rootElement.clientHeight;
-      }
-      return this.dimensions.limit[this.isHorizontal ? "x" : "y"];
-    }
-    /**
-    * Whether or not the scroll is horizontal
-    */
-    get isHorizontal() {
-      return this.options.orientation === "horizontal";
-    }
-    /**
-    * The actual scroll value
-    */
-    get actualScroll() {
-      const wrapper = this.options.wrapper;
-      return this.isHorizontal ? wrapper.scrollX ?? wrapper.scrollLeft : wrapper.scrollY ?? wrapper.scrollTop;
-    }
-    /**
-    * The current scroll value
-    */
-    get scroll() {
-      return this.options.infinite ? modulo(this.animatedScroll, this.limit) : this.animatedScroll;
-    }
-    /**
-    * The progress of the scroll relative to the limit
-    */
-    get progress() {
-      return this.limit === 0 ? 1 : this.scroll / this.limit;
-    }
-    /**
-    * Current scroll state
-    */
-    get isScrolling() {
-      return this._isScrolling;
-    }
-    set isScrolling(value) {
-      if (this._isScrolling !== value) {
-        this._isScrolling = value;
-        this.updateClassName();
-      }
-    }
-    /**
-    * Check if lenis is stopped
-    */
-    get isStopped() {
-      return this._isStopped;
-    }
-    set isStopped(value) {
-      if (this._isStopped !== value) {
-        this._isStopped = value;
-        this.updateClassName();
-      }
-    }
-    /**
-    * Check if lenis is locked
-    */
-    get isLocked() {
-      return this._isLocked;
-    }
-    set isLocked(value) {
-      if (this._isLocked !== value) {
-        this._isLocked = value;
-        this.updateClassName();
-      }
-    }
-    /**
-    * Check if lenis is smooth scrolling
-    */
-    get isSmooth() {
-      return this.isScrolling === "smooth";
-    }
-    /**
-    * Whether the user prefers reduced motion and lenis is honoring it (see `respectReducedMotion` option)
-    */
-    get prefersReducedMotion() {
-      return this.options.respectReducedMotion && this.reducedMotionMediaQuery.matches;
-    }
-    /**
-    * The class name applied to the wrapper element
-    */
-    get className() {
-      let className = "lenis";
-      if (this.options.autoToggle) className += " lenis-autoToggle";
-      if (this.isStopped) className += " lenis-stopped";
-      if (this.isLocked) className += " lenis-locked";
-      if (this.isScrolling) className += " lenis-scrolling";
-      if (this.isScrolling === "smooth") className += " lenis-smooth";
-      return className;
-    }
-    updateClassName() {
-      this.cleanUpClassName();
-      this.className.split(" ").forEach((className) => {
-        this.rootElement.classList.add(className);
-      });
-    }
-    cleanUpClassName() {
-      for (const className of Array.from(this.rootElement.classList)) if (className === "lenis" || className.startsWith("lenis-")) this.rootElement.classList.remove(className);
-    }
-  };
-
-  // node_modules/lenis/dist/lenis-snap.mjs
-  function debounce2(callback, delay) {
-    let timer;
-    return function(...args) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = void 0;
-        callback.apply(this, args);
-      }, delay);
-    };
-  }
-  function removeParentSticky(element) {
-    if (getComputedStyle(element).position === "sticky") {
-      element.style.setProperty("position", "static");
-      element.dataset.sticky = "true";
-    }
-    if (element.offsetParent) removeParentSticky(element.offsetParent);
-  }
-  function addParentSticky(element) {
-    if (element?.dataset?.sticky === "true") {
-      element.style.removeProperty("position");
-      delete element.dataset.sticky;
-    }
-    if (element.offsetParent) addParentSticky(element.offsetParent);
-  }
-  function offsetTop(element, accumulator = 0) {
-    const top = accumulator + element.offsetTop;
-    if (element.offsetParent) return offsetTop(element.offsetParent, top);
-    return top;
-  }
-  function offsetLeft(element, accumulator = 0) {
-    const left = accumulator + element.offsetLeft;
-    if (element.offsetParent) return offsetLeft(element.offsetParent, left);
-    return left;
-  }
-  function scrollTop(element, accumulator = 0) {
-    const top = accumulator + element.scrollTop;
-    if (element.offsetParent) return scrollTop(element.offsetParent, top);
-    return top + window.scrollY;
-  }
-  function scrollLeft(element, accumulator = 0) {
-    const left = accumulator + element.scrollLeft;
-    if (element.offsetParent) return scrollLeft(element.offsetParent, left);
-    return left + window.scrollX;
-  }
-  var SnapElement = class {
-    element;
-    options;
-    align;
-    rect = {};
-    wrapperResizeObserver;
-    resizeObserver;
-    debouncedWrapperResize;
-    constructor(element, { align = ["start"], ignoreSticky = true, ignoreTransform = false } = {}) {
-      this.element = element;
-      this.options = {
-        align,
-        ignoreSticky,
-        ignoreTransform
-      };
-      this.align = [align].flat();
-      this.debouncedWrapperResize = debounce2(this.onWrapperResize, 500);
-      this.wrapperResizeObserver = new ResizeObserver(this.debouncedWrapperResize);
-      this.wrapperResizeObserver.observe(document.body);
-      this.onWrapperResize();
-      this.resizeObserver = new ResizeObserver(this.onResize);
-      this.resizeObserver.observe(this.element);
-      this.setRect({
-        width: this.element.offsetWidth,
-        height: this.element.offsetHeight
-      });
-    }
-    destroy() {
-      this.wrapperResizeObserver.disconnect();
-      this.resizeObserver.disconnect();
-    }
-    setRect({ top, left, width, height, element } = {}) {
-      top = top ?? this.rect.top;
-      left = left ?? this.rect.left;
-      width = width ?? this.rect.width;
-      height = height ?? this.rect.height;
-      element = element ?? this.rect.element;
-      if (top === this.rect.top && left === this.rect.left && width === this.rect.width && height === this.rect.height && element === this.rect.element) return;
-      this.rect.top = top;
-      this.rect.y = top;
-      this.rect.width = width;
-      this.rect.height = height;
-      this.rect.left = left;
-      this.rect.x = left;
-      this.rect.bottom = top + height;
-      this.rect.right = left + width;
-    }
-    onWrapperResize = () => {
-      let top;
-      let left;
-      if (this.options.ignoreSticky) removeParentSticky(this.element);
-      if (this.options.ignoreTransform) {
-        top = offsetTop(this.element);
-        left = offsetLeft(this.element);
-      } else {
-        const rect = this.element.getBoundingClientRect();
-        top = rect.top + scrollTop(this.element);
-        left = rect.left + scrollLeft(this.element);
-      }
-      if (this.options.ignoreSticky) addParentSticky(this.element);
-      this.setRect({
-        top,
-        left
-      });
-    };
-    onResize = ([entry]) => {
-      if (!entry?.borderBoxSize[0]) return;
-      const width = entry.borderBoxSize[0].inlineSize;
-      const height = entry.borderBoxSize[0].blockSize;
-      this.setRect({
-        width,
-        height
-      });
-    };
-  };
-  var index = 0;
-  function uid() {
-    return index++;
-  }
-  var Snap = class {
-    options;
-    elements = /* @__PURE__ */ new Map();
-    snaps = /* @__PURE__ */ new Map();
-    viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight
-    };
-    isStopped = false;
-    onSnapDebounced;
-    currentSnapIndex;
-    constructor(lenis2, { type = "proximity", lerp: lerp2, easing, duration, distanceThreshold = "50%", debounce: debounceDelay = 500, onSnapStart, onSnapComplete } = {}) {
-      this.lenis = lenis2;
-      if (!window.lenis) window.lenis = {};
-      window.lenis.snap = true;
-      this.options = {
-        type,
-        lerp: lerp2,
-        easing,
-        duration,
-        distanceThreshold,
-        debounce: debounceDelay,
-        onSnapStart,
-        onSnapComplete
-      };
-      this.onWindowResize();
-      window.addEventListener("resize", this.onWindowResize);
-      this.onSnapDebounced = debounce2(this.onSnap, this.options.debounce);
-      this.lenis.on("virtual-scroll", this.onSnapDebounced);
-    }
-    /**
-    * Destroy the snap instance
-    */
-    destroy() {
-      this.lenis.off("virtual-scroll", this.onSnapDebounced);
-      window.removeEventListener("resize", this.onWindowResize);
-      this.elements.forEach((element) => {
-        element.destroy();
-      });
-    }
-    /**
-    * Start the snap after it has been stopped
-    */
-    start() {
-      this.isStopped = false;
-    }
-    /**
-    * Stop the snap
-    */
-    stop() {
-      this.isStopped = true;
-    }
-    /**
-    * Add a snap to the snap instance
-    *
-    * @param value The value to snap to
-    * @param userData User data that will be forwarded through the snap event
-    * @returns Unsubscribe function
-    */
-    add(value) {
-      const id = uid();
-      this.snaps.set(id, { value });
-      return () => this.snaps.delete(id);
-    }
-    /**
-    * Add an element to the snap instance
-    *
-    * @param element The element to add
-    * @param options The options for the element
-    * @returns Unsubscribe function
-    */
-    addElement(element, options = {}) {
-      const id = uid();
-      this.elements.set(id, new SnapElement(element, options));
-      return () => this.elements.delete(id);
-    }
-    addElements(elements, options = {}) {
-      const map = [...elements].map((element) => this.addElement(element, options));
-      return () => {
-        map.forEach((remove) => {
-          remove();
-        });
-      };
-    }
-    onWindowResize = () => {
-      this.viewport.width = window.innerWidth;
-      this.viewport.height = window.innerHeight;
-    };
-    computeSnaps = () => {
-      const { isHorizontal } = this.lenis;
-      let snaps = [...this.snaps.values()];
-      this.elements.forEach(({ rect, align }) => {
-        let value;
-        align.forEach((align2) => {
-          if (align2 === "start") value = rect.top;
-          else if (align2 === "center") value = isHorizontal ? rect.left + rect.width / 2 - this.viewport.width / 2 : rect.top + rect.height / 2 - this.viewport.height / 2;
-          else if (align2 === "end") value = isHorizontal ? rect.left + rect.width - this.viewport.width : rect.top + rect.height - this.viewport.height;
-          if (typeof value === "number") snaps.push({ value: Math.ceil(value) });
-        });
-      });
-      snaps = snaps.sort((a, b) => Math.abs(a.value) - Math.abs(b.value));
-      return snaps;
-    };
-    previous() {
-      this.goTo((this.currentSnapIndex ?? 0) - 1);
-    }
-    next() {
-      this.goTo((this.currentSnapIndex ?? 0) + 1);
-    }
-    goTo(index2) {
-      const snaps = this.computeSnaps();
-      if (snaps.length === 0) return;
-      this.currentSnapIndex = Math.max(0, Math.min(index2, snaps.length - 1));
-      const currentSnap = snaps[this.currentSnapIndex];
-      if (currentSnap === void 0) return;
-      this.lenis.scrollTo(currentSnap.value, {
-        duration: this.options.duration,
-        easing: this.options.easing,
-        lerp: this.options.lerp,
-        lock: this.options.type === "lock",
-        userData: { initiator: "snap" },
-        onStart: () => {
-          this.options.onSnapStart?.({
-            index: this.currentSnapIndex,
-            ...currentSnap
-          });
-        },
-        onComplete: () => {
-          this.options.onSnapComplete?.({
-            index: this.currentSnapIndex,
-            ...currentSnap
-          });
-        }
-      });
-    }
-    get distanceThreshold() {
-      let distanceThreshold = Number.POSITIVE_INFINITY;
-      if (this.options.type === "mandatory") return Number.POSITIVE_INFINITY;
-      const { isHorizontal } = this.lenis;
-      const axis = isHorizontal ? "width" : "height";
-      if (typeof this.options.distanceThreshold === "string" && this.options.distanceThreshold.endsWith("%")) distanceThreshold = Number(this.options.distanceThreshold.replace("%", "")) / 100 * this.viewport[axis];
-      else if (typeof this.options.distanceThreshold === "number") distanceThreshold = this.options.distanceThreshold;
-      else distanceThreshold = this.viewport[axis];
-      return distanceThreshold;
-    }
-    onSnap = (e) => {
-      if (this.isStopped) return;
-      if (e.event.type === "touchmove") return;
-      if (this.options.type === "lock" && this.lenis.userData?.initiator === "snap") return;
-      let { scroll, isHorizontal } = this.lenis;
-      const delta = isHorizontal ? e.deltaX : e.deltaY;
-      scroll = Math.ceil(this.lenis.scroll + delta);
-      const snaps = this.computeSnaps();
-      if (snaps.length === 0) return;
-      let snapIndex;
-      const prevSnapIndex = snaps.findLastIndex(({ value }) => value < scroll);
-      const nextSnapIndex = snaps.findIndex(({ value }) => value > scroll);
-      if (this.options.type === "lock") {
-        if (delta > 0) snapIndex = nextSnapIndex;
-        else if (delta < 0) snapIndex = prevSnapIndex;
-      } else {
-        const prevSnap = snaps[prevSnapIndex];
-        const distanceToPrevSnap = prevSnap ? Math.abs(scroll - prevSnap.value) : Number.POSITIVE_INFINITY;
-        const nextSnap = snaps[nextSnapIndex];
-        snapIndex = distanceToPrevSnap < (nextSnap ? Math.abs(scroll - nextSnap.value) : Number.POSITIVE_INFINITY) ? prevSnapIndex : nextSnapIndex;
-      }
-      if (snapIndex === void 0) return;
-      if (snapIndex === -1) return;
-      snapIndex = Math.max(0, Math.min(snapIndex, snaps.length - 1));
-      const snap2 = snaps[snapIndex];
-      if (Math.abs(scroll - snap2.value) <= this.distanceThreshold) this.goTo(snapIndex);
-    };
-    resize() {
-      this.elements.forEach((element) => {
-        element.onWrapperResize();
-      });
-    }
-  };
-
-  // assets/js/telar-story/panels.js
-  var PANEL_TYPES = ["layer1", "layer2", "glossary"];
-  function initializePanels() {
-    document.addEventListener("click", function(e) {
-      const trigger = e.target.closest('[data-panel="layer1"]');
-      if (trigger) {
-        const stepNumber = trigger.dataset.step;
-        document.querySelectorAll(".offcanvas.show").forEach((p) => {
-          const inst = bootstrap.Offcanvas.getInstance(p);
-          if (inst) inst.hide();
-        });
-        state.panelStack = [];
-        openPanel("layer1", stepNumber);
-      }
-    });
-    document.addEventListener("click", function(e) {
-      if (e.target.matches('[data-panel="layer2"]')) {
-        const stepNumber = e.target.dataset.step;
-        openPanel("layer2", stepNumber);
-      }
-    });
-    const layer1Back = document.getElementById("panel-layer1-back");
-    if (layer1Back) {
-      layer1Back.addEventListener("click", function() {
-        closePanel("layer1");
-      });
-    }
-    const layer2Back = document.getElementById("panel-layer2-back");
-    if (layer2Back) {
-      layer2Back.addEventListener("click", function() {
-        closePanel("layer2");
-      });
-    }
-    const glossaryBack = document.getElementById("panel-glossary-back");
-    if (glossaryBack) {
-      glossaryBack.addEventListener("click", function() {
-        closePanel("glossary");
-      });
-    }
-    const glossaryPanel = document.getElementById("panel-glossary");
-    if (glossaryPanel) {
-      glossaryPanel.addEventListener("show.bs.offcanvas", joinGlossaryToStack);
-    }
-    PANEL_TYPES.forEach((panelType) => {
-      const panel = document.getElementById(`panel-${panelType}`);
-      if (!panel) return;
-      panel.addEventListener("hidden.bs.offcanvas", function() {
-        const before = state.panelStack.length;
-        state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
-        if (state.panelStack.length !== before) {
-          writeHash();
-        }
-        if (!anyPanelOpen()) {
-          state.isPanelOpen = false;
-          deactivateScrollLock();
-        }
-      });
-    });
-  }
-  function anyPanelOpen() {
-    return state.panelStack.length > 0 || PANEL_TYPES.some((t) => document.getElementById(`panel-${t}`)?.classList.contains("show"));
-  }
-  function joinGlossaryToStack() {
-    const top = state.panelStack[state.panelStack.length - 1];
-    if (top?.type !== "glossary") {
-      state.panelStack.push({ type: "glossary", id: null });
-    }
-    state.isPanelOpen = true;
-    activateScrollLock();
-  }
-  function openPanel(panelType, contentId) {
-    const panelId = `panel-${panelType}`;
-    const panel = document.getElementById(panelId);
-    if (!panel) return;
-    const content = getPanelContent(panelType, contentId);
-    if (content) {
-      const titleElement = document.getElementById(`${panelId}-title`);
-      titleElement.textContent = content.title;
-      if (content.demo) {
-        const demoBadgeText = window.telarLang?.demoPanelBadge || "Demo content";
-        const badge = document.createElement("span");
-        badge.className = "demo-badge-inline";
-        badge.style.marginLeft = "0.5rem";
-        badge.textContent = demoBadgeText;
-        titleElement.appendChild(badge);
-      }
-      const contentElement = document.getElementById(`${panelId}-content`);
-      contentElement.innerHTML = content.html;
-      const glossaryLinks = contentElement.querySelectorAll(".glossary-inline-link");
-      glossaryLinks.forEach((el, i) => {
-        el.dataset.deepLinkN = i + 1;
-      });
-      glossaryLinks.forEach((el) => {
-        el.addEventListener("click", () => {
-          writeHashWithGlossary(parseInt(el.dataset.deepLinkN, 10));
-        });
-      });
-      if (window.telarRenderLatex) {
-        window.telarRenderLatex(contentElement);
-      }
-      if (panelType === "layer1") {
-        state.panelStack = [{ type: panelType, id: contentId }];
-      } else {
-        state.panelStack.push({ type: panelType, id: contentId });
-      }
-      const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel) || new bootstrap.Offcanvas(panel);
-      bsOffcanvas.show();
-      state.isPanelOpen = true;
-      activateScrollLock();
-      writeHash();
-    }
-  }
-  function closePanel(panelType) {
-    const panelId = `panel-${panelType}`;
-    const panel = document.getElementById(panelId);
-    if (!panel) return;
-    const bsOffcanvas = bootstrap.Offcanvas.getInstance(panel);
-    if (bsOffcanvas) {
-      bsOffcanvas.hide();
-    }
-    state.panelStack = state.panelStack.filter((p) => p.type !== panelType);
-    writeHash();
-    setTimeout(() => {
-      if (!anyPanelOpen()) {
-        state.isPanelOpen = false;
-        deactivateScrollLock();
-      }
-    }, 350);
-  }
-  function closeTopPanel() {
-    if (state.panelStack.length > 0) {
-      const top = state.panelStack[state.panelStack.length - 1];
-      closePanel(top.type);
-    }
-  }
-  function closeAllPanels() {
-    [...state.panelStack].reverse().forEach((p) => closePanel(p.type));
-  }
-  function getPanelContent(panelType, contentId) {
-    const steps = window.storyData?.steps || [];
-    const step = steps.find((s) => s.step == contentId);
-    if (!step) return null;
-    if (panelType === "layer1") {
-      let html = formatPanelContent({
-        text: step.layer1_text,
-        media: step.layer1_media
-      }, step.object);
-      if (step.layer2_title && step.layer2_title.trim() !== "" || step.layer2_text && step.layer2_text.trim() !== "") {
-        const buttonLabel = step.layer2_button && step.layer2_button.trim() !== "" ? step.layer2_button : window.telarLang.goDeeper;
-        html += `<p><button class="panel-trigger" data-panel="layer2" data-step="${contentId}">${escapeHtml(buttonLabel)} \u2192</button></p>`;
-      }
-      return {
-        title: step.layer1_title || step.layer1_button || window.telarLang.learnMore,
-        html,
-        demo: step.layer1_demo || false
-      };
-    } else if (panelType === "layer2") {
-      return {
-        title: step.layer2_title || step.layer2_button || window.telarLang.goDeeper,
-        html: formatPanelContent({
-          text: step.layer2_text,
-          media: step.layer2_media
-        }, step.object),
-        demo: step.layer2_demo || false
-      };
-    }
-    return null;
-  }
-  function formatPanelContent(panelData, objectId) {
-    let html = "";
-    const basePath = getBasePath();
-    if (panelData.text) {
-      html += fixImageUrls(panelData.text, basePath);
-    }
-    if (panelData.media && panelData.media.trim() !== "") {
-      let mediaUrl = panelData.media;
-      if (mediaUrl.startsWith("/") && !mediaUrl.startsWith("//")) {
-        mediaUrl = basePath + mediaUrl;
-      }
-      const objectsData = window.objectsData || [];
-      const panelObj = objectId ? objectsData.find((o) => o.object_id === objectId) || {} : {};
-      const panelAlt = panelObj.alt_text || panelObj.title || objectId || "Panel image";
-      html += `<img src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(panelAlt)}" class="img-fluid">`;
-    }
-    return html;
-  }
-  function stepHasLayer1Content(step) {
-    if (!step) return false;
-    return step.layer1_title && step.layer1_title.trim() !== "" || step.layer1_text && step.layer1_text.trim() !== "";
-  }
-  function stepHasLayer2Content(step) {
-    if (!step) return false;
-    return step.layer2_title && step.layer2_title.trim() !== "" || step.layer2_text && step.layer2_text.trim() !== "";
-  }
-  function initializeScrollLock() {
-    const backdrop = document.createElement("div");
-    backdrop.id = "panel-backdrop";
-    backdrop.style.cssText = `
-    position: fixed;
-    inset: -50px;
-    background: var(--color-panel-backdrop);
-    z-index: var(--z-panel-backdrop);
-    display: none;
-    pointer-events: none;
-  `;
-    document.body.appendChild(backdrop);
-    const storyContainer = document.querySelector(".story-container");
-    if (storyContainer) {
-      storyContainer.addEventListener("click", function(e) {
-        if (state.isPanelOpen && !e.target.closest(".offcanvas") && !e.target.closest("[data-panel]") && !e.target.closest(".share-button")) {
-          closeTopPanel();
-        }
-      });
-    }
-  }
-  function activateScrollLock() {
-    state.scrollLockActive = true;
-    if (state.lenis) state.lenis.stop();
-    const backdrop = document.getElementById("panel-backdrop");
-    if (backdrop) {
-      backdrop.style.display = "block";
-    }
-  }
-  function deactivateScrollLock() {
-    state.scrollLockActive = false;
-    if (state.lenis) state.lenis.start();
-    const backdrop = document.getElementById("panel-backdrop");
-    if (backdrop) {
-      backdrop.style.display = "none";
-    }
-  }
-
-  // assets/js/telar-story/deep-link.js
-  var _deepLinkTimers = [];
-  function _cancelDeepLinkTimers() {
-    _deepLinkTimers.forEach(clearTimeout);
-    _deepLinkTimers = [];
-    window.removeEventListener("wheel", _cancelDeepLinkTimers);
-    window.removeEventListener("keydown", _cancelDeepLinkTimers);
-    window.removeEventListener("touchstart", _cancelDeepLinkTimers);
-  }
-  function _armDeepLinkCancellation() {
-    window.addEventListener("wheel", _cancelDeepLinkTimers, { passive: true });
-    window.addEventListener("keydown", _cancelDeepLinkTimers);
-    window.addEventListener("touchstart", _cancelDeepLinkTimers, { passive: true });
-  }
-  var FRAGMENT_RE = /^#s(\d+)(?:l(\d+)(?:(g)(\d+))?)?$/;
-  function parseFragment(hash) {
-    if (!hash || hash === "#") return null;
-    const m = FRAGMENT_RE.exec(hash);
-    if (!m) return null;
-    return {
-      step: parseInt(m[1], 10),
-      // 1-based step number
-      layer: m[2] ? parseInt(m[2], 10) : null,
-      subType: m[3] || null,
-      // 'g' or null
-      subN: m[4] ? parseInt(m[4], 10) : null
-    };
-  }
-  function writeHash() {
-    _writeHashFragment(null);
-  }
-  function writeHashWithGlossary(n) {
-    _writeHashFragment(n);
-  }
-  function _writeHashFragment(glossaryN) {
-    const idx = state.currentIndex;
-    let hash = "";
-    if (idx >= 0) {
-      hash = `#s${idx + 1}`;
-      if (state.panelStack.length > 0) {
-        for (let i = state.panelStack.length - 1; i >= 0; i--) {
-          const layerMatch = state.panelStack[i].type.match(/^layer(\d+)$/);
-          if (layerMatch) {
-            hash += `l${layerMatch[1]}`;
-            if (glossaryN !== null) {
-              hash += `g${glossaryN}`;
-            }
-            break;
-          }
-        }
-      }
-    }
-    if (hash) {
-      history.replaceState(null, "", hash);
-    } else {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
-  }
-  function navigateToIntro() {
-    _cancelDeepLinkTimers();
-    closeAllPanels();
-    for (const plate of Object.values(state.viewerPlates)) {
-      plate.container.classList.remove("is-active");
-    }
-    if (state.lenis) {
-      state.currentIndex = -1;
-      state.scrollPosition = 0;
-      jumpScrollTo(0);
-      if (state.snap) state.snap.currentSnapIndex = 0;
-      state.lenis.stop();
-      requestAnimationFrame(() => {
-        if (!state.isPanelOpen) state.lenis.start();
-      });
-    }
-    goToStep(-1, "backward");
-    putButtonsOnIntro();
-    writeHash();
-  }
-  function navigateToStep(stepNumber) {
-    const targetIndex = stepNumber - 1;
-    if (targetIndex < 0 || targetIndex >= state.steps.length) return;
-    _cancelDeepLinkTimers();
-    closeAllPanels();
-    reconcilePlatesForJump(targetIndex);
-    if (state.lenis) {
-      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
-      jumpScrollTo(targetPx);
-      if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
-      reconcileStackForJump(targetIndex);
-      activateCard(targetIndex, "forward");
-      state.currentIndex = targetIndex;
-      state.scrollPosition = targetIndex + 1;
-    } else {
-      reconcileStackForJump(targetIndex);
-      activateCard(targetIndex, "forward");
-      jumpButtonsTo(targetIndex);
-    }
-    writeHash();
-  }
-  function applyDeepLinkOnLoad() {
-    const parsed = parseFragment(window.location.hash);
-    if (!parsed) return;
-    const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
-    if (targetIndex < 0) return;
-    if (state.lenis) {
-      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
-      state.lenis.scrollTo(targetPx, { immediate: true, force: true });
-      if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
-      reconcileStackForJump(targetIndex);
-      activateCard(targetIndex, "forward");
-      state.currentIndex = targetIndex;
-      state.scrollPosition = targetIndex + 1;
-    } else {
-      reconcileStackForJump(targetIndex);
-      activateCard(targetIndex, "forward");
-      jumpButtonsTo(targetIndex);
-    }
-    if (parsed.layer !== null) {
-      const stepNumber = state.steps[targetIndex]?.dataset?.step;
-      if (stepNumber) {
-        let delay = 100;
-        const onTarget = () => state.currentIndex === targetIndex;
-        if (parsed.layer >= 2) {
-          _deepLinkTimers.push(setTimeout(() => {
-            if (onTarget()) openPanel("layer1", stepNumber);
-          }, delay));
-          delay += 200;
-        }
-        _deepLinkTimers.push(setTimeout(() => {
-          if (onTarget()) openPanel("layer" + parsed.layer, stepNumber);
-        }, delay));
-        delay += 200;
-        if (parsed.subType === "g" && parsed.subN !== null) {
-          _deepLinkTimers.push(setTimeout(() => {
-            if (!onTarget()) return;
-            const panelContent = document.getElementById("panel-layer" + parsed.layer + "-content");
-            if (panelContent) {
-              const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
-              if (target) target.click();
-            }
-          }, delay));
-        }
-        if (_deepLinkTimers.length) _armDeepLinkCancellation();
-      }
-    }
-  }
-
-  // assets/js/telar-story/scroll-engine.js
-  var lenis;
-  var snap;
-  var snapRemovers = [];
-  var rafId;
-  var dwellTimer;
-  var scrubEndTimer;
-  var cardStackEl;
-  var totalPositions = 0;
-  var keyboardNavInFlight = false;
-  var navToken = 0;
-  var navSeq = 0;
-  var navTarget = null;
-  var navTargetToken = 0;
-  var scrollDirection = 1;
-  var lastPosition = 0;
-  var moveTarget = null;
-  var moveTargetToken = 0;
-  var buttonMoveToken = 0;
-  var remapping = false;
-  function beginNav() {
-    navToken = ++navSeq;
-    return navToken;
-  }
-  function _recordMoveTarget(token, position) {
-    moveTarget = position;
-    moveTargetToken = token;
-  }
-  function _stepPx() {
-    return state.scrollStepPx || window.innerHeight;
-  }
-  function _stateLanding(token, position) {
-    if (navToken === token) state.scrollPosition = position;
-  }
-  function endNav(token) {
-    if (navToken === token) navToken = 0;
-  }
-  function _clampPosition(position) {
-    return Math.max(0, Math.min(position, totalPositions - 1));
-  }
-  var REST_TOLERANCE = 1e-3;
-  function _isInsidePanel(node) {
-    return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
-  }
-  function _isScrollTakeover({ deltaX, deltaY, event } = {}) {
-    if (!event) return true;
-    if (event.ctrlKey) return false;
-    if (deltaX === 0 && deltaY === 0) return false;
-    if (deltaY === 0) return false;
-    if (lenis.isStopped || lenis.isLocked) return false;
-    const path = event.composedPath ? event.composedPath() : [];
-    return !path.some((node) => node instanceof HTMLElement && _isInsidePanel(node));
-  }
-  function initScrollEngine(stepCount) {
-    const surface = document.querySelector(".scroll-surface");
-    const cardStack = document.querySelector(".card-stack");
-    if (!surface || !cardStack) {
-      console.error("scroll-engine: .scroll-surface or .card-stack not found in DOM");
-      return;
-    }
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-    if (dwellTimer) {
-      clearTimeout(dwellTimer);
-      dwellTimer = null;
-    }
-    if (scrubEndTimer) {
-      clearTimeout(scrubEndTimer);
-      scrubEndTimer = null;
-    }
-    navToken = 0;
-    navTarget = null;
-    navTargetToken = 0;
-    moveTarget = null;
-    moveTargetToken = 0;
-    buttonMoveToken = 0;
-    remapping = false;
-    keyboardNavInFlight = false;
-    state.steps = Array.from(document.querySelectorAll(".story-step"));
-    history.scrollRestoration = "manual";
-    totalPositions = stepCount + 1;
-    state.scrollStepPx = window.innerHeight;
-    surface.style.height = `${totalPositions * state.scrollStepPx}px`;
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    lenis = new Lenis({
-      lerp: 0.06,
-      // lower = heavier, more contemplative feel
-      smoothWheel: !prefersReduced,
-      wheelMultiplier: 0.5,
-      // scroll sensitivity
-      autoRaf: false,
-      // we drive the rAF loop manually
-      prevent: _isInsidePanel
-      // let wheel events pass through inside open panels
-    });
-    snap = new Snap(lenis, {
-      type: "lock",
-      velocityThreshold: 0.5,
-      debounce: 150,
-      distanceThreshold: "20%",
-      lerp: 0.08,
-      onSnapStart: () => {
-        state.isSnapping = true;
-      },
-      onSnapComplete: () => {
-        state.isSnapping = false;
-        const layoutStale = remapping || window.innerHeight !== _stepPx();
-        const finalPosition = layoutStale && Number.isInteger(snap.currentSnapIndex) ? snap.currentSnapIndex : lenis.animatedScroll / _stepPx();
-        updateScrollPosition(finalPosition);
-        writeHash();
-        lenis.stop();
-        dwellTimer = setTimeout(() => {
-          if (!state.isPanelOpen) {
-            lenis.start();
-          }
-          dwellTimer = null;
-        }, navSeconds().keyboard * 1e3);
-      }
-    });
-    registerSnapPoints(totalPositions);
-    cardStackEl = cardStack;
-    lenis.on("virtual-scroll", (payload) => {
-      cardStack.classList.add("is-scrubbing");
-      if (_isScrollTakeover(payload)) {
-        navTarget = null;
-        keyboardNavInFlight = false;
-        navToken = 0;
-        buttonMoveToken = 0;
-      }
-      armScrubEnd();
-    });
-    lenis.on("scroll", (l) => {
-      if (remapping || window.innerHeight !== _stepPx()) return;
-      const position = l.animatedScroll / _stepPx();
-      if (position !== lastPosition) {
-        scrollDirection = position > lastPosition ? 1 : -1;
-        lastPosition = position;
-      }
-      updateScrollPosition(position);
-      if (!navToken) armScrubEnd();
-    });
-    rafId = requestAnimationFrame(function raf(time) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    });
-    onViewportResize(({ viewport }) => {
-      if (viewport.h === _stepPx()) {
-        surface.style.height = `${totalPositions * viewport.h}px`;
-        lenis.resize();
-        registerSnapPoints(totalPositions);
-        return;
-      }
-      _remapToHeight(surface, viewport.h);
-    });
-    state.lenis = lenis;
-    state.snap = snap;
-    initKeyboardNavigation();
-    initializeLoadingShimmer();
-  }
-  function armScrubEnd() {
-    clearTimeout(scrubEndTimer);
-    scrubEndTimer = setTimeout(endScrub, 100);
-  }
-  function endScrub({ carry = true } = {}) {
-    clearTimeout(scrubEndTimer);
-    scrubEndTimer = null;
-    if (!cardStackEl) return;
-    cardStackEl.classList.remove("is-scrubbing");
-    if (!lenis) return;
-    const position = lenis.animatedScroll / _stepPx();
-    settleCards(position);
-    if (carry) carryToNearestStep(position);
-  }
-  function carryToNearestStep(position) {
-    if (navToken || state.isSnapping) return;
-    const target = scrollDirection < 0 ? Math.floor(position) : Math.ceil(position);
-    if (Math.abs(position - target) < REST_TOLERANCE) return;
-    if (target < 0 || target >= totalPositions) return;
-    const nearest = target;
-    const token = beginNav();
-    _recordMoveTarget(token, nearest);
-    lenis.scrollTo(nearest * _stepPx(), {
-      duration: navSeconds().button,
-      easing: (t) => 1 - Math.pow(1 - t, 3),
-      // ease-out cubic
-      onComplete: () => {
-        _stateLanding(token, nearest);
-        endNav(token);
-        writeHash();
-      }
-    });
-  }
-  function _positionToKeep() {
-    const px = _stepPx();
-    let position = state.scrollPosition;
-    let moving = false;
-    if (lenis.isScrolling === "smooth") {
-      moving = true;
-      if (navToken && moveTargetToken === navToken && moveTarget !== null) {
-        position = moveTarget;
-      } else if (state.isSnapping && Number.isInteger(snap.currentSnapIndex)) {
-        position = snap.currentSnapIndex;
-      } else {
-        position = lenis.targetScroll / px;
-      }
-    }
-    const rounded = Math.round(position);
-    if (Math.abs(position - rounded) < REST_TOLERANCE) position = rounded;
-    return { position: _clampPosition(position), moving };
-  }
-  function _remapToHeight(surface, height) {
-    const { position, moving } = _positionToKeep();
-    const enteredFrom = state.currentIndex;
-    remapping = true;
-    if (moving && !lenis.isStopped) {
-      lenis.stop();
-      lenis.start();
-    }
-    state.scrollStepPx = height;
-    surface.style.height = `${totalPositions * height}px`;
-    lenis.resize();
-    lenis.scrollTo(position * height, { immediate: true, force: true });
-    remapping = false;
-    registerSnapPoints(totalPositions);
-    if (moving) {
-      navToken = 0;
-      navTarget = null;
-      navTargetToken = 0;
-      buttonMoveToken = 0;
-      keyboardNavInFlight = false;
-      state.isSnapping = false;
-      if (Number.isInteger(position)) snap.currentSnapIndex = position;
-    }
-    lastPosition = position;
-    updateScrollPosition(position);
-    armScrubEnd();
-    if (moving || state.currentIndex !== enteredFrom) writeHash();
-  }
-  function registerSnapPoints(count) {
-    snapRemovers.forEach((fn) => fn());
-    snapRemovers = [];
-    for (let i = 0; i < count; i++) {
-      snapRemovers.push(snap.add(i * _stepPx()));
-    }
-  }
-  function advanceToStep(targetIndex) {
-    if (targetIndex < -1 || targetIndex >= state.steps.length) return false;
-    const lenisInstance = state.lenis || lenis;
-    if (!lenisInstance) return false;
-    _clearDwell();
-    if (lenisInstance.isStopped || lenisInstance.isLocked) return false;
-    const token = beginNav();
-    buttonMoveToken = token;
-    keyboardNavInFlight = false;
-    navTarget = null;
-    _recordMoveTarget(token, targetIndex + 1);
-    endScrub({ carry: false });
-    const targetPx = (targetIndex + 1) * _stepPx();
-    _endMoveHeldAt(lenisInstance, targetPx);
-    lenisInstance.scrollTo(targetPx, {
-      duration: navSeconds().button,
-      easing: (t) => 1 - Math.pow(1 - t, 3),
-      // ease-out cubic
-      onComplete: () => {
-        _stateLanding(token, targetIndex + 1);
-        if (buttonMoveToken === token) buttonMoveToken = 0;
-        endNav(token);
-        followEngine(state.currentIndex);
-        writeHash();
-      }
-    });
-    return true;
-  }
-  function buttonHeading() {
-    const ownMove = navToken && (navToken === buttonMoveToken || navToken === navTargetToken);
-    if (ownMove && moveTargetToken === navToken && moveTarget !== null) return moveTarget - 1;
-    return state.currentIndex;
-  }
-  function _endMoveHeldAt(lenisInstance, px) {
-    if (px !== lenisInstance.targetScroll || lenisInstance.isScrolling !== "smooth") return;
-    keyboardNavInFlight = false;
-    lenisInstance.stop();
-    lenisInstance.start();
-  }
-  function jumpScrollTo(px) {
-    standDownMoves();
-    _endMoveHeldAt(state.lenis, px);
-    state.lenis.scrollTo(px, { immediate: true, force: true });
-  }
-  function standDownMoves() {
-    navToken = 0;
-    navTarget = null;
-    navTargetToken = 0;
-    moveTarget = null;
-    moveTargetToken = 0;
-    buttonMoveToken = 0;
-    keyboardNavInFlight = false;
-  }
-  function _clearDwell() {
-    if (dwellTimer) {
-      clearTimeout(dwellTimer);
-      dwellTimer = null;
-      if (!state.isPanelOpen) lenis.start();
-    }
-  }
-  function _keyboardTarget(direction, inFlight, position) {
-    const step = direction === "forward" ? 1 : -1;
-    if (inFlight !== null) return inFlight + step;
-    const rounded = Math.round(position);
-    if (Math.abs(position - rounded) < 0.01) return rounded + step;
-    return direction === "forward" ? Math.ceil(position) : Math.floor(position);
-  }
-  function _activateKeyboardTarget(target, direction) {
-    const targetStep = target - 1;
-    if (targetStep >= 0 && targetStep !== state.currentIndex) {
-      _enterStep(targetStep, direction);
-    } else if (targetStep < 0 && state.currentIndex >= 0) {
-      _enterStep(-1, "backward");
-    }
-  }
-  function _enterStep(stepIndex, direction) {
-    if (stepIndex < 0) {
-      goToStep(-1, "backward");
-    } else {
-      state.scrollDriven = true;
-      activateCard(stepIndex, direction);
-      state.scrollDriven = false;
-      state.currentIndex = stepIndex;
-      updateViewerInfo(stepIndex);
-      if (state.onStepChange) state.onStepChange(stepIndex);
-    }
-    followEngine(stepIndex);
-  }
-  function keyboardNav(direction) {
-    if (!lenis) return;
-    const inFlight = navTargetToken === navToken ? navTarget : null;
-    if (inFlight !== null && _clampPosition(inFlight + (direction === "forward" ? 1 : -1)) === inFlight) {
-      return;
-    }
-    const token = beginNav();
-    navTargetToken = token;
-    endScrub({ carry: false });
-    _clearDwell();
-    const vh = _stepPx();
-    const position = lenis.animatedScroll / vh;
-    const isExact = Math.abs(position - Math.round(position)) < 0.01;
-    const rounded = Math.round(position);
-    const target = _clampPosition(_keyboardTarget(direction, inFlight, position));
-    if (inFlight === null && target === rounded && isExact) {
-      endNav(token);
-      return;
-    }
-    navTarget = target;
-    _recordMoveTarget(token, target);
-    settleCards(target);
-    snap.currentSnapIndex = target;
-    _activateKeyboardTarget(target, direction);
-    keyboardNavInFlight = true;
-    _endMoveHeldAt(lenis, target * vh);
-    lenis.scrollTo(target * vh, {
-      force: true,
-      duration: navSeconds().keyboard,
-      easing: (t) => 1 - Math.pow(1 - t, 3),
-      // ease-out cubic
-      onComplete: () => {
-        _stateLanding(token, target);
-        if (navToken === token) {
-          keyboardNavInFlight = false;
-          navTarget = null;
-        }
-        endNav(token);
-        writeHash();
-      }
-    });
-  }
-  function getScrollEngineState() {
-    return {
-      lenis,
-      snap,
-      position: state.scrollPosition,
-      progress: state.scrollProgress
-    };
-  }
-  function updateScrollPosition(position) {
-    const contentPos = position - 1;
-    const maxContent = state.steps.length - 1;
-    state.scrollPosition = position;
-    if (position < 1) {
-      state.scrollProgress = 0;
-      if (state.currentIndex >= 0 && !keyboardNavInFlight) {
-        _enterStep(-1, "backward");
-      }
-      if (!keyboardNavInFlight) settleCards(position);
-      return;
-    }
-    const clamped = Math.min(maxContent, contentPos);
-    const stepIndex = Math.floor(clamped);
-    const progress = clamped - stepIndex;
-    state.scrollProgress = progress;
-    if (!keyboardNavInFlight || progress >= 1e-3) setCardProgress(stepIndex, progress);
-    lerpIiifPosition(stepIndex, progress, state.stepsData || []);
-    if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
-      _enterStep(stepIndex, stepIndex > state.currentIndex ? "forward" : "backward");
-    }
-  }
-
-  // assets/js/telar-story/navigation.js
-  function initKeyboardNavigation() {
-    document.addEventListener("keydown", handleKeyboard);
-  }
-  function goToStep(newIndex, direction = "forward") {
-    if (newIndex < -1 || newIndex >= state.steps.length) return;
-    state.currentIndex = newIndex;
-    if (newIndex === -1) {
-      _restoreIntro();
-      return;
-    }
-    activateCard(newIndex, direction);
-    updateViewerInfo(newIndex);
-    if (state.onStepChange) state.onStepChange(newIndex);
-  }
-  function _restoreIntro() {
-    _showIntroCard();
-    _sendFirstTextCardOffScreen();
-    releaseTitleCardsForIntro();
-    _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
-    state.currentObjectRun = { objectId: null, runPosition: 0 };
-    _hideStepChrome();
-    if (state.onStepChange) state.onStepChange(-1);
-  }
-  function _showIntroCard() {
-    const intro = document.querySelector(".story-intro");
-    if (!intro) return;
-    intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
-    intro.style.transform = "translateY(0)";
-  }
-  function _sendFirstTextCardOffScreen() {
-    const firstCard = state.textCards?.[0];
-    if (!firstCard) return;
-    firstCard.classList.remove("is-active", "is-stacked");
-    const rot = parseFloat(firstCard.dataset.messinessRot || 0);
-    const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-    const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-    firstCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-  }
-  function _sendPlateOffScreen(plate) {
-    if (!plate) return;
-    plate.container.style.transform = "translateY(100%)";
-    plate.container.classList.remove("is-active");
-  }
-  function _hideStepChrome() {
-    updateViewerInfo(-1);
-    const creditBadge = document.getElementById("object-credits-badge");
-    if (creditBadge) creditBadge.classList.add("d-none");
-  }
-  function recordButtonStep(index2) {
-    if (state.lenis) return;
-    state.currentIndex = index2;
-    if (state.onStepChange) state.onStepChange(index2);
-  }
-  function jumpButtonsTo(index2) {
-    state.currentMobileStep = index2;
-    state.mobileInIntro = false;
-    state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === index2));
-    updateMobileButtonStates();
-    recordButtonStep(index2);
-  }
-  function putButtonsOnIntro() {
-    if (!state.mobileNavButtons) return;
-    state.mobileInIntro = true;
-    state.currentMobileStep = 0;
-    state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === 0));
-    updateMobileButtonStates();
-  }
-  function followEngine(index2) {
-    if (!state.mobileNavButtons) return;
-    if (index2 < 0) {
-      putButtonsOnIntro();
-    } else {
-      jumpButtonsTo(index2);
-    }
-  }
-  function createNavigationButtons() {
-    if (document.querySelector(".mobile-nav")) {
-      console.warn("Navigation buttons already exist, skipping creation");
-      return null;
-    }
-    const navContainer = document.createElement("div");
-    navContainer.className = "mobile-nav";
-    const prevButton = document.createElement("button");
-    prevButton.className = "mobile-prev";
-    prevButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
-    prevButton.setAttribute("aria-label", "Previous step");
-    const nextButton = document.createElement("button");
-    nextButton.className = "mobile-next";
-    nextButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="32" viewBox="0 -960 960 960" width="32" fill="currentColor"><path d="M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z"/></svg>';
-    nextButton.setAttribute("aria-label", "Next step");
-    navContainer.appendChild(prevButton);
-    navContainer.appendChild(nextButton);
-    document.body.appendChild(navContainer);
-    return { container: navContainer, prev: prevButton, next: nextButton };
-  }
-  function initializeButtonNavigation() {
-    document.documentElement.dataset.navigation = "buttons";
-    state.steps = Array.from(document.querySelectorAll(".story-step"));
-    initializeLoadingShimmer();
-    state.steps.forEach((step) => {
-      step.classList.remove("mobile-active");
-    });
-    if (state.steps.length > 0) {
-      state.steps[0].classList.add("mobile-active");
-      state.currentMobileStep = 0;
-    }
-    state.mobileInIntro = !!document.querySelector(".story-intro");
-    const buttons = createNavigationButtons();
-    if (!buttons) return;
-    state.mobileNavButtons = { prev: buttons.prev, next: buttons.next };
-    buttons.prev.addEventListener("click", goToPreviousMobileStep);
-    buttons.next.addEventListener("click", goToNextMobileStep);
-    updateMobileButtonStates();
-    initKeyboardNavigation();
-  }
-  function goToNextMobileStep() {
-    if (state.lenis) {
-      _moveThroughEngine(buttonHeading() + 1);
-      return;
-    }
-    if (state.mobileInIntro) {
-      _dismissMobileIntro();
-      return;
-    }
-    if (state.currentMobileStep >= state.steps.length - 1) {
-      return;
-    }
-    goToMobileStep(state.currentMobileStep + 1);
-  }
-  function goToPreviousMobileStep() {
-    if (state.lenis) {
-      _moveThroughEngine(buttonHeading() - 1);
-      return;
-    }
-    if (state.mobileInIntro) {
-      return;
-    }
-    if (state.currentMobileStep === 0) {
-      _restoreMobileIntro();
-      return;
-    }
-    goToMobileStep(state.currentMobileStep - 1);
-  }
-  function _restoreMobileIntro() {
-    if (state.mobileNavigationCooldown) return;
-    state.mobileNavigationCooldown = true;
-    setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
-    _showIntroCard();
-    _sendFirstTextCardOffScreen();
-    _sendPlateOffScreen(state.viewerPlates?.[0]);
-    state.currentObjectRun = { objectId: null, runPosition: 0 };
-    _hideStepChrome();
-    putButtonsOnIntro();
-    recordButtonStep(-1);
-    writeHash();
-  }
-  function _dismissMobileIntro() {
-    if (state.mobileNavigationCooldown) return;
-    state.mobileNavigationCooldown = true;
-    setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
-    state.mobileInIntro = false;
-    const intro = document.querySelector(".story-intro");
-    if (intro) {
-      intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
-      intro.style.transform = "translateY(-100%)";
-    }
-    state.currentMobileStep = 0;
-    activateCard(0, "forward");
-    updateViewerInfo(0);
-    updateMobileButtonStates();
-    recordButtonStep(0);
-    writeHash();
-  }
-  function _moveThroughEngine(newIndex) {
-    if (newIndex < -1 || newIndex >= state.steps.length) return;
-    if (state.mobileNavigationCooldown) return;
-    if (!advanceToStep(newIndex)) return;
-    state.mobileNavigationCooldown = true;
-    setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
-    if (newIndex >= 0) {
-      const plate = state.viewerPlates[state.stepToScene[newIndex]];
-      if (!plate || !plate.isReady) showViewerSkeletonState();
-    }
-  }
-  function goToMobileStep(newIndex) {
-    if (newIndex < 0 || newIndex >= state.steps.length) {
-      return;
-    }
-    if (state.mobileNavigationCooldown) {
-      return;
-    }
-    const plate = state.viewerPlates[state.stepToScene[newIndex]];
-    if (!plate || !plate.isReady) {
-      showViewerSkeletonState();
-    }
-    state.mobileNavigationCooldown = true;
-    setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
-    const direction = newIndex > state.currentMobileStep ? "forward" : "backward";
-    state.steps[state.currentMobileStep].classList.remove("mobile-active");
-    state.steps[newIndex].classList.add("mobile-active");
-    state.currentMobileStep = newIndex;
-    updateMobileButtonStates();
-    activateCard(newIndex, direction);
-    updateViewerInfo(newIndex);
-    recordButtonStep(newIndex);
-    writeHash();
-  }
-  function updateMobileButtonStates() {
-    if (!state.mobileNavButtons) return;
-    state.mobileNavButtons.prev.disabled = !!state.mobileInIntro;
-    state.mobileNavButtons.next.disabled = state.currentMobileStep === state.steps.length - 1;
-  }
-  var KEY_ACTIONS = /* @__PURE__ */ new Map([
-    ["ArrowDown", (e) => _stepKey(e, "forward")],
-    ["PageDown", (e) => _stepKey(e, "forward")],
-    ["ArrowUp", (e) => _stepKey(e, "backward")],
-    ["PageUp", (e) => _stepKey(e, "backward")],
-    ["ArrowRight", (e) => {
-      e.preventDefault();
-      _openNextLayer();
-    }],
-    ["ArrowLeft", (e) => {
-      e.preventDefault();
-      _closeTopmostPanel(e);
-    }],
-    ["Escape", (e) => _closeTopmostPanel(e)],
-    [" ", (e) => _spaceKey(e)]
-  ]);
-  function handleKeyboard(e) {
-    if (e.repeat && !state.isPanelOpen) return;
-    KEY_ACTIONS.get(e.key)?.(e);
-  }
-  function _stepKey(e, direction) {
-    if (_panelTookScroll(direction === "forward" ? 40 : -40)) return;
-    e.preventDefault();
-    _navigateStep(direction);
-  }
-  var SPACE_CONTROLS = 'button, summary, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])';
-  function _isSpaceControl(e) {
-    const target = e.target;
-    return !!(target && target.closest && target.closest(SPACE_CONTROLS));
-  }
-  function _spaceKey(e) {
-    if (_isSpaceControl(e)) return;
-    e.preventDefault();
-    if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
-    _navigateStep(e.shiftKey ? "backward" : "forward");
-  }
-  function _panelTookScroll(delta) {
-    if (!state.isPanelOpen) return false;
-    scrollOpenPanel(delta);
-    return true;
-  }
-  function _navigateStep(direction) {
-    if (state.scrollLockActive) return;
-    if (state.lenis) {
-      keyboardNav(direction);
-      return;
-    }
-    if (direction === "forward") {
-      goToNextMobileStep();
-    } else {
-      goToPreviousMobileStep();
-    }
-  }
-  function _openNextLayer() {
-    if (!state.isPanelOpen) {
-      _openLayerWithContent("layer1", stepHasLayer1Content);
-      return;
-    }
-    if (state.panelStack.length === 1 && state.panelStack[0]?.type === "layer1") {
-      _openLayerWithContent("layer2", stepHasLayer2Content);
-    }
-  }
-  function _openLayerWithContent(type, hasContent) {
-    const step = getCurrentStepData();
-    const stepNumber = getCurrentStepNumber();
-    if (step && hasContent(step)) {
-      openPanel(type, stepNumber);
-    }
-  }
-  function _closeTopmostPanel(e) {
-    if (!state.isPanelOpen) return;
-    e.preventDefault();
-    closeTopPanel();
-  }
-  function scrollOpenPanel(delta) {
-    const top = state.panelStack[state.panelStack.length - 1];
-    if (!top) return;
-    const panel = document.getElementById(`panel-${top.type}`);
-    const body = panel?.querySelector(".offcanvas-body");
-    if (body) body.scrollBy({ top: delta, behavior: "smooth" });
-  }
-  function getCurrentStepNumber() {
-    if (state.currentIndex < 0 || state.currentIndex >= state.steps.length) {
-      return null;
-    }
-    return state.steps[state.currentIndex].dataset.step;
-  }
-  function getCurrentStepData() {
-    const stepNumber = getCurrentStepNumber();
-    if (!stepNumber) return null;
-    const steps = window.storyData?.steps || [];
-    return steps.find((s) => s.step == stepNumber);
-  }
-  function updateViewerInfo(stepIndex) {
-    const counter = document.getElementById("step-counter");
-    const infoElement = document.getElementById("current-object-title");
-    if (!counter || !infoElement) return;
-    if (stepIndex < 0) {
-      counter.classList.add("d-none");
-      return;
-    }
-    counter.classList.remove("d-none");
-    const total = (window.storyData?.steps || []).filter((s) => !s._metadata).length;
-    const stepTemplate = window.telarLang.stepNumber || "Step {{ number }}";
-    const display = stepTemplate.replace("{{ number }}", stepIndex + 1);
-    infoElement.textContent = total > 0 ? `${display} / ${total}` : display;
   }
 
   // assets/js/telar-story/ios-device.js

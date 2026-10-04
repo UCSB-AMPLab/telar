@@ -342,6 +342,73 @@ describe('initCardPool — built card content escapes author text', () => {
   });
 });
 
+// ── Re-initialisation ────────────────────────────────────────────────────────
+
+describe('initCardPool — called twice', () => {
+  let frames;
+  let fonts;
+  let passes;
+
+  beforeEach(() => {
+    document.body.innerHTML = '<div class="card-stack"></div>';
+    state.objectsIndex = {};
+    state.viewerPlates = {};
+    state.textCards = {};
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', (cb) => { frames.push(cb); return frames.length; });
+    fonts = new EventTarget();
+    fonts.ready = new Promise(() => {});
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+    const story = { steps: [
+      { step: '1', object: '', question: 'intro', answer: '' },
+      { step: '2', object: 'obj-a', question: 'q', answer: 'a' },
+    ] };
+    initCardPool(story, {});
+    document.body.innerHTML = '<div class="card-stack"></div>';
+    initCardPool(story, {});
+    frames = [];
+    passes = vi.spyOn(performance, 'mark');
+    passes.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    delete document.fonts;
+    document.body.innerHTML = '';
+    state.viewerPlates = {};
+    state.textCards = {};
+    state.titleCards = {};
+  });
+
+  const geometryPasses = () => passes.mock.calls
+    .filter(([name]) => name === 'telar-card-geometry-start').length;
+  const flush = () => { const run = frames; frames = []; for (const cb of run) cb(); };
+
+  it('runs one geometry pass for the embed banner', () => {
+    window.dispatchEvent(new Event('telar:embed-banner'));
+    flush();
+    expect(geometryPasses()).toBe(1);
+  });
+
+  it('runs one geometry pass for a font that finishes loading', () => {
+    fonts.dispatchEvent(new Event('loadingdone'));
+    flush();
+    expect(geometryPasses()).toBe(1);
+  });
+
+  it('runs one geometry pass for a settled resize', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      window.dispatchEvent(new Event('resize'));
+      vi.advanceTimersByTime(200);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(geometryPasses()).toBe(1);
+  });
+});
+
 // ── Media plates, labels, pending framing, and the scrubbed handoff ──────────
 //
 // Four behaviours that a story built from image objects alone never reaches,
@@ -879,5 +946,48 @@ describe('reconcilePlatesForJump — closing the plates a jump crossed', () => {
     reconcilePlatesForJump(1);
 
     expect(crossed.container.style.transition).toBe('');
+  });
+});
+
+// ── The side card's fit and its scroll ───────────────────────────────────────
+// The fit itself is card-fit.test.js's; here, only that the pool runs it on a
+// horizontal layout and that an activated card arrives at its question.
+
+describe('card pool — the side card is fitted and arrives at its top', () => {
+  beforeEach(() => {
+    resetPoolState();
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation(REDUCED_MOTION));
+    vi.stubGlobal('OpenSeadragon', vi.fn());
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+    resetPoolState();
+  });
+
+  const steps = [
+    { step: '1', object: 'A', question: 'q', answer: 'a' },
+    { step: '2', object: 'A', question: 'q', answer: 'a' },
+  ];
+
+  it('writes a fit on every text card of a horizontal layout', () => {
+    buildStory(steps);
+    for (const card of Object.values(state.textCards)) {
+      expect(card.dataset.cardFit).toBe('natural');
+    }
+  });
+
+  it('puts a card back at its question when it is activated', () => {
+    buildStory(steps);
+    const card = state.textCards[1];
+    card.dataset.cardFit = 'scroll';
+    card.scrollTop = 240;
+    state.currentObjectRun = { objectId: 'A', runPosition: 0 };
+
+    activateCard(1, 'forward');
+
+    expect(card.scrollTop).toBe(0);
   });
 });

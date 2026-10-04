@@ -85,7 +85,9 @@ import {
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
 import { isFitHeight, applyCardMotionDuration } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
-import { arrangeMediaScene } from './media-arrangement.js';
+import { arrangeMediaScene, measureTopBand } from './media-arrangement.js';
+import { fitSideCards, clearAnswerFit, timeGeometryPass, watchCardContent } from './card-fit.js';
+import { attachCardScroll, resetCardScroll } from './card-scroll.js';
 import { MediaPlate } from './plates/media-plate.js';
 import { VideoPlate } from './plates/video-plate.js';
 import { AudioPlate } from './plates/audio-plate.js';
@@ -399,12 +401,11 @@ function _liftBase(progress) {
   return progress ? `translateY(${-progress * 100}vh)` : 'translateY(0)';
 }
 
-// A viewport's worth of travel clears any card the fit model builds: the
-// card's top edge rests at (viewportH − cardH) / 2 and its lower edge at
-// (viewportH + cardH) / 2, and the ceiling holds cardH to 0.80 of the
-// viewport, so the lower edge rests at most 0.9 of the way down. The card's
-// own rotation and offset ride along, so a lifted card is the same sheet at a
-// different height rather than a squared-up one.
+// A viewport's worth of travel clears any card the fit model builds: its
+// lower edge rests at most one padding above the viewport's bottom
+// (card-fit.js, sideCardTop). The card's own rotation and offset ride along,
+// so a lifted card is the same sheet at a different height rather than a
+// squared-up one.
 
 /**
  * How far along the lift the current scroll position stands.
@@ -563,13 +564,10 @@ const SIDE_CARD_VIEWPORT_FRACTION = 0.80;
  * @param {number} viewportH - Current viewport height in px
  * @param {number} runPos - Position within this object's step sequence
  * @param {number} peekHeight - Pixels each successive card settles lower
- * @param {number|null} maxHeightPx - Ceiling in px, or null to leave the cap
- *   to the stylesheet
  */
-function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
+function _sizeCardToContent(card, viewportH, runPos, peekHeight) {
   card.style.height = '';
-  if (maxHeightPx == null) card.style.removeProperty('max-height');
-  else card.style.maxHeight = `${maxHeightPx}px`;
+  card.style.removeProperty('max-height');
   const cardH = card.offsetHeight;
   const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
   card.style.setProperty('top', `${topPx}px`, 'important');
@@ -580,39 +578,40 @@ function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
  *
  * Called by onViewportResize and onLayoutChange subscriptions so card geometry
  * stays correct after desktop window resize, device rotation, or layout-mode
- * flip. Iterates `.text-card` DOM nodes (iterating the DOM is the reliable
- * source of all active cards regardless of state.textCards population order).
- * Applies computeCardTop with runPosition=0 for all cards and uses
- * style.setProperty('top', ..., 'important') so the inline value wins the
- * cascade over the `top: auto !important` in the landscape side-card rule.
+ * flip, and by the content watch. Iterates `.text-card` DOM nodes (the DOM
+ * is the reliable source of all cards regardless of state.textCards
+ * population order). Tops are written with style.setProperty('top', ...,
+ * 'important') so the inline value wins over the landscape side-card rule's.
  *
  * @param {number} viewportW - Current viewport width in px
  * @param {number} viewportH - Current viewport height in px
+ * @param {HTMLElement[]|null} [changed] - The cards to fit; every card if null
  */
-function _recomputeCardGeometry(viewportW, viewportH) {
+function _recomputeCardGeometry(viewportW, viewportH, changed = null) {
+  timeGeometryPass(() => _geometryPass(viewportW, viewportH, changed));
+}
+
+function _geometryPass(viewportW, viewportH, changed) {
   const peekHeight = _config.peekHeight;
   const landscapeSideCard = isLandscapeSideCard();
-  // The fit model governs the desktop side card and nothing else: a window no
-  // taller than the side-card threshold (a landscape phone, or a short desktop
-  // window) already sizes its side card to content through the stylesheet, and
-  // the portrait bottom card keeps its own geometry.
-  const fitSideCard = isFitHeight()
-    && !landscapeSideCard
-    && getLayoutMode() !== 'vertical';
+  // The fit model governs the side card on a horizontal layout, at any
+  // height (card-fit.js). A landscape phone and the portrait bottom card keep
+  // their own geometry below.
+  const sideFit = isFitHeight() && getLayoutMode() !== 'vertical';
 
   const cards = document.querySelectorAll('.text-card');
-  for (const card of cards) {
+  const side = sideFit ? fitSideCards(changed || cards, { W: viewportW, H: viewportH,
+    peek: peekHeight, fraction: SIDE_CARD_VIEWPORT_FRACTION, activeIndex: state.currentIndex }) : null;
+
+  for (const card of sideFit ? [] : cards) {
+    clearAnswerFit(card);
     const runPos = parseInt(card.dataset.runPosition, 10) || 0;
 
     if (landscapeSideCard) {
-      // A window no taller than the side-card threshold, at any width: the CSS
+      // A landscape phone, or a short window under the fixed model: the CSS
       // rule sets `height: auto !important` and the ceiling, so the card is
-      // sized to its content. Clear any stale inline height, measure the real
-      // rendered height, and centre by that — the portrait `viewportH * 0.80`
-      // model oversizes the card and jams it against the top on a short landscape
-      // viewport. Inline !important top beats the
-      // landscape rule's `top: auto !important`.
-      _sizeCardToContent(card, viewportH, runPos, peekHeight, null);
+      // sized to its content and centred by the height it renders at.
+      _sizeCardToContent(card, viewportH, runPos, peekHeight);
     } else if (getLayoutMode() === 'vertical') {
       // getLayoutMode() reads the live matchMedia (self-initialising), so this is
       // correct even at the init-time call below — before layout-mode.js has
@@ -624,13 +623,6 @@ function _recomputeCardGeometry(viewportW, viewportH) {
       card.style.removeProperty('top');
       card.style.removeProperty('max-height');
       card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;  // capped by the CSS max-height: 40vh
-    } else if (fitSideCard) {
-      // Desktop horizontal under the fit model: the viewport fraction is a
-      // ceiling rather than a height, and the card takes what its content
-      // needs below it. At the ceiling the card's own `overflow: hidden` and
-      // `margin-block: auto` do the clipping, exactly as at the fixed height.
-      _sizeCardToContent(card, viewportH, runPos, peekHeight,
-        viewportH * SIDE_CARD_VIEWPORT_FRACTION);
     } else {
       // Desktop horizontal: tall side card sized to 80% of the (tall) viewport,
       // vertically centred. No base CSS `top`, so the inline value drives placement.
@@ -644,8 +636,8 @@ function _recomputeCardGeometry(viewportW, viewportH) {
   // A media scene's cards can go below its player only where they were just
   // sized to their content on a horizontal layout: the arrangement is decided
   // from those heights.
-  const contentSized = (fitSideCard || landscapeSideCard) && getLayoutMode() !== 'vertical';
-  _arrangeMediaScenes(cards, viewportW, viewportH, contentSized);
+  const contentSized = (sideFit || landscapeSideCard) && getLayoutMode() !== 'vertical';
+  _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side);
 }
 
 /**
@@ -660,19 +652,21 @@ function _recomputeCardGeometry(viewportW, viewportH) {
  * @param {number} viewportH - Current viewport height in px
  * @param {boolean} contentSized - Whether the cards were sized to their content
  *   on a horizontal layout
+ * @param {{ topOf: (card: HTMLElement) => number }|null} side - The fit's placement
  */
-function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized) {
+function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side) {
   const cardsByScene = {};
   for (const card of cards) {
     const scene = getSceneIndex(parseInt(card.dataset.stepIndex, 10));
     (cardsByScene[scene] ||= []).push(card);
   }
-  const besideTop = (card) => computeCardTop(
-    viewportH, card.offsetHeight, _cardRunPosition(card), _config.peekHeight);
+  const besideTop = side?.topOf ?? ((card) => computeCardTop(
+    viewportH, card.offsetHeight, _cardRunPosition(card), _config.peekHeight));
+  const topBand = measureTopBand(viewportW, viewportH);
   for (const [scene, plate] of Object.entries(state.viewerPlates)) {
     if (!(plate instanceof MediaPlate)) continue;
     arrangeMediaScene(plate.container, cardsByScene[scene] || [], {
-      W: viewportW, H: viewportH, eligible: contentSized, besideTop,
+      W: viewportW, H: viewportH, eligible: contentSized, besideTop, topBand,
     });
     plate.resize();
   }
@@ -866,6 +860,7 @@ function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
 
     cardStack.appendChild(card);
     state.textCards[stepIdx] = card;
+    attachCardScroll(card);
   }
 }
 
@@ -908,6 +903,16 @@ function _preloadFirstScenePlate(steps) {
   _evictBeyondPoolCap(0);
 }
 
+/** Removes the last init's resize, layout and content subscriptions. */
+let _stopGeometryWatch = null;
+/** Counts inits, so a font wait from an earlier one can tell it is stale. */
+let _geometryGeneration = 0;
+
+function _teardownGeometryWatch() {
+  _stopGeometryWatch?.();
+  _stopGeometryWatch = null;
+}
+
 /**
  * Initialize the card pool: create all DOM elements, apply initial transforms
  * (off-screen below), and append them to .card-stack.
@@ -922,6 +927,12 @@ function _preloadFirstScenePlate(steps) {
 export function initCardPool(storyData, config) {
   const cardStack = document.querySelector('.card-stack');
   if (!cardStack) return;
+
+  // Each call installs its own subscriptions and content watch; the previous
+  // call's are removed first so a second init leaves one geometry pass per
+  // trigger.
+  _teardownGeometryWatch();
+  const generation = ++_geometryGeneration;
 
   const steps = (storyData?.steps || []).filter(s => !s._metadata);
 
@@ -956,13 +967,12 @@ export function initCardPool(storyData, config) {
 
   _preloadFirstScenePlate(steps);
 
-  // Subscribe to layout-mode events so card geometry stays live
-  // (no new ad-hoc resize listeners — only layout-mode.js subscriptions).
-  // Mirror the video-card.js subscription pattern.
-  onViewportResize(({ viewport }) => {
+  // Layout-mode events keep card geometry live; the content watch below
+  // observes each card's content, never the viewport.
+  const stopResize = onViewportResize(({ viewport }) => {
     _recomputeCardGeometry(viewport.w, viewport.h);
   });
-  onLayoutChange(({ viewport }) => {
+  const stopLayout = onLayoutChange(({ viewport }) => {
     _recomputeCardGeometry(viewport.w, viewport.h);
   });
 
@@ -983,10 +993,14 @@ export function initCardPool(storyData, config) {
   // time — a rotation between the two is a layout change away.
   if (document.fonts?.ready) {
     document.fonts.ready.then(() => {
+      if (generation !== _geometryGeneration) return;
       _recomputeCardGeometry(window.innerWidth, window.innerHeight);
     });
   }
-
+  const stopWatch = watchCardContent(Object.values(state.textCards), (changed) => {
+    _recomputeCardGeometry(window.innerWidth, window.innerHeight, changed);
+  });
+  _stopGeometryWatch = () => { stopResize(); stopLayout(); stopWatch(); };
 
   applyCardMotionDuration(cardStack);
 }
@@ -1854,6 +1868,7 @@ function _writeCardOverlayRect(cardEl) {
  */
 function _activateTextCard(cardEl) {
   const messiness = _readCardMessiness(cardEl);
+  resetCardScroll(cardEl);
   cardEl.classList.remove('is-stacked');
   cardEl.classList.add('is-active');
 

@@ -49,6 +49,7 @@ import { followEngine, goToStep, updateViewerInfo } from './navigation.js';
 import { initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
+import { cardHoldsGesture } from './card-scroll.js';
 
 // ── Module-level references ───────────────────────────────────────────────────
 
@@ -330,8 +331,14 @@ export function initScrollEngine(stepCount) {
   // the cards have to keep tracking it for all of that or they hold a position
   // the scroll has long left. Both events therefore re-arm the same timer, so
   // the flag lapses 100 ms after the last frame rather than the last gesture.
+  //
+  // A gesture the side card owns (card-scroll.js) is cancelled and stopped
+  // before Lenis sees it, so none should arrive here. The owner is read all
+  // the same, so that if one ever does, the engine and the card cannot
+  // disagree about whose input it is: it neither scrubs nor takes over.
   cardStackEl = cardStack;
   lenis.on('virtual-scroll', (payload) => {
+    if (cardHoldsGesture()) return;
     cardStack.classList.add('is-scrubbing');
     if (_isScrollTakeover(payload)) {
       // A scroll the reader is driving has no landing the keyboard chose, so

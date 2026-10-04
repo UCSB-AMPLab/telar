@@ -23,7 +23,10 @@
  *
  * Keyboard navigation works in all modes: arrow keys and Page Up/Down move
  * between steps, left/right arrows open and close panels, Space advances
- * (Shift+Space goes back), and Escape closes the current panel.
+ * (Shift+Space goes back), and Escape closes the current panel. A side card
+ * that scrolls inside itself (card-scroll.js) takes the story keys first,
+ * after an open panel: a line for an arrow, a page for Page Up/Down and
+ * Space, and the key moves a step only once the card is at rest at its edge.
  *
  * state.currentIndex is the current step in every mode (-1 on the intro), and
  * everything that asks which step the reader is on reads it: the fragment,
@@ -47,6 +50,7 @@ import { state, MOBILE_NAV_COOLDOWN } from './state.js';
 import { activateCard, releaseTitleCardsForIntro } from './card-pool.js';
 import { advanceToStep, buttonHeading, keyboardNav } from './scroll-engine.js';
 import { writeHash } from './deep-link.js';
+import { cardTakesKey } from './card-scroll.js';
 import { initializeLoadingShimmer, showViewerSkeletonState } from './viewer.js';
 import {
   openPanel,
@@ -505,17 +509,18 @@ function updateMobileButtonStates() {
  * What each navigation key does.
  *
  * A Map rather than an object literal, so that a key value is looked up as
- * itself and nothing inherited can answer for it. Page Down and Page Up are
- * the arrow keys under another name; every other key the story reads has an
+ * itself and nothing inherited can answer for it. Page Down and Page Up move
+ * a step as the arrow keys do, and differ only in how far they scroll a side
+ * card that scrolls inside itself; every other key the story reads has an
  * action of its own.
  *
  * @type {Map<string, (e: KeyboardEvent) => void>}
  */
 const KEY_ACTIONS = new Map([
-  ['ArrowDown',  (e) => _stepKey(e, 'forward')],
-  ['PageDown',   (e) => _stepKey(e, 'forward')],
-  ['ArrowUp',    (e) => _stepKey(e, 'backward')],
-  ['PageUp',     (e) => _stepKey(e, 'backward')],
+  ['ArrowDown',  (e) => _stepKey(e, 'forward', 'line')],
+  ['PageDown',   (e) => _stepKey(e, 'forward', 'page')],
+  ['ArrowUp',    (e) => _stepKey(e, 'backward', 'line')],
+  ['PageUp',     (e) => _stepKey(e, 'backward', 'page')],
   ['ArrowRight', (e) => { e.preventDefault(); _openNextLayer(); }],
   ['ArrowLeft',  (e) => { e.preventDefault(); _closeTopmostPanel(e); }],
   ['Escape',     (e) => _closeTopmostPanel(e)],
@@ -523,35 +528,69 @@ const KEY_ACTIONS = new Map([
 ]);
 
 /**
+ * The direction and reach of a story key, or null for any other key.
+ *
+ * @type {Map<string, ['forward'|'backward', 'line'|'page']>}
+ */
+const STORY_KEYS = new Map([
+  ['ArrowDown', ['forward', 'line']],
+  ['PageDown',  ['forward', 'page']],
+  ['ArrowUp',   ['backward', 'line']],
+  ['PageUp',    ['backward', 'page']],
+]);
+
+/**
  * Handle keyboard navigation and panel control.
  *
  * Auto-repeat key events are ignored for story navigation — each physical key
  * press advances exactly one step — but allowed through while a panel is
- * open, so that a held arrow key keeps the panel scrolling.
+ * open, so that a held arrow key keeps the panel scrolling. A repeated story
+ * key over a side card that scrolls inside itself scrolls the card and is
+ * cancelled, at its edge too, so a held key scrolls to the card's end and
+ * stops there without stepping.
  *
  * @param {KeyboardEvent} e
  */
 function handleKeyboard(e) {
-  if (e.repeat && !state.isPanelOpen) return;
+  if (e.repeat && !state.isPanelOpen) {
+    _repeatOverCard(e);
+    return;
+  }
 
   KEY_ACTIONS.get(e.key)?.(e);
 }
 
 /**
- * Move one step, or scroll the open panel instead.
+ * Give an auto-repeated story key to a side card that scrolls inside itself.
+ *
+ * @param {KeyboardEvent} e
+ */
+function _repeatOverCard(e) {
+  let motion = STORY_KEYS.get(e.key);
+  if (e.key === ' ' && !_isSpaceControl(e)) motion = [e.shiftKey ? 'backward' : 'forward', 'page'];
+  if (!motion) return;
+  if (cardTakesKey(...motion) !== 'none') e.preventDefault();
+}
+
+/**
+ * Move one step, or scroll the open panel or the side card instead.
  *
  * A panel takes the key first, and the event stays uncancelled in that
  * state so that a panel too long for its own scrolling still gets the
  * browser's. With no panel open the key belongs to the story and is
- * cancelled whether or not a scroll lock lets the step through.
+ * cancelled whether or not a scroll lock lets the step through; a side card
+ * that scrolls inside itself takes it before the step, until it is at rest
+ * at its edge.
  *
  * @param {KeyboardEvent} e
  * @param {string} direction - 'forward' or 'backward'.
+ * @param {'line'|'page'} kind - How far the key scrolls a side card.
  */
-function _stepKey(e, direction) {
+function _stepKey(e, direction, kind) {
   if (_panelTookScroll(direction === 'forward' ? 40 : -40)) return;
 
   e.preventDefault();
+  if (cardTakesKey(direction, kind) === 'scrolled') return;
   _navigateStep(direction);
 }
 
@@ -576,11 +615,12 @@ function _isSpaceControl(e) {
 }
 
 /**
- * Page through the story, or through the open panel instead.
+ * Page through the story, or through the open panel or the side card instead.
  *
  * Space carries the page's own scrolling, so it is cancelled in both states.
  * Shift reverses it. On a focused control the key belongs to the control and
- * is left to the browser, uncancelled, with no step moved.
+ * is left to the browser, uncancelled, with no step moved. A side card that
+ * scrolls inside itself takes a page after an open panel and before the step.
  *
  * @param {KeyboardEvent} e
  */
@@ -590,7 +630,9 @@ function _spaceKey(e) {
   e.preventDefault();
   if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
 
-  _navigateStep(e.shiftKey ? 'backward' : 'forward');
+  const direction = e.shiftKey ? 'backward' : 'forward';
+  if (cardTakesKey(direction, 'page') === 'scrolled') return;
+  _navigateStep(direction);
 }
 
 /**
