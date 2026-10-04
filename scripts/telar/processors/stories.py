@@ -43,7 +43,7 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import re
@@ -87,28 +87,71 @@ def _normalise_frame(df):
     return df
 
 
+def _step_label(step):
+    """The step as its author wrote it, not as pandas typed it.
+
+    A page column with a blank in it makes pandas read the whole sheet's
+    step numbers as floats, so a warning about step 1 said "step 1.0".
+    Only the label is normalised; the offending value is quoted exactly as
+    it was read, because that is the author's own data.
+    """
+    if isinstance(step, float) and step.is_integer():
+        return str(int(step))
+    return str(step)
+
+
+def _page_value(raw, step, warnings):
+    """One cell as a page number, or '' with a warning.
+
+    float() runs first because a spreadsheet writes a whole number as
+    3.0. OverflowError joins the caught set because it is what
+    int(float('Infinity')) raises, and it is a sibling of ValueError
+    rather than a subclass -- omitting it crashed the build on a cell a
+    person can type by hand.
+    """
+    if not pd.notna(raw) or not str(raw).strip():
+        return ''
+
+    try:
+        page = int(float(str(raw).strip()))
+        if page < 1:
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
+        _warn(f"Story step {_step_label(step)}: invalid page value "
+              f"'{raw}' (must be positive integer)", warnings)
+        return ''
+
+    return page
+
+
 def _validate_page_column(df, warnings):
     """A page number is an integer or it is nothing.
 
     A step that names a page the story does not have would render
     nowhere, so an unusable value is cleared and said out loud rather
     than carried into the JSON.
+
+    The column is rebuilt rather than written cell by cell, and that is
+    the whole of why this function looks like this. pandas gives a column
+    a dtype from what it read, and refuses a value of another type into
+    it:
+
+      - a column pandas read as text (one typo beside real page numbers)
+        rejected the integer, so every *valid* page in that column was
+        cleared and reported as invalid;
+      - a column pandas read as numbers (a 0 from someone counting from
+        zero, beside a blank) rejected the empty string used to clear it,
+        and the TypeError escaped this function and stopped the build.
+
+    Assigning the whole column at once replaces its dtype instead of
+    fighting it, so neither case arises.
     """
-    # Validate and normalize page column
-    if 'page' in df.columns:
-        for idx, row in df.iterrows():
-            page_val = row.get('page', '')
-            step_num = row.get('step', 'unknown')
-            if pd.notna(page_val) and str(page_val).strip():
-                try:
-                    page_int = int(float(str(page_val).strip()))
-                    if page_int < 1:
-                        raise ValueError
-                    df.at[idx, 'page'] = page_int
-                except (ValueError, TypeError):
-                    msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
-                    _warn(msg, warnings)
-                    df.at[idx, 'page'] = ''
+    if 'page' not in df.columns:
+        return df
+
+    df['page'] = [_page_value(row.get('page', ''), row.get('step', 'unknown'),
+                              warnings)
+                  for _, row in df.iterrows()]
     return df
 
 
