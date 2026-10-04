@@ -312,7 +312,15 @@ def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
 
         items.append(data)
 
-    # Analyze aspect ratios to determine optimal carousel height
+    return {'items': items, 'size_class': _carousel_size_class(items)}
+
+
+def _carousel_size_class(items):
+    """The carousel's height class, from the tallest image in it.
+
+    An image whose size cannot be read, or whose width is zero, does not
+    count; a carousel with none that can be read is 'default'.
+    """
     aspect_ratios = []
     for item in items:
         dimensions = declared_dimensions(item) or get_image_dimensions(item['image'])
@@ -334,8 +342,7 @@ def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
             size_class = 'tall'  # Square to mild portrait
         else:
             size_class = 'portrait'  # Strong portrait
-
-    return {'items': items, 'size_class': size_class}
+    return size_class
 
 
 def parse_markdown_sections(content):

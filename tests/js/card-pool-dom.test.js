@@ -29,6 +29,7 @@ import {
 import { VideoPlate } from '../../assets/js/telar-story/plates/video-plate.js';
 import { AudioPlate } from '../../assets/js/telar-story/plates/audio-plate.js';
 import { IiifPlate } from '../../assets/js/telar-story/plates/iiif-plate.js';
+import { makePlate } from './iiif-plate-helpers.js';
 
 // Video-card is spied, not replaced: every export keeps its real body, and the
 // two the card pool routes plate handovers through are wrapped so a test can
@@ -166,14 +167,6 @@ describe('activateCard — same-object jump re-shows a hidden viewer plate', () 
     vi.unstubAllGlobals();
     state.scrollDriven = false;
   });
-
-  /** A plate as _createViewerPlates builds one: an instance over an element. */
-  function makePlate() {
-    const el = document.createElement('div');
-    el.className = 'viewer-plate';
-    el.dataset.cardType = 'iiif';
-    return new IiifPlate(el, 'obj-a', 0, 0);
-  }
 
   function wireStep0(plate) {
     state.viewerPlates = { 0: plate };

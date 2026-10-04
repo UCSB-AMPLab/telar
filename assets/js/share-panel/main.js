@@ -33,10 +33,11 @@
  *
  * Bundled by esbuild into assets/js/share-panel.js; see assets/js/README.md.
  *
- * Version: v1.7.0
+ * Version: v1.8.0
  */
 
 import { warningState, setWarning } from './warnings.js';
+import { escapeHtml } from '../objects-filter/escape.js';
 
 /** One share panel's link and embed controls over the page it is given. */
 export function createSharePanel({
@@ -449,15 +450,6 @@ export function createSharePanel({
     }
   }
 
-  // Escape a value for safe inclusion in a double-quoted HTML attribute.
-  // Twin of escapeHtml in objects-filter/escape.js, which the objects gallery's
-  // own bundle holds; the two bundles are separate, so keep them in sync.
-  function escapeAttr(text) {
-    const div = doc.createElement('div');
-    div.textContent = text == null ? '' : String(text);
-    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-
   /**
    * Generate embed code
    */
@@ -482,7 +474,7 @@ export function createSharePanel({
 
     // Get story title for iframe title attribute (escaped for the attribute so a
     // quote in the title can't break the copied embed snippet)
-    const storyTitle = escapeAttr(getStoryTitle());
+    const storyTitle = escapeHtml(getStoryTitle(), doc);
 
     // Generate iframe code
     const iframeCode = `<iframe src="${embedUrl}"

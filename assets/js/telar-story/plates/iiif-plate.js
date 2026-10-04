@@ -23,44 +23,15 @@ import { state } from '../state.js';
 import { IiifViewer } from '../iiif-viewer.js';
 import { getManifestUrl } from '../viewer.js';
 import { snapIiifToPosition, animateIiifToPosition } from '../iiif-card.js';
+import { FULL_OBJECT_FRAMING, stepFraming } from './framing.js';
 
 /** Unique ids for the div OSD mounts into, one per viewer ever built. */
 let _viewerSeq = 0;
 
-// A step that leaves x, y or zoom blank shows the whole object, and the whole
-// object is a framing like any other: the image centre at zoom 1, which the
-// focal target resolves to the whole image fit and centred in the region the
-// text card leaves uncovered. Without these the viewer keeps whatever OSD's home
-// position gives it — the image centred in the VIEWER, so a side card sits over
-// one edge of it.
-//
-// Exported because the Compositor's capture path pins this value and cites it
-// in its editor. An import it can resolve beats a regex over this file, which
-// can only ever report zero matches when the name moves.
-export const FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
-
-/**
- * The framing a step asks its viewer for.
- *
- * A blank x, y or zoom falls back to the whole-object framing; page is
- * 1-indexed in the story data and absent unless the object is a multi-page
- * external manifest.
- *
- * @param {Object} step - Step data
- * @returns {{ x: number, y: number, zoom: number, page: number|undefined }}
- */
-export function stepFraming(step) {
-  const num = (value, fallback) => {
-    const n = parseFloat(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-  return {
-    x:    num(step.x,    FULL_OBJECT_FRAMING.x),
-    y:    num(step.y,    FULL_OBJECT_FRAMING.y),
-    zoom: num(step.zoom, FULL_OBJECT_FRAMING.zoom),
-    page: step.page ? parseInt(step.page, 10) : undefined,
-  };
-}
+// Defined in framing.js, which `iiif-card.js` can import without a cycle.
+// Re-exported here because the Compositor's capture path imports this module
+// for both, and its parity test resolves them from this path.
+export { FULL_OBJECT_FRAMING, stepFraming };
 
 export class IiifPlate extends Plate {
 

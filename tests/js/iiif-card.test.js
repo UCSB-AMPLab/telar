@@ -71,27 +71,27 @@ describe('computeFocalTarget — the home fit has two arms', () => {
   beforeEach(() => { setDesktopViewport(1440, 900); });
 
   const CARD = { x: 0, y: 0, w: 576, h: 900 };
-  const at = (w, h, zoom) =>
+  const diameterAt = (w, h, zoom) =>
     computeFocalTarget(0.5, 0.5, zoom, w, h, CARD, 'horizontal').diameterImg;
 
   it('a landscape image fits by width, so its frame is its own width', () => {
     // 12237 x 7920, aspect 1.545: wider than the authoring frame, so it fills
     // it edge to edge and the home zoom is 1. frameWidthImg = 12237/2 = 6118.5,
     // diameterImg = 0.90 * 6118.5 = 5506.65.
-    expect(at(12237, 7920, 2)).toBeCloseTo(5506.65, 1);
+    expect(diameterAt(12237, 7920, 2)).toBeCloseTo(5506.65, 1);
   });
 
   it('a portrait image fits by height, so the min does not bind', () => {
     // The transpose of the same pixels: aspect 0.647, under the authoring
     // aspect, so the frame comes from the height and the min passes it
     // through. 0.90 * 7920/((0.64722/1.053) * 2).
-    expect(at(7920, 12237, 2)).toBeCloseTo(5798.5, 1);
+    expect(diameterAt(7920, 12237, 2)).toBeCloseTo(5798.5, 1);
   });
 
   it('a square image still fits by height while the frame is wider than tall', () => {
     // Aspect 1 is under the authoring aspect of 1.053, so a square image is
     // on the height arm too. The hinge sits at the authoring aspect, not at 1.
-    expect(at(4000, 4000, 2)).toBeCloseTo(0.9 * 4000 / ((1 / 1.053) * 2), 1);
+    expect(diameterAt(4000, 4000, 2)).toBeCloseTo(0.9 * 4000 / ((1 / 1.053) * 2), 1);
   });
 
   it('the frame never exceeds the image, however wide the image', () => {
@@ -99,12 +99,12 @@ describe('computeFocalTarget — the home fit has two arms', () => {
     // narrower authored frame, without limit. Every one of these is the
     // image's own width at zoom 1, and none is larger.
     for (const [w, h] of [[4000, 3000], [3840, 2160], [8000, 1000]]) {
-      expect(at(w, h, 1)).toBeCloseTo(0.9 * w, 6);
+      expect(diameterAt(w, h, 1)).toBeCloseTo(0.9 * w, 6);
     }
   });
 
   it('two images of one aspect scale together, whatever their pixel size', () => {
-    expect(at(3840, 2160, 3) / at(1920, 1080, 3)).toBeCloseTo(2, 6);
+    expect(diameterAt(3840, 2160, 3) / diameterAt(1920, 1080, 3)).toBeCloseTo(2, 6);
   });
 });
 

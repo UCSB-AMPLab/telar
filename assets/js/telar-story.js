@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
+/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
 (() => {
   // assets/js/telar-story/state.js
   var MOBILE_NAV_COOLDOWN = 400;
@@ -200,12 +200,14 @@
     return window.matchMedia(`(max-height: ${maxH}px)`).matches;
   }
 
-  // assets/js/telar-story/utils.js
-  function escapeHtml(text) {
-    const div = document.createElement("div");
+  // assets/js/objects-filter/escape.js
+  function escapeHtml(text, doc = document) {
+    const div = doc.createElement("div");
     div.textContent = text == null ? "" : String(text);
     return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
+
+  // assets/js/telar-story/utils.js
   function getBasePath() {
     const pathParts = window.location.pathname.split("/").filter((p) => p);
     if (pathParts.length >= 2) {
@@ -381,6 +383,21 @@
   var AUTHORING_ASPECT = 1.053;
   function authoringHomeZoom(imageAspect) {
     return Math.min(1, imageAspect / AUTHORING_ASPECT);
+  }
+
+  // assets/js/telar-story/plates/framing.js
+  var FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
+  function stepFraming(step) {
+    const num = (value, fallback) => {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    return {
+      x: num(step.x, FULL_OBJECT_FRAMING.x),
+      y: num(step.y, FULL_OBJECT_FRAMING.y),
+      zoom: num(step.zoom, FULL_OBJECT_FRAMING.zoom),
+      page: step.page ? parseInt(step.page, 10) : void 0
+    };
   }
 
   // assets/js/telar-story/iiif-card.js
@@ -563,26 +580,34 @@
       osdViewer.springStiffness = originalSpringStiffness;
     }, seconds * 1e3 + 100);
   }
+  function _objectOf(step) {
+    return step.object || step.objectId || "";
+  }
+  function _authoredFraming(step) {
+    const x = parseFloat(step.x), y = parseFloat(step.y), zoom = parseFloat(step.zoom);
+    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
+    return { x, y, zoom };
+  }
+  function _restsAt(settled, stepIndex, x, y, zoom) {
+    return Boolean(settled) && settled.step === stepIndex && settled.x === x && settled.y === y && settled.zoom === zoom;
+  }
   function lerpIiifPosition(stepIndex, progress, stepsData) {
     const stepA = stepsData[stepIndex];
     const stepB = stepsData[stepIndex + 1];
     if (!stepA || !stepB) return;
-    const objectIdA = stepA.object || stepA.objectId || "";
-    const objectIdB = stepB.object || stepB.objectId || "";
-    if (objectIdA !== objectIdB) return;
-    const xA = parseFloat(stepA.x), yA = parseFloat(stepA.y), zA = parseFloat(stepA.zoom);
-    const xB = parseFloat(stepB.x), yB = parseFloat(stepB.y), zB = parseFloat(stepB.zoom);
-    if (isNaN(xA) || isNaN(yA) || isNaN(zA)) return;
-    if (isNaN(xB) || isNaN(yB) || isNaN(zB)) return;
+    if (_objectOf(stepA) !== _objectOf(stepB)) return;
+    const a = _authoredFraming(stepA);
+    const b = _authoredFraming(stepB);
+    if (!a || !b) return;
     const atRest = progress < 1e-3;
-    const x = atRest ? xA : xA + (xB - xA) * progress;
-    const y = atRest ? yA : yA + (yB - yA) * progress;
-    const zoom = atRest ? zA : zA + (zB - zA) * progress;
+    const between = (from, to) => atRest ? from : from + (to - from) * progress;
+    const x = between(a.x, b.x);
+    const y = between(a.y, b.y);
+    const zoom = between(a.zoom, b.zoom);
     const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
     if (!viewerCard || !viewerCard.isReady) return;
     if (atRest) {
-      const settled = viewerCard.settledAt;
-      if (settled && settled.step === stepIndex && settled.x === x && settled.y === y && settled.zoom === zoom) return;
+      if (_restsAt(viewerCard.settledAt, stepIndex, x, y, zoom)) return;
       viewerCard.settledAt = { step: stepIndex, x, y, zoom };
     } else {
       viewerCard.settledAt = null;
@@ -601,11 +626,8 @@
     const steps = (window.storyData?.steps || []).filter((s) => !s._metadata);
     const step = steps[stepIndex];
     if (!step) return;
-    const num = (value, fallback) => {
-      const n = parseFloat(value);
-      return Number.isFinite(n) ? n : fallback;
-    };
-    snapIiifToPosition(viewerCard, num(step.x, 0.5), num(step.y, 0.5), num(step.zoom, 1));
+    const { x, y, zoom } = stepFraming(step);
+    snapIiifToPosition(viewerCard, x, y, zoom);
   }
   onViewportResize(() => {
     reSnapActiveViewer();
@@ -804,62 +826,11 @@
     }
   };
 
-  // assets/js/telar-story/video-card.js
+  // assets/js/telar-story/video-layout.js
   var _cs = getComputedStyle(document.documentElement);
   var videoPadFactor = parseFloat(_cs.getPropertyValue("--telar-video-pad-factor").trim()) || 0.025;
   var videoStackMaxH = parseFloat(_cs.getPropertyValue("--telar-video-stack-max-h").trim()) || 0.58;
   var videoCardFracSide = parseFloat(_cs.getPropertyValue("--telar-video-card-frac-side").trim()) || 0.35;
-  var _videoPlayers = [];
-  var MAX_VIDEO_PLAYERS = 3;
-  function loadYouTubeAPI() {
-    if (window._ytApiPromise) return window._ytApiPromise;
-    window._ytApiPromise = new Promise((resolve) => {
-      if (window.YT && window.YT.Player) {
-        resolve();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://www.youtube.com/iframe_api";
-      script.async = true;
-      document.head.appendChild(script);
-      const prev = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = function() {
-        if (typeof prev === "function") prev();
-        resolve();
-      };
-    });
-    return window._ytApiPromise;
-  }
-  function detectYouTubeAspect(videoId) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        if (img.naturalWidth >= 320 && img.naturalHeight >= 180) {
-          resolve(img.naturalWidth / img.naturalHeight);
-        } else {
-          resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
-    });
-  }
-  function loadVimeoAPI() {
-    if (window._vimeoApiPromise) return window._vimeoApiPromise;
-    window._vimeoApiPromise = new Promise((resolve, reject) => {
-      if (window.Vimeo && window.Vimeo.Player) {
-        resolve();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://player.vimeo.com/api/player.js";
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load Vimeo Player API"));
-      document.head.appendChild(script);
-    });
-    return window._vimeoApiPromise;
-  }
   function computeVideoLayout(W, H, aspectRatio) {
     if (state.layoutMode === "vertical") {
       return _computeStackedLayout(W, H, aspectRatio);
@@ -972,6 +943,59 @@
   }
   function buildGDriveEmbedUrl(fileId) {
     return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
+
+  // assets/js/telar-story/video-card.js
+  var _videoPlayers = [];
+  var MAX_VIDEO_PLAYERS = 3;
+  function loadYouTubeAPI() {
+    if (window._ytApiPromise) return window._ytApiPromise;
+    window._ytApiPromise = new Promise((resolve) => {
+      if (window.YT && window.YT.Player) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      document.head.appendChild(script);
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = function() {
+        if (typeof prev === "function") prev();
+        resolve();
+      };
+    });
+    return window._ytApiPromise;
+  }
+  function detectYouTubeAspect(videoId) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        if (img.naturalWidth >= 320 && img.naturalHeight >= 180) {
+          resolve(img.naturalWidth / img.naturalHeight);
+        } else {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+    });
+  }
+  function loadVimeoAPI() {
+    if (window._vimeoApiPromise) return window._vimeoApiPromise;
+    window._vimeoApiPromise = new Promise((resolve, reject) => {
+      if (window.Vimeo && window.Vimeo.Player) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://player.vimeo.com/api/player.js";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Failed to load Vimeo Player API"));
+      document.head.appendChild(script);
+    });
+    return window._vimeoApiPromise;
   }
   function applyClipEndDim(plateEl) {
     let overlay = plateEl.querySelector(".clip-end-overlay");
@@ -1360,19 +1384,22 @@
       _evictPlayer(evicted);
     }
   }
+  function _destroyProviderPlayer(wrapper) {
+    if (wrapper.type === "youtube" && wrapper.player) {
+      if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
+      if (wrapper._autoplayTimeout) clearTimeout(wrapper._autoplayTimeout);
+      wrapper.player.destroy();
+    } else if (wrapper.type === "vimeo" && wrapper.player) {
+      wrapper.player.destroy();
+    } else if (wrapper.type === "google-drive") {
+      const iframe = wrapper.element.querySelector("iframe.video-iframe");
+      if (iframe) iframe.remove();
+    }
+  }
   function _evictPlayer(wrapper) {
     wrapper._destroyed = true;
     try {
-      if (wrapper.type === "youtube" && wrapper.player) {
-        if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
-        if (wrapper._autoplayTimeout) clearTimeout(wrapper._autoplayTimeout);
-        wrapper.player.destroy();
-      } else if (wrapper.type === "vimeo" && wrapper.player) {
-        wrapper.player.destroy();
-      } else if (wrapper.type === "google-drive") {
-        const iframe = wrapper.element.querySelector("iframe.video-iframe");
-        if (iframe) iframe.remove();
-      }
+      _destroyProviderPlayer(wrapper);
     } catch (e) {
       console.warn("_evictPlayer: error during evict", e);
     }
@@ -2586,19 +2613,6 @@
 
   // assets/js/telar-story/plates/iiif-plate.js
   var _viewerSeq = 0;
-  var FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
-  function stepFraming(step) {
-    const num = (value, fallback) => {
-      const n = parseFloat(value);
-      return Number.isFinite(n) ? n : fallback;
-    };
-    return {
-      x: num(step.x, FULL_OBJECT_FRAMING.x),
-      y: num(step.y, FULL_OBJECT_FRAMING.y),
-      zoom: num(step.zoom, FULL_OBJECT_FRAMING.zoom),
-      page: step.page ? parseInt(step.page, 10) : void 0
-    };
-  }
   var IiifPlate = class _IiifPlate extends Plate {
     // The class every viewer plate already carries. Named here so the base
     // constructor has something true to add rather than a class of its own.
@@ -5499,40 +5513,21 @@
       onComplete: () => endNav(token)
     });
   }
-  function keyboardNav(direction) {
-    if (!lenis) return;
-    const inFlight = navTargetToken === navToken ? navTarget : null;
-    if (inFlight !== null && _clampPosition(inFlight + (direction === "forward" ? 1 : -1)) === inFlight) {
-      return;
-    }
-    const token = beginNav();
-    navTargetToken = token;
-    endScrub({ carry: false });
+  function _clearDwell() {
     if (dwellTimer) {
       clearTimeout(dwellTimer);
       dwellTimer = null;
       lenis.start();
     }
-    const vh = window.innerHeight;
-    const position = lenis.animatedScroll / vh;
-    const isExact = Math.abs(position - Math.round(position)) < 0.01;
+  }
+  function _keyboardTarget(direction, inFlight, position) {
+    const step = direction === "forward" ? 1 : -1;
+    if (inFlight !== null) return inFlight + step;
     const rounded = Math.round(position);
-    let target;
-    if (inFlight !== null) {
-      target = inFlight + (direction === "forward" ? 1 : -1);
-    } else if (direction === "forward") {
-      target = isExact ? rounded + 1 : Math.ceil(position);
-    } else {
-      target = isExact ? rounded - 1 : Math.floor(position);
-    }
-    target = _clampPosition(target);
-    if (inFlight === null && target === rounded && isExact) {
-      endNav(token);
-      return;
-    }
-    navTarget = target;
-    settleCards(target);
-    snap.currentSnapIndex = target;
+    if (Math.abs(position - rounded) < 0.01) return rounded + step;
+    return direction === "forward" ? Math.ceil(position) : Math.floor(position);
+  }
+  function _activateKeyboardTarget(target, direction) {
     const targetStep = target - 1;
     if (targetStep >= 0 && targetStep !== state.currentIndex) {
       state.scrollDriven = true;
@@ -5544,6 +5539,30 @@
     } else if (targetStep < 0 && state.currentIndex >= 0) {
       goToStep(-1, "backward");
     }
+  }
+  function keyboardNav(direction) {
+    if (!lenis) return;
+    const inFlight = navTargetToken === navToken ? navTarget : null;
+    if (inFlight !== null && _clampPosition(inFlight + (direction === "forward" ? 1 : -1)) === inFlight) {
+      return;
+    }
+    const token = beginNav();
+    navTargetToken = token;
+    endScrub({ carry: false });
+    _clearDwell();
+    const vh = window.innerHeight;
+    const position = lenis.animatedScroll / vh;
+    const isExact = Math.abs(position - Math.round(position)) < 0.01;
+    const rounded = Math.round(position);
+    const target = _clampPosition(_keyboardTarget(direction, inFlight, position));
+    if (inFlight === null && target === rounded && isExact) {
+      endNav(token);
+      return;
+    }
+    navTarget = target;
+    settleCards(target);
+    snap.currentSnapIndex = target;
+    _activateKeyboardTarget(target, direction);
     keyboardNavInFlight = true;
     lenis.scrollTo(target * vh, {
       force: true,

@@ -41,6 +41,7 @@
 import { state } from './state.js';
 import { onViewportResize, onLayoutChange, isLandscapeSideCard } from './layout-mode.js';
 import { authoringHomeZoom } from './authoring-frame.js';
+import { stepFraming } from './plates/framing.js';
 
 // ── Type definition ──────────────────────────────────────────────────────────
 
@@ -647,6 +648,30 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
 
 // ── Per-frame IIIF interpolation ─────────────────────────────────────────────
 
+/** The object a step shows, under either of the names step data carries it by. */
+function _objectOf(step) {
+  return step.object || step.objectId || '';
+}
+
+/**
+ * A step's x, y and zoom as numbers, or null when any of them is not one.
+ *
+ * Not `stepFraming`, which falls back to the whole object per axis: a pair of
+ * steps with a cell that is not a number is not interpolated at all, and the
+ * viewer keeps the framing the step's own activation gave it.
+ */
+function _authoredFraming(step) {
+  const x = parseFloat(step.x), y = parseFloat(step.y), zoom = parseFloat(step.zoom);
+  if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
+  return { x, y, zoom };
+}
+
+/** Whether a viewer already rests at this framing for this step. */
+function _restsAt(settled, stepIndex, x, y, zoom) {
+  return Boolean(settled) && settled.step === stepIndex &&
+    settled.x === x && settled.y === y && settled.zoom === zoom;
+}
+
 /**
  * Interpolate IIIF viewer position between two steps based on scroll progress.
  *
@@ -672,15 +697,11 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   const stepB = stepsData[stepIndex + 1];
   if (!stepA || !stepB) return;
 
-  const objectIdA = stepA.object || stepA.objectId || '';
-  const objectIdB = stepB.object || stepB.objectId || '';
-  if (objectIdA !== objectIdB) return; // different object, freeze
+  if (_objectOf(stepA) !== _objectOf(stepB)) return; // different object, freeze
 
-  const xA = parseFloat(stepA.x), yA = parseFloat(stepA.y), zA = parseFloat(stepA.zoom);
-  const xB = parseFloat(stepB.x), yB = parseFloat(stepB.y), zB = parseFloat(stepB.zoom);
-
-  if (isNaN(xA) || isNaN(yA) || isNaN(zA)) return;
-  if (isNaN(xB) || isNaN(yB) || isNaN(zB)) return;
+  const a = _authoredFraming(stepA);
+  const b = _authoredFraming(stepB);
+  if (!a || !b) return;
 
   // A whole step is a resting place, and the framing there is the author's
   // own, stated rather than approached. The interpolation stops a fraction of
@@ -691,9 +712,10 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // of a cliff; it still states the authored endpoint exactly, which is what a
   // reader resting on a step is owed.
   const atRest = progress < 0.001;
-  const x    = atRest ? xA : xA + (xB - xA) * progress;
-  const y    = atRest ? yA : yA + (yB - yA) * progress;
-  const zoom = atRest ? zA : zA + (zB - zA) * progress;
+  const between = (from, to) => (atRest ? from : from + (to - from) * progress);
+  const x    = between(a.x, b.x);
+  const y    = between(a.y, b.y);
+  const zoom = between(a.zoom, b.zoom);
 
   // Keyed by scene, not by objectId: an object appearing in several scenes has
   // a plate for each, and an objectId lookup finds the wrong one on backward
@@ -706,9 +728,7 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // layout in OSD, so the resting write happens once per arrival rather than
   // for as long as the reader stays on the step.
   if (atRest) {
-    const settled = viewerCard.settledAt;
-    if (settled && settled.step === stepIndex &&
-        settled.x === x && settled.y === y && settled.zoom === zoom) return;
+    if (_restsAt(viewerCard.settledAt, stepIndex, x, y, zoom)) return;
     viewerCard.settledAt = { step: stepIndex, x, y, zoom };
   } else {
     viewerCard.settledAt = null;
@@ -753,13 +773,9 @@ export function reSnapActiveViewer() {
   const step = steps[stepIndex];
   if (!step) return;
 
-  // A step that authored no framing shows the whole object: the image centre at
-  // zoom 1, the same framing card-pool.js gives it on activation.
-  const num = (value, fallback) => {
-    const n = parseFloat(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-  snapIiifToPosition(viewerCard, num(step.x, 0.5), num(step.y, 0.5), num(step.zoom, 1));
+  // A cell left blank falls back as it does on activation: to the whole object.
+  const { x, y, zoom } = stepFraming(step);
+  snapIiifToPosition(viewerCard, x, y, zoom);
 }
 
 // Subscribe to layout-mode events (no new ad-hoc resize listeners).

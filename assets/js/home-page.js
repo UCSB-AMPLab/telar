@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-thumbnails/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
+/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-thumbnails/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
 (() => {
   // assets/js/iiif-thumbnails/resolve.js
   function pickThumbnailSize(sizes, minWidth) {

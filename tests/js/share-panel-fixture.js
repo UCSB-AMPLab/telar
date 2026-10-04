@@ -24,6 +24,9 @@
 import { vi } from 'vitest';
 
 import { createSharePanel } from '../../assets/js/share-panel/main.js';
+import { el } from './test-helpers.js';
+
+export { el };
 
 /** The origin the test file is served at; see its @vitest-environment-options. */
 export const ORIGIN = 'https://example.org';
@@ -312,7 +315,6 @@ export function openPanel() {
   el('panel-share').dispatchEvent(new Event('show.bs.modal'));
 }
 
-export const el = (id) => document.getElementById(id);
 export const value = (id) => el(id).value;
 export const hasClass = (id, className) => el(id).classList.contains(className);
 export const icon = (id) => el(id).querySelector('.icon');

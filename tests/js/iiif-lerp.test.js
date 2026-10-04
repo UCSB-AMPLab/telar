@@ -20,41 +20,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
-import { IiifPlate } from '../../assets/js/telar-story/plates/iiif-plate.js';
-
-// The image the fake viewer holds, in image pixels.
-const IMG = { width: 1200, height: 900 };
-// The viewer's box on screen.
-const CONTAINER = { x: 0, y: 0, width: 1000, height: 800, top: 0, left: 0 };
+import { makePlate } from './iiif-plate-helpers.js';
 
 let fitBounds;
-
-/**
- * A plate whose viewer is fake from `viewport.fitBounds` outwards.
- *
- * `imageToViewportRectangle` is the identity, so the rectangle `fitBounds`
- * receives is still in image pixels and can be read directly. Everything the
- * focal geometry does to reach it is the real code.
- */
-function makePlate(objectId, sceneIndex, { isReady = true } = {}) {
-  const el = document.createElement('div');
-  el.className = 'viewer-plate';
-  el.dataset.cardType = 'iiif';
-
-  const plate = new IiifPlate(el, objectId, sceneIndex, 0);
-  plate.isReady = isReady;
-  plate.osdWrapper = {
-    containerEl: { getBoundingClientRect: () => ({ ...CONTAINER }) },
-  };
-  plate.osdViewer = {
-    world: { getItemAt: () => ({ source: { ...IMG } }) },
-    viewport: {
-      imageToViewportRectangle: (rect) => rect,
-      fitBounds,
-    },
-  };
-  return plate;
-}
 
 /** The centre of the rectangle the viewer was last asked to frame, in image px. */
 function framedCentre() {
@@ -88,7 +56,7 @@ describe('lerpIiifPosition — moving between two steps on one object', () => {
   const stepsData = [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3)];
 
   beforeEach(() => {
-    state.viewerPlates = { 0: makePlate('fig1', 0) };
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
     state.stepToScene = { 0: 0, 1: 0 };
   });
 
@@ -129,7 +97,7 @@ describe('lerpIiifPosition — at rest on a step', () => {
   const stepsData = [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3)];
 
   beforeEach(() => {
-    state.viewerPlates = { 0: makePlate('fig1', 0) };
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
     state.stepToScene = { 0: 0, 1: 0 };
   });
 
@@ -182,7 +150,7 @@ describe('lerpIiifPosition — what it declines to move', () => {
   const pair = [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3)];
 
   beforeEach(() => {
-    state.viewerPlates = { 0: makePlate('fig1', 0) };
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
     state.stepToScene = { 0: 0, 1: 0 };
   });
 
@@ -222,7 +190,7 @@ describe('lerpIiifPosition — what it declines to move', () => {
   });
 
   it('waits for a viewer that is not ready yet', () => {
-    state.viewerPlates = { 0: makePlate('fig1', 0, { isReady: false }) };
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds, isReady: false }) };
     lerpIiifPosition(0, 0.5, pair);
     expect(fitBounds).not.toHaveBeenCalled();
   });
@@ -251,12 +219,12 @@ describe('lerpIiifPosition — a story that returns to an object', () => {
       makeStep('fig2', 0, 0, 1), makeStep('fig2', 0, 0, 1),
       makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3),
     ];
-    const first = makePlate('fig1', 0);
-    const second = makePlate('fig1', 2);
+    const first = makePlate('fig1', 0, { fitBounds });
+    const second = makePlate('fig1', 2, { fitBounds });
     const firstFitBounds = vi.fn();
     first.osdViewer.viewport.fitBounds = firstFitBounds;
 
-    state.viewerPlates = { 0: first, 1: makePlate('fig2', 1), 2: second };
+    state.viewerPlates = { 0: first, 1: makePlate('fig2', 1, { fitBounds }), 2: second };
     state.stepToScene = { 0: 0, 1: 0, 2: 1, 3: 1, 4: 2, 5: 2 };
 
     lerpIiifPosition(4, 0.5, stepsData);

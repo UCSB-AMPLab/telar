@@ -40,28 +40,35 @@ import sys
 import json
 import yaml
 import argparse
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 # Add scripts directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
 from migrations.base import (
     BaseMigration, ChangeCategory, ChangeRecord, ChangeStatus,
-    UPGRADE_STATE_FILE, apply_config_version, category_for_path,
+    UPGRADE_STATE_FILE, apply_config_version,
     coerce_change,
     is_hard_failure,
 )
-from migrations.messages import get_message, get_file_count_suffix
+from migrations.messages import get_message
 from migrations.discovery import discover_migrations
 
-# The exit code csv_to_json.py uses for "protected stories cannot be
-# encrypted downstream". Declared here as a literal rather than imported:
-# the scripts/telar package eagerly imports pandas and PIL, and this script
-# runs before _ensure_regeneration_dependencies() has had a chance to
-# install them. tests/unit/test_upgrade_protected_prerequisite.py reads
-# both definitions and fails if they diverge.
-PROTECTED_PREREQUISITE_EXIT = 3
+# The shared helpers, the summary and the data regeneration live in the three
+# telar_upgrade_* modules beside this one, which the tooling tarball carries
+# with it. Every name is imported back here: main() calls them from this
+# module, and tests reach them through it.
+from telar_upgrade_common import (  # noqa: F401
+    PROTECTED_PREREQUISITE_EXIT, _get_date, _get_lang,
+)
+from telar_upgrade_report import (  # noqa: F401
+    _PATH_IN_DESCRIPTION, _categorize_changes, _category_from_description,
+    _visible_manual_steps, generate_checklist,
+)
+from telar_upgrade_regen import (  # noqa: F401
+    _REGENERATION_IMPORTS, _ensure_regeneration_dependencies,
+    _missing_regeneration_imports, _regenerate_data_files,
+)
 
 # The chain, read off the modules in migrations/ rather than hand-listed.
 #
@@ -184,26 +191,6 @@ def detect_current_version(repo_root: str) -> Optional[str]:
         return None
 
 
-def _get_lang(repo_root: str) -> str:
-    """Read the site's telar_language from _config.yml for console output.
-
-    Defaults to English when the config is missing/unreadable or the key is
-    absent. messages.py recognises 'en' and 'es'; anything else falls back to
-    English there.
-    """
-    config_path = os.path.join(repo_root, '_config.yml')
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-        if isinstance(config, dict):
-            lang = config.get('telar_language')
-            if isinstance(lang, str) and lang.strip():
-                return lang.strip()
-    except Exception:
-        pass
-    return 'en'
-
-
 def get_migration_path(from_version: str, repo_root: str) -> List[BaseMigration]:
     """
     Get list of migrations to run from current version to latest.
@@ -310,399 +297,6 @@ def run_migrations(migrations: List[BaseMigration], dry_run: bool = False) -> Li
     return all_changes
 
 
-# A path inside a change description: a dotted filename, or one of the
-# dotfiles the chain touches by name. Records that carry no category of
-# their own still name the file they changed, and the filename is the part
-# of a description that does not move when someone rewords the sentence
-# around it.
-# Longest extension first: alternation is leftmost-first, so `js` ahead of
-# `json` would match `package.js` out of `package.json` and file an npm
-# manifest under Scripts.
-_PATH_IN_DESCRIPTION = re.compile(
-    r'(?:[\w./-]*\.(?:yaml|yml|json|scss|html|lock|css|txt|ini|md|py|js)(?!\w)'
-    r'|\.gitignore|\.gitattributes|\.ruby-version'
-    r'|\bNOTICE\b|\bLICENSE\b)',
-    re.IGNORECASE,
-)
-
-
-def _category_from_description(description: str) -> str:
-    """The heading for a record that carries no category of its own.
-
-    Legacy migrations return bare strings, which `coerce_change` wraps
-    without a category, so something has to place them. This reads the
-    file path out of the description and asks `category_for_path`, which
-    is the same function a record with a category answers with.
-
-    It is derived rather than guessed, which is the difference that
-    matters. Matching keywords in the prose put "Updated _includes/head.html"
-    under Configuration, because "config" appears nowhere in it but the
-    substring test for `_config.yml`'s neighbours fired first; and any
-    migration that reworded its own description moved its change to another
-    heading with nothing to notice. A path does not move when the sentence
-    around it is rewritten.
-
-    A description naming no file falls to Other, which is honest: there is
-    no file for the change to be filed under.
-    """
-    for match in _PATH_IN_DESCRIPTION.finditer(description):
-        token = match.group(0).lstrip('`\'"(')
-        # Both spellings: the name table is keyed on real filenames, which
-        # are cased (README.md, NOTICE), while a description may shout a
-        # path it is quoting.
-        for candidate in (token, token.lower()):
-            category = category_for_path(candidate)
-            if category != ChangeCategory.OTHER:
-                return category
-    return ChangeCategory.OTHER
-
-
-def _categorize_changes(records: List[ChangeRecord]) -> dict:
-    """Group applied changes under the summary headings, in print order.
-
-    A record's own `category` is used when it has one. A record without
-    one is placed by the file path in its description, which is what
-    `_category_from_description` is for.
-
-    Returns:
-        {category slug: [description, ...]}, empty categories dropped.
-    """
-    grouped = {category: [] for category in ChangeCategory.ORDER}
-
-    for record in records:
-        category = record.category or _category_from_description(record.description)
-        if category not in grouped:
-            category = ChangeCategory.OTHER
-        grouped[category].append(record.description)
-
-    return {name: items for name, items in grouped.items() if items}
-
-
-def generate_checklist(
-    migrations: List[BaseMigration],
-    all_changes: List[ChangeRecord],
-    from_version: str,
-    to_version: str,
-    soft_warnings: Optional[List[str]] = None,
-    lang: str = 'en',
-    sheets_enabled: bool = True,
-    extra_manual_steps: Optional[List[dict]] = None,
-) -> str:
-    """
-    Generate UPGRADE_SUMMARY.md content (without YAML frontmatter).
-
-    Applied changes render as ticked `- [x]` items and are the only ones
-    counted in the automated-changes total. Failed changes render as unticked
-    `- [ ]` items so a failure is never reported as completed work, under one
-    of two headings: a blocking failure, where the site was not upgraded and
-    a re-run is the fix, and a flagged one, where the file is absent from the
-    release, the site was upgraded anyway, and a re-run changes nothing.
-
-    Args:
-        migrations: List of migrations that were run
-        all_changes: ChangeRecords for every change attempted
-        from_version: Original version
-        to_version: Target version
-        soft_warnings: Non-fatal warnings (e.g. IIIF tile regeneration) to
-            surface visibly rather than bury.
-        lang: Language code for the summary text ('en' or 'es'), from the
-            site's telar_language setting.
-        sheets_enabled: Whether the site pulls content from Google Sheets,
-            which decides whether the spreadsheet manual steps are addressed
-            to its owner. Defaults to True so a caller that does not know
-            shows every step rather than hiding one.
-        extra_manual_steps: Steps the run discovered rather than a migration
-            declaring them. They are not filtered by audience: the run found
-            this site in this state, so the step is addressed to whoever is
-            reading this summary.
-
-    Returns:
-        Markdown content for summary
-    """
-    soft_warnings = soft_warnings or []
-
-    applied = [r for r in all_changes if r.status == ChangeStatus.APPLIED]
-    # The two kinds of failure get their own sections, because one body
-    # cannot be true of both: a blocking failure means the site was not
-    # upgraded and a re-run is the fix, and a flagged one means the site was
-    # upgraded and a re-run changes nothing.
-    failed = [r for r in all_changes if is_hard_failure(r)]
-    flagged = [r for r in all_changes
-               if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
-
-    manual_steps = _visible_manual_steps(migrations, sheets_enabled)
-    manual_steps = manual_steps + list(extra_manual_steps or [])
-
-    # Categorize applied changes
-    categorized = _categorize_changes(applied)
-
-    summary_title = get_message(lang, 'summary_title')
-    checklist = f"""---
-layout: default
-title: {summary_title}
----
-
-## {summary_title}
-- **{get_message(lang, 'summary_from')}:** {from_version}
-- **{get_message(lang, 'summary_to')}:** {to_version}
-- **{get_message(lang, 'summary_date')}:** {_get_date()}
-- **{get_message(lang, 'summary_automated_changes')}:** {len(applied)}
-- **{get_message(lang, 'summary_manual_steps')}:** {len(manual_steps)}
-"""
-    if failed:
-        checklist += f"- **{get_message(lang, 'summary_failed_count')}:** {len(failed)}\n"
-    if flagged:
-        checklist += f"- **{get_message(lang, 'summary_flagged_count')}:** {len(flagged)}\n"
-    checklist += f"\n## {get_message(lang, 'automated_changes_applied')}\n\n"
-
-    # Output changes by category
-    for category, changes in categorized.items():
-        category_label = get_message(lang, 'category_' + category)
-        file_suffix = get_file_count_suffix(lang, len(changes))
-        checklist += f"### {category_label} ({len(changes)} {file_suffix})\n\n"
-        for change in changes:
-            checklist += f"- [x] {change}\n"
-        checklist += "\n"
-
-    # Failures are never ticked and never counted as automated changes.
-    if failed:
-        checklist += f"## {get_message(lang, 'failed_needs_attention')}\n\n"
-        checklist += get_message(lang, 'failed_section_body') + "\n\n"
-        for record in failed:
-            checklist += f"- [ ] {record.description}\n"
-        checklist += "\n"
-
-    if flagged:
-        checklist += f"## {get_message(lang, 'flagged_needs_attention')}\n\n"
-        checklist += get_message(lang, 'flagged_section_body') + "\n\n"
-        for record in flagged:
-            checklist += f"- [ ] {record.description}\n"
-        checklist += "\n"
-
-    if soft_warnings:
-        checklist += f"## {get_message(lang, 'completed_with_warnings')}\n\n"
-        checklist += get_message(lang, 'warnings_section_body') + "\n\n"
-        for warning in soft_warnings:
-            checklist += f"- {warning}\n"
-        checklist += "\n"
-
-    if manual_steps:
-        checklist += f"""## {get_message(lang, 'manual_steps_required')}
-
-{get_message(lang, 'complete_after_merge')}
-
-"""
-        for i, step in enumerate(manual_steps, 1):
-            checklist += f"{i}. {step['description']}"
-            if 'doc_url' in step:
-                checklist += f" ([{get_message(lang, 'guide')}]({step['doc_url']}))"
-            checklist += "\n"
-    else:
-        checklist += f"## {get_message(lang, 'no_manual_steps')}\n\n{get_message(lang, 'all_automated')}\n"
-
-    checklist += f"""
-## {get_message(lang, 'resources')}
-
-- [{get_message(lang, 'full_documentation')}](https://telar.org/docs)
-- [{get_message(lang, 'changelog')}](https://github.com/UCSB-AMPLab/telar/blob/main/CHANGELOG.md)
-- [{get_message(lang, 'report_issues')}](https://github.com/UCSB-AMPLab/telar/issues)
-"""
-
-    return checklist
-
-
-def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool, bool]:
-    """
-    Regenerate JSON data files and IIIF tiles from CSV sources with validation.
-
-    Runs csv_to_json.py, generate_collections.py, and generate_iiif.py to apply
-    validation logic to existing data and regenerate IIIF tiles for local images.
-
-    csv_to_json and generate_collections are HARD: if they fail the derived data
-    is stale and the upgrade must not be stamped as complete. generate_iiif is
-    SOFT: tile generation can fail (e.g. missing source images) without
-    invalidating the upgrade, and is surfaced as a warning instead.
-
-    Precondition: the modules in _REGENERATION_IMPORTS must be importable in
-    this interpreter — main() runs _ensure_regeneration_dependencies() first.
-
-    Args:
-        repo_root: Path to repository root
-
-    One cause is carved out of the HARD rule. `csv_to_json.py` exits
-    PROTECTED_PREREQUISITE_EXIT when the site has a protected story that
-    the build workflow cannot encrypt, and it does so *after* writing every
-    JSON file — the regeneration succeeded, and what failed is a check on a
-    future build. Treating that as a hard failure aborts the upgrade and
-    leaves a working site at its old version, while preventing nothing: the
-    build runs `csv_to_json.py` too, so the same refusal stops publication
-    whether or not this upgrade completes. The site is left needing a
-    workflow edit either way; the only question is whether it also loses
-    the upgrade.
-
-    Returns:
-        (csv_ok, iiif_ok, protected_blocked). csv_ok is False if the HARD
-        data steps could not be run or returned an error. iiif_ok is False
-        if IIIF tile regeneration failed (non-fatal). protected_blocked is
-        True when the data was regenerated but a protected story has no way
-        to be encrypted; csv_ok is True in that case. When the scripts are
-        absent, csv_ok is False (the caller treats "could not regenerate"
-        as a HARD failure).
-    """
-    import subprocess
-
-    lang = _get_lang(repo_root)
-    scripts_dir = os.path.join(repo_root, 'scripts')
-    csv_to_json = os.path.join(scripts_dir, 'csv_to_json.py')
-    generate_collections = os.path.join(scripts_dir, 'generate_collections.py')
-
-    # Check if scripts exist
-    if not os.path.exists(csv_to_json):
-        return (False, True, False)
-
-    try:
-        # Run csv_to_json.py (generates objects.json with validation)
-        result = subprocess.run(
-            [sys.executable, csv_to_json],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        protected_blocked = result.returncode == PROTECTED_PREREQUISITE_EXIT
-        if result.returncode != 0 and not protected_blocked:
-            print('  ' + get_message(lang, 'regeneration_script_error',
-                                     'csv_to_json.py', result.stderr))
-            return (False, True, False)
-        if protected_blocked:
-            # The refusal is the engine's own, and it prints both languages.
-            print(result.stdout.rstrip())
-
-        # Run generate_collections.py (generates story/glossary JSON with validation)
-        if os.path.exists(generate_collections):
-            result = subprocess.run(
-                [sys.executable, generate_collections],
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode != 0:
-                print('  ' + get_message(lang, 'regeneration_script_error',
-                                         'generate_collections.py', result.stderr))
-                return (False, True, False)
-
-        # Run generate_iiif.py (regenerates IIIF tiles for local images).
-        # SOFT: a failure here does not block the upgrade.
-        iiif_ok = True
-        generate_iiif = os.path.join(scripts_dir, 'generate_iiif.py')
-        if os.path.exists(generate_iiif):
-            result = subprocess.run(
-                [sys.executable, generate_iiif],
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-                timeout=180  # Longer timeout for tile generation
-            )
-
-            if result.returncode != 0:
-                print('  ' + get_message(lang, 'regeneration_script_error',
-                                         'generate_iiif.py', result.stderr))
-                iiif_ok = False
-
-        return (True, iiif_ok, protected_blocked)
-
-    except subprocess.TimeoutExpired:
-        print('  ' + get_message(lang, 'regeneration_timeout'))
-        return (False, True, False)
-    except Exception as e:
-        print('  ' + get_message(lang, 'regeneration_failed', e))
-        return (False, True, False)
-
-
-# Import names that data regeneration transitively requires. csv_to_json.py and
-# generate_collections.py load the scripts/telar package, which eagerly imports
-# these; regeneration cannot run unless every one resolves. These are IMPORT
-# names, not pip package names — requirements.txt lists the packages that
-# provide them (PIL comes from Pillow, yaml from pyyaml).
-_REGENERATION_IMPORTS = ["markdown", "PIL", "jinja2", "cryptography", "yaml", "pandas"]
-
-
-def _missing_regeneration_imports() -> List[str]:
-    """Return the subset of _REGENERATION_IMPORTS that cannot currently be imported."""
-    import importlib.util
-    return [name for name in _REGENERATION_IMPORTS
-            if importlib.util.find_spec(name) is None]
-
-
-def _ensure_regeneration_dependencies(repo_root: str) -> Tuple[bool, List[str]]:
-    """Ensure the modules data regeneration needs are importable.
-
-    _regenerate_data_files() subprocess-runs csv_to_json.py and
-    generate_collections.py, which transitively import the modules in
-    _REGENERATION_IMPORTS through the scripts/telar package. This script is
-    fetched fresh from the release tooling tarball on every run, so it ensures
-    its own dependencies here rather than relying on the site's CI workflow — a
-    copy the migrations cannot update.
-
-    When every required module already resolves, this returns immediately with no
-    pip call. Otherwise it installs from a requirements manifest, preferring the
-    tooling copy shipped beside this script (the tarball places requirements.txt
-    as a sibling of scripts/) and falling back to the site's own requirements.txt.
-
-    Args:
-        repo_root: Path to the site being upgraded (source of the fallback manifest).
-
-    Returns:
-        (ok, missing). ok is True when every required module is importable after
-        the ensure step. missing lists the import names still unresolved.
-    """
-    import importlib
-    import subprocess
-
-    lang = _get_lang(repo_root)
-    missing = _missing_regeneration_imports()
-    if not missing:
-        return (True, [])
-
-    # Manifest search order: the tooling copy beside this script first (tarball
-    # layout: requirements.txt sibling of scripts/), then the site's own copy —
-    # the fallback that is the only manifest present when the tooling tarball
-    # carries no requirements.txt.
-    candidates = [
-        Path(__file__).resolve().parent.parent / 'requirements.txt',
-        Path(repo_root) / 'requirements.txt',
-    ]
-    manifest = next((p for p in candidates if p.is_file()), None)
-
-    if manifest is None:
-        print(get_message(lang, 'deps_no_manifest', ', '.join(missing)))
-        return (False, missing)
-
-    print(get_message(lang, 'deps_installing', manifest))
-    try:
-        result = subprocess.run(
-            [sys.executable, '-m', 'pip', 'install', '-r', str(manifest)],
-            capture_output=True,
-            text=True,
-            # pip resolves over the network; without a bound, a hung fetch
-            # stalls the CI job until the runner's own multi-hour timeout.
-            timeout=600,
-        )
-        if result.returncode != 0:
-            stderr_tail = '\n'.join((result.stderr or '').strip().splitlines()[-10:])
-            print(get_message(lang, 'deps_pip_failed', manifest, stderr_tail))
-    except subprocess.TimeoutExpired:
-        print(get_message(lang, 'deps_pip_timeout', manifest))
-
-    # A fresh install may not be visible to find_spec until import caches are cleared.
-    importlib.invalidate_caches()
-    still_missing = _missing_regeneration_imports()
-    return (not still_missing, still_missing)
-
-
 def _update_config_version(repo_root: str, new_version: str, new_date: str) -> bool:
     """Stamp telar.version/release_date in _config.yml (the final stamp in
     main()). Thin I/O wrapper over the shared apply_config_version writer in
@@ -742,44 +336,6 @@ def _site_uses_google_sheets(repo_root: str) -> bool:
         return False
     section = config.get('google_sheets')
     return bool(isinstance(section, dict) and section.get('enabled'))
-
-
-def _visible_manual_steps(migrations: List[BaseMigration],
-                          sheets_enabled: bool) -> List[Dict[str, str]]:
-    """The manual steps this site's owner is actually meant to act on.
-
-    The framework's half of the `audience` contract. The Compositor filters
-    the same field on its own screen; a site upgrading with this engine had
-    nothing doing it, so every step reached every summary -- including the
-    spreadsheet steps, on sites with no spreadsheet.
-
-    `local` is not filtered here and cannot be. It means "the Compositor
-    does this for you", and a site running this engine is by definition not
-    being upgraded by the Compositor, so every `local` step is addressed to
-    whoever is reading this summary.
-
-    An unrecognised value shows the step. A step nobody can see is the
-    failure the field exists to prevent, so an unknown audience errs
-    towards the reader rather than away.
-    """
-    visible = []
-    for migration in migrations:
-        for step in migration.get_manual_steps():
-            audience = step.get('audience')
-            if audience == 'google-sheets' and not sheets_enabled:
-                continue
-            visible.append(step)
-    return visible
-
-
-def _get_date() -> str:
-    """Today, for the things that are genuinely about now.
-
-    The summary's own date and the state file's timestamp record when this
-    run happened. The version stamp does not — see `_stamp_date`.
-    """
-    from datetime import datetime
-    return datetime.now().strftime('%Y-%m-%d')
 
 
 def _stamp_date(lang: str) -> str:
@@ -951,6 +507,44 @@ def _retire_local_migrations(repo_root: str, lang: str) -> List[ChangeRecord]:
     )]
 
 
+def _report_prior_failure(repo_root: str, lang: str) -> None:
+    """Say so if a previous upgrade left a failed-state marker."""
+    prior_state = _read_state_file(repo_root)
+    if prior_state and prior_state.get('status') == 'failed':
+        print("\n" + get_message(lang, 'prev_upgrade_incomplete', prior_state.get('to_version', '?')))
+        print(get_message(lang, 'prev_upgrade_rerun'))
+
+
+def _uncommitted_changes_accepted(repo_root: str, lang: str, dry_run: bool) -> bool:
+    """Whether the run may go ahead over uncommitted changes in the site.
+
+    False only when a person at a terminal was asked and declined. Without a
+    terminal, e.g. in CI, there is no prompt, since `input` would raise
+    EOFError, and the workflow's branch model is the gate. A dry run changes
+    nothing, so it is not asked. Git missing or failing is not a reason to
+    stop.
+    """
+    if not os.path.exists(os.path.join(repo_root, '.git')):
+        return True
+    import subprocess
+    try:
+        result = subprocess.run(['git', 'status', '--porcelain'],
+                                cwd=repo_root, capture_output=True, text=True)
+        if result.stdout.strip() and not dry_run:
+            print('\n' + get_message(lang, 'uncommitted_warning'))
+            print(get_message(lang, 'uncommitted_recommend'))
+            if sys.stdin.isatty():
+                response = input(get_message(lang, 'continue_anyway'))
+                if response.lower() != 'y':
+                    print(get_message(lang, 'upgrade_cancelled'))
+                    return False
+            else:
+                print(get_message(lang, 'no_tty_continue'))
+    except Exception:
+        pass  # Git not available or other error, continue anyway
+    return True
+
+
 def main():
     """Main upgrade orchestrator."""
     parser = argparse.ArgumentParser(description='Upgrade Telar to the latest version')
@@ -968,32 +562,9 @@ def main():
     print(get_message(lang, 'upgrade_title'))
     print("=" * 60)
 
-    # Inform the user if a previous upgrade left a failed-state marker.
-    prior_state = _read_state_file(repo_root)
-    if prior_state and prior_state.get('status') == 'failed':
-        print("\n" + get_message(lang, 'prev_upgrade_incomplete', prior_state.get('to_version', '?')))
-        print(get_message(lang, 'prev_upgrade_rerun'))
-
-    # Check for uncommitted changes (skip the prompt when there is no terminal,
-    # e.g. in CI, to avoid an EOFError; the workflow's branch model is the gate).
-    git_dir = os.path.join(repo_root, '.git')
-    if os.path.exists(git_dir):
-        import subprocess
-        try:
-            result = subprocess.run(['git', 'status', '--porcelain'],
-                                    cwd=repo_root, capture_output=True, text=True)
-            if result.stdout.strip() and not args.dry_run:
-                print('\n' + get_message(lang, 'uncommitted_warning'))
-                print(get_message(lang, 'uncommitted_recommend'))
-                if sys.stdin.isatty():
-                    response = input(get_message(lang, 'continue_anyway'))
-                    if response.lower() != 'y':
-                        print(get_message(lang, 'upgrade_cancelled'))
-                        return EXIT_PRECONDITION
-                else:
-                    print(get_message(lang, 'no_tty_continue'))
-        except Exception:
-            pass  # Git not available or other error, continue anyway
+    _report_prior_failure(repo_root, lang)
+    if not _uncommitted_changes_accepted(repo_root, lang, args.dry_run):
+        return EXIT_PRECONDITION
 
     # Detect current version
     print('\n' + get_message(lang, 'detecting_version'))

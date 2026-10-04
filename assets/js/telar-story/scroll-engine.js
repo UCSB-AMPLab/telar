@@ -466,6 +466,60 @@ export function advanceToStep(targetIndex) {
   });
 }
 
+/** Stop a post-snap dwell, if one is running, and give Lenis back its input. */
+function _clearDwell() {
+  if (dwellTimer) {
+    clearTimeout(dwellTimer);
+    dwellTimer = null;
+    lenis.start();
+  }
+}
+
+/**
+ * The scroll position a key press moves to, before clamping.
+ *
+ * A move of the keyboard's own is stepped from where it is going, not from
+ * where it has reached. Anything else — a scroll at rest, or one the reader
+ * left part way — is read from the position, which is the only account of it
+ * there is: a position on a step moves a whole step, and one between steps
+ * moves to the next step in the direction of the press.
+ *
+ * @param {'forward'|'backward'} direction
+ * @param {number|null} inFlight - The target of the keyboard move under way, if any.
+ * @param {number} position - The scroll position, in viewports.
+ */
+function _keyboardTarget(direction, inFlight, position) {
+  const step = direction === 'forward' ? 1 : -1;
+  if (inFlight !== null) return inFlight + step;
+  const rounded = Math.round(position);
+  if (Math.abs(position - rounded) < 0.01) return rounded + step;
+  return direction === 'forward' ? Math.ceil(position) : Math.floor(position);
+}
+
+/**
+ * Show the card a key press is moving to, before the scroll gets there.
+ *
+ * The target is a scroll position (intro=0, step0=1, step1=2…), so its step
+ * index is target-1. Target 0 is the intro, which carries no card. The intro
+ * zone's own restore is suppressed by keyboardNavInFlight for the whole
+ * animation, so the restore runs here — the same call the scroll zone and the
+ * Back to Start button make, so index, fragment and nav button end up where
+ * those paths leave them.
+ */
+function _activateKeyboardTarget(target, direction) {
+  const targetStep = target - 1;
+  if (targetStep >= 0 && targetStep !== state.currentIndex) {
+    state.scrollDriven = true;
+    activateCard(targetStep, direction);
+    state.scrollDriven = false;
+    state.currentIndex = targetStep;
+    updateViewerInfo(targetStep);
+    if (state.onStepChange) state.onStepChange(targetStep);
+  } else if (targetStep < 0 && state.currentIndex >= 0) {
+    goToStep(-1, 'backward');
+  }
+}
+
 /**
  * Keyboard-driven step navigation.
  *
@@ -518,32 +572,14 @@ export function keyboardNav(direction) {
   endScrub({ carry: false });
 
   // Clear any active dwell — keyboard overrides scroll dwell
-  if (dwellTimer) {
-    clearTimeout(dwellTimer);
-    dwellTimer = null;
-    lenis.start();
-  }
+  _clearDwell();
 
   const vh = window.innerHeight;
   const position = lenis.animatedScroll / vh;
   const isExact = Math.abs(position - Math.round(position)) < 0.01;
   const rounded = Math.round(position);
 
-  // A move of the keyboard's own is stepped from where it is going, not from
-  // where it has reached. Anything else — a scroll at rest, or one the reader
-  // left part way — is read from the position, which is the only account of it
-  // there is.
-  let target;
-  if (inFlight !== null) {
-    target = inFlight + (direction === 'forward' ? 1 : -1);
-  } else if (direction === 'forward') {
-    target = isExact ? rounded + 1 : Math.ceil(position);
-  } else {
-    target = isExact ? rounded - 1 : Math.floor(position);
-  }
-
-  // Clamp to valid range
-  target = _clampPosition(target);
+  const target = _clampPosition(_keyboardTarget(direction, inFlight, position));
   if (inFlight === null && target === rounded && isExact) {
     endNav(token);   // nothing to move; the scroll is the reader's again
     return;
@@ -564,24 +600,7 @@ export function keyboardNav(direction) {
 
   // Activate card immediately so it swaps on keypress — the IIIF lerp
   // then runs during the scroll animation for simultaneous effect.
-  // target is scroll position (intro=0, step0=1, step1=2…); stepIndex
-  // is target-1.
-  const targetStep = target - 1;
-  if (targetStep >= 0 && targetStep !== state.currentIndex) {
-    state.scrollDriven = true;
-    activateCard(targetStep, direction);
-    state.scrollDriven = false;
-    state.currentIndex = targetStep;
-    updateViewerInfo(targetStep);
-    if (state.onStepChange) state.onStepChange(targetStep);
-  } else if (targetStep < 0 && state.currentIndex >= 0) {
-    // Target 0 is the intro, which carries no card. The intro zone's own
-    // restore below is suppressed by keyboardNavInFlight for the whole
-    // animation, so the restore runs here — the same call the scroll zone and
-    // the Back to Start button make, so index, fragment and nav button end up
-    // where those paths leave them.
-    goToStep(-1, 'backward');
-  }
+  _activateKeyboardTarget(target, direction);
 
   // Suppress the activateCard guard in updateScrollPosition while Lenis
   // animates toward the target — otherwise the first scroll frame sees

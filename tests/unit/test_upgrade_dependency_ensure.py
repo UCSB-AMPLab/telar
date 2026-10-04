@@ -21,6 +21,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 import telar_upgrade as upgrade
+import telar_upgrade_regen as regen
 
 
 def _install_find_spec(monkeypatch, state):
@@ -45,12 +46,17 @@ def _install_run(monkeypatch, returncode=0, stderr='', on_call=None):
 
 
 def _point_tooling_at(monkeypatch, tmp_path):
-    """Make Path(__file__).resolve().parent.parent the given dir by faking __file__."""
+    """Make Path(__file__).resolve().parent.parent the given dir by faking __file__.
+
+    The regeneration module's own `__file__`, which is the one the ensure step
+    reads: it sits in scripts/ beside the engine, so the tooling manifest is
+    found in the same place either way.
+    """
     fake_scripts = tmp_path / 'scripts'
     fake_scripts.mkdir(parents=True, exist_ok=True)
     fake_file = fake_scripts / 'upgrade.py'
     fake_file.write_text('# fake\n')
-    monkeypatch.setattr(upgrade, '__file__', str(fake_file))
+    monkeypatch.setattr(regen, '__file__', str(fake_file))
 
 
 def test_all_imports_present_skips_pip(monkeypatch):

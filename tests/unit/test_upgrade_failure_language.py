@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 import telar_upgrade as upgrade
+import telar_upgrade_regen as regen
 from migrations.base import (
     BaseMigration, ChangeStatus, FetchOutcome, FetchResult, coerce_change)
 from migrations.messages import MESSAGES, get_message
@@ -258,9 +259,10 @@ class TestTheDependencyEnsureStepSpeaksSpanish:
         (tmp_path / '_config.yml').write_text(f'telar_language: "{lang}"\n',
                                              encoding='utf-8')
         # No manifest anywhere, so it takes the branch that cannot install.
-        monkeypatch.setattr(upgrade, '_missing_regeneration_imports',
+        # Patched where the ensure step looks them up.
+        monkeypatch.setattr(regen, '_missing_regeneration_imports',
                             lambda: ['nonexistent_pkg'])
-        monkeypatch.setattr(upgrade.Path, 'is_file', lambda self: False)
+        monkeypatch.setattr(regen.Path, 'is_file', lambda self: False)
 
         ok, missing = upgrade._ensure_regeneration_dependencies(str(tmp_path))
 

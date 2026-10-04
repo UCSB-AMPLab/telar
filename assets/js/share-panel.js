@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
+/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
 (() => {
   // assets/js/share-panel/warnings.js
   function warningState(currentStoryProtected, storyKey, includeKey, currentStoryUrl) {
@@ -14,6 +14,13 @@
     } else {
       element.classList.add("d-none");
     }
+  }
+
+  // assets/js/objects-filter/escape.js
+  function escapeHtml(text, doc = document) {
+    const div = doc.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   // assets/js/share-panel/main.js
@@ -290,11 +297,6 @@
         updateEmbedCode();
       }
     }
-    function escapeAttr(text) {
-      const div = doc.createElement("div");
-      div.textContent = text == null ? "" : String(text);
-      return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    }
     function generateEmbedCode() {
       if (!currentStoryUrl) {
         return "";
@@ -306,7 +308,7 @@
       const widthAttr = normalizeDimension(width);
       const heightAttr = normalizeDimension(height);
       const embedUrl = addEmbedParameter(currentStoryUrl);
-      const storyTitle = escapeAttr(getStoryTitle());
+      const storyTitle = escapeHtml(getStoryTitle(), doc);
       const iframeCode = `<iframe src="${embedUrl}"
   width="${widthAttr}" height="${heightAttr}" title="${storyTitle}"
   frameborder="0">

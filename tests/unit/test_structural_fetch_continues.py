@@ -604,15 +604,21 @@ class TestOneDefinitionOfTheStopRule:
                 if 'severity == "hard"' in line and 'def is_hard_failure' not in line:
                     offenders.append('%s:%d' % (path.name, number))
 
-        assert offenders == ['base.py:%d' % _is_hard_failure_line()]
+        assert offenders == ['%s:%d' % _is_hard_failure_line()]
 
 
 def _is_hard_failure_line():
-    """The line inside `is_hard_failure` itself, which is the one definition."""
+    """The file and line inside `is_hard_failure` itself, the one definition.
+
+    Taken from the function, not assumed: it is imported through
+    `migrations.base` and defined wherever that module gets it from.
+    """
     import inspect
+    import pathlib
     from migrations import base
     source, start = inspect.getsourcelines(base.is_hard_failure)
+    name = pathlib.Path(inspect.getsourcefile(base.is_hard_failure)).name
     for offset, line in enumerate(source):
         if 'severity == "hard"' in line:
-            return start + offset
+            return name, start + offset
     raise AssertionError('is_hard_failure no longer tests severity')

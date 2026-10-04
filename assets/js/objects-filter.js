@@ -1,9 +1,9 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/objects-filter/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
+/* GENERATED FILE - do not edit. Bundled from assets/js/objects-filter/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
 (() => {
   // assets/js/objects-filter/escape.js
   function escapeHtml(text, doc = document) {
     const div = doc.createElement("div");
-    div.textContent = text;
+    div.textContent = text == null ? "" : String(text);
     return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 

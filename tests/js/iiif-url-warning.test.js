@@ -17,6 +17,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { el, flush, stubFetch } from './test-helpers.js';
 
 import {
   readWarningData, initIIIFUrlWarning, findAffectedObjects,
@@ -100,28 +101,6 @@ function notOk(body) {
   return { notOk: true, body };
 }
 
-/** A fetch stub answering from a URL -> body map; anything else rejects. */
-function stubFetch(responses) {
-  const calls = [];
-  vi.stubGlobal('fetch', vi.fn((url) => {
-    calls.push(url);
-    if (!(url in responses)) return Promise.reject(new Error(`unscripted fetch: ${url}`));
-    const body = responses[url];
-    if (body instanceof Error) return Promise.reject(body);
-    if (body && body.notOk) {
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(body.body) });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-  }));
-  return calls;
-}
-
-async function flush() {
-  for (let round = 0; round < 3; round++) {
-    for (let i = 0; i < 20; i++) await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}
 
 /** The Liquid-supplied configuration, in the JSON block the include writes. */
 function setConfig(config) {
@@ -151,7 +130,6 @@ async function runScript() {
   await flush();
 }
 
-const el = (id) => document.getElementById(id);
 const display = (id) => el(id).style.display;
 const text = (id) => el(id).textContent;
 const manifestUrl = (id) => `${IIIF_BASE}/${id}/manifest.json`;

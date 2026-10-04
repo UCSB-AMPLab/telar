@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { stubFetch } from './test-helpers.js';
 
 import {
   pickThumbnailSize, upgradeIIIFThumbnailUrl, extractManifestImage, isLevel0Profile,
@@ -31,19 +32,6 @@ import v3Manifest from '../fixtures/iiif/manifest-v3.json';
 const SERVICE = 'https://example.invalid/iiif/2/canvas-1';
 const V2_FALLBACK = 'https://example.invalid/iiif/2/canvas-1/full/full/0/default.jpg';
 const LANG = { thumbnailLoadError: 'Failed to load', noImage: 'No image' };
-
-/** A fetch stub answering from a URL -> body map; anything else rejects. */
-function stubFetch(responses) {
-  const calls = [];
-  vi.stubGlobal('fetch', vi.fn((url) => {
-    calls.push(url);
-    if (!(url in responses)) return Promise.reject(new Error(`unscripted fetch: ${url}`));
-    const body = responses[url];
-    if (body instanceof Error) return Promise.reject(body);
-    return Promise.resolve({ json: () => Promise.resolve(body) });
-  }));
-  return calls;
-}
 
 async function flush() {
   for (let i = 0; i < 6; i++) await Promise.resolve();

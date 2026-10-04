@@ -59,7 +59,7 @@ function homePage({ block = storiesBlockFor() } = {}) {
 }
 
 /** Let the clipboard promise settle without letting the feedback timer run. */
-async function settle() {
+async function flushMicrotasks() {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
@@ -143,7 +143,7 @@ describe('story page, the embed title', () => {
   });
 
   it('escapes quotes, angle brackets and ampersands in the title', async () => {
-    // A synthetic probe over the three characters escapeAttr covers, built on
+    // A synthetic probe over the characters escapeHtml covers, built on
     // the real story title Título, not a story this repository holds.
     storyPage({ title: `Título & <b>"tag"</b> 'x'` });
     await runScript();
@@ -474,7 +474,7 @@ describe('copying', () => {
     it(`${id} writes what its field holds`, async () => {
       const before = icon(id).outerHTML;
       el(id).click();
-      await settle();
+      await flushMicrotasks();
 
       expect(writes).toEqual([expected()]);
       expect(icon(id).outerHTML).toBe(CHECK_ICON);
@@ -486,7 +486,7 @@ describe('copying', () => {
 
   it('keeps the checkmark until the two seconds are up', async () => {
     el('share-copy-link-btn').click();
-    await settle();
+    await flushMicrotasks();
 
     vi.advanceTimersByTime(1999);
     expect(icon('share-copy-link-btn').outerHTML).toBe(CHECK_ICON);
@@ -495,7 +495,7 @@ describe('copying', () => {
   it('writes nothing when the field is empty', async () => {
     el('share-url-input').value = '';
     el('share-copy-link-btn').click();
-    await settle();
+    await flushMicrotasks();
 
     expect(writes).toEqual([]);
     expect(icon('share-copy-link-btn').outerHTML).not.toBe(CHECK_ICON);
@@ -524,7 +524,7 @@ describe('telling a screen reader the copy worked', () => {
     openPanel();
 
     el('share-copy-link-btn').click();
-    await settle();
+    await flushMicrotasks();
     expect(status.textContent).toBe('Copiado al portapapeles');
 
     vi.advanceTimersByTime(2000);
@@ -539,7 +539,7 @@ describe('telling a screen reader the copy worked', () => {
     openPanel();
 
     el('share-copy-link-btn').click();
-    await settle();
+    await flushMicrotasks();
     expect(status.textContent).toBe('');
   });
 });
@@ -570,7 +570,7 @@ describe('copying without a working clipboard', () => {
     openPanel();
 
     el('share-copy-link-btn').click();
-    await settle();
+    await flushMicrotasks();
 
     expect(alerts).toEqual(['Please manually copy the text']);
     expect(consoles.error).toHaveBeenCalledWith(
