@@ -445,10 +445,6 @@ def main():
     # v0.6.0+: Process ALL CSVs except system files
     system_csvs = {'project.csv', 'proyecto.csv', 'objects.csv', 'objetos.csv'}
 
-    process_story_func = (
-        (lambda df: process_story(df, christmas_tree=True)) if christmas_tree_mode
-        else process_story
-    )
     for csv_file in structures_dir.glob('*.csv'):
         if csv_file.name not in system_csvs:
             # --story flag: skip all story CSVs except the requested one
@@ -456,10 +452,17 @@ def main():
                 continue
             json_filename = csv_file.stem + '.json'
             json_file = data_dir / json_filename
+            # The story's name is bound per file rather than closed over:
+            # the loop variable would otherwise reach every call as
+            # whichever CSV the glob ended on.
             csv_to_json(
                 str(csv_file),
                 str(json_file),
-                process_story_func
+                lambda df, name=csv_file.stem: process_story(
+                    df,
+                    christmas_tree=christmas_tree_mode,
+                    story_name=name
+                )
             )
 
     # Merge demo content if available

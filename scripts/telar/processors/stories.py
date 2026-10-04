@@ -29,12 +29,21 @@ from one story CSV and performs several passes over the data:
    heading and is left alone), so `[[term]]` works in the main story text,
    not only in layer panels.
 
-3. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
+3. **Answer limits** — the step's `answer` is prose read on a card that
+   does not scroll, so it is held to plain prose and to a length that
+   fits. `ANSWER_PROSE_RULES` says what comes out of it and what is
+   flattened, and an answer still above `ANSWER_WORD_LIMIT` words is cut
+   at a word boundary that does not land inside markup. A softer limit
+   read from `_config.yml` only warns. This pass runs on the answer as
+   the author wrote it, before glossary anchors go into it.
+
+4. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
    position.
 
-4. **Warning aggregation** — all warnings (missing objects, missing
-   markdown files, broken glossary links, widget errors) are collected
+5. **Warning aggregation** — all warnings (missing objects, missing
+   markdown files, broken glossary links, widget errors, answers held to
+   the limits) are collected
    into a `viewer_warnings` list stored in `df.attrs`, which the core
    module later injects into the JSON output for display in the story's
    intro panel.
@@ -48,6 +57,7 @@ Version: v1.8.0
 
 import re
 import json
+from collections import namedtuple
 from pathlib import Path
 
 import pandas as pd
@@ -56,7 +66,7 @@ from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
-from telar.latex import has_latex
+from telar.latex import has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
 
 
@@ -65,6 +75,278 @@ def _warn(msg, warnings):
     print(f"  [WARN] {msg}")
     warnings.append(msg)
 
+
+
+ANSWER_WORD_LIMIT = 200
+"""Words a step's answer may hold before the build cuts it.
+
+Above this the answer is unreadable rather than merely long: on the desktop
+layout the side card never scrolls, so everything past the card's edge is
+clipped and no reader can reach it. The tightest common laptop cells hold
+225 words at 1280x720, 264 at 1366x768 and 275 at 1440x757, and this limit
+sits under that floor with a margin for a larger type size.
+
+The Compositor reads this constant by name, from this module, for a parity
+test against its own editor-side limit, so the name and the module path are
+part of that shared contract and cannot move quietly.
+"""
+
+ANSWER_MEDIA = 'media'
+ANSWER_FOOTNOTES = 'footnotes'
+ANSWER_MARKUP = 'markup'
+
+_ProseRule = namedtuple('_ProseRule', 'name kind pattern replacement')
+
+ANSWER_PROSE_RULES = (
+    _ProseRule(
+        'fenced code block', ANSWER_MARKUP,
+        re.compile(r'^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*\n?',
+                   re.MULTILINE),
+        ''),
+    _ProseRule(
+        'table', ANSWER_MARKUP,
+        re.compile(r'^[^\n|]*\|[^\n]*\n'
+                   r'[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*'
+                   r'(?:\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*\n'
+                   r'(?:[^\n]*\|[^\n]*\n?)*',
+                   re.MULTILINE),
+        ''),
+    _ProseRule(
+        'image or embed', ANSWER_MEDIA,
+        re.compile(r'!\[[^\]]*\]\([^)]*\)'
+                   r'|<(img|iframe|video|audio|embed|object)\b[^>]*>'
+                   r'(?:.*?</\1\s*>)?',
+                   re.IGNORECASE | re.DOTALL),
+        ''),
+    _ProseRule(
+        'footnote definition', ANSWER_FOOTNOTES,
+        re.compile(r'^[ \t]*\[\^[^\]]*\]:.*(?:\n[ \t]+\S.*)*\n?',
+                   re.MULTILINE),
+        ''),
+    _ProseRule(
+        'footnote reference', ANSWER_FOOTNOTES,
+        re.compile(r'\[\^[^\]]*\]'),
+        ''),
+    _ProseRule(
+        'horizontal rule', ANSWER_MARKUP,
+        re.compile(r'^[ \t]{0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}'
+                   r'|(?:_[ \t]*){3,})$\n?',
+                   re.MULTILINE),
+        ''),
+    _ProseRule(
+        'blockquote mark', ANSWER_MARKUP,
+        re.compile(r'^[ \t]*(?:>[ \t]?)+', re.MULTILINE),
+        ''),
+    _ProseRule(
+        'heading mark', ANSWER_MARKUP,
+        re.compile(r'^[ \t]*#{1,6}[ \t]+(.*?)[ \t]*#*[ \t]*$', re.MULTILINE),
+        r'\1'),
+    _ProseRule(
+        'list marker', ANSWER_MARKUP,
+        re.compile(r'^[ \t]*(?:[-*+]|[0-9]+[.)])[ \t]+', re.MULTILINE),
+        ''),
+)
+"""Everything a step's answer is not allowed to be, in the order applied.
+
+A step's answer is plain prose. The Compositor mirrors this set on the
+editor side and reads this list as the contract, so both the expressions
+and their order are part of it.
+
+Removed outright, with the words inside them:
+
+  - **fenced code block** -- ``` or ~~~ through its matching fence.
+  - **table** -- a pipe-table block: a row carrying a pipe, a delimiter
+    row, and the body rows that follow while they carry one.
+  - **image or embed** -- markdown image syntax, and the HTML elements
+    that bring their own media (img, iframe, video, audio, embed,
+    object), opening tag through closing tag where one exists.
+  - **footnote definition** -- a line opening `[^n]:`, through the
+    indented continuation lines that belong to it.
+  - **footnote reference** -- `[^n]` in the prose. It runs after the
+    definition rule, which would otherwise be left holding a bare colon.
+  - **horizontal rule** -- a line of three or more dashes, asterisks or
+    underscores. It runs before the list rule, which would read `* * *`
+    as a bullet.
+
+Flattened, losing their marks and keeping their words:
+
+  - **blockquote mark** -- the leading `>`, every level of it. It runs
+    before the heading and list rules, so a quoted heading or bullet
+    reaches them.
+  - **heading mark** -- the ATX `#` marks, leading and closing.
+  - **list marker** -- the bullet or number opening a list item.
+
+Untouched, because they are prose: bold, italics, inline links,
+`[[term]]`, inline LaTeX, code spans, paragraph breaks.
+
+Detection runs on the raw markdown with no awareness of code spans, so
+image syntax inside backticks goes too. The rules have to be expressions
+the Compositor can implement identically, and a step's answer is prose
+about an object rather than a markdown tutorial. A bare image URL is
+text and stays.
+
+Nothing repairs the whitespace a removal leaves behind: each rule takes
+out what it matched and nothing else, so an answer carrying none of these
+comes back byte for byte and markdown decides what the rest means.
+"""
+
+# The order warnings are reported in, one per answer per kind, whatever
+# order the rules that fired sit in.
+ANSWER_KINDS = (ANSWER_MEDIA, ANSWER_FOOTNOTES, ANSWER_MARKUP)
+
+# What each kind is called in the message catalogue.
+_ANSWER_KIND_KEYS = {
+    ANSWER_MEDIA: 'answer_image_dropped',
+    ANSWER_FOOTNOTES: 'answer_footnotes_dropped',
+    ANSWER_MARKUP: 'answer_markup_flattened',
+}
+
+# Markup a cut must not land inside. Each of these is one thing to a reader
+# and to the renderer, so half of one publishes as broken syntax rather than
+# as a shortened answer. LaTeX comes from telar.latex, which owns the
+# question of what maths looks like. A footnote reference is absent because
+# the prose rules have already taken it out.
+_ANSWER_ATOMIC = [
+    re.compile(r'\[\[[^\]]*\]\]'),        # glossary reference
+    re.compile(r'\[[^\]]*\]\([^)]*\)'),   # markdown link
+    re.compile(r'`[^`]*`'),               # code span
+    re.compile(r'<[^>]+>'),               # inline HTML tag
+]
+
+# The token that ends a cut answer. One character, so the count of words
+# before it stays the count this module reports.
+_ANSWER_ELLIPSIS = '…'
+
+
+def _count_answer_words(text):
+    """The number of words in *text*, by the rule the Compositor shares.
+
+    Trim, split on Unicode whitespace, count the non-empty tokens. Markup
+    and URLs are words, because they take up the card like any other text,
+    and a non-breaking space separates words like any other whitespace.
+    """
+    return len(str(text).split())
+
+
+def _reduce_answer_to_prose(text):
+    """*text* as plain prose, and the kinds of thing that came out of it.
+
+    Applies ANSWER_PROSE_RULES in order; that constant's docstring is the
+    whole of what the rules are and why they run in that order. The kinds
+    come back in ANSWER_KINDS order rather than in the order the rules
+    fired, so one answer earns one warning per kind and always the same
+    sequence of them.
+    """
+    fired = set()
+    for rule in ANSWER_PROSE_RULES:
+        text, count = rule.pattern.subn(rule.replacement, text)
+        if count:
+            fired.add(rule.kind)
+
+    return text, [kind for kind in ANSWER_KINDS if kind in fired]
+
+
+def _answer_atomic_spans(text):
+    """Every span in *text* a cut must fall outside of."""
+    spans = [(match.start(), match.end())
+             for pattern in _ANSWER_ATOMIC
+             for match in pattern.finditer(text)]
+    spans.extend(latex_spans(text))
+    return spans
+
+
+def _cut_answer(text, limit):
+    """*text* shortened to at most *limit* words, closed with an ellipsis.
+
+    The cut lands on a word boundary, and never inside markup. A boundary
+    that falls within a link, a glossary or footnote reference, a code
+    span, a LaTeX span or an HTML tag moves back to the start of that
+    markup and then back to the nearest earlier boundary, repeating until
+    it is clear -- so an answer that ends near markup publishes shorter
+    than the limit rather than broken at it.
+
+    A token holding no whitespace cannot be split this way, because a word
+    boundary never falls inside one.
+    """
+    boundaries = [match.end() for match in re.finditer(r'\S+', text)]
+    if len(boundaries) <= limit:
+        return text
+
+    spans = _answer_atomic_spans(text)
+    cut = boundaries[limit - 1]
+    while True:
+        straddled = [start for start, end in spans if start < cut < end]
+        if not straddled:
+            break
+        cut = min(straddled)
+        earlier = [end for end in boundaries if end <= cut]
+        cut = earlier[-1] if earlier else 0
+
+    return text[:cut] + _ANSWER_ELLIPSIS
+
+
+def _limit_answers(df, story_name, warnings, answer_warnings):
+    """Hold every step's answer to text only, and to a readable length.
+
+    Runs on the answer exactly as the author typed it, ahead of the
+    glossary pass, so the word count is the author's own words and the
+    markup the cut protects is the markup they wrote rather than the
+    anchors Telar injects.
+
+    An answer over ANSWER_WORD_LIMIT is cut and reported. Length on its
+    own earns no report: the build speaks where it has changed the
+    author's words and stays quiet where it has not.
+
+    The prose rules run first, so the count is of the words that survive
+    them: a list of two hundred bulleted words is two hundred words, and a
+    footnote the rules removed weighs nothing.
+    """
+    if 'answer' not in df.columns:
+        return df
+
+    story = story_name or 'unknown'
+
+    for idx, row in df.iterrows():
+        raw = str(row['answer'])
+        if not raw.strip():
+            continue
+
+        step = row.get('step', 'unknown')
+        label = _step_label(step)
+        answer = raw
+
+        answer, kinds = _reduce_answer_to_prose(answer)
+        for kind in kinds:
+            _report_answer(
+                _ANSWER_KIND_KEYS[kind], step, answer_warnings, warnings,
+                story=story, step_label=label)
+
+        count = _count_answer_words(answer)
+        if count > ANSWER_WORD_LIMIT:
+            answer = _cut_answer(answer, ANSWER_WORD_LIMIT)
+            _report_answer(
+                'answer_over_hard_limit', step, answer_warnings, warnings,
+                story=story, step_label=label, count=count,
+                limit=ANSWER_WORD_LIMIT)
+
+        if answer != raw:
+            df.at[idx, 'answer'] = answer
+
+    return df
+
+
+def _report_answer(key, step, answer_warnings, warnings, step_label, **fields):
+    """One localised report, to the build log and to the intro panel.
+
+    The message is a whole sentence naming its own story and step, because
+    the build log prints it with no context around it. It travels as a
+    `panel` warning, the type the intro panel renders unprefixed.
+    """
+    message = get_lang_string('errors.object_warnings.' + key,
+                              step=step_label, **fields)
+    _warn(message, warnings)
+    answer_warnings.append({'step': step, 'type': 'panel',
+                            'message': message})
 
 
 def _normalise_frame(df):
@@ -503,7 +785,7 @@ def _add_christmas_tree_warnings(df, all_warnings):
     df.attrs['viewer_warnings'] = all_warnings + fake_warnings
     print("\U0001f384 Christmas Tree Mode: Injected test warnings into story")
 
-def process_story(df, christmas_tree=False):
+def process_story(df, christmas_tree=False, story_name=''):
     """
     Process story CSV with panel content (file references or inline text).
 
@@ -514,6 +796,10 @@ def process_story(df, christmas_tree=False):
     Args:
         df: pandas DataFrame from story CSV
         christmas_tree: If True, inject fake warnings for testing
+        story_name: The story's name, for warnings that have to say which
+            story they are about. A DataFrame carries no such name, so the
+            caller supplies it; a caller that has none gets warnings that
+            say 'unknown', which is the step column's own fallback.
 
     Returns:
         pandas DataFrame with processed content and aggregated warnings
@@ -526,8 +812,10 @@ def process_story(df, christmas_tree=False):
     glossary_terms = load_glossary_terms()
     glossary_warnings = []
     widget_warnings = []
+    answer_warnings = []
 
     df = _normalise_frame(df)
+    df = _limit_answers(df, story_name, warnings, answer_warnings)
     df = _validate_page_column(df, warnings)
     df = _validate_object_references(df, _load_objects_data(), warnings)
     df = _process_content_columns(df, glossary_terms, glossary_warnings,
@@ -538,6 +826,7 @@ def process_story(df, christmas_tree=False):
     all_warnings = _collect_step_warnings(df)
     all_warnings.extend(glossary_warnings)
     all_warnings.extend(widget_warnings)
+    all_warnings.extend(answer_warnings)
     df.attrs['viewer_warnings'] = all_warnings
 
     df.attrs['has_latex'] = _detect_latex(df)

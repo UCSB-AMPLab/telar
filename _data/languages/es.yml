@@ -354,6 +354,12 @@ errors:
     short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
     glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
 
+    # Límites de la respuesta de un paso
+    answer_image_dropped: "En `{{ story }}` quitamos una imagen o un elemento incrustado de la respuesta del paso {{ step }}. La respuesta de un paso es texto corrido: pon ese contenido en un panel o conviértelo en el objeto del paso."
+    answer_over_hard_limit: "La respuesta del paso {{ step }} de `{{ story }}` tiene {{ count }} palabras y la recortamos a {{ limit }}. El texto que sobra no aparece en la historia. Acorta la respuesta o pasa los detalles a un panel."
+    answer_footnotes_dropped: "En `{{ story }}` quitamos las notas al pie de la respuesta del paso {{ step }}, tanto el número como el texto de la nota. La respuesta de un paso es texto corrido: pasa la nota a un panel o di en la misma frase lo que decía."
+    answer_markup_flattened: "En `{{ story }}` simplificamos la respuesta del paso {{ step }}: las listas, los títulos y las citas conservan las palabras y pierden el formato; las tablas, los bloques de código y las líneas divisorias desaparecen por completo. La respuesta de un paso es texto corrido: pasa ese contenido a un panel, donde se ve tal como lo escribiste."
+
 # Funcionalidad de compartir e incrustar
 share:
   button: "Compartir"

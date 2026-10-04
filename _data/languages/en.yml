@@ -352,6 +352,12 @@ errors:
     short_glossary_not_found: "Missing glossary term: {{ term_id }}"
     glossary_load_error: "Failed to load glossary term. Please try again."
 
+    # Step answer limits
+    answer_image_dropped: "An image or embed in the answer to step {{ step }} of `{{ story }}` was removed. A step's answer is plain prose: put the image in a layer panel, or make it the step's object."
+    answer_over_hard_limit: "The answer to step {{ step }} of `{{ story }}` runs to {{ count }} words and was cut at {{ limit }}. The text past the cut does not appear in the story. Shorten the answer, or move the detail into a layer panel."
+    answer_footnotes_dropped: "A step's answer is plain prose, so the footnotes in the answer to step {{ step }} of `{{ story }}` came out, references and definitions alike. Move the note into a layer panel, or fold what it says into the sentence."
+    answer_markup_flattened: "A step's answer is plain prose, so markup in the answer to step {{ step }} of `{{ story }}` was flattened: lists, headings and quotes kept their words and lost their marks, and tables, code blocks and horizontal rules came out altogether. Move that material into a layer panel, where it renders as written."
+
 # Share and embed functionality
 share:
   button: "Share"

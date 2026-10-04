@@ -102,6 +102,27 @@ _PROTECT_PATTERNS = [
 ]
 
 
+def latex_spans(text):
+    """Every LaTeX block in *text*, as (start, end) character offsets.
+
+    The same patterns `protect_latex` holds out of Python Markdown's
+    reach. A caller that must not cut through maths -- the story
+    processor, trimming an over-long answer -- asks this module where the
+    maths is rather than keeping a second idea of what maths looks like.
+
+    Spans may overlap, because the patterns overlap: `$$a$$` is matched
+    both as display math and by the inline pattern. A caller checking
+    whether a position sits inside maths wants the union, so the
+    duplication costs nothing.
+    """
+    if not text:
+        return []
+
+    return [(match.start(), match.end())
+            for pattern in _PROTECT_PATTERNS
+            for match in pattern.finditer(text)]
+
+
 def protect_latex(text):
     """Replace LaTeX blocks with placeholders before markdown processing.
 
