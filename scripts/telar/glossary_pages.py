@@ -14,7 +14,8 @@ import shutil
 from pathlib import Path
 
 from telar.images import process_images
-from telar.glossary import (load_glossary_terms, markdown_glossary_title,
+from telar.glossary import (glossary_link_map, load_glossary_terms,
+                            markdown_glossary_title,
                             process_glossary_links, read_glossary_sheet)
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
@@ -24,18 +25,21 @@ from telar.story_pages import jekyll_slug
 from telar.glossary_kinds import front_matter_kind, resolve_kind, write_site_kinds
 
 
-def _csv_page_rows(csv_path):
+def _csv_page_rows(csv_path, warn_missing=True):
     """The rows of glossary.csv that become pages, as (term_id, title, row).
 
     The one decision of which site terms are published from a CSV: a sheet
     missing a required column publishes none, and a row without an id or a
-    title, or whose id starts with `#`, is not a term.
+    title, or whose id starts with `#`, is not a term. `warn_missing` says
+    whether a missing column is reported; the link map reads the sheet once
+    per story and leaves the report to the generator.
     """
     df = read_glossary_sheet(csv_path)
 
     for col in ['term_id', 'title', 'definition']:
         if col not in df.columns:
-            print(f"  ⚠️ glossary.csv missing required column: {col}")
+            if warn_missing:
+                print(f"  ⚠️ glossary.csv missing required column: {col}")
             return []
 
     rows = []
@@ -46,6 +50,12 @@ def _csv_page_rows(csv_path):
             continue
         rows.append((term_id, title, row))
     return rows
+
+
+def _csv_pages(rows):
+    """The `site_glossary_pages` entries of `_csv_page_rows`' rows."""
+    return {term_id: (title, resolve_kind(row.get('kind', ''), warn=False))
+            for term_id, title, row in rows}
 
 
 def _split_markdown_term(content):
@@ -60,19 +70,18 @@ def _split_markdown_term(content):
             term_id_match.group(1) if term_id_match else None)
 
 
-def site_glossary_pages():
+def site_glossary_pages(warn_missing=True):
     """The site's own glossary pages as {term_id: (title, kind id)}, the
     title and kind as the page shows them, chosen as `generate_glossary`
     chooses its source: glossary.csv when present, else the legacy markdown
     files. A markdown page without a `title` shows its term id.
+    `warn_missing` is passed to `_csv_page_rows`.
     """
     csv_path = Path(find_csv_with_fallback('telar-content/spreadsheets/glossary', 'glosario'))
     md_path = Path('telar-content/texts/glossary')
     pages = {}
     if csv_path.exists():
-        for term_id, title, row in _csv_page_rows(csv_path):
-            pages[term_id] = (title, resolve_kind(row.get('kind', ''), warn=False))
-        return pages
+        return _csv_pages(_csv_page_rows(csv_path, warn_missing))
     if md_path.exists():
         for source_file in md_path.glob('*.md'):
             with open(source_file, 'r', encoding='utf-8') as f:
@@ -83,15 +92,19 @@ def site_glossary_pages():
     return pages
 
 
-def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
+def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms, rows=None):
     """Generate glossary files from CSV.
 
     Args:
         csv_path: Path to glossary.csv
         glossary_dir: Output directory for Jekyll files
         glossary_terms: Dict of term_id -> title for link processing
+        rows: `_csv_page_rows(csv_path)` when the caller has already read
+            the sheet; read here otherwise
     """
-    for term_id, title, row in _csv_page_rows(csv_path):
+    if rows is None:
+        rows = _csv_page_rows(csv_path)
+    for term_id, title, row in rows:
         definition = str(row.get('definition', '')).strip()
         related_terms_raw = str(row.get('related_terms', '')).strip()
 
@@ -260,6 +273,10 @@ def generate_glossary():
     - _data/demo-glossary.json (demo content from bundle)
 
     If both CSV and markdown exist, CSV takes precedence and a warning is shown.
+
+    Returns the site's link map (`load_glossary_terms()`'s), so the pages
+    that run after it need not read the sheet again: each warning the read
+    raises is printed once per run.
     """
     glossary_dir = Path('_jekyll-files/_glossary')
 
@@ -274,19 +291,25 @@ def generate_glossary():
     # so a kind removed from _config.yml leaves the page with the rest.
     write_site_kinds()
 
-    # Load glossary terms for link processing (enables glossary-to-glossary linking)
-    glossary_terms = load_glossary_terms()
-
     csv_path = Path(find_csv_with_fallback('telar-content/spreadsheets/glossary', 'glosario'))
     md_path = Path('telar-content/texts/glossary')
 
-    # 1. Process user glossary from CSV (preferred) or markdown (legacy)
+    # The link map and the pages come from one read of the sheet, so a
+    # warning that read raises is printed once.
+    csv_rows = None
     if csv_path.exists():
+        csv_rows = _csv_page_rows(csv_path)
+        glossary_terms = glossary_link_map(_csv_pages(csv_rows))
+    else:
+        glossary_terms = load_glossary_terms()
+
+    # 1. Process user glossary from CSV (preferred) or markdown (legacy)
+    if csv_rows is not None:
         # Warn if markdown files also exist
         if md_path.exists() and any(md_path.glob('*.md')):
             print(f"  ⚠️ Found both glossary.csv and markdown files. Using CSV.")
 
-        _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms)
+        _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms, csv_rows)
 
     elif md_path.exists() and any(md_path.glob('*.md')):
         _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms)
@@ -325,3 +348,5 @@ def generate_glossary():
                 f.write(output_content)
 
             print(f"✓ Generated {filepath} [DEMO]")
+
+    return glossary_terms

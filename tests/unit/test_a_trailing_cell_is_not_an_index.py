@@ -23,8 +23,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'
 
 from telar.core import csv_to_json
 from telar.csv_utils import OBJECT_FIELDS, read_sheet
-from telar.glossary import load_glossary_from_csv
-from telar.glossary_pages import _generate_glossary_from_csv
+from telar.glossary import load_glossary_terms
+from telar.glossary_pages import _generate_glossary_from_csv, generate_glossary
+from telar.pages import generate_pages
 from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
 
@@ -51,12 +52,31 @@ def _glossary(tmp_path, text):
     return path
 
 
+def _terms(tmp_path, monkeypatch, text):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / 'telar-content' / 'spreadsheets'
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'glossary.csv').write_text(text, encoding='utf-8')
+    return load_glossary_terms()
+
+
 def _pages(tmp_path, monkeypatch, text):
     monkeypatch.chdir(tmp_path)
     out = tmp_path / 'pages'
     out.mkdir()
     _generate_glossary_from_csv(_glossary(tmp_path, text), out, {})
     return {p.name: p.read_text(encoding='utf-8') for p in out.iterdir()}
+
+
+STRAY_CELL = 'term_id,title,definition\nencomienda,Encomienda,A grant,extra\n'
+
+
+def _site(tmp_path, monkeypatch, text):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / '_config.yml').write_text('title: Test\n', encoding='utf-8')
+    folder = tmp_path / 'telar-content' / 'spreadsheets'
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'glossary.csv').write_text(text, encoding='utf-8')
 
 
 GLOSSARY = ('term_id,title,definition\n'
@@ -83,8 +103,8 @@ class TestATrailingCommaInTheFirstRow:
         assert [(s['step'], s['object'], s['answer']) for s in steps] == \
             [(1, 'map', 'Here'), (2, 'map', 'Then')]
 
-    def test_the_glossary_link_map_keys_by_term_id(self, tmp_path):
-        assert load_glossary_from_csv(_glossary(tmp_path, GLOSSARY)) == \
+    def test_the_glossary_link_map_keys_by_term_id(self, tmp_path, monkeypatch):
+        assert _terms(tmp_path, monkeypatch, GLOSSARY) == \
             {'encomienda': 'Encomienda', 'cabildo': 'Cabildo'}
 
     def test_the_glossary_pages_are_named_by_term_id(self, tmp_path, monkeypatch):
@@ -112,10 +132,10 @@ class TestACellPastTheHeaderHoldingAValue:
 
         assert '[WARN] objects.csv row 2' in capsys.readouterr().out
 
-    def test_the_glossary_link_map_reports_it(self, tmp_path, capsys):
-        load_glossary_from_csv(_glossary(
-            tmp_path, 'term_id,title,definition\nencomienda,Encomienda,A grant,\n'
-            'cabildo,Cabildo,A council,extra\n'))
+    def test_the_glossary_link_map_reports_it(self, tmp_path, monkeypatch, capsys):
+        _terms(tmp_path, monkeypatch,
+               'term_id,title,definition\nencomienda,Encomienda,A grant,\n'
+               'cabildo,Cabildo,A council,extra\n')
 
         assert '[WARN] glossary.csv row 3' in capsys.readouterr().out
 
@@ -126,13 +146,44 @@ class TestACellPastTheHeaderHoldingAValue:
 
         assert '[WARN] glossary.csv row 3' in capsys.readouterr().out
 
-    def test_pandas_does_not_report_an_empty_one_as_lost_data(self, tmp_path):
+    def test_the_link_map_reports_it_once(self, tmp_path, monkeypatch, capsys):
+        _terms(tmp_path, monkeypatch, STRAY_CELL)
+
+        assert capsys.readouterr().out.count('[WARN] glossary.csv row 2') == 1
+
+    def test_the_generator_reports_it_once(self, tmp_path, monkeypatch, capsys):
+        _site(tmp_path, monkeypatch, STRAY_CELL)
+
+        generate_glossary()
+
+        out = capsys.readouterr().out
+        assert out.count('[WARN] glossary.csv row 2') == 1
+        assert (tmp_path / '_jekyll-files' / '_glossary' / 'encomienda.md').exists()
+
+    def test_a_build_reports_it_once(self, tmp_path, monkeypatch, capsys):
+        # generate_collections.py runs the generator and then the pages in
+        # one process, and hands the pages the generator's link map.
+        _site(tmp_path, monkeypatch, STRAY_CELL)
+        pages = tmp_path / 'telar-content' / 'texts' / 'pages'
+        pages.mkdir(parents=True)
+        (pages / 'about.md').write_text('---\ntitle: About\n---\n[[encomienda]]\n',
+                                        encoding='utf-8')
+
+        glossary_terms = generate_glossary()
+        generate_pages(glossary_terms=glossary_terms)
+
+        out = capsys.readouterr().out
+        assert out.count('[WARN] glossary.csv row 2') == 1
+        assert 'glossary-inline-link' in (
+            tmp_path / '_jekyll-files' / '_pages' / 'about.md').read_text(encoding='utf-8')
+
+    def test_pandas_does_not_report_an_empty_one_as_lost_data(self, tmp_path, monkeypatch):
         # The glossary readers keep an empty cell as text, so pandas counts a
         # trailing comma as data it dropped. The link map swallows a read
         # error, so the terms are what shows the warning was not raised.
         with warnings.catch_warnings():
             warnings.simplefilter('error')
-            terms = load_glossary_from_csv(_glossary(tmp_path, GLOSSARY))
+            terms = _terms(tmp_path, monkeypatch, GLOSSARY)
 
         assert terms == {'encomienda': 'Encomienda', 'cabildo': 'Cabildo'}
 
@@ -156,8 +207,7 @@ class TestASheetWithoutExtraCells:
     def test_the_glossary_readers_are_unchanged(self, tmp_path, monkeypatch, capsys):
         sheet = 'term_id,title,definition\nencomienda,Encomienda,"A grant, of labour"\n'
 
-        assert load_glossary_from_csv(_glossary(tmp_path, sheet)) == \
-            {'encomienda': 'Encomienda'}
+        assert _terms(tmp_path, monkeypatch, sheet) == {'encomienda': 'Encomienda'}
         assert sorted(_pages(tmp_path, monkeypatch, sheet)) == ['encomienda.md']
         assert '.csv row' not in capsys.readouterr().out
 
@@ -192,8 +242,8 @@ class TestALaterRowWiderThanTheFirst:
              'encomienda,Encomienda,A grant of labour\n'
              'cabildo,Cabildo,A town council,\n')
 
-    def test_the_glossary_link_map_keeps_the_term(self, tmp_path):
-        assert load_glossary_from_csv(_glossary(tmp_path, self.SHEET)) == \
+    def test_the_glossary_link_map_keeps_the_term(self, tmp_path, monkeypatch):
+        assert _terms(tmp_path, monkeypatch, self.SHEET) == \
             {'encomienda': 'Encomienda', 'cabildo': 'Cabildo'}
 
     def test_the_glossary_pages_keep_the_term(self, tmp_path, monkeypatch):
@@ -248,10 +298,13 @@ class TestAWhitespaceLineAboveTheHeader:
     GLOSSARY = ['term_id,title,definition', 'encomienda,Encomienda,A grant of labour']
 
     @pytest.mark.parametrize('case', CASES)
-    def test_the_glossary_link_map_reads_the_term(self, tmp_path, case):
-        path = self._write(tmp_path, 'glossary.csv', case, self.GLOSSARY)
+    def test_the_glossary_link_map_reads_the_term(self, tmp_path, monkeypatch, case):
+        monkeypatch.chdir(tmp_path)
+        folder = tmp_path / 'telar-content' / 'spreadsheets'
+        folder.mkdir(parents=True)
+        self._write(folder, 'glossary.csv', case, self.GLOSSARY)
 
-        assert load_glossary_from_csv(path) == {'encomienda': 'Encomienda'}
+        assert load_glossary_terms() == {'encomienda': 'Encomienda'}
 
     @pytest.mark.parametrize('case', CASES)
     def test_the_glossary_pages_read_the_term(self, tmp_path, monkeypatch, case):

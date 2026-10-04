@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'
 from telar.csv_utils import (ColumnCollisionError, GLOSSARY_COLUMN_ALIASES,
                              OBJECT_FIELDS, is_header_row,
                              normalize_column_names)
-from telar.glossary import load_glossary_from_csv
+from telar.glossary import load_glossary_terms
 from telar.glossary_kinds import (_fold, all_kinds, default_kind,
                                   glossary_kinds, kind_text, resolve_kind,
                                   site_kinds)
@@ -202,15 +202,18 @@ class TestTheSpanishColumnNameIsTheGlossarysOnly:
         with pytest.raises(ColumnCollisionError):
             normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
 
-    def test_the_link_loader_refuses_it_too(self, tmp_path):
-        """The loader and the page generator read the same file and refuse
+    def test_the_link_map_refuses_it_too(self, tmp_path, monkeypatch):
+        """The link map and the page generator read the same file and refuse
         the same sheets."""
-        csv_path = tmp_path / 'glossary.csv'
-        csv_path.write_text('term_id,title,kind,tipo\nx,X,source,fuente\n',
-                            encoding='utf-8')
+        monkeypatch.chdir(tmp_path)
+        folder = tmp_path / 'telar-content' / 'spreadsheets'
+        folder.mkdir(parents=True)
+        (folder / 'glossary.csv').write_text(
+            'term_id,title,definition,kind,tipo\nx,X,d,source,fuente\n',
+            encoding='utf-8')
 
         with pytest.raises(ColumnCollisionError):
-            load_glossary_from_csv(csv_path)
+            load_glossary_terms()
 
     def test_the_spanish_header_row_of_the_template_is_a_header_row(self):
         """The template's second row names each column in Spanish. With four

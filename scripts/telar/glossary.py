@@ -118,59 +118,6 @@ def read_glossary_sheet(csv_path):
     return df.reset_index(drop=True)
 
 
-def load_glossary_from_csv(csv_path):
-    """
-    Load glossary terms from a CSV file.
-
-    Args:
-        csv_path: Path to glossary.csv
-
-    Returns:
-        GlossaryTerms: term_id to term title, with each entry's kind
-    """
-    glossary_terms = GlossaryTerms()
-
-    try:
-        df = read_glossary_sheet(csv_path)
-
-        if 'term_id' not in df.columns or 'title' not in df.columns:
-            print(f"  ⚠️ glossary.csv missing required columns (term_id, title)")
-            return glossary_terms
-
-        for _, row in df.iterrows():
-            term_id = str(row.get('term_id', '')).strip()
-            title = str(row.get('title', '')).strip()
-
-            # A row whose id begins `#` is a comment the author left for
-            # themselves, and the page generator gives it no page. The link
-            # map has to exclude it on the same stripped value, or a term
-            # resolves to a link with nothing behind it. `strip()` settles
-            # every way such a row can arrive -- leading spaces, and the
-            # U+0085 a paste into a spreadsheet cell can carry.
-            if term_id.startswith('#'):
-                continue
-
-            if term_id and title:
-                glossary_terms[term_id] = title
-                # The page generator reads the same cell and warns about it.
-                glossary_terms.kinds[term_id] = resolve_kind(
-                    row.get('kind', ''), warn=False)
-
-    except (ColumnCollisionError, ReservedColumnError):
-        # The page generator reads this same file and fails the build on
-        # these two. A loader that swallowed them handed back an empty link
-        # map, so whether the author heard about the sheet at all depended
-        # on which path ran first. Both refuse alike, with the sheet's path,
-        # which read_glossary_sheet gives the error: it surfaces inside each
-        # story's conversion, where the file being converted is the story,
-        # not the one to change.
-        raise
-    except Exception as e:
-        print(f"  ⚠️ Could not load glossary.csv: {e}")
-
-    return glossary_terms
-
-
 def markdown_glossary_title(frontmatter_text):
     """The `title` of a legacy glossary file's front matter as the page
     generated from it reads it, or None when it has none or the front
@@ -217,74 +164,44 @@ def _as_liquid_text(value, zulu=False):
     return str(value)
 
 
-def load_glossary_from_markdown(glossary_dir):
-    """
-    Load glossary terms from markdown files (legacy method).
-
-    Args:
-        glossary_dir: Path to telar-content/texts/glossary/
-
-    Returns:
-        GlossaryTerms: term_id to term title, with each entry's kind
-    """
-    glossary_terms = GlossaryTerms()
-
-    try:
-        for glossary_file in glossary_dir.glob('*.md'):
-            with open(glossary_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            # Parse frontmatter
-            frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
-            match = re.match(frontmatter_pattern, content, re.DOTALL)
-
-            if match:
-                frontmatter_text = match.group(1)
-
-                # Extract term_id and title
-                term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
-                title = markdown_glossary_title(frontmatter_text)
-
-                if term_id_match and title is not None:
-                    term_id = term_id_match.group(1)
-                    glossary_terms[term_id] = title
-                    glossary_terms.kinds[term_id] = resolve_kind(
-                        front_matter_kind(frontmatter_text), warn=False)
-
-    except Exception as e:
-        print(f"  ⚠️ Could not load glossary markdown files: {e}")
-
-    return glossary_terms
-
-
 def load_glossary_terms():
     """
-    Load glossary terms from CSV or markdown files.
+    The link map for the site's own glossary: the terms that have a page.
 
-    Checks for glossary.csv first, then glosario.csv (Spanish-language
-    spreadsheet support), then falls back to markdown files.
-    If both CSV and markdown exist, CSV takes precedence and a warning is shown.
+    The map is `site_glossary_pages()`, the decision the page generator
+    writes its pages from (glossary.csv or glosario.csv when present, else
+    the legacy markdown files), so a term is linkable exactly when a page
+    exists for it. A term without a page resolves as missing.
+
+    The generator reports why a sheet publishes no pages (a missing required
+    column) when it runs. This reader runs once per story, so it leaves that
+    one report to the generator; every other warning the read raises is shown.
 
     Returns:
-        dict: Dictionary mapping term_id to term title, or empty dict if no glossary found
+        GlossaryTerms: term_id to term title, with each entry's kind; empty
+        when the site has no glossary content
     """
-    csv_path = Path('telar-content/spreadsheets/glossary.csv')
-    if not csv_path.exists():
-        fallback = Path('telar-content/spreadsheets/glosario.csv')
-        if fallback.exists():
-            csv_path = fallback
-    md_path = Path('telar-content/texts/glossary')
+    # Imported here: glossary_pages imports this module.
+    from telar.glossary_pages import site_glossary_pages
 
-    # Check if CSV exists (preferred source)
-    if csv_path.exists():
-        return load_glossary_from_csv(csv_path)
+    try:
+        pages = site_glossary_pages(warn_missing=False)
+    except (ColumnCollisionError, ReservedColumnError):
+        raise
+    except Exception as e:
+        print(f"  ⚠️ Could not load glossary: {e}")
+        return GlossaryTerms()
+    return glossary_link_map(pages)
 
-    # Fall back to markdown files
-    elif md_path.exists() and any(md_path.glob('*.md')):
-        return load_glossary_from_markdown(md_path)
 
-    # No glossary content
-    return {}
+def glossary_link_map(pages):
+    """The link map of `site_glossary_pages()`'s pages, as `load_glossary_terms`
+    returns it."""
+    glossary_terms = GlossaryTerms()
+    for term_id, (title, kind) in pages.items():
+        glossary_terms[term_id] = title
+        glossary_terms.kinds[term_id] = kind
+    return glossary_terms
 
 
 def glossary_term_slug(term_id):
@@ -488,9 +405,8 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         return text
 
     # Build a case-insensitive lookup that resolves an author's [[term]] (any
-    # casing) to the ACTUAL stored key. Glossary loaders store term_id verbatim
-    # — load_glossary_from_csv, load_glossary_from_markdown, and the demo bundle
-    # do not lowercase keys (e.g. the demo glossary stores 'IIIF'). Resolving to
+    # casing) to the ACTUAL stored key. The glossary sources store term_id verbatim
+    # — load_glossary_terms and the demo bundle do not lowercase keys (e.g. the demo glossary stores 'IIIF'). Resolving to
     # the stored key (rather than a lowercased copy) keeps the rendered
     # data-term-id and title lookup on the key the glossary holds. Mirrors the
     # objects_lower_map pattern in stories.py.

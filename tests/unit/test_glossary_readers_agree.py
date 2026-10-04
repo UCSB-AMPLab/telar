@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'
 from migrations import v180_sheets
 from telar import csv_utils
 from telar.core import csv_to_json
-from telar.glossary import load_glossary_from_csv, read_glossary_sheet
+from telar.glossary import load_glossary_terms, read_glossary_sheet
 from telar.glossary_pages import _generate_glossary_from_csv
 
 SCRIPTS = Path(__file__).resolve().parents[2] / 'scripts'
@@ -95,9 +95,13 @@ def test_the_story_conversion_takes_the_same_rows(sheet, tmp_path):
 
 def test_the_link_map_and_the_pages_hold_only_the_terms(sheet, tmp_path, monkeypatch):
     expected = {'t1', 't2'} if 't2' in sheet.read_text(encoding='utf-8') else {'t1'}
-    assert set(load_glossary_from_csv(sheet)) == expected
-
     monkeypatch.chdir(tmp_path)
+    folder = tmp_path / 'telar-content' / 'spreadsheets'
+    folder.mkdir(parents=True)
+    (folder / 'glossary.csv').write_text(sheet.read_text(encoding='utf-8'),
+                                         encoding='utf-8')
+    assert set(load_glossary_terms()) == expected
+
     out = tmp_path / 'pages'
     out.mkdir()
     _generate_glossary_from_csv(sheet, out, {})

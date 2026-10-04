@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from telar.core import csv_to_json
-from telar.glossary import load_glossary_from_csv
+from telar.glossary import load_glossary_terms
 from telar.glossary_pages import _generate_glossary_from_csv
 
 
@@ -31,12 +31,20 @@ def _write(tmp_path):
     return path
 
 
+def _site_sheet(tmp_path, text):
+    folder = tmp_path / 'telar-content' / 'spreadsheets'
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'glossary.csv').write_text(text, encoding='utf-8')
+
+
 class TestCommentColumnsAreIgnored:
     def test_the_story_conversion_accepts_the_sheet(self, tmp_path):
         assert csv_to_json(str(_write(tmp_path)), str(tmp_path / 'out.json')) is True
 
-    def test_the_link_map_reads_the_term(self, tmp_path):
-        assert 'encomienda' in load_glossary_from_csv(_write(tmp_path))
+    def test_the_link_map_reads_the_term(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        _site_sheet(tmp_path, SHEET)
+        assert 'encomienda' in load_glossary_terms()
 
     def test_the_page_generator_writes_the_term(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -54,10 +62,10 @@ class TestTheSecondHeaderRowIsNotATerm:
              'id_término,titulo,definición\n'
              'encomienda,Encomienda,A grant of labour from a community\n')
 
-    def test_the_link_map_holds_only_the_terms(self, tmp_path):
-        path = tmp_path / 'glossary.csv'
-        path.write_text(self.SHEET, encoding='utf-8')
-        assert load_glossary_from_csv(path) == {'encomienda': 'Encomienda'}
+    def test_the_link_map_holds_only_the_terms(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        _site_sheet(tmp_path, self.SHEET)
+        assert load_glossary_terms() == {'encomienda': 'Encomienda'}
 
     def test_the_page_generator_agrees(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

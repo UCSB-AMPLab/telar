@@ -127,7 +127,7 @@ def check_title_keys(root='.'):
     return warnings
 
 
-def generate_pages(telar_language='en'):
+def generate_pages(telar_language='en', glossary_terms=None):
     """Generate processed page files from user markdown sources.
 
     Reads from telar-content/texts/pages/*.md, processes widgets and glossary links,
@@ -139,6 +139,9 @@ def generate_pages(telar_language='en'):
     in place of the canonical file but is output under the canonical filename
     (so the URL is the same in both languages). Sister files for other
     languages are skipped.
+
+    `glossary_terms` is the link map the caller has already loaded
+    (`generate_glossary()` returns it); read here when omitted.
     """
     source_dir = Path('telar-content/texts/pages')
     output_dir = Path('_jekyll-files/_pages')
@@ -156,7 +159,8 @@ def generate_pages(telar_language='en'):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load glossary terms for link processing
-    glossary_terms = load_glossary_terms()
+    if glossary_terms is None:
+        glossary_terms = load_glossary_terms()
 
     # Pass 1: separate canonical pages from localized sisters and build a sister map
     canonicals = []  # list of source files

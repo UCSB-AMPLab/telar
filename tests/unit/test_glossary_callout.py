@@ -22,7 +22,7 @@ import yaml
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 import telar.config
-from telar.glossary import (GlossaryTerms, load_glossary_from_csv,
+from telar.glossary import (GlossaryTerms, load_glossary_terms,
                             process_glossary_links, strip_glossary_links)
 from telar.latex import convert_markdown
 from telar.widgets import parse_glossary_widget, process_widgets
@@ -287,12 +287,14 @@ class TestWhereItWorks:
         box = _callout(page)
         assert 'glossary-callout--left' in box and 'Place' in box
 
-    def test_the_loaders_keep_each_entrys_kind(self, site, tmp_path):
-        csv_path = tmp_path / 'glossary.csv'
-        csv_path.write_text('term_id,title,kind\ncarta,Carta,fuente\ntelar,Telar,\n',
-                            encoding='utf-8')
+    def test_the_link_map_keeps_each_entrys_kind(self, site, tmp_path):
+        folder = tmp_path / 'telar-content' / 'spreadsheets'
+        folder.mkdir(parents=True)
+        (folder / 'glossary.csv').write_text(
+            'term_id,title,definition,kind\ncarta,Carta,d,fuente\ntelar,Telar,d,\n',
+            encoding='utf-8')
 
-        terms = load_glossary_from_csv(csv_path)
+        terms = load_glossary_terms()
 
         assert terms.kinds == {'carta': 'source', 'telar': 'term'}
 

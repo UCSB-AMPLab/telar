@@ -531,7 +531,7 @@ def main():
     print()
 
     # Always generate glossary
-    generate_glossary()
+    glossary_terms = generate_glossary()
     print()
 
     # Always derive theme on-colours: the stylesheet reads them whichever
@@ -557,7 +557,7 @@ def main():
 
     # Always generate pages (passes active language so localized sister files
     # like acerca.md/about.md can be selected at build time)
-    generate_pages(telar_language=telar_language)
+    generate_pages(telar_language=telar_language, glossary_terms=glossary_terms)
     check_title_keys()
 
     # Must follow generate_pages, which can clear _jekyll-files/_pages/ where
