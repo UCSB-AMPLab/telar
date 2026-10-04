@@ -48,8 +48,13 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
     # under `term_id` below. A hand-edited glossary headed that way built
     # before, and refusing it at upgrade over the casing of its own headers
     # would be a regression, not a fix.
-    from telar.csv_utils import normalize_column_names, is_header_row
-    df = normalize_column_names(df)
+    from telar.csv_utils import (normalize_column_names, is_header_row,
+                                 ColumnCollisionError, ReservedColumnError)
+    try:
+        df = normalize_column_names(df)
+    except (ColumnCollisionError, ReservedColumnError) as e:
+        e.source = str(csv_path)
+        raise
     df.columns = df.columns.str.lower().str.strip()
 
     # Filter out instruction columns starting with #

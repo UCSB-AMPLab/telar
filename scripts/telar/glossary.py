@@ -95,11 +95,14 @@ def load_glossary_from_csv(csv_path):
             if term_id and title:
                 glossary_terms[term_id] = title
 
-    except (ColumnCollisionError, ReservedColumnError):
+    except (ColumnCollisionError, ReservedColumnError) as e:
         # The page generator reads this same file and fails the build on
         # these two. A loader that swallowed them handed back an empty link
         # map, so whether the author heard about the sheet at all depended
-        # on which path ran first. Both refuse alike.
+        # on which path ran first. Both refuse alike. The path goes with the
+        # error because it surfaces inside each story's conversion, where
+        # the file being converted is the story, not the one to change.
+        e.source = str(csv_path)
         raise
     except Exception as e:
         print(f"  ⚠️ Could not load glossary.csv: {e}")

@@ -43,12 +43,15 @@ Version: v1.8.0
 import argparse
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import yaml
 
 # Import processing functions from telar package
-from telar.csv_utils import OBJECT_FIELDS
+from telar.core import SHEET_REFUSED_EXIT
+from telar.csv_utils import (OBJECT_FIELDS, ColumnCollisionError,
+                             ReservedColumnError)
 from telar.latex import has_latex
 from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
 from telar import theme_colours
@@ -573,3 +576,9 @@ if __name__ == '__main__':
     except ManifestError as error:
         print(f"\n❌ This site cannot be generated as described:\n  {error}")
         raise SystemExit(1)
+    except (ColumnCollisionError, ReservedColumnError) as error:
+        # Stderr, where the upgrade reads a failed step's reason.
+        source = getattr(error, 'source', None)
+        prefix = f"{source}: " if source else ""
+        print(f"\n❌ {prefix}{error}", file=sys.stderr)
+        raise SystemExit(SHEET_REFUSED_EXIT)
