@@ -277,7 +277,8 @@ def _demo_link_terms(bundle):
     glossary and the site's published pages together. Which demo terms
     have pages, and what a skipped demo id links to, is `place_demo_terms`'
     decision, the one the glossary pages are written from. A site term
-    without a page is not linked: nothing is published for it.
+    without a page is not linked: nothing is published for it, and neither
+    is a demo term whose address is the glossary page's own.
     """
     # Imported here: glossary_pages loads the package this module is part of.
     from telar.glossary_pages import site_glossary_pages
@@ -290,6 +291,9 @@ def _demo_link_terms(bundle):
 
     terms = GlossaryTerms()
     for placement in placements:
+        if placement.reason == 'index':
+            # Published at the glossary page's own address: no page of its own.
+            continue
         if placement.written:
             term_data = glossary[placement.term_id]
             title = term_data.get('term', placement.term_id)

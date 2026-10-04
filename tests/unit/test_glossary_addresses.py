@@ -250,7 +250,8 @@ class TestADemoTermDoesNotReplaceASitePageFile:
     def test_a_name_the_disk_folds_to_a_site_file_is_skipped_and_linked_there(
             self, tmp_path, monkeypatch, capsys):
         # A case-insensitive disk (APFS here) holds Straße.md and Strasse.md
-        # as one file.
+        # as one file, and glossary/straße/ and glossary/strasse/ as one
+        # folder, so the output file is taken first.
         _site(tmp_path, monkeypatch)
         _legacy(tmp_path, 'Straße.md', 'term_id: Straße\ntitle: Street')
         self._demo(tmp_path, 'Strasse')
@@ -258,9 +259,9 @@ class TestADemoTermDoesNotReplaceASitePageFile:
         generate_glossary()
 
         assert _written(tmp_path) == ['Straße.md']
-        assert ("Demo glossary term 'Strasse' skipped: the site's glossary term "
-                "'Straße' is written to the same file, _glossary/Straße.md, "
-                "which is kept.") in capsys.readouterr().out
+        assert ("Demo glossary term 'Strasse' skipped: another glossary term is "
+                "published at /glossary/straße/, which is kept."
+                ) in capsys.readouterr().out
         terms = _demo_link_terms({'glossary': {'Strasse': {'term': 'Demo'}}})
         assert terms['Strasse'] == 'Street'
 
@@ -277,9 +278,9 @@ class TestADemoTermDoesNotReplaceASitePageFile:
         generate_glossary()
 
         assert _written(tmp_path) == ['Straße.md']
-        assert ("Demo glossary term 'Strasse' skipped: the demo glossary term "
-                "'Straße' is written to the same file, _glossary/Straße.md, "
-                "which is kept.") in capsys.readouterr().out
+        assert ("Demo glossary term 'Strasse' skipped: another glossary term is "
+                "published at /glossary/straße/, which is kept."
+                ) in capsys.readouterr().out
         terms = _demo_link_terms({'glossary': {'Straße': {'term': 'Street'},
                                                'Strasse': {'term': 'Other'}}})
         assert terms['Strasse'] == 'Street'
@@ -399,14 +400,17 @@ class TestASkippedDemoTermLeavesItsAddressAndFileFree:
         assert 'data-term-url="/elsewhere/"' in _link('a_b', terms)
         assert 'data-term-url="/glossary/a-b/"' in _link('a-b', terms)
 
-    def test_a_term_skipped_for_its_address_leaves_its_file(self, tmp_path, monkeypatch):
+    def test_ids_sharing_a_file_share_an_output_folder_too(self, tmp_path, monkeypatch):
+        # Ids that casefold alike make slugs that casefold alike, so a demo
+        # term skipped for its address cannot leave a file another demo id
+        # could take: glossary/strasse/ is the folder glossary/straße/ is.
         _site(tmp_path, monkeypatch)
         _legacy(tmp_path, 'x.md', 'term_id: X\ntitle: Site X\npermalink: /glossary/straße/')
         terms = self._run(tmp_path, ['Straße', 'Strasse'])
-        assert _written(tmp_path) == ['Strasse.md', 'X.md']
+        assert _written(tmp_path) == ['X.md']
         assert 'data-term-url="/glossary/straße/"' in _link('Straße', terms)
-        assert 'data-term-url="/glossary/strasse/"' in _link('Strasse', terms)
-        assert '>Demo Strasse<' in _link('Strasse', terms)
+        assert 'data-term-url="/glossary/straße/"' in _link('Strasse', terms)
+        assert '>Site X<' in _link('Strasse', terms)
 
     def test_a_term_skipped_for_a_site_file_links_at_the_site_pages_slug(
             self, tmp_path, monkeypatch):

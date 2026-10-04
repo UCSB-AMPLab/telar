@@ -61,11 +61,12 @@ import datetime
 import html
 import math
 import re
-from pathlib import Path
 from typing import NamedTuple, Optional
 
 import yaml
 
+from telar.jekyll_urls import (disk_name, front_matter_mapping, glossary_index_addresses,
+                               glossary_output_file, resolve_permalink, sanitize_url)
 from telar.code_spans import code_elements, code_regions, overlaps, unread_regions
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
@@ -210,69 +211,140 @@ def glossary_link_map(pages):
 
 
 def markdown_glossary_permalink(frontmatter_text):
-    """The `permalink` of a legacy glossary file's front matter as Jekyll
-    publishes the page at it, or None when it has none. The page copies the
-    front matter verbatim, so a permalink there moves the page. Jekyll
-    reads it as a site-relative path: a leading slash is supplied and a run
-    of slashes is one."""
-    try:
-        fields = yaml.safe_load(frontmatter_text)
-    except yaml.YAMLError:
-        return None
-    if not isinstance(fields, dict):
+    """The `permalink` of a legacy glossary file's front matter as written,
+    read as a site-relative path as Jekyll reads it, or None when it has
+    none. The page copies the front matter verbatim, so a permalink there
+    moves the page. Placeholders are left in; `markdown_glossary_address`
+    resolves them."""
+    fields = front_matter_mapping(frontmatter_text)
+    if fields is None:
         return None
     permalink = fields.get('permalink')
     if permalink is None or not str(permalink).strip():
         return None
-    return re.sub(r'/{2,}', '/', '/' + str(permalink).strip())
+    return sanitize_url(str(permalink).strip())
+
+
+def resolve_glossary_permalink(permalink, term_id, fields):
+    """(address, unresolved) of a legacy glossary page's `permalink`: the
+    URL Jekyll gives the document `_glossary/<term_id>.md` in the glossary
+    collection (`jekyll_urls.resolve_permalink`)."""
+    return resolve_permalink(permalink, term_id, fields, 'glossary')
+
+
+def markdown_glossary_address(frontmatter_text, term_id):
+    """(permalink, unresolved) of a legacy glossary file: the address its
+    front matter's `permalink` publishes the page at, placeholders
+    resolved (`resolve_glossary_permalink`), or (None, []) when it has
+    none."""
+    permalink = markdown_glossary_permalink(frontmatter_text)
+    if permalink is None:
+        return None, []
+    return resolve_glossary_permalink(permalink, term_id,
+                                      front_matter_mapping(frontmatter_text))
 
 
 def glossary_term_address(term_id, permalink=None):
     """The site-relative path (no baseurl) a glossary term's page is
     published at: its own permalink when the front matter gives one, else
-    `/glossary/<slug>/`."""
-    return permalink or f'/glossary/{glossary_term_slug(term_id)}/'
-
-
-def first_at_each_address(entries, warn=True):
-    """The entries that keep their address, in order, as
-    [(term_id, address, item)].
-
-    Jekyll publishes one page at an address, so of the entries that share
-    one the first is kept and the others are not published or linkable.
-    Ids that differ only in case or punctuation share a slug. `warn` says
-    whether each dropped entry is reported.
-    """
-    kept, owners = [], {}
-    for term_id, address, item in entries:
-        owner = owners.get(address)
-        if owner is None:
-            owners[address] = term_id
-            kept.append((term_id, address, item))
-        elif warn:
-            print(f"  ⚠️ Glossary entries '{owner}' and '{term_id}' would both "
-                  f"be published at {address}. '{owner}' keeps that address; "
-                  f"'{term_id}' is not published and cannot be linked.")
-    return kept
+    `/glossary/<slug>/`, sanitized as Jekyll sanitizes a URL, so an id
+    with an empty slug is at `/glossary/`."""
+    return permalink or sanitize_url(f'/glossary/{glossary_term_slug(term_id)}/')
 
 
 def glossary_page_file(term_id):
-    """The file a glossary page is written to, `<term_id>.md`, as a
-    case-insensitive disk names it: names that casefold alike (`Viewer.md`
-    and `viewer.md`, `Straße.md` and `Strasse.md`) are one file there."""
-    return f'{term_id}.md'.casefold()
+    """The file a glossary page is written to, `<term_id>.md`, as a case-
+    and normalization-insensitive disk names it: `Viewer.md` and
+    `viewer.md`, `Straße.md` and `Strasse.md`, and `é` written as one
+    character or as `e` and an accent, are one file there."""
+    return disk_name(f'{term_id}.md')
+
+
+class _PageClaims:
+    """The output files and `_glossary/` files the glossary pages written so
+    far hold, each with the entry of the page that holds it. The output
+    file of each of the site's glossary pages (`glossary_index_addresses`)
+    is held from the start. The one test of whether
+    a page can be written: the site's pages and the demo bundle's are
+    placed by it."""
+
+    def __init__(self):
+        self._indexes = {}
+        for address in glossary_index_addresses():
+            self._indexes.setdefault(glossary_output_file(address), address)
+        self._outputs, self._files = {}, {}
+
+    def holder(self, term_id, address):
+        """(reason, entry) of what holds the output file of `address`: a
+        glossary page ('index', with that page's address as the entry) or
+        another entry ('address'), else
+        the entry holding the file of `term_id` ('file'); (None, None) when
+        both are free."""
+        output = glossary_output_file(address)
+        if output in self._indexes:
+            return 'index', self._indexes[output]
+        entry = self._outputs.get(output)
+        if entry is not None:
+            return 'address', entry
+        entry = self._files.get(glossary_page_file(term_id))
+        if entry is not None:
+            return 'file', entry
+        return None, None
+
+    def claim(self, term_id, address, entry):
+        self._outputs[glossary_output_file(address)] = entry
+        self._files[glossary_page_file(term_id)] = entry
+
+
+def _report_site_collision(reason, owner, term_id):
+    if reason == 'index':
+        print(f"  ⚠️ Glossary entry '{term_id}' would be published at "
+              f"{owner}, the glossary page's own address. "
+              f"'{term_id}' is not published and cannot be linked.")
+    elif reason == 'address':
+        print(f"  ⚠️ Glossary entries '{owner[0]}' and '{term_id}' would both "
+              f"be published at {owner[1]}. '{owner[0]}' keeps that address; "
+              f"'{term_id}' is not published and cannot be linked.")
+    else:
+        print(f"  ⚠️ Glossary entries '{owner[0]}' and '{term_id}' would both "
+              f"be written to the same file, _glossary/{owner[0]}.md. '{owner[0]}' "
+              f"keeps that file; '{term_id}' is not published and cannot be linked.")
+
+
+def first_at_each_address(entries, warn=True):
+    """The entries that are written, in order, as [(term_id, address, item)].
+
+    Jekyll writes one file for each output path, and the build writes each
+    page to `_glossary/<term_id>.md`; both are compared as a case- and
+    normalization-insensitive disk names them (`glossary_output_file`,
+    `glossary_page_file`). Of the entries that share either, the first is
+    kept and the others are not published or linkable; an entry at a
+    glossary page's own address is never published. Ids that differ only
+    in case or punctuation share a slug. `warn` says whether each dropped
+    entry is reported.
+    """
+    kept, claims = [], _PageClaims()
+    for term_id, address, item in entries:
+        reason, owner = claims.holder(term_id, address)
+        if reason is None:
+            claims.claim(term_id, address, (term_id, address))
+            kept.append((term_id, address, item))
+        elif warn:
+            _report_site_collision(reason, owner, term_id)
+    return kept
 
 
 class DemoTermPlacement(NamedTuple):
     """What becomes of one demo glossary term (`place_demo_terms`).
 
     `written` is True when the term's own page is written, at `address` in
-    `_glossary/<term_id>.md`. Otherwise `reason` is 'address' (another page
-    is published at the term's address) or 'file' (another page is written
-    to the term's file), and `owner` is the term whose page holds it, with
-    `owner_is_site` saying whose. The demo id links to its own page when
-    written, else to the owner's page, at `address`, which is then the
-    owner's address.
+    `_glossary/<term_id>.md`. Otherwise `reason` is 'index' (the term's
+    address is the glossary page's own), 'address' (another page is written
+    to the term's output file) or 'file' (another page is written to the
+    term's file). For 'address' and 'file', `owner` is the term whose page
+    holds it, with `owner_is_site` saying whose, and the demo id links to
+    the owner's page at `address`, the owner's address; for 'index' it has
+    no owner, is not linked, and `address` is that glossary page's.
     """
     term_id: str
     written: bool
@@ -288,40 +360,36 @@ def place_demo_terms(site_pages, demo_ids):
 
     `site_pages` is the site's glossary pages in the order they are written
     (a mapping of term ids, with `addresses` for any published away from
-    its slug); every site page is written as `<term_id>.md`. `demo_ids` is
-    the bundle's glossary ids in order. Only a written page claims its
-    address and file, so a term skipped earlier leaves both free for a
-    later one. A demo term is skipped when its address is taken, else when
-    its file is taken on a case-insensitive disk. A skipped id is linked to
-    the page that holds its address or file, so a demo story never shows a
-    term its bundle defines as missing.
+    its slug), already placed by `first_at_each_address`. `demo_ids` is the
+    bundle's glossary ids in order. Only a written page claims its output
+    file and its `_glossary/` file (`_PageClaims`), so a term skipped
+    earlier leaves both free for a later one. A demo term is skipped when
+    its output file is taken, else when its `_glossary/` file is. A skipped
+    id is linked to the page that holds it, so a demo story never shows a
+    term its bundle defines as missing, unless that is the glossary page.
     """
     site_addresses = getattr(site_pages, 'addresses', {})
-    at_address, in_file = {}, {}
+    claims = _PageClaims()
     for term_id in site_pages:
-        entry = (term_id, site_addresses.get(term_id) or glossary_term_address(term_id), True)
-        at_address.setdefault(entry[1], entry)
-        in_file.setdefault(glossary_page_file(term_id), entry)
+        address = site_addresses.get(term_id) or glossary_term_address(term_id)
+        if claims.holder(term_id, address)[0] is None:
+            claims.claim(term_id, address, (term_id, address, True))
 
     placements = []
     for term_id in demo_ids:
         address = glossary_term_address(term_id)
-        page_file = glossary_page_file(term_id)
-        owner = at_address.get(address)
-        reason = 'address'
-        if owner is None:
-            owner = in_file.get(page_file)
-            reason = 'file'
-        if owner is None:
-            entry = (term_id, address, False)
-            at_address[address] = entry
-            in_file[page_file] = entry
+        reason, owner = claims.holder(term_id, address)
+        if reason is None:
+            claims.claim(term_id, address, (term_id, address, False))
             placements.append(DemoTermPlacement(term_id, True, address, None, None,
                                                 False))
-            continue
-        owner_id, owner_address, owner_is_site = owner
-        placements.append(DemoTermPlacement(
-            term_id, False, owner_address, reason, owner_id, owner_is_site))
+        elif reason == 'index':
+            placements.append(DemoTermPlacement(term_id, False, owner,
+                                                reason, None, False))
+        else:
+            owner_id, owner_address, owner_is_site = owner
+            placements.append(DemoTermPlacement(
+                term_id, False, owner_address, reason, owner_id, owner_is_site))
     return placements
 
 

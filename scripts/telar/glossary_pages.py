@@ -15,7 +15,7 @@ from pathlib import Path
 
 from telar.images import process_images
 from telar.glossary import (first_at_each_address, glossary_link_map, glossary_term_address,
-                            markdown_glossary_permalink, place_demo_terms,
+                            markdown_glossary_address, place_demo_terms,
                             markdown_glossary_title,
                             process_glossary_links, read_glossary_sheet)
 from telar.markdown import read_markdown_file, process_inline_content
@@ -86,14 +86,29 @@ def _split_markdown_term(content):
             term_id_match.group(1) if term_id_match else None)
 
 
+def _markdown_term_permalink(frontmatter_text, term_id, source_file, warn):
+    """The address a legacy file's `permalink` publishes its page at, or
+    None without one. A placeholder the build cannot resolve is reported
+    when `warn` is set, with the remedy, and the page is linked at the
+    permalink as written."""
+    permalink, unresolved = markdown_glossary_address(frontmatter_text, term_id)
+    if unresolved and warn:
+        named = ' and '.join(filter(None, [', '.join(unresolved[:-1]), unresolved[-1]]))
+        print(f"  ⚠️ Glossary entry '{term_id}' ({source_file.name}): its permalink "
+              f"uses {named}, which the build cannot work out, so links to it may not "
+              f"reach its page. Write the permalink without {named}.")
+    return permalink
+
+
 def _markdown_terms(md_path, warn=True):
     """The legacy glossary files that become pages, in file-name order, as
     (source_file, frontmatter_text, body, term_id, permalink).
 
     A file without front matter or a `term_id` is not a term. A page is
-    published at its front matter's `permalink` when it has one, so that is
-    its address, and of files whose pages share an address the first keeps
-    it. `warn` says whether these are reported.
+    published at its front matter's `permalink` when it has one, its
+    placeholders resolved, so that is its address, and of files whose pages
+    share an output file or a `_glossary/` file the first keeps it
+    (`first_at_each_address`). `warn` says whether these are reported.
     """
     terms = []
     for source_file in sorted(md_path.glob('*.md')):
@@ -107,7 +122,7 @@ def _markdown_terms(md_path, warn=True):
             if warn:
                 print(f"Warning: No term_id found in {source_file}")
             continue
-        permalink = markdown_glossary_permalink(frontmatter_text)
+        permalink = _markdown_term_permalink(frontmatter_text, term_id, source_file, warn)
         terms.append((term_id, glossary_term_address(term_id, permalink),
                       (source_file, frontmatter_text, body, term_id, permalink)))
     return [item for _id, _address, item in first_at_each_address(terms, warn)]
@@ -305,6 +320,24 @@ def _demo_glossary_fields(term, term_id):
     return fields
 
 
+def _report_demo_skip(placement):
+    """Print why `place_demo_terms` did not write a demo term's page."""
+    term_id = placement.term_id
+    if placement.reason == 'index':
+        print(f"  ⚠️ Demo glossary term '{term_id}' skipped: it would be "
+              f"published at {placement.address}, the glossary page's "
+              f"own address.")
+    elif placement.reason == 'address':
+        print(f"  ⚠️ Demo glossary term '{term_id}' skipped: another "
+              f"glossary term is published at {placement.address}, "
+              f"which is kept.")
+    else:
+        whose = "site's" if placement.owner_is_site else 'demo'
+        print(f"  ⚠️ Demo glossary term '{term_id}' skipped: the "
+              f"{whose} glossary term '{placement.owner}' is written to "
+              f"the same file, _glossary/{placement.owner}.md, which is kept.")
+
+
 def generate_glossary():
     """Generate glossary markdown files from user content and demo JSON.
 
@@ -377,16 +410,8 @@ def generate_glossary():
 
         for term, placement in zip(demo_terms, placements):
             term_id = placement.term_id
-            if placement.reason == 'address':
-                print(f"  ⚠️ Demo glossary term '{term_id}' skipped: another "
-                      f"glossary term is published at {placement.address}, "
-                      f"which is kept.")
-                continue
-            if placement.reason == 'file':
-                whose = "site's" if placement.owner_is_site else 'demo'
-                print(f"  ⚠️ Demo glossary term '{term_id}' skipped: the "
-                      f"{whose} glossary term '{placement.owner}' is written to "
-                      f"the same file, _glossary/{placement.owner}.md, which is kept.")
+            if not placement.written:
+                _report_demo_skip(placement)
                 continue
             filepath = glossary_dir / f"{term_id}.md"
 
