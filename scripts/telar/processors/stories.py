@@ -68,6 +68,7 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
+from telar.code_spans import code_regions
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
@@ -707,34 +708,8 @@ _ANSWER_MATHS = (
     (re.compile(r'\\\(((?:(?!\\\().)+?)\\\)', re.DOTALL), 1),
     (re.compile(r'(?<![\\$])\$(?!\$)(\S(?:[^$]*?[^\s\\])?)\$(?!\$)'), 1),
 )
-_BACKTICK_RUN = re.compile(r'`+')
 # A destination may hold one level of balanced parentheses, as kramdown allows.
 _LINK_DESTINATION = re.compile(r'\]\((?:[^()]|\([^()]*\))*\)')
-_RAW_CODE_ELEMENT = re.compile(r'<(code|pre|kbd|samp)\b[^>]*>(?:(?!<\1\b).)*?</\1\s*>',
-                               re.DOTALL | re.IGNORECASE)
-
-
-def _answer_code_spans(text):
-    """Code spans as story-step.html reads them: a run of N backticks
-    closed by the next run of exactly N; a run with no match is literal."""
-    runs = [(m.start(), m.end()) for m in _BACKTICK_RUN.finditer(text)]
-    later = {}
-    for index in range(len(runs) - 1, -1, -1):
-        later.setdefault(runs[index][1] - runs[index][0], []).append(index)
-    spans = []
-    i = 0
-    while i < len(runs):
-        start, end = runs[i]
-        same = later[end - start]
-        while same and same[-1] <= i:
-            same.pop()
-        if not same:
-            i += 1
-            continue
-        close = same.pop()
-        spans.append((start, runs[close][1]))
-        i = close + 1
-    return spans
 
 
 def _answer_maths_for_kramdown(text):
@@ -746,8 +721,7 @@ def _answer_maths_for_kramdown(text):
     another dollar, which is one formula inside another and has no single
     reading.
     """
-    guarded = (_answer_code_spans(text)
-               + [(m.start(), m.end()) for m in _RAW_CODE_ELEMENT.finditer(text)]
+    guarded = (code_regions(text)
                + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
                + [(m.start(), m.end()) for m in _LINK_DESTINATION.finditer(text)])
     # Each pattern's next match from the current position, searched again

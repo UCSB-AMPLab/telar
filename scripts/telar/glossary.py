@@ -60,6 +60,7 @@ import html
 import re
 from pathlib import Path
 import pandas as pd
+from telar.code_spans import code_regions
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
@@ -400,12 +401,15 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # Text is linked, a tag never: [[term]] inside an attribute (an image's
     # alt text) stays literal, or the link it made would end the attribute.
     # A quoted attribute value may hold '>', so it does not end the tag.
+    # Code is shown as written, so [[term]] in a code span or element (on
+    # the answer's markdown, or on a panel's HTML) is the syntax, not a link.
     tags = [m.span() for m in re.finditer(
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
+    literal = tags + code_regions(text)
 
     def link_outside_tags(match):
         start = match.start()
-        if any(a < start < b for a, b in tags):
+        if any(a < start < b for a, b in literal):
             return match.group(0)
         return replace_glossary_link(match)
 
