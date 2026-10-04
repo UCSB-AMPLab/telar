@@ -2,19 +2,25 @@
  * Telar Story — the authoring frame.
  *
  * A story step records where the author left the viewer: a focal point and a
- * zoom. Both are read off one screen and replayed on another, so the zoom
- * cannot mean "a multiple of the home fit on whatever pane happened to be
- * open". It means a multiple of the home fit in a viewport of one canonical
- * aspect, and that is what this module holds: the aspect, and the home zoom
- * it implies for a given image.
+ * zoom. Both are read off one screen and replayed on another, so they cannot
+ * be measured against whatever pane happened to be open. x and y are
+ * fractions of the image. zoom is a multiple of the whole-object fit in a
+ * frame of one canonical aspect, and that is what this module holds: the
+ * aspect, and the home zoom it implies for a given image.
  *
- * Both ends of the round trip use it. `iiif-viewer.js` divides by it when it
- * reads a position out of a live viewer, and `iiif-card.js` multiplies by it
- * when it reconstructs the authored frame. Because both use the same number,
- * it cancels: a value captured at one aspect replays as the same framing at
- * any other, and the constant could be anything without changing a published
- * story. It is 1 because that is the one value an author can hold in mind —
- * zoom 1 is the whole object in a square frame.
+ * Replay reconstructs the authored frame from it (`iiif-card.js`,
+ * `computeFocalTarget`). A step's zoom means two things there: at or below 1
+ * a fraction of the whole-object fit, and from 2 up the width of the framed
+ * detail. The two agree for every image only when the zoom was captured in a
+ * pane of this aspect, where the pane's own home zoom is `authoringHomeZoom`.
+ * That is why a capture surface has to measure in a pane of this shape: the
+ * object page's viewer takes it (`_viewer.scss`), and a surface whose pane
+ * has another shape measures against a frame of this shape drawn inside it.
+ *
+ * The value is fixed. It was chosen in 1.4.0 as the mean of the two authoring
+ * surfaces' shapes at the time, and every zoom already published replays
+ * through it, so changing it would move every square and portrait step on
+ * every site.
  *
  * The home fit has two arms and both are needed. An image taller than the
  * frame fits by height and letterboxes at the sides; an image wider than the
@@ -29,8 +35,8 @@
 /**
  * The aspect ratio of the frame an authored zoom is measured against.
  *
- * Not author-tunable, and not a property of any real screen: it is the unit
- * both ends agree to divide by. See the module note above for why it is 1.
+ * Not author-tunable. It is the shape a capture pane must have for its zoom
+ * to mean what replay reads; see the module note above for why it is fixed.
  */
 export const AUTHORING_ASPECT = 1.053;
 

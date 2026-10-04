@@ -380,11 +380,24 @@
   // assets/js/telar-story/iiif-viewer.js
   function normalizedViewportPosition(viewport) {
     const center = viewport.getCenter();
-    const bounds = viewport.getHomeBounds();
-    const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
-    const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
+    const image = viewport.viewer && viewport.viewer.world.getItemAt(0);
+    let x, y;
+    if (image) {
+      const px = image.viewportToImageCoordinates(center);
+      const size = image.getContentSize();
+      x = px.x / size.x;
+      y = px.y / size.y;
+    } else {
+      const bounds = viewport.getHomeBounds();
+      x = (center.x - bounds.x) / bounds.width;
+      y = (center.y - bounds.y) / bounds.height;
+    }
     const zoom = Math.max(0.1, Math.min(10, viewport.getZoom() / viewport.getHomeZoom()));
-    return { x, y, zoom };
+    return {
+      x: Math.max(0, Math.min(1, x)),
+      y: Math.max(0, Math.min(1, y)),
+      zoom
+    };
   }
   var IiifViewer = class _IiifViewer {
     /**

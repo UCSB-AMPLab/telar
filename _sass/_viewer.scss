@@ -32,22 +32,22 @@
   position: relative;
 }
 
-/* Image object page: 1:1 square, white weave background, inset shadow.
+/* Image object page: the authoring aspect, white weave background, inset shadow.
  *
- * The square is not decoration. An author reads x/y/zoom off this pane and
- * pastes them into a spreadsheet, and the zoom means "a multiple of the fit"
- * — of the fit in *this* pane. So the pane's shape is part of what the number
- * means, and a pane whose shape moves with the window writes the author's
- * window size into their story.
+ * The shape is not decoration. An author reads x/y/zoom off this pane and
+ * pastes them into a spreadsheet, and the zoom is a multiple of the fit in
+ * *this* pane, while a story replays it against a frame of the authoring
+ * aspect (AUTHORING_ASPECT in telar-story/authoring-frame.js). The two agree
+ * for every image only when this pane has that aspect, so 1.053 here is that
+ * constant, and tests/js/authoring-aspect-css.test.js fails if they differ.
  *
- * Capping the height is what used to break it: with `width: 100%` the height
- * clamped on a short window and the width did not, so the square became a
- * 1.19 rectangle at 1440x900 and a 1.15 one at 1280x800 while staying square
- * on taller ones. Capping the width by the same measure keeps the square and
- * shrinks it instead. */
+ * The width is capped, not the height: with `width: 100%` a height cap alone
+ * clamps on a short window while the width does not, and the pane's shape
+ * moves with the window. Capping the width by the same measure keeps the
+ * shape and shrinks the pane instead. */
 #object-viewer.viewer-image {
-  aspect-ratio: 1 / 1;
-  max-width: min(100%, 80vh);
+  aspect-ratio: 1.053;
+  max-width: min(100%, calc(80vh * 1.053));
   overflow: hidden;
   background: #fff url('../img/background-gris.svg') repeat;
   background-size: 20px auto;

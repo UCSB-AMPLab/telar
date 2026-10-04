@@ -24,7 +24,7 @@
  *
  * Adapted from the Telar Compositor's IIIF viewer.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { extractAllPages } from './iiif-manifest.js';
@@ -44,22 +44,44 @@ import { registerTestViewer, unregisterTestViewer } from './test-hook.js';
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
 /**
- * Read an OpenSeadragon viewport's current position in Telar's normalised
- * story coordinates: x/y as 0–1 fractions of the home bounds (clamped), zoom
- * as a multiple of home zoom (clamped 0.1–10). This is the forward transform
- * that the object page's coordinate panel shows authors; the story runtime
- * applies the inverse when it pans a viewer to an authored x/y/zoom step.
+ * Read an OpenSeadragon viewport's current position in Telar's step
+ * coordinates, the numbers the object page's coordinate panel shows authors.
+ *
+ * x and y are 0–1 fractions of the image, because that is how a step is
+ * replayed (`computeFocalTarget` places the focal at x · width, y · height).
+ * They are read through the open image rather than the home bounds: OSD's
+ * home bounds are the home view, letterbox included, so a fraction of them
+ * matches a fraction of the image only in a pane of the image's own shape.
+ *
+ * zoom is a multiple of the home zoom, clamped 0.1–10. It means what replay
+ * reads it as only in a pane of the authoring aspect (see authoring-frame.js),
+ * which is why the object page's pane has that shape.
  *
  * @param {OpenSeadragon.Viewport} viewport - Live OSD viewport
  * @returns {{x: number, y: number, zoom: number}}
  */
 export function normalizedViewportPosition(viewport) {
   const center = viewport.getCenter();
-  const bounds = viewport.getHomeBounds();
-  const x = Math.max(0, Math.min(1, (center.x - bounds.x) / bounds.width));
-  const y = Math.max(0, Math.min(1, (center.y - bounds.y) / bounds.height));
+  const image = viewport.viewer && viewport.viewer.world.getItemAt(0);
+  let x, y;
+  if (image) {
+    const px = image.viewportToImageCoordinates(center);
+    const size = image.getContentSize();
+    x = px.x / size.x;
+    y = px.y / size.y;
+  } else {
+    // Before the image opens there is nothing to measure against; the home
+    // bounds are the best the viewport alone can say.
+    const bounds = viewport.getHomeBounds();
+    x = (center.x - bounds.x) / bounds.width;
+    y = (center.y - bounds.y) / bounds.height;
+  }
   const zoom = Math.max(0.1, Math.min(10, viewport.getZoom() / viewport.getHomeZoom()));
-  return { x: x, y: y, zoom: zoom };
+  return {
+    x: Math.max(0, Math.min(1, x)),
+    y: Math.max(0, Math.min(1, y)),
+    zoom: zoom,
+  };
 }
 
 // ── Class ────────────────────────────────────────────────────────────────────
