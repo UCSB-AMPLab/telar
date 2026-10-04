@@ -274,17 +274,37 @@ jobs:
         run: |
           python scripts/check_jekyll_conflicts.py jekyll-build.log
 
+      # An Actions cache entry is immutable per key, so the key has to move
+      # whenever the tiles would differ. They depend on the image files and
+      # their names (a tile directory is named by object ID), on the objects
+      # sheet (which objects are self-hosted), and on _config.yml (tiles bake
+      # the site's url/baseurl into each info.json `@id`). hashFiles reads
+      # contents only, never paths, so the key is computed here. The objects
+      # sheet fetched from Google Sheets is on disk by now.
+      - name: Hash the IIIF tile inputs
+        id: tile-inputs
+        run: |
+          python3 - <<'EOF'
+          import hashlib, os
+          from pathlib import Path
+
+          digest = hashlib.sha256()
+          objects = Path('telar-content/objects')
+          files = sorted(p for p in objects.rglob('*') if p.is_file()) if objects.is_dir() else []
+          sheets = [Path('telar-content/spreadsheets') / name for name in ('objects.csv', 'objetos.csv')]
+          for path in files + [p for p in sheets + [Path('_config.yml')] if p.is_file()]:
+              digest.update(path.as_posix().encode('utf-8') + b'\0')
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write(f'hash={digest.hexdigest()}\n')
+          EOF
+
       - name: Restore IIIF tiles from cache
         id: cache-iiif
         uses: actions/cache/restore@v6
         with:
           path: cached-iiif/
-          # Tiles bake the site's base URL into each info.json `@id`, and an
-          # Actions cache entry is immutable per key. Keyed on the images alone,
-          # a _config.yml whose url/baseurl changed restores tiles built for the
-          # old address and silently reverts the correction, so the key has to
-          # move when either input does.
-          key: iiif-tiles-${{ hashFiles('telar-content/objects/**', '_config.yml') }}
+          key: iiif-tiles-${{ steps.tile-inputs.outputs.hash }}
 
       - name: Detect if IIIF regeneration is needed
         id: detect-changes
@@ -402,8 +422,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: cached-iiif/
-          # v0.5.0: Flattened image directory structure
-          key: iiif-tiles-${{ hashFiles('telar-content/objects/**', '_config.yml') }}
+          key: iiif-tiles-${{ steps.tile-inputs.outputs.hash }}
 
       - name: Restore IIIF tiles from cache to _site (when skipping regeneration)
         if: steps.detect-changes.outputs.needs_iiif == 'false'

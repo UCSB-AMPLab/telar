@@ -9,15 +9,20 @@ reports success and the site deploys without its images.
 
 These tests hold the two properties that keep the skip path honest: the
 decision is re-checked against what the cache actually produced, and the
-cache key moves when either input to a tile moves.
+cache key moves when any input to a tile moves.
 
-They assert on the workflow text because the logic lives in shell inside
-YAML, where nothing else can reach it. That makes them a guard against the
-shape being removed or renamed, not a proof that the shell is correct.
+The decisions are asserted on the workflow text, because that logic lives
+in shell inside YAML, where nothing else can reach it; that makes them a
+guard against the shape being removed or renamed, not a proof that the
+shell is correct. The tile key is computed by a step of its own, which the
+tests run.
 
 Version: v1.8.0
 """
 
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,31 +52,107 @@ def _step(steps, name_fragment):
     return matches[0]
 
 
-class TestTheTileCacheKeyMovesWithTheBaseUrl:
-    """Tiles bake the site's base URL into each info.json `@id`.
+def _tile_key_steps(steps):
+    return [step for step in steps
+            if isinstance(step.get('with'), dict)
+            and str(step['with'].get('key', '')).startswith('iiif-tiles-')]
 
-    An Actions cache entry is immutable per key, so a key that hashes the
-    images alone can never be overwritten by tiles built for a corrected
-    address. The site restores the old ones and reverts the correction.
-    """
 
-    def test_both_key_sites_hash_the_config(self, workflow_steps):
-        keys = [step['with']['key'] for step in workflow_steps
-                if 'with' in step and isinstance(step.get('with'), dict)
-                and str(step['with'].get('key', '')).startswith('iiif-tiles-')]
+class TestTheTileCacheKey:
+    """An Actions cache entry is immutable per key, so the key has to move
+    whenever the tiles would differ, or a push that skips regeneration
+    restores tiles built for the old input. The tiles depend on each image's
+    bytes and name (a tile directory is named by object ID), on the objects
+    sheet (which objects are self-hosted), and on _config.yml (the base URL
+    is baked into each info.json `@id`)."""
 
-        assert len(keys) == 2, keys
-        for key in keys:
-            assert "'_config.yml'" in key, key
-            assert "'telar-content/objects/**'" in key, key
-
-    def test_the_save_key_matches_the_restore_key(self, workflow_steps):
+    def test_the_restore_and_the_save_use_the_one_computed_hash(self, workflow_steps):
         """A save under a key nothing restores from is a cache that never hits."""
-        keys = {step['with']['key'] for step in workflow_steps
-                if 'with' in step and isinstance(step.get('with'), dict)
-                and str(step['with'].get('key', '')).startswith('iiif-tiles-')}
+        keys = [step['with']['key'] for step in _tile_key_steps(workflow_steps)]
 
-        assert len(keys) == 1, keys
+        assert keys == ['iiif-tiles-${{ steps.tile-inputs.outputs.hash }}'] * 2
+
+    def test_the_hash_is_computed_after_the_fetch_and_before_the_restore(self, workflow_steps):
+        """A Google Sheets site has its objects sheet on disk only after the fetch."""
+        names = [step.get('name', '') for step in workflow_steps]
+        hashing = _step(workflow_steps, 'Hash the IIIF tile inputs')
+
+        assert hashing['id'] == 'tile-inputs'
+        assert names.index(_step(workflow_steps, 'Fetch data from Google Sheets')['name']) \
+            < names.index(hashing['name'])
+        assert all(names.index(hashing['name']) < names.index(step['name'])
+                   for step in _tile_key_steps(workflow_steps))
+
+    @pytest.fixture
+    def key(self, workflow_steps, tmp_path):
+        run = _step(workflow_steps, 'Hash the IIIF tile inputs')['run']
+
+        def compute(site):
+            output = tmp_path / 'github-output'
+            output.write_text('', encoding='utf-8')
+            subprocess.run(['bash', '-e', '-c', run], cwd=site, check=True,
+                           env={**os.environ, 'GITHUB_OUTPUT': str(output)})
+            lines = output.read_text(encoding='utf-8').splitlines()
+            assert len(lines) == 1 and lines[0].startswith('hash='), lines
+            return lines[0][len('hash='):]
+        return compute
+
+    @pytest.fixture
+    def site(self, tmp_path):
+        root = tmp_path / 'site'
+        objects = root / 'telar-content' / 'objects'
+        sheets = root / 'telar-content' / 'spreadsheets'
+        objects.mkdir(parents=True)
+        sheets.mkdir()
+        (objects / 'map.jpg').write_bytes(b'map image')
+        (sheets / 'objects.csv').write_text('object_id,title\nmap,Map\n', encoding='utf-8')
+        (sheets / 'story-one.csv').write_text('step,question,answer,object\n1,Q,A,map\n',
+                                              encoding='utf-8')
+        (root / '_config.yml').write_text('url: https://example.org\n', encoding='utf-8')
+        return root
+
+    def test_it_is_the_same_for_the_same_site(self, key, site):
+        assert key(site) == key(site)
+
+    def test_a_rename_with_the_same_bytes_moves_it(self, key, site):
+        before = key(site)
+        objects = site / 'telar-content' / 'objects'
+        (objects / 'map.jpg').rename(objects / 'plan.jpg')
+
+        assert key(site) != before
+
+    def test_an_image_edit_moves_it(self, key, site):
+        before = key(site)
+        (site / 'telar-content' / 'objects' / 'map.jpg').write_bytes(b'another image')
+
+        assert key(site) != before
+
+    @pytest.mark.parametrize('sheet', ['objects.csv', 'objetos.csv'])
+    def test_an_objects_sheet_edit_moves_it(self, key, site, sheet):
+        sheets = site / 'telar-content' / 'spreadsheets'
+        (sheets / 'objects.csv').rename(sheets / sheet)
+        before = key(site)
+        (sheets / sheet).write_text('object_id,title\nplan,Map\n', encoding='utf-8')
+
+        assert key(site) != before
+
+    def test_a_config_edit_moves_it(self, key, site):
+        before = key(site)
+        (site / '_config.yml').write_text('url: https://example.com\n', encoding='utf-8')
+
+        assert key(site) != before
+
+    def test_a_story_edit_leaves_it(self, key, site):
+        before = key(site)
+        (site / 'telar-content' / 'spreadsheets' / 'story-one.csv').write_text(
+            'step,question,answer,object\n1,Q,Another answer,map\n', encoding='utf-8')
+
+        assert key(site) == before
+
+    def test_a_site_without_objects_has_a_key(self, key, site):
+        shutil.rmtree(site / 'telar-content' / 'objects')
+
+        assert key(site)
 
 
 class TestASkipIsVerifiedAgainstTheCache:
