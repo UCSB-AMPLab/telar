@@ -104,6 +104,10 @@ def load_glossary_from_csv(csv_path):
         # redundant and needlessly mutated the actual header labels, diverging
         # from every other CSV's column-casing behaviour.
         from telar.csv_utils import normalize_column_names, GLOSSARY_COLUMN_ALIASES
+        # Instruction columns go first, as in csv_to_json, which reads this
+        # file as a story sheet: they are never read, so two of them cannot
+        # collide.
+        df = df[[col for col in df.columns if not col.startswith('#')]]
         df = normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
 
         if 'term_id' not in df.columns or 'title' not in df.columns:
