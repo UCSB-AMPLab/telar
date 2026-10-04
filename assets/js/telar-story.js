@@ -468,7 +468,8 @@
     return Math.min(1, Math.max(OVERVIEW_MIN_FRACTION, zoom));
   }
   function _clampFocalPx(region, edges, ideal, radius) {
-    const into = (lo, hi, want) => lo <= hi ? Math.max(lo, Math.min(hi, want)) : null;
+    const MEET_PX = 1e-3;
+    const into = (lo, hi, want) => lo <= hi + MEET_PX ? Math.max(lo, Math.min(hi, want)) : null;
     const axis = (start, extent, near, far, want) => {
       const coverLo = start + extent - far;
       const coverHi = start + near;

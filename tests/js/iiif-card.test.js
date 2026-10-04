@@ -526,6 +526,79 @@ describe('_clampFocalPx — keep-circle focal clamp', () => {
   });
 });
 
+// ── _clampFocalPx — an image exactly as long as the region covers it ──────────
+//
+// At zoom 1 the image is scaled to fit the uncovered region, so on its limiting
+// axis its length equals the region's and the two coverage bounds meet. Whether
+// the sum of the focal's edge distances comes out a fraction above or below the
+// region's length is decided by floating-point rounding; the sweeps below take
+// image sizes that land on both sides and require the image's edges to sit on
+// the region's edges in every one.
+describe('_clampFocalPx — an image that exactly fits the region', () => {
+  const region = { x: 576, y: 0, w: 864, h: 757 };   // 1440×757, side card on the left
+  const centre = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
+
+  function placeAtFit(fx, fy, imgW, imgH) {
+    const s = Math.min(region.w / imgW, region.h / imgH);   // zoom 1: the whole-image fit
+    const f = { x: fx * imgW, y: fy * imgH };
+    const edges = {
+      eLeft: f.x * s, eRight: (imgW - f.x) * s,
+      eTop: f.y * s, eBottom: (imgH - f.y) * s,
+    };
+    const F = _clampFocalPx(region, edges, centre, 0);
+    return {
+      edges,
+      left: F.x - edges.eLeft, right: F.x + edges.eRight,
+      top: F.y - edges.eTop, bottom: F.y + edges.eBottom,
+    };
+  }
+
+  function sweepFitSizes(aspect, fx, fy, axis) {
+    let short = 0, long = 0;
+    const misplaced = [];
+    for (let w = 1000; w <= 6000; w += 7) {
+      const h = Math.round(w / aspect);
+      const r = placeAtFit(fx, fy, w, h);
+      const [near, far, lo, hi, a, b] = axis === 'x'
+        ? [r.edges.eLeft, r.edges.eRight, region.x, region.x + region.w, r.left, r.right]
+        : [r.edges.eTop, r.edges.eBottom, region.y, region.y + region.h, r.top, r.bottom];
+      const len = near + far;
+      if (len < hi - lo) short++;
+      if (len > hi - lo) long++;
+      if (Math.abs(a - lo) > 1e-6 || Math.abs(b - hi) > 1e-6) misplaced.push(`${w}×${h}`);
+    }
+    return { short, long, misplaced: { count: misplaced.length, first: misplaced.slice(0, 3) } };
+  }
+
+  it('puts a landscape image edge to edge across the region at every size', () => {
+    const r = sweepFitSizes(1.5, 0.04, 0.5, 'x');
+    expect(r.short).toBeGreaterThan(0);   // the sweep reaches both sides of the rounding
+    expect(r.long).toBeGreaterThan(0);
+    expect(r.misplaced).toEqual({ count: 0, first: [] });
+  });
+
+  it('puts a portrait image edge to edge down the region at every size', () => {
+    const r = sweepFitSizes(0.5, 0.04, 0.9, 'y');
+    expect(r.short).toBeGreaterThan(0);
+    expect(r.long).toBeGreaterThan(0);
+    expect(r.misplaced).toEqual({ count: 0, first: [] });
+  });
+
+  it('places the reported 1000×667 image flush with the region, not at 973.44', () => {
+    const r = placeAtFit(0.04, 0.5, 1000, 667);
+    expect(r.left).toBeCloseTo(576, 6);
+    expect(r.right).toBeCloseTo(1440, 6);
+  });
+
+  it('still leaves an image a hundredth of a pixel short at the ideal position', () => {
+    // Genuinely smaller than the region, however slightly: the overview rule holds.
+    const edges = { eLeft: 100, eRight: 763.99, eTop: 50, eBottom: 50 };
+    const F = _clampFocalPx(region, edges, centre, 0);
+    expect(F.x).toBe(centre.x);
+    expect(F.y).toBe(centre.y);
+  });
+});
+
 describe('overviewPullFraction', () => {
   // The authored zoom at or below an overview says how much of the
   // whole-object fit the step asks for: 1 the whole frame, less than 1 the

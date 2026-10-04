@@ -343,7 +343,8 @@ export function overviewPullFraction(zoom) {
  *
  * Where the image cannot cover the axis at all — an overview, where it is meant to
  * stand inside the region with margin around it — there is nothing to hold it to and
- * the ideal position stands.
+ * the ideal position stands. An image exactly as long as the region (zoom 1, on its
+ * limiting axis) covers it, and is placed edge to edge.
  *
  * Note: this returns the target focal POSITION (not a pan delta) and reads no live
  * OSD state, so the apply path is independent of the transient (mid-animation) zoom.
@@ -355,8 +356,15 @@ export function overviewPullFraction(zoom) {
  * @returns {{x:number,y:number}} The clamped focal position in element px.
  */
 export function _clampFocalPx(region, edges, ideal, radius) {
+  // Bounds that cross by no more than this still count as meeting. At zoom 1 the
+  // image fits the region, so on its limiting axis its length equals the region's
+  // and the two coverage bounds coincide; rounding leaves them apart by about
+  // 1e-13 px at these magnitudes, on either side. A thousandth of a pixel is nine
+  // orders above that and far below a device pixel, so it absorbs the rounding
+  // without letting an image visibly smaller than the region be pinned to one edge.
+  const MEET_PX = 1e-3;
   const into = (lo, hi, want) =>
-    (lo <= hi ? Math.max(lo, Math.min(hi, want)) : null);
+    (lo <= hi + MEET_PX ? Math.max(lo, Math.min(hi, want)) : null);
 
   const axis = (start, extent, near, far, want) => {
     const coverLo = start + extent - far;   // the image still reaches the far edge
