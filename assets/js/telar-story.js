@@ -909,6 +909,12 @@
     }
   };
 
+  // assets/js/telar-story/authoring-frame.js
+  var AUTHORING_ASPECT = 1.053;
+  function authoringHomeZoom(imageAspect) {
+    return Math.min(1, imageAspect / AUTHORING_ASPECT);
+  }
+
   // assets/js/telar-story/iiif-card.js
   function _isSane(imageW, imageH, viewportW, viewportH, x, y, zoom) {
     const fin = (v) => typeof v === "number" && Number.isFinite(v);
@@ -949,7 +955,6 @@
     if (cardBox.x + cardBox.w < viewportW * 0.6) return "horizontal";
     return "vertical";
   }
-  var AUTHORING_ASPECT = 1.053;
   var FOCAL_DIAMETER_FRAC = 0.9;
   function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode) {
     const viewportW = window.innerWidth;
@@ -966,21 +971,35 @@
       region = { x: 0, y: 0, w: viewportW, h: box.y };
     }
     const imageAspect = imageW / imageH;
-    const homeZoomAuth = imageAspect / AUTHORING_ASPECT;
+    const homeZoomAuth = authoringHomeZoom(imageAspect);
     const frameWidthImg = imageW / (homeZoomAuth * zoom);
     const diameterImg = FOCAL_DIAMETER_FRAC * frameWidthImg;
     const focalImg = { x: x * imageW, y: y * imageH };
     return { focalImg, diameterImg, region, imageW, imageH };
   }
+  var OVERVIEW_MIN_FRACTION = 0.1;
+  function overviewPullFraction(zoom) {
+    if (!Number.isFinite(zoom)) return 1;
+    return Math.min(1, Math.max(OVERVIEW_MIN_FRACTION, zoom));
+  }
   function _clampFocalPx(region, edges, ideal, radius) {
-    const keep = (edge) => Math.max(edge, radius);
-    const loX = region.x + region.w - keep(edges.eRight);
-    const hiX = region.x + keep(edges.eLeft);
-    const loY = region.y + region.h - keep(edges.eBottom);
-    const hiY = region.y + keep(edges.eTop);
+    const into = (lo, hi, want) => lo <= hi ? Math.max(lo, Math.min(hi, want)) : null;
+    const axis = (start, extent, near, far, want) => {
+      const coverLo = start + extent - far;
+      const coverHi = start + near;
+      const both = into(
+        Math.max(coverLo, start + radius),
+        Math.min(coverHi, start + extent - radius),
+        want
+      );
+      if (both !== null) return both;
+      const covered = into(coverLo, coverHi, want);
+      if (covered !== null) return covered;
+      return want;
+    };
     return {
-      x: loX <= hiX ? Math.max(loX, Math.min(hiX, ideal.x)) : ideal.x,
-      y: loY <= hiY ? Math.max(loY, Math.min(hiY, ideal.y)) : ideal.y
+      x: axis(region.x, region.w, edges.eLeft, edges.eRight, ideal.x),
+      y: axis(region.y, region.h, edges.eTop, edges.eBottom, ideal.y)
     };
   }
   function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
@@ -1006,7 +1025,8 @@
     const isOverview = zoom <= 1;
     const s_tgt = Math.min(region.w, region.h) / diameterImg;
     const s_fit = hasRegion ? Math.min(region.w / imgW, region.h / imgH) : Math.min(rect.width / imgW, rect.height / imgH);
-    const s = isOverview ? s_fit : Math.max(s_tgt, s_fit);
+    const pull = overviewPullFraction(zoom);
+    const s = isOverview ? s_fit * pull : zoom < 2 ? s_fit + (zoom - 1) * (Math.max(s_tgt * (2 / zoom), s_fit) - s_fit) : Math.max(s_tgt, s_fit);
     const CB = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
     const edges = {
       eLeft: focalImg.x * s,
@@ -1014,7 +1034,13 @@
       eTop: focalImg.y * s,
       eBottom: (imgH - focalImg.y) * s
     };
-    const radiusPx = diameterImg * s / 2;
+    const radiusPx = Math.min(
+      diameterImg * s / 2,
+      edges.eLeft,
+      edges.eRight,
+      edges.eTop,
+      edges.eBottom
+    );
     const F = _clampFocalPx(region, edges, CB, radiusPx);
     const visW = rect.width / s;
     const visH = rect.height / s;

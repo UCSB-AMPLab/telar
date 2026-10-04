@@ -23,7 +23,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
-import { computeFocalTarget, _clampFocalPx } from '../../assets/js/telar-story/iiif-card.js';
+import { computeFocalTarget, _clampFocalPx, overviewPullFraction, OVERVIEW_MIN_FRACTION }
+  from '../../assets/js/telar-story/iiif-card.js';
 
 // ── Viewport helpers ───────────────────────────────────────────────────────────
 
@@ -41,18 +42,71 @@ function setMobileViewport(width = 375, height = 812) {
 
 // ── Worked-table test object ───────────────────────────────────────────────────
 //
-// Worked table:
+// Worked table (portrait — the arm of the home fit that was never in doubt):
 //   imageW=7920, imageH=12237
 //   imageAspect = 7920/12237 = 0.64722
-//   homeZoomAuth = 0.64722 / 1.053 = 0.6146
+//   homeZoomAuth = min(1, 0.64722 / 1.053) = 0.6146
 //   frameWidthImg = imageW / (homeZoomAuth · zoom) = 12886 / zoom
 //   diameterImg = 0.90 · frameWidthImg
+//
+// A portrait image is narrower than the authoring frame, so it fits by height
+// and the `min` does not bind. Every row of this table is the same portrait
+// object, which is why nothing here could see the missing arm; the landscape
+// suite below is the one that does.
 
 const IMAGE_W = 7920;
 const IMAGE_H = 12237;
 
 // Side card — horizontal placement; placed left of the viewer so uncovered region is to the right.
 const SIDE_CARD_BOX = { x: 0, y: 0, w: 402, h: 900 };
+
+// ── Test suite 0: the arm of the home fit the worked table cannot reach ───────
+//
+// Reported by the Compositor session, which had the branch in its own tree the
+// whole time: `visitorVisibleRect` draws the author's guide and would have
+// looked visibly wrong without it, so theirs was kept honest by being
+// rendered. Nothing drew this one.
+
+describe('computeFocalTarget — the home fit has two arms', () => {
+  beforeEach(() => { setDesktopViewport(1440, 900); });
+
+  const CARD = { x: 0, y: 0, w: 576, h: 900 };
+  const at = (w, h, zoom) =>
+    computeFocalTarget(0.5, 0.5, zoom, w, h, CARD, 'horizontal').diameterImg;
+
+  it('a landscape image fits by width, so its frame is its own width', () => {
+    // 12237 x 7920, aspect 1.545: wider than the authoring frame, so it fills
+    // it edge to edge and the home zoom is 1. frameWidthImg = 12237/2 = 6118.5,
+    // diameterImg = 0.90 * 6118.5 = 5506.65.
+    expect(at(12237, 7920, 2)).toBeCloseTo(5506.65, 1);
+  });
+
+  it('a portrait image fits by height, so the min does not bind', () => {
+    // The transpose of the same pixels: aspect 0.647, under the authoring
+    // aspect, so the frame comes from the height and the min passes it
+    // through. 0.90 * 7920/((0.64722/1.053) * 2).
+    expect(at(7920, 12237, 2)).toBeCloseTo(5798.5, 1);
+  });
+
+  it('a square image still fits by height while the frame is wider than tall', () => {
+    // Aspect 1 is under the authoring aspect of 1.053, so a square image is
+    // on the height arm too. The hinge sits at the authoring aspect, not at 1.
+    expect(at(4000, 4000, 2)).toBeCloseTo(0.9 * 4000 / ((1 / 1.053) * 2), 1);
+  });
+
+  it('the frame never exceeds the image, however wide the image', () => {
+    // The defect in one sentence: without the min, a wider image produced a
+    // narrower authored frame, without limit. Every one of these is the
+    // image's own width at zoom 1, and none is larger.
+    for (const [w, h] of [[4000, 3000], [3840, 2160], [8000, 1000]]) {
+      expect(at(w, h, 1)).toBeCloseTo(0.9 * w, 6);
+    }
+  });
+
+  it('two images of one aspect scale together, whatever their pixel size', () => {
+    expect(at(3840, 2160, 3) / at(1920, 1080, 3)).toBeCloseTo(2, 6);
+  });
+});
 
 // ── Test suite 1: diameterImg — worked table ───────────────────────────────────
 
@@ -402,35 +456,116 @@ describe('_clampFocalPx — keep-circle focal clamp', () => {
     expect(F.y).toBeCloseTo(1045, 5);
   });
 
-  it('holds the circle a radius clear of the region edge when one axis is nearer (corner step)', () => {
-    // Focal near the image's top edge: eTop is smaller than the circle's radius, so the
-    // image bound would put part of the framed detail outside the region.
+  it('keeps the image against the region edge when one axis is nearer (corner step)', () => {
+    // Focal near the image's top edge: eTop (120) is smaller than the radius (432),
+    // so the two constraints cannot both hold on y. Coverage wins — the focal is
+    // held where the image still reaches the region's top, and the circle straddles.
     const region = { x: 576, y: 0, w: 864, h: 900 };
     const edges = { eLeft: 2867.7, eRight: 3032.9, eTop: 120, eBottom: 6591.5 };
     const ideal = { x: 1008, y: 450 };
     const radius = 432;
     const F = _clampFocalPx(region, edges, ideal, radius);
     expect(F.x).toBeCloseTo(1008, 0);   // x untouched: both x edges clear the radius
-    expect(F.y).toBeCloseTo(432, 0);    // y held a radius below the region's top edge
-    expect(F.y - radius).toBeGreaterThanOrEqual(region.y);
-    expect(F.y + radius).toBeLessThanOrEqual(region.y + region.h);
-    // The image's top edge sits inside the region: background shows above it.
-    expect(F.y - edges.eTop).toBeGreaterThan(region.y);
+    expect(F.y).toBeCloseTo(120, 0);    // y held where the image's top edge is flush
+    // No background above the image — the thing a reader sees at once.
+    expect(F.y - edges.eTop).toBeCloseTo(region.y, 0);
+    // And the circle is the side that gives: it now reaches past the region's top.
+    expect(F.y - radius).toBeLessThan(region.y);
   });
 
-  it('holds the circle clear of both region edges at an extreme corner', () => {
+  it('keeps the image against both region edges at an extreme corner', () => {
     // Bottom card: the uncovered region is the strip above it, and the focal sits near
-    // the image's top-left corner — nearer than the radius on both axes.
+    // the image's top-left corner — nearer than the radius on both axes, so both give.
     const region = { x: 0, y: 0, w: 900, h: 800 };
     const edges = { eLeft: 150, eRight: 4000, eTop: 90, eBottom: 5000 };
     const ideal = { x: 450, y: 400 };
     const radius = 400;                                    // radius match: min(w, h) / 2
     const F = _clampFocalPx(region, edges, ideal, radius);
-    expect(F.x).toBeCloseTo(400, 0);
+    expect(F.x).toBeCloseTo(150, 0);
+    expect(F.y).toBeCloseTo(90, 0);
+    // Both image edges flush with the region: no background on either axis.
+    expect(F.x - edges.eLeft).toBeCloseTo(region.x, 0);
+    expect(F.y - edges.eTop).toBeCloseTo(region.y, 0);
+  });
+
+  it('leaves the focal alone where the image cannot cover the axis at all', () => {
+    // An overview: the whole object stands inside the region with margin, so there is
+    // no region edge for it to reach and nothing to hold the focal to.
+    const region = { x: 0, y: 0, w: 1000, h: 600 };
+    const edges = { eLeft: 120, eRight: 120, eTop: 80, eBottom: 80 };
+    const ideal = { x: 500, y: 300 };
+    const F = _clampFocalPx(region, edges, ideal, 100);
+    expect(F.x).toBeCloseTo(500, 0);
+    expect(F.y).toBeCloseTo(300, 0);
+  });
+
+  it('honours both constraints where the image is wide enough for both', () => {
+    // The ordinary case, and the one that must not change: radius clear of every
+    // region edge and the image reaching every one of them.
+    const region = { x: 0, y: 0, w: 900, h: 800 };
+    const edges = { eLeft: 3000, eRight: 3000, eTop: 2000, eBottom: 2000 };
+    const ideal = { x: 450, y: 400 };
+    const radius = 200;
+    const F = _clampFocalPx(region, edges, ideal, radius);
+    expect(F.x).toBeCloseTo(450, 0);
     expect(F.y).toBeCloseTo(400, 0);
     expect(F.x - radius).toBeGreaterThanOrEqual(region.x);
-    expect(F.y - radius).toBeGreaterThanOrEqual(region.y);
-    expect(F.x + radius).toBeLessThanOrEqual(region.x + region.w);
     expect(F.y + radius).toBeLessThanOrEqual(region.y + region.h);
+  });
+
+  it('holds the iPad mini landscape step that showed a band of background', () => {
+    // The case that found this: 1024x768, a 1600x900 image at zoom 6, focal at
+    // y 0.1. eTop 166.7 against a radius of 222.2, so the old bound let the focal
+    // sit at the region centre and the image's top edge landed 56.5 px inside it.
+    const region = { x: 0, y: 0, w: 1024, h: 443.8 };
+    const edges = { eLeft: 2666.6, eRight: 296.3, eTop: 166.7, eBottom: 1500 };
+    const F = _clampFocalPx(region, edges, { x: 512, y: 221.9 }, 222.2);
+    expect(F.y).toBeCloseTo(166.7, 1);
+    expect(F.y - edges.eTop).toBeCloseTo(0, 1);   // flush, no band
+    expect(F.x).toBeCloseTo(727.7, 1);            // x was already right, and stays
+  });
+});
+
+describe('overviewPullFraction', () => {
+  // The authored zoom at or below an overview says how much of the
+  // whole-object fit the step asks for: 1 the whole frame, less than 1 the
+  // same object standing back from it. The floor is shared with the
+  // Compositor's editor, which has to let an author reach the same framing
+  // this allows, so it is exported rather than written down twice.
+
+  it('frames the whole object at 1', () => {
+    expect(overviewPullFraction(1)).toBe(1);
+  });
+
+  it('stands the object back in proportion below 1', () => {
+    expect(overviewPullFraction(0.8)).toBeCloseTo(0.8, 10);
+    expect(overviewPullFraction(0.5)).toBeCloseTo(0.5, 10);
+    expect(overviewPullFraction(0.25)).toBeCloseTo(0.25, 10);
+  });
+
+  it('holds at the floor rather than letting the object become a speck', () => {
+    expect(overviewPullFraction(0.01)).toBe(OVERVIEW_MIN_FRACTION);
+    expect(overviewPullFraction(0)).toBe(OVERVIEW_MIN_FRACTION);
+    expect(overviewPullFraction(-3)).toBe(OVERVIEW_MIN_FRACTION);
+  });
+
+  it('never asks for more than the fit, whatever is above it', () => {
+    expect(overviewPullFraction(2)).toBe(1);
+    expect(overviewPullFraction(9)).toBe(1);
+  });
+
+  it('falls back to the whole object when the zoom is not a number', () => {
+    expect(overviewPullFraction(NaN)).toBe(1);
+    expect(overviewPullFraction(undefined)).toBe(1);
+    expect(overviewPullFraction(Infinity)).toBe(1);
+  });
+
+  it('is monotonic across the range, so an author gets what they asked for', () => {
+    let previous = 0;
+    for (const zoom of [0.1, 0.2, 0.35, 0.5, 0.75, 0.9, 1]) {
+      const pull = overviewPullFraction(zoom);
+      expect(pull).toBeGreaterThanOrEqual(previous);
+      previous = pull;
+    }
   });
 });

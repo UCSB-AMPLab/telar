@@ -32,10 +32,22 @@
   position: relative;
 }
 
-/* Image object page: 1:1 square, white weave background, inset shadow */
+/* Image object page: 1:1 square, white weave background, inset shadow.
+ *
+ * The square is not decoration. An author reads x/y/zoom off this pane and
+ * pastes them into a spreadsheet, and the zoom means "a multiple of the fit"
+ * — of the fit in *this* pane. So the pane's shape is part of what the number
+ * means, and a pane whose shape moves with the window writes the author's
+ * window size into their story.
+ *
+ * Capping the height is what used to break it: with `width: 100%` the height
+ * clamped on a short window and the width did not, so the square became a
+ * 1.19 rectangle at 1440x900 and a 1.15 one at 1280x800 while staying square
+ * on taller ones. Capping the width by the same measure keeps the square and
+ * shrinks it instead. */
 #object-viewer.viewer-image {
   aspect-ratio: 1 / 1;
-  max-height: 80vh;
+  max-width: min(100%, 80vh);
   overflow: hidden;
   background: #fff url('../img/background-gris.svg') repeat;
   background-size: 20px auto;
