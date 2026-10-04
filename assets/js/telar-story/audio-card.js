@@ -264,6 +264,28 @@ export function getSharedAudioContext() {
 // ── Player lifecycle ──────────────────────────────────────────────────────────
 
 /**
+ * The plate's one waveform container, made if it is not there yet.
+ *
+ * Decorative and display-only: the bars are a picture of the sound, not a
+ * control, so the container is hidden from assistive technology and takes no
+ * pointer events. Its layout is the stylesheet's, which the mobile query
+ * overrides.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {HTMLElement}
+ */
+function _ensureWaveformContainer(plateEl) {
+  const existing = plateEl.querySelector(".waveform-container");
+  if (existing) return existing;
+
+  const container = document.createElement("div");
+  container.className = "waveform-container";
+  container.setAttribute("aria-hidden", "true");
+  plateEl.appendChild(container);
+  return container;
+}
+
+/**
  * Create a WaveSurfer audio player inside the given plate element.
  *
  * Loads the vendored WaveSurfer bundle on demand (first call), fetches
@@ -289,28 +311,6 @@ export function getSharedAudioContext() {
  * @param {Function} [options.onError]
  * @returns {Object} Player wrapper
  */
-/**
- * The plate's one waveform container, made if it is not there yet.
- *
- * Decorative and display-only: the bars are a picture of the sound, not a
- * control, so the container is hidden from assistive technology and takes no
- * pointer events. Its layout is the stylesheet's, which the mobile query
- * overrides.
- *
- * @param {HTMLElement} plateEl
- * @returns {HTMLElement}
- */
-function _ensureWaveformContainer(plateEl) {
-  const existing = plateEl.querySelector(".waveform-container");
-  if (existing) return existing;
-
-  const container = document.createElement("div");
-  container.className = "waveform-container";
-  container.setAttribute("aria-hidden", "true");
-  plateEl.appendChild(container);
-  return container;
-}
-
 export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
   const {
     clipStart = 0,

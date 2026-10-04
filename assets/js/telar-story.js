@@ -2544,11 +2544,16 @@
     "google-drive": "video-plate",
     "audio": "audio-plate"
   };
+  function _isVideoPlate(plate) {
+    return _MEDIA_PLATE_CLASSES[plate?.dataset?.cardType] === "video-plate";
+  }
+  function _isAudioPlate(plate) {
+    return plate?.dataset?.cardType === "audio";
+  }
   function _markMediaPlate(plate, cardType, firstStep) {
     const mediaClass = _MEDIA_PLATE_CLASSES[cardType];
     if (!mediaClass) return;
     plate.classList.add(mediaClass);
-    plate.dataset.cardType = cardType;
     if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
     if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
     if (firstStep.loop) plate.dataset.loop = firstStep.loop;
@@ -2574,12 +2579,11 @@
       state.viewerPlates[sceneIdx] = plate;
     }
   }
-  function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH, peekHeight, messinessPercent) {
-    const objectRunPosition = {};
+  function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
+    const sceneRunPosition = {};
     for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
       const step = steps[stepIdx];
       const objectId = step.object || "";
-      const cardType = _detectStepCardType(objectId, step, audioObjects);
       if (!objectId) {
         const zIndex2 = _zPlan.textCardZ[stepIdx];
         const titleCard = document.createElement("div");
@@ -2593,14 +2597,13 @@
         state.titleCards[stepIdx] = titleCard;
         continue;
       }
-      if (!Object.hasOwn(objectRunPosition, objectId)) {
-        objectRunPosition[objectId] = 0;
-      }
-      const runPos = objectRunPosition[objectId];
-      objectRunPosition[objectId]++;
       const objectIndex = getSceneIndex(stepIdx);
+      if (!Object.hasOwn(sceneRunPosition, objectIndex)) {
+        sceneRunPosition[objectIndex] = 0;
+      }
+      const runPos = sceneRunPosition[objectIndex];
+      sceneRunPosition[objectIndex]++;
       const zIndex = _zPlan.textCardZ[stepIdx];
-      const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
       const messiness = getCardMessiness(stepIdx, messinessPercent);
       const card = document.createElement("div");
       card.className = "text-card";
@@ -2608,8 +2611,6 @@
       card.dataset.object = objectId;
       card.dataset.runPosition = runPos;
       card.style.zIndex = zIndex;
-      card.style.top = `${topPx}px`;
-      card.style.height = `${cardH}px`;
       card.style.transform = buildTransform(messiness, "translateY(100vh)");
       card.dataset.messinessRot = messiness.rot;
       card.dataset.messinessOffX = messiness.offX;
@@ -2630,7 +2631,6 @@
       state.cardRegistry.push({
         stepIndex: stepIdx,
         objectId,
-        cardType,
         runPosition: runPos,
         objectIndex,
         element: card
@@ -2664,9 +2664,9 @@
     const plate = state.viewerPlates[0];
     if (!firstObjectId || !plate) return;
     const zIndex = _zPlan.plateZ[0];
-    if (plate.classList.contains("video-plate")) {
+    if (_isVideoPlate(plate)) {
       _initVideoInPlate(plate, firstObjectId, 0, zIndex);
-    } else if (plate.classList.contains("audio-plate")) {
+    } else if (_isAudioPlate(plate)) {
       _initAudioInPlate(plate, firstObjectId, 0, zIndex);
     } else {
       const { x, y, zoom, page } = _stepFraming(firstStep);
@@ -2680,23 +2680,13 @@
     _stepsData = steps;
     state.stepsData = steps;
     _config = _resolveCardConfig(config);
-    const viewportH = window.innerHeight;
-    const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
     _zPlan = computeZIndexPlan(steps);
     _buildSceneMaps(steps);
     state.titleCards = {};
     state.activeTitleCardIndex = null;
     const audioObjects = window.audioObjects || {};
     _createViewerPlates(steps, cardStack, audioObjects);
-    _createTextCards(
-      steps,
-      cardStack,
-      audioObjects,
-      viewportH,
-      cardH,
-      _config.peekHeight,
-      _config.messiness
-    );
+    _createTextCards(steps, cardStack, audioObjects, _config.messiness);
     _preloadFirstScenePlate(steps);
     onViewportResize(({ viewport }) => {
       _recomputeCardGeometry(viewport.w, viewport.h);
@@ -2748,10 +2738,10 @@
     };
   }
   function _retargetPlateForStep(plate, objectId, step, stepIndex) {
-    if (plate && plate.classList.contains("video-plate")) {
+    if (_isVideoPlate(plate)) {
       const clip = _stepClip(step);
       updateVideoClip(plate, clip.start, clip.end || void 0, clip.loop);
-    } else if (plate && plate.classList.contains("audio-plate")) {
+    } else if (_isAudioPlate(plate)) {
       const clip = _stepClip(step);
       updateAudioClip(plate, clip.start, clip.end || void 0, clip.loop);
     } else if (!state.scrollDriven) {
@@ -2814,8 +2804,8 @@
       plate.classList.remove("is-active");
       plate.style.transition = "none";
       plate.style.transform = "translateY(100%)";
-      if (plate.classList.contains("video-plate")) deactivateVideoCard(plate);
-      else if (plate.classList.contains("audio-plate")) deactivateAudioCard(plate);
+      if (_isVideoPlate(plate)) deactivateVideoCard(plate);
+      else if (_isAudioPlate(plate)) deactivateAudioCard(plate);
       moved.push(plate);
     }
     if (moved.length) {
@@ -2854,13 +2844,13 @@
   }
   function _swapPlatesBackward(currentPlate, prevPlate, index2, prevObjectId) {
     if (currentPlate) {
-      if (currentPlate.classList.contains("video-plate")) {
+      if (_isVideoPlate(currentPlate)) {
         currentPlate.style.transition = "none";
         currentPlate.style.transform = "translateY(100%)";
         void currentPlate.offsetHeight;
         currentPlate.style.transition = "";
         deactivateVideoCard(currentPlate);
-      } else if (currentPlate.classList.contains("audio-plate")) {
+      } else if (_isAudioPlate(currentPlate)) {
         currentPlate.style.transition = "none";
         currentPlate.style.transform = "translateY(100%)";
         void currentPlate.offsetHeight;
@@ -2881,9 +2871,9 @@
       void prevPlate.offsetHeight;
       prevPlate.style.transition = "";
       prevPlate.classList.add("is-active");
-      if (prevPlate.classList.contains("video-plate")) {
+      if (_isVideoPlate(prevPlate)) {
         activateVideoCard(prevPlate, getSceneIndex(index2));
-      } else if (prevPlate.classList.contains("audio-plate")) {
+      } else if (_isAudioPlate(prevPlate)) {
         activateAudioCard(prevPlate, getSceneIndex(index2));
       }
     }
@@ -3005,13 +2995,13 @@
   function _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step) {
     const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
     const { x, y, zoom, page } = _stepFraming(step);
-    if (newPlate.classList.contains("audio-plate")) {
+    if (_isAudioPlate(newPlate)) {
       if (!newPlate.querySelector(".waveform-container")) {
         const zIndex = _zPlan.plateZ[stepIndex];
         _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
       }
       activateAudioCard(newPlate, sceneIndex);
-    } else if (newPlate.classList.contains("video-plate")) {
+    } else if (_isVideoPlate(newPlate)) {
       if (!newPlate.querySelector(".video-iframe, iframe")) {
         const zIndex = _zPlan.plateZ[stepIndex];
         _initVideoInPlate(newPlate, objectId, sceneIndex, zIndex);
@@ -3045,9 +3035,9 @@
     }
   }
   function _deactivateDepartingPlate(plate) {
-    if (plate.classList.contains("video-plate")) {
+    if (_isVideoPlate(plate)) {
       deactivateVideoCard(plate);
-    } else if (plate.classList.contains("audio-plate")) {
+    } else if (_isAudioPlate(plate)) {
       deactivateAudioCard(plate);
     } else {
       plate.classList.remove("is-active");
@@ -3335,11 +3325,11 @@
     const objectId = step.object || "";
     if (!objectId) return;
     const zIndex = _zPlan.plateZ[firstStepIdx];
-    if (plate.classList.contains("audio-plate")) {
+    if (_isAudioPlate(plate)) {
       if (!plate.querySelector(".waveform-container")) {
         _initAudioInPlate(plate, objectId, targetScene, zIndex);
       }
-    } else if (plate.classList.contains("video-plate")) {
+    } else if (_isVideoPlate(plate)) {
       if (!plate.querySelector(".video-iframe, iframe")) {
         _initVideoInPlate(plate, objectId, targetScene, zIndex);
       }

@@ -1041,12 +1041,10 @@ def main():
     # like acerca.md/about.md can be selected at build time)
     generate_pages(telar_language=telar_language)
 
-    # After generate_pages: it may clean _jekyll-files/_pages/, where the
-    # fragment pages live
-    # Always called: even when stories are skipped, a fragment page left
-    # from an earlier run must be cleared, or it renders plaintext steps that
-    # nothing will encrypt. The function returns after that cleanup when
-    # there is nothing to generate.
+    # Must follow generate_pages, which can clear _jekyll-files/_pages/ where
+    # the fragment pages live, and must run even when stories are skipped: a
+    # fragment page left from an earlier run renders plaintext steps that
+    # nothing will encrypt.
     generate_protected_fragments(skip=skip_stories)
 
     print("-" * 50)

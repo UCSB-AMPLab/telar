@@ -218,6 +218,70 @@ describe('cardOverlayRect — null on title-card activation', () => {
   });
 });
 
+// ── A run starts where a scene starts ────────────────────────────────────────
+//
+// computeCardTop centres the first card of a run and settles each later card
+// peekHeight lower. That contract holds only if the run counter restarts when
+// the run does. A story that returns to an object starts a new scene there, so
+// keying the counter by object instead carried the count across the gap and
+// left the returning card peekHeight lower for every earlier appearance,
+// compounding on each return.
+//
+// Invisible on default settings — card_peek_height defaults to 1 — and plainly
+// visible on a site that raises it, which is why it wants a test rather than an
+// eye.
+
+describe('initCardPool — a run starts where its scene starts', () => {
+  beforeEach(() => {
+    resetPoolState();
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation(REDUCED_MOTION));
+    // The viewer wrapper wants the vendored global and fetches before using it;
+    // a fetch that never settles leaves it suspended, which is enough for the
+    // build phase this asserts on.
+    vi.stubGlobal('OpenSeadragon', vi.fn());
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+    resetPoolState();
+  });
+
+  // A A B A A after the intro — the reader leaves object A and comes back
+  const steps = [
+    { step: '1', object: 'A', question: 'q', answer: 'a' },
+    { step: '2', object: 'A', question: 'q', answer: 'a' },
+    { step: '3', object: 'B', question: 'q', answer: 'a' },
+    { step: '4', object: 'A', question: 'q', answer: 'a' },
+    { step: '5', object: 'A', question: 'q', answer: 'a' },
+  ];
+
+  it('restarts the run position when the story returns to an object', () => {
+    buildStory(steps);
+
+    const runPositions = state.cardRegistry
+      .slice()
+      .sort((x, y) => x.stepIndex - y.stepIndex)
+      .map((c) => c.runPosition);
+
+    // not [0, 1, 0, 2, 3], which is what a per-object counter produces
+    expect(runPositions).toEqual([0, 1, 0, 0, 1]);
+  });
+
+  it('gives every card that begins a scene run position zero', () => {
+    buildStory(steps);
+
+    for (const entry of state.cardRegistry) {
+      const beginsScene =
+        state.sceneFirstStep[state.stepToScene[entry.stepIndex]] === entry.stepIndex;
+      if (beginsScene) {
+        expect(entry.runPosition, `step ${entry.stepIndex} begins its run`).toBe(0);
+      }
+    }
+  });
+});
+
 // ── Built card content escapes author text ───────────────────────────────────
 // question/answer are documented as plain text; both JS builders must escape
 // them identically. Runs the real initCardPool build phase in jsdom: title
@@ -727,9 +791,20 @@ describe('activateCard — a mode flip on one object re-seats the plate it share
 // across the whole screen where it did not.
 
 describe('reconcilePlatesForJump — closing the plates a jump crossed', () => {
+  // A plate as _createViewerPlates builds one: the media class for the
+  // stylesheet AND dataset.cardType for the code, which is what decides
+  // whether a plate holds a player. A fixture carrying only the class is a
+  // plate the framework never produces.
+  const CARD_TYPE_FOR = {
+    'audio-plate': 'audio',
+    'video-plate': 'youtube',
+    '': 'iiif',
+  };
+
   function plate(className = '') {
     const el = document.createElement('div');
     el.className = `viewer-plate ${className}`.trim();
+    el.dataset.cardType = CARD_TYPE_FOR[className];
     el.classList.add('is-active');
     el.style.transform = 'translateY(0)';   // as a walk onto it left it
     return el;

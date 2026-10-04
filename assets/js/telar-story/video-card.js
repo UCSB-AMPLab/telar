@@ -473,12 +473,6 @@ export function destroyVideoPlayer(wrapper) {
 }
 
 /**
- * Activate a video card plate: position it using auto-layout and reveal it.
- *
- * @param {HTMLElement} plateEl - The video plate element
- * @param {number} sceneIndex - Scene index (used for layout and z-index)
- */
-/**
  * Show the frosted glass pill play overlay on a video plate.
  *
  * Creates the overlay on first call; subsequent calls just make it visible.
@@ -531,6 +525,12 @@ function _showVideoPlayOverlay(plateEl) {
 /** @public Exposed so card-pool.js can call it from the onAutoplayBlocked callback. */
 export { _showVideoPlayOverlay as showVideoPlayOverlay };
 
+/**
+ * Activate a video card plate: position it using auto-layout and reveal it.
+ *
+ * @param {HTMLElement} plateEl - The video plate element
+ * @param {number} sceneIndex - Scene index (used for layout and z-index)
+ */
 export function activateVideoCard(plateEl, sceneIndex) {
   // Bring plate into view
   plateEl.style.transform = 'translateY(0)';

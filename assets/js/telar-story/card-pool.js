@@ -202,6 +202,20 @@ export function getCardMessiness(seed, messinessPercent) {
 }
 
 // ── Peek positioning (pure, unit-tested) ─────────────────────────────────────
+//
+// Two words this module uses throughout.
+//
+// A **run** is an unbroken stretch of steps sharing one object, which is the
+// same thing the module elsewhere calls a scene. A story that leaves an object
+// and returns to it has two runs on that object, not one. `runPosition` is a
+// card's 0-based place inside its own run, so the first card of every run is 0
+// — including the first card of a second visit.
+//
+// **Peek** is how far each later card in a run settles below the one before it,
+// leaving a strip of the earlier card visible above: the stack peeks out.
+// `peekHeight` is that distance in pixels, from `site.card_peek_height`, and it
+// defaults to 1, which is near enough to a flat stack that the effect only
+// appears on a site that raises it.
 
 /**
  * Compute the CSS `top` value (px) for a text card within an object run.
@@ -272,7 +286,7 @@ const _settleHooks = [];
  *
  * @param {Array} steps - Story step data
  */
-export function _buildSceneMaps(steps) {
+function _buildSceneMaps(steps) {
   let scene = -1;
   let currentObjectId = null;
   let titleCounter = 0;
@@ -493,17 +507,6 @@ function cardBaseFor(cardIndex, stepIndex, progress = 0) {
 }
 
 /**
- * Read back the messiness a card was built with.
- *
- * The three values are written onto the card's dataset once, at build time,
- * and are the only record of its rotation and offset. A card without them —
- * a title card, or any card built at messiness 0 — reads as all zeros, which
- * is the identity transform.
- *
- * @param {HTMLElement} el
- * @returns {{ rot: number, offX: number, offY: number }}
- */
-/**
  * The step a card was built for.
  *
  * Written onto every text and title card at build time, and the only handle
@@ -518,6 +521,17 @@ function _cardStepIndex(el) {
   return Number.isInteger(i) ? i : -1;
 }
 
+/**
+ * Read back the messiness a card was built with.
+ *
+ * The three values are written onto the card's dataset once, at build time,
+ * and are the only record of its rotation and offset. A card without them —
+ * a title card, or any card built at messiness 0 — reads as all zeros, which
+ * is the identity transform.
+ *
+ * @param {HTMLElement} el
+ * @returns {{ rot: number, offX: number, offY: number }}
+ */
 function _readCardMessiness(el) {
   return {
     rot:  parseFloat(el.dataset.messinessRot  || 0),
@@ -566,8 +580,7 @@ function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
  * stays correct after desktop window resize, device rotation, or layout-mode
  * flip. Iterates `.text-card` DOM nodes (iterating the DOM is the reliable
  * source of all active cards regardless of state.textCards population order).
- * Applies computeCardTop with runPosition=0 for all cards
- * (the same initial value used at initCardPool time) and uses
+ * Applies computeCardTop with runPosition=0 for all cards and uses
  * style.setProperty('top', ..., 'important') so the inline value wins the
  * cascade over the `top: auto !important` in the landscape side-card rule.
  *
@@ -626,17 +639,6 @@ function _recomputeCardGeometry(viewportW, viewportH) {
 }
 
 /**
- * Initialize the card pool: create all DOM elements, apply initial transforms
- * (off-screen below), and append them to .card-stack.
- *
- * Builds the unique objects list from stepsData to assign z-index bands.
- * Tracks run position per object for peek-stacking calculations.
- *
- * @param {Object} storyData - window.storyData
- * @param {Object} storyData.steps - Array of step data objects
- * @param {{ peekHeight: number, messiness: number }} config - Card stack config
- */
-/**
  * What kind of card a step's object asks for.
  *
  * detectCardType weighs three things, and this is where they are gathered:
@@ -669,6 +671,26 @@ const _MEDIA_PLATE_CLASSES = {
 };
 
 /**
+ * Whether a plate holds a video or an audio player.
+ *
+ * The card type is the data; the `video-plate` and `audio-plate` classes are
+ * the styling hook the stylesheet matches on. Asking the class list what kind
+ * of object a plate holds makes a CSS rename a behaviour change, so the type
+ * test reads `dataset.cardType`, which `_createViewerPlates` writes once.
+ *
+ * @param {HTMLElement} plate
+ * @returns {boolean}
+ */
+function _isVideoPlate(plate) {
+  return _MEDIA_PLATE_CLASSES[plate?.dataset?.cardType] === 'video-plate';
+}
+
+/** Counterpart of `_isVideoPlate` for audio. */
+function _isAudioPlate(plate) {
+  return plate?.dataset?.cardType === 'audio';
+}
+
+/**
  * Mark a plate that holds a player rather than an image.
  *
  * Players are one per scene, so the clip window written here is the scene's
@@ -684,7 +706,6 @@ function _markMediaPlate(plate, cardType, firstStep) {
   if (!mediaClass) return;
 
   plate.classList.add(mediaClass);
-  plate.dataset.cardType = cardType;
   if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
   if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
   if (firstStep.loop) plate.dataset.loop = firstStep.loop;
@@ -731,15 +752,20 @@ function _createViewerPlates(steps, cardStack, audioObjects) {
  * Each card also records where it sits in its object's run, which is what
  * lets activateCard tell a move within one object from a move between two.
  */
-function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH,
-                          peekHeight, messinessPercent) {
-  // Create text cards (one per step) and track run position per object
-  const objectRunPosition = {};  // objectId → current run position
+function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
+  // Create text cards (one per step) and track each card's place in its run.
+  //
+  // A run is the stretch of consecutive steps sharing one object, which is what
+  // a scene is, so the counter is keyed by scene rather than by object: a story
+  // that returns to an object later starts a fresh run there, and
+  // computeCardTop centres the first card of every run. Keying by object would
+  // carry the count across the gap and settle that card peekHeight lower for
+  // each earlier appearance.
+  const sceneRunPosition = {};  // scene index → next run position
 
   for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
     const step = steps[stepIdx];
     const objectId = step.object || '';
-    const cardType = _detectStepCardType(objectId, step, audioObjects);
 
     if (!objectId) {
       // Title card — full-viewport, no messiness, no viewer plate
@@ -756,18 +782,14 @@ function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH,
       continue;  // skip text card creation for this step
     }
 
-    // Track run position within this object's sequence
-    if (!Object.hasOwn(objectRunPosition, objectId)) {
-      objectRunPosition[objectId] = 0;
-    }
-    const runPos = objectRunPosition[objectId];
-    objectRunPosition[objectId]++;
-
     const objectIndex = getSceneIndex(stepIdx);
+
+    if (!Object.hasOwn(sceneRunPosition, objectIndex)) {
+      sceneRunPosition[objectIndex] = 0;
+    }
+    const runPos = sceneRunPosition[objectIndex];
+    sceneRunPosition[objectIndex]++;
     const zIndex = _zPlan.textCardZ[stepIdx];
-    // All cards share the same centred top — peek offset applied via
-    // transform when stacking, so the active card always covers the previous
-    const topPx = computeCardTop(viewportH, cardH, 0, peekHeight);
     const messiness = getCardMessiness(stepIdx, messinessPercent);
 
     const card = document.createElement('div');
@@ -776,15 +798,17 @@ function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH,
     card.dataset.object = objectId;
     card.dataset.runPosition = runPos;
     card.style.zIndex = zIndex;
-    card.style.top = `${topPx}px`;
-    card.style.height = `${cardH}px`;
     card.style.transform = buildTransform(messiness, 'translateY(100vh)');
     card.dataset.messinessRot = messiness.rot;
     card.dataset.messinessOffX = messiness.offX;
     card.dataset.messinessOffY = messiness.offY;
 
-    // Clone rendered content from the hidden step-data element (Jekyll has
-    // already processed markdownify, panel triggers, layer conditions, etc.)
+    // `.step-data` is a hidden block the story layout renders every step into
+    // at build time, with markdownify, panel triggers and layer conditions
+    // already applied. Cloning out of it is what lets a card carry authored
+    // markup the client cannot produce: Liquid has run, and the browser has no
+    // markdown renderer. A step with no node there falls back to building the
+    // content from the step data, which loses that processing.
     const hiddenStep = document.querySelector(`.step-data .story-step[data-step="${step.step}"]`);
     if (hiddenStep) {
       const content = hiddenStep.querySelector('.step-content');
@@ -803,7 +827,6 @@ function _createTextCards(steps, cardStack, audioObjects, viewportH, cardH,
     state.cardRegistry.push({
       stepIndex: stepIdx,
       objectId,
-      cardType,
       runPosition: runPos,
       objectIndex,
       element: card,
@@ -878,9 +901,9 @@ function _preloadFirstScenePlate(steps) {
   if (!firstObjectId || !plate) return;
 
   const zIndex = _zPlan.plateZ[0];
-  if (plate.classList.contains('video-plate')) {
+  if (_isVideoPlate(plate)) {
     _initVideoInPlate(plate, firstObjectId, 0, zIndex);
-  } else if (plate.classList.contains('audio-plate')) {
+  } else if (_isAudioPlate(plate)) {
     _initAudioInPlate(plate, firstObjectId, 0, zIndex);
   } else {
     const { x, y, zoom, page } = _stepFraming(firstStep);
@@ -888,6 +911,17 @@ function _preloadFirstScenePlate(steps) {
   }
 }
 
+/**
+ * Initialize the card pool: create all DOM elements, apply initial transforms
+ * (off-screen below), and append them to .card-stack.
+ *
+ * Builds the unique objects list from stepsData to assign z-index bands.
+ * Tracks run position per object for peek-stacking calculations.
+ *
+ * @param {Object} storyData - window.storyData
+ * @param {Object} storyData.steps - Array of step data objects
+ * @param {{ peekHeight: number, messiness: number }} config - Card stack config
+ */
 export function initCardPool(storyData, config) {
   const cardStack = document.querySelector('.card-stack');
   if (!cardStack) return;
@@ -902,9 +936,6 @@ export function initCardPool(storyData, config) {
   // the index.
   state.stepsData = steps;
   _config = _resolveCardConfig(config);
-
-  const viewportH = window.innerHeight;
-  const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
 
   // Compute scene-based z-indexes — each object change starts a new scene
   // with its own z-index band, even if the object was seen before.
@@ -924,8 +955,7 @@ export function initCardPool(storyData, config) {
 
   _createViewerPlates(steps, cardStack, audioObjects);
 
-  _createTextCards(steps, cardStack, audioObjects, viewportH, cardH,
-                   _config.peekHeight, _config.messiness);
+  _createTextCards(steps, cardStack, audioObjects, _config.messiness);
 
   _preloadFirstScenePlate(steps);
 
@@ -1028,25 +1058,6 @@ function _buildTitleCardContent(step) {
 // ── Context-sensitive card activation ────────────────────────────────────────
 
 /**
- * Activate the card at the given step index, orchestrating context-sensitive
- * stacking based on whether the object changed.
- *
- * Object change or mode change:
- *   New viewer plate slides up + text card slides up, covering everything
- *   from the previous object.
- *
- * Same object, same mode:
- *   Only a new text card slides up; the IIIF viewer stays visible and does
- *   not reload. If viewer is ready, animate to the new step's position.
- *
- * Backward navigation:
- *   Reverse the above — current text card slides back down; on object change
- *   the current viewer plate also slides back down.
- *
- * @param {number} index - Step index to activate
- * @param {'forward'|'backward'} direction
- */
-/**
  * The clip window a step asks a media plate for.
  *
  * A missing or unparseable value is 0, which the players read as "from the
@@ -1078,10 +1089,10 @@ function _stepClip(step) {
  * @param {number} stepIndex
  */
 function _retargetPlateForStep(plate, objectId, step, stepIndex) {
-  if (plate && plate.classList.contains('video-plate')) {
+  if (_isVideoPlate(plate)) {
     const clip = _stepClip(step);
     updateVideoClip(plate, clip.start, clip.end || undefined, clip.loop);
-  } else if (plate && plate.classList.contains('audio-plate')) {
+  } else if (_isAudioPlate(plate)) {
     const clip = _stepClip(step);
     updateAudioClip(plate, clip.start, clip.end || undefined, clip.loop);
   } else if (!state.scrollDriven) {
@@ -1244,8 +1255,8 @@ export function reconcilePlatesForJump(targetIndex) {
     plate.classList.remove('is-active');
     plate.style.transition = 'none';
     plate.style.transform = 'translateY(100%)';
-    if (plate.classList.contains('video-plate')) deactivateVideoCard(plate);
-    else if (plate.classList.contains('audio-plate')) deactivateAudioCard(plate);
+    if (_isVideoPlate(plate)) deactivateVideoCard(plate);
+    else if (_isAudioPlate(plate)) deactivateAudioCard(plate);
     moved.push(plate);
   }
 
@@ -1356,7 +1367,7 @@ function _activateForward(index, direction, card, registryEntry, step, objectId,
 function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
   // Different DOM elements always — slide current plate down, reveal previous
   if (currentPlate) {
-    if (currentPlate.classList.contains('video-plate')) {
+    if (_isVideoPlate(currentPlate)) {
       // Snap immediately off-screen. Video/audio iframes on mobile
       // can break CSS transform transitions (compositing layer issues
       // with cross-origin iframes), so bypass the transition entirely.
@@ -1365,7 +1376,7 @@ function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
       void currentPlate.offsetHeight;  // force reflow
       currentPlate.style.transition = '';
       deactivateVideoCard(currentPlate);
-    } else if (currentPlate.classList.contains('audio-plate')) {
+    } else if (_isAudioPlate(currentPlate)) {
       currentPlate.style.transition = 'none';
       currentPlate.style.transform = 'translateY(100%)';
       void currentPlate.offsetHeight;
@@ -1390,9 +1401,9 @@ function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
     prevPlate.style.transition = '';
     prevPlate.classList.add('is-active');
     // Re-apply video/audio layout when returning to a media plate
-    if (prevPlate.classList.contains('video-plate')) {
+    if (_isVideoPlate(prevPlate)) {
       activateVideoCard(prevPlate, getSceneIndex(index));
-    } else if (prevPlate.classList.contains('audio-plate')) {
+    } else if (_isAudioPlate(prevPlate)) {
       activateAudioCard(prevPlate, getSceneIndex(index));
     }
   }
@@ -1484,6 +1495,25 @@ function _refreshPlateAriaLabel(index, objectId) {
   plate.setAttribute('aria-label', _buildAriaLabel(objectId, stepAlt, cardType));
 }
 
+/**
+ * Activate the card at the given step index, orchestrating context-sensitive
+ * stacking based on whether the object changed.
+ *
+ * Object change or mode change:
+ *   New viewer plate slides up + text card slides up, covering everything
+ *   from the previous object.
+ *
+ * Same object, same mode:
+ *   Only a new text card slides up; the IIIF viewer stays visible and does
+ *   not reload. If viewer is ready, animate to the new step's position.
+ *
+ * Backward navigation:
+ *   Reverse the above — current text card slides back down; on object change
+ *   the current viewer plate also slides back down.
+ *
+ * @param {number} index - Step index to activate
+ * @param {'forward'|'backward'} direction
+ */
 export function activateCard(index, direction) {
   // Title card path — no viewer plate, no text card, no IIIF
   if (state.titleCards[index]) {
@@ -1675,18 +1705,6 @@ export function onCardsSettle(hook) {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 /**
- * Activate a new viewer plate for an object change.
- *
- * Forward: slide new plate up from below. Past plate stays in place,
- * covered by the new plate's higher z-index.
- *
- * @param {string} objectId - New object ID
- * @param {number} stepIndex - Current step index (for z-plan lookup)
- * @param {string|null} prevObjectId - Previous object ID (may be null)
- * @param {Object} step - Current step data
- * @param {'forward'|'backward'} direction
- */
-/**
  * Point the plate's viewer at this step.
  *
  * Three kinds of plate and four states between them: audio and video are
@@ -1728,14 +1746,14 @@ function _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step) {
   const { x, y, zoom, page } = _stepFraming(step);
 
   // Route to audio, video, or IIIF initialisation
-  if (newPlate.classList.contains('audio-plate')) {
+  if (_isAudioPlate(newPlate)) {
     // Audio plate: initialise player if not already present
     if (!newPlate.querySelector('.waveform-container')) {
       const zIndex = _zPlan.plateZ[stepIndex];
       _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
     }
     activateAudioCard(newPlate, sceneIndex);
-  } else if (newPlate.classList.contains('video-plate')) {
+  } else if (_isVideoPlate(newPlate)) {
     // Video plate: initialise player if not already present
     if (!newPlate.querySelector('.video-iframe, iframe')) {
       const zIndex = _zPlan.plateZ[stepIndex];
@@ -1804,15 +1822,27 @@ function _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction) {
  * @param {HTMLElement} plate
  */
 function _deactivateDepartingPlate(plate) {
-  if (plate.classList.contains('video-plate')) {
+  if (_isVideoPlate(plate)) {
     deactivateVideoCard(plate);
-  } else if (plate.classList.contains('audio-plate')) {
+  } else if (_isAudioPlate(plate)) {
     deactivateAudioCard(plate);
   } else {
     plate.classList.remove('is-active');
   }
 }
 
+/**
+ * Activate a new viewer plate for an object change.
+ *
+ * Forward: slide new plate up from below. Past plate stays in place,
+ * covered by the new plate's higher z-index.
+ *
+ * @param {string} objectId - New object ID
+ * @param {number} stepIndex - Current step index (for z-plan lookup)
+ * @param {string|null} prevObjectId - Previous object ID (may be null)
+ * @param {Object} step - Current step data
+ * @param {'forward'|'backward'} direction
+ */
 function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direction) {
   const sceneIndex = getSceneIndex(stepIndex);
   const prevSceneIndex = stepIndex > 0 ? getSceneIndex(stepIndex - 1) : -1;
@@ -1849,22 +1879,6 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
   _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step);
 }
 
-/**
- * Initialise an IIIF viewer inside an existing plate element.
- *
- * This is called when we need a viewer but no ViewerCard has been created
- * yet for the scene. Rather than creating a new plate, we inject the
- * wrapper into the plate that initCardPool already placed in the DOM.
- *
- * @param {HTMLElement} plateEl - The existing viewer-plate element
- * @param {string} objectId
- * @param {number} sceneIndex - The scene this card belongs to
- * @param {number} zIndex
- * @param {number} x
- * @param {number} y
- * @param {number} zoom
- * @param {number|undefined} page - 1-indexed page for external multi-page manifests; mapped to wrapper's 0-indexed `startPage` below
- */
 /**
  * The div OSD mounts into for a plate.
  *
@@ -1931,6 +1945,22 @@ function _evictBeyondPoolCap(currentScene) {
   }
 }
 
+/**
+ * Initialise an IIIF viewer inside an existing plate element.
+ *
+ * This is called when we need a viewer but no ViewerCard has been created
+ * yet for the scene. Rather than creating a new plate, we inject the
+ * wrapper into the plate that initCardPool already placed in the DOM.
+ *
+ * @param {HTMLElement} plateEl - The existing viewer-plate element
+ * @param {string} objectId
+ * @param {number} sceneIndex - The scene this card belongs to
+ * @param {number} zIndex
+ * @param {number} x
+ * @param {number} y
+ * @param {number} zoom
+ * @param {number|undefined} page - 1-indexed page for external multi-page manifests; mapped to wrapper's 0-indexed `startPage` below
+ */
 function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
   const manifestUrl = getManifestUrl(objectId, page);
   if (!manifestUrl) {
@@ -2250,13 +2280,6 @@ function _activateTextCard(cardEl) {
 }
 
 /**
- * Activate a title card step — slide it up from below (forward) or restore it
- * (backward), hide the credits bar, and update activeTitleCardIndex.
- *
- * @param {number} index - Step index of the title card
- * @param {'forward'|'backward'} direction
- */
-/**
  * Stack the title card that another title card is arriving over.
  *
  * Consecutive title cards are separate scenes, so the one being left moves
@@ -2300,6 +2323,13 @@ function _hideDepartingPlateForTitle(index, direction) {
   _deactivateDepartingPlate(departingPlate);
 }
 
+/**
+ * Activate a title card step — slide it up from below (forward) or restore it
+ * (backward), hide the credits bar, and update activeTitleCardIndex.
+ *
+ * @param {number} index - Step index of the title card
+ * @param {'forward'|'backward'} direction
+ */
 function _activateTitleCardStep(index, direction) {
   const titleCard = state.titleCards[index];
   if (!titleCard) return;
@@ -2359,19 +2389,6 @@ function _animateViewerToStep(objectId, step, stepIndex) {
 // ── Preloading ────────────────────────────────────────────────────────────────
 
 /**
- * Preload viewer cards for nearby scenes.
- * Respects the maxViewerCards pool limit from state.config.
- *
- * Creates IIIF wrapper instances for scenes near the current scene so they are
- * initialised and ready when the user navigates to them.
- * Scene-based: counts distinct scenes, not step offsets, so a long
- * run of same-object steps doesn't count as multiple preload slots.
- *
- * @param {number} currentIndex - Current step index
- * @param {number} ahead - Scenes to preload ahead
- * @param {number} behind - Scenes to keep behind
- */
-/**
  * Get one scene's plate ready before the reader arrives at it.
  *
  * Audio and video plates are cheap and idempotent -- a plate that already
@@ -2394,12 +2411,12 @@ function _warmScene(targetScene) {
 
   const zIndex = _zPlan.plateZ[firstStepIdx];
 
-  if (plate.classList.contains('audio-plate')) {
+  if (_isAudioPlate(plate)) {
     // Audio plate: preload only if no waveform container yet
     if (!plate.querySelector('.waveform-container')) {
       _initAudioInPlate(plate, objectId, targetScene, zIndex);
     }
-  } else if (plate.classList.contains('video-plate')) {
+  } else if (_isVideoPlate(plate)) {
     // Video plate: preload only if no video iframe yet
     if (!plate.querySelector('.video-iframe, iframe')) {
       _initVideoInPlate(plate, objectId, targetScene, zIndex);
@@ -2415,6 +2432,19 @@ function _warmScene(targetScene) {
   }
 }
 
+/**
+ * Preload viewer cards for nearby scenes.
+ * Respects the maxViewerCards pool limit from state.config.
+ *
+ * Creates IIIF wrapper instances for scenes near the current scene so they are
+ * initialised and ready when the user navigates to them.
+ * Scene-based: counts distinct scenes, not step offsets, so a long
+ * run of same-object steps doesn't count as multiple preload slots.
+ *
+ * @param {number} currentIndex - Current step index
+ * @param {number} ahead - Scenes to preload ahead
+ * @param {number} behind - Scenes to keep behind
+ */
 export function preloadAhead(currentIndex, ahead, behind) {
   const currentScene = getSceneIndex(currentIndex);
   if (currentScene < 0) return;
