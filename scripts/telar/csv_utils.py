@@ -48,13 +48,34 @@ from pathlib import Path
 import pandas as pd
 
 
-# Canonical set of local image/document extensions, shared by the objects and
-# stories processors. Single source of truth so the extension lists used for
-# reference-stripping and on-disk existence checks can no longer drift (a
-# `.bmp`/`.svg` object used to strip correctly but fail the existence check).
-IMAGE_EXTENSIONS = frozenset({
-    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf',
-})
+# Canonical local image/document extensions, shared by the CSV processors and
+# the tile generator. Every list of image extensions in the build derives from
+# this one: a processor that recognises a file the tiler never searches for
+# produces an object that validates and has no image.
+#
+# Ordered, because the tiler takes the first extension matching an object id and
+# several files can share a stem. The order is the tiler's existing priority, so
+# which file a site already tiles does not change.
+#
+# The Telar Compositor pins its own upload allowlist against this tuple, so the
+# name and the literal shape are load-bearing outside this repository: an author
+# must not be able to upload a file the build cannot tile, or hold a file in
+# their repository that the Compositor refuses. Widening the set here is what
+# lets the Compositor widen; renaming it or building it dynamically breaks a
+# check that runs at their release gate.
+IMAGE_EXTENSIONS_ORDERED = (
+    '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.tif', '.tiff', '.pdf',
+    '.gif', '.bmp', '.svg',
+)
+
+# Membership form, for reference-stripping and on-disk existence checks.
+IMAGE_EXTENSIONS = frozenset(IMAGE_EXTENSIONS_ORDERED)
+
+# Rendered by MuPDF rather than decoded by Pillow. Both describe a document
+# rather than a grid of pixels, so the build chooses a resolution for them:
+# process_pdf.py renders a PDF page at 200 DPI, and iiif_utils rasterises an SVG
+# to a fixed longest side. Everything else is decoded at its own size.
+PYMUPDF_EXTENSIONS = frozenset({'.pdf', '.svg'})
 
 
 def build_stem_index(directory):

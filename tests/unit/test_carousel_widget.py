@@ -9,7 +9,7 @@ The parsing validates required fields (image), warns about missing alt text
 for accessibility, and analyzes image aspect ratios to determine optimal
 carousel height.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import sys
@@ -51,13 +51,49 @@ caption: Photo caption"""
         assert result['items'][0]['image'] == 'photo.jpg'
         assert result['items'][0]['alt'] == 'A description'
 
-    def test_resolves_local_src_to_baseurl_asset_path(self, mock_image_validation, mock_image_dimensions):
-        """Bare filenames resolve to the Liquid baseurl token + assets path."""
+    def test_resolves_local_src_against_the_site_base_url(self, mock_image_validation, mock_image_dimensions):
+        """A bare filename becomes a path the browser can fetch.
+
+        It used to become the literal string `{{ site.baseurl }}/assets/...`,
+        on the assumption Jekyll would resolve it later. A page does resolve
+        it; a story does not, because `story.html` serialises step content
+        through `jsonify`, which does not re-parse Liquid inside the strings
+        it writes. The same carousel worked on a page and shipped a broken
+        image in a story.
+        """
         content = """image: photo.jpg
 alt: A description"""
         warnings = []
-        result = parse_carousel_widget(content, 'test.md', warnings)
-        assert result['items'][0]['src'] == '{{ site.baseurl }}/assets/images/photo.jpg'
+        result = parse_carousel_widget(content, 'test.md', warnings,
+                                       base_url='/telar')
+
+        assert result['items'][0]['src'] == '/telar/assets/images/photo.jpg'
+
+    def test_a_site_at_a_domain_root_gets_a_root_relative_path(
+            self, mock_image_validation, mock_image_dimensions):
+        """An empty baseurl is a real answer, not a missing one."""
+        content = """image: photo.jpg
+alt: A description"""
+        warnings = []
+        result = parse_carousel_widget(content, 'test.md', warnings, base_url='')
+
+        assert result['items'][0]['src'] == '/assets/images/photo.jpg'
+
+    # `base_url` is a fixture name owned by pytest-base-url, so the parameter
+    # takes another name; pytest resolves a test argument as a fixture before
+    # it looks at parametrize.
+    @pytest.mark.parametrize('prefix', ['/telar', '', '/deep/path'])
+    def test_no_src_carries_a_liquid_token(self, prefix, mock_image_validation,
+                                           mock_image_dimensions):
+        """The regression guard. A token here reaches the reader verbatim."""
+        content = """image: photo.jpg
+alt: A description"""
+        warnings = []
+        result = parse_carousel_widget(content, 'test.md', warnings,
+                                       base_url=prefix)
+
+        assert '{{' not in result['items'][0]['src']
+        assert 'site.baseurl' not in result['items'][0]['src']
 
     @pytest.mark.parametrize('url', [
         'http://example.org/photo.jpg',

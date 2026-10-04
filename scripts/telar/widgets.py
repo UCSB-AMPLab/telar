@@ -21,9 +21,16 @@ Each widget type has its own parser:
   The maximum aspect ratio across all slides determines the carousel's
   CSS size class (compact, default, tall, or portrait). It also resolves
   each slide's final `src`: absolute http(s) URLs pass through unchanged,
-  while bare filenames are joined to the literal `{{ site.baseurl }}` Liquid
-  token (processed later by Jekyll) plus `/assets/images/`. The carousel
-  template only ever renders `item.src` — it carries no URL logic of its own.
+  while everything else is joined to the site's configured `baseurl` plus
+  `/assets/images/`. The carousel template only ever renders `item.src` —
+  it carries no URL logic of its own.
+
+  The base URL is read here rather than left as a Liquid token because the
+  two render paths do not treat such a token alike. A widget in a page is
+  rendered by Jekyll and would resolve it; a widget in a story reaches the
+  browser through `story.html`'s `jsonify`, which serialises strings without
+  re-parsing Liquid inside them, so the token arrived at the reader verbatim.
+  Resolving in Python is what makes both paths produce the same URL.
 
 - `parse_tabs_widget()` and `parse_accordion_widget()` both use
   `parse_markdown_sections()` to split content on `## ` headers into
@@ -41,13 +48,15 @@ pairs from a text block, used by the carousel parser.
 and renders it with the parsed widget data. If the template fails, it
 returns an error `<div>` instead of crashing the build.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import html
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+
+import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from telar.config import get_lang_string
 from telar.images import validate_image_path, get_image_dimensions
@@ -175,7 +184,50 @@ def declared_dimensions(item):
     return width, height
 
 
-def parse_carousel_widget(content, file_path, warnings_list):
+# The site's own prefix, for turning an author's bare filename into a path a
+# browser can fetch. Read from _config.yml rather than emitted as a Liquid
+# token: a widget in a page is rendered by Jekyll and would resolve such a
+# token, but a widget in a story reaches the browser through story.html's
+# `jsonify`, which serialises strings without re-parsing Liquid inside them.
+# The same carousel therefore worked in one place and published a literal
+# "{{ site.baseurl }}" in the other. Resolving here is what makes the two
+# paths the same path.
+_BASE_URL_UNSET = object()
+_cached_base_url = _BASE_URL_UNSET
+
+
+def site_base_url():
+    """The site's baseurl, as configured, with no trailing slash.
+
+    Empty string for a site served at a domain root, which is a valid answer
+    and not a missing one — hence the sentinel rather than a falsy check.
+    """
+    global _cached_base_url
+    if _cached_base_url is _BASE_URL_UNSET:
+        _cached_base_url = _read_base_url_from_config()
+    return _cached_base_url
+
+
+def _read_base_url_from_config():
+    config_path = Path('_config.yml')
+    if not config_path.exists():
+        return ''
+    try:
+        with open(config_path, 'r', encoding='utf-8') as handle:
+            config = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError):
+        return ''
+    return str(config.get('baseurl') or '').rstrip('/')
+
+
+def reset_base_url_cache():
+    """Forget the cached baseurl. For tests, and for a build that rewrites
+    _config.yml mid-run."""
+    global _cached_base_url
+    _cached_base_url = _BASE_URL_UNSET
+
+
+def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
     """
     Parse carousel widget content.
 
@@ -199,6 +251,9 @@ def parse_carousel_widget(content, file_path, warnings_list):
     Returns:
         dict: Parsed carousel data with 'items' list and 'size_class'
     """
+    if base_url is None:
+        base_url = site_base_url()
+
     items = []
     blocks = content.split('---')
 
@@ -227,14 +282,15 @@ def parse_carousel_widget(content, file_path, warnings_list):
                 'message': f'Carousel image not found: {data["image"]} (expected at {full_path})'
             })
 
-        # Resolve the final image src here rather than in the template:
-        # absolute http(s) URLs are used as given; bare filenames are joined
-        # to the literal "{{ site.baseurl }}" Liquid token, which Jekyll
-        # resolves at site-build time (see render_widget_html's base_url).
+        # Resolve the final image src here rather than in the template.
+        # Absolute http(s) URLs are used as given; everything else is joined
+        # to the site's configured baseurl, so the value that reaches the
+        # browser is a path it can fetch by whichever route the widget
+        # travelled.
         if data['image'].startswith('http://') or data['image'].startswith('https://'):
             data['src'] = data['image']
         else:
-            data['src'] = '{{ site.baseurl }}/assets/images/' + data['image']
+            data['src'] = '%s/assets/images/%s' % (base_url, data['image'])
 
         # Warn if alt text missing
         if 'alt' not in data:

@@ -270,6 +270,71 @@ class TestImageExtensionsAndStemIndex:
                     '.tiff', '.bmp', '.svg', '.pdf'):
             assert ext in IMAGE_EXTENSIONS
 
+    def test_every_recognised_extension_has_a_renderer_that_can_open_it(self):
+        """Membership is a claim about the decoders present, so ask them.
+
+        Asserting the list against itself proves nothing, and the list has been
+        wrong in both directions: .heic was tiled while the processors did not
+        recognise it, and .svg was recognised for releases while nothing could
+        read it. The falsifiable question is whether a renderer exists for each.
+        """
+        from PIL import Image
+        try:
+            from pillow_heif import register_heif_opener
+            register_heif_opener()
+        except ImportError:
+            pass
+        Image.init()  # plugin registration is lazy; without this every format looks unsupported
+
+        import pymupdf
+        from telar.csv_utils import IMAGE_EXTENSIONS_ORDERED, PYMUPDF_EXTENSIONS
+
+        for ext in IMAGE_EXTENSIONS_ORDERED:
+            if ext in PYMUPDF_EXTENSIONS:
+                assert pymupdf is not None  # rendered, not decoded; exercised below
+                continue
+            assert ext in Image.EXTENSION, f"{ext} is searched for but no decoder can open it"
+
+    @pytest.mark.parametrize('view_w,view_h,expect_w,expect_h', [
+        (200, 100, 4000, 2000),   # landscape: width is the long side
+        (100, 200, 2000, 4000),   # portrait: height is, which is the case that
+                                  # tells scaling-by-long-side apart from
+                                  # scaling-by-width. A landscape fixture alone
+                                  # cannot see the difference.
+        (150, 150, 4000, 4000),   # square
+    ])
+    def test_an_svg_rasterises_at_its_authored_proportions(
+        self, tmp_path, view_w, view_h, expect_w, expect_h
+    ):
+        """The SVG path end to end, because a membership list cannot show it works.
+
+        An SVG carrying only a viewBox is the case that matters: a browser gives
+        it no intrinsic size and falls back to 300x150, while MuPDF reads the
+        viewBox and keeps the authored proportions.
+        """
+        from iiif_utils import _rasterise_svg, SVG_TARGET_LONG_SIDE_PX
+
+        svg = tmp_path / 'map.svg'
+        svg.write_text(
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {view_w} {view_h}">'
+            f'<rect width="{view_w}" height="{view_h}" fill="#204060"/></svg>'
+        )
+
+        img = _rasterise_svg(svg)
+        assert img is not None, "a well-formed SVG must rasterise"
+        assert img.mode == 'RGB'
+        assert max(img.size) == SVG_TARGET_LONG_SIDE_PX
+        assert img.size == (expect_w, expect_h), \
+            "the viewBox proportions must survive, not a browser's 300x150 default"
+
+    def test_a_malformed_svg_is_reported_rather_than_raising(self, tmp_path):
+        """A bad file must skip its object, not stop the run part way through."""
+        from iiif_utils import _rasterise_svg
+
+        broken = tmp_path / 'broken.svg'
+        broken.write_text('this is not an svg at all')
+        assert _rasterise_svg(broken) is None
+
     def test_build_stem_index_groups_files_by_stem(self, tmp_path):
         from telar.csv_utils import build_stem_index
         (tmp_path / 'photo.png').write_text('x')

@@ -67,9 +67,12 @@ def render_pdf_pages(pdf_path, output_dir, dpi=200):
         List of (page_number, image_path, width, height) tuples.
         Page numbers are 1-indexed.
     """
-    import fitz
+    # `pymupdf` is the library's own name for itself; the `fitz` alias it
+    # shipped under is deprecated, and importing by it prints a warning into
+    # the build output of every site that tiles a PDF.
+    import pymupdf
 
-    doc = fitz.open(str(pdf_path))
+    doc = pymupdf.open(str(pdf_path))
     pages_info = []
 
     MAX_SIDE_PX = 10_000  # ceiling on the longest rendered side, guards against OOM
@@ -86,7 +89,7 @@ def render_pdf_pages(pdf_path, output_dir, dpi=200):
             print(f"  [WARNING] Page {page_num + 1} is very large; clamping render "
                   f"scale to keep the longest side under {MAX_SIDE_PX}px")
             scale = max_scale
-        matrix = fitz.Matrix(scale, scale)
+        matrix = pymupdf.Matrix(scale, scale)
         pixmap = page.get_pixmap(matrix=matrix)
 
         # Save as JPEG (1-indexed page numbers)

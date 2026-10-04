@@ -31,7 +31,7 @@
             pages.push({ tileSource: infoUrl });
             continue;
           }
-          pages.push({ tileSource: body.id });
+          pages.push({ tileSource: { type: "image", url: body.id } });
         }
       }
     } catch {
@@ -56,7 +56,7 @@
           continue;
         }
         if (resource["@id"] && typeof resource["@id"] === "string") {
-          pages.push({ tileSource: resource["@id"] });
+          pages.push({ tileSource: { type: "image", url: resource["@id"] } });
         }
       }
     } catch {

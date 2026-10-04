@@ -34,7 +34,7 @@ Tile generation backends:
   - iiif library (fallback): Pure Python, no system dependencies.
     Install: pip install iiif
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import os
@@ -53,6 +53,7 @@ from iiif_utils import (
     generate_tiles_libvips, copy_base_image, create_single_canvas_manifest,
     fix_fallback_region_sizes, generate_full_max,
 )
+from telar.csv_utils import IMAGE_EXTENSIONS_ORDERED
 
 
 # ---------------------------------------------------------------------------
@@ -184,10 +185,8 @@ def find_image_for_object(object_id, source_dir):
         Path object if found, None otherwise
     """
     source_path = Path(source_dir)
-    # Priority order: Common formats first, then newer/specialized formats
-    image_extensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.tif', '.tiff', '.pdf']
 
-    for ext in image_extensions:
+    for ext in IMAGE_EXTENSIONS_ORDERED:
         # Check both lowercase and uppercase extensions
         for case_ext in [ext, ext.upper()]:
             image_path = source_path / f"{object_id}{case_ext}"
@@ -353,7 +352,8 @@ def _process_object(object_id, source_dir, output_path, base_url, backend):
 
     if not image_file:
         print(f"  ⚠️  No image file found for {object_id}")
-        print(f"      Checked: {object_id}.jpg, .jpeg, .png, .heic, .heif, .webp, .tif, .tiff, .pdf")
+        checked = ', '.join(IMAGE_EXTENSIONS_ORDERED)
+        print(f"      Checked {object_id} with each of: {checked}")
         print(f"      The name before the extension must match {object_id} exactly, including capitalisation.")
         print()
         return 'skipped'
