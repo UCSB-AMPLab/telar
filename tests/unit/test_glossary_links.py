@@ -13,7 +13,7 @@ The syntax supports two forms:
 Invalid terms (not found in glossary) are marked with a warning indicator
 to help authors catch typos and missing definitions.
 
-Version: v1.5.1
+Version: v1.8.0
 """
 
 import sys
@@ -186,8 +186,8 @@ class TestProcessGlossaryLinks:
         Glossary loaders (CSV, markdown, demo bundle) store term_id verbatim, so
         keys are not guaranteed lowercase (e.g. the demo bundle stores 'IIIF').
         Matching must tolerate any author casing AND any stored-key casing, and
-        the rendered data-term-id must equal the stored key so it matches the
-        published glossary page slug.
+        the rendered data-term-id is the stored key. The page URL is a separate
+        attribute (see TestPublishedTermUrl).
         """
         terms = {'IIIF': 'IIIF', 'colonial-period': 'Colonial Period'}
         # Author types lowercase; stored key is uppercase
@@ -247,3 +247,91 @@ class TestProcessGlossaryLinks:
         result = process_glossary_links(text, glossary_terms)
         assert 'data-term-id="a&quot;&lt;x&gt;z"' in result
         assert '<x>' not in result
+
+
+class TestPublishedTermUrl:
+    """An inline link carries the URL its term's page is published at.
+
+    Jekyll publishes each glossary page at `/glossary/:name/`, where `:name`
+    is `Jekyll::Utils.slugify` of the file's basename, and the build names the
+    file after the stored term id. The page for `IIIF` is therefore at
+    `/glossary/iiif/`, and a link that builds its URL from the id verbatim
+    fetches a page that does not exist.
+
+    The expected slugs below were produced by Jekyll 4.4.1's
+    `Jekyll::Utils.slugify` (default mode) for the same inputs.
+    """
+
+    JEKYLL_SLUGS = [
+        ('IIIF', 'iiif'),
+        ('demo-IIIF', 'demo-iiif'),
+        ('Colonial-Period', 'colonial-period'),
+        ('colonial period', 'colonial-period'),
+        ('Café Crème', 'café-crème'),
+        ('ÉPOCA', 'época'),
+        ('a.b', 'a-b'),
+        ('a_b', 'a-b'),
+        ('año-1810', 'año-1810'),
+        ('x--y', 'x-y'),
+        ('-lead-', 'lead'),
+        ('KCSB2', 'kcsb2'),
+        ('Ω-omega', 'ω-omega'),
+        ('naïve', 'naïve'),
+        ('term(1)', 'term-1'),
+        ('ΟΣ', 'οσ'),
+        ('ΛΟΓΟΣ ΚΑΛΟΣ', 'λογοσ-καλοσ'),
+    ]
+
+    @pytest.mark.parametrize('term_id,slug', JEKYLL_SLUGS)
+    def test_slug_matches_jekyll(self, term_id, slug):
+        from telar.glossary import glossary_term_slug
+        assert glossary_term_slug(term_id) == slug
+
+    def test_uppercase_stored_key_links_to_lowercase_page(self):
+        terms = {'IIIF': 'IIIF'}
+        result = process_glossary_links('Served via [[IIIF]].', terms, base_url='/telar')
+        assert 'data-term-id="IIIF"' in result
+        assert 'data-term-url="/telar/glossary/iiif/"' in result
+
+    def test_author_casing_does_not_change_the_url(self):
+        terms = {'IIIF': 'IIIF'}
+        for typed in ('iiif', 'IIIF', 'Iiif'):
+            result = process_glossary_links(f'[[{typed}]]', terms, base_url='')
+            assert 'data-term-url="/glossary/iiif/"' in result
+
+    def test_id_with_spaces_and_accents(self):
+        terms = {'Época Colonial': 'Época colonial'}
+        result = process_glossary_links('[[Época Colonial]]', terms, base_url='/sitio')
+        assert 'data-term-url="/sitio/glossary/época-colonial/"' in result
+
+    def test_display_text_form_carries_the_url(self):
+        terms = {'Colonial-Period': 'Colonial Period'}
+        result = process_glossary_links('[[colonial-period|that era]]', terms, base_url='')
+        assert 'data-term-url="/glossary/colonial-period/"' in result
+        assert '>that era</a>' in result
+
+    def test_demo_term_carries_the_url(self):
+        terms = {'demo-IIIF': 'IIIF'}
+        result = process_glossary_links('[[demo-IIIF]]', terms, base_url='/telar')
+        assert 'data-term-url="/telar/glossary/demo-iiif/"' in result
+        assert 'data-demo="true"' in result
+
+    def test_base_url_defaults_to_the_site_config(self, tmp_path, monkeypatch):
+        from telar import widgets
+        (tmp_path / '_config.yml').write_text('baseurl: "/mysite"\n', encoding='utf-8')
+        monkeypatch.chdir(tmp_path)
+        widgets.reset_base_url_cache()
+        try:
+            result = process_glossary_links('[[IIIF]]', {'IIIF': 'IIIF'})
+        finally:
+            widgets.reset_base_url_cache()
+        assert 'data-term-url="/mysite/glossary/iiif/"' in result
+
+    def test_unresolved_term_carries_no_url(self):
+        result = process_glossary_links('[[nope]]', {'IIIF': 'IIIF'}, base_url='')
+        assert 'glossary-link-error' in result
+        assert 'data-term-url' not in result
+
+    def test_strip_still_unwraps_a_link_with_a_url(self):
+        linked = process_glossary_links('See [[IIIF]].', {'IIIF': 'IIIF'}, base_url='/telar')
+        assert strip_glossary_links(linked) == 'See IIIF.'

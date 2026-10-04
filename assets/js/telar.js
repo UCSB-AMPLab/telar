@@ -211,10 +211,29 @@ function initializeGlossaryDelegation() {
 }
 
 /**
+ * The path segment Jekyll publishes a glossary term's page at: its default
+ * slugify of the term id, so every run of characters other than letters,
+ * marks and decimal digits becomes one hyphen, edge hyphens are dropped, and
+ * the result is lowercased. The build's glossary_term_slug() applies the
+ * same rule to write data-term-url.
+ *
+ * @param {string} termId
+ * @returns {string}
+ */
+function glossaryTermSlug(termId) {
+  return String(termId)
+    .replace(/[^\p{M}\p{L}\p{Nd}]+/gu, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
+
+/**
  * Handle a glossary link click.
  *
  * Opens the glossary panel with the term content fetched from the term's URL.
- * Constructs the URL dynamically to properly handle baseurl configuration.
+ * Links the build writes carry that URL in data-term-url; a link without it
+ * gets the published path built from its id, under the base path read from
+ * the current page URL.
  *
  * @param {Event} e - Click event
  * @param {Element} link - The glossary link element (resolved via event delegation)
@@ -228,13 +247,12 @@ function handleGlossaryLinkClick(e, link) {
   // Use the pre-computed URL from the data attribute if available
   let termUrl = link.dataset.termUrl;
   if (!termUrl) {
-    // Fallback: construct URL (for inline links that may not have data-term-url)
     const pathParts = window.location.pathname.split('/').filter(p => p);
     let basePath = '';
     if (pathParts.length >= 2) {
       basePath = '/' + pathParts.slice(0, -2).join('/');
     }
-    termUrl = basePath + '/glossary/' + encodeURIComponent(termId) + '/';
+    termUrl = basePath + '/glossary/' + encodeURIComponent(glossaryTermSlug(termId)) + '/';
   }
 
   openGlossaryPanel(termUrl, termTitle, isDemo);

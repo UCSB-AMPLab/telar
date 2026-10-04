@@ -23,20 +23,27 @@ already-converted HTML text (after markdown processing) and replaces
 `[[term_id]]` or `[[display text|term_id]]` syntax with clickable links.
 
 If a term ID exists in the glossary, the link is rendered as an `<a>` tag
-with `class="glossary-inline-link"` and a `data-term-id` attribute.
-JavaScript in `telar.js` handles the click event and constructs the URL
-dynamically (to correctly handle baseurl across deployment scenarios).
+with `class="glossary-inline-link"`, a `data-term-id` attribute holding the
+stored key, and a `data-term-url` attribute holding the path the term's page
+is published at. `telar.js` fetches that path when the link is clicked.
 Demo glossary terms (those prefixed with `demo-`) get an extra
 `data-demo="true"` attribute.
+
+The page path is not the stored key. Jekyll publishes each glossary page at
+`/glossary/:name/`, where `:name` is its slugified filename, lowercased: the
+page for `IIIF` is at `/glossary/iiif/`. `glossary_term_slug()` reproduces
+that rule, and the path is joined to the site's configured baseurl here
+because story text reaches the browser through `story.html`'s `jsonify`,
+which does not resolve Liquid inside it.
 
 If a term ID is not found in the glossary, the link is rendered as a
 visible error indicator with a warning emoji, and a warning is appended
 to the `warnings_list` so it appears in the build output and in the
 story's intro panel.
 
-Term matching is case-insensitive (v1.5.1): an author's `[[Term]]` resolves
-against the stored key regardless of casing, and the rendered `data-term-id`
-uses the stored key so it matches the published glossary page slug.
+Term matching is case-insensitive: an author's `[[Term]]` resolves against
+the stored key regardless of casing, and the rendered `data-term-id` is the
+stored key.
 
 Version: v1.8.0
 """
@@ -46,6 +53,8 @@ import re
 from pathlib import Path
 import pandas as pd
 from telar.config import get_lang_string
+from telar.widgets import site_base_url
+from telar.story_pages import jekyll_slug
 from telar.csv_utils import ColumnCollisionError, ReservedColumnError
 
 
@@ -179,6 +188,25 @@ def load_glossary_terms():
     return {}
 
 
+def glossary_term_slug(term_id):
+    """The path segment a glossary term's page is published at.
+
+    Jekyll's `:name` for a collection document is `Jekyll::Utils.slugify` of
+    the file's basename in its default mode, and the build writes each term
+    to `<term_id>.md`. The rule is `jekyll_slug`'s, the one the story pages
+    and the demo-term collision check use, so every published address is
+    computed the same way.
+    """
+    return jekyll_slug(str(term_id))
+
+
+def glossary_term_url(term_id, base_url=None):
+    """The site-relative URL of a glossary term's page, baseurl included."""
+    if base_url is None:
+        base_url = site_base_url()
+    return f'{base_url}/glossary/{glossary_term_slug(term_id)}/'
+
+
 # Matches the markup that process_glossary_links emits: a resolved inline link
 # (<a class="glossary-inline-link">…</a>) or the unresolved-term error span
 # (<span class="glossary-link-error">…</span>). The inner text is captured so it
@@ -219,7 +247,8 @@ def strip_glossary_links(text):
     return _GLOSSARY_MARKUP_RE.sub(unwrap, text)
 
 
-def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None):
+def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None,
+                           base_url=None):
     """
     Transform [[term]] or [[display|term]] syntax into glossary link HTML.
 
@@ -229,6 +258,8 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         warnings_list: Optional list to append warning messages
         step_num: Optional step number for warning messages
         layer_name: Optional layer name (e.g., 'layer1', 'layer2') for warning context
+        base_url: The site's baseurl for the term page URL; read from
+            _config.yml when omitted
 
     Returns:
         str: Text with glossary links transformed to HTML
@@ -241,8 +272,8 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # — load_glossary_from_csv, load_glossary_from_markdown, and the demo bundle
     # do not lowercase keys (e.g. the demo glossary stores 'IIIF'). Resolving to
     # the stored key (rather than a lowercased copy) keeps the rendered
-    # data-term-id equal to the published glossary page slug, which telar.js
-    # fetches on click. Mirrors the objects_lower_map pattern in stories.py.
+    # data-term-id and title lookup on the key the glossary holds. Mirrors the
+    # objects_lower_map pattern in stories.py.
     # If two keys differ only by case, the last one wins — acceptable because the
     # glossary page system would already collide on such keys.
     glossary_lower_map = {key.lower(): key for key in glossary_terms}
@@ -266,8 +297,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         # [[Colonial-Period]], while the stored key may be lowercase (the common
         # compositor case) or not (hand-authored CSV / demo bundle, e.g. 'IIIF').
         # Match case-insensitively and resolve to the actual stored key so the
-        # title lookup succeeds and the rendered data-term-id matches the glossary
-        # page slug telar.js fetches to open the panel.
+        # title lookup succeeds; the page URL is derived from that key.
         canonical_id = glossary_lower_map.get(raw_term_id.lower())
 
         # Check if term exists in glossary (case-insensitive)
@@ -276,15 +306,15 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
             if not has_custom_display:
                 # Use the glossary title as display text
                 display_text = glossary_terms[term_id]
-            # Valid term - create glossary link
-            # Note: data-term-url is intentionally omitted; JavaScript fallback in telar.js
-            # constructs the URL dynamically from the current page URL, which correctly
-            # handles baseurl for all deployment scenarios (GitHub Pages, subpaths, etc.)
-            # Add data-demo attribute for demo terms (prefixed with demo-)
             demo_attr = ' data-demo="true"' if term_id.startswith('demo-') else ''
-            # Escape the canonical term id (attribute) and display text so a
-            # quote or angle bracket in either cannot break out of the link markup.
-            return f'<a href="#" class="glossary-inline-link" data-term-id="{html.escape(term_id, quote=True)}"{demo_attr}>{html.escape(display_text)}</a>'
+            term_url = glossary_term_url(term_id, base_url)
+            # Escape the canonical term id, the URL and the display text so a
+            # quote or angle bracket in any of them cannot break out of the
+            # link markup.
+            return (f'<a href="#" class="glossary-inline-link"'
+                    f' data-term-id="{html.escape(term_id, quote=True)}"'
+                    f' data-term-url="{html.escape(term_url, quote=True)}"{demo_attr}>'
+                    f'{html.escape(display_text)}</a>')
         else:
             # Invalid term - create error indicator (author's original casing preserved)
             if warnings_list is not None:
