@@ -41,7 +41,7 @@
 
 import Lenis from 'lenis';
 import Snap from 'lenis/snap';
-import { state } from './state.js';
+import { state, navSeconds } from './state.js';
 import { onViewportResize } from './layout-mode.js';
 import { activateCard, setCardProgress, settleCards } from './card-pool.js';
 import { writeHash } from './deep-link.js';
@@ -61,6 +61,13 @@ let scrubEndTimer;
 let cardStackEl;
 let totalPositions = 0;
 let keyboardNavInFlight = false;
+
+// True while the engine is driving the scroll itself. A programmatic move ends
+// exactly on a step and the paths that start it state where the cards and
+// plates belong, so the scroll coming to rest at the end of one is not a rest
+// that needs settling — and settling it there rewrites transforms the move's
+// own transitions are still running towards, which restarts them.
+let navInFlight = false;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -119,8 +126,8 @@ export function initScrollEngine(stepCount) {
 
   // Create Snap plugin with lock mode — directional snapping (forward on
   // scroll-down, backward on scroll-up).  Lerp-only (no fixed duration) for
-  // a gradual settle.  500ms dwell on complete (see dwellTimer below) absorbs
-  // residual scroll input.
+  // a gradual settle.  The dwell on complete (see dwellTimer below) absorbs
+  // residual scroll input while the cards arrive.
   snap = new Snap(lenis, {
     type: 'lock',
     velocityThreshold: 0.5,
@@ -139,12 +146,16 @@ export function initScrollEngine(stepCount) {
       updateScrollPosition(finalPosition);
       writeHash();
       lenis.stop();
+      // The dwell holds the scroll still while the cards finish arriving, so
+      // it is the pace of a move rather than a number of its own: a dwell
+      // shorter than the motion hands the reader back a scroll that can be
+      // pushed while the stack is still settling into the step behind it.
       dwellTimer = setTimeout(() => {
         if (!state.isPanelOpen) {
           lenis.start();
         }
         dwellTimer = null;
-      }, 500);
+      }, navSeconds().keyboard * 1000);
     },
   });
 
@@ -165,10 +176,22 @@ export function initScrollEngine(stepCount) {
   });
 
   // Per-frame position update from smoothed scroll output
+  // Every frame arms the settle, whether the reader's scroll is still flagged
+  // or not. A scroll outlives its own flag — the smoothing tail and the snap
+  // lerp both run on past it — and the frames after the flag lapses are
+  // exactly the ones no other path states a position for, so a scroll that
+  // drifts to a stop away from a waypoint would leave the stack at whatever
+  // position the flag happened to lapse on.
   lenis.on('scroll', (l) => {
     const position = l.animatedScroll / window.innerHeight;
     updateScrollPosition(position);
-    if (cardStack.classList.contains('is-scrubbing')) armScrubEnd();
+    // Armed on every frame of the reader's own scroll, flagged or not: a
+    // scroll outlives its flag — the smoothing tail and the snap lerp both run
+    // past it — and the frames after it lapses are exactly the ones no other
+    // path states a position for, so a gesture that drifts to a stop away from
+    // a waypoint would leave the stack at whatever position the flag happened
+    // to lapse on.
+    if (!navInFlight) armScrubEnd();
   });
 
   // Start rAF loop — drives Lenis physics every frame
@@ -236,46 +259,6 @@ function registerSnapPoints(count) {
   }
 }
 
-// Seconds a programmatic move to a step takes. This one number is the pace of
-// the whole move: Lenis carries the scroll over it, the per-frame interpolation
-// follows the scroll and so the viewer pans and zooms over it too, and the card
-// slide is written to match. The keyboard is given longer than a button because
-// a reader holding an arrow key is reading as they go, where a reader who has
-// clicked a section has already chosen where to be.
-const NAV_SECONDS = { keyboard: 1.2, button: 0.75 };
-
-/**
- * Read a tuning override for the pace of a programmatic move.
- *
- * `?nav=1.6` gives the keyboard that many seconds and scales the button move
- * by the same factor, so the two keep their relation. `?nav=1.6,0.9` sets them
- * independently. A value outside the range leaves the defaults, so a mistyped
- * switch cannot strand the reader mid-move. Resolved once, and only for as
- * long as the pace is being settled.
- *
- * @returns {{ keyboard: number, button: number }}
- */
-let _navTuning = null;
-function navSeconds() {
-  if (_navTuning) return _navTuning;
-
-  _navTuning = { ...NAV_SECONDS };
-  try {
-    const raw = new URLSearchParams(window.location.search).get('nav');
-    if (raw) {
-      const [k, btn] = raw.split(',').map(Number);
-      if (k >= 0.1 && k <= 20) {
-        _navTuning.keyboard = k;
-        _navTuning.button = NAV_SECONDS.button * (k / NAV_SECONDS.keyboard);
-      }
-      if (btn >= 0.1 && btn <= 20) _navTuning.button = btn;
-    }
-  } catch {
-    // A URL we cannot read leaves the defaults standing.
-  }
-  return _navTuning;
-}
-
 /**
  * Programmatically navigate to a step (button/keyboard nav).
  *
@@ -297,9 +280,11 @@ export function advanceToStep(targetIndex) {
 
   // +1 to account for intro at position 0
   const targetPx = (targetIndex + 1) * window.innerHeight;
+  navInFlight = true;
   lenisInstance.scrollTo(targetPx, {
     duration: navSeconds().button,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
+    onComplete: () => { navInFlight = false; },
   });
 }
 
@@ -389,6 +374,7 @@ export function keyboardNav(direction) {
   // the old stepIndex and fires activateCard(oldStep, 'backward'),
   // undoing the immediate activation above.
   keyboardNavInFlight = true;
+  navInFlight = true;
 
   lenis.scrollTo(target * vh, {
     force: true,
@@ -396,6 +382,7 @@ export function keyboardNav(direction) {
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
       keyboardNavInFlight = false;
+      navInFlight = false;
       writeHash();
     },
   });

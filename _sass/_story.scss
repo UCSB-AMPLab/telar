@@ -58,6 +58,27 @@
   // CRITICAL: NO z-index here — mandatory for z-index banding to work
   overflow: visible;
 
+  // EN: A card's slide, a covered card's lift and a plate's travel are one
+  //     movement seen from three places, so they run for one duration. Every
+  //     transition for a card or a plate below reads this property instead of
+  //     restating the figure. The figure here is only what stands until the
+  //     card pool writes over it at init with the pace of a move to a step,
+  //     which is the same movement measured at the scroll; `?cardmotion=0.9`
+  //     is a tuning switch for the release cycle, of the same standing as
+  //     `?cardheight=fixed`, for a card duration deliberately out of step
+  //     with the move.
+  // ES: El deslizamiento de una tarjeta, el ascenso de una tarjeta cubierta y
+  //     el recorrido de una placa son un mismo movimiento visto desde tres
+  //     puntos, así que duran lo mismo. Todas las transiciones de tarjeta o de
+  //     placa que vienen más abajo leen esta propiedad en vez de repetir la
+  //     cifra. La cifra que está aquí solo rige hasta que el card pool la
+  //     sobrescribe al arrancar con el ritmo de un desplazamiento a un paso,
+  //     que es ese mismo movimiento medido en el scroll; `?cardmotion=0.9` es
+  //     un control de ajuste para este ciclo de versiones, de la misma índole
+  //     que `?cardheight=fixed`, para una duración de tarjeta que se aparte
+  //     del desplazamiento a propósito.
+  --card-motion-duration: 0.5s;
+
   // During scroll-driven scrubbing: disable CSS transitions for per-frame control
   &.is-scrubbing .viewer-plate,
   &.is-scrubbing .text-card {
@@ -77,7 +98,7 @@
   inset: 0;
   box-sizing: border-box;
   transform: translateY(100%);                    // offscreen below by default
-  transition: transform 0.5s ease-out;           // pure slide, no fade
+  transition: transform var(--card-motion-duration) ease-out;  // pure slide, no fade
   // Top-edge shadow and border matching text cards (visible during slide-up)
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15), 0 -6px 24px rgba(0, 0, 0, 0.12);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
@@ -371,10 +392,46 @@
   padding: 1.5rem 2rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  // EN: The card is a fixed-height box, so centring the content is only safe
+  //     while it fits. `justify-content: center` distributes free space even
+  //     when it is negative, which pushes the question above the card's top
+  //     edge, from where neither clipping nor scrolling returns it.
+  //     `margin-block: auto` on the card's single flex item centres short
+  //     content and top-aligns long content, because auto margins absorb free
+  //     space only while there is some.
+  //     Auto margins rather than `justify-content: safe center`: both engines
+  //     have supported flex auto margins since flexbox shipped, whereas `safe
+  //     center` needs Safari 16 and below it drops silently to top alignment.
+  //     `overflow: hidden` keeps inside the card whatever the build's answer
+  //     limit lets through: the card in horizontal neither scrolls nor
+  //     overflows onto the image, and what does not fit is cut from the
+  //     bottom, never from the top, where the question is.
+  // ES: La tarjeta tiene altura fija, así que centrar el contenido solo es
+  //     seguro mientras quepa. `justify-content: center` reparte el espacio
+  //     libre incluso cuando es negativo, lo que empuja la pregunta por encima
+  //     del borde superior de la tarjeta, de donde no la devuelven ni el
+  //     recorte ni el desplazamiento. `margin-block: auto` en el único
+  //     elemento flex de la tarjeta centra el contenido corto y alinea arriba
+  //     el contenido largo, porque los márgenes automáticos solo absorben
+  //     espacio libre mientras lo haya.
+  //     Se usan márgenes automáticos y no `justify-content: safe center`:
+  //     ambos motores admiten los márgenes automáticos de flexbox desde que
+  //     existe flexbox, mientras que `safe center` exige Safari 16 y por debajo
+  //     de esa versión pasa en silencio a la alineación superior.
+  //     `overflow: hidden` mantiene dentro de la tarjeta lo que el límite de
+  //     respuesta del build deje pasar: la tarjeta en horizontal no se desplaza
+  //     ni se desborda sobre la imagen, y lo que no quepa se corta por abajo,
+  //     nunca por arriba, donde va la pregunta.
+  justify-content: flex-start;
+  overflow: hidden;
+
+  > :only-child {
+    margin-block: auto;
+  }
+
   pointer-events: auto;
   transform: translateY(100vh);          // offscreen below by default
-  transition: transform 0.5s ease-out;
+  transition: transform var(--card-motion-duration) ease-out;
   // Base shadow — cards always look like cards, not flat divs
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 6px 24px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
 
@@ -388,6 +445,20 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
   }
 
+  // ── Variable-height side card: the covered card ────────────────────────────
+  // EN: A covered card goes away through the top when nothing rises to cover
+  //     it, and nowhere at all when a plate does. card-pool.js writes that
+  //     inline, not this sheet: a card's transform goes inline on every
+  //     activation, so a rule here would lose in the cascade. What the
+  //     stylesheet owns is the clock the travel runs on, which is the
+  //     transition above.
+  // ES: Una tarjeta cubierta se va hacia arriba y sale de la pantalla cuando
+  //     nada sube a taparla, y no va a ninguna parte cuando la que sube es una
+  //     placa. Eso lo escribe card-pool.js en línea, no esta hoja: el
+  //     `transform` de una tarjeta va en línea en cada activación, así que una
+  //     regla aquí perdería en la cascada. Lo que sí le corresponde a la hoja
+  //     de estilos es el reloj del recorrido: la transición de arriba.
+
   .step-question {
     font-family: var(--font-headings);
     font-size: 1.5rem;
@@ -396,12 +467,20 @@
     margin-bottom: 0.75rem;
   }
 
+  // EN: `.step-answer` is a grandchild of the card: card-pool.js clones the
+  //     server-rendered `.step-content` wrapper into it, and that wrapper is
+  //     the card's only flex item. So neither `flex` nor an overflow of its own
+  //     takes effect here. The card is what scrolls in vertical and what clips
+  //     in horizontal.
+  // ES: `.step-answer` es nieto de la tarjeta: card-pool.js clona dentro de ella
+  //     el contenedor `.step-content` renderizado en el servidor, y ese
+  //     contenedor es el único elemento flex de la tarjeta. Por eso, ni `flex`
+  //     ni un overflow propio surten efecto aquí. La tarjeta es la que se
+  //     desplaza en vertical y la que recorta en horizontal.
   .step-answer {
     font-size: 1rem;
     line-height: 1.6;
     color: var(--color-body);
-    overflow-y: auto;  // scroll for long text
-    flex: 1;
   }
 
   .step-actions {
@@ -483,7 +562,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.5s ease-out;  // slides away via translateY(-120vh)
+  transition: transform var(--card-motion-duration) ease-out;  // slides away via translateY(-120vh)
 }
 
 .intro-floating-card {
@@ -643,7 +722,7 @@
   align-items: center;
   justify-content: center;
   transform: translateY(100vh);
-  transition: transform 0.5s ease-out;
+  transition: transform var(--card-motion-duration) ease-out;
 
   .title-card-inner {
     text-align: center;
@@ -864,7 +943,25 @@
     max-height: $telar-card-mobile-max-height;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    transition: transform 0.4s ease-out;  // Slightly faster than desktop 0.5s
+    transition: transform calc(var(--card-motion-duration) * 0.8) ease-out;  // slightly faster than the desktop card
+  }
+
+  // dvh override for mobile text card — same structure as story-container above.
+  // The $telar-card-mobile-max-height Sass var (40vh) is intentionally left as
+  // the vh fallback source-of-truth; this @supports block provides the dvh value
+  // at the rule level — simplest approach, no Sass var duplication.
+  //
+  // EN: The dvh cap has to precede the block that overrides for landscape: both
+  //     select `.text-card` at the same specificity, so source order decides it,
+  //     and that block's `max-height: none` only holds if it comes last.
+  // ES: El tope en dvh debe ir antes del bloque que anula para horizontal:
+  //     ambas reglas seleccionan `.text-card` con la misma especificidad, así
+  //     que lo decide el orden de aparición, y el `max-height: none` de ese
+  //     bloque solo se mantiene si va de última.
+  @supports (height: 100dvh) {
+    .text-card {
+      max-height: 40dvh;
+    }
   }
 
   // ── Landscape-phone side card override ─────────────────────────────────────
@@ -896,17 +993,27 @@
       //     el viewport corto en horizontal debe ajustar la tarjeta a su contenido y
       //     card-pool la centra según la altura medida.
       height: auto !important;
-      max-height: none;
-    }
-  }
+      // EN: The cap is the viewport less the card's inset at top and bottom, so
+      //     the landscape card can use nearly the whole short viewport and
+      //     scrolls inside above it. A cap of 40dvh is the portrait bottom
+      //     card's share of a tall viewport and leaves a landscape card far too
+      //     short; no cap at all lets the content-height card grow past both
+      //     edges of a 430px viewport, from where nothing brings it back.
+      // ES: El tope es el viewport menos la separación de la tarjeta arriba y
+      //     abajo, así que la tarjeta en horizontal puede ocupar casi todo el
+      //     viewport corto y, a partir de ese tope, se desplaza por dentro. Un
+      //     tope de 40dvh es la porción que le corresponde a la tarjeta inferior
+      //     en vertical dentro de un viewport alto, y a la tarjeta en horizontal
+      //     la deja demasiado corta; sin tope alguno, la tarjeta de altura según
+      //     contenido crece más allá de ambos bordes de un viewport de 430px, de
+      //     donde no la devuelve nada.
+      max-height: calc(100vh - 2rem);
 
-  // dvh override for mobile text card — same structure as story-container above.
-  // The $telar-card-mobile-max-height Sass var (40vh) is intentionally left as
-  // the vh fallback source-of-truth; this @supports block provides the dvh value
-  // at the rule level — simplest approach, no Sass var duplication.
-  @supports (height: 100dvh) {
-    .text-card {
-      max-height: 40dvh;
+      // The dvh value sits inside the landscape block, in the same shape as the
+      // vh-then-dvh pattern above, so the cap and its fallback stay together.
+      @supports (height: 100dvh) {
+        max-height: calc(100dvh - 2rem);
+      }
     }
   }
 

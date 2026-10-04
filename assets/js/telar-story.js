@@ -2,6 +2,25 @@
 (() => {
   // assets/js/telar-story/state.js
   var MOBILE_NAV_COOLDOWN = 400;
+  var NAV_SECONDS = { keyboard: 1.2, button: 0.75 };
+  var _navTuning = null;
+  function navSeconds() {
+    if (_navTuning) return _navTuning;
+    _navTuning = { ...NAV_SECONDS };
+    try {
+      const raw = new URLSearchParams(window.location.search).get("nav");
+      if (raw) {
+        const [k, btn] = raw.split(",").map(Number);
+        if (k >= 0.1 && k <= 20) {
+          _navTuning.keyboard = k;
+          _navTuning.button = NAV_SECONDS.button * (k / NAV_SECONDS.keyboard);
+        }
+        if (btn >= 0.1 && btn <= 20) _navTuning.button = btn;
+      }
+    } catch {
+    }
+    return _navTuning;
+  }
   var state = {
     // ── Navigation ───────────────────────────────────────────────────────────
     /** @type {HTMLElement[]} All .story-step elements in DOM order. */
@@ -1112,6 +1131,51 @@
       reSnapActiveViewer();
     });
   });
+
+  // assets/js/telar-story/card-height.js
+  var _height = null;
+  var _motion = void 0;
+  var MOTION_MIN = 0.1;
+  var MOTION_MAX = 20;
+  function _params() {
+    if (typeof window === "undefined") return null;
+    try {
+      return new URLSearchParams(window.location.search);
+    } catch {
+      return null;
+    }
+  }
+  function _readHeight() {
+    if (typeof window === "undefined") return "fit";
+    const global = window.__TELAR_CARD_HEIGHT__;
+    if (global != null) {
+      const v = typeof global === "object" ? global.height : global;
+      return String(v || "").toLowerCase() === "fixed" ? "fixed" : "fit";
+    }
+    const params = _params();
+    if (!params) return "fit";
+    return String(params.get("cardheight") || "").toLowerCase() === "fixed" ? "fixed" : "fit";
+  }
+  function _readMotion() {
+    const params = _params();
+    if (!params || !params.has("cardmotion")) return null;
+    const seconds = parseFloat(params.get("cardmotion"));
+    if (!Number.isFinite(seconds)) return null;
+    if (seconds < MOTION_MIN || seconds > MOTION_MAX) return null;
+    return seconds;
+  }
+  function isFitHeight() {
+    if (_height === null) _height = _readHeight();
+    return _height === "fit";
+  }
+  function cardMotionSeconds() {
+    if (_motion === void 0) _motion = _readMotion();
+    return _motion === null ? navSeconds().keyboard : _motion;
+  }
+  function applyCardMotionDuration(cardStack) {
+    if (!cardStack) return;
+    cardStack.style.setProperty("--card-motion-duration", `${cardMotionSeconds()}s`);
+  }
 
   // assets/js/telar-story/text-card.js
   function isFullObjectMode(stepData) {
@@ -2345,8 +2409,52 @@
   function _plateForScene(sceneIndex) {
     return sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
   }
+  function _isTitleStep(stepIndex) {
+    if (stepIndex < 0 || stepIndex >= _stepsData.length) return false;
+    return !(_stepsData[stepIndex].object || "");
+  }
+  function _standingPlate(stepIndex) {
+    for (let i = Math.min(stepIndex, _stepsData.length - 1); i >= 0; i--) {
+      const plate = _plateForScene(getSceneIndex(i));
+      if (plate) return plate;
+    }
+    return null;
+  }
   function buildTransform(messiness, baseTranslate) {
     return `${baseTranslate} rotate(${messiness.rot}deg) translate(${messiness.offX}px, ${messiness.offY}px)`;
+  }
+  function _liftBase(progress) {
+    return progress ? `translateY(${-progress * 100}vh)` : "translateY(0)";
+  }
+  function buildLiftTransform(el, progress) {
+    return buildTransform(_readCardMessiness(el), _liftBase(progress));
+  }
+  function _liftProgress() {
+    const p = state.scrollProgress;
+    return Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0;
+  }
+  function _coveredCardLifts(stepIndex) {
+    if (!isFitHeight()) return false;
+    const over = stepIndex + 1;
+    if (stepIndex < 0 || over >= _stepsData.length) return false;
+    if (getSceneIndex(stepIndex) === getSceneIndex(over)) return true;
+    return _isTitleStep(over) && !!_plateForScene(getSceneIndex(stepIndex));
+  }
+  function coveredCardBase(stepIndex) {
+    return _coveredCardLifts(stepIndex) ? "translateY(-100vh)" : "translateY(0)";
+  }
+  function _settleLiftedCards(stepIndex, progress) {
+    for (let i = 0; i <= stepIndex; i++) {
+      const el = state.textCards[i] || state.titleCards[i];
+      if (!el) continue;
+      const lift = !_coveredCardLifts(i) ? 0 : i === stepIndex ? progress : 1;
+      const transform = buildLiftTransform(el, lift);
+      if (el.style.transform !== transform) el.style.transform = transform;
+    }
+  }
+  function _cardStepIndex(el) {
+    const i = parseInt(el.dataset.stepIndex, 10);
+    return Number.isInteger(i) ? i : -1;
   }
   function _readCardMessiness(el) {
     return {
@@ -2355,22 +2463,38 @@
       offY: parseFloat(el.dataset.messinessOffY || 0)
     };
   }
+  var SIDE_CARD_VIEWPORT_FRACTION = 0.8;
+  function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
+    card.style.height = "";
+    if (maxHeightPx == null) card.style.removeProperty("max-height");
+    else card.style.maxHeight = `${maxHeightPx}px`;
+    const cardH = card.offsetHeight;
+    const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+    card.style.setProperty("top", `${topPx}px`, "important");
+  }
   function _recomputeCardGeometry(viewportW, viewportH) {
     const peekHeight = _config.peekHeight;
     const landscapeSideCard = isLandscapeSideCard();
+    const fitSideCard = isFitHeight() && !landscapeSideCard && getLayoutMode() !== "vertical";
     const cards = document.querySelectorAll(".text-card");
     for (const card of cards) {
       const runPos = parseInt(card.dataset.runPosition, 10) || 0;
       if (landscapeSideCard) {
-        card.style.height = "";
-        const cardH = card.offsetHeight;
-        const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
-        card.style.setProperty("top", `${topPx}px`, "important");
+        _sizeCardToContent(card, viewportH, runPos, peekHeight, null);
       } else if (getLayoutMode() === "vertical") {
         card.style.removeProperty("top");
-        card.style.height = `${viewportH * 0.8}px`;
+        card.style.removeProperty("max-height");
+        card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;
+      } else if (fitSideCard) {
+        _sizeCardToContent(
+          card,
+          viewportH,
+          runPos,
+          peekHeight,
+          viewportH * SIDE_CARD_VIEWPORT_FRACTION
+        );
       } else {
-        const cardH = viewportH * 0.8;
+        const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
         const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
         card.style.setProperty("top", `${topPx}px`, "important");
         card.style.height = `${cardH}px`;
@@ -2530,7 +2654,7 @@
     state.stepsData = steps;
     _config = _resolveCardConfig(config);
     const viewportH = window.innerHeight;
-    const cardH = viewportH * 0.8;
+    const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
     _zPlan = computeZIndexPlan(steps);
     _buildSceneMaps(steps);
     state.titleCards = {};
@@ -2554,6 +2678,13 @@
       _recomputeCardGeometry(viewport.w, viewport.h);
     });
     _recomputeCardGeometry(window.innerWidth, window.innerHeight);
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        _recomputeCardGeometry(window.innerWidth, window.innerHeight);
+      });
+    }
+    if (isFitHeight()) onCardsSettle(_settleLiftedCards);
+    applyCardMotionDuration(cardStack);
   }
   function buildTextCardContent(step) {
     const question = escapeHtml(step.question || "");
@@ -2639,7 +2770,7 @@
       el.style.transition = "none";
       el.style.transform = buildTransform(
         _readCardMessiness(el),
-        below ? "translateY(0)" : "translateY(100vh)"
+        below ? coveredCardBase(i) : "translateY(100vh)"
       );
       moved.push(el);
     }
@@ -2652,7 +2783,8 @@
   function _restoreBackwardTarget(cardEl) {
     if (!cardEl) return;
     if (cardEl.classList.contains("is-stacked") || cardEl.classList.contains("is-active")) return;
-    _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), "translateY(0)"));
+    const base = coveredCardBase(_cardStepIndex(cardEl));
+    _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), base));
   }
   function _activateForward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
     if (needsNewViewer) {
@@ -2774,24 +2906,24 @@
     _refreshPlateAriaLabel(index2, objectId);
     preloadAhead(index2, _config.preloadSteps, 2);
   }
-  function _interpolatePlateHandoff(stepIndex, nextIndex, progress) {
-    const nextStep2 = _stepsData[nextIndex];
-    const currentStep = _stepsData[stepIndex];
-    if (!nextStep2 || !currentStep) return;
-    const nextObjectId = nextStep2.object || "";
-    const currentObjectId = currentStep.object || "";
-    if (nextObjectId === currentObjectId) return;
-    if (nextObjectId === "") {
-      const currentPlate = _plateForScene(getSceneIndex(stepIndex));
-      if (currentPlate) {
-        currentPlate.style.transform = `translateY(-${progress * 100}%)`;
-      }
-    } else {
-      const nextPlate = _plateForScene(getSceneIndex(nextIndex));
-      if (nextPlate) {
-        const plateTranslateY = (1 - progress) * 100;
-        nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
-      }
+  function _settlePlates(stepIndex, progress) {
+    const place = (plate, y) => {
+      if (!plate) return;
+      const transform = `translateY(${y}%)`;
+      if (plate.style.transform !== transform) plate.style.transform = transform;
+    };
+    const here = getSceneIndex(stepIndex);
+    const next = getSceneIndex(stepIndex + 1);
+    const after = getSceneIndex(stepIndex + 2);
+    const standing = _standingPlate(stepIndex);
+    if (_isTitleStep(stepIndex)) place(standing, -100);
+    else if (_isTitleStep(stepIndex + 1)) place(standing, -progress * 100);
+    else place(standing, 0);
+    if (next !== here && !_isTitleStep(stepIndex + 1)) {
+      place(_plateForScene(next), (1 - progress) * 100);
+    }
+    if (after !== next && !_isTitleStep(stepIndex + 2)) {
+      place(_plateForScene(after), 100);
     }
   }
   function setCardProgress(stepIndex, progress) {
@@ -2806,18 +2938,22 @@
     const progress = contentPos - stepIndex;
     const cardAt = (i) => i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i];
     const place = (el, base) => {
-      if (el) el.style.transform = buildTransform(_readCardMessiness(el), base);
+      if (!el) return;
+      const transform = buildTransform(_readCardMessiness(el), base);
+      if (el.style.transform !== transform) el.style.transform = transform;
     };
     place(cardAt(stepIndex), "translateY(0)");
     place(cardAt(stepIndex + 1), `translateY(${(1 - progress) * 100}vh)`);
     place(cardAt(stepIndex + 2), "translateY(100vh)");
-    if (stepIndex < 0) {
-      const firstPlate = state.viewerPlates?.[0];
-      if (firstPlate) firstPlate.style.transform = `translateY(${(1 - progress) * 100}%)`;
-    } else {
-      _interpolatePlateHandoff(stepIndex, stepIndex + 1, progress);
-    }
+    _settlePlates(stepIndex, progress);
     for (const hook of _settleHooks) hook(stepIndex, progress);
+  }
+  function onCardsSettle(hook) {
+    _settleHooks.push(hook);
+    return () => {
+      const at = _settleHooks.indexOf(hook);
+      if (at >= 0) _settleHooks.splice(at, 1);
+    };
   }
   function _applyFramingToViewer(viewerCard, x, y, zoom, snap2) {
     if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
@@ -3085,6 +3221,9 @@
       el.classList.remove("is-stacked");
     } else {
       el.classList.add("is-stacked");
+      if (_coveredCardLifts(prevCard.stepIndex)) {
+        el.style.transform = buildLiftTransform(el, 1);
+      }
     }
   }
   function _writeCardOverlayRect(cardEl) {
@@ -3096,9 +3235,13 @@
     const messiness = _readCardMessiness(cardEl);
     cardEl.classList.remove("is-stacked");
     cardEl.classList.add("is-active");
-    cardEl.style.transform = buildTransform(messiness, "translateY(0)");
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const isScrubbing = document.querySelector(".card-stack")?.classList.contains("is-scrubbing");
+    if (isScrubbing && _coveredCardLifts(_cardStepIndex(cardEl))) {
+      cardEl.style.transform = buildLiftTransform(cardEl, _liftProgress());
+    } else {
+      cardEl.style.transform = buildTransform(messiness, "translateY(0)");
+    }
     if (prefersReduced || isScrubbing) {
       _writeCardOverlayRect(cardEl);
       return;
@@ -4989,6 +5132,7 @@
   var cardStackEl;
   var totalPositions = 0;
   var keyboardNavInFlight = false;
+  var navInFlight = false;
   function initScrollEngine(stepCount) {
     const surface = document.querySelector(".scroll-surface");
     const cardStack = document.querySelector(".card-stack");
@@ -5044,7 +5188,7 @@
             lenis.start();
           }
           dwellTimer = null;
-        }, 500);
+        }, navSeconds().keyboard * 1e3);
       }
     });
     registerSnapPoints(totalPositions);
@@ -5056,7 +5200,7 @@
     lenis.on("scroll", (l) => {
       const position = l.animatedScroll / window.innerHeight;
       updateScrollPosition(position);
-      if (cardStack.classList.contains("is-scrubbing")) armScrubEnd();
+      if (!navInFlight) armScrubEnd();
     });
     rafId = requestAnimationFrame(function raf(time) {
       lenis.raf(time);
@@ -5090,35 +5234,20 @@
       snapRemovers.push(snap.add(i * window.innerHeight));
     }
   }
-  var NAV_SECONDS = { keyboard: 1.2, button: 0.75 };
-  var _navTuning = null;
-  function navSeconds() {
-    if (_navTuning) return _navTuning;
-    _navTuning = { ...NAV_SECONDS };
-    try {
-      const raw = new URLSearchParams(window.location.search).get("nav");
-      if (raw) {
-        const [k, btn] = raw.split(",").map(Number);
-        if (k >= 0.1 && k <= 20) {
-          _navTuning.keyboard = k;
-          _navTuning.button = NAV_SECONDS.button * (k / NAV_SECONDS.keyboard);
-        }
-        if (btn >= 0.1 && btn <= 20) _navTuning.button = btn;
-      }
-    } catch {
-    }
-    return _navTuning;
-  }
   function advanceToStep(targetIndex) {
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
     const lenisInstance = state.lenis || lenis;
     if (!lenisInstance) return;
     endScrub();
     const targetPx = (targetIndex + 1) * window.innerHeight;
+    navInFlight = true;
     lenisInstance.scrollTo(targetPx, {
       duration: navSeconds().button,
-      easing: (t) => 1 - Math.pow(1 - t, 3)
+      easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
+      onComplete: () => {
+        navInFlight = false;
+      }
     });
   }
   function keyboardNav(direction) {
@@ -5155,6 +5284,7 @@
       goToStep(-1, "backward");
     }
     keyboardNavInFlight = true;
+    navInFlight = true;
     lenis.scrollTo(target * vh, {
       force: true,
       duration: navSeconds().keyboard,
@@ -5162,6 +5292,7 @@
       // ease-out cubic
       onComplete: () => {
         keyboardNavInFlight = false;
+        navInFlight = false;
         writeHash();
       }
     });
@@ -5236,7 +5367,7 @@
   function _showIntroCard() {
     const intro = document.querySelector(".story-intro");
     if (!intro) return;
-    intro.style.transition = "transform 0.5s ease-out";
+    intro.style.transition = "transform var(--card-motion-duration) ease-out";
     intro.style.transform = "translateY(0)";
   }
   function _sendFirstTextCardOffScreen() {
@@ -5339,7 +5470,7 @@
     state.mobileInIntro = false;
     const intro = document.querySelector(".story-intro");
     if (intro) {
-      intro.style.transition = "transform 0.5s ease-out";
+      intro.style.transition = "transform var(--card-motion-duration) ease-out";
       intro.style.transform = "translateY(-100%)";
     }
     state.currentMobileStep = 0;

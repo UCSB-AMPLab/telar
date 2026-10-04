@@ -74,6 +74,7 @@ import {
   _deriveCardPlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
+import { isFitHeight, applyCardMotionDuration } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
 import {
   createVideoPlayer,
@@ -321,6 +322,40 @@ function _plateForScene(sceneIndex) {
   return sceneIndex >= 0 ? state.viewerPlates[sceneIndex] : null;
 }
 
+/**
+ * Whether a step is a section card — a step with no object, and so no plate.
+ *
+ * A step outside the story answers false: the intro below the first step and
+ * the void above the last one are not section cards, and the callers that ask
+ * about `stepIndex + 1` and `stepIndex + 2` run off the end of every story.
+ *
+ * @param {number} stepIndex
+ * @returns {boolean}
+ */
+function _isTitleStep(stepIndex) {
+  if (stepIndex < 0 || stepIndex >= _stepsData.length) return false;
+  return !(_stepsData[stepIndex].object || '');
+}
+
+/**
+ * The plate standing behind a step.
+ *
+ * A section card has no plate of its own, and the scene it interrupts is the
+ * one whose plate the reader was last looking at. Walking back to the nearest
+ * object scene is what lets a position on a section card say where that plate
+ * belongs, which is the one plate nothing else names.
+ *
+ * @param {number} stepIndex
+ * @returns {HTMLElement|null}
+ */
+function _standingPlate(stepIndex) {
+  for (let i = Math.min(stepIndex, _stepsData.length - 1); i >= 0; i--) {
+    const plate = _plateForScene(getSceneIndex(i));
+    if (plate) return plate;
+  }
+  return null;
+}
+
 // ── Card pool DOM management ──────────────────────────────────────────────────
 
 /**
@@ -335,6 +370,132 @@ function buildTransform(messiness, baseTranslate) {
 }
 
 /**
+ * The base translate for a card a fraction of the way along the lift.
+ *
+ * Zero is written as the settle writes a resting card, not as `-0vh`, so the
+ * two statements of a card at rest are the same string and neither undoes the
+ * other.
+ *
+ * @param {number} progress - 0 at rest, 1 lifted clear
+ * @returns {string}
+ */
+function _liftBase(progress) {
+  return progress ? `translateY(${-progress * 100}vh)` : 'translateY(0)';
+}
+
+/**
+ * Place a card along the lift: 0 is its resting place, 1 is clear of the top
+ * of the viewport.
+ *
+ * A viewport's worth of travel clears any card the fit model builds. The
+ * card's top edge rests at `(viewportH − cardH) / 2` and its lower edge at
+ * `(viewportH + cardH) / 2`, and the ceiling holds cardH to 0.80 of the
+ * viewport, so the lower edge rests at most 0.9 of the way down and one
+ * viewport of travel carries it past the top. The card's own rotation and
+ * offset ride along, so a lifted card is the same sheet at a different
+ * height rather than a squared-up one.
+ *
+ * @param {HTMLElement} el
+ * @param {number} progress - 0 at rest, 1 lifted clear
+ * @returns {string} A transform string for the card's inline style
+ */
+function buildLiftTransform(el, progress) {
+  return buildTransform(_readCardMessiness(el), _liftBase(progress));
+}
+
+/**
+ * How far along the lift the current scroll position stands.
+ *
+ * The scroll engine writes the fraction of the way from one step to the next
+ * into state on every frame, and the lift runs over exactly that interval:
+ * the card being covered is clear of the top at the moment the card arriving
+ * from below reaches its rest. Away from a scrub the value is whatever the
+ * last frame left, which is why only the scrubbing paths read it.
+ *
+ * @returns {number} 0 at rest, 1 lifted clear
+ */
+function _liftProgress() {
+  const p = state.scrollProgress;
+  return Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0;
+}
+
+/**
+ * Whether the card at a step leaves through the top when the step over it
+ * arrives.
+ *
+ * A card belongs to its plate: it moves exactly as its plate moves, and on
+ * its own only inside a scene. That gives three cases and one question.
+ *
+ * The step over it opens a new scene — its plate rises over card and plate
+ * together, and the card stays exactly where it is. This is what makes the
+ * stack read as plates covering one another.
+ *
+ * The step over it is a section card — the card's own plate lifts away
+ * through the top, and the card goes with it on the same clock.
+ *
+ * The step over it is in the same scene — no plate moves at all, so the card
+ * travels alone. This is the case the lift exists for: once cards take the
+ * height their content needs, a short card cannot cover a tall one.
+ *
+ * A section card has no plate of its own, so it never travels: whatever comes
+ * over it covers it, full-viewport against full-viewport.
+ *
+ * @param {number} stepIndex - The card's step
+ * @returns {boolean}
+ */
+function _coveredCardLifts(stepIndex) {
+  if (!isFitHeight()) return false;
+  const over = stepIndex + 1;
+  if (stepIndex < 0 || over >= _stepsData.length) return false;
+  if (getSceneIndex(stepIndex) === getSceneIndex(over)) return true;
+  return _isTitleStep(over) && !!_plateForScene(getSceneIndex(stepIndex));
+}
+
+/**
+ * Where a card under the active one belongs.
+ *
+ * In the fixed stack a covered card stays exactly where it was and the card
+ * over it hides it. Under the fit model it stays only where a plate rises to
+ * cover it, and has left through the top of the viewport otherwise. Every
+ * path that parks a covered card — the settle, the reconciliation a jump
+ * runs, the backstop a backward move keeps — reads the base here, so one
+ * answer covers them all.
+ *
+ * @param {number} stepIndex - The card's step
+ * @returns {string} A base translate for buildTransform
+ */
+function coveredCardBase(stepIndex) {
+  return _coveredCardLifts(stepIndex) ? 'translateY(-100vh)' : 'translateY(0)';
+}
+
+/**
+ * The lift's share of a settle: every covered card either clear of the top or
+ * at rest under the plate that covers it, and the card being covered part of
+ * the way to wherever it is going.
+ *
+ * Registered on the engine's settle rather than written beside it, so the
+ * rule reaches every path that states where the cards are — a scrub frame, a
+ * scroll that stops of its own accord, a snap, a keyboard move, a jump, a
+ * deep link — and a scrub that ends part-way up cannot leave a card above the
+ * fold with nothing to bring it back. The settle has already placed the card
+ * at `stepIndex` at rest; that card is the one travelling, so its write here
+ * is the last word on the position.
+ *
+ * @param {number} stepIndex - Step the position rests on; -1 is the intro
+ * @param {number} progress - Fraction of the way to the next step
+ */
+function _settleLiftedCards(stepIndex, progress) {
+  for (let i = 0; i <= stepIndex; i++) {
+    const el = state.textCards[i] || state.titleCards[i];
+    if (!el) continue;
+
+    const lift = !_coveredCardLifts(i) ? 0 : (i === stepIndex ? progress : 1);
+    const transform = buildLiftTransform(el, lift);
+    if (el.style.transform !== transform) el.style.transform = transform;
+  }
+}
+
+/**
  * Read back the messiness a card was built with.
  *
  * The three values are written onto the card's dataset once, at build time,
@@ -345,6 +506,21 @@ function buildTransform(messiness, baseTranslate) {
  * @param {HTMLElement} el
  * @returns {{ rot: number, offX: number, offY: number }}
  */
+/**
+ * The step a card was built for.
+ *
+ * Written onto every text and title card at build time, and the only handle
+ * the paths that are handed a card element rather than an index have on which
+ * step's covered-card rule applies to it.
+ *
+ * @param {HTMLElement} el
+ * @returns {number} The step index, or -1 on a card that carries none
+ */
+function _cardStepIndex(el) {
+  const i = parseInt(el.dataset.stepIndex, 10);
+  return Number.isInteger(i) ? i : -1;
+}
+
 function _readCardMessiness(el) {
   return {
     rot:  parseFloat(el.dataset.messinessRot  || 0),
@@ -354,6 +530,37 @@ function _readCardMessiness(el) {
 }
 
 // ── Geometry recompute on resize / layout change ─────────────────────────────
+
+/**
+ * The side card's share of a tall viewport: its height under the fixed model,
+ * and its ceiling under the fit model.
+ */
+const SIDE_CARD_VIEWPORT_FRACTION = 0.80;
+
+/**
+ * Size a card to its content and centre it by the height that comes back.
+ *
+ * The inline height has to go before the measurement, or `offsetHeight`
+ * returns the inline figure rather than the content's. An inline `!important`
+ * top is what beats the `top: auto !important` the landscape side-card rule
+ * carries; a card whose top is driven by CSS instead does not come through
+ * here.
+ *
+ * @param {HTMLElement} card
+ * @param {number} viewportH - Current viewport height in px
+ * @param {number} runPos - Position within this object's step sequence
+ * @param {number} peekHeight - Pixels each successive card settles lower
+ * @param {number|null} maxHeightPx - Ceiling in px, or null to leave the cap
+ *   to the stylesheet
+ */
+function _sizeCardToContent(card, viewportH, runPos, peekHeight, maxHeightPx) {
+  card.style.height = '';
+  if (maxHeightPx == null) card.style.removeProperty('max-height');
+  else card.style.maxHeight = `${maxHeightPx}px`;
+  const cardH = card.offsetHeight;
+  const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+  card.style.setProperty('top', `${topPx}px`, 'important');
+}
 
 /**
  * Recompute the inline top and height of all currently-rendered text cards.
@@ -373,6 +580,12 @@ function _readCardMessiness(el) {
 function _recomputeCardGeometry(viewportW, viewportH) {
   const peekHeight = _config.peekHeight;
   const landscapeSideCard = isLandscapeSideCard();
+  // The fit model governs the desktop side card and nothing else: a landscape
+  // phone already sizes its side card to content through the stylesheet, and
+  // the portrait bottom card keeps its own geometry.
+  const fitSideCard = isFitHeight()
+    && !landscapeSideCard
+    && getLayoutMode() !== 'vertical';
 
   const cards = document.querySelectorAll('.text-card');
   for (const card of cards) {
@@ -385,10 +598,7 @@ function _recomputeCardGeometry(viewportW, viewportH) {
       // model oversizes the card and jams it against the top on a short landscape
       // viewport. Inline !important top beats the
       // landscape rule's `top: auto !important`.
-      card.style.height = '';
-      const cardH = card.offsetHeight;
-      const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
-      card.style.setProperty('top', `${topPx}px`, 'important');
+      _sizeCardToContent(card, viewportH, runPos, peekHeight, null);
     } else if (getLayoutMode() === 'vertical') {
       // getLayoutMode() reads the live matchMedia (self-initialising), so this is
       // correct even at the init-time call below — before layout-mode.js has
@@ -398,11 +608,19 @@ function _recomputeCardGeometry(viewportW, viewportH) {
       // `max-height: 40vh`). Remove any inline top so the CSS anchor wins — do NOT
       // force an !important top here, or the card detaches from the bottom on resize.
       card.style.removeProperty('top');
-      card.style.height = `${viewportH * 0.80}px`;  // capped by the CSS max-height: 40vh
+      card.style.removeProperty('max-height');
+      card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;  // capped by the CSS max-height: 40vh
+    } else if (fitSideCard) {
+      // Desktop horizontal under the fit model: the viewport fraction is a
+      // ceiling rather than a height, and the card takes what its content
+      // needs below it. At the ceiling the card's own `overflow: hidden` and
+      // `margin-block: auto` do the clipping, exactly as at the fixed height.
+      _sizeCardToContent(card, viewportH, runPos, peekHeight,
+        viewportH * SIDE_CARD_VIEWPORT_FRACTION);
     } else {
       // Desktop horizontal: tall side card sized to 80% of the (tall) viewport,
       // vertically centred. No base CSS `top`, so the inline value drives placement.
-      const cardH = viewportH * 0.80;
+      const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
       const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
       card.style.setProperty('top', `${topPx}px`, 'important');
       card.style.height = `${cardH}px`;
@@ -689,7 +907,7 @@ export function initCardPool(storyData, config) {
   _config = _resolveCardConfig(config);
 
   const viewportH = window.innerHeight;
-  const cardH = viewportH * 0.80;
+  const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
 
   // Compute scene-based z-indexes — each object change starts a new scene
   // with its own z-index band, even if the object was seen before.
@@ -729,6 +947,25 @@ export function initCardPool(storyData, config) {
   // fires to trigger the side-card centring. Cards are
   // built with content above, so offsetHeight is measurable.
   _recomputeCardGeometry(window.innerWidth, window.innerHeight);
+
+  // A card sized to its content is centred by a height read at init time,
+  // and at init time the web fonts may still be loading: the content is laid
+  // out in the fallback face, measures taller, and the card settles that much
+  // below the centre of the viewport, with nothing but a resize to correct it.
+  // The measurement the centring uses has to be the one the reader sees, so
+  // the geometry is taken again once the fonts are in. Unconditionally: the
+  // desktop side card is one card sized to its content and the landscape-phone
+  // side card is another, and which of them a page has is not settled at init
+  // time — a rotation between the two is a layout change away.
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      _recomputeCardGeometry(window.innerWidth, window.innerHeight);
+    });
+  }
+
+  if (isFitHeight()) onCardsSettle(_settleLiftedCards);
+
+  applyCardMotionDuration(cardStack);
 }
 
 /**
@@ -961,7 +1198,7 @@ export function reconcileStackForJump(targetIndex) {
     el.style.transition = 'none';
     el.style.transform = buildTransform(
       _readCardMessiness(el),
-      below ? 'translateY(0)' : 'translateY(100vh)',
+      below ? coveredCardBase(i) : 'translateY(100vh)',
     );
     moved.push(el);
   }
@@ -981,12 +1218,13 @@ export function reconcileStackForJump(targetIndex) {
  * Bring the card a backward move is about to activate into its resting place
  * without animating it.
  *
- * Backward, the card being uncovered is already stacked at translateY(0) and is
- * revealed rather than moved: the departing card is the only thing that travels.
- * A card that arrives here off screen would instead rise as the departing card
- * falls, and two cards crossing is a motion the stack never makes. Every path
- * that leaves a card off screen under the active one is meant to be reconciled
- * before it gets here; this is the backstop for one that is not.
+ * Backward, the card being uncovered is already parked where the covered-card
+ * rule puts it and is revealed rather than lifted into place: the departing
+ * card is the one that travels. A card that arrives here off screen below
+ * would instead rise as the departing card falls, and two cards crossing is a
+ * motion the stack never makes. Every path that leaves a card off screen under
+ * the active one is meant to be reconciled before it gets here; this is the
+ * backstop for one that is not.
  *
  * @param {HTMLElement} cardEl - The card the move is activating
  */
@@ -995,7 +1233,8 @@ function _restoreBackwardTarget(cardEl) {
   if (cardEl.classList.contains('is-stacked') ||
       cardEl.classList.contains('is-active')) return;
 
-  _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), 'translateY(0)'));
+  const base = coveredCardBase(_cardStepIndex(cardEl));
+  _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), base));
 }
 
 /**
@@ -1243,6 +1482,52 @@ export function activateCard(index, direction) {
 // ── Per-frame interpolated positioning ────────────────────────────────────────
 
 /**
+ * Put every plate the scroll moves where this position says it belongs.
+ *
+ * The cards have one statement of where they belong for a position; the
+ * plates need the same and for the same reason. A plate moves only across a
+ * scene boundary, so nothing restates it for a position that does not cross
+ * one, and a scrub that stops short leaves it wherever the last frame put it.
+ * The plate behind a section card is the case with no writer at all: resting
+ * on the section card, the pair in play is the section and the object after
+ * it, which moves the arriving plate, while the plate the section card is
+ * covering belongs clear of the top and is never named.
+ *
+ * Three plates are in play. The standing plate — the one behind the step the
+ * position rests on — is clear of the top while a section card holds the
+ * screen, on its way there while the position crosses into one, and at rest
+ * otherwise. The next scene's plate is the position's own fraction of a
+ * viewport up from below. The one after that is a full viewport down, which a
+ * crossing would otherwise leave a pixel or two short of home.
+ *
+ * @param {number} stepIndex - Step the position rests on; -1 is the intro
+ * @param {number} progress - Fraction of the way to the next step
+ */
+function _settlePlates(stepIndex, progress) {
+  const place = (plate, y) => {
+    if (!plate) return;
+    const transform = `translateY(${y}%)`;
+    if (plate.style.transform !== transform) plate.style.transform = transform;
+  };
+
+  const here  = getSceneIndex(stepIndex);
+  const next  = getSceneIndex(stepIndex + 1);
+  const after = getSceneIndex(stepIndex + 2);
+
+  const standing = _standingPlate(stepIndex);
+  if (_isTitleStep(stepIndex)) place(standing, -100);
+  else if (_isTitleStep(stepIndex + 1)) place(standing, -progress * 100);
+  else place(standing, 0);
+
+  if (next !== here && !_isTitleStep(stepIndex + 1)) {
+    place(_plateForScene(next), (1 - progress) * 100);
+  }
+  if (after !== next && !_isTitleStep(stepIndex + 2)) {
+    place(_plateForScene(after), 100);
+  }
+}
+
+/**
  * Interpolate the visual progress of a card transition each scroll frame.
  *
  * Called every frame by the scroll engine. Part way through a step this runs
@@ -1255,43 +1540,6 @@ export function activateCard(index, direction) {
  * @param {number} stepIndex - Current step (floor of position)
  * @param {number} progress - Fractional progress 0.0-1.0
  */
-/**
- * Move the plates under a scrubbed card handoff.
- *
- * Only a step across an object boundary moves a plate mid-scroll. Scrubbing
- * onto a title card pulls the scene's own plate up and out of the way;
- * scrubbing onto any other object brings the next scene's plate in from
- * below. Within one scene both plates are the same one, and it stays put.
- *
- * @param {number} stepIndex - Step being scrubbed away from
- * @param {number} nextIndex - Step being scrubbed towards
- * @param {number} progress - Fractional progress 0.0-1.0
- */
-function _interpolatePlateHandoff(stepIndex, nextIndex, progress) {
-  const nextStep = _stepsData[nextIndex];
-  const currentStep = _stepsData[stepIndex];
-  if (!nextStep || !currentStep) return;
-
-  const nextObjectId = nextStep.object || '';
-  const currentObjectId = currentStep.object || '';
-  if (nextObjectId === currentObjectId) return;
-
-  if (nextObjectId === '') {
-    // Next step is a title card — interpolate current plate away downward
-    const currentPlate = _plateForScene(getSceneIndex(stepIndex));
-    if (currentPlate) {
-      currentPlate.style.transform = `translateY(-${progress * 100}%)`;
-    }
-  } else {
-    // Normal object change — slide next viewer plate proportionally
-    const nextPlate = _plateForScene(getSceneIndex(nextIndex));
-    if (nextPlate) {
-      const plateTranslateY = (1 - progress) * 100; // %
-      nextPlate.style.transform = `translateY(${plateTranslateY}%)`;
-    }
-  }
-}
-
 export function setCardProgress(stepIndex, progress) {
   // A whole step is a resting place, and the cards belong on it whoever brought
   // them there: the write has to happen off the scrub too, or a scroll that
@@ -1324,9 +1572,19 @@ export function setCardProgress(stepIndex, progress) {
  * story's first card sliding up over the intro, and the second card waiting a
  * viewport down. The first viewer plate travels with the first card.
  *
+ * The plates get the same treatment, in `_settlePlates`: a position states
+ * where every plate in play stands, not only the one the step it is leaving
+ * happens to move.
+ *
  * The transition is left alone, so off the scrub the write is a slide from
  * wherever the card is and under `is-scrubbing` it is a position. That is what
  * makes a settle safe to run from the scrub and from the animation both.
+ *
+ * A settle states where a thing belongs, and where it already says that it
+ * says nothing: a transform written over a transition that is running towards
+ * it restarts that transition from wherever it has reached, so a settle that
+ * repeats itself leaves the last per cent of a move running for another full
+ * duration after the move looked finished.
  *
  * @param {number} position - Scroll position; 0 is the intro, 1 is step 0.
  */
@@ -1337,20 +1595,16 @@ export function settleCards(position) {
 
   const cardAt = (i) => (i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i]);
   const place = (el, base) => {
-    if (el) el.style.transform = buildTransform(_readCardMessiness(el), base);
+    if (!el) return;
+    const transform = buildTransform(_readCardMessiness(el), base);
+    if (el.style.transform !== transform) el.style.transform = transform;
   };
 
   place(cardAt(stepIndex), 'translateY(0)');
   place(cardAt(stepIndex + 1), `translateY(${(1 - progress) * 100}vh)`);
   place(cardAt(stepIndex + 2), 'translateY(100vh)');
 
-  if (stepIndex < 0) {
-    // Scene 0 is always the first scene — index it directly, no objectId lookup.
-    const firstPlate = state.viewerPlates?.[0];
-    if (firstPlate) firstPlate.style.transform = `translateY(${(1 - progress) * 100}%)`;
-  } else {
-    _interpolatePlateHandoff(stepIndex, stepIndex + 1, progress);
-  }
+  _settlePlates(stepIndex, progress);
 
   for (const hook of _settleHooks) hook(stepIndex, progress);
 }
@@ -1875,9 +2129,14 @@ function _deactivatePreviousTextCard(newIndex, direction) {
     el.style.transform = buildTransform(messiness, 'translateY(100vh)');
     el.classList.remove('is-stacked');
   } else {
-    // Forward: card stays completely still — don't touch transform or top.
-    // The new card slides up over it and covers it fully.
+    // Forward: the card stays completely still where a plate rises to cover
+    // it, and leaves through the top where none does. The transform has to be
+    // written here rather than left to the stylesheet, because a card's
+    // transform is inline and a rule for it would lose the cascade.
     el.classList.add('is-stacked');
+    if (_coveredCardLifts(prevCard.stepIndex)) {
+      el.style.transform = buildLiftTransform(el, 1);
+    }
   }
 }
 
@@ -1902,13 +2161,33 @@ function _writeCardOverlayRect(cardEl) {
 /**
  * Activate a text card — slide it up from below.
  *
+ * A card that left through the top is arriving backward from above rather
+ * than from below, and the transform it is leaving carries that: the
+ * uncovered card holds the lifted position until this write, and the write
+ * returns it to rest. Both cards in a backward move therefore travel
+ * downward and neither crosses the other. A card a plate covered never left,
+ * and this write finds it already at rest.
+ *
  * @param {HTMLElement} cardEl - The text card element
  */
 function _activateTextCard(cardEl) {
   const messiness = _readCardMessiness(cardEl);
   cardEl.classList.remove('is-stacked');
   cardEl.classList.add('is-active');
-  cardEl.style.transform = buildTransform(messiness, 'translateY(0)');
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isScrubbing    = document.querySelector('.card-stack')?.classList.contains('is-scrubbing');
+
+  // Mid-scrub the lift belongs to the scroll position, not to this write: a
+  // card uncovered at the boundary is one frame's worth of travel away from
+  // rest, and the next frame's setCardProgress carries it the rest of the
+  // way. Resting it here instead would put it home for a frame and then lift
+  // it again.
+  if (isScrubbing && _coveredCardLifts(_cardStepIndex(cardEl))) {
+    cardEl.style.transform = buildLiftTransform(cardEl, _liftProgress());
+  } else {
+    cardEl.style.transform = buildTransform(messiness, 'translateY(0)');
+  }
 
   // Write final rect to state.cardOverlayRect once the slide-up transition settles.
   // Two cases skip transitionend (it never fires when transition: none is set):
@@ -1916,8 +2195,6 @@ function _activateTextCard(cardEl) {
   //   2. .card-stack.is-scrubbing        (_sass/_story.scss:50-52)
   // In both cases the imperative style write above forces an immediate layout,
   // so getBoundingClientRect() is correct synchronously.
-  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isScrubbing    = document.querySelector('.card-stack')?.classList.contains('is-scrubbing');
   if (prefersReduced || isScrubbing) {
     _writeCardOverlayRect(cardEl);
     return;

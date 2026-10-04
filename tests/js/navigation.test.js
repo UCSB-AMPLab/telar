@@ -683,7 +683,9 @@ describe('goToStep(-1) — intro restoration', () => {
 
     expect(state.currentIndex).toBe(-1);
     expect(intro.style.transform).toBe('translateY(0)');
-    expect(intro.style.transition).toBe('transform 0.5s ease-out');
+    // The intro travels with the card that covers it, so it takes the card
+    // stack's own duration rather than a figure of its own.
+    expect(intro.style.transition).toBe('transform var(--card-motion-duration) ease-out');
   });
 
   it('sends the first text card off the bottom carrying its authored messiness', () => {

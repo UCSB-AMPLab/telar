@@ -500,16 +500,57 @@ describe('setCardProgress — the arriving plate slides with the scrub', () => {
     expect(state.viewerPlates[1].style.transform).toBe('translateY(-25%)');
   });
 
-  it('moves no plate while both steps share an object', () => {
+  it('holds the standing plate at rest while both steps share an object', () => {
     buildStory([
       { step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' },
       { step: '2', object: 'obj-a', question: 'Q2', answer: 'A2' },
     ]);
     document.querySelector('.card-stack').classList.add('is-scrubbing');
-    state.viewerPlates[1].style.transform = 'translateY(0)';
 
     setCardProgress(1, 0.25);
-    expect(state.viewerPlates[1].style.transform).toBe('translateY(0)');
+    expect(state.viewerPlates[1].style.transform).toBe('translateY(0%)');
+  });
+
+  it('states the plate behind a section card as clear of the top', () => {
+    // The position rests on the section card, so the pair in play is the
+    // section and the object after it. Nothing in that pair is the plate the
+    // section card is covering, which is the one the reader sees again on the
+    // way back — and which a scrub that stopped short leaves part way up.
+    buildStory([
+      { step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' },
+      { step: '2', object: '',      question: 'Interlude', answer: '' },
+      { step: '3', object: 'obj-b', question: 'Q3', answer: 'A3' },
+    ]);
+    document.querySelector('.card-stack').classList.add('is-scrubbing');
+    state.viewerPlates[1].style.transform = 'translateY(-34%)';
+
+    setCardProgress(2, 0);
+    expect(state.viewerPlates[1].style.transform).toBe('translateY(-100%)');
+    expect(state.viewerPlates[3].style.transform).toBe('translateY(100%)');
+  });
+
+  it('brings the next plate up out of a section card', () => {
+    buildStory([
+      { step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' },
+      { step: '2', object: 'obj-b', question: 'Q2', answer: 'A2' },
+    ]);
+    document.querySelector('.card-stack').classList.add('is-scrubbing');
+
+    // Step 0 is the fixture's own section card, so the position is leaving one.
+    setCardProgress(0, 0.25);
+    expect(state.viewerPlates[1].style.transform).toBe('translateY(75%)');
+  });
+
+  it('holds the plates below while the intro gives way to a section card', () => {
+    buildStory([
+      { step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' },
+    ]);
+    document.querySelector('.card-stack').classList.add('is-scrubbing');
+
+    // Nothing rises over the intro but the section card itself, which is a
+    // card and not a plate; the first object's plate waits a viewport down.
+    setCardProgress(-1, 0.25);
+    expect(state.viewerPlates[1].style.transform).toBe('translateY(100%)');
   });
 });
 

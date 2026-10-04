@@ -131,7 +131,7 @@ function _showIntroCard() {
   const intro = document.querySelector('.story-intro');
   if (!intro) return;
 
-  intro.style.transition = 'transform 0.5s ease-out';
+  intro.style.transition = 'transform var(--card-motion-duration) ease-out';
   intro.style.transform = 'translateY(0)';
 }
 
@@ -320,7 +320,7 @@ function _dismissMobileIntro() {
   // Hide intro card
   const intro = document.querySelector('.story-intro');
   if (intro) {
-    intro.style.transition = 'transform 0.5s ease-out';
+    intro.style.transition = 'transform var(--card-motion-duration) ease-out';
     intro.style.transform = 'translateY(-100%)';
   }
 
