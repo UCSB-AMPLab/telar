@@ -18,9 +18,10 @@
  * Protected-story path — this loader does not wait for the unlock event. It
  * loads KaTeX (or not) based on page.has_latex alone, in parallel with the
  * user entering their key. Once the CDN scripts resolve, window.telarRenderLatex
- * is published; story-unlock.js polls for that global (renderLatexWhenReady)
- * after decryption and calls it on the newly-injected step markup, so the
- * loader racing the unlock is expected and already handled downstream.
+ * is published and every step and text card on the page is rendered. The unlock
+ * renders the injected step markup itself when KaTeX is already there, before
+ * the cards are cloned from it; when KaTeX arrives later, the cards exist and
+ * this loader renders them with the step pool.
  *
  * CDN URLs, version pin, and the delimiter list come from _data/katex.yml,
  * the single source shared with _includes/katex.html (used by the default
@@ -92,8 +93,13 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
               }
             };
-            // Render LaTeX in step text already in the DOM
-            document.querySelectorAll('.story-step').forEach(function(el) {
+            // Render LaTeX in the step text already in the DOM: the hidden
+            // step pool, and the text cards the story has already built from
+            // it. Text cards are built once, when the story starts, which for
+            // a protected story is the moment it is unlocked; KaTeX arriving
+            // after that reaches them here or not at all. Title cards are
+            // plain text and are left alone.
+            document.querySelectorAll('.story-step, .text-card').forEach(function(el) {
               window.telarRenderLatex(el);
             });
             return;

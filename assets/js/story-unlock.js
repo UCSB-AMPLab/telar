@@ -20,7 +20,7 @@
  * page. Use a private repository for content that must not be read by
  * unauthorized people.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 // PBKDF2 iterations — must match Python encryption (OWASP minimum for
@@ -258,26 +258,6 @@ function hideUnlockOverlay() {
 }
 
 /**
- * Render LaTeX inside an element once the shared renderer exists.
- *
- * KaTeX loads through story.html's standard path (keyed on the page's
- * has_latex frontmatter); the CDN scripts race the unlock, so retry until
- * window.telarRenderLatex appears. When the story has no LaTeX the renderer
- * never appears and the retries lapse harmlessly.
- * @param {Element} element - Container whose math should render
- * @param {number} [attempt] - Internal retry counter
- */
-function renderLatexWhenReady(element, attempt = 0) {
-  if (window.telarRenderLatex) {
-    window.telarRenderLatex(element);
-    return;
-  }
-  if (attempt < 20) {
-    setTimeout(() => renderLatexWhenReady(element, attempt + 1), 250);
-  }
-}
-
-/**
  * Apply a decrypted envelope to the page.
  *
  * Single owner of the post-decryption sequence, shared by the fresh-unlock
@@ -312,9 +292,9 @@ function applyDecryptedPayload(payload, key) {
 
   // Render math into the pool BEFORE the event: main.js clones cards from
   // the pool synchronously in its unlock handler, and clones inherit the
-  // pool's state. If KaTeX is still loading, the retries render the pool
-  // for every later clone — the same CDN race open stories run.
-  renderLatexWhenReady(container);
+  // pool's state. If KaTeX is still loading, katex-loader.js renders the pool
+  // and the cards cloned from it when it arrives.
+  if (window.telarRenderLatex) window.telarRenderLatex(container);
 
   window.dispatchEvent(new CustomEvent('telar:story-unlocked'));
 }

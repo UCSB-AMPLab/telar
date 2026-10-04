@@ -10,10 +10,10 @@
  * it is loaded once as a side-effect import and exercised through its
  * window.TelarUnlock surface.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -76,6 +76,32 @@ describe('applyDecryptedPayload', () => {
     expect(window.storyData.firstObject).toBe('fixture-obj');
     expect(window.telarStoryKey).toBe(fixture.key);
     expect(unlocked).toBe(true);
+  });
+
+  it('renders the injected steps before the unlock event when KaTeX is already there', () => {
+    const rendered = [];
+    let renderedAtUnlock = null;
+    window.telarRenderLatex = (el) => rendered.push(el.id);
+    window.addEventListener('telar:story-unlocked', () => { renderedAtUnlock = [...rendered]; }, { once: true });
+    try {
+      window.TelarUnlock.applyDecryptedPayload(fixture.payload, fixture.key);
+    } finally {
+      delete window.telarRenderLatex;
+    }
+    // The cards are cloned from the pool in the event's handler, so the pool
+    // is rendered by then.
+    expect(renderedAtUnlock).toEqual(['encrypted-steps-container']);
+  });
+
+  it('schedules nothing when KaTeX has not arrived: the KaTeX loader renders on arrival', () => {
+    vi.useFakeTimers();
+    try {
+      expect(window.telarRenderLatex).toBeUndefined();
+      window.TelarUnlock.applyDecryptedPayload(fixture.payload, fixture.key);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('refuses a payload that is not a {steps, html} envelope', () => {

@@ -181,10 +181,45 @@ class TestUnlockFlow:
 
     def test_latex_renders_after_unlock(self, page, base_url):
         # KaTeX loads via the page's has_latex frontmatter; the unlock path
-        # renders the injected pool (retrying across the CDN race).
+        # renders the injected pool, or the loader does when KaTeX arrives
+        # after it.
         unlock_story(page, base_url)
         page.wait_for_selector("#story-unlock-overlay", state="hidden", timeout=10000)
         page.wait_for_function("document.querySelectorAll('.katex').length > 0", timeout=15000)
+
+    def test_latex_reaches_the_cards_when_katex_arrives_after_unlock(self, page, base_url):
+        # The cards are cloned from the pool once, on unlock. KaTeX loads from
+        # the CDN in parallel with the reader typing the key, so it can arrive
+        # after that clone; its scripts are held here until the story is
+        # unlocked to make that the case every run.
+        held = []
+        released = {"now": False}
+
+        def hold(route):
+            if released["now"]:
+                route.continue_()
+            else:
+                held.append(route)
+
+        page.route(re.compile(r"cdn\.jsdelivr\.net/npm/katex@.*\.js$"), hold)
+        # A held script holds the load event too, so the page is taken at
+        # DOMContentLoaded rather than through unlock_story.
+        page.goto(f"{base_url}{LOCKED_STORY_PATH}", wait_until="domcontentloaded")
+        page.wait_for_selector("#story-unlock-overlay", state="visible", timeout=10000)
+        page.fill("#unlock-key-input", STORY_KEY)
+        page.click("#unlock-form button[type=submit]")
+        page.wait_for_selector("#story-unlock-overlay", state="hidden", timeout=10000)
+        card = page.locator(".text-card", has_text="LFIX-A4-SENTINEL")
+        card.wait_for(state="attached", timeout=10000)
+        assert held, "the KaTeX scripts were requested and held"
+        assert card.locator(".katex").count() == 0, "held KaTeX cannot have rendered"
+
+        released["now"] = True
+        for route in held:
+            route.continue_()
+        page.wait_for_function("typeof window.telarRenderLatex === 'function'", timeout=30000)
+        expect(card.locator(".katex")).to_have_count(1, timeout=10000)
+        assert "\\frac" not in card.locator(".step-answer").inner_text()
 
     def test_wrong_key_shows_error(self, page, base_url):
         unlock_story(page, base_url, key=WRONG_KEY)

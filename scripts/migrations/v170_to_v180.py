@@ -141,6 +141,7 @@ FRAMEWORK_FILES = {
     'assets/js/iiif-url-warning.js': 'IIIF URL warning bundle',
     'assets/js/katex-loader.js': 'Lazy KaTeX loader for story pages',
     'assets/js/object-theme.js': 'Object page theme helpers',
+    'assets/js/story-unlock.js': 'Unlocking protected stories',
     'assets/js/telar.js': 'Site-wide panel and glossary behaviour',
     'assets/js/object-audio.js': 'Object page bundle for audio objects',
     'assets/js/object-audio.js.map': 'Source map for the audio object bundle',
