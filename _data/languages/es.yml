@@ -358,6 +358,7 @@ errors:
 
     # Errores de enlaces al glosario
     glossary_term_not_found: "la entrada '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una fila de tu hoja de cálculo del glosario o de un archivo de <code>telar-content/texts/glossary/</code>."
+    glossary_term_in_link_text: "la entrada '<strong>{{ term_id }}</strong>' está dentro del texto de un enlace, así que se muestra como texto normal y no abre el glosario. Sácala del enlace para que abra el glosario."
 
     # Límites de la respuesta de un paso
     answer_image_dropped: "En `{{ story }}` quitamos una imagen o un elemento incrustado de la respuesta del paso {{ step }}. La respuesta de un paso es texto corrido: pon ese contenido en un panel o conviértelo en el objeto del paso."

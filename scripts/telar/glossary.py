@@ -57,17 +57,20 @@ stored key.
 Version: v1.8.0
 """
 
+import bisect
 import datetime
 import html
 import math
 import re
+from html.parser import HTMLParser
 from typing import NamedTuple, Optional
 
 import yaml
 
 from telar.jekyll_urls import (disk_name, front_matter_mapping, glossary_index_addresses,
                                glossary_output_file, resolve_permalink, sanitize_url)
-from telar.code_spans import code_elements, code_regions, overlaps, unread_regions
+from telar.code_spans import (anchor_texts, answer_regions, code_elements, code_regions,
+                              link_texts, overlaps, unread_regions)
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
@@ -573,6 +576,197 @@ def find_glossary_links(text):
             start = text.find('[[', link.end)
 
 
+class _PanelHTML(HTMLParser):
+    """A panel's HTML read by Python's HTML tokenizer, for two kinds of
+    stretch, as (start, end) offsets.
+
+    `regions` holds the content of each `<a>` element: a tag inside a
+    comment, another tag's attribute or text-only content is not a tag,
+    and one whose offset *skip* (a test of an offset range) holds is not
+    one either. As a browser keeps them, an element ends at its `</a>` or
+    where the next `<a>` opens, `<a/>` opens one, and one never closed runs
+    to the end of the text.
+
+    `raw_texts` holds the content of each element whose content is text
+    only (`script`, `style`, `textarea` and the others the tokenizer reads
+    so), to its closing tag or the end of the text: markup written there is
+    not markup."""
+
+    def __init__(self, text, skip):
+        super().__init__(convert_charrefs=False)
+        self.skip = skip
+        self.text_only = (self.CDATA_CONTENT_ELEMENTS
+                          + getattr(self, 'RCDATA_CONTENT_ELEMENTS', ()))
+        self.line_starts = [0] + [match.end() for match in re.finditer('\n', text)]
+        self.regions, self.content = [], None
+        self.raw_texts, self.raw_text = [], None
+        self.feed(text)
+        self.close()
+        if self.content is not None:
+            self.regions.append((self.content, len(text)))
+        if self.raw_text is not None:
+            self.raw_texts.append((self.raw_text[1], len(text)))
+
+    def tag_offset(self):
+        """The offset of the tag being read."""
+        line, column = self.getpos()
+        return self.line_starts[line - 1] + column
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.text_only:
+            self.raw_text = (tag, self.tag_offset() + len(self.get_starttag_text()))
+        elif tag == 'a':
+            self.open_anchor()
+
+    def handle_startendtag(self, tag, attrs):
+        if tag == 'a':
+            self.open_anchor()
+
+    def open_anchor(self):
+        start = self.tag_offset()
+        end = start + len(self.get_starttag_text())
+        if self.skip(start, end):
+            return
+        if self.content is not None:
+            self.regions.append((self.content, start))
+        self.content = end
+
+    def handle_endtag(self, tag):
+        if self.raw_text is not None and tag == self.raw_text[0]:
+            self.raw_texts.append((self.raw_text[1], self.tag_offset()))
+            self.raw_text = None
+        elif tag == 'a' and self.content is not None:
+            start = self.tag_offset()
+            if not self.skip(start, start + 1):
+                self.regions.append((self.content, start))
+                self.content = None
+
+
+# A start tag of an element whose content `_PanelHTML` reads as text, as
+# the tokenizer finds one: no such tag, no such content.
+_TEXT_ONLY_TAG_RE = re.compile(
+    '<(?:' + '|'.join(HTMLParser.CDATA_CONTENT_ELEMENTS
+                      + getattr(HTMLParser, 'RCDATA_CONTENT_ELEMENTS', ())) + r')(?![a-z0-9-])',
+    re.IGNORECASE | re.ASCII)
+
+
+def _text_only_regions(text, markdown):
+    """The content of each element in *text* whose content a browser takes
+    as text (`script`, `style`, `textarea` and the others `_PanelHTML`
+    reads so), as (start, end) offsets: in a panel, read over the whole
+    HTML; in an answer, over each stretch of raw HTML kramdown prints as
+    written."""
+    if not _TEXT_ONLY_TAG_RE.search(text):
+        return []
+    if not markdown:
+        return _PanelHTML(text, _no_range).raw_texts
+    return [(start + first, start + last)
+            for kind, start, end in answer_regions(text) if kind == 'raw'
+            for first, last in _PanelHTML(text[start:end], _no_range).raw_texts]
+
+
+def _no_range(start, end):
+    """A test of an offset range that holds no range."""
+    return False
+
+
+def _merged(regions):
+    """*regions* sorted, with those that overlap made one."""
+    merged = []
+    for start, end in sorted(regions):
+        if merged and start < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _link_text_regions(text, markdown):
+    """Where the text of a link is in *text*, as sorted, non-overlapping
+    (start, end) offsets: in an answer's markdown, kramdown's link texts
+    and the content of the raw `<a>` elements it reads; in a panel's HTML,
+    the content of an `<a>` element as an HTML tokenizer reads it, outside
+    code elements."""
+    if markdown:
+        return _merged(link_texts(text) + anchor_texts(text))
+    return _merged(_PanelHTML(text, overlaps(code_elements(text))).regions)
+
+
+def _region_around(regions, starts, start):
+    """The (start, end) region of *regions*, whose starts are *starts*,
+    holding offset *start*, or the one whose text begins just after it: a
+    `[` that opens a link's text counts as inside it. None when there is
+    none."""
+    after = bisect.bisect_right(starts, start + 1)
+    for number in (after - 2, after - 1):
+        if number >= 0 and regions[number][0] - 1 <= start < regions[number][1]:
+            return regions[number]
+    return None
+
+
+def _term_in_link_text(link, text, regions, starts):
+    """The glossary link to replace when *link* lies in a link's text, as
+    (link, True); (link, False) when it does not lie in one; or
+    (None, True) when there is nothing to replace.
+
+    In `[[[term]]](url)` kramdown reads the outer brackets as the link
+    and `[[term]]` as its text, while the syntax reads `[term` as the
+    term; the term is the inner link there.
+    """
+    region = _region_around(regions, starts, link.start)
+    if region is None:
+        return link, False
+    if not link.term.startswith('['):
+        return link, link.start >= region[0]
+    inner = next(find_glossary_links(text[link.start + 1:link.end]), None)
+    if inner is None or inner.start != 0:
+        return None, True
+    return GlossaryLink(link.start + 1, link.start + 1 + inner.end, inner.term,
+                        inner.display), True
+
+
+# What markdown reads in span text, which a title or display text must not
+# be read as: written as a numeric character reference, a character is text.
+_MARKDOWN_ACTIVE_RE = re.compile(r'[\\\[\]*_`{}$|~]')
+
+
+def _as_literal_text(shown, markdown):
+    """*shown* as text that reads as written: escaped for HTML, and in
+    markdown also with each character kramdown could read as syntax made a
+    character reference."""
+    escaped = html.escape(html.unescape(shown))
+    if not markdown:
+        return escaped
+    return _MARKDOWN_ACTIVE_RE.sub(lambda match: f'&#{ord(match.group())};', escaped)
+
+
+def _plain_term(raw_term_id, display_text, canonical_id, glossary_terms,
+                warnings_list, step_num, layer_name, markdown):
+    """A term inside the text of a link, as the plain text it shows.
+
+    A link cannot hold a link, so the term is not linked: it shows its
+    display text, or its title, or, when the glossary has no such entry,
+    the text as written. The build says so either way.
+    """
+    if canonical_id is None:
+        message = get_lang_string('errors.object_warnings.glossary_term_not_found',
+                                  term_id=raw_term_id)
+        shown = display_text or raw_term_id
+    else:
+        message = get_lang_string('errors.object_warnings.glossary_term_in_link_text',
+                                  term_id=raw_term_id)
+        shown = display_text or glossary_terms[canonical_id]
+    if warnings_list is not None:
+        warnings_list.append({
+            'step': step_num,
+            'type': 'glossary',
+            'term_id': raw_term_id,
+            'layer': layer_name,
+            'message': message,
+        })
+    return _as_literal_text(shown, markdown)
+
+
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None,
                            base_url=None, markdown=False):
     """
@@ -606,7 +800,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # glossary page system would already collide on such keys.
     glossary_lower_map = {key.lower(): key for key in (glossary_terms or {})}
 
-    def replace_glossary_link(link):
+    def replace_glossary_link(link, in_link_text=False):
         # If pipe is present: [[term|display]], else [[term]]
         if link.display:  # Has pipe
             raw_term_id = link.term.strip()
@@ -623,6 +817,10 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         # Match case-insensitively and resolve to the actual stored key so the
         # title lookup succeeds; the page URL is derived from that key.
         canonical_id = glossary_lower_map.get(raw_term_id.lower())
+
+        if in_link_text:
+            return _plain_term(raw_term_id, display_text, canonical_id, glossary_terms,
+                               warnings_list, step_num, layer_name, markdown)
 
         # Check if term exists in glossary (case-insensitive)
         if canonical_id is not None:
@@ -652,10 +850,12 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # A quoted attribute value may hold '>', so it does not end the tag.
     # Code is shown as written, so [[term]] in code is the syntax, not a
     # link: a code span or element in an answer's markdown, a code element in
-    # a panel's HTML.
+    # a panel's HTML. So is the content of a `script`, `style` or other
+    # element whose content is text only.
     tags = [m.span() for m in re.finditer(
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
-    literal = overlaps(tags + (code_regions(text) if markdown else code_elements(text)))
+    literal = overlaps(tags + (code_regions(text) if markdown else code_elements(text))
+                       + _text_only_regions(text, markdown))
     # In markdown, what kramdown puts into an attribute, prints as written or
     # reads for nothing is left as written if any of the link touches it: a
     # link's destination, title or id, a link definition, an image's text
@@ -664,12 +864,19 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     unread = overlaps([(start, end) for _, start, end in unread_regions(text)]
                       if markdown else [])
 
+    # A link cannot hold a link: a term in a link's text is shown, not linked.
+    link_regions = _link_text_regions(text, markdown)
+    link_starts = [start for start, _ in link_regions]
+
     if glossary_terms:
         pieces, written = [], 0
-        for link in find_glossary_links(text):
-            if literal(link.start, link.start + 1) or unread(link.start, link.end):
+        for found in find_glossary_links(text):
+            if literal(found.start, found.start + 1) or unread(found.start, found.end):
                 continue
-            pieces += [text[written:link.start], replace_glossary_link(link)]
+            link, in_link_text = _term_in_link_text(found, text, link_regions, link_starts)
+            if link is None:
+                continue
+            pieces += [text[written:link.start], replace_glossary_link(link, in_link_text)]
             written = link.end
         text = ''.join(pieces) + text[written:]
     # After the links: the marker an unknown callout leaves reads as

@@ -50,6 +50,14 @@ element and a `comment` extension print nothing, and a `nomarkdown`
 extension prints its body as written, so code inside any of them is not
 code; after text, an IAL is text.
 
+The same reading gives the text of each link and the content of each raw
+`<a>` element, which the glossary pass leaves unlinked, since a link
+cannot hold a link. A span `<a>` ends at its closing tag or, unclosed,
+where kramdown closes it at the end of its paragraph. Inside block HTML,
+which kramdown reads with its raw reading (parser/html.rb), a processing
+instruction is a token and a block element's tag opens an element, and
+an unclosed `<a>` ends with its block.
+
 Not modelled, all rare in an answer: a definition list's content past its
 first paragraph; a `markdown` attribute on an element inside block HTML,
 and a link definition there; an IAL over several lines; a setext heading
@@ -74,11 +82,12 @@ import bisect
 import itertools
 import re
 
-from telar.kramdown_blocks import (_BLOCK_ELEMENTS, _CLOSE_TAG, _INDENT, _KNOWN, _OPEN_TAG,
+from telar.kramdown_blocks import (_BLOCK_ELEMENTS, _CLOSE_TAG, _INDENT, _KNOWN, _LEAD, _OPEN_TAG,
                                    _READ_MODEL, _S, _SPACE, _WITHOUT_BODY, _attributes,
                                    _Blocks, _closing_tag, _link_id)
 # Its tests import it from telar.code_spans.
 from telar.kramdown_blocks import _FenceCloses  # noqa: F401
+from telar.kramdown_index import _BACKTICKS, _Index
 
 # What kramdown reads before a backtick, at the same position: a backslash
 # escape (GFM's list of escapable characters, gfm.rb:190), HTML, a link's
@@ -86,7 +95,6 @@ from telar.kramdown_blocks import _FenceCloses  # noqa: F401
 _ESCAPE = re.compile(r'\\[\\.*_+`<>()\[\]{}#!:|"\'$=~-]')
 _NEXT = re.compile(r'[\\<\[\]$`]|!(?=\[)|\{:')
 _LT = re.compile('<')
-_BACKTICKS = re.compile('`+')
 
 # Links and images, as parse_link reads them (parser/kramdown/link.rb).
 # A footnote marker is read before a link, and is text without a
@@ -94,23 +102,18 @@ _BACKTICKS = re.compile('`+')
 _FOOTNOTE_MARKER = re.compile(r'\[\^[A-Za-z0-9_][A-Za-z0-9_-]*\]')
 # A reference's explicit id after the text's `]` (link.rb:55).
 _REFERENCE_ID = re.compile(rf'{_S}*?\[([^\]]*)\]')
-# The quote opening a title (link.rb:56), and each quote that can close
-# one: followed by whitespace and `)`.
+# The quote opening a title (link.rb:56).
 _TITLE_OPEN = re.compile(rf'{_S}*(["\'])')
-_TITLE_CLOSE = re.compile(rf'(["\']){_S}*\)')
-# Whitespace before a quote, which ends a destination in parentheses
-# (LINK_PAREN_STOP_RE, link.rb:54).
-_SPACE_QUOTE = re.compile(rf'{_S}(?=["\'])')
 # The escapes a reference's text loses when it is its own id: kramdown's
 # list (escaped_chars.rb:14), not GFM's.
 _KRAMDOWN_ESCAPE = re.compile(r'\\([\\.*_+`<>()\[\]{}#!:|"\'$=-])')
-_KRAMDOWN_ESCAPABLE = frozenset('\\.*_+`<>()[]{}#!:|"\'$=-')
 # Span extensions (extensions.rb:152-153, 187): a start tag's name, a
 # stop tag, and the names kramdown knows (96-137).
 _EXTENSION_NAME = re.compile(r'\{::([A-Za-z0-9_]+)')
 _EXTENSION_STOP = re.compile(r'\{:/([A-Za-z0-9_][A-Za-z0-9_-]*)?\}')
-_EXTENSION_STOPS = re.compile(r'\{:/(comment|nomarkdown|options)?\}')
 _EXTENSIONS = frozenset({'comment', 'nomarkdown', 'options'})
+# The elements whose content kramdown's block HTML reading takes as text.
+_RAW_TEXT = frozenset({'script', 'style'})
 # A paragraph opening with `\$$` (after up to three spaces) whose first
 # `$$` after that is followed only by whitespace to the end of its line:
 # kramdown's block maths start, which drops the backslash and leaves the
@@ -156,111 +159,6 @@ _PENDING = object()
 _NOT_EXTENSION = object()
 
 
-class _Index:
-    """Positions in a text, each kind found once when first needed, so a
-    search repeated from many starts is a lookup rather than a scan."""
-
-    def __init__(self, text):
-        self.text = text
-        self.built = {}
-
-    def get(self, name):
-        if name not in self.built:
-            self.built[name] = getattr(self, 'build_' + name)()
-        return self.built[name]
-
-    def build_parentheses(self):
-        """The `)` that brings the count from each `(` back to nothing."""
-        matching, opened = {}, []
-        for match in re.finditer(r'[()]', self.text):
-            if match.group() == '(':
-                opened.append(match.start())
-            elif opened:
-                matching[opened.pop()] = match.start()
-        return matching
-
-    def build_space_quotes(self):
-        return [match.start() for match in _SPACE_QUOTE.finditer(self.text)]
-
-    def build_title_closes(self):
-        """For each quote, where each quote followed by whitespace and `)`
-        starts, and where that `)` ends."""
-        closes = {'"': ([], []), "'": ([], [])}
-        for match in _TITLE_CLOSE.finditer(self.text):
-            starts, ends = closes[match.group(1)]
-            starts.append(match.start())
-            ends.append(match.end())
-        return closes
-
-    def build_angles(self):
-        return ([match.start() for match in re.finditer('>', self.text)],
-                [match.start() for match in re.finditer('\n', self.text)])
-
-    def build_braces(self):
-        """Every `}`, as a backslash before it leaves it: unescaped, or
-        escaped."""
-        unescaped, escaped = [], []
-        for match in re.finditer('}', self.text):
-            k = match.start()
-            (escaped if k and self.text[k - 1] == '\\' else unescaped).append(k)
-        return unescaped, escaped
-
-    def build_backtick_runs(self):
-        """Where each whole run of backticks starts, in order, and a tree of
-        the longest run under each node, the runs its leaves."""
-        starts, lengths = [], []
-        for match in _BACKTICKS.finditer(self.text):
-            starts.append(match.start())
-            lengths.append(match.end() - match.start())
-        size = 1 << max(len(lengths) - 1, 0).bit_length()
-        longest = [0] * size + lengths + [0] * (size - len(lengths))
-        for node in range(size - 1, 0, -1):
-            longest[node] = max(longest[2 * node], longest[2 * node + 1])
-        return starts, longest, size
-
-    def backtick_run(self, start, length):
-        """Where the first *length* backticks in a row at or after *start*
-        begin, *start* not being inside a run: the start of the first whole
-        run there at least that long, or None."""
-        starts, longest, size = self.get('backtick_runs')
-        node = bisect.bisect_left(starts, start) + size
-        if node - size >= len(starts):
-            return None
-        while longest[node] < length:
-            # Past this subtree: up while it is a right child, then across.
-            while node & 1:
-                node >>= 1
-            if node == 0:
-                return None
-            node += 1
-        while node < size:
-            node = 2 * node if longest[2 * node] >= length else 2 * node + 1
-        return starts[node - size]
-
-    def build_extension_stops(self):
-        stops = {}
-        for match in _EXTENSION_STOPS.finditer(self.text):
-            stops.setdefault(match.group(1) or '', []).append((match.start(), match.end()))
-        return stops
-
-    def build_id_lengths(self):
-        """Prefix sums of how a stretch's length changes when it becomes a
-        link id: less a whitespace character after another, less each
-        backslash kramdown's escapes drop, and one more for each letter
-        whose lower case is two (only U+0130)."""
-        text = self.text
-        change = [0] * (len(text) + 1)
-        for match in re.finditer(f'(?<={_S}){_S}|İ', text):
-            change[match.start() + 1] += 1 if match.group() == 'İ' else -1
-        for match in re.finditer(r'\\+', text):
-            start, end = match.span()
-            for k in range(start, end - 1, 2):
-                change[k + 1] -= 1
-            if (end - start) % 2 and end < len(text) and text[end] in _KRAMDOWN_ESCAPABLE:
-                change[end] -= 1
-        return list(itertools.accumulate(change))
-
-
 class _Frame:
     """A stretch a walk reads: a link's or image's text, to the `]` that
     ends it, or an HTML element's content, to its closing tag."""
@@ -299,6 +197,7 @@ class _Scan:
         # crosses one. What kramdown reads none of is skipped.
         blocks = _Blocks(text)
         self.regions = list(blocks.regions)
+        self.block_html = [(start, end) for kind, start, end in blocks.regions if kind == 'raw']
         self.ends = sorted(end for _, end in blocks.units) + [len(text)]
         self.blocks = sorted(blocks.skips)
         self.definitions = blocks.definitions
@@ -314,11 +213,15 @@ class _Scan:
         self.no_close = {}
         # The elements open in this paragraph, innermost last, as
         # (name, raw, closing tag); and where the raw content began.
+        # An `a` element's entry also holds where its content starts,
+        # others None; the content of each `a` element read, as (start,
+        # end), is kept in `anchors`.
         self.open, self.paragraph_end, self.raw_from = [], None, None
+        self.anchors = []
         # The links and images whose text is being read, innermost last, as
         # (the `]` ending the text, where the link ends, how many elements
-        # were open when it began); and the text of each image.
-        self.links, self.images = [], []
+        # were open when it began); and the text of each image and of each link.
+        self.links, self.images, self.link_texts = [], [], []
         # The end of the last token read, and whether it made an element,
         # which a span IAL needs just before it.
         self.last = (0, False)
@@ -363,7 +266,7 @@ class _Scan:
         i = 0
         while i is not None:
             i = self.step(i)
-        self.end_paragraph(len(self.text))
+        self.end_paragraph(self.paragraph_end if self.open else len(self.text))
         return self.regions
 
     def raw(self):
@@ -401,10 +304,64 @@ class _Scan:
             return self.paragraph_end
         return self.html(lt)
 
+    def block_anchors(self):
+        """Read each block HTML element as kramdown reads its raw content,
+        for the `a` elements it holds, which it closes at the end of the
+        block. The regions this reading finds besides are not kept: the
+        block is one already. A `script` or `style` element's content is
+        text, which holds no element."""
+        regions, text = self.regions, self.text
+        for start, end in self.block_html:
+            tag = _OPEN_TAG.match(text, _LEAD.match(text, start).end())
+            name, _, closing = _element_reading(tag, True)
+            if name in _RAW_TEXT:
+                continue
+            self.regions, self.raw_from, self.paragraph_end = [], start, end
+            self.open = [(name, True, closing, None)]
+            i = tag.end()
+            while self.open and i < end:
+                i = self.block_step(i, end)
+            self.end_paragraph(end)
+        self.regions, self.open, self.raw_from = regions, [], None
+
+    def block_step(self, i, end):
+        """In block HTML a processing instruction is read before a tag, and
+        the tag of a block element opens one, unless it is the innermost
+        element's close (parser/html.rb:151-195); the rest is read as raw
+        content."""
+        text = self.text
+        lt = text.find('<', i, end)
+        if text.startswith('<?', lt):
+            close = self.find_close('?>', lt + 2, end)
+            if close != -1:
+                return close + 2
+        match = _OPEN_TAG.match(text, lt, end) if lt != -1 else None
+        if match and not self.open[-1][2].match(text, lt, end):
+            past = self.block_tag(match, end)
+            if past is not None:
+                return past
+        return self.raw_step(i)
+
+    def block_tag(self, match, end):
+        """Past the opening tag *match* in block HTML when it is read there
+        and not in raw content, or None: a `script` or `style` element's
+        content is text to its closing tag, in any case, or to the end of
+        the block, closed tag or not (parser/html.rb:101, 128-138); a block
+        element's tag opens it."""
+        name, _ = _tag_name(match)
+        if name in _RAW_TEXT:
+            close = _closing_tag(name, True).search(self.text, match.end(), end)
+            return close.end() if close else end
+        if name in _BLOCK_ELEMENTS and not (match.group(4) or name in _WITHOUT_BODY):
+            self.open.append((name, True, _closing_tag(name, True), None))
+            return match.end()
+        return None
+
     def end_paragraph(self, end):
         """Close what is open at the end of a paragraph, as kramdown does."""
         if self.raw_from is not None:
             self.regions.append(('raw', self.raw_from, end))
+        self.anchors += [(content, end) for *_, content in self.open if content is not None]
         self.open, self.raw_from = [], None
 
     def bracket(self, i):
@@ -430,8 +387,7 @@ class _Scan:
         end = None if close is None else self.link_end(close, start)
         if end is not None:
             self.links.append((close, end, len(self.open)))
-            if image:
-                self.images.append((start, close))
+            (self.images if image else self.link_texts).append((start, close))
         return self.mark(start, False)
 
     def close_bracket(self, i):
@@ -502,10 +458,12 @@ class _Scan:
             self.raw_from = None
         elif not self.raw() and not read:
             self.raw_from = i
-        self.open.append((name, not read, closing))
+        self.open.append((name, not read, closing, match.end() if name == 'a' else None))
 
     def close_element(self, i, end):
-        was_raw = self.open.pop()[1]
+        _, was_raw, _, content = self.open.pop()
+        if content is not None:
+            self.anchors.append((content, i))
         if was_raw and not self.raw():
             self.regions.append(('raw', self.raw_from, end))
             self.raw_from = None
@@ -933,6 +891,31 @@ def link_destinations(text):
     reference's id, and a link definition line. kramdown prints these as
     written, in an attribute or not at all."""
     return [(start, end) for kind, start, end in unread_regions(text) if kind == 'destination']
+
+
+def link_texts(text):
+    """The text of every link in an answer, as (start, end) offsets inside its brackets, in
+    order. An image is not a link, and a reference link counts only when its definition
+    exists."""
+    scan = _Scan(text)
+    scan.run()
+    return sorted(scan.link_texts)
+
+
+def anchor_texts(text):
+    """The content of every raw `<a>` element in an answer, as kramdown
+    reads span HTML, as sorted (start, end) offsets: from the end of its
+    start tag to the start of its end tag, or, when it is never closed, to
+    the end of its paragraph, where kramdown closes it. A tag kramdown reads
+    as text (in code, a comment or an attribute, or one it cannot parse)
+    opens nothing, and a self-closed `<a/>` has no content. Inside block
+    HTML, whose content kramdown reads as raw HTML, an `a` element is read
+    the same way and closes at the end of the block. Elements may nest, so
+    regions may overlap."""
+    scan = _Scan(text)
+    scan.run()
+    scan.block_anchors()
+    return sorted(scan.anchors)
 
 
 def image_texts(text):

@@ -223,6 +223,7 @@ FRAMEWORK_FILES = {
     'scripts/telar/images.py': 'Image syntax and captions',
     'scripts/telar/jekyll_urls.py': 'How Jekyll names a page\'s address and the file it writes, for glossary pages — imported by the build',
     'scripts/telar/kramdown_blocks.py': 'Reads block structure as kramdown does, for the code span finder — imported by the build',
+    'scripts/telar/kramdown_index.py': 'Positions in an answer found once, for the code span finder — imported by the build',
     'scripts/telar/latex.py': 'Mathematics protection and the shared markdown converter',
     'scripts/telar/markdown.py': 'Panel markdown pipeline',
     'scripts/telar/pages.py': 'User pages for the pages collection — imported by the build',

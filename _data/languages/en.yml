@@ -355,6 +355,7 @@ errors:
 
     # Glossary link errors
     glossary_term_not_found: "the entry '<strong>{{ term_id }}</strong>' does not exist in your glossary. Check that it matches the <code>term_id</code> of a row in your glossary spreadsheet or of a file in <code>telar-content/texts/glossary/</code>."
+    glossary_term_in_link_text: "the entry '<strong>{{ term_id }}</strong>' is inside the text of a link, so it is shown as ordinary text and does not open the glossary. Move it outside the link so it opens the glossary."
 
     # Step answer limits
     answer_image_dropped: "An image or embed in the answer to step {{ step }} of `{{ story }}` was removed. A step's answer is plain prose: put the image in a layer panel, or make it the step's object."
