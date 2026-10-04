@@ -33,6 +33,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
+from telar.code_spans import answer_regions
 from telar.processors.stories import _answer_maths_for_kramdown, _prepare_answer_maths
 
 REPO = Path(__file__).resolve().parents[2]
@@ -174,6 +175,60 @@ class TestALongMalformedAnswerIsReadInLinearTime:
         started = time.perf_counter()
         _answer_maths_for_kramdown(answer)
         assert time.perf_counter() - started < 1.0
+
+
+# Links, images, references, IALs and extensions left open or nested,
+# 20,000 of each: each opener starts a reading of its text, which must not
+# read again what an earlier one read.
+_N = 20000
+_LINKS = {unit: unit * _N for unit in [
+    '[', '[`', '![', '[^a', '[^a]', '[a](', '[a](<', '[a](b "x', '[x]( (', '[`](', '[a](((',
+    '[[a](b)', '[<span>', '[a <code>]', '`a`{: ', '{::comment}', '[a](b){:x', '[a](b){:x}{:']}
+_LINKS.update({
+    'parentheses': '[a](' + '(' * _N,
+    'titles': '[a](b "' + '" x' * _N,
+    'brackets': '[' * _N + ']' * _N,
+    'images': '![' * _N + '](x)' * _N,
+    'code in destinations': '[' + '[a](`)`[' * _N,
+    'runs in destinations': '[' + ''.join('[a](' + '`' * (i % 8 + 1) + ')`[' for i in range(_N)),
+    'extension tags': '{::comment ' * _N + '}',
+    'references': '[r]: u\n\n' + '[' * _N + 'r' + ']' * _N,
+    'many definitions': (''.join('[' + 'r' * k + ']: u\n' for k in range(1, 201)) + '\n'
+                         + '[' * _N + 'r' + ']' * _N),
+    'references and code': '[a]: u\n\n' + '[a`' * _N,
+    'references opened': '[a]: u\n\n' + '[a][' * _N,
+    'a definition line': '[a]: u' + ' "x' * _N,
+})
+# A link's text holding an element, code, maths, a comment or an extension
+# that runs to the end of the paragraph, opened 20,000 times.
+_LINKS.update({f'element {inner}': f'[[x]({inner})' * _N + '`z`' for inner in [
+    '<code>', '<b>', '<span>', '<u markdown="span">', '$$', '`', '<!--', '{::comment}',
+    '<code>`']})
+_LINKS['element runs'] = ''.join('[[x](' + '`' * (i % 8 + 1) + ')' for i in range(_N)) + '`z`'
+
+
+class TestALongLinkAnswerIsReadInLinearTime:
+    """Whether a `[` opens a link is settled by reading its text; those
+    readings share what they find, so 20,000 of any of these take well
+    under a second, and nesting 20,000 deep needs no recursion."""
+
+    @pytest.mark.parametrize('unit', list(_LINKS))
+    def test_bounded(self, unit):
+        started = time.perf_counter()
+        answer_regions(_LINKS[unit])
+        assert time.perf_counter() - started < 1.0
+
+    def test_backtick_runs_each_a_new_length(self):
+        # Every run is longer than any after it, so none closes, and each
+        # length is searched for once: 4,800 runs, 11.5 million characters.
+        answer = 'a ' + ''.join('`' * k + 'x' for k in range(4800, 0, -1))
+        started = time.perf_counter()
+        answer_regions(answer)
+        assert time.perf_counter() - started < 1.0
+
+    def test_nesting_needs_no_recursion(self):
+        answer_regions('[' * _N + 'a' + ']' * _N + '(b)')
+        answer_regions('![' * _N + '<span>' * _N + '`x`')
 
 
 class TestTheColumn:

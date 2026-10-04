@@ -33,138 +33,88 @@ text, and every other element (`code`, `kbd`, `u`, `script`, an unknown
 tag) is raw to its own closing tag, or to the end of the block; a
 `markdown` attribute changes which. A block that opens with `\\$$`, whose
 first `$$` after it ends a line, is maths: kramdown drops that backslash.
+
+Links and images are read as parse_link reads them (parser/kramdown/
+link.rb). A link's text is read for spans, counting brackets, to the `]`
+that closes it in its paragraph; a `]` inside code, HTML, maths, an
+escape, an IAL or an extension is not counted, and inside the text a `[`
+opens no link, though an image is still read. After the text comes a
+destination in parentheses, which may hold spaces, line breaks and
+parentheses nested to any depth, and ends at whitespace before a title;
+one in angle brackets; or a reference, which is a link only when a link
+definition in the text has its id. Destination, title and id are read for
+nothing, and so is a link definition line. Where there is no link, its
+opening is text. A footnote marker `[^…]` is never a link. An IAL `{:…}`
+after an element, and a `comment` or `nomarkdown` extension, print
+nothing, so code inside them is not code; after text, an IAL is text.
+
 Not modelled, all rare in an answer: a definition list's content past its
-first paragraph; a `markdown` attribute on an element inside block HTML;
-an IAL over several lines; a setext heading, link or abbreviation
-definition; `~~` strikethrough; autolinks; and a code span begun in a
-link's text and closed in its destination. The answer's prose rules have
-already flattened list, quote and heading marks.
+first paragraph; a `markdown` attribute on an element inside block HTML,
+and a link definition there; an IAL over several lines; a setext heading
+or abbreviation definition; `~~` strikethrough; autolinks, and a `]` that
+emphasis or an autolink hides inside a link's text; a span IAL after
+emphasis, an entity or a footnote marker with a definition, and `<<` and
+`>>`, with or without an IAL after them; footnote definitions; and what an
+`options` extension changes. The answer's prose rules have already
+flattened list, quote and heading marks.
 
 In a panel, which reaches the glossary pass as HTML, a backtick is a
 character and code is an element: a raw `<code>`, `<pre>`, `<kbd>` or
 `<samp>` with its content, which is also what markdown's code spans and
 blocks become.
 
+Blocks are read by `telar.kramdown_blocks`.
+
 Version: v1.8.0
 """
 
 import bisect
-import functools
 import itertools
 import re
 
-# Whitespace as kramdown's Ruby `\s` has it: ASCII only, so a no-break
-# space is not whitespace.
-_SPACE = ' \t\n\r\f\v'
-_S = r'[ \t\n\r\f\v]'
-# An element or attribute name, as REXML's UNAME_STR.
-_NAME = r'(?:[^\W\d][-\w.]*:)?[^\W\d][-\w.]*'
+from telar.kramdown_blocks import (_BLOCK_ELEMENTS, _CLOSE_TAG, _INDENT, _KNOWN, _OPEN_TAG,
+                                   _READ_MODEL, _S, _SPACE, _WITHOUT_BODY, _attributes,
+                                   _Blocks, _closing_tag, _link_id)
+# Its tests import it from telar.code_spans.
+from telar.kramdown_blocks import _FenceCloses  # noqa: F401
 
 # What kramdown reads before a backtick, at the same position: a backslash
-# escape (its own list of escapable characters), HTML, a link's
+# escape (GFM's list of escapable characters, gfm.rb:190), HTML, a link's
 # destination, and `$$…$$` within a paragraph.
-_ESCAPE = re.compile(r'\\[\\.*_+`<>()\[\]{}#!:|"\'$=-]')
-_OPEN_TAG = re.compile(
-    rf'<((?>{_NAME})){_S}*((?>{_S}+{_NAME}(?:{_S}*={_S}*(?:\w+|("|\').*?\3))?)*){_S}*(/)?>',
-    re.DOTALL)
-_CLOSE_TAG = re.compile(rf'</({_NAME}){_S}*>')
-_ATTRIBUTE = re.compile(rf'{_S}*({_NAME})(?:{_S}*={_S}*(?:(\w+)|("|\')(.*?)\3))?', re.DOTALL)
-# kramdown's HTML content model. Inside a paragraph, a block element's tag
-# is text; a body-less or self-closed tag is only a tag; the content of an
-# element of the span or block model is read; every other element, known or
-# not, is raw.
-_BLOCK_ELEMENTS = frozenset('''
-    address article aside applet body blockquote caption col colgroup dd div
-    dl dt fieldset figcaption footer form h1 h2 h3 h4 h5 h6 header hgroup hr
-    html head iframe legend menu li main map nav ol optgroup p pre section
-    summary table tbody td th thead tfoot tr ul'''.split())
-_SPAN_ELEMENTS = frozenset('''
-    a abbr acronym b big bdo br button cite code del dfn em i img input ins
-    kbd label mark option q rb rbc rp rt rtc ruby samp select small span
-    strong sub sup time tt u var'''.split())
-_WITHOUT_BODY = frozenset('''
-    area base br col command embed hr img input keygen link meta param source
-    track wbr'''.split())
-_READ_MODEL = frozenset('''
-    address applet article aside blockquote body dd details div dl fieldset
-    figure figcaption footer form header hgroup iframe li main map menu nav
-    noscript object section summary td
-    a abbr acronym b bdo big button cite caption del dfn dt em h1 h2 h3 h4 h5
-    h6 i ins label legend optgroup p q rb rbc rp rt rtc ruby select small span
-    strong sub sup th tt'''.split())
-_RAW_MODEL = frozenset('script style math option textarea pre code kbd samp var'.split())
-# A known name is matched without regard to case, and read in lower case.
-_KNOWN = _BLOCK_ELEMENTS | _SPAN_ELEMENTS | _WITHOUT_BODY | _READ_MODEL | _RAW_MODEL
-# A link's destination, after the `]` that ends its text; the text holds
-# spans like any other.
-_DESTINATION = re.compile(r'\((?:[^()\s]|\([^()]*\))*(?:\s+(?:"[^"]*"|\'[^\']*\'))?\)')
-_MATHS = re.compile(r'\$\$.*?\$\$', re.DOTALL)
-_NEXT = re.compile(r'[\\<\[$`]')
+_ESCAPE = re.compile(r'\\[\\.*_+`<>()\[\]{}#!:|"\'$=~-]')
+_NEXT = re.compile(r'[\\<\[\]$`]|!(?=\[)|\{:')
+_LT = re.compile('<')
+_BACKTICKS = re.compile('`+')
+
+# Links and images, as parse_link reads them (parser/kramdown/link.rb).
+# A footnote marker is read before a link, and is text without a
+# definition (footnote.rb:37, 40-59; ALD_ID_NAME, ASCII `\w[\w-]*`).
+_FOOTNOTE_MARKER = re.compile(r'\[\^[A-Za-z0-9_][A-Za-z0-9_-]*\]')
+# A reference's explicit id after the text's `]` (link.rb:55).
+_REFERENCE_ID = re.compile(rf'{_S}*?\[([^\]]*)\]')
+# The quote opening a title (link.rb:56), and each quote that can close
+# one: followed by whitespace and `)`.
+_TITLE_OPEN = re.compile(rf'{_S}*(["\'])')
+_TITLE_CLOSE = re.compile(rf'(["\']){_S}*\)')
+# Whitespace before a quote, which ends a destination in parentheses
+# (LINK_PAREN_STOP_RE, link.rb:54).
+_SPACE_QUOTE = re.compile(rf'{_S}(?=["\'])')
+# The escapes a reference's text loses when it is its own id: kramdown's
+# list (escaped_chars.rb:14), not GFM's.
+_KRAMDOWN_ESCAPE = re.compile(r'\\([\\.*_+`<>()\[\]{}#!:|"\'$=-])')
+_KRAMDOWN_ESCAPABLE = frozenset('\\.*_+`<>()[]{}#!:|"\'$=-')
+# Span extensions (extensions.rb:152-153, 187): a start tag's name, a
+# stop tag, and the names kramdown knows (96-137).
+_EXTENSION_NAME = re.compile(r'\{::([A-Za-z0-9_]+)')
+_EXTENSION_STOP = re.compile(r'\{:/([A-Za-z0-9_][A-Za-z0-9_-]*)?\}')
+_EXTENSION_STOPS = re.compile(r'\{:/(comment|nomarkdown|options)?\}')
+_EXTENSIONS = frozenset({'comment', 'nomarkdown', 'options'})
 # A paragraph opening with `\$$` (after up to three spaces) whose first
 # `$$` after that is followed only by whitespace to the end of its line:
 # kramdown's block maths start, which drops the backslash and leaves the
 # rest to the paragraph.
 _ESCAPED_BLOCK_MATHS = re.compile(r' {0,3}(\\)\$\$')
 _LINE_END = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
-
-# kramdown's blocks, as far as they bound span syntax (GFM input, with its
-# paragraph_end quirk: parser/kramdown/paragraph.rb, kramdown-parser-gfm).
-# A line holding only whitespace.
-_BLANK = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
-# The first line of an indented code block, which holds text.
-_INDENTED = re.compile(r'(?:\t| {4})[ \t]*[^ \t\n\r\f\v]')
-# An IAL line. kramdown's may run over several lines; one on a line of its
-# own is read, which keeps the search to the line.
-_IAL = r' {0,3}\{:(?![:/])(?:\\\}|[^}\n])+\}[ \t\r\f\v]*(?:\n|\Z)'
-_IAL_LINE = re.compile(_IAL)
-_EOB_LINE = re.compile(r'\^[ \t\r\f\v]*(?:\n|\Z)')
-# A heading line, and the closing marks its text loses: with no text left,
-# it is not a heading.
-_ATX_LINE = re.compile(r'#{1,6}[\t ]+([^\n]*)')
-_ATX_CLOSE = re.compile(r'[\t ]#+\Z')
-_DEFINITION_LINE = re.compile(r' {0,3}:[\t |]')
-# A fenced code block (GFM's FENCED_CODEBLOCK_MATCH): three or more of `~`
-# and backticks in any mix, closed by the same run followed by any more of
-# its last character.
-_FENCE = re.compile(rf' {{0,3}}(([~`]){{3,}}){_S}*?(?:[^ \t\n\r\f\v]+?(?:\?[^ \t\n\r\f\v]*)?)?'
-                    rf'{_S}*?\n.*?^ {{0,3}}\1\2*{_S}*?(?:\n|\Z)', re.DOTALL | re.MULTILINE)
-# The span elements, and script, whose tag opening a line does not end a
-# paragraph.
-_LAZY_SPAN = '|'.join(sorted(_SPAN_ELEMENTS | {'script'}))
-# A line that ends the paragraph above it. A closing tag, or a fence
-# never closed, ends it only for a paragraph to follow, which kramdown
-# joins to it, so neither is listed.
-_PARAGRAPH_END = re.compile(rf'''
-    [ \t\r\f\v]*(?:\n|\Z)
-  | \^[ \t\r\f\v]*(?:\n|\Z)
-  | {_IAL.replace(' {0,3}', '[ ]{0,3}', 1)}
-  | [ ]{{0,3}}<(?>(?!(?:{_LAZY_SPAN})\b){_NAME})
-  | [ ]{{0,3}}(?:[+*-]|[0-9]+\.)[\t |]
-  | \#{{1,6}}[\t ]
-  | [ ]{{0,3}}:[\t |]
-  | [ ]{{0,3}}>
-  | [ ]{{0,3}}[~`]{{3,}}
-''', re.VERBOSE)
-_PROCESSING_INSTRUCTION = re.compile(r'<\?.*?\?>', re.DOTALL)
-_COMMENT_TOKEN = re.compile(r'<!--.*?-->', re.DOTALL)
-_CDATA_TOKEN = re.compile(r'<!\[CDATA\[.*?\]\]>', re.DOTALL)
-_LEAD = re.compile(r' {0,3}')
-_INDENT = re.compile(r'[ \t]*')
-_TRAILING = re.compile(r'(?:[ \t]*\n)?')
-_FENCE_START = re.compile(r' {0,3}[~`]{3,}')
-# A line that could close a fence: its run alone, then whitespace.
-_FENCE_CLOSE_LINE = re.compile(rf'(?m)^ {{0,3}}([~`]{{3,}}){_S}*?(?:\n|\Z)')
-_FENCE_OPENING = re.compile(rf' {{0,3}}(([~`]){{3,}}){_S}*?(?:[^ \t\n\r\f\v]+?(?:\?[^ \t\n\r\f\v]*)?)?'
-                            rf'{_S}*?\n')
-# Block maths: kramdown's BLOCK_MATH_START without its backslash, which the
-# span reading handles.
-# kramdown's text ends with a line break, so the end of an answer ends a line.
-_BLOCK_MATHS = re.compile(rf' {{0,3}}(\$\$.*?\$\$)({_S}*?\n|{_S}*\Z)?', re.DOTALL)
-_BLOCK_BOUNDARY = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)|\^[ \t\r\f\v]*(?:\n|\Z)'
-                             rf'|{_IAL}')
-# A line opening with a tag, open or closing, of an element that is not a
-# span element: it ends an indented code block.
-_HTML_LINE = re.compile(rf' {{0,3}}</?(?>(?!(?:{_LAZY_SPAN})\b){_NAME})')
 
 # The content stops at the next opening of the same element, so an element
 # that is never closed does not make the search rescan the rest of the text.
@@ -192,340 +142,152 @@ def _read_content(name, attributes, inside_raw):
     return name in _READ_MODEL and not inside_raw
 
 
-# The letters Ruby's case-insensitive match folds with a letter outside
-# ASCII: the long s and the Kelvin sign. It folds no others with a known
-# element's name, which are ASCII, so not the dotted or dotless i, both of
-# which Python's own case-insensitive match folds with i.
-_RUBY_FOLDS = {'s': 'sS\u017f', 'k': 'kK\u212a'}
+# What a walk's reader returns: go on reading the same frame; and a child
+# frame's result not yet known.
+_CONTINUE = object()
+_PENDING = object()
+# What `extension_end` returns when the braces are not an extension tag.
+_NOT_EXTENSION = object()
 
 
-@functools.lru_cache(maxsize=256)
-def _closing_tag(name, known):
-    """The closing tag of the element *name*: for a known one, in any case,
-    as Ruby's case-insensitive match reads it."""
-    if not known:
-        return re.compile(rf'</{re.escape(name)}{_S}*>')
-    letters = ''.join(f'[{_RUBY_FOLDS.get(char, char + char.upper())}]' if char.isalpha()
-                      else re.escape(char) for char in name)
-    return re.compile(rf'</{letters}{_S}*>')
-
-
-def _attributes(source, known):
-    """The attributes in a tag's *source*, the last of a name winning; a
-    known element's attribute names are read in lower case."""
-    attributes = {}
-    for match in _ATTRIBUTE.finditer(source):
-        if not match.group(1):
-            continue
-        name = match.group(1).lower() if known else match.group(1)
-        attributes[name] = match.group(2) or match.group(4) or ''
-    return attributes
-
-
-class _Blocks:
-    """kramdown's blocks in *text*, as far as span syntax needs them: the
-    stretches it reads span syntax in (a paragraph with the lines kramdown
-    joins to it, a heading, a list item or quote read as one, each term of
-    a definition list), and the stretches it reads none in (a code block,
-    a block HTML element with what it holds, a comment opening a block, an
-    IAL or EOB line)."""
+class _Index:
+    """Positions in a text, each kind found once when first needed, so a
+    search repeated from many starts is a lookup rather than a scan."""
 
     def __init__(self, text):
         self.text = text
-        # (start, end) of each stretch read for spans; the starts of those
-        # that open after a block boundary, where `\\$$` opens block maths.
-        self.units = []
-        self.boundary_starts = []
-        # (start, end) of each stretch read for no spans, and the regions
-        # they hold, as (kind, start, end).
-        self.skips = []
-        self.regions = []
-        self.no_comment_close = False
-        self.fence_closes = None
-        # Whether the block before ended at a blank line, an EOB or IAL
-        # line, or is the start of the text.
-        self.boundary = True
-        pos = 0
-        while pos is not None and pos < len(text):
-            pos = self.block(pos)
+        self.built = {}
 
-    def skip(self, start, end, kind=None):
-        self.skips.append((start, end))
-        if kind:
-            self.regions.append((kind, start, end))
+    def get(self, name):
+        if name not in self.built:
+            self.built[name] = getattr(self, 'build_' + name)()
+        return self.built[name]
 
-    def line_end(self, pos):
-        end = self.text.find('\n', pos)
-        return len(self.text) if end == -1 else end
+    def build_parentheses(self):
+        """The `)` that brings the count from each `(` back to nothing."""
+        matching, opened = {}, []
+        for match in re.finditer(r'[()]', self.text):
+            if match.group() == '(':
+                opened.append(match.start())
+            elif opened:
+                matching[opened.pop()] = match.start()
+        return matching
 
-    def block(self, pos):
-        """Read the block at *pos*; where the next one starts, or None."""
-        blank = _BLANK.match(self.text, pos)
-        if blank:
-            self.boundary = True
-            return blank.end() if blank.end() > pos else None
-        for reader in (self.code_block, self.fenced, self.marker_line, self.block_html,
-                       self.block_maths):
-            end = reader(pos)
-            if end is not None:
-                # An EOB line is a boundary; an IAL line leaves it as it was,
-                # since it belongs to the block before it or after it.
-                self.boundary = (reader == self.marker_line
-                                 and (self.boundary or _EOB_LINE.match(self.text, pos)))
-                return end
-        end = self.paragraph(pos)
-        self.boundary = False
-        return end
+    def build_space_quotes(self):
+        return [match.start() for match in _SPACE_QUOTE.finditer(self.text)]
 
-    def code_block(self, pos):
-        """An indented code block: its lines, and lazy lines after them, to
-        a blank line or a line that ends it."""
+    def build_title_closes(self):
+        """For each quote, where each quote followed by whitespace and `)`
+        starts, and where that `)` ends."""
+        closes = {'"': ([], []), "'": ([], [])}
+        for match in _TITLE_CLOSE.finditer(self.text):
+            starts, ends = closes[match.group(1)]
+            starts.append(match.start())
+            ends.append(match.end())
+        return closes
+
+    def build_angles(self):
+        return ([match.start() for match in re.finditer('>', self.text)],
+                [match.start() for match in re.finditer('\n', self.text)])
+
+    def build_braces(self):
+        """Every `}`, as a backslash before it leaves it: unescaped, or
+        escaped."""
+        unescaped, escaped = [], []
+        for match in re.finditer('}', self.text):
+            k = match.start()
+            (escaped if k and self.text[k - 1] == '\\' else unescaped).append(k)
+        return unescaped, escaped
+
+    def build_backtick_runs(self):
+        """Where each whole run of backticks starts, in order, and a tree of
+        the longest run under each node, the runs its leaves."""
+        starts, lengths = [], []
+        for match in _BACKTICKS.finditer(self.text):
+            starts.append(match.start())
+            lengths.append(match.end() - match.start())
+        size = 1
+        while size < len(lengths):
+            size *= 2
+        longest = [0] * size + lengths + [0] * (size - len(lengths))
+        for node in range(size - 1, 0, -1):
+            longest[node] = max(longest[2 * node], longest[2 * node + 1])
+        return starts, longest, size
+
+    def backtick_run(self, start, length):
+        """Where the first *length* backticks in a row at or after *start*
+        begin, *start* not being inside a run: the start of the first whole
+        run there at least that long, or None."""
+        starts, longest, size = self.get('backtick_runs')
+        node = bisect.bisect_left(starts, start) + size
+        if node - size >= len(starts):
+            return None
+        while longest[node] < length:
+            # Past this subtree: up while it is a right child, then across.
+            while node & 1:
+                node >>= 1
+            if node == 0:
+                return None
+            node += 1
+        while node < size:
+            node = 2 * node if longest[2 * node] >= length else 2 * node + 1
+        return starts[node - size]
+
+    def build_extension_stops(self):
+        stops = {}
+        for match in _EXTENSION_STOPS.finditer(self.text):
+            stops.setdefault(match.group(1) or '', []).append((match.start(), match.end()))
+        return stops
+
+    def build_id_lengths(self):
+        """Prefix sums of how a stretch's length changes when it becomes a
+        link id: less a whitespace character after another, less each
+        backslash kramdown's escapes drop, and one more for each letter
+        whose lower case is two (only U+0130)."""
         text = self.text
-        if not _INDENTED.match(text, pos):
-            return None
-        end = self.line_end(pos)
-        while end < len(text):
-            line = end + 1
-            if (_BLANK.match(text, line) or _IAL_LINE.match(text, line)
-                    or _EOB_LINE.match(text, line) or _HTML_LINE.match(text, line)):
-                break
-            end = self.line_end(line)
-        self.skip(pos, end, 'block')
-        return end
-
-    def fenced(self, pos):
-        match = self.fence(pos)
-        if not match:
-            return None
-        self.skip(pos, match.end(), 'block')
-        return match.end()
-
-    def fence(self, pos):
-        """The fenced code block opening at *pos*, or None. The fence is
-        searched for only when a line after it could close it. The fence's
-        run may be any start of three or more of the opening's, the rest
-        being read as its info string."""
-        opening = _FENCE_OPENING.match(self.text, pos)
-        if not opening:
-            return None
-        if not self.closes().close_after(opening.group(1), opening.end()):
-            return None
-        return _FENCE.match(self.text, pos)
-
-    def closes(self):
-        if self.fence_closes is None:
-            self.fence_closes = _FenceCloses(self.text)
-        return self.fence_closes
-
-    def marker_line(self, pos):
-        """An EOB or IAL line, which prints nothing."""
-        match = _EOB_LINE.match(self.text, pos) or _IAL_LINE.match(self.text, pos)
-        if not match:
-            return None
-        self.skip(pos, match.end())
-        return match.end()
-
-    def block_html(self, pos):
-        """A comment, or an element that is not a span element, opening the
-        block, as kramdown's parse_block_html reads them."""
-        text = self.text
-        tag = _LEAD.match(text, pos).end()
-        if text.startswith('<!--', tag):
-            return self.block_comment(pos, tag)
-        match = _OPEN_TAG.match(text, tag)
-        if not match or match.group(1).lower() in _SPAN_ELEMENTS:
-            return None
-        end = _html_element_end(text, match)
-        if end is None:
-            # Its content is read: only the tag is skipped.
-            return match.end()
-        self.skip(pos, end, 'raw')
-        name = match.group(1).lower()
-        if match.group(4) or name in _WITHOUT_BODY or name in ('script', 'style'):
-            # The line break after it is left, and reads as a blank line.
-            return end
-        return _TRAILING.match(text, end).end()
-
-    def block_comment(self, pos, tag):
-        close = -1 if self.no_comment_close else self.text.find('-->', tag + 4)
-        if close == -1:
-            self.no_comment_close = True
-            return None
-        end = _TRAILING.match(self.text, close + 3).end()
-        self.skip(pos, end)
-        return end
-
-    def block_maths(self, pos):
-        """`$$…$$` opening a block after a boundary and followed by one:
-        maths of its own, which may hold blank lines."""
-        text = self.text
-        match = _BLOCK_MATHS.match(text, pos)
-        if not (self.boundary and match and match.group(2) is not None):
-            return None
-        if not (match.end() == len(text) or _BLOCK_BOUNDARY.match(text, match.end())):
-            return None
-        self.skip(pos, match.end())
-        self.regions.append(('maths', match.start(1), match.end(1)))
-        return match.end()
-
-    def paragraph(self, pos):
-        """A paragraph, heading, list item, quote or definition, read for
-        spans to the line that ends it."""
-        text = self.text
-        if self.boundary:
-            self.boundary_starts.append(pos)
-        end = self.line_end(pos)
-        if _heading(text, pos):
-            self.units.append((pos, end))
-            return end + 1
-        while end < len(text):
-            line = end + 1
-            if _PARAGRAPH_END.match(text, line) and not self.joins(line):
-                break
-            end = self.line_end(line)
-        if end < len(text) and _DEFINITION_LINE.match(text, end + 1):
-            # Each line above a definition is a term of its own.
-            start = pos
-            newline = text.find('\n', start, end)
-            while newline != -1:
-                self.units.append((start, newline))
-                start = newline + 1
-                newline = text.find('\n', start, end)
-            self.units.append((start, end))
-        else:
-            self.units.append((pos, end))
-        return end + 1 if end < len(text) else None
-
-    def joins(self, line):
-        """Whether the line at *line*, which ends a paragraph, opens one that
-        kramdown joins to it: a fence never closed, or a tag that does not
-        open block HTML."""
-        text = self.text
-        lead = _LEAD.match(text, line).end()
-        if _FENCE_START.match(text, line):
-            return not self.fence(line)
-        if _ATX_LINE.match(text, line):
-            return not _heading(text, line)
-        if text.startswith('<', lead) and not _BLANK.match(text, line):
-            match = _OPEN_TAG.match(text, lead)
-            return not match or match.group(1).lower() in _SPAN_ELEMENTS
-        return False
+        change = [0] * (len(text) + 1)
+        for match in re.finditer(f'(?<={_S}){_S}|İ', text):
+            change[match.start() + 1] += 1 if match.group() == 'İ' else -1
+        for match in re.finditer(r'\\+', text):
+            start, end = match.span()
+            for k in range(start, end - 1, 2):
+                change[k + 1] -= 1
+            if (end - start) % 2 and end < len(text) and text[end] in _KRAMDOWN_ESCAPABLE:
+                change[end] -= 1
+        return list(itertools.accumulate(change))
 
 
-class _FenceCloses:
-    """Every line in a text that could close a fence, found once: a run of
-    three or more tildes and backticks alone on its line. A run closes a
-    fence opened by the same run followed by more of its last character, so
-    each is filed in a trie under its stem, the run without the repeats of
-    its last character at its end, and then under that character."""
+class _Frame:
+    """A stretch a walk reads: a link's or image's text, to the `]` that
+    ends it, or an HTML element's content, to its closing tag."""
 
-    def __init__(self, text):
-        self.root = ({}, {})
-        for match in _FENCE_CLOSE_LINE.finditer(text):
-            run = match.group(1)
-            stem = run.rstrip(run[-1])
-            node = self.root
-            for char in stem:
-                node = node[0].setdefault(char, ({}, {}))
-            node[1].setdefault(run[-1], []).append(match.start())
+    __slots__ = ('start', 'pos', 'limit', 'last', 'visited', 'waiting', 'key', 'raw',
+                 'closing', 'fresh')
 
-    def close_after(self, run, pos):
-        """Whether a line starting at or after *pos* closes a fence opened with
-        *run*, or with any start of it three or more long, the rest of which
-        GFM then reads as the info string.
-
-        Each stretch of one character in *run*, from j to e, is where such a
-        start with the stem `run[:j]` ends. Any close line under that stem
-        and character closes one of them when e is at least three, since a
-        close line is itself at least three long. So the trie is walked once
-        along the run."""
-        node, start = self.root, 0
-        while start < len(run):
-            char = run[start]
-            end = start
-            while end < len(run) and run[end] == char:
-                end += 1
-            lines = node[1].get(char)
-            if end >= 3 and lines and lines[-1] >= pos:
-                return True
-            for step in run[start:end]:
-                node = node[0].get(step)
-                if node is None:
-                    return False
-            start = end
-        return False
-
-
-def _heading(text, pos):
-    """Whether the line at *pos* is a heading that holds text."""
-    match = _ATX_LINE.match(text, pos)
-    return bool(match) and bool(_ATX_CLOSE.sub('', match.group(1).strip(_SPACE)).rstrip(_SPACE))
-
-
-def _html_element_end(text, match):
-    """Where the block HTML element opened by *match* ends, or None when
-    kramdown reads its content: past its closing tag, or the end of the
-    text. Its content is raw, as parse_raw_html reads it."""
-    name = match.group(1)
-    known = name.lower() in _KNOWN
-    name = name.lower() if known else name
-    if match.group(4) or name in _WITHOUT_BODY:
-        return match.end()
-    if name in ('script', 'style'):
-        close = _closing_tag(name, True).search(text, match.end())
-        return close.end() if close else len(text)
-    source = match.group(2)
-    if 'markdown' in source.lower():
-        markdown = _attributes(source, known).get('markdown')
-        if markdown in ('span', 'block') or markdown == '1' and name in _READ_MODEL:
-            return None
-    return _raw_html_end(text, match.end(), [(name, known)])
-
-
-def _raw_html_end(text, pos, open_names):
-    """Past the closing tag of the innermost of *open_names*, reading the
-    raw HTML from *pos* as parse_raw_html does, or the end of the text."""
-    while open_names:
-        lt = text.find('<', pos)
-        if lt == -1:
-            return len(text)
-        pos = lt + 1
-        for token in (_COMMENT_TOKEN, _PROCESSING_INSTRUCTION, _CDATA_TOKEN):
-            match = token.match(text, lt)
-            if match:
-                pos = match.end()
-                break
-        else:
-            pos = _raw_html_tag(text, lt, open_names) or pos
-    return pos
-
-
-def _raw_html_tag(text, lt, open_names):
-    """Past the tag at *lt* in raw block HTML, opening or closing an element
-    of *open_names*; None when there is no tag there."""
-    match = _OPEN_TAG.match(text, lt)
-    if match:
-        name = match.group(1)
-        known = name.lower() in _KNOWN
-        name = name.lower() if known else name
-        if name in ('script', 'style'):
-            close = _closing_tag(name, True).search(text, match.end())
-            return close.end() if close else len(text)
-        if not (match.group(4) or name in _WITHOUT_BODY):
-            open_names.append((name, known))
-        return match.end()
-    match = _CLOSE_TAG.match(text, lt)
-    if not match:
-        return None
-    innermost, known = open_names[-1]
-    closing = match.group(1).lower() if known else match.group(1)
-    if closing == innermost:
-        open_names.pop()
-    return match.end()
+    def __init__(self, start, limit, key=None, raw=False, closing=None):
+        self.start = self.pos = start
+        self.limit = limit
+        # The end of the last token read, and whether it made an element:
+        # at the start there is none.
+        self.last = (start, False)
+        # The positions read at this frame's own level, which share its end.
+        self.visited = []
+        # What a child frame's result is for.
+        self.waiting = None
+        # An element's frame: its key, whether its content is raw, and its
+        # closing tag. A text's frame has no key.
+        self.key, self.raw, self.closing = key, raw, closing
+        self.fresh = True
 
 
 class _Scan:
-    """One left-to-right reading of *text*, as kramdown reads span syntax."""
+    """One left-to-right reading of *text*, as kramdown reads span syntax.
+
+    At a `[` or `![`, whether a link or image begins is settled by a walk: a
+    reading of its text that records nothing, to the `]` that ends it, then
+    of its destination or reference. The main reading then goes on inside
+    the text, and at that `]` jumps past the destination, which holds no
+    span syntax."""
 
     def __init__(self, text):
         self.text = text
@@ -536,23 +298,36 @@ class _Scan:
         self.ends = sorted(end for _, end in blocks.units) + [len(text)]
         self.blocks = sorted(blocks.skips)
         self.regions.extend(blocks.regions)
-        # A close searched for and not found stays not found further on in
-        # the same paragraph, so an unmatched opening costs one scan per
-        # kind and paragraph rather than one per opening.
-        self.unclosed = set()
-        # The destination of the link being read, skipped when reached; and
-        # the next `]`, found once for every `[` before it.
-        self.destination = None
-        self.bracket = None
+        self.definitions = blocks.definitions
+        self.definition_lengths = {len(key) for key in self.definitions}
+        # For each needle and paragraph, the lowest start from which the
+        # needle has been searched for and not found.
+        self.no_close = {}
         # The elements open in this paragraph, innermost last, as
         # (name, raw, closing tag); and where the raw content began.
         self.open = []
         self.paragraph_end = None
         self.raw_from = None
+        # The links and images whose text is being read, innermost last, as
+        # (the `]` ending the text, where the link ends, how many elements
+        # were open when it began); and the text of each image.
+        self.links = []
+        self.images = []
+        # The end of the last token read, and whether it made an element,
+        # which a span IAL needs just before it.
+        self.last = (0, False)
+        # The walks' memos: where a text read from a position ends, and
+        # where an element opened at a position ends.
+        self.closes = {}
+        self.element_ends = {}
+        self.index = _Index(text)
         self.dropped = self.dropped_backslashes(blocks.boundary_starts)
         # Where each stretch's text starts, leading spaces off, as kramdown
         # reads it.
         self.block_starts = {0} | {_INDENT.match(text, start).end() for start, _ in blocks.units}
+        self.readers = {'[': self.bracket, '!': self.bang, ']': self.close_bracket,
+                        '{': self.brace, '`': self.backticks, '<': self.html,
+                        '\\': self.backslash, '$': self.dollars}
 
     def dropped_backslashes(self, starts):
         """Every backslash kramdown drops from a block's opening `\\$$`."""
@@ -579,6 +354,8 @@ class _Scan:
         """The end of the paragraph holding *i*."""
         return self.ends[bisect.bisect_left(self.ends, i)]
 
+    # The main reading, which records regions.
+
     def run(self):
         i = 0
         while i is not None:
@@ -595,11 +372,7 @@ class _Scan:
             self.end_paragraph(self.paragraph_end)
         if self.raw():
             return self.raw_step(i)
-        i = self.past_destination(i)
         found = _NEXT.search(self.text, i)
-        if self.destination and (not found or found.start() >= self.destination[0]):
-            i, self.destination = self.destination[1], None
-            return i
         if not found:
             return None
         return self.token(found.start())
@@ -611,16 +384,12 @@ class _Scan:
             return block_end
         if self.open and i >= self.paragraph_end:
             self.end_paragraph(self.paragraph_end)
-        char = self.text[i]
-        if char == '[':
-            return self.link(i)
-        if char == '`':
-            return self.backticks(i)
-        if char == '<':
-            return self.html(i)
-        if char == '\\':
-            return i + 1 if i in self.dropped else self.escape(i)
-        return self.dollars(i)
+        return self.readers[self.text[i]](i)
+
+    def mark(self, end, element):
+        """Note the token just read, ending at *end*; where to go on."""
+        self.last = (end, element)
+        return end
 
     def raw_step(self, i):
         """In raw content only HTML is read: the next tag, or the end of
@@ -637,68 +406,91 @@ class _Scan:
             self.regions.append(('raw', self.raw_from, end))
         self.open, self.raw_from = [], None
 
-    def past_destination(self, i):
-        """*i*, moved past a destination a span begun in the link's text
-        ran into."""
-        if self.destination and i >= self.destination[0]:
-            i, self.destination = max(i, self.destination[1]), None
-        return i
+    def bracket(self, i):
+        """A footnote marker, which is text; a `[` in a link's or image's
+        text, or before `^`, which is text; or a link."""
+        marker = _FOOTNOTE_MARKER.match(self.text, i, self.limit(i))
+        if marker:
+            return self.mark(marker.end(), False)
+        if self.links or self.text.startswith('[^', i):
+            return self.mark(i + 1, False)
+        return self.attempt(i + 1, image=False)
 
-    def link(self, i):
-        if self.bracket is None or self.bracket[0] < i:
-            end = self.text.find(']', i)
-            destination = _DESTINATION.match(self.text, end + 1) if end != -1 else None
-            self.bracket = (len(self.text) if end == -1 else end,
-                            destination.span() if destination else None)
-        if self.bracket[1] and not self.destination:
-            self.destination = self.bracket[1]
-        return i + 1
+    def bang(self, i):
+        """An image, or before `[^` a `!` that is text."""
+        if self.text.startswith('![^', i):
+            return self.mark(i + 1, False)
+        return self.attempt(i + 2, image=True)
 
-    def escape(self, i):
-        match = _ESCAPE.match(self.text, i)
-        return match.end() if match else i + 1
+    def attempt(self, start, image):
+        """A link or image whose text starts at *start*: read on inside it,
+        or, when it is not one, read its opening as text."""
+        close = self.text_end(start)
+        end = None if close is None else self.link_end(close, start)
+        if end is None:
+            return self.mark(start, False)
+        self.links.append((close, end, len(self.open)))
+        if image:
+            self.images.append((start, close))
+        return self.mark(start, False)
+
+    def close_bracket(self, i):
+        """The `]` ending the innermost link's text, past which its
+        destination or reference is skipped; or a `]` that is text."""
+        if self.links and self.links[-1][0] == i:
+            end = self.links.pop()[1]
+            return self.mark(end, True)
+        return self.mark(i + 1, False)
+
+    def brace(self, i):
+        read = self.brace_end(i, self.element_before(i, self.last), self.limit(i))
+        if read is None:
+            return self.mark(i + 1, False)
+        return self.mark(*read)
+
+    def backslash(self, i):
+        if i in self.dropped:
+            return i + 1
+        return self.mark(self.escape_end(i), False)
+
+    def backticks(self, i):
+        end, span = self.code_end(i)
+        if span:
+            self.regions.append(('code', i, end))
+        return self.mark(end, span)
+
+    def dollars(self, i):
+        end, kind = self.maths_end(i)
+        if kind == 'maths':
+            self.regions.append(('maths', i, end))
+        elif kind == 'stray':
+            # No close in its paragraph, so kramdown prints it as it is,
+            # without a backslash it dropped before it.
+            self.regions.append(('stray', i - (i - 1 in self.dropped), end))
+        return self.mark(end, kind == 'maths')
 
     def html(self, i):
-        """Past the HTML at *i*: the close of the innermost open element, a
-        comment, CDATA, a tag read as text, or an opening tag."""
+        """Past the HTML at *i*: the close of the innermost open element,
+        unless it was opened before the link whose text this is, where
+        its closing tag is text; a comment, CDATA, a tag read as text, or
+        an opening tag."""
         text = self.text
         limit = self.limit(i)
-        if self.open:
+        depth = self.links[-1][2] if self.links else 0
+        if len(self.open) > depth:
             match = self.open[-1][2].match(text, i, limit)
             if match:
                 self.close_element(i, match.end())
-                return match.end()
-        end = text.startswith('<!', i) and (self.delimited(i, '<!--', '-->', limit)
-                                           or self.delimited(i, '<![CDATA[', ']]>', limit))
-        if end:
-            if not self.raw() and text.startswith('<![', i):
-                self.regions.append(('cdata', i, end))
-            return end
-        match = _CLOSE_TAG.match(text, i, limit)
-        if match:
-            return match.end()
-        match = _OPEN_TAG.match(text, i, limit)
-        if not match:
-            return i + 1
-        self.open_element(i, match, limit)
-        return match.end()
-
-    def delimited(self, i, opening, closing, limit):
-        """The end of a comment or CDATA opened at *i*, or None."""
-        if not self.text.startswith(opening, i) or (limit, closing) in self.unclosed:
-            return None
-        close = self.text.find(closing, i + len(opening), limit)
-        if close == -1:
-            self.unclosed.add((limit, closing))
-            return None
-        return close + len(closing)
+                return self.mark(match.end(), True)
+        kind, end, match = self.markup(i, limit)
+        if kind == 'cdata' and not self.raw():
+            self.regions.append(('cdata', i, end))
+        if kind == 'open':
+            self.open_element(i, match, limit)
+        return self.mark(end, kind in ('comment', 'tag'))
 
     def open_element(self, i, match, limit):
-        name = match.group(1)
-        known = name.lower() in _KNOWN
-        name = name.lower() if known else name
-        if name in _BLOCK_ELEMENTS or match.group(4) or name in _WITHOUT_BODY:
-            return
+        name, known = _tag_name(match)
         source = match.group(2)
         attributes = _attributes(source, known) if 'markdown' in source.lower() else {}
         read = _read_content(name, attributes, self.raw())
@@ -720,42 +512,394 @@ class _Scan:
         elif not was_raw and self.raw():
             self.raw_from = i
 
-    def dollars(self, i):
-        match = _MATHS.match(self.text, i, self.limit(i))
-        if match:
-            self.regions.append(('maths', i, match.end()))
-            return match.end()
-        if self.text.startswith('$$', i):
-            # No close in its paragraph, so kramdown prints it as it is,
-            # without a backslash it dropped before it.
-            self.regions.append(('stray', i - (i - 1 in self.dropped), i + 2))
-            return i + 2
-        return i + 1
+    # Tokens, read the same by the main reading and by walks.
 
-    def backticks(self, i):
-        text = self.text
-        end = i
-        while end < len(text) and text[end] == '`':
-            end += 1
-        close = self.close(i, end)
-        if close is None:
-            return end
-        self.regions.append(('code', i, close))
-        return close
+    def find_close(self, needle, start, limit):
+        """The first *needle* at or after *start* that ends by *limit*, or
+        -1. Where none is found is remembered as the lowest start from
+        which there is none, so a search from an earlier start stops
+        there."""
+        key = (needle, limit)
+        none_from = self.no_close.get(key)
+        if none_from is not None and start >= none_from:
+            return -1
+        end = limit if none_from is None else min(limit, none_from + len(needle) - 1)
+        found = self.text.find(needle, start, end)
+        if found == -1:
+            self.no_close[key] = start
+        return found
 
-    def close(self, i, end):
-        """Where the run from *i* to *end* closes its span, or None."""
-        run = end - i
+    def code_end(self, i):
+        """Past the backtick run at *i*, and whether it opens a code span."""
+        end = _BACKTICKS.match(self.text, i).end()
         if _literal_single(self.text, i, end, self.block_starts):
+            return end, False
+        run = end - i
+        close = self.index.backtick_run(end, run)
+        if close is None or close + run > self.limit(end):
+            return end, False
+        return close + run, True
+
+    def escape_end(self, i):
+        match = _ESCAPE.match(self.text, i)
+        return match.end() if match else i + 1
+
+    def maths_end(self, i):
+        """Past the `$` at *i*, and what it is: 'maths' for a `$$…$$` span,
+        'stray' for a `$$` with no close in its paragraph, or None."""
+        if not self.text.startswith('$$', i):
+            return i + 1, None
+        close = self.find_close('$$', i + 2, self.limit(i))
+        return (i + 2, 'stray') if close == -1 else (close + 2, 'maths')
+
+    def markup(self, i, limit):
+        """What the `<` at *i* begins, as span HTML: (kind, end, match),
+        the kind being 'comment' or 'tag' (an element with no body),
+        'open' (an element whose content follows), 'cdata' or 'text'."""
+        text = self.text
+        for opening, closing, kind in (('<!--', '-->', 'comment'), ('<![CDATA[', ']]>', 'cdata')):
+            if text.startswith(opening, i):
+                close = self.find_close(closing, i + len(opening), limit)
+                if close != -1:
+                    return kind, close + len(closing), None
+        match = _CLOSE_TAG.match(text, i, limit)
+        if match:
+            return 'text', match.end(), None
+        match = _OPEN_TAG.match(text, i, limit)
+        if not match:
+            return 'text', i + 1, None
+        name, _ = _tag_name(match)
+        if name in _BLOCK_ELEMENTS:
+            return 'text', match.end(), match
+        if match.group(4) or name in _WITHOUT_BODY:
+            return 'tag', match.end(), match
+        return 'open', match.end(), match
+
+    def element_before(self, i, last):
+        """Whether an element ends just before the `{` at *i*, *last* being
+        the last token's end and whether it made one: that token, or in
+        the text after it a smart quote, or a run of `-` or `.` that
+        typographic symbols end (`---` and `--`; `...`)."""
+        end, element = last
+        if end == i:
+            return element
+        char = self.text[i - 1]
+        if char in '"\'':
+            return True
+        if char not in '-.':
+            return False
+        run = i - 1
+        while run > end and self.text[run - 1] == char:
+            run -= 1
+        length = i - run
+        return length % 3 == 0 if char == '.' else length % 3 != 1
+
+    def brace_end(self, i, before, limit):
+        """Past the `{:` at *i*, and whether an element is then the last
+        thing read, *before* saying whether one was just before it; or
+        None when the `{` is text. An extension tag or an IAL, read as
+        parse_span_extensions reads them (extensions.rb:54-94, 187-210)."""
+        text = self.text
+        if text.startswith('{::', i):
+            read = self.extension_end(i, before, limit)
+            if read is not _NOT_EXTENSION:
+                return read
+        elif _EXTENSION_STOP.match(text, i, limit):
             return None
-        limit = self.limit(end)
-        if (limit, run) in self.unclosed:
+        if not before:
             return None
-        close = self.text.find('`' * run, end, limit)
-        if close == -1:
-            self.unclosed.add((limit, run))
+        close = self.brace_close(i + 2, limit)
+        return None if close is None else (close + 1, True)
+
+    def extension_end(self, i, before, limit):
+        """An extension start tag at *i*: past it and its body, with what is
+        then last (`comment` and `nomarkdown` make an element, `options`
+        nothing); None for a name kramdown does not know or a tag with no
+        stop tag, whose `{` is text; or _NOT_EXTENSION."""
+        text = self.text
+        name = _EXTENSION_NAME.match(text, i, limit)
+        if not name:
+            return _NOT_EXTENSION
+        after = name.end()
+        if after < limit and text[after] in _SPACE:
+            close = self.brace_close(after + 1, limit, empty=True)
+            if close is None:
+                return _NOT_EXTENSION
+            closing = close > after + 1 and text[close - 1] == '/'
+        elif text.startswith('}', after):
+            close, closing = after, False
+        elif text.startswith('/}', after):
+            close, closing = after + 1, True
+        else:
+            return _NOT_EXTENSION
+        if name.group(1) not in _EXTENSIONS:
             return None
-        return close + run
+        if closing:
+            return close + 1, before
+        stop = self.extension_stop(name.group(1), close + 1, limit)
+        if stop is None:
+            return None
+        return stop, True if name.group(1) != 'options' else before
+
+    def brace_close(self, start, limit, empty=False):
+        """The `}` closing attributes that start at *start*, as
+        `(?:\\\\\\}|[^}])+\\}` finds it: the first `}` with no backslash
+        before it or, with none, by backtracking the last with one; the
+        attributes may be empty only if *empty*."""
+        if not empty and self.text.startswith('}', start):
+            return None
+        unescaped, escaped = self.index.get('braces')
+        found = bisect.bisect_left(unescaped, start)
+        if found < len(unescaped) and unescaped[found] < limit:
+            return unescaped[found]
+        found = bisect.bisect_left(escaped, limit) - 1
+        if found >= 0 and escaped[found] > start:
+            return escaped[found]
+        return None
+
+    def extension_stop(self, name, start, limit):
+        """Past the first `{:/}` or `{:/name}` at or after *start* in the
+        paragraph, or None."""
+        stops = self.index.get('extension_stops')
+        ends = []
+        for key in ('', name):
+            found = stops.get(key, [])
+            k = bisect.bisect_left(found, (start, 0))
+            if k < len(found) and found[k][1] <= limit:
+                ends.append(found[k])
+        return min(ends)[1] if ends else None
+
+    # Where a link or image ends, once its text has.
+
+    def link_end(self, close, start):
+        """Where the link or image whose text runs from *start* to the `]`
+        at *close* ends, or None when it is not one (link.rb:88-143)."""
+        after = close + 1
+        limit = self.limit(close)
+        if after < limit and self.text[after] == '(':
+            return self.destination_end(after, limit)
+        if not self.definitions:
+            return None
+        return self.reference_end(close, start, limit)
+
+    def reference_end(self, close, start, limit):
+        """Past a reference link's id, or its text when the text is the id,
+        if that id is defined."""
+        match = _REFERENCE_ID.match(self.text, close + 1, limit)
+        if match and match.group(1):
+            key = _link_id(match.group(1))
+        else:
+            lengths = self.index.get('id_lengths')
+            if close - start + lengths[close] - lengths[start] not in self.definition_lengths:
+                return None
+            key = _link_id(_KRAMDOWN_ESCAPE.sub(r'\1', self.text[start:close]))
+        if key not in self.definitions:
+            return None
+        return match.end() if match else close + 1
+
+    def destination_end(self, at, limit):
+        """Past the destination in parentheses at *at*, and its title if it
+        has one, or None."""
+        text = self.text
+        if text.startswith('(<', at):
+            gts, newlines = self.index.get('angles')
+            gt = _next(gts, at + 2)
+            newline = _next(newlines, at + 2)
+            if gt is not None and gt < limit and (newline is None or gt < newline):
+                if text.startswith(')', gt + 1) and gt + 1 < limit:
+                    return gt + 2
+                return self.title_end(gt + 1, limit)
+        close = self.index.get('parentheses').get(at)
+        space = _next(self.index.get('space_quotes'), at)
+        if space is not None and space + 1 < limit and (close is None or space < close):
+            return self.title_end(space + 1, limit)
+        if close is not None and close < limit:
+            return close + 1
+        return None
+
+    def title_end(self, pos, limit):
+        """Past a title at *pos* and the `)` after it, or None."""
+        opening = _TITLE_OPEN.match(self.text, pos, limit)
+        if not opening:
+            return None
+        starts, ends = self.index.get('title_closes')[opening.group(1)]
+        found = bisect.bisect_left(starts, opening.end() + 1)
+        if found < len(starts) and ends[found] <= limit:
+            return ends[found]
+        return None
+
+    # Walks: a reading of a text or an element that records nothing, on a
+    # stack of frames, memoized so that no stretch is read again.
+
+    def text_end(self, start):
+        """The `]` ending a link's or image's text that starts at *start*,
+        or None."""
+        if start in self.closes:
+            return self.closes[start]
+        stack = [_Frame(start, self.limit(start))]
+        value = _PENDING
+        while True:
+            frame = stack[-1]
+            if value is not _PENDING:
+                value = self.resume(frame, value)
+            if value is _PENDING:
+                value = self.read(frame)
+                if isinstance(value, _Frame):
+                    stack.append(value)
+                    value = _PENDING
+                    continue
+            self.settle(frame, value)
+            stack.pop()
+            if not stack:
+                return value
+
+    def settle(self, frame, value):
+        if frame.key is not None:
+            self.element_ends[frame.key] = value
+            return
+        self.closes[frame.start] = value
+        for position in frame.visited:
+            self.closes[position] = value
+
+    def read(self, frame):
+        """Read *frame* on to its end, as a position or None, or to a child
+        frame to read first."""
+        if frame.fresh:
+            frame.fresh = False
+            memo = self.closes if frame.key is None else self.element_ends
+            key = frame.start if frame.key is None else frame.key
+            if key in memo:
+                return memo[key]
+        text, limit = self.text, frame.limit
+        pattern = _LT if frame.raw else _NEXT
+        while True:
+            found = pattern.search(text, frame.pos, limit)
+            if not found:
+                return None
+            i = found.start()
+            if frame.key is None:
+                outcome = self.text_token(frame, i)
+            else:
+                outcome = self.element_token(frame, i)
+            if outcome is not _CONTINUE:
+                return outcome
+
+    def text_token(self, frame, i):
+        """Read the token at *i* in a text: a `]` ends it; a `[` or a
+        footnote marker opens a text inside it, as does the `!` of `![^`;
+        and `![` an image."""
+        text = self.text
+        if text[i] != '{':
+            if i in self.closes:
+                return self.closes[i]
+            frame.visited.append(i)
+        char = text[i]
+        if char == ']':
+            return i
+        if char == '[':
+            marker = _FOOTNOTE_MARKER.match(text, i, frame.limit)
+            return self.child(frame, marker.end() if marker else i + 1, 'bracket')
+        if char == '!':
+            if text.startswith('![^', i):
+                return self.child(frame, i + 1, 'bracket')
+            return self.child(frame, i + 2, i)
+        return self.common_token(frame, i)
+
+    def element_token(self, frame, i):
+        """Read the token at *i* in an element's content, which its closing
+        tag ends. Brackets are text there, and images are read."""
+        text = self.text
+        if text[i] == '<':
+            close = frame.closing.match(text, i, frame.limit)
+            if close:
+                return close.end()
+        if frame.raw:
+            return self.markup_token(frame, i)
+        char = text[i]
+        if char == '[':
+            marker = _FOOTNOTE_MARKER.match(text, i, frame.limit)
+            return self.advance(frame, marker.end() if marker else i + 1, False)
+        if char == ']' or text.startswith('![^', i):
+            return self.advance(frame, i + 1, False)
+        if char == '!':
+            return self.child(frame, i + 2, i)
+        return self.common_token(frame, i)
+
+    def common_token(self, frame, i):
+        char = self.text[i]
+        if char == '`':
+            return self.advance(frame, *self.code_end(i))
+        if char == '\\':
+            return self.advance(frame, i + 1 if i in self.dropped else self.escape_end(i), False)
+        if char == '$':
+            end, kind = self.maths_end(i)
+            return self.advance(frame, end, kind == 'maths')
+        if char == '{':
+            read = self.brace_end(i, self.element_before(i, frame.last), frame.limit)
+            return self.advance(frame, *(read or (i + 1, False)))
+        return self.markup_token(frame, i)
+
+    def markup_token(self, frame, i):
+        kind, end, match = self.markup(i, frame.limit)
+        if kind != 'open':
+            return self.advance(frame, end, kind in ('comment', 'tag'))
+        name, known = _tag_name(match)
+        source = match.group(2)
+        attributes = _attributes(source, known) if 'markdown' in source.lower() else {}
+        read = _read_content(name, attributes, frame.raw)
+        child = _Frame(end, frame.limit, key=(i, frame.raw), raw=not read,
+                       closing=_closing_tag(name, known))
+        frame.waiting = 'element'
+        return child
+
+    def advance(self, frame, end, element):
+        frame.pos, frame.last = end, (end, element)
+        return _CONTINUE
+
+    def child(self, frame, start, waiting):
+        """A text inside *frame* starting at *start*: a bracket's, or, with
+        *waiting* the position of its `![`, an image's."""
+        frame.waiting = waiting
+        return _Frame(start, frame.limit)
+
+    def resume(self, frame, value):
+        """Go on reading *frame* after a child frame that ended at *value*,
+        or failed with None; or end *frame*, as None."""
+        waiting = frame.waiting
+        if waiting in ('element', 'bracket'):
+            if value is None:
+                return None
+            if waiting == 'element':
+                self.advance(frame, value, True)
+            else:
+                self.advance(frame, value + 1, False)
+            return _PENDING
+        end = None if value is None else self.link_end(value, waiting + 2)
+        if end is not None:
+            self.advance(frame, end, True)
+        elif frame.key is not None:
+            # An image that is not one is its `![` as text, and what follows
+            # it is read as the element's content.
+            self.advance(frame, waiting + 2, False)
+        elif value is None:
+            return None
+        else:
+            self.advance(frame, value + 1, False)
+        return _PENDING
+
+
+def _next(positions, start):
+    """The first of sorted *positions* at or after *start*, or None."""
+    found = bisect.bisect_left(positions, start)
+    return positions[found] if found < len(positions) else None
+
+
+def _tag_name(match):
+    """The name of the tag *match* found, in lower case if it is known, and
+    whether it is."""
+    name = match.group(1)
+    known = name.lower() in _KNOWN
+    return (name.lower() if known else name), known
 
 
 def _regions(text):
