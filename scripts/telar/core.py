@@ -105,8 +105,14 @@ def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None,
         # dtype inference reads the whole column, so a flag would otherwise
         # mean one thing in a column with a blank cell and another in a column
         # without one. See TEXT_COLUMNS in telar.csv_utils.
+        # Only a blank cell is missing. pandas' other missing-value tokens
+        # (`NA`, `N/A`, `null`, `None`, `nan`...) are text an author typed,
+        # as the glossary readers and the Compositor read them: an object
+        # titled `NA` is titled `NA`, and the token counts as a cell in the
+        # bilingual header-row test.
         df = pd.read_csv(csv_path, on_bad_lines='warn',
-                         dtype=text_column_dtypes())
+                         dtype=text_column_dtypes(),
+                         keep_default_na=False, na_values=[''])
 
         # Filter out comment rows (first column value starts with #)
         # This handles both # and "# patterns while preserving markdown headers in multi-line cells

@@ -796,10 +796,10 @@ def _apply_coordinate_defaults(df):
     coordinate_defaults = {'x': '0.5', 'y': '0.5', 'zoom': '1'}
     for col, default in coordinate_defaults.items():
         if col in df.columns:
-            # Convert to string first to handle NaN values
+            # Blank cells are '' by now. A typed `nan` is text like `NA`,
+            # and is reported by the coordinate check, not defaulted.
             df[col] = df[col].astype(str)
-            # Set defaults for empty or 'nan' values
-            df.loc[df[col].isin(['', 'nan']), col] = default
+            df.loc[df[col] == '', col] = default
     return df
 
 

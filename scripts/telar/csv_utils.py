@@ -521,12 +521,11 @@ def is_header_row(row_values, sheet_aliases=None):
         valid_names.update(sheet_aliases.values())
 
     # Count how many cells match known column names
-    # A blank cell is absent however the file was read. A sheet read with
-    # `keep_default_na=False` -- which the glossary and object readers do, so
-    # a term titled `NA` survives -- gives '' where an inferring read gives
-    # NaN, and counting '' as populated made the verdict depend on which
-    # reader got there: a bilingual header row of three names padded with two
-    # empty custom columns fell from 100% to 60% and was published as data.
+    # A blank cell is absent however the file was read. The glossary readers
+    # give '' for it and `csv_to_json` gives NaN (both keep `NA` as text),
+    # and counting '' as populated made the verdict depend on which reader
+    # got there: a bilingual header row of three names padded with two empty
+    # custom columns fell from 100% to 60% and was published as data.
     matches = 0
     total = 0
     for val in row_values:

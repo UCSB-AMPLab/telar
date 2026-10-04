@@ -13,9 +13,9 @@ build does three things with them, and they are different acts:
   right while the sheet stayed wrong. The viewer's own per-axis fallback
   (`stepFraming` in `iiif-plate.js`) keeps the step usable meanwhile.
 
-In a build, `n/a`, `NA`, `null` and the other spellings pandas reads as
-missing arrive blank, and are treated as blanks. `process_story` on its own
-has no such reading, so the tests that call it directly report `n/a`.
+`n/a`, `NA`, `null` and the other spellings pandas can read as missing are
+text a build reads as typed, as the Compositor does, so they are reported
+like any other value that is not a number. Only an empty cell is blank.
 
 Version: v1.8.0
 """
@@ -187,13 +187,21 @@ class TestThroughTheRealReader:
         [step2] = [s for s in steps if s.get('step') == '2']
         assert (step2['x'], step2['y']) == ('left', '0.5')
 
-    # pandas reads these as missing before the processor sees them, so a
-    # build treats them as blanks: the default, and nothing said. That
-    # reading is kept, since each of them says "no value".
-    @pytest.mark.parametrize('value', ['n/a', 'N/A', 'NA', 'null', 'None'])
-    def test_a_spelling_pandas_reads_as_missing_is_a_blank(self, site, capsys, tmp_path, value):
+    # pandas would read these as missing; a build reads them as the text
+    # an author typed, so they are reported and left as typed.
+    @pytest.mark.parametrize('value', ['n/a', 'N/A', 'NA', 'null', 'None', 'nan'])
+    def test_a_spelling_pandas_can_read_as_missing_is_reported(self, site, capsys, tmp_path, value):
         site()
         steps = self._build(tmp_path, f'1,Q,A,,{value},0.5,1\n')
+        printed = [l for l in capsys.readouterr().out.splitlines()
+                   if 'not a number' in l]
+        assert len(printed) == 1 and f'`{value}`' in printed[0]
+        [step1] = [s for s in steps if s.get('step') == '1']
+        assert step1['x'] == value
+
+    def test_an_empty_cell_is_still_a_blank(self, site, capsys, tmp_path):
+        site()
+        steps = self._build(tmp_path, '1,Q,A,,,0.5,1\n')
         assert not [l for l in capsys.readouterr().out.splitlines()
                     if 'not a number' in l]
         [step1] = [s for s in steps if s.get('step') == '1']
