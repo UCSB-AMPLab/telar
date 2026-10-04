@@ -5,7 +5,8 @@ Story pages load KaTeX from the CDN after the page itself, so a reader can
 open a panel before it arrives: a deep link naming a layer opens it at load.
 The loader renders that panel when KaTeX arrives. If a KaTeX script fails to
 load, the loader stops, says so in the console, and leaves every formula as
-the author wrote it.
+the author wrote it. A page that holds no maths loads KaTeX when the glossary
+panel fetches a term that does.
 
 The KaTeX scripts are held or failed with page.route, so the order is the
 same on every run. The panel is the second layer of the second step of
@@ -22,6 +23,8 @@ Version: v1.8.0
 """
 
 import re
+
+import pytest
 
 from playwright.sync_api import expect
 
@@ -66,3 +69,42 @@ def test_a_failed_katex_script_leaves_the_formulas_as_written(page, base_url):
     expect(content).to_contain_text(SOURCE, timeout=15000)
     assert content.locator(".katex").count() == 0
     assert page.evaluate("typeof window.telarRenderLatex") == "undefined"
+
+
+# A term whose definition holds inline maths, opened from pages that hold
+# none: an ordinary page and a story. Neither loads KaTeX for itself.
+TERM_WITH_MATHS = "/glossary/lfix-overlap/"
+
+
+@pytest.mark.parametrize("path", ["/objects/", "/stories/motion-check/"])
+def test_a_term_with_maths_is_rendered_on_a_page_without_any(page, base_url, path):
+    page.goto(f"{base_url}{path}")
+    assert page.evaluate("typeof window.telarRenderLatex") == "undefined"
+
+    page.evaluate("""url => {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'glossary-inline-link';
+        link.dataset.termId = 'lfix-overlap';
+        link.dataset.termUrl = url;
+        link.textContent = 'Overlap fixture';
+        document.body.prepend(link);
+        link.click();
+    }""", f"{base_url}{TERM_WITH_MATHS}")
+
+    content = page.locator("#panel-glossary-content")
+    expect(content.locator(".katex").first).to_be_attached(timeout=30000)
+    assert "$x^4$" not in content.inner_text()
+
+
+def test_a_failed_katex_script_on_an_ordinary_page_is_reported_not_thrown(page, base_url):
+    """The term's own page loads KaTeX through _includes/katex.html."""
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.route(KATEX_SCRIPT, lambda route: route.abort())
+    with page.expect_console_message(
+            lambda message: "KaTeX could not be loaded" in message.text, timeout=15000):
+        page.goto(f"{base_url}{TERM_WITH_MATHS}")
+
+    assert errors == []
+    assert "$x^4$" in page.locator(".glossary-content").inner_text()

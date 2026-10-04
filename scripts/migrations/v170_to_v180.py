@@ -95,6 +95,7 @@ FRAMEWORK_FILES = {
     # Includes.
     '_includes/footer.html': 'Site footer',
     '_includes/katex.html': 'KaTeX loading for pages with mathematics',
+    '_includes/katex-loader.html': 'KaTeX loading on request, for stories and the glossary panel',
     '_includes/panels.html': 'Story panels',
     '_includes/share-panel.html': 'Share panel',
     '_includes/story-step.html': 'One story step',
@@ -139,7 +140,7 @@ FRAMEWORK_FILES = {
     'assets/js/README.md': 'How the JavaScript in this directory is organised and rebuilt',
     'assets/js/home-page.js': 'Home page bundle',
     'assets/js/iiif-url-warning.js': 'IIIF URL warning bundle',
-    'assets/js/katex-loader.js': 'Lazy KaTeX loader for story pages',
+    'assets/js/katex-loader.js': 'Lazy KaTeX loader for story pages and the glossary panel',
     'assets/js/object-theme.js': 'Object page theme helpers',
     'assets/js/story-unlock.js': 'Unlocking protected stories',
     'assets/js/telar.js': 'Site-wide panel and glossary behaviour',

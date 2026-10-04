@@ -6,7 +6,8 @@
 
   CDN URLs, version pin, and the delimiter list are read from _data/katex.yml,
   the single source shared with assets/js/katex-loader.js (the lazy loader
-  story pages use, via window.telarKatexConfig set in _layouts/story.html).
+  story pages and the glossary panel use, via window.telarKatexConfig set in
+  _includes/katex-loader.html).
   To bump the KaTeX version, edit _data/katex.yml only.
 
   The trust callback below (which \href URL schemes are permitted) is logic,
@@ -39,6 +40,13 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {
+    // A CDN script that failed to load leaves the formulas as the author
+    // wrote them, which is readable; say why rather than throw.
+    if (typeof renderMathInElement !== 'function') {
+      console.warn('Telar: KaTeX could not be loaded — formulas are shown as written.');
+      return;
+    }
+
     // Render all LaTeX on page load
     var katexDelimiters = {{ site.data.katex.delimiters | jsonify }};
 

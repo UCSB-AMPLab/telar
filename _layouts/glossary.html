@@ -37,7 +37,7 @@ layout: default
       {% assign glossary_kind = glossary_all_kinds | where: "id", page.glossary_kind | first %}
       {% unless glossary_kind %}{% assign glossary_kind = glossary_default_kind %}{% endunless %}
       {% include glossary-kind-text.html kind=glossary_kind part="label" lang=lang %}
-      <div class="glossary-content mt-4" data-glossary-kind="{{ glossary_kind.id | escape }}" data-glossary-kind-label="{{ glossary_kind_text | escape }}">
+      <div class="glossary-content mt-4" data-glossary-kind="{{ glossary_kind.id | escape }}" data-glossary-kind-label="{{ glossary_kind_text | escape }}"{% if page.has_latex %} data-has-latex{% endif %}>
         {{ content }}
       </div>
 

@@ -355,9 +355,12 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
         showKindLabel(kindLabel, glossaryContent.dataset.glossaryKindLabel);
         contentElement.innerHTML = glossaryContent.innerHTML;
 
-        // Re-render LaTeX in fetched glossary content
+        // Render the term's maths. A page whose own content holds none has
+        // not loaded KaTeX; the loader renders this panel once it arrives.
         if (window.telarRenderLatex) {
           window.telarRenderLatex(contentElement);
+        } else if (glossaryContent.hasAttribute('data-has-latex') && window.telarLoadKatex) {
+          window.telarLoadKatex();
         }
       } else {
         throw new Error('Glossary content not found');

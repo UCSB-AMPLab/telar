@@ -27,7 +27,8 @@
   (an empty container is left for story-unlock.js to populate after decryption), so authored
   content never ships in the HTML before the reader supplies the key. KaTeX is loaded lazily by
   assets/js/katex-loader.js, only after storyData (or, for protected stories, has_latex
-  frontmatter) reveals the story uses LaTeX. "Christmas tree mode" is a development flag that
+  frontmatter) reveals the story uses LaTeX, or a glossary term fetched into the panel holds
+  maths. "Christmas tree mode" is a development flag that
   decorates warning headings, via assets/js/christmas-tree-decorator.js.
 {%- endcomment -%}
 <!DOCTYPE html>
@@ -324,27 +325,7 @@
   <script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
 
   <!-- KaTeX for LaTeX rendering (loaded dynamically if story has LaTeX) -->
-  <!-- CDN URLs, version pin, and the delimiter list are read from
-       _data/katex.yml, the single source shared with _includes/katex.html
-       (used by the default layout for non-story pages). To bump the KaTeX
-       version, edit _data/katex.yml only.
-       The loader itself is assets/js/katex-loader.js; this inline script
-       hands it the config plus the Liquid-dependent has_latex flag (protected
-       stories carry no readable steps before unlock, so their flag must ride
-       frontmatter). -->
-  <script>
-    window.telarKatexConfig = {
-      hasLatex: {% if page.has_latex %}true{% else %}false{% endif %},
-      cssUrl: {{ site.data.katex.css | jsonify }},
-      urls: [
-        {{ site.data.katex.js | jsonify }},
-        {{ site.data.katex.auto_render | jsonify }},
-        {{ site.data.katex.mhchem | jsonify }}
-      ],
-      delimiters: {{ site.data.katex.delimiters | jsonify }}
-    };
-  </script>
-  <script src="{{ '/assets/js/katex-loader.js' | relative_url }}"></script>
+  {% include katex-loader.html has_latex=page.has_latex %}
 
   <!-- Telar Core -->
   <script src="{{ '/assets/js/telar.js' | relative_url }}"></script>
