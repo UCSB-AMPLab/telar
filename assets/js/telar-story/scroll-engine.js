@@ -140,9 +140,8 @@ function _stepPx() {
 /**
  * State where a move that has just completed landed, if it is still the move
  * current. The scroll handler reads no frame while the layout and the window
- * disagree, so a move that completes in that interval has left the story's
- * position at wherever the last frame read; a relayout keeps the reader at
- * that position, and would put them back a step.
+ * disagree, so a move completing then leaves the position at the last frame
+ * read, and a relayout would put the reader back a step.
  */
 function _stateLanding(token, position) {
   if (navToken === token) state.scrollPosition = position;
@@ -164,18 +163,15 @@ function _clampPosition(position) {
   return Math.max(0, Math.min(position, totalPositions - 1));
 }
 
-// How far the scroll has to have moved since it last held the scrub open for
-// a frame to count as the reader's scroll still travelling: the half pixel at
-// which Lenis itself calls a smoothed move complete. Lenis completes a move
-// only when its value rounds to its target's rounding, so a target on a half
-// pixel (an odd wheel total under a wheel multiplier of 0.5) is approached from
-// below and never completes: it goes on emitting frames that differ by
-// millionths of a pixel. Read as travel, they would hold the scrub open for
-// good and the gesture would never be carried to a step.
+// How far the scroll must move since it last held the scrub open for a frame
+// to count as still travelling: the half pixel at which Lenis calls a smoothed
+// move complete. Lenis completes a move only when its value rounds to its
+// target's rounding, so a target on a half pixel (an odd wheel total under a
+// wheel multiplier of 0.5) is approached from below and never completes; its
+// frames differ by millionths of a pixel and, read as travel, would hold the
+// scrub open for good and keep the gesture from being carried to a step.
 const SCROLL_MOVING_PX = 0.5;
-
-// The scroll offset at which a frame last held the scrub open.
-let armedAt = 0;
+let armedAt = 0;  // the scroll offset at which a frame last held the scrub open
 
 // How near a whole step counts as resting on it. A scroll lands on fractions
 // of a pixel, and a thousandth of a viewport is under a pixel on every cell.
@@ -317,8 +313,7 @@ export function initScrollEngine(stepCount) {
       // clamped it: the step the snap was heading for is the landing then.
       const layoutStale = remapping || window.innerHeight !== _stepPx();
       const finalPosition = layoutStale && Number.isInteger(snap.currentSnapIndex)
-        ? snap.currentSnapIndex
-        : lenis.animatedScroll / _stepPx();
+        ? snap.currentSnapIndex : lenis.animatedScroll / _stepPx();
       updateScrollPosition(finalPosition);
       writeHash();
       lenis.stop();

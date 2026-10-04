@@ -4013,21 +4013,31 @@
         if (wrapper) observer.observe(wrapper);
       }
     }
+    let loadOpen = false;
     const onFonts = () => {
+      loadOpen = false;
       for (const card of list) bumpContentRevision(card);
       all = true;
       schedule();
+    };
+    const onFontsLoading = () => {
+      loadOpen = true;
+      Promise.resolve(fonts?.ready).then(() => {
+        if (loadOpen) onFonts();
+      });
     };
     const onBanner = () => {
       all = true;
       schedule();
     };
     const fonts = document.fonts;
+    fonts?.addEventListener?.("loading", onFontsLoading);
     fonts?.addEventListener?.("loadingdone", onFonts);
     window.addEventListener("telar:embed-banner", onBanner);
     return () => {
       stopped = true;
       observer?.disconnect();
+      fonts?.removeEventListener?.("loading", onFontsLoading);
       fonts?.removeEventListener?.("loadingdone", onFonts);
       window.removeEventListener("telar:embed-banner", onBanner);
     };
@@ -6221,26 +6231,34 @@
       fraction: SIDE_CARD_VIEWPORT_FRACTION,
       activeIndex: state.currentIndex
     }) : null;
-    const phoneBand = landscapeSideCard && !sideFit && getLayoutMode() === "vertical" && viewportW > viewportH ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION }) : null;
-    for (const card of sideFit ? [] : cards) {
-      clearAnswerFit(card);
-      const runPos = parseInt(card.dataset.runPosition, 10) || 0;
-      if (landscapeSideCard) {
-        _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
-      } else if (getLayoutMode() === "vertical") {
-        card.style.removeProperty("top");
-        card.style.removeProperty("max-height");
-        card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;
-      } else {
-        const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
-        const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
-        card.style.setProperty("top", `${topPx}px`, "important");
-        card.style.removeProperty("max-height");
-        card.style.height = `${cardH}px`;
+    const phoneBand = _phoneBandFor(landscapeSideCard && !sideFit, viewportW, viewportH);
+    if (!sideFit) {
+      for (const card of cards) {
+        _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand);
       }
     }
     const contentSized = (sideFit || landscapeSideCard) && getLayoutMode() !== "vertical";
     _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side);
+  }
+  function _phoneBandFor(eligible, viewportW, viewportH) {
+    return eligible && getLayoutMode() === "vertical" && viewportW > viewportH ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION }) : null;
+  }
+  function _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand) {
+    clearAnswerFit(card);
+    const runPos = parseInt(card.dataset.runPosition, 10) || 0;
+    if (landscapeSideCard) {
+      _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
+    } else if (getLayoutMode() === "vertical") {
+      card.style.removeProperty("top");
+      card.style.removeProperty("max-height");
+      card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;
+    } else {
+      const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
+      const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+      card.style.setProperty("top", `${topPx}px`, "important");
+      card.style.removeProperty("max-height");
+      card.style.height = `${cardH}px`;
+    }
   }
   function _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side) {
     const cardsByScene = {};

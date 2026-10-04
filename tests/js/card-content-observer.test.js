@@ -169,6 +169,41 @@ describe('watchCardContent', () => {
     }
   });
 
+  it('refits on `fonts.ready` after a `loading` with no `loadingdone`, as WebKit behaves', async () => {
+    const { card } = fittedCard(200);
+    const refit = vi.fn();
+    let settle;
+    fonts.ready = new Promise((r) => { settle = r; });
+    watchCardContent([card], refit, { raf: queueFrame });
+
+    fonts.dispatchEvent(new Event('loading'));
+    flushFrames();
+    expect(refit).not.toHaveBeenCalled();
+    settle();
+    await fonts.ready;
+    await Promise.resolve();
+    flushFrames();
+
+    expect(refit).toHaveBeenCalledTimes(1);
+    expect(refit).toHaveBeenCalledWith(null);
+  });
+
+  it('runs one pass for a load that fires `loadingdone` and then settles `fonts.ready`', async () => {
+    const { card } = fittedCard(200);
+    const refit = vi.fn();
+    fonts.ready = Promise.resolve();
+    watchCardContent([card], refit, { raf: queueFrame });
+
+    fonts.dispatchEvent(new Event('loading'));
+    fonts.dispatchEvent(new Event('loadingdone'));
+    flushFrames();
+    await fonts.ready;
+    await Promise.resolve();
+    flushFrames();
+
+    expect(refit).toHaveBeenCalledTimes(1);
+  });
+
   it('re-runs the pass when the embed banner comes or goes', () => {
     const { card } = fittedCard(200);
     const refit = vi.fn();

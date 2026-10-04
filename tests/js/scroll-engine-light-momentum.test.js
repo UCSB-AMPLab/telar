@@ -50,7 +50,7 @@ function play(trace) {
   }
 }
 
-const decay = (n, first, k, dt) => Array.from({ length: n }, (_, i) => [i * dt, Math.round(first * Math.pow(k, i))]);
+const decayingTrace = (n, first, k, dt) => Array.from({ length: n }, (_, i) => [i * dt, Math.round(first * Math.pow(k, i))]);
 
 describe('a wheel gesture on the real Lenis and Snap', () => {
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
   });
 
   /** Play a trace, wait out the tail and any carry, and read where the story rests. */
-  function rest(trace, idleMs = 6000) {
+  function settledStep(trace, idleMs = 6000) {
     play(trace);
     frames(idleMs);
     return state.lenis.animatedScroll / H;
@@ -92,32 +92,32 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
 
   it('a light trace whose total is odd comes to rest on the step it was heading for', () => {
     // 885 raw is a target on a half pixel at a wheel multiplier of 0.5.
-    const trace = decay(30, 70, 0.93, 16);
+    const trace = decayingTrace(30, 70, 0.93, 16);
     expect(raw(trace) % 2).toBe(1);
-    expect(rest(trace)).toBe(4);
+    expect(settledStep(trace)).toBe(4);
     expect(state.scrollPosition).toBe(4);
     expect(document.querySelector('.card-stack').classList.contains('is-scrubbing')).toBe(false);
   });
 
   it('a light trace whose total is even comes to rest on the same step', () => {
-    const trace = decay(30, 70, 0.93, 16);
+    const trace = decayingTrace(30, 70, 0.93, 16);
     trace[0][1] += 1;
     expect(raw(trace) % 2).toBe(0);
-    expect(rest(trace)).toBe(4);
+    expect(settledStep(trace)).toBe(4);
   });
 
   it('a light trace backwards is carried to the step behind', () => {
-    const trace = decay(30, -70, 0.93, 16);
+    const trace = decayingTrace(30, -70, 0.93, 16);
     expect(raw(trace) % 2).toBe(-1);
-    expect(rest(trace)).toBe(2);
+    expect(settledStep(trace)).toBe(2);
   });
 
   it('a trackpad flick lands where the snap takes it', () => {
-    expect(rest(decay(110, 90, 0.96, 16))).toBe(5);
+    expect(settledStep(decayingTrace(110, 90, 0.96, 16))).toBe(5);
   });
 
   it('a hard flick lands where the snap takes it', () => {
-    expect(rest(decay(60, 150, 0.97, 16))).toBe(6);
+    expect(settledStep(decayingTrace(60, 150, 0.97, 16))).toBe(6);
   });
 
   it('slow ticks are carried one step forward once the wheel has been idle', () => {

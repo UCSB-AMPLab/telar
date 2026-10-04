@@ -436,22 +436,33 @@ export function watchCardContent(cards, refit, { raf = (cb) => requestAnimationF
     }
   }
 
+  // A load is refit once, by whichever of `loadingdone` and `fonts.ready`
+  // comes first: WebKit settles `ready` but never fires `loadingdone`, and
+  // the other browsers fire both for the same load.
+  let loadOpen = false;
   const onFonts = () => {
+    loadOpen = false;
     for (const card of list) bumpContentRevision(card);
     all = true;
     schedule();
+  };
+  const onFontsLoading = () => {
+    loadOpen = true;
+    Promise.resolve(fonts?.ready).then(() => { if (loadOpen) onFonts(); });
   };
   const onBanner = () => {
     all = true;
     schedule();
   };
   const fonts = document.fonts;
+  fonts?.addEventListener?.('loading', onFontsLoading);
   fonts?.addEventListener?.('loadingdone', onFonts);
   window.addEventListener('telar:embed-banner', onBanner);
 
   return () => {
     stopped = true;
     observer?.disconnect();
+    fonts?.removeEventListener?.('loading', onFontsLoading);
     fonts?.removeEventListener?.('loadingdone', onFonts);
     window.removeEventListener('telar:embed-banner', onBanner);
   };

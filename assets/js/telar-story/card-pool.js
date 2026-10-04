@@ -609,44 +609,11 @@ function _geometryPass(viewportW, viewportH, changed) {
   const side = sideFit ? fitSideCards(changed || cards, { W: viewportW, H: viewportH,
     peek: peekHeight, fraction: SIDE_CARD_VIEWPORT_FRACTION, activeIndex: state.currentIndex }) : null;
 
-  // A landscape phone's card clears the top controls by the same band. A
-  // short portrait window is not a phone held sideways and keeps the card
-  // the CSS rule gives it.
-  const phoneBand = landscapeSideCard && !sideFit && getLayoutMode() === 'vertical'
-    && viewportW > viewportH
-    ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION })
-    : null;
+  const phoneBand = _phoneBandFor(landscapeSideCard && !sideFit, viewportW, viewportH);
 
-  for (const card of sideFit ? [] : cards) {
-    clearAnswerFit(card);
-    const runPos = parseInt(card.dataset.runPosition, 10) || 0;
-
-    if (landscapeSideCard) {
-      // A landscape phone, a short portrait window, or a short window under the
-      // fixed model: the CSS rule sets `height: auto !important` and the
-      // ceiling, so the card is sized to its content and centred by the height
-      // it renders at. A phone's ceiling and top come from the band under the
-      // top controls.
-      _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
-    } else if (getLayoutMode() === 'vertical') {
-      // getLayoutMode() reads the live matchMedia (self-initialising), so this is
-      // correct even at the init-time call below — before layout-mode.js has
-      // written state.layoutMode (which defaults to 'horizontal' and would wrongly
-      // pick the desktop branch, jamming the portrait card at the top).
-      // Portrait mobile: the card is bottom-anchored by CSS (`top: auto !important`,
-      // `max-height: 40vh`). Remove any inline top so the CSS anchor wins — do NOT
-      // force an !important top here, or the card detaches from the bottom on resize.
-      card.style.removeProperty('top');
-      card.style.removeProperty('max-height');
-      card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;  // capped by the CSS max-height: 40vh
-    } else {
-      // Desktop horizontal: tall side card sized to 80% of the (tall) viewport,
-      // vertically centred. No base CSS `top`, so the inline value drives placement.
-      const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
-      const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
-      card.style.setProperty('top', `${topPx}px`, 'important');
-      card.style.removeProperty('max-height');
-      card.style.height = `${cardH}px`;
+  if (!sideFit) {
+    for (const card of cards) {
+      _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand);
     }
   }
 
@@ -655,6 +622,66 @@ function _geometryPass(viewportW, viewportH, changed) {
   // from those heights.
   const contentSized = (sideFit || landscapeSideCard) && getLayoutMode() !== 'vertical';
   _arrangeMediaScenes(cards, viewportW, viewportH, contentSized, side);
+}
+
+/**
+ * The band a landscape phone's card clears the top controls by, or null. A
+ * short portrait window is not a phone held sideways and keeps the card the
+ * CSS rule gives it.
+ *
+ * @param {boolean} eligible - A landscape side card that the fit model does not govern
+ * @param {number} viewportW - Current viewport width in px
+ * @param {number} viewportH - Current viewport height in px
+ * @returns {{ band: number, pad: number, ceiling: number }|null}
+ */
+function _phoneBandFor(eligible, viewportW, viewportH) {
+  return eligible && getLayoutMode() === 'vertical' && viewportW > viewportH
+    ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION })
+    : null;
+}
+
+/**
+ * Size and place one text card by the layout it is in: sized to its content
+ * for a landscape side card, bottom-anchored by CSS on a portrait layout, or
+ * a tall centred side card on a desktop horizontal layout.
+ *
+ * @param {HTMLElement} card
+ * @param {number} viewportH - Current viewport height in px
+ * @param {number} peekHeight - Pixels each successive card settles lower
+ * @param {boolean} landscapeSideCard - The CSS rule sets the card's height to auto
+ * @param {{ band: number, pad: number, ceiling: number }|null} phoneBand
+ */
+function _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand) {
+  clearAnswerFit(card);
+  const runPos = parseInt(card.dataset.runPosition, 10) || 0;
+
+  if (landscapeSideCard) {
+    // A landscape phone, a short portrait window, or a short window under the
+    // fixed model: the CSS rule sets `height: auto !important` and the
+    // ceiling, so the card is sized to its content and centred by the height
+    // it renders at. A phone's ceiling and top come from the band under the
+    // top controls.
+    _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
+  } else if (getLayoutMode() === 'vertical') {
+    // getLayoutMode() reads the live matchMedia (self-initialising), so this is
+    // correct even when geometry runs at init — before layout-mode.js has
+    // written state.layoutMode (which defaults to 'horizontal' and would wrongly
+    // pick the desktop branch, jamming the portrait card at the top).
+    // Portrait mobile: the card is bottom-anchored by CSS (`top: auto !important`,
+    // `max-height: 40vh`). Remove any inline top so the CSS anchor wins — do NOT
+    // force an !important top here, or the card detaches from the bottom on resize.
+    card.style.removeProperty('top');
+    card.style.removeProperty('max-height');
+    card.style.height = `${viewportH * SIDE_CARD_VIEWPORT_FRACTION}px`;  // capped by the CSS max-height: 40vh
+  } else {
+    // Desktop horizontal: tall side card sized to 80% of the (tall) viewport,
+    // vertically centred. No base CSS `top`, so the inline value drives placement.
+    const cardH = viewportH * SIDE_CARD_VIEWPORT_FRACTION;
+    const topPx = computeCardTop(viewportH, cardH, runPos, peekHeight);
+    card.style.setProperty('top', `${topPx}px`, 'important');
+    card.style.removeProperty('max-height');
+    card.style.height = `${cardH}px`;
+  }
 }
 
 /**

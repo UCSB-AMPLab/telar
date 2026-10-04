@@ -39,7 +39,7 @@ const phoneMedia = (query) => ({
   addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
 });
 
-function resizeTo(W, H) {
+function resizeViewport(W, H) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: W });
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: H });
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -76,7 +76,7 @@ async function openPhone(W, H, contentH) {
     { step: '0', object: '', question: 'intro', answer: '' },
     { step: '1', object: 'obj-a', question: 'q', answer: 'a' },
   ] }, {});
-  resizeTo(W, H);
+  resizeViewport(W, H);
   return document.querySelector('.text-card');
 }
 
@@ -113,7 +113,7 @@ describe('a landscape phone card under the top controls', () => {
     window.__TELAR_CARD_HEIGHT__ = 'fixed';
     const card = await openPhone(932, 430, CONTENT_H);
     expect(card.style.maxHeight).not.toBe('');
-    resizeTo(1280, 800);
+    resizeViewport(1280, 800);
     expect(card.style.maxHeight).toBe('');
     expect(card.style.height).toBe('640px');
   });
