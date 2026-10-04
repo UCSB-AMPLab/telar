@@ -39,6 +39,8 @@ are populated when present, old fields are ignored gracefully.
 Version: v1.8.0
 """
 
+import contextlib
+import io
 import json
 from pathlib import Path
 
@@ -49,6 +51,14 @@ from telar.latex import convert_markdown
 from telar.widgets import process_widgets
 from telar.glossary import GlossaryTerms, process_glossary_links
 from telar.glossary_kinds import resolve_kind
+from telar.processors.stories import (_detect_latex, _limit_answers,
+                                      _prepare_answer_maths, _resolve_answer_glossary)
+
+# Fields a bundle object or step may carry, copied only when it has a value:
+# the step template emits an attribute for any value Liquid finds, and to
+# Liquid an empty string is a value.
+_DEMO_OBJECT_OPTIONAL = ('alt_text', 'media_type')
+_DEMO_STEP_OPTIONAL = ('alt_text', 'page', 'clip_start', 'clip_end', 'loop')
 
 
 def load_demo_bundle():
@@ -183,8 +193,14 @@ def _merge_demo_objects(bundle, data_dir):
                         'source': obj_data.get('source', obj_data.get('location', '')),
                         'credit': obj_data.get('credit', ''),
                         'thumbnail': obj_data.get('thumbnail', ''),
+                        # The gallery's Medium/Genre facet reads `medium`,
+                        # which bundles before it was named call object_type.
+                        'medium': obj_data.get('medium') or obj_data.get('object_type', ''),
                         '_demo': True
                     }
+                    for key in _DEMO_OBJECT_OPTIONAL:
+                        if obj_data.get(key) not in (None, ''):
+                            demo_obj[key] = obj_data[key]
                     user_objects.append(demo_obj)
                     demo_count += 1
 
@@ -233,10 +249,18 @@ def _write_demo_stories(bundle, data_dir):
                         '_demo': True
                     }
 
+                    for key in _DEMO_STEP_OPTIONAL:
+                        if step.get(key) not in (None, ''):
+                            step_data[key] = str(step[key])
+
                     # Process layers
                     _add_demo_layers(step_data, step, story_id, glossary_terms)
 
                     steps.append(step_data)
+
+                _process_demo_answers(steps, story_id, glossary_terms)
+                if _detect_latex(pd.DataFrame(steps).fillna('')):
+                    steps.insert(0, {'_metadata': True, 'has_latex': True})
 
                 with open(story_path, 'w', encoding='utf-8') as f:
                     json.dump(steps, f, indent=2, ensure_ascii=False)
@@ -245,6 +269,28 @@ def _write_demo_stories(bundle, data_dir):
 
             except Exception as e:
                 print(f"  [WARN] Could not create demo story {story_id}: {e}")
+
+
+def _process_demo_answers(steps, story_id, glossary_terms):
+    """Run a demo story's answers through the passes a site's own answers
+    take, in the same order: the text-only rules and word limit, glossary
+    links, and the maths kramdown would misread.
+
+    What the passes report is discarded: the demo bundle's text is not
+    something a site's author can change.
+    """
+    frame = pd.DataFrame({
+        'step': [str(step.get('step', '')) for step in steps],
+        'answer': [step.get('answer') or '' for step in steps],
+    })
+    with contextlib.redirect_stdout(io.StringIO()):
+        frame = _limit_answers(frame, f'demo-{story_id}', [], [])
+        frame = _resolve_answer_glossary(frame, glossary_terms, [])
+        frame = _prepare_answer_maths(frame)
+    for index, step in enumerate(steps):
+        step['answer'] = frame.at[index, 'answer']
+        if 'answer_kramdown' in frame.columns and frame.at[index, 'answer_kramdown']:
+            step['answer_kramdown'] = frame.at[index, 'answer_kramdown']
 
 
 def _add_demo_layers(step_data, step, story_id, glossary_terms):
@@ -311,6 +357,11 @@ def _write_demo_glossary(bundle):
             # page generator makes of an entry with no kind.
             if term_data.get('kind'):
                 entry['kind'] = term_data['kind']
+            related = term_data.get('related_terms')
+            if isinstance(related, str):
+                related = [term.strip() for term in related.split('|')]
+            if related:
+                entry['related_terms'] = [str(term) for term in related if str(term).strip()]
             glossary_data.append(entry)
 
         glossary_json_path = Path('_data/demo-glossary.json')

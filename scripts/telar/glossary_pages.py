@@ -231,6 +231,25 @@ layout: glossary{latex_flag}
         print(f"✓ Generated {filepath}")
 
 
+def _demo_glossary_fields(term, term_id):
+    """The front matter of a demo glossary entry's page."""
+    fields = {'term_id': _as_text(term_id),
+              'title': _as_text(term.get('title', term_id)),
+              'glossary_kind': resolve_kind(
+                  term.get('kind', ''),
+                  where=f"Demo glossary entry '{term_id}'"),
+              'layout': 'glossary',
+              # The layout tests this as a boolean.
+              'demo': True}
+    # A sequence, as a site's entry writes it: the layout iterates it.
+    if term.get('related_terms'):
+        fields['related_terms'] = [_as_text(related)
+                                   for related in term['related_terms']]
+    if has_latex(term.get('content', '')):
+        fields['has_latex'] = True
+    return fields
+
+
 def generate_glossary():
     """Generate glossary markdown files from user content and demo JSON.
 
@@ -297,15 +316,7 @@ def generate_glossary():
 
             filepath = glossary_dir / f"{term_id}.md"
 
-            # Create markdown with frontmatter
-            fields = {'term_id': _as_text(term_id),
-                      'title': _as_text(term.get('title', term_id)),
-                      'glossary_kind': resolve_kind(
-                          term.get('kind', ''),
-                          where=f"Demo glossary entry '{term_id}'"),
-                      'layout': 'glossary',
-                      # The layout tests this as a boolean.
-                      'demo': True}
+            fields = _demo_glossary_fields(term, term_id)
             output_content = ('---\n' + _frontmatter_block(fields)
                               + '---\n\n' + term.get('content', '') + '\n')
 
