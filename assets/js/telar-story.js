@@ -1907,6 +1907,15 @@
     }
     return _sharedAudioContext;
   }
+  function _ensureWaveformContainer(plateEl) {
+    const existing = plateEl.querySelector(".waveform-container");
+    if (existing) return existing;
+    const container = document.createElement("div");
+    container.className = "waveform-container";
+    container.setAttribute("aria-hidden", "true");
+    plateEl.appendChild(container);
+    return container;
+  }
   function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
     const {
       clipStart = 0,
@@ -1943,6 +1952,7 @@
     };
     _audioPlayers.push(wrapper);
     _enforceAudioPoolLimit(sceneIndex);
+    const waveContainer = _ensureWaveformContainer(plateEl);
     loadWaveSurferAPI().then(() => {
       if (wrapper._destroyed) return;
       const peaksFetch = peaksUrl ? fetch(peaksUrl).then((r) => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null);
@@ -1955,13 +1965,6 @@
         const patternUri = _buildPatternDataUri(colors.patternColor);
         plateEl.style.background = `${colors.backgroundColor} ${patternUri} repeat`;
         plateEl.style.backgroundSize = "20px auto";
-        let waveContainer = plateEl.querySelector(".waveform-container");
-        if (!waveContainer) {
-          waveContainer = document.createElement("div");
-          waveContainer.className = "waveform-container";
-          waveContainer.setAttribute("aria-hidden", "true");
-          plateEl.appendChild(waveContainer);
-        }
         const regionsPlugin = window.WaveSurfer.Regions.create();
         const ws = window.WaveSurfer.create({
           container: waveContainer,

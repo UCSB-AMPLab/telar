@@ -289,6 +289,28 @@ export function getSharedAudioContext() {
  * @param {Function} [options.onError]
  * @returns {Object} Player wrapper
  */
+/**
+ * The plate's one waveform container, made if it is not there yet.
+ *
+ * Decorative and display-only: the bars are a picture of the sound, not a
+ * control, so the container is hidden from assistive technology and takes no
+ * pointer events. Its layout is the stylesheet's, which the mobile query
+ * overrides.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {HTMLElement}
+ */
+function _ensureWaveformContainer(plateEl) {
+  const existing = plateEl.querySelector(".waveform-container");
+  if (existing) return existing;
+
+  const container = document.createElement("div");
+  container.className = "waveform-container";
+  container.setAttribute("aria-hidden", "true");
+  plateEl.appendChild(container);
+  return container;
+}
+
 export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
   const {
     clipStart = 0,
@@ -323,6 +345,16 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
   _audioPlayers.push(wrapper);
   _enforceAudioPoolLimit(sceneIndex);
 
+  // Both callers in card-pool.js decide whether a plate needs a player by
+  // asking whether it already holds this container, so it has to exist by the
+  // time this function returns rather than when the load below resolves. A
+  // guard that tests what its own build creates later cannot turn a second
+  // caller away: preload and activation arrive within milliseconds of each
+  // other when a reader crosses several steps at once, both read an empty
+  // plate, and each WaveSurfer appends its own node into whichever container
+  // the first of them eventually made.
+  const waveContainer = _ensureWaveformContainer(plateEl);
+
   loadWaveSurferAPI()
     .then(() => {
       // The wrapper may have been evicted/destroyed while the vendored-bundle
@@ -349,17 +381,6 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
         const patternUri = _buildPatternDataUri(colors.patternColor);
         plateEl.style.background = `${colors.backgroundColor} ${patternUri} repeat`;
         plateEl.style.backgroundSize = "20px auto";
-
-        // Create waveform container (display-only)
-        let waveContainer = plateEl.querySelector(".waveform-container");
-        if (!waveContainer) {
-          waveContainer = document.createElement("div");
-          waveContainer.className = "waveform-container";
-          // Layout handled by CSS class — mobile media query overrides position
-          // Set aria-hidden — decorative, not interactive
-          waveContainer.setAttribute("aria-hidden", "true");
-          plateEl.appendChild(waveContainer);
-        }
 
         // Create Regions plugin instance
         const regionsPlugin = window.WaveSurfer.Regions.create();
