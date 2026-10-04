@@ -321,6 +321,397 @@ def _count_answer_words(text):
     return len(str(text).split())
 
 
+_FENCE_LEAD = re.compile(r'[ \t]*(`+|~+)')
+
+
+def _line_starts(text):
+    """The index at which each line of *text* begins."""
+    starts = [0]
+    pos = text.find('\n')
+    while pos != -1:
+        starts.append(pos + 1)
+        pos = text.find('\n', pos + 1)
+    return starts
+
+
+def _fence_line_openings(text, starts):
+    """For each line, its fence marker, the run of it, and the blanks before."""
+    total = len(starts)
+    marker = [None] * total
+    run = [0] * total
+    lead = [0] * total
+    for i in range(total):
+        found = _FENCE_LEAD.match(text, starts[i])
+        if found:
+            marker[i] = found.group(1)[0]
+            run[i] = len(found.group(1))
+            lead[i] = found.start(1) - starts[i]
+    return marker, run, lead
+
+
+def _longest_runs_after(marker, run):
+    """after[c][i] is the longest run of marker c on any line from i on."""
+    total = len(marker)
+    after = {'`': [0] * (total + 1), '~': [0] * (total + 1)}
+    for i in range(total - 1, -1, -1):
+        for longest in after.values():
+            longest[i] = longest[i + 1]
+        if marker[i]:
+            longest = after[marker[i]]
+            longest[i] = max(longest[i], run[i])
+    return after
+
+
+def _closing_line(marker, run, i, fence):
+    """The first line after *i* with a run of *fence* or more of its marker."""
+    j = i + 1
+    while marker[j] != marker[i] or run[j] < fence:
+        j += 1
+    return j
+
+
+def _fence_block_end(text, end):
+    """*end* moved past trailing blanks and one optional newline."""
+    while end < len(text) and text[end] in ' \t':
+        end += 1
+    if end < len(text) and text[end] == '\n':
+        end += 1
+    return end
+
+
+def _remove_fenced_blocks(text):
+    """*text* without its fenced code blocks, and how many were removed.
+
+    An opening is a line of optional blanks and a run of m >= 3 of one
+    marker, with a newline after the line. Its fence is k markers: the
+    smaller of m and the longest run of that marker opening any later
+    line, and it needs k >= 3 or the line opens nothing. The block ends
+    after the first later line whose run is at least k markers, then that
+    line's trailing blanks and one optional newline. A closing line may
+    carry more markers than k. Reading resumes on the first line start
+    after the block.
+    """
+    starts = _line_starts(text)
+    total = len(starts)
+    marker, run, lead = _fence_line_openings(text, starts)
+    after = _longest_runs_after(marker, run)
+
+    pieces = []
+    kept = 0
+    removed = 0
+    i = 0
+    while i < total:
+        if run[i] >= 3 and i < total - 1:
+            fence = min(run[i], after[marker[i]][i + 1])
+            if fence >= 3:
+                j = _closing_line(marker, run, i, fence)
+                end = _fence_block_end(text, starts[j] + lead[j] + fence)
+                pieces.append(text[kept:starts[i]])
+                kept = end
+                removed += 1
+                i = j + 1
+                continue
+        i += 1
+    pieces.append(text[kept:])
+    return ''.join(pieces), removed
+
+
+_WIDGET_OPEN = re.compile(r'[ \t]*:::[A-Za-z0-9_]+[ \t]*\n')
+_WIDGET_CLOSE = re.compile(r'[ \t]*:::[ \t]*(?=\n|\Z)')
+
+
+def _remove_widget_blocks(text):
+    """*text* without its widget blocks, and how many were removed.
+
+    An opening is a line of optional blanks, `:::`, a name of letters,
+    digits and underscores, and optional blanks. The block ends after the
+    first later line that is `:::` alone between optional blanks, and one
+    optional newline. An opening with no such line after it opens nothing.
+    Reading resumes on the first line start after the block.
+    """
+    starts = _line_starts(text)
+    total = len(starts)
+    # next_close[i] is the first line from i on that is `:::` alone.
+    next_close = [total] * (total + 1)
+    for i in range(total - 1, -1, -1):
+        next_close[i] = i if _WIDGET_CLOSE.match(text, starts[i]) \
+            else next_close[i + 1]
+
+    pieces = []
+    kept = 0
+    removed = 0
+    i = 0
+    while i < total - 1:
+        if _WIDGET_OPEN.match(text, starts[i]) and next_close[i + 1] < total:
+            j = next_close[i + 1]
+            end = _WIDGET_CLOSE.match(text, starts[j]).end()
+            if text[end:end + 1] == '\n':
+                end += 1
+            pieces.append(text[kept:starts[i]])
+            kept = end
+            removed += 1
+            i = j + 1
+        else:
+            i += 1
+    pieces.append(text[kept:])
+    return ''.join(pieces), removed
+
+
+_TABLE_LINEAR = re.compile(
+    r'^[^\n|]*\|[^\n]*\n'
+    r'[ \t]*(?:\|[ \t]*)?:?-{2,}:?[ \t]*'
+    r'(?:\|[ \t]*:?-{2,}:?[ \t]*)*(?:\|[ \t]*)?\n'
+    r'(?:[^\n]*\|[^\n]*\n?)*',
+    re.MULTILINE)
+
+
+def _remove_tables(text):
+    """*text* without its tables, and how many were removed.
+
+    The table rule's language, with each run of blanks and each pipe
+    written once: the rule allows a blank run on both sides of an optional
+    pipe, so a long run of blanks that fails to end the delimiter row can
+    be split between them in as many ways as it has blanks.
+    """
+    return _TABLE_LINEAR.subn('', text)
+
+
+_MEDIA_START = re.compile(
+    r'!\[|<(?:img|iframe|video|audio|embed|object)\b', re.IGNORECASE)
+_MEDIA_TAG = re.compile(r'<(img|iframe|video|audio|embed|object)\b',
+                        re.IGNORECASE)
+_MEDIA_CLOSE = re.compile(r'</(img|iframe|video|audio|embed|object)\s*>',
+                          re.IGNORECASE)
+def _backreference_key(name):
+    """*name* as a case-insensitive backreference compares it: each
+    character by the first character of its lowercase. So `IMG` and `İMG`
+    close `<img>`, and `ımg`, which the name's own pattern matches, does
+    not."""
+    return ''.join(char.lower()[0] for char in name)
+
+
+def _media_index(text):
+    """The positions of brackets, parentheses, angle closes and closing tags."""
+    brackets = [i for i, char in enumerate(text) if char in '[]']
+    parens = [i for i, char in enumerate(text) if char == ')']
+    angles = [i for i, char in enumerate(text) if char == '>']
+    closes = {}
+    for found in _MEDIA_CLOSE.finditer(text):
+        closes.setdefault(_backreference_key(found.group(1)), []).append(
+            (found.start(), found.end()))
+    close_starts = {name: [start for start, _ in spans]
+                    for name, spans in closes.items()}
+    return brackets, parens, angles, closes, close_starts
+
+
+def _alt_end(text, brackets, ends, pos):
+    """Where the alt text that begins at *pos* stops."""
+    size = len(text)
+    path = []
+    while pos not in ends:
+        path.append(pos)
+        at = bisect.bisect_left(brackets, pos)
+        if at == len(brackets):
+            ends[pos] = size
+            break
+        bracket = brackets[at]
+        if text[bracket] == ']':
+            ends[pos] = bracket
+            break
+        nxt = bisect.bisect_left(brackets, bracket + 1)
+        if nxt < len(brackets) and text[brackets[nxt]] == ']':
+            pos = brackets[nxt] + 1
+        else:
+            ends[pos] = bracket
+            break
+    stop = ends[pos]
+    for seen in path:
+        ends[seen] = stop
+    return stop
+
+
+def _image_end(text, s, index, ends):
+    """Where the image starting at *s* ends, or None when it does not."""
+    brackets, parens = index[0], index[1]
+    stop = _alt_end(text, brackets, ends, s + 2)
+    if not text.startswith('](', stop):
+        return None
+    at = bisect.bisect_left(parens, stop + 2)
+    return parens[at] + 1 if at < len(parens) else None
+
+
+def _embed_end(text, s, index):
+    """Where the embed starting at *s* ends, or None when it does not."""
+    angles, closes, close_starts = index[2], index[3], index[4]
+    tag = _MEDIA_TAG.match(text, s)
+    at = bisect.bisect_left(angles, tag.end())
+    if at == len(angles):
+        return None
+    end = angles[at] + 1
+    name = _backreference_key(tag.group(1))
+    starts = close_starts.get(name, [])
+    later = bisect.bisect_left(starts, end)
+    return closes[name][later][1] if later < len(starts) else end
+
+
+def _remove_images_and_embeds(text):
+    """*text* without its images and embeds, and how many were removed.
+
+    An image is `![`, alt text holding balanced single brackets, `](`, and
+    the next `)`. An embed is an opening tag of img, iframe, video, audio,
+    embed or object, up to the next `>`, and through the first later
+    closing tag of the same name (case aside, blanks allowed before its
+    `>`) when there is one. Every search is a lookup in the positions of
+    the bracket, parenthesis and angle characters found in one pass, so a
+    start that fails costs a lookup rather than a rescan of the rest.
+    """
+    if not _MEDIA_START.search(text):
+        return text, 0
+    index = _media_index(text)
+    ends = {}
+
+    pieces = []
+    kept = 0
+    removed = 0
+    pos = 0
+    while True:
+        start = _MEDIA_START.search(text, pos)
+        if not start:
+            break
+        s = start.start()
+        end = _image_end(text, s, index, ends) if text[s] == '!' \
+            else _embed_end(text, s, index)
+        if end is None:
+            pos = s + 1
+            continue
+        pieces.append(text[kept:s])
+        kept = end
+        removed += 1
+        pos = end
+    pieces.append(text[kept:])
+    return ''.join(pieces), removed
+
+
+_NOTE_OPEN = re.compile(r'[ \t]*\[\^')
+_NOTE_CONTINUATION = re.compile(r'\n[ \t]+\S.*')
+
+
+def _remove_footnote_definitions(text):
+    """*text* without its footnote definitions, and how many were removed.
+
+    A definition is a line of optional blanks, `[^`, a label running to
+    the next `]` (which may lie on a later line), `:`, the rest of that
+    line, and any following lines that begin with blanks and then a
+    non-blank character, and one optional newline. Reading resumes on the
+    first line start after it.
+    """
+    closers = [i for i, char in enumerate(text) if char == ']']
+    size = len(text)
+    pieces = []
+    kept = 0
+    removed = 0
+    pos = 0
+    while pos < size:
+        opening = _NOTE_OPEN.match(text, pos)
+        if opening:
+            at = bisect.bisect_left(closers, opening.end())
+            if at == len(closers):
+                break
+            closer = closers[at]
+            if text.startswith(':', closer + 1):
+                end = text.find('\n', closer + 2)
+                end = size if end == -1 else end
+                more = _NOTE_CONTINUATION.match(text, end)
+                while more:
+                    end = more.end()
+                    more = _NOTE_CONTINUATION.match(text, end)
+                if text.startswith('\n', end):
+                    end += 1
+                pieces.append(text[kept:pos])
+                kept = end
+                removed += 1
+                pos = end
+                continue
+        line_end = text.find('\n', pos)
+        if line_end == -1:
+            break
+        pos = line_end + 1
+    pieces.append(text[kept:])
+    return ''.join(pieces), removed
+
+
+def _remove_footnote_references(text):
+    """*text* without its footnote references, and how many were removed.
+
+    A reference is `[^`, a label of anything but `]`, and the next `]`.
+    """
+    pieces = []
+    kept = 0
+    removed = 0
+    pos = text.find('[^')
+    while pos != -1:
+        close = text.find(']', pos + 2)
+        if close == -1:
+            break
+        pieces.append(text[kept:pos])
+        kept = close + 1
+        removed += 1
+        pos = text.find('[^', kept)
+    pieces.append(text[kept:])
+    return ''.join(pieces), removed
+
+
+_HEADING_OPEN = re.compile(r'[ \t]*#{1,6}[ \t]+')
+
+
+def _strip_heading_marks(text):
+    """*text* with each heading line reduced to its title, and how many.
+
+    A heading is a line of optional blanks, one to six `#`, and blanks.
+    Its title is what follows, less the longest tail made of blanks, `#`
+    and blanks that ends the line.
+    """
+    size = len(text)
+    pieces = []
+    kept = 0
+    changed = 0
+    pos = 0
+    while pos <= size:
+        line_end = text.find('\n', pos)
+        line_end = size if line_end == -1 else line_end
+        opening = _HEADING_OPEN.match(text, pos)
+        if opening and opening.end() <= line_end:
+            begin = opening.end()
+            end = line_end
+            while end > begin and text[end - 1] in ' \t':
+                end -= 1
+            while end > begin and text[end - 1] == '#':
+                end -= 1
+            while end > begin and text[end - 1] in ' \t':
+                end -= 1
+            pieces.append(text[kept:pos])
+            pieces.append(text[begin:end])
+            kept = line_end
+            changed += 1
+        pos = line_end + 1
+    pieces.append(text[kept:])
+    return ''.join(pieces), changed
+
+
+# Rules whose expression takes more than linear time on some input carry
+# a reader here that gives the same result in linear time. The expression
+# stays in the tuple because the Compositor compares its text.
+_ANSWER_PROSE_READERS = {
+    'widget': _remove_widget_blocks,
+    'fenced code block': _remove_fenced_blocks,
+    'table': _remove_tables,
+    'image or embed': _remove_images_and_embeds,
+    'footnote definition': _remove_footnote_definitions,
+    'footnote reference': _remove_footnote_references,
+    'heading mark': _strip_heading_marks,
+}
+
+
 def _reduce_answer_to_prose(text):
     """*text* as plain prose, and the kinds of thing that came out of it.
 
@@ -332,7 +723,11 @@ def _reduce_answer_to_prose(text):
     """
     fired = set()
     for rule in ANSWER_PROSE_RULES:
-        text, count = rule.pattern.subn(rule.replacement, text)
+        reader = _ANSWER_PROSE_READERS.get(rule.name)
+        if reader:
+            text, count = reader(text)
+        else:
+            text, count = rule.pattern.subn(rule.replacement, text)
         if count:
             fired.add(rule.kind)
 

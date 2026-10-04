@@ -24,6 +24,9 @@ import {
 import { state } from '../../assets/js/telar-story/state.js';
 import { computeFocalTarget } from '../../assets/js/telar-story/iiif-card.js';
 
+const BASE_URL = 'https://example.org/iiif/objects/test';
+const tail = (url) => url.replace(BASE_URL + '/', '');
+
 // ── Z-index banding ───────────────────────────────────────────────────────────
 
 describe('computeZIndexPlan — scene banding invariants', () => {
@@ -251,8 +254,6 @@ describe('computeZIndexPlan — title cards', () => {
 //   3. With null cardOverlayRect, computeFocalTarget still runs and URLs are valid.
 
 describe('_computeTileUrls tile-prefetch compensation', () => {
-  const BASE_URL = 'https://example.org/iiif/objects/test';
-
   // Minimal info.json shape — large tiles so a single tile covers the region
   const INFO = {
     width:  4000,
@@ -411,8 +412,6 @@ describe('_computeTileUrls tile-prefetch compensation', () => {
 // fetched at, and how the tile grid is walked and capped.
 
 describe('computeTileUrls — tile source shape, level choice and grid', () => {
-  const BASE_URL = 'https://example.org/iiif/objects/test';
-
   /** Parse "base/rx,ry,rw,rh/outW,/0/default.jpg" into its numbers. */
   function parseTile(url) {
     const parts = url.replace(BASE_URL + '/', '').split('/');
@@ -490,9 +489,7 @@ describe('computeTileUrls — tile source shape, level choice and grid', () => {
 // (scale factors up to 8), density 1 (jsdom), 512-px tiles.
 
 describe('computeTileUrls — the level the viewer draws and the cells it meets', () => {
-  const BASE_URL = 'https://example.org/iiif/objects/test';
   const INFO = { width: 4000, height: 4000, tiles: [{ width: 512, scaleFactors: [1, 2, 4, 8] }] };
-  const tail = (url) => url.replace(BASE_URL + '/', '');
   const tile = (x, y) => `${x},${y},512,512/512,/0/default.jpg`;
 
   beforeEach(() => {
@@ -639,10 +636,8 @@ describe('prefetchRegion — the image the viewer shows at rest', () => {
 // a 1600×900 image with 512-px tiles and scale factors 1, 2 and 4.
 
 describe('computeTileUrls — tile names', () => {
-  const BASE_URL = 'https://example.org/iiif/objects/test';
   const V3 = { '@context': 'http://iiif.io/api/image/3/context.json', type: 'ImageService3' };
   const V2 = { '@context': 'http://iiif.io/api/image/2/context.json' };
-  const tail = (url) => url.replace(BASE_URL + '/', '');
 
   beforeEach(() => {
     state.activeTitleCardIndex = null;
