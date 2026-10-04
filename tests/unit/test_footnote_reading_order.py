@@ -11,9 +11,10 @@ build — measured first across every piece of real content available, where
 no panel changes, because authors define notes in the order they cite them.
 
 Each conversion is its own footnote namespace: top-level prose, each
-widget section and each bibliography entry are separate sequences, and
-none of these tests asserts across that boundary because the build never
-puts them in one.
+widget section and each bibliography entry are separate sequences. A panel
+with a widget in it does put them on one page, since the widget's HTML is
+spliced into the panel's text before the panel is converted; that case is
+tested in test_footnotes_per_conversion.py.
 
 Version: v1.8.0
 """
@@ -27,7 +28,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
-from telar.latex import convert_markdown, renumber_footnotes_by_reference
+from telar.latex import convert_markdown
 
 
 def _numbers(html):
@@ -95,7 +96,7 @@ class TestTheAwkwardShapes:
     def test_prose_with_no_footnotes_is_returned_unchanged(self):
         html = markdown.markdown("Just prose.", extensions=['extra'])
 
-        assert renumber_footnotes_by_reference(html) == html
+        assert _convert("Just prose.") == html
 
     def test_a_defined_but_never_referenced_note_is_not_dropped(self):
         """Python Markdown emits it; losing it here would delete content."""

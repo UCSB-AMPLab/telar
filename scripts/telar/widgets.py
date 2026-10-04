@@ -345,12 +345,17 @@ def _carousel_size_class(items):
     return size_class
 
 
-def parse_markdown_sections(content):
+def parse_markdown_sections(content, footnote_scope=None):
     """
     Parse content into sections based on ## headers.
 
+    Each section is its own conversion. With *footnote_scope*, section n's
+    footnote anchors carry `<footnote_scope>-<n>`, so two sections that
+    use the same label still link each reference to its own note.
+
     Args:
         content: Markdown text with ## headers
+        footnote_scope: Optional widget id for the sections' note anchors
 
     Returns:
         list: List of dicts with 'title' and 'content' keys
@@ -375,16 +380,21 @@ def parse_markdown_sections(content):
         sections.append(current_section)
 
     # Convert content lists to strings and process markdown
-    for section in sections:
+    for number, section in enumerate(sections, 1):
         content_text = '\n'.join(section['content']).strip()
-        # Convert markdown to HTML
         section['content_html'] = convert_markdown(
-            content_text, extensions=['extra', 'nl2br'])
+            content_text, extensions=['extra', 'nl2br'],
+            footnote_scope=_section_scope(footnote_scope, number))
 
     return sections
 
 
-def parse_tabs_widget(content, file_path, warnings_list):
+def _section_scope(widget_id, number):
+    """The footnote scope for the *number*th conversion inside a widget."""
+    return '%s-%d' % (widget_id, number) if widget_id else None
+
+
+def parse_tabs_widget(content, file_path, warnings_list, widget_id=None):
     """
     Parse tabs widget content.
 
@@ -400,7 +410,7 @@ def parse_tabs_widget(content, file_path, warnings_list):
     Returns:
         dict: Parsed tabs data with 'tabs' list
     """
-    sections = parse_markdown_sections(content)
+    sections = parse_markdown_sections(content, widget_id)
 
     # Validate tab count
     if len(sections) < 2:
@@ -428,7 +438,7 @@ def parse_tabs_widget(content, file_path, warnings_list):
     return {'tabs': sections}
 
 
-def parse_accordion_widget(content, file_path, warnings_list):
+def parse_accordion_widget(content, file_path, warnings_list, widget_id=None):
     """
     Parse accordion widget content.
 
@@ -444,7 +454,7 @@ def parse_accordion_widget(content, file_path, warnings_list):
     Returns:
         dict: Parsed accordion data with 'panels' list
     """
-    sections = parse_markdown_sections(content)
+    sections = parse_markdown_sections(content, widget_id)
 
     # Validate panel count
     if len(sections) < 2:
@@ -472,7 +482,7 @@ def parse_accordion_widget(content, file_path, warnings_list):
     return {'panels': sections}
 
 
-def parse_bibliography_widget(content, file_path, warnings_list):
+def parse_bibliography_widget(content, file_path, warnings_list, widget_id=None):
     """Parse bibliography widget content.
 
     Expected format:
@@ -482,7 +492,9 @@ def parse_bibliography_widget(content, file_path, warnings_list):
     Author, B. (2019). Title with [link](url). Journal, 1(2), 3-4.
     :::
 
-    Each blank-line-separated block becomes one entry with hanging indent.
+    Each blank-line-separated block becomes one entry with hanging indent,
+    converted on its own; with *widget_id*, entry n's footnote anchors
+    carry `<widget_id>-<n>`.
 
     Returns:
         dict: Parsed bibliography data with 'entries' list
@@ -492,7 +504,9 @@ def parse_bibliography_widget(content, file_path, warnings_list):
         block = block.strip()
         if not block:
             continue
-        html = convert_markdown(block, extensions=['extra', 'nl2br'])
+        html = convert_markdown(
+            block, extensions=['extra', 'nl2br'],
+            footnote_scope=_section_scope(widget_id, len(entries) + 1))
         entries.append({'content_html': html})
 
     if not entries:
@@ -597,7 +611,13 @@ def process_widgets(text, file_path, warnings_list):
 
         # Parse widget content
         parser = widget_parsers[widget_type]
-        widget_data = parser(content, file_path, warnings_list)
+        if widget_type == 'carousel':
+            widget_data = parser(content, file_path, warnings_list)
+        else:
+            # Sections and entries are converted one by one and share the
+            # page; the widget id keeps their footnote anchors apart.
+            widget_data = parser(content, file_path, warnings_list,
+                                 widget_id=widget_id)
 
         # Render HTML
         html = render_widget_html(widget_type, widget_data, widget_id)
