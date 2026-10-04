@@ -166,6 +166,8 @@ REMOVED = [
     ('media', 'Before <object data="folio.pdf"></object> after.',
      'Before  after.'),
     ('media', 'Before ![The plate](plate.jpg) after.', 'Before  after.'),
+    ('media', 'Before ![The plate [La lámina]](plate.jpg) after.',
+     'Before  after.'),
     ('footnotes', 'The mill ran on water.[^1]', 'The mill ran on water.'),
     ('footnotes', 'Water.\n\n[^1]: Guaman Poma, folio 1157.\n', 'Water.\n\n'),
     ('footnotes', 'Water.\n\n[^1]: Guaman Poma,\n    folio 1157.\nAfter.\n',

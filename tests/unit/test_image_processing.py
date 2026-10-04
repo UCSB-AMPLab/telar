@@ -57,6 +57,22 @@ class TestProcessImages:
         assert 'src="https://example.com/i.jpg"' in process_images(
             '![Alt](https://example.com/i.jpg)', base_url='/telar')
 
+    def test_alt_text_may_hold_bracketed_text(self):
+        """Brackets nested in the alt text, as in a caption carrying a
+        bracketed translation, still make an image, with its path resolved."""
+        result = process_images(
+            '![Framework of a Kogi loom [Marco de un telar kogui]]'
+            '(historia/1.3.3.1.jpg){md}', base_url='/telar')
+        assert 'src="/telar/telar-content/objects/historia/1.3.3.1.jpg"' in result
+        assert 'alt="Framework of a Kogi loom [Marco de un telar kogui]"' in result
+        assert 'class="img-md"' in result
+
+    def test_unbalanced_brackets_in_alt_text_are_not_an_image(self):
+        """An unclosed bracket makes no image, as the markdown library reads
+        it: the text is left for that library, which renders a link."""
+        text = '![A [stray bracket](photo.jpg)'
+        assert process_images(text, base_url='') == text
+
     def test_base_url_defaults_to_the_site_config(self, tmp_path, monkeypatch):
         from telar import widgets
         (tmp_path / '_config.yml').write_text('baseurl: "/mysite/"\n', encoding='utf-8')

@@ -103,8 +103,9 @@ def process_images(text, base_url=None):
     result = []
     i = 0
 
-    # Pattern for image with optional size
-    img_pattern = r'^!\[([^\]]*)\]\(([^)]+)\)(?:\{(sm|small|md|medium|lg|large|full)\})?$'
+    # Pattern for image with optional size. The alt text may hold brackets
+    # nested one level deep, as in a caption carrying a bracketed translation.
+    img_pattern = r'^!\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(([^)]+)\)(?:\{(sm|small|md|medium|lg|large|full)\})?$'
 
     while i < len(lines):
         line = lines[i]

@@ -116,7 +116,7 @@ ANSWER_PROSE_RULES = (
         ''),
     _ProseRule(
         'image or embed', ANSWER_MEDIA,
-        re.compile(r'!\[[^\]]*\]\([^)]*\)'
+        re.compile(r'!\[(?:[^\[\]]|\[[^\[\]]*\])*\]\([^)]*\)'
                    r'|<(img|iframe|video|audio|embed|object)\b[^>]*>'
                    r'(?:.*?</\1\s*>)?',
                    re.IGNORECASE | re.DOTALL),
