@@ -16,11 +16,14 @@ paragraph. A single backtick with whitespace (ASCII, as in Ruby) on both
 sides, or at the start of the text and followed by whitespace, is literal,
 and so is a backtick escaped with a backslash. An HTML comment or tag, a
 link's destination and a `$$…$$` span are read before code, so backticks
-inside them open nothing. Block syntax is not read here: the answer's prose
-rules have removed it first. Not modelled, all rare in an answer: a
-backslash directly before `$$`, which kramdown reads as an escaped dollar or
-as the start of maths depending on what follows; elements whose content
-kramdown leaves raw (`<u>`, `<mark>`, `<script>` and the like); `~~`
+inside them open nothing. HTML elements are read by kramdown's content
+model: the content of a span-model element (`span`, `em`, `a`…) is read
+like any text, and every other element (`code`, `kbd`, `u`, `mark`, an
+unknown tag) is raw to its own closing tag, or to the end of the paragraph.
+Block syntax is not read here: the answer's prose rules have removed it
+first. Not modelled, all rare in an answer: a backslash directly before
+`$$`, which kramdown reads as an escaped dollar or as the start of maths
+depending on what follows; a `markdown` attribute on an element; `~~`
 strikethrough; autolinks; and a code span begun in a link's text and closed
 in its destination.
 
@@ -39,12 +42,34 @@ import re
 # escape (its own list of escapable characters), an HTML comment or tag, a
 # link's destination, and `$$…$$` within a paragraph.
 _ESCAPE = re.compile(r'\\[\\.*_+`<>()\[\]{}#!:|"\'$=-]')
-_TAG = re.compile(r'<!--.*?-->|</?[A-Za-z][\w:.-]*(?:\s(?:[^<>"\']|"[^"]*"|\'[^\']*\')*)?/?>',
-                  re.DOTALL)
+_COMMENT = re.compile(r'<!--.*?-->', re.DOTALL)
+_CLOSE_TAG = re.compile(r'</[A-Za-z][\w:.-]*\s*>')
+_OPEN_TAG = re.compile(r'<([A-Za-z][\w:.-]*)(?:\s(?:[^<>"\']|"[^"]*"|\'[^\']*\')*)?(/?)>')
+# kramdown's HTML content model (parser/html.rb). Inside a paragraph, a block
+# element's tag is text; an element of the span model has its content read;
+# a body-less or self-closed tag is only a tag; every other element, known
+# or not, is raw to its first closing tag, or to the end of the paragraph.
+_BLOCK_ELEMENTS = frozenset('''
+    address article aside applet body blockquote caption col colgroup dd div
+    dl dt fieldset figcaption footer form h1 h2 h3 h4 h5 h6 header hgroup hr
+    html head iframe legend menu li main map nav ol optgroup p pre section
+    summary table tbody td th thead tfoot tr ul'''.split())
+_SPAN_MODEL = frozenset('''
+    a abbr acronym b bdo big button cite caption del dfn dt em h1 h2 h3 h4 h5
+    h6 i ins label legend optgroup p q rb rbc rp rt rtc ruby select small span
+    strong sub sup th tt'''.split())
+_SPAN_ELEMENTS = frozenset('''
+    a abbr acronym b big bdo br button cite code del dfn em i img input ins
+    kbd label mark option q rb rbc rp rt rtc ruby samp select small span
+    strong sub sup time tt u var'''.split())
+_WITHOUT_BODY = frozenset('''
+    area base br col command embed hr img input keygen link meta param source
+    track wbr'''.split())
+_KNOWN = _BLOCK_ELEMENTS | _SPAN_ELEMENTS | _WITHOUT_BODY
 # A link: its text, which holds spans like any other, then its destination.
 _LINK = re.compile(r'\[[^\]]*\](\((?:[^()\s]|\([^()]*\))*(?:\s+(?:"[^"]*"|\'[^\']*\'))?\))')
 _MATHS = re.compile(r'\$\$(?:(?!\n[ \t]*\n).)*?\$\$', re.DOTALL)
-_OPAQUE = {'\\': _ESCAPE, '<': _TAG, '$': _MATHS}
+_OPAQUE = {'\\': _ESCAPE, '$': _MATHS}
 _NEXT = re.compile(r'[\\<\[$`]')
 _BLANK_LINE = re.compile(r'\n[ \t]*\n')
 # Whitespace as kramdown's Ruby `\s` has it: ASCII only, so a no-break
@@ -100,6 +125,8 @@ class _Scan:
             return self.link(i)
         if self.text[i] == '`':
             return self.backticks(i)
+        if self.text[i] == '<':
+            return self.html(i)
         return self.opaque(i)
 
     def past_destination(self, i):
@@ -114,6 +141,60 @@ class _Scan:
         if link and not self.destination:
             self.destination = link.span(1)
         return i + 1
+
+    def html(self, i):
+        """Past a comment or tag at *i*, and past the content of an
+        element kramdown leaves raw."""
+        text = self.text
+        match = _COMMENT.match(text, i) or _CLOSE_TAG.match(text, i)
+        if match:
+            return match.end()
+        match = _OPEN_TAG.match(text, i)
+        if not match:
+            return i + 1
+        name = match.group(1).lower()
+        if (name in _BLOCK_ELEMENTS or match.group(2) or name in _WITHOUT_BODY
+                or name in _SPAN_MODEL):
+            return match.end()
+        limit = self.ends[bisect.bisect_left(self.ends, match.end())]
+        return self.raw_end(match.end(), match.group(1), limit) or limit
+
+    def raw_end(self, pos, name, limit):
+        """Where the raw element *name*, whose content starts at *pos*, ends:
+        past its closing tag, or None when the paragraph ends first. Tags in
+        it are read as kramdown reads them there: an element opened in it is
+        raw too, and only its own closing tag ends it."""
+        text = self.text
+        open_names = [name]
+        while open_names:
+            lt = text.find('<', pos, limit)
+            if lt == -1:
+                return None
+            pos = self.raw_tag(lt, open_names)
+        return pos
+
+    def raw_tag(self, lt, open_names):
+        """Past the tag at *lt* inside raw content, closing or opening an
+        element in *open_names* as it does."""
+        text = self.text
+        match = _CLOSE_TAG.match(text, lt)
+        if match:
+            closing = match.group(0)[2:].rstrip('> \t\r\n\f\v')
+            innermost = open_names[-1]
+            if (closing == innermost or innermost.lower() in _KNOWN
+                    and closing.lower() == innermost.lower()):
+                open_names.pop()
+            return match.end()
+        match = _COMMENT.match(text, lt)
+        if match:
+            return match.end()
+        match = _OPEN_TAG.match(text, lt)
+        if not match:
+            return lt + 1
+        name = match.group(1).lower()
+        if not (name in _BLOCK_ELEMENTS or match.group(2) or name in _WITHOUT_BODY):
+            open_names.append(match.group(1))
+        return match.end()
 
     def opaque(self, i):
         match = _OPAQUE[self.text[i]].match(self.text, i)

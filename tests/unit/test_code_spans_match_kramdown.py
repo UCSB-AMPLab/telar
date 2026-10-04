@@ -90,6 +90,12 @@ FORMS = [
     'a <!--`--> [[t]] `c`',
     'a [x](y`z) `w` v',
     'a [x](y "`t") `w` v',
+    '<u>`a</u> b` c',
+    '<span>`a</span> b` c',
+    '<code>`a` $$b$$</code> `c`',
+    '<kbd>`a</kbd> b` c',
+    '<u>`a b` no close',
+    '<x-y>`a</x-y> b` c',
     '` <b title="`">x',
     '`x <b title="`">y',
     '`a b\n\nc` d',
@@ -104,7 +110,8 @@ FORMS = [
 # reads it.
 PIECES = ['`', '``', '```', ' ', '\t', '\u00a0', 'a', 'b c', '\\', '\\`', '<em>',
           '</em>', '<br title="`">', '<!--`-->', '[x](y`z)', '$$', '*', '\na',
-          '\n\na']
+          '\n\na', '<u>', '</u>', '<code>', '</code>', '<span>', '</span>',
+          '<x-y>', '</x-y>', '<img src="`"/>']
 
 
 def _random_answers(count, seed=541):
@@ -114,9 +121,11 @@ def _random_answers(count, seed=541):
 
 
 def _rendered_code(rendered):
-    """The text of every `<code>` kramdown made, in order."""
+    """The text of every code span kramdown made, in order. Its spans carry
+    the highlighter's class; a `<code>` the author wrote does not."""
     return [_line_ends(html.unescape(content)) for content in
-            re.findall(r'<code[^>]*>(.*?)</code>', rendered, re.DOTALL)]
+            re.findall(r'<code class="language-plaintext highlighter-rouge">(.*?)</code>',
+                       rendered, re.DOTALL)]
 
 
 def _line_ends(content):

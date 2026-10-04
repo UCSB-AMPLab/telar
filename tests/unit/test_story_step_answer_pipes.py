@@ -96,6 +96,7 @@ ANSWERS = {
     'maths_and_prose_pipe': 'If x | y then $$|x| \\le |y|$$ holds',
     'closing_run_longer': 'Type `a|b`` then x | y',
     'lone_backtick_then_span': 'Say ` x | y `a` here',
+    'maths_in_code_element': '<code>$$a|b$$</code> x | y',
 }
 
 
@@ -256,6 +257,12 @@ class TestAPipeInsideDisplayMaths:
     def test_beside_a_pipe_in_prose(self, rendered):
         assert _answer(rendered, 'maths_and_prose_pipe') == (
             r'<p>If x | y then \(\vert x\vert  \le \vert y\vert\) holds</p>')
+
+    def test_in_a_code_element_is_not_maths(self, rendered):
+        # kramdown leaves the element's content raw, so the entity prints a
+        # pipe and nothing there is maths.
+        assert _answer(rendered, 'maths_in_code_element') == (
+            '<p><code>$$a&#124;b$$</code> x | y</p>')
 
     def test_in_a_code_span_is_code_not_maths(self, rendered):
         assert _answer(rendered, 'maths_in_code_span') == (
