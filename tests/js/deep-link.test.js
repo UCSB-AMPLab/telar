@@ -6,7 +6,7 @@
  * (card-pool, navigation, panels, state) are mocked so the module imports
  * cleanly in jsdom and the timing behaviour can be driven with fake timers.
  *
- * @version v1.5.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -25,7 +25,10 @@ vi.mock('../../assets/js/telar-story/state.js', () => ({
     snap: null,
   },
 }));
-vi.mock('../../assets/js/telar-story/card-pool.js', () => ({ activateCard: vi.fn() }));
+vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
+  activateCard: vi.fn(),
+  reconcileStackForJump: vi.fn(),
+}));
 vi.mock('../../assets/js/telar-story/navigation.js', () => ({ goToStep: vi.fn() }));
 vi.mock('../../assets/js/telar-story/panels.js', () => ({ openPanel: vi.fn() }));
 

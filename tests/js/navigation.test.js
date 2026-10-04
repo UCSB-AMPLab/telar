@@ -17,7 +17,7 @@
  *   - goToStep's bounds, its card activation, and its intro restoration
  *   - the mobile previous button restoring the intro from step 0
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
   const mockStepHasLayer1Content = vi.fn(() => true);
   const mockStepHasLayer2Content = vi.fn(() => false);
   const mockActivateCard = vi.fn();
+  const mockReleaseTitleCardsForIntro = vi.fn();
   const mockInitializeLoadingShimmer = vi.fn();
   const mockAdvanceToStep = vi.fn();
   const mockKeyboardNav = vi.fn();
@@ -40,6 +41,7 @@ const mocks = vi.hoisted(() => {
     mockStepHasLayer1Content,
     mockStepHasLayer2Content,
     mockActivateCard,
+    mockReleaseTitleCardsForIntro,
     mockInitializeLoadingShimmer,
     mockAdvanceToStep,
     mockKeyboardNav,
@@ -57,6 +59,7 @@ vi.mock('../../assets/js/telar-story/panels.js', () => ({
 
 vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
   activateCard: mocks.mockActivateCard,
+  releaseTitleCardsForIntro: mocks.mockReleaseTitleCardsForIntro,
   setCardProgress: vi.fn(),
   initCardPool: vi.fn(),
 }));
@@ -718,6 +721,15 @@ describe('goToStep(-1) — intro restoration', () => {
     goToStep(-1, 'backward');
 
     expect(mocks.mockActivateCard).not.toHaveBeenCalled();
+  });
+
+  // A section card at step 0 is the story's first card, and it is full
+  // viewport: left on screen it hides the intro outright, and the text-card
+  // path above cannot reach it because state.textCards[0] does not exist.
+  it('sends the title cards standing over the intro away', () => {
+    goToStep(-1, 'backward');
+
+    expect(mocks.mockReleaseTitleCardsForIntro).toHaveBeenCalled();
   });
 
   it('leaves the plates alone when the story names no first object', () => {

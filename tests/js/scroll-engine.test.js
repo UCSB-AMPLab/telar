@@ -9,10 +9,10 @@
  *   - advanceToStep: guard for out-of-range indices
  *   - initScrollEngine: Lenis constructor options, snap configuration
  *
- * @version v1.5.0
+ * @version v1.8.0
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 // vi.hoisted() runs before vi.mock() factories, ensuring all variables are
@@ -82,6 +82,7 @@ vi.mock('lenis/snap', () => ({ default: mocks.MockSnap }));
 vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
   activateCard: mocks.mockActivateCard,
   setCardProgress: vi.fn(),
+  settleCards: vi.fn(),
 }));
 
 vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
@@ -113,7 +114,7 @@ vi.mock('../../assets/js/telar-story/viewer.js', () => ({
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
-import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState } from '../../assets/js/telar-story/scroll-engine.js';
+import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav } from '../../assets/js/telar-story/scroll-engine.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
 import { state } from '../../assets/js/telar-story/state.js';
 
@@ -392,5 +393,81 @@ describe('initScrollEngine', () => {
     const regular = document.createElement('div');
     document.body.appendChild(regular);
     expect(opts.prevent(regular)).toBe(false);
+  });
+});
+
+// ── keyboardNav: the way back to the intro ────────────────────────────────────
+//
+// Position 0 is the intro; the keyboard's backward target from step 0 is
+// therefore position 0, which carries no card to activate. The intro zone in
+// updateScrollPosition cannot cover for it: keyboardNavInFlight suppresses that
+// path for the whole scroll animation. So the keyboard has to run the intro
+// restore itself, through the one call the scroll and button paths both make.
+
+describe('keyboardNav — arriving at the intro', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="scroll-surface"></div>
+      <div class="card-stack">
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+      </div>
+    `;
+    mocks.mockGoToStep.mockClear();
+    mocks.mockActivateCard.mockClear();
+    mocks.lenisScrollTo.mockClear();
+    resetState({ currentIndex: 0 });
+
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
+      matches: false, media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    try {
+      Object.defineProperty(history, 'scrollRestoration',
+        { writable: true, value: 'auto', configurable: true });
+    } catch (_) { /* already writable here */ }
+
+    initScrollEngine(3);
+    state.currentIndex = 0;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Park the engine's Lenis at a scroll position, in whole viewport heights. */
+  function parkAt(position) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = position * window.innerHeight;
+  }
+
+  it('restores the intro when the target is position 0', () => {
+    parkAt(1); // step 0
+    keyboardNav('backward');
+    expect(mocks.mockGoToStep).toHaveBeenCalledWith(-1, 'backward');
+  });
+
+  it('scrolls to the top of the surface on the same press', () => {
+    parkAt(1);
+    keyboardNav('backward');
+    expect(mocks.lenisScrollTo).toHaveBeenCalledWith(0, expect.objectContaining({ force: true }));
+  });
+
+  it('activates the step rather than the intro when the target is a step', () => {
+    parkAt(2); // step 1
+    state.currentIndex = 1;
+    keyboardNav('backward');
+    expect(mocks.mockActivateCard).toHaveBeenCalledWith(0, 'backward');
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+
+  it('does not restore the intro a second time once it is the current position', () => {
+    parkAt(0);
+    state.currentIndex = -1;
+    keyboardNav('backward');
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
   });
 });

@@ -56,7 +56,7 @@
  * getCardMessiness) are unit-tested. DOM-interacting functions are
  * acceptance-tested against the running site.
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -256,6 +256,10 @@ let _zPlan = { viewerPlateZ: {}, textCardZ: {} };
 // scene — preloadAhead calls it repeatedly, which would otherwise re-fetch
 // info.json and append duplicate <link rel=prefetch> nodes to <head> unbounded.
 const _prefetchedScenes = new Set();
+
+// Extra writes a build adds to the settle, registered through onCardsSettle.
+// Module-level so a hook survives every settle rather than one.
+const _settleHooks = [];
 
 // ── Scene maps ────────────────────────────────────────────────────────────────
 
@@ -888,6 +892,113 @@ function _clearActiveTitleCard(direction) {
 }
 
 /**
+ * Clear the title cards standing between the reader and the intro.
+ *
+ * The intro sits at z-index 0, under every card in the stack, so it shows
+ * only once the cards above it are off screen. A title card is
+ * full-viewport, and both of its resting states — `is-active` and
+ * `is-stacked` — hold it at translateY(0), so one left behind hides the
+ * intro completely. The card at index 0 is the case the intro restore has
+ * no other handle on: `state.textCards[0]` is undefined on a story whose
+ * first step is a section.
+ */
+export function releaseTitleCardsForIntro() {
+  _clearActiveTitleCard('backward');
+  const first = state.titleCards[0];
+  if (first) _deactivateTitleCard(first, 'backward');
+}
+
+/**
+ * Write a card's transform with the animation suppressed.
+ *
+ * The reflow between killing the transition and handing it back is what makes
+ * the write land as a position rather than as a move: without it the browser
+ * coalesces both style changes into one and animates to the new transform. The
+ * viewer plates are put in place the same way — see `_swapPlatesBackward`.
+ *
+ * @param {HTMLElement} el
+ * @param {string} transform - Full transform string, messiness included
+ */
+function _snapTransform(el, transform) {
+  el.style.transition = 'none';
+  el.style.transform = transform;
+  void el.offsetHeight;  // force reflow
+  el.style.transition = '';
+}
+
+/**
+ * Put the card stack in the state a walk to this step would have left it in.
+ *
+ * The invariant, after any navigation: the cards below the active one are
+ * stacked in place at translateY(0), the cards above it are off screen below at
+ * translateY(100vh), and the active one is at rest. A walk holds the invariant
+ * one step at a time — each card left behind is stacked going forward and sent
+ * back down going backward. A jump crosses many steps at once and has to
+ * restate it for all of them, or the stack keeps the shape the reader's route
+ * happened to leave and the next backward move lifts the target card from below
+ * the viewport while the departing card falls past it.
+ *
+ * The target card is the one card this leaves alone: `activateCard` owns it, and
+ * its arrival is the movement the reader is meant to see. Everything else is
+ * written with the transition suppressed, so a jump stays a jump.
+ *
+ * @param {number} targetIndex - Step index the jump lands on
+ */
+export function reconcileStackForJump(targetIndex) {
+  // Written in three passes over one reflow rather than a reflow per card: a
+  // single forced layout commits every pending write, and a story is as long as
+  // its author made it.
+  const moved = [];
+
+  for (let i = 0; i < _stepsData.length; i++) {
+    if (i === targetIndex) continue;
+    const el = state.textCards[i] || state.titleCards[i];
+    if (!el) continue;
+
+    const below = i < targetIndex;
+    el.classList.remove('is-active');
+    el.classList.toggle('is-stacked', below);
+    el.style.transition = 'none';
+    el.style.transform = buildTransform(
+      _readCardMessiness(el),
+      below ? 'translateY(0)' : 'translateY(100vh)',
+    );
+    moved.push(el);
+  }
+
+  if (moved.length) {
+    void moved[0].offsetHeight;  // force reflow
+    for (const el of moved) el.style.transition = '';
+  }
+
+  // A title card below the target is stacked under it and one above is off
+  // screen, so neither holds the screen any longer. activateCard writes this
+  // again when the step jumped to is itself a title card.
+  if (state.activeTitleCardIndex !== targetIndex) state.activeTitleCardIndex = null;
+}
+
+/**
+ * Bring the card a backward move is about to activate into its resting place
+ * without animating it.
+ *
+ * Backward, the card being uncovered is already stacked at translateY(0) and is
+ * revealed rather than moved: the departing card is the only thing that travels.
+ * A card that arrives here off screen would instead rise as the departing card
+ * falls, and two cards crossing is a motion the stack never makes. Every path
+ * that leaves a card off screen under the active one is meant to be reconciled
+ * before it gets here; this is the backstop for one that is not.
+ *
+ * @param {HTMLElement} cardEl - The card the move is activating
+ */
+function _restoreBackwardTarget(cardEl) {
+  if (!cardEl) return;
+  if (cardEl.classList.contains('is-stacked') ||
+      cardEl.classList.contains('is-active')) return;
+
+  _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), 'translateY(0)'));
+}
+
+/**
  * Scrolling into a step.
  *
  * Either the object or the framing has changed, and the reader gets a new
@@ -1007,6 +1118,10 @@ function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
 
 function _activateBackward(index, direction, card, registryEntry, step, objectId,
    prevObjectId, needsNewViewer) {
+  // Before anything departs: the card being uncovered has to be in place, so
+  // that the only thing the reader sees move is the card leaving.
+  _restoreBackwardTarget(card);
+
   // Backward navigation
   if (needsNewViewer) {
     // Per-scene plates: distinct scenes own distinct DOM elements. (An
@@ -1130,14 +1245,12 @@ export function activateCard(index, direction) {
 /**
  * Interpolate the visual progress of a card transition each scroll frame.
  *
- * Called every frame by the scroll engine. Positions the NEXT card
- * proportionally — at progress 0.0 it is fully below viewport, at 1.0
- * it is fully in position. The current card stays put (revealed
- * as the next card slides away backward).
- *
- * Only operates while the user is actively scrubbing (the is-scrubbing
- * class is set, disabling CSS transitions). During button/keyboard nav,
- * CSS transitions handle the animation instead.
+ * Called every frame by the scroll engine. Part way through a step this runs
+ * only while the reader is scrubbing (`is-scrubbing` is set, which disables the
+ * CSS transitions the per-frame writes would otherwise fight); button and
+ * keyboard navigation animate on those transitions instead. On a whole step it
+ * runs either way, because a step is a resting place and the cards belong on it
+ * however the scroll arrived.
  *
  * @param {number} stepIndex - Current step (floor of position)
  * @param {number} progress - Fractional progress 0.0-1.0
@@ -1180,23 +1293,86 @@ function _interpolatePlateHandoff(stepIndex, nextIndex, progress) {
 }
 
 export function setCardProgress(stepIndex, progress) {
-  if (progress < 0.001) return; // At exact integer, no interpolation needed
-
-  const nextIndex = stepIndex + 1;
-  const nextCard = state.textCards[nextIndex] || state.titleCards[nextIndex];
-  if (!nextCard) return;
-
-  // Only apply per-frame transforms while the user is actively scrubbing
+  // A whole step is a resting place, and the cards belong on it whoever brought
+  // them there: the write has to happen off the scrub too, or a scroll that
+  // carries on after the scrub flag has lapsed leaves the arriving card
+  // wherever the last scrub frame put it.
   const cardStack = document.querySelector('.card-stack');
-  if (!cardStack || !cardStack.classList.contains('is-scrubbing')) return;
+  const scrubbing = !!cardStack && cardStack.classList.contains('is-scrubbing');
+  if (!scrubbing && progress >= 0.001) return;
 
-  // next card slides from translateY(100vh) to its final position
-  const { rot, offX, offY } = _readCardMessiness(nextCard);
+  settleCards(stepIndex + 1 + progress);
+}
 
-  const translateY = (1 - progress) * 100; // vh
-  nextCard.style.transform = `translateY(${translateY}vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
+/**
+ * Put every card the scroll moves where this position says it belongs.
+ *
+ * One idea of settling, for every path that has to state where the cards are:
+ * the scrub frame, the snap that knows its landing before it gets there, the
+ * scroll that stops of its own accord, the keyboard move that has a target. The
+ * position is the scroll engine's — 0 is the intro, 1 is step 0 — and the cards
+ * follow from it. Three cards are in play at any position: the step it rests
+ * on, at `translateY(0)` with its messiness; the one card it is part way
+ * through, the proportion of a viewport up from below; and the card above that,
+ * a full viewport down, which is the card the position has just stopped moving
+ * and which a crossing would otherwise leave a pixel or two short of home. On a
+ * whole step that is the resting invariant, and on a position between steps it
+ * is the same interpolation a scrub frame writes, so a scroll that stops short
+ * leaves the cards agreeing with it.
+ *
+ * Below position 1 the same three are the intro's: no step underneath, the
+ * story's first card sliding up over the intro, and the second card waiting a
+ * viewport down. The first viewer plate travels with the first card.
+ *
+ * The transition is left alone, so off the scrub the write is a slide from
+ * wherever the card is and under `is-scrubbing` it is a position. That is what
+ * makes a settle safe to run from the scrub and from the animation both.
+ *
+ * @param {number} position - Scroll position; 0 is the intro, 1 is step 0.
+ */
+export function settleCards(position) {
+  const contentPos = position - 1;
+  const stepIndex = Math.floor(contentPos);
+  const progress = contentPos - stepIndex;
 
-  _interpolatePlateHandoff(stepIndex, nextIndex, progress);
+  const cardAt = (i) => (i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i]);
+  const place = (el, base) => {
+    if (el) el.style.transform = buildTransform(_readCardMessiness(el), base);
+  };
+
+  place(cardAt(stepIndex), 'translateY(0)');
+  place(cardAt(stepIndex + 1), `translateY(${(1 - progress) * 100}vh)`);
+  place(cardAt(stepIndex + 2), 'translateY(100vh)');
+
+  if (stepIndex < 0) {
+    // Scene 0 is always the first scene — index it directly, no objectId lookup.
+    const firstPlate = state.viewerPlates?.[0];
+    if (firstPlate) firstPlate.style.transform = `translateY(${(1 - progress) * 100}%)`;
+  } else {
+    _interpolatePlateHandoff(stepIndex, stepIndex + 1, progress);
+  }
+
+  for (const hook of _settleHooks) hook(stepIndex, progress);
+}
+
+/**
+ * Add a settle of your own to the one the engine runs.
+ *
+ * The base stack moves two cards per position and leaves the rest where they
+ * are. A build that moves more of them — cards of their own height, which lift
+ * the stack under the active one by the same scrub progress — registers the
+ * writes for those here rather than repeating the settle, so every path that
+ * settles the stack settles all of it.
+ *
+ * @param {(stepIndex: number, progress: number) => void} hook
+ * @returns {() => void} Removes the hook
+ */
+export function onCardsSettle(hook) {
+  _settleHooks.push(hook);
+  return () => {
+    const at = _settleHooks.indexOf(hook);
+    if (at >= 0) _settleHooks.splice(at, 1);
+  };
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -1355,21 +1531,23 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
   // Intra-scene mode change: a full-object↔detail flip within one object's run
   // flags needsNewViewer, but the scene — and therefore the plate element — is
   // unchanged, so prevPlate and newPlate resolve to the same node. The plate is
-  // already on-screen; keep it visible and return before the slide/deactivate
-  // logic below, which would otherwise add then immediately strip is-active
-  // (add at the end, remove in the prevPlate block) and blank the viewer. This
-  // surfaces on TOC/deep-link jumps and on ordinary forward scroll across
-  // a zoom-in→out step on the same object.
-  if (prevPlate && prevPlate === newPlate) {
+  // already on-screen: keep it visible and skip the slide/deactivate pair, which
+  // would otherwise add then immediately strip is-active (add below, remove in
+  // the prevPlate block) and blank the viewer. This surfaces on TOC/deep-link
+  // jumps and on ordinary forward scroll across a zoom-in→out step on the same
+  // object. The wiring below still runs: the plate may hold no viewer yet (a
+  // story whose first step is a section card wires none at load), and the step's
+  // framing has to reach the viewer whether or not the plate moves.
+  const samePlate = prevPlate && prevPlate === newPlate;
+
+  if (samePlate) {
     newPlate.style.transform = 'translateY(0)';
-    newPlate.classList.add('is-active');
-    return;
+  } else {
+    _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
   }
 
-  _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
-
   newPlate.classList.add('is-active');
-  if (prevPlate) _deactivateDepartingPlate(prevPlate);
+  if (prevPlate && !samePlate) _deactivateDepartingPlate(prevPlate);
 
   _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step);
 }
@@ -1813,6 +1991,11 @@ function _hideDepartingPlateForTitle(index, direction) {
 function _activateTitleCardStep(index, direction) {
   const titleCard = state.titleCards[index];
   if (!titleCard) return;
+
+  // A title card returned to is revealed, not raised: it is already resting
+  // under whatever covered it. One that is off screen is put back in place
+  // first, so it cannot rise while the departing card falls.
+  if (direction === 'backward') _restoreBackwardTarget(titleCard);
 
   // Deactivate any previously active title card
   _stackPreviousTitleCard(index, direction);

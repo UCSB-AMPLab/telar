@@ -29,11 +29,11 @@
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
-import { activateCard } from './card-pool.js';
+import { activateCard, releaseTitleCardsForIntro } from './card-pool.js';
 import { advanceToStep, keyboardNav } from './scroll-engine.js';
 import { writeHash } from './deep-link.js';
 import { initializeLoadingShimmer, showViewerSkeletonState } from './viewer.js';
@@ -90,14 +90,16 @@ export function goToStep(newIndex, direction = 'forward') {
 /**
  * Restore the intro, the state that sits before step 0.
  *
- * Four things go back: the intro card into view, step 0's text card and the
- * first object's viewer plate off the bottom of the screen, and the step
- * chrome out of sight. A story whose author gave it no intro card still
- * passes through here, and each piece is skipped where it is absent.
+ * Five things go back: the intro card into view, step 0's text card, any
+ * title card holding the screen and the first object's viewer plate off the
+ * bottom of the screen, and the step chrome out of sight. A story whose
+ * author gave it no intro card still passes through here, and each piece is
+ * skipped where it is absent.
  */
 function _restoreIntro() {
   _showIntroCard();
   _sendFirstTextCardOffScreen();
+  releaseTitleCardsForIntro();
   _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
 
   state.currentObjectRun = { objectId: null, runPosition: 0 };
@@ -138,7 +140,9 @@ function _showIntroCard() {
  *
  * The card carries its authored messiness — a rotation and a small offset —
  * in its transform, so the slide has to restate them or the card would snap
- * square on its way out.
+ * square on its way out. A story whose first step is a section has no text
+ * card here at all; that first card is a title card, and
+ * releaseTitleCardsForIntro sends it away instead.
  */
 function _sendFirstTextCardOffScreen() {
   const firstCard = state.textCards?.[0];

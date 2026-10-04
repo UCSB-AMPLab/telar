@@ -21,11 +21,11 @@
  * is already set to 'manual' in scroll-engine.js, which prevents browser
  * scroll restoration from interfering.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
-import { activateCard } from './card-pool.js';
+import { activateCard, reconcileStackForJump } from './card-pool.js';
 import { goToStep } from './navigation.js';
 import { openPanel } from './panels.js';
 
@@ -230,12 +230,14 @@ export function navigateToStep(stepNumber) {
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned (matches keyboardNav)
 
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
     state.currentIndex = targetIndex;
     state.scrollPosition = targetIndex + 1;
   } else {
     state.currentMobileStep = targetIndex;
     state.mobileInIntro = false;
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
 
     state.steps.forEach((step, i) => {
@@ -285,7 +287,8 @@ export function applyDeepLinkOnLoad() {
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned
 
-    // Activate card and sync state
+    // Stack the cards jumped over, then activate the card and sync state
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
     state.currentIndex = targetIndex;
     state.scrollPosition = targetIndex + 1;
@@ -293,6 +296,7 @@ export function applyDeepLinkOnLoad() {
     // Button/mobile/iOS mode: no scroll surface — activate card directly
     state.currentMobileStep = targetIndex;
     state.mobileInIntro = false;
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
 
     // Ensure the correct step has the mobile-active class

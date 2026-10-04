@@ -11,7 +11,7 @@
  * positioning, scene maps, tile URLs) live in the sibling file,
  * card-pool.test.js.
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -653,7 +653,7 @@ describe('activateCard — a mode flip on one object re-seats the plate it share
     resetPoolState();
   });
 
-  it('shows the shared plate rather than panning the viewer inside it', () => {
+  it('keeps the shared plate on screen and sends it the step framing', () => {
     buildStory([
       { step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' },
       { step: '2', object: 'obj-a', question: 'Q2', answer: 'A2',
@@ -669,6 +669,8 @@ describe('activateCard — a mode flip on one object re-seats the plate it share
 
     expect(plate.classList.contains('is-active')).toBe(true);
     expect(plate.style.transform).toBe('translateY(0)');
-    expect(viewerCard.pendingZoom).toBeNull();
+    // The plate stays put, and the step's framing still reaches the viewer —
+    // queued here because this viewer card is not ready yet.
+    expect(viewerCard.pendingZoom).toEqual({ x: 0.4, y: 0.6, zoom: 4, snap: true });
   });
 });

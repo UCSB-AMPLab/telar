@@ -2293,6 +2293,7 @@
   var _config = { peekHeight: 1, messiness: 20, preloadSteps: 5 };
   var _zPlan = { viewerPlateZ: {}, textCardZ: {} };
   var _prefetchedScenes = /* @__PURE__ */ new Set();
+  var _settleHooks = [];
   function _buildSceneMaps(steps) {
     let scene = -1;
     let currentObjectId = null;
@@ -2590,6 +2591,44 @@
     if (prevTitle) _deactivateTitleCard(prevTitle, direction);
     state.activeTitleCardIndex = null;
   }
+  function releaseTitleCardsForIntro() {
+    _clearActiveTitleCard("backward");
+    const first = state.titleCards[0];
+    if (first) _deactivateTitleCard(first, "backward");
+  }
+  function _snapTransform(el, transform) {
+    el.style.transition = "none";
+    el.style.transform = transform;
+    void el.offsetHeight;
+    el.style.transition = "";
+  }
+  function reconcileStackForJump(targetIndex) {
+    const moved = [];
+    for (let i = 0; i < _stepsData.length; i++) {
+      if (i === targetIndex) continue;
+      const el = state.textCards[i] || state.titleCards[i];
+      if (!el) continue;
+      const below = i < targetIndex;
+      el.classList.remove("is-active");
+      el.classList.toggle("is-stacked", below);
+      el.style.transition = "none";
+      el.style.transform = buildTransform(
+        _readCardMessiness(el),
+        below ? "translateY(0)" : "translateY(100vh)"
+      );
+      moved.push(el);
+    }
+    if (moved.length) {
+      void moved[0].offsetHeight;
+      for (const el of moved) el.style.transition = "";
+    }
+    if (state.activeTitleCardIndex !== targetIndex) state.activeTitleCardIndex = null;
+  }
+  function _restoreBackwardTarget(cardEl) {
+    if (!cardEl) return;
+    if (cardEl.classList.contains("is-stacked") || cardEl.classList.contains("is-active")) return;
+    _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), "translateY(0)"));
+  }
   function _activateForward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
     if (needsNewViewer) {
       _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
@@ -2647,6 +2686,7 @@
     }
   }
   function _activateBackward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
+    _restoreBackwardTarget(card);
     if (needsNewViewer) {
       const currentSceneIndex = getSceneIndex(index2 + 1);
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
@@ -2730,16 +2770,29 @@
     }
   }
   function setCardProgress(stepIndex, progress) {
-    if (progress < 1e-3) return;
-    const nextIndex = stepIndex + 1;
-    const nextCard = state.textCards[nextIndex] || state.titleCards[nextIndex];
-    if (!nextCard) return;
     const cardStack = document.querySelector(".card-stack");
-    if (!cardStack || !cardStack.classList.contains("is-scrubbing")) return;
-    const { rot, offX, offY } = _readCardMessiness(nextCard);
-    const translateY = (1 - progress) * 100;
-    nextCard.style.transform = `translateY(${translateY}vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-    _interpolatePlateHandoff(stepIndex, nextIndex, progress);
+    const scrubbing = !!cardStack && cardStack.classList.contains("is-scrubbing");
+    if (!scrubbing && progress >= 1e-3) return;
+    settleCards(stepIndex + 1 + progress);
+  }
+  function settleCards(position) {
+    const contentPos = position - 1;
+    const stepIndex = Math.floor(contentPos);
+    const progress = contentPos - stepIndex;
+    const cardAt = (i) => i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i];
+    const place = (el, base) => {
+      if (el) el.style.transform = buildTransform(_readCardMessiness(el), base);
+    };
+    place(cardAt(stepIndex), "translateY(0)");
+    place(cardAt(stepIndex + 1), `translateY(${(1 - progress) * 100}vh)`);
+    place(cardAt(stepIndex + 2), "translateY(100vh)");
+    if (stepIndex < 0) {
+      const firstPlate = state.viewerPlates?.[0];
+      if (firstPlate) firstPlate.style.transform = `translateY(${(1 - progress) * 100}%)`;
+    } else {
+      _interpolatePlateHandoff(stepIndex, stepIndex + 1, progress);
+    }
+    for (const hook of _settleHooks) hook(stepIndex, progress);
   }
   function _applyFramingToViewer(viewerCard, x, y, zoom, snap2) {
     if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
@@ -2811,14 +2864,14 @@
     const newPlate = _plateForScene(sceneIndex);
     if (!newPlate) return;
     newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
-    if (prevPlate && prevPlate === newPlate) {
+    const samePlate = prevPlate && prevPlate === newPlate;
+    if (samePlate) {
       newPlate.style.transform = "translateY(0)";
-      newPlate.classList.add("is-active");
-      return;
+    } else {
+      _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
     }
-    _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
     newPlate.classList.add("is-active");
-    if (prevPlate) _deactivateDepartingPlate(prevPlate);
+    if (prevPlate && !samePlate) _deactivateDepartingPlate(prevPlate);
     _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step);
   }
   function _viewerInstanceDiv(plateEl, viewerId) {
@@ -3058,6 +3111,7 @@
   function _activateTitleCardStep(index2, direction) {
     const titleCard = state.titleCards[index2];
     if (!titleCard) return;
+    if (direction === "backward") _restoreBackwardTarget(titleCard);
     _stackPreviousTitleCard(index2, direction);
     _deactivatePreviousTextCard(index2, direction);
     _hideDepartingPlateForTitle(index2, direction);
@@ -4825,12 +4879,14 @@
       const targetPx = (targetIndex + 1) * window.innerHeight;
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
+      reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
       state.currentIndex = targetIndex;
       state.scrollPosition = targetIndex + 1;
     } else {
       state.currentMobileStep = targetIndex;
       state.mobileInIntro = false;
+      reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
       state.steps.forEach((step, i) => {
         if (i === targetIndex) {
@@ -4851,12 +4907,14 @@
       const targetPx = (targetIndex + 1) * window.innerHeight;
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
+      reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
       state.currentIndex = targetIndex;
       state.scrollPosition = targetIndex + 1;
     } else {
       state.currentMobileStep = targetIndex;
       state.mobileInIntro = false;
+      reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
       state.steps.forEach((step, i) => {
         if (i === targetIndex) {
@@ -4902,6 +4960,8 @@
   var snapRemovers = [];
   var rafId;
   var dwellTimer;
+  var scrubEndTimer;
+  var cardStackEl;
   var totalPositions = 0;
   var keyboardNavInFlight = false;
   function initScrollEngine(stepCount) {
@@ -4918,6 +4978,10 @@
     if (dwellTimer) {
       clearTimeout(dwellTimer);
       dwellTimer = null;
+    }
+    if (scrubEndTimer) {
+      clearTimeout(scrubEndTimer);
+      scrubEndTimer = null;
     }
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     history.scrollRestoration = "manual";
@@ -4959,15 +5023,15 @@
       }
     });
     registerSnapPoints(totalPositions);
-    let scrubEndTimer;
+    cardStackEl = cardStack;
     lenis.on("virtual-scroll", () => {
       cardStack.classList.add("is-scrubbing");
-      clearTimeout(scrubEndTimer);
-      scrubEndTimer = setTimeout(() => cardStack.classList.remove("is-scrubbing"), 100);
+      armScrubEnd();
     });
     lenis.on("scroll", (l) => {
       const position = l.animatedScroll / window.innerHeight;
       updateScrollPosition(position);
+      if (cardStack.classList.contains("is-scrubbing")) armScrubEnd();
     });
     rafId = requestAnimationFrame(function raf(time) {
       lenis.raf(time);
@@ -4983,6 +5047,17 @@
     initKeyboardNavigation();
     initializeLoadingShimmer();
   }
+  function armScrubEnd() {
+    clearTimeout(scrubEndTimer);
+    scrubEndTimer = setTimeout(endScrub, 100);
+  }
+  function endScrub() {
+    clearTimeout(scrubEndTimer);
+    scrubEndTimer = null;
+    if (!cardStackEl) return;
+    cardStackEl.classList.remove("is-scrubbing");
+    if (lenis) settleCards(lenis.animatedScroll / window.innerHeight);
+  }
   function registerSnapPoints(count) {
     snapRemovers.forEach((fn) => fn());
     snapRemovers = [];
@@ -4994,6 +5069,7 @@
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
     const lenisInstance = state.lenis || lenis;
     if (!lenisInstance) return;
+    endScrub();
     const targetPx = (targetIndex + 1) * window.innerHeight;
     lenisInstance.scrollTo(targetPx, {
       duration: 0.5,
@@ -5003,6 +5079,7 @@
   }
   function keyboardNav(direction) {
     if (!lenis) return;
+    endScrub();
     if (dwellTimer) {
       clearTimeout(dwellTimer);
       dwellTimer = null;
@@ -5020,16 +5097,7 @@
     }
     target = Math.max(0, Math.min(target, totalPositions - 1));
     if (target === rounded && isExact) return;
-    if (direction === "backward") {
-      const contentStepIndex = Math.floor(Math.max(0, position - 1));
-      const interpolatedCard = state.textCards?.[contentStepIndex + 1];
-      if (interpolatedCard && !interpolatedCard.classList.contains("is-active")) {
-        const rot = parseFloat(interpolatedCard.dataset.messinessRot || 0);
-        const offX = parseFloat(interpolatedCard.dataset.messinessOffX || 0);
-        const offY = parseFloat(interpolatedCard.dataset.messinessOffY || 0);
-        interpolatedCard.style.transform = `translateY(100vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-      }
-    }
+    settleCards(target);
     snap.currentSnapIndex = target;
     const targetStep = target - 1;
     if (targetStep >= 0 && targetStep !== state.currentIndex) {
@@ -5039,6 +5107,8 @@
       state.currentIndex = targetStep;
       updateViewerInfo(targetStep);
       if (state.onStepChange) state.onStepChange(targetStep);
+    } else if (targetStep < 0 && state.currentIndex >= 0) {
+      goToStep(-1, "backward");
     }
     keyboardNavInFlight = true;
     lenis.scrollTo(target * vh, {
@@ -5069,27 +5139,14 @@
       if (state.currentIndex >= 0 && !keyboardNavInFlight) {
         goToStep(-1, "backward");
       }
-      const progress2 = position;
-      const firstCard = state.textCards?.[0];
-      if (firstCard) {
-        const rot = parseFloat(firstCard.dataset.messinessRot || 0);
-        const offX = parseFloat(firstCard.dataset.messinessOffX || 0);
-        const offY = parseFloat(firstCard.dataset.messinessOffY || 0);
-        const translateY = (1 - progress2) * 100;
-        firstCard.style.transform = `translateY(${translateY}vh) rotate(${rot}deg) translate(${offX}px, ${offY}px)`;
-      }
-      const firstPlate = state.viewerPlates?.[0];
-      if (firstPlate) {
-        const plateTranslateY = (1 - progress2) * 100;
-        firstPlate.style.transform = `translateY(${plateTranslateY}%)`;
-      }
+      settleCards(position);
       return;
     }
     const clamped = Math.min(maxContent, contentPos);
     const stepIndex = Math.floor(clamped);
     const progress = clamped - stepIndex;
     state.scrollProgress = progress;
-    setCardProgress(stepIndex, progress);
+    if (!keyboardNavInFlight || progress >= 1e-3) setCardProgress(stepIndex, progress);
     lerpIiifPosition(stepIndex, progress, state.stepsData || []);
     if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
       const direction = stepIndex > state.currentIndex ? "forward" : "backward";
@@ -5120,6 +5177,7 @@
   function _restoreIntro() {
     _showIntroCard();
     _sendFirstTextCardOffScreen();
+    releaseTitleCardsForIntro();
     _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
     state.currentObjectRun = { objectId: null, runPosition: 0 };
     _hideStepChrome();
