@@ -45,7 +45,7 @@ a nice-to-have, not a build blocker.
 Version: v1.8.0
 """
 
-from html import escape as html_escape
+from html import escape as html_escape, unescape as html_unescape
 import re
 from pathlib import Path
 import urllib.request
@@ -139,7 +139,11 @@ def process_images(text, base_url=None):
                     i += 1  # Skip the caption line
 
             # Build HTML
-            img_tag = f'<img src="{html_escape(src, quote=True)}" alt="{html_escape(alt, quote=True)}"{class_attr}>'
+            # An entity the author wrote (&#91; for a literal bracket) is
+            # the character it names, so it is decoded before escaping and
+            # not published as the text "&#91;".
+            alt_attr = html_escape(html_unescape(alt), quote=True)
+            img_tag = f'<img src="{html_escape(src, quote=True)}" alt="{alt_attr}"{class_attr}>'
             if caption:
                 # Convert caption markdown to HTML (strip wrapping <p> tags)
                 caption_html = convert_markdown(

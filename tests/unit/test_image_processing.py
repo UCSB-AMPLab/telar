@@ -73,6 +73,17 @@ class TestProcessImages:
         text = '![A [stray bracket](photo.jpg)'
         assert process_images(text, base_url='') == text
 
+    def test_an_entity_in_alt_text_is_the_character_it_names(self):
+        """&#91; is how a literal bracket is written; it is published as a
+        bracket, not as the text "&#91;"."""
+        result = process_images('![Loom &#91;Telar&#93;](a.jpg)', base_url='')
+        assert 'alt="Loom [Telar]"' in result
+
+    def test_markup_characters_in_alt_text_are_still_escaped(self):
+        result = process_images(
+            '![Tom &amp; Jerry & "friends" <b>](a.jpg)', base_url='')
+        assert 'alt="Tom &amp; Jerry &amp; &quot;friends&quot; &lt;b&gt;"' in result
+
     def test_base_url_defaults_to_the_site_config(self, tmp_path, monkeypatch):
         from telar import widgets
         (tmp_path / '_config.yml').write_text('baseurl: "/mysite/"\n', encoding='utf-8')
