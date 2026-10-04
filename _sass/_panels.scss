@@ -117,6 +117,15 @@
   color: var(--color-on-panel-layer2);
 }
 
+/* A covered panel is inert (telar.js), which does not change how it looks, and
+   the panel over it leaves a strip of it in view. Its controls are hidden so
+   none shows in that strip; they go once the panel over it has slid in
+   (Bootstrap's 0.3s offcanvas transition) and return as soon as it leaves. */
+.offcanvas[inert] :is(button, a, [tabindex]:not([tabindex="-1"])) {
+  visibility: hidden;
+  transition: visibility 0s linear 0.3s;
+}
+
 /* Panel text max-width for readability (centered, images/widgets span full width) */
 .offcanvas-body p,
 .offcanvas-body ul,

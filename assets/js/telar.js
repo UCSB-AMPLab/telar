@@ -27,7 +27,21 @@
  * enters the DOM — including story cards the viewer builds and clones at runtime,
  * whose cloned nodes would lose a per-element handler.
  *
- * @version v1.6.0
+ * Covered content — what an open panel covers is inert: a layer panel under the
+ * panel over it, and the page's <main> under the glossary panel. The panels stack
+ * in a fixed order (layer 1, layer 2, glossary: nothing opens a lower panel over
+ * a higher one), so the topmost open panel is the last open one in that order.
+ * The state is recomputed from Bootstrap's show, hide and hidden events, which
+ * every way of opening or closing a panel fires, so no close path can leave
+ * content inert.
+ *
+ * Keys outside stories — on a page with no story, Left arrow and Escape close an
+ * open glossary panel and are otherwise left to the page. On a story page the
+ * story's own keyboard handler closes the topmost panel, glossary included.
+ *
+ * The covered-content and key functions are exposed on `window.TelarPanels`.
+ *
+ * @version v1.8.0
  */
 
 // Wait for DOM to be ready
@@ -44,7 +58,110 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize click-outside-to-close for glossary panels (works on all pages)
   initializeClickOutsideClose();
+
+  initializeCoveredContent();
+  initializeGlossaryKeys();
 });
+
+// ── Covered content ──────────────────────────────────────────────────────────
+
+/** The panels, lowest first. */
+const PANEL_ORDER = ['layer1', 'layer2', 'glossary'];
+
+/**
+ * Whether a panel is open or on its way in, and not on its way out.
+ *
+ * @param {Element} panel
+ * @returns {boolean}
+ */
+function isPanelOpen(panel) {
+  const cls = panel.classList;
+  return (cls.contains('show') || cls.contains('showing')) && !cls.contains('hiding');
+}
+
+/**
+ * The open panels, lowest first.
+ *
+ * A panel whose show or hide event is being handled has not yet changed its
+ * classes, so it is named explicitly.
+ *
+ * @param {Element|null} opening - A panel about to open.
+ * @param {Element|null} closing - A panel about to close.
+ * @returns {Element[]}
+ */
+function openPanelsInOrder(opening, closing) {
+  return PANEL_ORDER
+    .map((type) => document.getElementById(`panel-${type}`))
+    .filter((panel) => panel && panel !== closing && (panel === opening || isPanelOpen(panel)));
+}
+
+/**
+ * Make inert what the open panels cover, and nothing else.
+ *
+ * Every open panel below the topmost is inert, and so is the page's <main>
+ * while the glossary panel is open.
+ *
+ * @param {Element|null} [opening=null] - A panel about to open.
+ * @param {Element|null} [closing=null] - A panel about to close.
+ */
+function syncCoveredContent(opening = null, closing = null) {
+  const open = openPanelsInOrder(opening, closing);
+  const top = open[open.length - 1];
+  PANEL_ORDER.forEach((type) => {
+    const panel = document.getElementById(`panel-${type}`);
+    if (panel) panel.toggleAttribute('inert', open.includes(panel) && panel !== top);
+  });
+  const main = document.querySelector('main');
+  if (main) main.toggleAttribute('inert', open.some((panel) => panel.id === 'panel-glossary'));
+}
+
+/**
+ * Recompute covered content whenever a Telar panel opens or closes.
+ *
+ * Bootstrap's offcanvas events bubble, so one document listener per event
+ * hears every panel. The share panel is an offcanvas too, and is left out.
+ */
+function initializeCoveredContent() {
+  const isTelarPanel = (e) => e.target.matches?.('[data-telar-panel]') && !e.defaultPrevented;
+  document.addEventListener('show.bs.offcanvas', (e) => {
+    if (isTelarPanel(e)) syncCoveredContent(e.target, null);
+  });
+  document.addEventListener('hide.bs.offcanvas', (e) => {
+    if (isTelarPanel(e)) syncCoveredContent(null, e.target);
+  });
+  document.addEventListener('hidden.bs.offcanvas', (e) => {
+    if (isTelarPanel(e)) syncCoveredContent();
+  });
+}
+
+// ── Keys outside stories ─────────────────────────────────────────────────────
+
+/**
+ * Close an open glossary panel on Left arrow or Escape.
+ *
+ * The key is cancelled only when there is a panel to close.
+ *
+ * @param {KeyboardEvent} e
+ */
+function closeGlossaryOnKey(e) {
+  if (e.key !== 'ArrowLeft' && e.key !== 'Escape') return;
+  const panel = document.getElementById('panel-glossary');
+  if (!panel || !isPanelOpen(panel)) return;
+
+  e.preventDefault();
+  bootstrap.Offcanvas.getInstance(panel)?.hide();
+}
+
+/**
+ * Wire the glossary keys on pages with no story; a story page's own handler
+ * closes the topmost panel there.
+ */
+function initializeGlossaryKeys() {
+  if (document.body.classList.contains('story-page')) return;
+  document.addEventListener('keydown', closeGlossaryOnKey);
+}
+
+window.TelarPanels = { syncCoveredContent, closeGlossaryOnKey };
 
 /**
  * Initialize click-outside-to-close behavior for glossary panels

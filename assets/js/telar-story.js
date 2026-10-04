@@ -4971,6 +4971,10 @@
         closePanel("glossary");
       });
     }
+    const glossaryPanel = document.getElementById("panel-glossary");
+    if (glossaryPanel) {
+      glossaryPanel.addEventListener("show.bs.offcanvas", joinGlossaryToStack);
+    }
     ["layer1", "layer2", "glossary"].forEach((panelType) => {
       const panel = document.getElementById(`panel-${panelType}`);
       if (!panel) return;
@@ -4986,6 +4990,14 @@
         }
       });
     });
+  }
+  function joinGlossaryToStack() {
+    const top = state.panelStack[state.panelStack.length - 1];
+    if (top?.type !== "glossary") {
+      state.panelStack.push({ type: "glossary", id: null });
+    }
+    state.isPanelOpen = true;
+    activateScrollLock();
   }
   function openPanel(panelType, contentId) {
     const panelId = `panel-${panelType}`;

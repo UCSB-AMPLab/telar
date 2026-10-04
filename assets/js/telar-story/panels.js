@@ -11,18 +11,21 @@
  * - Layer 2: A deeper panel that stacks on top of Layer 1, triggered by a
  *   button inside the Layer 1 content.
  * - Glossary: A panel that can open from any context when the user clicks a
- *   glossary link in story or panel content.
+ *   glossary link in story or panel content. telar.js opens it, not
+ *   openPanel(); it joins the stack here when it shows, so that it is the
+ *   topmost panel the keys close. It never adds a layer to the URL fragment.
  *
  * The panel stack tracks which panels are open and in what order. Closing
  * always removes the topmost panel. The user can close panels with the back
- * button, Escape key, left arrow key, or by clicking outside the panel.
+ * button, Escape key, left arrow key, or by clicking outside the panel. What
+ * an open panel covers is made inert by telar.js.
  *
  * When any panel is open, the scroll lock system blocks step navigation
  * (wheel events, keyboard arrows, touch swipes) and shows a subtle backdrop.
  * This is the "panel freeze" system — panels are truly modal and must be
  * explicitly dismissed.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -84,6 +87,11 @@ export function initializePanels() {
     });
   }
 
+  const glossaryPanel = document.getElementById('panel-glossary');
+  if (glossaryPanel) {
+    glossaryPanel.addEventListener('show.bs.offcanvas', joinGlossaryToStack);
+  }
+
   // Bootstrap can dismiss a panel without going through closePanel (the
   // offcanvas X button uses data-bs-dismiss), so panel state is reconciled
   // on hidden.bs.offcanvas — the one event every dismissal path fires.
@@ -102,6 +110,21 @@ export function initializePanels() {
       }
     });
   });
+}
+
+/**
+ * Put the glossary panel on top of the panel stack as it shows.
+ *
+ * The panel freezes the story as a layer does. The URL fragment is not
+ * rewritten: it names layers only, and a glossary link writes its own g{n}.
+ */
+export function joinGlossaryToStack() {
+  const top = state.panelStack[state.panelStack.length - 1];
+  if (top?.type !== 'glossary') {
+    state.panelStack.push({ type: 'glossary', id: null });
+  }
+  state.isPanelOpen = true;
+  activateScrollLock();
 }
 
 /**

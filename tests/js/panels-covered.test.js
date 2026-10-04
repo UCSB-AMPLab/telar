@@ -1,0 +1,264 @@
+/**
+ * Tests for covered panels: what an open panel covers is inert, and the
+ * glossary panel is the topmost panel the story's keys close.
+ *
+ * telar.js is a standalone script (not part of the esbuild bundle); it is
+ * loaded once as a side-effect import, started with a DOMContentLoaded event,
+ * and read through its window.TelarPanels surface. panels.js is imported as a
+ * module. Bootstrap's Offcanvas is replaced by a fake that fires the same
+ * bubbling show/hide/hidden events and holds each panel mid-transition until
+ * the test finishes it, as the real 0.3s slide does.
+ *
+ * @version v1.8.0
+ */
+
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { state } from '../../assets/js/telar-story/state.js';
+import {
+  initializePanels,
+  closeTopPanel,
+  closeAllPanels,
+} from '../../assets/js/telar-story/panels.js';
+
+// ── A stand-in for Bootstrap's Offcanvas ─────────────────────────────────────
+
+const instances = new Map();
+const pending = [];
+
+class FakeOffcanvas {
+  static getInstance(el) { return instances.get(el) || null; }
+
+  constructor(el) {
+    this.el = el;
+    this.shown = false;
+    instances.set(el, this);
+  }
+
+  fire(name) {
+    const e = new Event(`${name}.bs.offcanvas`, { bubbles: true, cancelable: true });
+    this.el.dispatchEvent(e);
+    return e;
+  }
+
+  show() {
+    if (this.shown || this.fire('show').defaultPrevented) return;
+    this.shown = true;
+    this.el.classList.add('showing');
+    pending.push(() => {
+      this.el.classList.remove('showing');
+      this.el.classList.add('show');
+      this.fire('shown');
+    });
+  }
+
+  hide() {
+    if (!this.shown || this.fire('hide').defaultPrevented) return;
+    this.shown = false;
+    this.el.classList.add('hiding');
+    pending.push(() => {
+      this.el.classList.remove('show', 'hiding');
+      this.fire('hidden');
+    });
+  }
+}
+
+/** End every slide in flight, as Bootstrap's transition end does. */
+function finishTransitions() {
+  while (pending.length) pending.shift()();
+}
+
+const PAGE = `
+  <main class="story-container"><button id="story-btn">x</button></main>
+  ${['layer1', 'layer2', 'glossary'].map((t) => `
+    <div class="offcanvas" id="panel-${t}" data-telar-panel="${t}">
+      <button id="panel-${t}-back">Back</button>
+      <h1 id="panel-${t}-title"></h1><div id="panel-${t}-content"></div>
+    </div>`).join('')}
+  <div class="offcanvas" id="share-panel"></div>
+`;
+
+const panel = (t) => document.getElementById(`panel-${t}`);
+const offcanvas = (t) => FakeOffcanvas.getInstance(panel(t)) || new FakeOffcanvas(panel(t));
+
+/** Which of the panels and <main> carry the inert attribute. */
+function inertParts() {
+  const parts = ['layer1', 'layer2', 'glossary'].filter((t) => panel(t).hasAttribute('inert'));
+  if (document.querySelector('main').hasAttribute('inert')) parts.push('main');
+  return parts;
+}
+
+/** Open panels the way their callers do: layers on the stack, the glossary by Bootstrap alone. */
+function openLayers(...types) {
+  types.forEach((t) => {
+    state.panelStack.push({ type: t, id: '7' });
+    offcanvas(t).show();
+  });
+  finishTransitions();
+}
+
+function openGlossary() {
+  offcanvas('glossary').show();
+  finishTransitions();
+}
+
+beforeAll(async () => {
+  window.bootstrap = { Offcanvas: FakeOffcanvas };
+  document.body.innerHTML = PAGE;
+  await import('../../assets/js/telar.js');
+  document.dispatchEvent(new Event('DOMContentLoaded'));
+  initializePanels();
+});
+
+beforeEach(() => {
+  instances.forEach((inst) => { inst.shown = false; });
+  pending.length = 0;
+  document.querySelectorAll('.offcanvas').forEach((el) => {
+    el.classList.remove('show', 'showing', 'hiding');
+    el.removeAttribute('inert');
+  });
+  document.querySelector('main').removeAttribute('inert');
+  state.panelStack = [];
+  state.isPanelOpen = false;
+  state.scrollLockActive = false;
+  state.currentIndex = 6;
+});
+
+// ── What is inert ────────────────────────────────────────────────────────────
+
+describe('covered content', () => {
+  it('leaves layer 1 and the story live while layer 1 is the only panel', () => {
+    openLayers('layer1');
+    expect(inertParts()).toEqual([]);
+  });
+
+  it('makes layer 1 inert as layer 2 starts to show, not after the slide', () => {
+    openLayers('layer1');
+    offcanvas('layer2').show();
+    expect(inertParts()).toEqual(['layer1']);
+  });
+
+  it('makes both layers and the story inert under the glossary panel', () => {
+    openLayers('layer1', 'layer2');
+    openGlossary();
+    expect(inertParts()).toEqual(['layer1', 'layer2', 'main']);
+  });
+
+  it('makes the page inert under a glossary panel with no layer open', () => {
+    openGlossary();
+    expect(inertParts()).toEqual(['main']);
+  });
+
+  it('releases layer 1 as soon as layer 2 starts to close', () => {
+    openLayers('layer1', 'layer2');
+    offcanvas('layer2').hide();
+    expect(inertParts()).toEqual([]);
+  });
+
+  it('releases what the glossary panel covered when it closes', () => {
+    openLayers('layer1', 'layer2');
+    openGlossary();
+    offcanvas('glossary').hide();
+    finishTransitions();
+    expect(inertParts()).toEqual(['layer1']);
+  });
+
+  it('leaves nothing inert once closeAllPanels has run', () => {
+    openLayers('layer1', 'layer2');
+    openGlossary();
+    closeAllPanels();
+    finishTransitions();
+    expect(inertParts()).toEqual([]);
+  });
+
+  it('ignores an offcanvas that is not a Telar panel', () => {
+    openLayers('layer1', 'layer2');
+    const share = new FakeOffcanvas(document.getElementById('share-panel'));
+    share.show();
+    share.hide();
+    finishTransitions();
+    expect(inertParts()).toEqual(['layer1']);
+  });
+
+  it('can be recomputed from the classes alone', () => {
+    panel('layer1').classList.add('show');
+    panel('glossary').classList.add('show');
+    window.TelarPanels.syncCoveredContent();
+    expect(inertParts()).toEqual(['layer1', 'main']);
+  });
+});
+
+// ── The glossary panel on the story's stack ──────────────────────────────────
+
+describe('the glossary panel on the panel stack', () => {
+  it('joins the stack on top when it shows, and freezes the story', () => {
+    openLayers('layer1');
+    openGlossary();
+    expect(state.panelStack.map((p) => p.type)).toEqual(['layer1', 'glossary']);
+    expect(state.isPanelOpen).toBe(true);
+    expect(state.scrollLockActive).toBe(true);
+  });
+
+  it('adds no layer to the URL fragment', () => {
+    openLayers('layer1', 'layer2');
+    history.replaceState(null, '', '#s7l2');
+    openGlossary();
+    expect(window.location.hash).toBe('#s7l2');
+  });
+
+  it('is what closeTopPanel closes, leaving the layer under it open', () => {
+    openLayers('layer1');
+    openGlossary();
+    closeTopPanel();
+    finishTransitions();
+    expect(offcanvas('glossary').shown).toBe(false);
+    expect(offcanvas('layer1').shown).toBe(true);
+    expect(state.panelStack.map((p) => p.type)).toEqual(['layer1']);
+  });
+
+  it('is still the top while Bootstrap closes it, so a second close in the same key press does not reach layer 1', () => {
+    openLayers('layer1');
+    openGlossary();
+    offcanvas('glossary').hide(); // Bootstrap's own Escape, focus in the panel
+    closeTopPanel(); // the story's Escape, on the same key press
+    finishTransitions();
+    expect(offcanvas('layer1').shown).toBe(true);
+    expect(state.panelStack.map((p) => p.type)).toEqual(['layer1']);
+  });
+
+  it('leaves the stack when it closes by any path', () => {
+    openGlossary();
+    offcanvas('glossary').hide();
+    finishTransitions();
+    expect(state.panelStack).toEqual([]);
+    expect(state.isPanelOpen).toBe(false);
+    expect(state.scrollLockActive).toBe(false);
+  });
+});
+
+// ── Keys on a page with no story ─────────────────────────────────────────────
+
+describe('closeGlossaryOnKey', () => {
+  const key = (k) => new KeyboardEvent('keydown', { key: k, cancelable: true });
+
+  it.each(['ArrowLeft', 'Escape'])('%s closes an open glossary panel and is cancelled', (k) => {
+    openGlossary();
+    const e = key(k);
+    window.TelarPanels.closeGlossaryOnKey(e);
+    expect(offcanvas('glossary').shown).toBe(false);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it.each(['ArrowLeft', 'Escape'])('%s is left to the page when no glossary panel is open', (k) => {
+    const e = key(k);
+    window.TelarPanels.closeGlossaryOnKey(e);
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it('leaves other keys alone', () => {
+    openGlossary();
+    const e = key('ArrowRight');
+    window.TelarPanels.closeGlossaryOnKey(e);
+    expect(offcanvas('glossary').shown).toBe(true);
+    expect(e.defaultPrevented).toBe(false);
+  });
+});
