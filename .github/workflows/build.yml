@@ -34,7 +34,7 @@ name: Build and Deploy Telar Site
 # build time. Sites without audio objects skip audio tool installation and
 # processing entirely — zero friction for image-only sites.
 #
-# Version: v1.7.0
+# Version: v1.8.0
 
 on:
   push:
@@ -124,10 +124,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 22: jsdom 30 needs ^22.22.2 and its undici >=22.19.0, and Node 20 is
+      # past end of life. Every engine range in package-lock.json accepts it.
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build JavaScript bundle
         # esbuild is the only tool a site build needs; vitest and jsdom are
@@ -174,11 +176,15 @@ jobs:
         id: detect-audio-changes
         run: |
           NEEDS_AUDIO="true"
+          # Whether this site has audio at all, which is what separates a
+          # legitimately empty cache from a lost one further down.
+          HAVE_AUDIO="true"
 
           # Check if any audio objects exist first
           if ! ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
             echo "No audio objects found - skipping audio processing"
             NEEDS_AUDIO="false"
+            HAVE_AUDIO="false"
           elif [ "${{ github.event_name }}" = "push" ]; then
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
@@ -200,6 +206,18 @@ jobs:
           else
             echo "Manual trigger - using input parameter (force_audio=${{ inputs.force_audio }})"
             NEEDS_AUDIO="${{ inputs.force_audio }}"
+          fi
+
+          # Same hole as the tile cache, smaller blast radius. A site with no
+          # audio is expected to restore nothing, which is why the warning on
+          # that path reads as unremarkable and hid the case where a site does
+          # have audio and the cache has gone.
+          if [ "$NEEDS_AUDIO" = "false" ] && [ "$HAVE_AUDIO" = "true" ]; then
+            if [ ! -d "cached-audio" ] || [ -z "$(ls -A cached-audio 2>/dev/null)" ]; then
+              echo "⚠️  The audio cache did not answer (expired, or never saved)."
+              echo "✓ Reprocessing rather than deploying without waveforms"
+              NEEDS_AUDIO="true"
+            fi
           fi
 
           echo "needs_audio=$NEEDS_AUDIO" >> $GITHUB_OUTPUT
@@ -261,8 +279,12 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: cached-iiif/
-          # v0.5.0: Flattened image directory structure - now all images in telar-content/objects/
-          key: iiif-tiles-${{ hashFiles('telar-content/objects/**') }}
+          # Tiles bake the site's base URL into each info.json `@id`, and an
+          # Actions cache entry is immutable per key. Keyed on the images alone,
+          # a _config.yml whose url/baseurl changed restores tiles built for the
+          # old address and silently reverts the correction, so the key has to
+          # move when either input does.
+          key: iiif-tiles-${{ hashFiles('telar-content/objects/**', '_config.yml') }}
 
       - name: Detect if IIIF regeneration is needed
         id: detect-changes
@@ -324,6 +346,22 @@ jobs:
             NEEDS_IIIF="${{ inputs.force_iiif }}"
           fi
 
+          # The decision so far reads the commit diff, which says whether the
+          # tiles need rebuilding — not whether any tiles exist to fall back on.
+          # GitHub evicts a cache after seven days without access, so a quiet
+          # repository that then receives a commit touching no image would skip
+          # generation, restore nothing, and deploy with every self-hosted image
+          # missing, every step reporting success. Verify rather than assume.
+          if [ "$NEEDS_IIIF" = "false" ]; then
+            if [ -d "telar-content/objects" ] && [ -n "$(ls -A telar-content/objects 2>/dev/null)" ]; then
+              if [ ! -d "cached-iiif" ] || [ -z "$(ls -A cached-iiif 2>/dev/null)" ]; then
+                echo "⚠️  The tile cache did not answer (expired, or never saved)."
+                echo "✓ Regenerating rather than deploying a site without its images"
+                NEEDS_IIIF="true"
+              fi
+            fi
+          fi
+
           echo "needs_iiif=$NEEDS_IIIF" >> $GITHUB_OUTPUT
           echo "IIIF regeneration: $NEEDS_IIIF"
 
@@ -365,7 +403,7 @@ jobs:
         with:
           path: cached-iiif/
           # v0.5.0: Flattened image directory structure
-          key: iiif-tiles-${{ hashFiles('telar-content/objects/**') }}
+          key: iiif-tiles-${{ hashFiles('telar-content/objects/**', '_config.yml') }}
 
       - name: Restore IIIF tiles from cache to _site (when skipping regeneration)
         if: steps.detect-changes.outputs.needs_iiif == 'false'
@@ -376,8 +414,7 @@ jobs:
             cp -r cached-iiif/* _site/iiif/objects/
             echo "✓ IIIF tiles restored successfully"
           else
-            echo "⚠️  Warning: No cached IIIF tiles found. Site may have missing images."
-            echo "⚠️  Run a full build with IIIF regeneration to create tiles."
+            echo "No cached IIIF tiles found, and none needed (site has no objects)."
           fi
 
       - name: Encrypt protected stories
