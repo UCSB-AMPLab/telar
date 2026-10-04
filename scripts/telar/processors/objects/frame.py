@@ -4,7 +4,7 @@ Column normalisation, id cleanup, the alt-text fallback, thumbnail checks,
 and the previous build's objects.json -- everything that happens to the frame
 itself rather than to what an object points at.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import json
@@ -55,10 +55,12 @@ def _normalise_frame(df, christmas_tree):
 
 
 def _clean_object_ids(df, warnings):
-    """Strip an accidental file extension, and warn about spaces.
+    """Strip an accidental file extension, warn about spaces, and keep one
+    row per id.
 
     An id is a file name in waiting, so `my-object.jpg` means `my-object`.
     """
+    written = [str(value).strip() for value in df['object_id']]
     # Validate and clean object_id values
     for idx, row in df.iterrows():
         object_id = str(row.get('object_id', '')).strip()
@@ -82,7 +84,46 @@ def _clean_object_ids(df, warnings):
         # Update the dataframe if modified
         if modified:
             df.at[idx, 'object_id'] = object_id
-    return df
+    return _keep_the_last_of_each_id(df, written, warnings)
+
+
+def _keep_the_last_of_each_id(df, written, warnings):
+    """*df* with one row per object id: the last. Two rows can share an id
+    as written, or once an extension is stripped (`map` and `map.jpg`).
+    Every reader of objects.json then sees the same object, the one the
+    Compositor's collision warning says the site shows. *written* is each
+    row's id as the author wrote it, which the warning names."""
+    positions = {}
+    for position, object_id in enumerate(df['object_id']):
+        positions.setdefault(object_id, []).append(position)
+    dropped = []
+    for object_id, rows in positions.items():
+        if len(rows) < 2:
+            continue
+        dropped.extend(rows[:-1])
+        msg = _shared_id_message(object_id, [written[row] for row in rows],
+                                 [str(df['title'].iloc[row]).strip() if 'title' in df.columns
+                                  else '' for row in rows])
+        print(f"  [WARN] {msg}")
+        warnings.append(msg)
+    if not dropped:
+        return df
+    return df.drop(index=df.index[dropped]).reset_index(drop=True)
+
+
+def _shared_id_message(object_id, written, titles):
+    """The warning for rows that share *object_id*, naming each by the id
+    its author wrote, and by its title where the ids are the same."""
+    names = [f"'{name}'" if len(set(written)) == len(written) else
+             f"'{name}' ({title})" if title else f"'{name}'"
+             for name, title in zip(written, titles)]
+    listed = ', '.join(names[:-1]) + ' and ' + names[-1]
+    because = (', because an image extension such as .jpg at the end of an ID is ignored'
+               if any(name != object_id for name in written) else '')
+    rest = 'the other' if len(written) == 2 else 'the others'
+    return (f"objects.csv has {len(written)} rows with the object ID '{object_id}': "
+            f"{listed}{because}. The site uses the last of them, {names[-1]}, and leaves "
+            f"out {rest}.")
 
 
 def _apply_alt_text_fallback(df):

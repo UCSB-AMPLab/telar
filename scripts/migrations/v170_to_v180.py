@@ -223,6 +223,7 @@ FRAMEWORK_FILES = {
     'scripts/telar/processors/project.py': 'Project spreadsheet processing: story numbers',
     'scripts/telar/processors/stories.py': 'Story spreadsheet processing and the answer limits',
     'scripts/telar/processors/objects/featured.py': 'Object processing: featured objects',
+    'scripts/telar/processors/objects/frame.py': 'Object processing: one row per object ID',
     'scripts/telar/processors/objects/local.py': 'Object processing: self-hosted objects',
 }
 
