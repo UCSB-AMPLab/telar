@@ -14,13 +14,73 @@ import shutil
 from pathlib import Path
 
 from telar.images import process_images
-from telar.glossary import load_glossary_terms, process_glossary_links, read_glossary_sheet
+from telar.glossary import (load_glossary_terms, markdown_glossary_title,
+                            process_glossary_links, read_glossary_sheet)
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
 from telar.latex import convert_markdown, has_latex
 from telar.frontmatter import FRONTMATTER_PATTERN, _as_text, _frontmatter_block
 from telar.story_pages import jekyll_slug
 from telar.glossary_kinds import front_matter_kind, resolve_kind, write_site_kinds
+
+
+def _csv_page_rows(csv_path):
+    """The rows of glossary.csv that become pages, as (term_id, title, row).
+
+    The one decision of which site terms are published from a CSV: a sheet
+    missing a required column publishes none, and a row without an id or a
+    title, or whose id starts with `#`, is not a term.
+    """
+    df = read_glossary_sheet(csv_path)
+
+    for col in ['term_id', 'title', 'definition']:
+        if col not in df.columns:
+            print(f"  ⚠️ glossary.csv missing required column: {col}")
+            return []
+
+    rows = []
+    for _, row in df.iterrows():
+        term_id = str(row.get('term_id', '')).strip()
+        title = str(row.get('title', '')).strip()
+        if not term_id or not title or term_id.startswith('#'):
+            continue
+        rows.append((term_id, title, row))
+    return rows
+
+
+def _split_markdown_term(content):
+    """(frontmatter_text, body, term_id) of a legacy glossary file; the
+    first is None without front matter, the last without a term_id."""
+    match = FRONTMATTER_PATTERN.match(content)
+    if not match:
+        return None, None, None
+    frontmatter_text = match.group(1)
+    term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
+    return (frontmatter_text, match.group(2).strip(),
+            term_id_match.group(1) if term_id_match else None)
+
+
+def site_glossary_pages():
+    """The site's own glossary pages as {term_id: (title, kind id)}, the
+    title and kind as the page shows them, chosen as `generate_glossary`
+    chooses its source: glossary.csv when present, else the legacy markdown
+    files. A markdown page without a `title` shows its term id.
+    """
+    csv_path = Path(find_csv_with_fallback('telar-content/spreadsheets/glossary', 'glosario'))
+    md_path = Path('telar-content/texts/glossary')
+    pages = {}
+    if csv_path.exists():
+        for term_id, title, row in _csv_page_rows(csv_path):
+            pages[term_id] = (title, resolve_kind(row.get('kind', ''), warn=False))
+        return pages
+    if md_path.exists():
+        for source_file in md_path.glob('*.md'):
+            with open(source_file, 'r', encoding='utf-8') as f:
+                frontmatter_text, _body, term_id = _split_markdown_term(f.read())
+            if term_id:
+                pages[term_id] = (markdown_glossary_title(frontmatter_text) or term_id,
+                                  resolve_kind(front_matter_kind(frontmatter_text), warn=False))
+    return pages
 
 
 def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
@@ -31,26 +91,9 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         glossary_dir: Output directory for Jekyll files
         glossary_terms: Dict of term_id -> title for link processing
     """
-    df = read_glossary_sheet(csv_path)
-
-    required_cols = ['term_id', 'title', 'definition']
-    for col in required_cols:
-        if col not in df.columns:
-            print(f"  ⚠️ glossary.csv missing required column: {col}")
-            return
-
-    for _, row in df.iterrows():
-        term_id = str(row.get('term_id', '')).strip()
-        title = str(row.get('title', '')).strip()
+    for term_id, title, row in _csv_page_rows(csv_path):
         definition = str(row.get('definition', '')).strip()
         related_terms_raw = str(row.get('related_terms', '')).strip()
-
-        if not term_id or not title:
-            continue
-
-        # Skip comment/instruction rows (e.g. "# Make it lower-case...")
-        if term_id.startswith('#'):
-            continue
 
         # Parse related_terms (pipe-separated)
         related_terms = []
@@ -119,13 +162,6 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
         with open(source_file, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Parse frontmatter and body
-        match = FRONTMATTER_PATTERN.match(content)
-
-        if not match:
-            print(f"Warning: No frontmatter found in {source_file}")
-            continue
-
         # Verbatim. Normalising it means cutting lines out of the author's
         # text or reading their frontmatter and writing it back, and both
         # decide what a file means: a cut is truncated by a blank line or a
@@ -135,16 +171,16 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
         # the page exactly as the author typed it, and has to be a YAML
         # list: the layout iterates it, and Liquid walks a scalar string as
         # one item, so `a,b` is looked up as a single id matching no term.
-        frontmatter_text = match.group(1)
-        body = match.group(2).strip()
+        frontmatter_text, body, term_id = _split_markdown_term(content)
 
-        # Extract term_id to determine output filename
-        term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
-        if not term_id_match:
+        if frontmatter_text is None:
+            print(f"Warning: No frontmatter found in {source_file}")
+            continue
+
+        if not term_id:
             print(f"Warning: No term_id found in {source_file}")
             continue
 
-        term_id = term_id_match.group(1)
         filepath = glossary_dir / f"{term_id}.md"
 
         # Written as a key of its own after the author's front matter, which

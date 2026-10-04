@@ -56,10 +56,15 @@ stored key.
 Version: v1.8.0
 """
 
+import datetime
 import html
+import math
 import re
 from pathlib import Path
 from typing import NamedTuple, Optional
+
+import yaml
+
 from telar.code_spans import code_elements, code_regions, overlaps
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
@@ -166,6 +171,52 @@ def load_glossary_from_csv(csv_path):
     return glossary_terms
 
 
+def markdown_glossary_title(frontmatter_text):
+    """The `title` of a legacy glossary file's front matter as the page
+    generated from it reads it, or None when it has none or the front
+    matter is not a YAML mapping. The page copies the front matter
+    verbatim, so the title is what a YAML reader makes of it: quotes and a
+    trailing comment are not part of it, and `subtitle:` is another key."""
+    try:
+        fields = yaml.safe_load(frontmatter_text)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(fields, dict) or fields.get('title') is None:
+        return None
+    # A YAML reader gives `Z` and `+00:00` as the same zone; Ruby prints them
+    # differently, so the written form decides.
+    zulu = re.search(r'^title:[ \t]*[0-9][^\n#]*[Zz][ \t]*(?:#.*)?$',
+                     frontmatter_text, re.MULTILINE) is not None
+    return _as_liquid_text(fields['title'], zulu)
+
+
+def _as_liquid_text(value, zulu=False):
+    """A YAML value as the page prints it: Ruby's reading of it, rendered
+    by Liquid. Not matched: a sexagesimal number (`12:34`), which the two
+    YAML libraries read differently, a `Z` time inside a list, printed with
+    its offset, and a mapping inside a list, printed in Python's form."""
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, float) and math.isinf(value):
+        return 'Infinity' if value > 0 else '-Infinity'
+    if isinstance(value, float) and math.isnan(value):
+        return 'NaN'
+    if isinstance(value, datetime.datetime):
+        # Ruby prints a time written with `Z` in UTC, one written with an
+        # offset at that offset, and one with no zone as UTC moved to the
+        # build machine's local time.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc).astimezone()
+        elif value.tzinfo is datetime.timezone.utc and zulu:
+            return value.strftime('%Y-%m-%d %H:%M:%S') + ' UTC'
+        return value.strftime('%Y-%m-%d %H:%M:%S %z')
+    if isinstance(value, list):
+        return ''.join(_as_liquid_text(item) for item in value)
+    if value is None:
+        return ''
+    return str(value)
+
+
 def load_glossary_from_markdown(glossary_dir):
     """
     Load glossary terms from markdown files (legacy method).
@@ -192,11 +243,10 @@ def load_glossary_from_markdown(glossary_dir):
 
                 # Extract term_id and title
                 term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
-                title_match = re.search(r'title:\s*["\']?(.*?)["\']?\s*$', frontmatter_text, re.MULTILINE)
+                title = markdown_glossary_title(frontmatter_text)
 
-                if term_id_match and title_match:
+                if term_id_match and title is not None:
                     term_id = term_id_match.group(1)
-                    title = title_match.group(1)
                     glossary_terms[term_id] = title
                     glossary_terms.kinds[term_id] = resolve_kind(
                         front_matter_kind(frontmatter_text), warn=False)

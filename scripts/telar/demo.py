@@ -51,13 +51,15 @@ from telar.latex import convert_markdown
 from telar.widgets import process_widgets
 from telar.glossary import GlossaryTerms, process_glossary_links
 from telar.glossary_kinds import resolve_kind
+from telar.media_type import detect_media_type
+from telar.story_pages import jekyll_slug
 from telar.processors.stories import (_detect_latex, _limit_answers,
                                       _prepare_answer_maths, _resolve_answer_glossary)
 
 # Fields a bundle object or step may carry, copied only when it has a value:
 # the step template emits an attribute for any value Liquid finds, and to
 # Liquid an empty string is a value.
-_DEMO_OBJECT_OPTIONAL = ('alt_text', 'media_type')
+_DEMO_OBJECT_OPTIONAL = ('alt_text',)
 _DEMO_STEP_OPTIONAL = ('alt_text', 'page', 'clip_start', 'clip_end', 'loop')
 
 
@@ -201,6 +203,11 @@ def _merge_demo_objects(bundle, data_dir):
                     for key in _DEMO_OBJECT_OPTIONAL:
                         if obj_data.get(key) not in (None, ''):
                             demo_obj[key] = obj_data[key]
+                    # Classified as a site's own objects are, from the source
+                    # URL, so objects.json and the object page agree; the
+                    # bundle's media_type is not read.
+                    demo_obj['media_type'] = detect_media_type(
+                        demo_obj['source_url'], obj_id)
                     user_objects.append(demo_obj)
                     demo_count += 1
 
@@ -229,13 +236,7 @@ def _write_demo_stories(bundle, data_dir):
                 # Convert demo story format to match user format
                 steps = []
 
-                # Build glossary terms dict from bundle for link processing
-                glossary_terms = GlossaryTerms()
-                if bundle.get('glossary'):
-                    for term_id, term_data in bundle['glossary'].items():
-                        glossary_terms[term_id] = term_data.get('term', term_id)
-                        glossary_terms.kinds[term_id] = resolve_kind(
-                            term_data.get('kind', ''), warn=False)
+                glossary_terms = _demo_link_terms(bundle)
 
                 for step in story_data.get('steps', []):
                     step_data = {
@@ -269,6 +270,33 @@ def _write_demo_stories(bundle, data_dir):
 
             except Exception as e:
                 print(f"  [WARN] Could not create demo story {story_id}: {e}")
+
+
+def _demo_link_terms(bundle):
+    """The link map a demo story resolves [[term]] against: the bundle's
+    glossary and the site's published pages together. A site page replaces a
+    demo term at the same address (`jekyll_slug`), as the glossary pages do.
+    """
+    terms = GlossaryTerms()
+    for term_id, term_data in (bundle.get('glossary') or {}).items():
+        terms[term_id] = term_data.get('term', term_id)
+        terms.kinds[term_id] = resolve_kind(term_data.get('kind', ''), warn=False)
+
+    # Imported here: glossary_pages loads the package this module is part of.
+    from telar.glossary_pages import site_glossary_pages
+    with contextlib.redirect_stdout(io.StringIO()):
+        pages = site_glossary_pages()
+    by_slug = {jekyll_slug(term_id): term_id for term_id in pages}
+    # A demo id at the address of a site page stays linkable under the id
+    # the bundle wrote, but names the site's term. A site term without a
+    # page is not linked: nothing is published for it.
+    for term_id in list(terms):
+        owner = by_slug.get(jekyll_slug(term_id))
+        if owner is not None:
+            terms[term_id], terms.kinds[term_id] = pages[owner]
+    for term_id, (title, kind) in pages.items():
+        terms[term_id], terms.kinds[term_id] = title, kind
+    return terms
 
 
 def _process_demo_answers(steps, story_id, glossary_terms):

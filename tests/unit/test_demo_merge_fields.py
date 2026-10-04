@@ -67,7 +67,7 @@ class TestAReleasedBundle:
         demo = _read(site, 'objects.json')[0]
         assert demo['medium'] == 'Map'
         assert demo['object_type'] == 'Map'
-        assert 'alt_text' not in demo and 'media_type' not in demo
+        assert 'alt_text' not in demo and demo['media_type'] == 'Image'
 
     def test_a_step_gains_no_empty_field(self, site):
         merge_demo_content(_bundle())
@@ -165,3 +165,160 @@ class TestTheGalleryFacet:
         merge_demo_content(_bundle())
 
         assert build_facets(_read(site, 'objects.json'))['medium'] == {'Map': 1}
+
+
+class TestAgreementWithTheSite:
+
+    def test_an_objects_media_type_is_the_one_its_page_shows(self, site):
+        """objects.json and the object page classify from the source URL
+        alone; a bundle's own media_type is not a third reading."""
+        from generate_collections import _object_page
+
+        objects = {
+            'film': {'title': 'A film', 'media_type': 'Video',
+                     'source_url': 'https://x.test/film.mp4'},
+            'clip': {'title': 'A clip', 'media_type': 'Image',
+                     'source_url': 'https://www.youtube.com/watch?v=abc'},
+        }
+        merge_demo_content(_bundle(objects=objects))
+
+        for obj in _read(site, 'objects.json'):
+            page = _object_page(obj)
+            assert f"media_type: {obj['media_type']}\n" in page, obj['object_id']
+        by_id = {o['object_id']: o['media_type'] for o in _read(site, 'objects.json')}
+        assert by_id == {'film': 'Image', 'clip': 'Video'}
+
+    def test_an_answer_links_a_term_the_site_glossary_holds(self, site):
+        sheets = site.parent / 'telar-content' / 'spreadsheets'
+        sheets.mkdir(parents=True)
+        (sheets / 'glossary.csv').write_text(
+            'term_id,title,definition\nsite-term,A site term,Defined.\n',
+            encoding='utf-8')
+        stories = {'demo-story': {'steps': [
+            {'step': 1, 'object': 'map', 'question': 'Q',
+             'answer': 'See [[site-term]] and [[demo-term]].'},
+        ]}}
+
+        merge_demo_content(_bundle(stories=stories))
+
+        answer = _read(site, 'demo-story.json')[0]['answer']
+        assert 'data-term-id="site-term"' in answer
+        assert 'data-term-id="demo-term"' in answer
+        assert 'glossary-link-error' not in answer
+
+    def test_the_sites_title_wins_over_a_demo_term_of_the_same_id(self, site):
+        sheets = site.parent / 'telar-content' / 'spreadsheets'
+        sheets.mkdir(parents=True)
+        (sheets / 'glossary.csv').write_text(
+            'term_id,title,definition\ndemo-term,Site title,Defined.\n',
+            encoding='utf-8')
+        stories = {'demo-story': {'steps': [
+            {'step': 1, 'object': 'map', 'question': 'Q', 'answer': 'See [[demo-term]].'},
+        ]}}
+
+        merge_demo_content(_bundle(stories=stories))
+
+        answer = _read(site, 'demo-story.json')[0]['answer']
+        assert '>Site title</a>' in answer
+        assert '>A term</a>' not in answer
+
+
+class TestASiteTermAtTheSameAddress:
+
+    def _site_glossary(self, site, rows):
+        sheets = site.parent / 'telar-content' / 'spreadsheets'
+        sheets.mkdir(parents=True)
+        (sheets / 'glossary.csv').write_text(
+            'term_id,title,definition\n' + rows, encoding='utf-8')
+
+    @pytest.mark.parametrize('demo_id, site_id', [
+        ('Viewer', 'viewer'),
+        ('my term', 'my-term'),
+    ])
+    def test_the_site_term_wins_where_the_ids_differ_but_the_address_is_shared(
+            self, site, demo_id, site_id):
+        from telar.story_pages import jekyll_slug
+        assert jekyll_slug(demo_id) == jekyll_slug(site_id)
+        self._site_glossary(site, f'{site_id},Site title,Defined.\n')
+        glossary = {demo_id: {'term': 'Demo title', 'content': 'A definition.'}}
+        stories = {'demo-story': {'steps': [
+            {'step': 1, 'object': 'map', 'question': 'Q',
+             'answer': f'See [[{demo_id}]].'},
+        ]}}
+
+        merge_demo_content(_bundle(glossary=glossary, stories=stories))
+
+        answer = _read(site, 'demo-story.json')[0]['answer']
+        assert '>Site title</a>' in answer
+        assert 'Demo title' not in answer
+
+    def test_a_site_term_the_generator_does_not_publish_does_not_win(self, site, tmp_path):
+        """A glossary.csv without a `definition` column publishes no site
+        page, so the demo term keeps the address and the link names it."""
+        sheets = site.parent / 'telar-content' / 'spreadsheets'
+        sheets.mkdir(parents=True)
+        (sheets / 'glossary.csv').write_text(
+            'term_id,title\ndemo-term,Site title\n', encoding='utf-8')
+        glossary = {'Demo Term': {'term': 'Demo title', 'content': 'A definition.'}}
+        stories = {'demo-story': {'steps': [
+            {'step': 1, 'object': 'map', 'question': 'Q',
+             'answer': 'See [[Demo Term]].'},
+        ]}}
+
+        merge_demo_content(_bundle(glossary=glossary, stories=stories))
+        generate_glossary()
+
+        pages = sorted(p.name for p in (tmp_path / '_jekyll-files' / '_glossary').glob('*.md'))
+        assert pages == ['Demo Term.md']
+        answer = _read(site, 'demo-story.json')[0]['answer']
+        assert '>Demo title</a>' in answer
+        assert 'Site title' not in answer
+
+    def test_a_site_term_with_no_page_is_not_linked_from_a_demo_answer(self, site):
+        """No `definition` column: no site page, so there is nothing at
+        /glossary/site-term/ for a demo answer to link."""
+        sheets = site.parent / 'telar-content' / 'spreadsheets'
+        sheets.mkdir(parents=True)
+        (sheets / 'glossary.csv').write_text(
+            'term_id,title\nsite-term,Site title\n', encoding='utf-8')
+        stories = {'demo-story': {'steps': [
+            {'step': 1, 'object': 'map', 'question': 'Q', 'answer': 'See [[site-term]].'},
+        ]}}
+
+        merge_demo_content(_bundle(stories=stories))
+
+        answer = _read(site, 'demo-story.json')[0]['answer']
+        assert 'glossary-inline-link' not in answer
+        assert 'glossary-link-error' in answer
+
+    @pytest.mark.parametrize('front_matter, shown', [
+        ('term_id: viewer\n', 'viewer'),
+        ('term_id: viewer\ntitle: Site viewer\n', 'Site viewer'),
+        ('term_id: viewer\ntitle: "Site viewer" # a note\n', 'Site viewer'),
+        ('term_id: viewer\nsubtitle: Other text\n', 'viewer'),
+        ('term_id: viewer\nsubtitle: Other text\ntitle: Site viewer\n', 'Site viewer'),
+        ('term_id: viewer\ntitle: [Site, viewer]\n', 'Siteviewer'),
+        ('term_id: viewer\ntitle: .inf\n', 'Infinity'),
+        ('term_id: viewer\ntitle: 2024-01-02T10:30:00Z\n', '2024-01-02 10:30:00 UTC'),
+        ('term_id: viewer\ntitle: 2024-01-02T10:30:00+00:00\n', '2024-01-02 10:30:00 +0000'),
+        ('term_id: viewer\ntitle: 2024-01-02T10:30:00+02:00\n', '2024-01-02 10:30:00 +0200'),
+    ])
+    def test_a_legacy_markdown_page_names_the_link_as_the_page_does(
+            self, site, tmp_path, front_matter, shown):
+        glossary_dir = site.parent / 'telar-content' / 'texts' / 'glossary'
+        glossary_dir.mkdir(parents=True)
+        (glossary_dir / 'viewer.md').write_text(
+            f'---\n{front_matter}---\n\nThe site viewer.\n', encoding='utf-8')
+        glossary = {'viewer': {'term': 'Demo title', 'content': 'A definition.'}}
+        stories = {'demo-story': {'steps': [
+            {'step': 1, 'object': 'map', 'question': 'Q', 'answer': 'See [[viewer]].'},
+        ]}}
+
+        merge_demo_content(_bundle(glossary=glossary, stories=stories))
+        generate_glossary()
+
+        pages = sorted(p.name for p in (tmp_path / '_jekyll-files' / '_glossary').glob('*.md'))
+        assert pages == ['viewer.md']
+        answer = _read(site, 'demo-story.json')[0]['answer']
+        assert f'>{shown}</a>' in answer
+        assert 'Demo title' not in answer
