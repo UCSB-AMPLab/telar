@@ -130,8 +130,13 @@ jobs:
           node-version: '20'
 
       - name: Build JavaScript bundle
+        # esbuild is the only tool a site build needs; vitest and jsdom are
+        # development dependencies for the framework's own test suite, which
+        # no site build runs, so they are omitted. npm install, not npm ci: a
+        # site's package-lock.json can be missing or out of step with its
+        # package.json after an upgrade, and npm ci refuses to build then.
         run: |
-          npm install
+          npm install --omit=dev
           npm run build:js
 
       - name: Fetch data from Google Sheets (if enabled)

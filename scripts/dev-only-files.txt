@@ -1,0 +1,21 @@
+# The files a site made through the Compositor does not carry: the
+# framework's own test infrastructure, present in this template only
+# because the template is also the framework's development repository.
+# Nothing on a published site links to any of this, and a local user who
+# clones the template keeps it all — this list is what the Compositor
+# route drops, not what the framework itself carries.
+#
+# Read in two places: by the Compositor, which deletes these paths in the
+# born-clean commit that sets a new site up, and by each release's
+# migration.json, which deletes them from a site upgraded from an earlier
+# version. The command-line migration (scripts/migrations/) leaves these
+# files alone.
+#
+# Format: one repository-relative path per line. A path ending in `/`
+# names a directory. A line starting with `#` is a note, and blank lines
+# are ignored.
+
+tests/
+vitest.config.js
+pytest.ini
+.github/workflows/telar-tests.yml
