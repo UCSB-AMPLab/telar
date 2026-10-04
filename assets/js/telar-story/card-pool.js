@@ -79,6 +79,7 @@ import {
   computeFocalTarget,
   reSnapActiveViewer,
   _deriveCardPlacement,
+  visibleImageRegion,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
 import { isFitHeight, applyCardMotionDuration } from './card-height.js';
@@ -2096,7 +2097,7 @@ function _prefetchTilesForScene(sceneIndex) {
 
       if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
 
-      const urls = _computeTileUrls(baseUrl, info, x, y, zoom);
+      const urls = _computeTileUrls(baseUrl, info, x, y, zoom, _plateViewerSize(sceneIndex));
       for (const url of urls) {
         const link = document.createElement('link');
         link.rel = 'prefetch';
@@ -2109,6 +2110,21 @@ function _prefetchTilesForScene(sceneIndex) {
 }
 
 /**
+ * The size a scene's viewer is framed in: its plate's content box, which the
+ * viewer fills, or the window while the plate has no layout.
+ *
+ * @param {number} sceneIndex
+ * @returns {{ width: number, height: number }}
+ */
+function _plateViewerSize(sceneIndex) {
+  const el = state.viewerPlates?.[sceneIndex]?.container;
+  if (el?.clientWidth > 0 && el.clientHeight > 0) {
+    return { width: el.clientWidth, height: el.clientHeight };
+  }
+  return { width: window.innerWidth, height: window.innerHeight };
+}
+
+/**
  * The tiling an image service advertises.
  *
  * A service that names neither a tile size nor a set of scale factors is
@@ -2116,7 +2132,7 @@ function _prefetchTilesForScene(sceneIndex) {
  * generated at.
  *
  * @param {Object} info - Parsed info.json
- * @returns {{ imageW: number, imageH: number, tileSize: number, scaleFactors: number[] }}
+ * @returns {{ imageW: number, imageH: number, tileSize: number, scaleFactors: number[], version: number }}
  */
 function _tileSourceShape(info) {
   return {
@@ -2124,26 +2140,80 @@ function _tileSourceShape(info) {
     imageH:       info.height,
     tileSize:     info.tiles?.[0]?.width || 512,
     scaleFactors: info.tiles?.[0]?.scaleFactors || [1],
+    version:      _imageApiVersion(info),
   };
+}
+
+/**
+ * The IIIF Image API version an info.json describes: 3 where its context or
+ * type says so, 2 otherwise.
+ *
+ * @param {Object} info - Parsed info.json
+ * @returns {2|3}
+ */
+function _imageApiVersion(info) {
+  const context = [].concat(info['@context'] || []).join(' ');
+  return (context.includes('/image/3/') || info.type === 'ImageService3') ? 3 : 2;
+}
+
+/**
+ * A static tile's URL, named as the viewer names it.
+ *
+ * A static tile set holds one file per name the viewer asks for, so a
+ * prefetch under any other name fetches nothing the viewer will use: it is
+ * not found. OpenSeadragon asks for a level narrower and shorter than one tile
+ * as the whole image at that level's size; a tile that is the whole image as
+ * region `full`; and a tile's size as `w,h` under API 3 and `w,` under API 2,
+ * except that the image's own full size is `max` under 3 and `full` under 2
+ * (where the width alone matches).
+ *
+ * @param {string} baseUrl - Image service base URL
+ * @param {{ imageW: number, imageH: number, tileSize: number, version: number }} shape
+ * @param {{ x: number, y: number, w: number, h: number }} tile - Image px
+ * @param {number} scaleFactor
+ * @returns {string}
+ */
+function _tileUrl(baseUrl, { imageW, imageH, tileSize, version }, tile, scaleFactor) {
+  const levelW = Math.ceil(imageW / scaleFactor);
+  const levelH = Math.ceil(imageH / scaleFactor);
+  const oneTile = levelW < tileSize && levelH < tileSize;
+
+  const region = oneTile || (tile.x === 0 && tile.y === 0 && tile.w === imageW && tile.h === imageH)
+    ? 'full'
+    : `${tile.x},${tile.y},${tile.w},${tile.h}`;
+
+  // Output pixels: the level's own size for a level under one tile, and
+  // otherwise the tile's image px at this level's scale.
+  const outW = oneTile ? levelW : Math.ceil(tile.w / scaleFactor);
+  const outH = oneTile ? levelH : Math.ceil(tile.h / scaleFactor);
+  let size;
+  if (version === 3) {
+    size = (outW === imageW && outH === imageH) ? 'max' : `${outW},${outH}`;
+  } else {
+    size = outW === imageW ? 'full' : `${outW},`;
+  }
+
+  return `${baseUrl}/${region}/${size}/0/default.jpg`;
 }
 
 /**
  * The image-pixel box a step's framing puts on screen.
  *
- * The two-circle model answers with the authored focal point as centre and
- * the inscribed-circle diameter as width, so the prefetched region aligns
- * with the rendered one. A step it cannot answer for falls back to the
- * authored point and a viewport-relative estimate. Either way the box is
- * clamped to the image bounds.
+ * Where the framing can be computed, the box is what the viewer shows at rest:
+ * visibleImageRegion is the rectangle the viewer is fitted to, cut to the
+ * image. A step it cannot answer for falls back to the authored point and a
+ * viewport-relative estimate, clamped to the image bounds.
  *
  * @param {number} imageW
  * @param {number} imageH
  * @param {number} x - Normalised centre X (0-1)
  * @param {number} y - Normalised centre Y (0-1)
  * @param {number} zoom - OSD zoom multiplier
+ * @param {{ width: number, height: number }} [container] - The viewer's size,
+ *   the window's where not given.
  * @returns {{ left: number, top: number, right: number, bottom: number }}
  */
-function _prefetchRegion(imageW, imageH, x, y, zoom) {
+function _prefetchRegion(imageW, imageH, x, y, zoom, container) {
   // Derive cardBox and placementMode via the canonical helper in iiif-card.js.
   const vpW = window.innerWidth;
   const vpH = window.innerHeight;
@@ -2152,22 +2222,16 @@ function _prefetchRegion(imageW, imageH, x, y, zoom) {
   const placementMode = _deriveCardPlacement(cardBox, vpW, vpH);
 
   const target = computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
-  let centreX, centreY, halfW, halfH;
+  const shown = target &&
+    visibleImageRegion(target, zoom, container || { width: vpW, height: vpH });
+  if (shown) return shown;
 
-  if (target) {
-    // The authored focal circle: centre = focalImg, radius = diameterImg/2
-    centreX = target.focalImg.x;
-    centreY = target.focalImg.y;
-    halfW   = target.diameterImg / 2;
-    halfH   = target.diameterImg / 2;
-  } else {
-    // Raw authored (x, y) with a viewport-relative size estimate
-    centreX = x * imageW;
-    centreY = y * imageH;
-    const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
-    halfW = (vpW * pixelsPerViewportPx) / 2;
-    halfH = (vpH * pixelsPerViewportPx) / 2;
-  }
+  // Raw authored (x, y) with a viewport-relative size estimate
+  const centreX = x * imageW;
+  const centreY = y * imageH;
+  const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
+  const halfW = (vpW * pixelsPerViewportPx) / 2;
+  const halfH = (vpH * pixelsPerViewportPx) / 2;
 
   return {
     left:   Math.max(0, centreX - halfW),
@@ -2214,13 +2278,12 @@ function _prefetchScaleFactor(scaleFactors, tileSize, region) {
  *
  * @param {string} baseUrl - Image service base URL
  * @param {{ left: number, top: number, right: number, bottom: number }} region
- * @param {number} imageW
- * @param {number} imageH
- * @param {number} tileSize - Tile width in image pixels at scale factor 1
+ * @param {{ imageW: number, imageH: number, tileSize: number, version: number }} shape
  * @param {number} scaleFactor
  * @returns {string[]} Array of tile URLs
  */
-function _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFactor) {
+function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
+  const { imageW, imageH, tileSize } = shape;
   const effectiveTile = tileSize * scaleFactor;
   const urls = [];
 
@@ -2232,13 +2295,7 @@ function _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFact
       const rh = Math.min(effectiveTile, imageH - ry);
       if (rw <= 0 || rh <= 0) continue;
 
-      // Output tile size: actual pixels / scaleFactor (IIIF Level 0 static tiles)
-      const outW = Math.ceil(rw / scaleFactor);
-
-      // IIIF Image API Level 0 URL pattern:
-      // {base}/{region_x},{region_y},{region_w},{region_h}/{output_w},/0/default.jpg
-      const url = `${baseUrl}/${rx},${ry},${rw},${rh}/${outW},/0/default.jpg`;
-      urls.push(url);
+      urls.push(_tileUrl(baseUrl, shape, { x: rx, y: ry, w: rw, h: rh }, scaleFactor));
 
       if (urls.length >= 9) return urls; // Cap at 9 tiles
     }
@@ -2259,16 +2316,18 @@ function _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFact
  * @param {number} x - Normalised centre X (0-1)
  * @param {number} y - Normalised centre Y (0-1)
  * @param {number} zoom - OSD zoom multiplier
+ * @param {{ width: number, height: number }} [container] - The viewer's size,
+ *   the window's where not given.
  * @returns {string[]} Array of tile URLs
  */
-function _computeTileUrls(baseUrl, info, x, y, zoom) {
-  const { imageW, imageH, tileSize, scaleFactors } = _tileSourceShape(info);
-  const region = _prefetchRegion(imageW, imageH, x, y, zoom);
-  const scaleFactor = _prefetchScaleFactor(scaleFactors, tileSize, region);
+function _computeTileUrls(baseUrl, info, x, y, zoom, container) {
+  const shape = _tileSourceShape(info);
+  const region = _prefetchRegion(shape.imageW, shape.imageH, x, y, zoom, container);
+  const scaleFactor = _prefetchScaleFactor(shape.scaleFactors, shape.tileSize, region);
 
-  return _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFactor);
+  return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor);
 }
 
 // Exported for unit testing under an alias without underscore (matches the
 // _buildSceneMaps as buildSceneMaps pattern above).
-export { _computeTileUrls as computeTileUrls };
+export { _computeTileUrls as computeTileUrls, _prefetchRegion as prefetchRegion };

@@ -8,7 +8,7 @@
  * initCardPool, and the media/label/framing/handoff/pool-cap paths they
  * drive — lives in the sibling file, card-pool-dom.test.js.
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -19,6 +19,7 @@ import {
   buildSceneMaps,
   computeZIndexPlan,
   computeTileUrls,
+  prefetchRegion,
 } from '../../assets/js/telar-story/card-pool.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import { computeFocalTarget } from '../../assets/js/telar-story/iiif-card.js';
@@ -328,13 +329,9 @@ describe('_computeTileUrls tile-prefetch compensation', () => {
   });
 
   it('tile region centroid differs from raw (x, y) centre when cardOverlayRect is set', () => {
-    // Same setup as above — confirm the focal-target actually shifts the centre.
-    // computeFocalTarget returns focalImg = {x: authoredX*imageW, y: authoredY*imageH}
-    // (the authored focal point, not a shifted point). The shift compared to the raw
-    // centre happens because the prefetch REGION is now diameterImg-wide rather than
-    // viewport-relative, so the tile centroid shifts when the uncovered region differs
-    // from the full viewport (side card). However, focalImg itself equals raw authored.
-    // We verify that tiles are non-trivially distributed around the focal area.
+    // Same setup as above. computeFocalTarget returns focalImg = {x: authoredX*imageW,
+    // y: authoredY*imageH}, the authored focal point itself; the prefetch box around
+    // it is what the viewer shows at rest (see the prefetchRegion block below).
     const cardBox = { x: 43, y: 0, w: 533, h: 900 };
     state.cardOverlayRect = { x: cardBox.x, y: cardBox.y, width: cardBox.w, height: cardBox.h };
 
@@ -354,8 +351,6 @@ describe('_computeTileUrls tile-prefetch compensation', () => {
     const urls = computeTileUrls(BASE_URL, INFO, authoredX, authoredY, authoredZoom);
     expect(urls.length).toBeGreaterThan(0);
 
-    // The tile region width should reflect diameterImg, not viewport-relative size.
-    // Parse the region size from the first URL and compare to diameterImg.
     const firstParts = urls[0].replace(BASE_URL + '/', '').split('/');
     const [, , rw] = firstParts[0].split(',').map(Number);
     // The tile size is clamped to the tile grid, so rw >= min(tileSize, diameterImg/2)
@@ -477,5 +472,122 @@ describe('computeTileUrls — tile source shape, level choice and grid', () => {
       expect(rx + rw).toBeLessThanOrEqual(INFO.width);
       expect(ry + rh).toBeLessThanOrEqual(INFO.height);
     }
+  });
+});
+
+// ── The prefetch box is what the viewer shows at rest ────────────────────────
+//
+// A 1440×900 window with the side card at x 43, 533 wide leaves an uncovered
+// region 864×900 from x 576, and the plate fills the window. The expected
+// boxes are worked by hand from the framing rules (the scale, the placed point
+// and the clamp), not by calling the framing code.
+
+describe('prefetchRegion — the image the viewer shows at rest', () => {
+  const W = 1600;
+  const H = 900;
+
+  beforeEach(() => {
+    state.activeTitleCardIndex = null;
+    state.layoutMode = 'horizontal';
+    state.cardOverlayRect = { x: 43, y: 0, width: 533, height: 900 };
+    Object.defineProperty(window, 'innerWidth',  { value: 1440, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 900,  configurable: true, writable: true });
+  });
+
+  const expectBox = (box, want) => {
+    for (const side of ['left', 'top', 'right', 'bottom']) {
+      expect(box[side], side).toBeCloseTo(want[side], 6);
+    }
+  };
+
+  it('an overview shows the whole image, wherever its x and y point', () => {
+    // Scale 864/1600 = 0.54 fits the image to the region; the image centre is
+    // placed at the region centre, so all of it is on screen.
+    for (const [x, y] of [[0.1, 0.9], [0.8, 0.2], [0.5, 0.5]]) {
+      expectBox(prefetchRegion(W, H, x, y, 1), { left: 0, top: 0, right: W, bottom: H });
+    }
+  });
+
+  it('a detail in the middle shows the window at its scale, centred on the focal point', () => {
+    // Zoom 2: frame 800 image px, circle 720, scale 864/720 = 1.2. The focal
+    // (800, 450) sits at the region centre (1008, 450), so the window's
+    // 1200×750 image px start at x 800 − 1008/1.2 = −40 and y 450 − 375 = 75.
+    expectBox(prefetchRegion(W, H, 0.5, 0.5, 2), { left: 0, top: 75, right: 1160, bottom: 825 });
+  });
+
+  it('a detail near an edge is held flush with the image edge it would pass', () => {
+    // Zoom 6: circle 240, scale 3.6, focal (1520, 45). Coverage holds the
+    // focal at x 1152 (the image's right edge on the window's) and y 162 (its
+    // top edge on the window's), so the window's 400×250 image px run from
+    // x 1520 − 1152/3.6 = 1200 and y 45 − 162/3.6 = 0.
+    expectBox(prefetchRegion(W, H, 0.95, 0.05, 6), { left: 1200, top: 0, right: W, bottom: 250 });
+  });
+
+  it('is measured in the viewer it is shown in, not the window', () => {
+    // The plate's border leaves the viewer 899 px tall: the same placement
+    // shows 899/1.2 image px of height rather than 750.
+    const box = prefetchRegion(W, H, 0.5, 0.5, 2, { width: 1440, height: 899 });
+    expectBox(box, { left: 0, top: 75, right: 1160, bottom: 75 + 899 / 1.2 });
+  });
+});
+
+// ── Tiles are named as the viewer names them ─────────────────────────────────
+//
+// A static tile set has a file for each name OpenSeadragon asks for and no
+// other. The expected names are the files the generator writes for
+// a 1600×900 image with 512-px tiles and scale factors 1, 2 and 4.
+
+describe('computeTileUrls — tile names', () => {
+  const BASE_URL = 'https://example.org/iiif/objects/test';
+  const V3 = { '@context': 'http://iiif.io/api/image/3/context.json', type: 'ImageService3' };
+  const V2 = { '@context': 'http://iiif.io/api/image/2/context.json' };
+  const tail = (url) => url.replace(BASE_URL + '/', '');
+
+  beforeEach(() => {
+    state.activeTitleCardIndex = null;
+    state.layoutMode = 'horizontal';
+    state.cardOverlayRect = { x: 43, y: 0, width: 533, height: 900 };
+    Object.defineProperty(window, 'innerWidth',  { value: 1440, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 900,  configurable: true, writable: true });
+  });
+
+  it('names a tile by width and height under API 3, edge tiles at their own size', () => {
+    const info = { ...V3, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [1, 2, 4] }] };
+    expect(computeTileUrls(BASE_URL, info, 0.5, 0.5, 1).map(tail).sort()).toEqual([
+      '0,0,512,512/512,512/0/default.jpg',
+      '0,512,512,388/512,388/0/default.jpg',
+      '1024,0,512,512/512,512/0/default.jpg',
+      '1024,512,512,388/512,388/0/default.jpg',
+      '1536,0,64,512/64,512/0/default.jpg',
+      '1536,512,64,388/64,388/0/default.jpg',
+      '512,0,512,512/512,512/0/default.jpg',
+      '512,512,512,388/512,388/0/default.jpg',
+    ]);
+  });
+
+  it('names a tile by width alone under API 2', () => {
+    const info = { ...V2, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [1, 2, 4] }] };
+    const names = computeTileUrls(BASE_URL, info, 0.5, 0.5, 1).map(tail);
+    expect(names).toContain('0,0,512,512/512,/0/default.jpg');
+    expect(names).toContain('1536,512,64,388/64,/0/default.jpg');
+  });
+
+  it('names a level smaller than one tile as the whole image at that size', () => {
+    const v3 = { ...V3, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [4] }] };
+    expect(computeTileUrls(BASE_URL, v3, 0.5, 0.5, 1).map(tail)).toEqual(['full/400,225/0/default.jpg']);
+    const v2 = { ...V2, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [4] }] };
+    expect(computeTileUrls(BASE_URL, v2, 0.5, 0.5, 1).map(tail)).toEqual(['full/400,/0/default.jpg']);
+  });
+
+  it('names an image within one tile as the whole image at full size', () => {
+    const v3 = { ...V3, width: 400, height: 300, tiles: [{ width: 512, scaleFactors: [1] }] };
+    expect(computeTileUrls(BASE_URL, v3, 0.5, 0.5, 1).map(tail)).toEqual(['full/max/0/default.jpg']);
+    const v2 = { ...V2, width: 400, height: 300, tiles: [{ width: 512, scaleFactors: [1] }] };
+    expect(computeTileUrls(BASE_URL, v2, 0.5, 0.5, 1).map(tail)).toEqual(['full/full/0/default.jpg']);
+  });
+
+  it('names a tile the whole image is exactly as region full', () => {
+    const v3 = { ...V3, width: 512, height: 300, tiles: [{ width: 512, scaleFactors: [1] }] };
+    expect(computeTileUrls(BASE_URL, v3, 0.5, 0.5, 1).map(tail)).toEqual(['full/max/0/default.jpg']);
   });
 });

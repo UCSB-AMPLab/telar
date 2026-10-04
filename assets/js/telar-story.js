@@ -526,6 +526,24 @@
   function _placedPoint(focalImg, imgW, imgH, zoom) {
     return zoom <= 1 ? { x: imgW / 2, y: imgH / 2 } : focalImg;
   }
+  function _viewerImageRect({ s, anchorImg, anchorPx }, container) {
+    return {
+      x: anchorImg.x - anchorPx.x / s,
+      y: anchorImg.y - anchorPx.y / s,
+      w: container.width / s,
+      h: container.height / s
+    };
+  }
+  function visibleImageRegion(target, zoom, container) {
+    const r = _viewerImageRect(framePlacement(target, zoom, container), container);
+    const shown = {
+      left: Math.max(0, r.x),
+      top: Math.max(0, r.y),
+      right: Math.min(target.imageW, r.x + r.w),
+      bottom: Math.min(target.imageH, r.y + r.h)
+    };
+    return shown.right > shown.left && shown.bottom > shown.top ? shown : null;
+  }
   function blendPlacements(from, to, t) {
     const corner = (p) => ({
       x: p.anchorPx.x - p.anchorImg.x * p.s,
@@ -552,15 +570,11 @@
     const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
     return { rect, placement: framePlacement(target, zoom, rect) };
   }
-  function _applyPlacement(viewerCard, rect, { s, anchorImg, anchorPx: F }, immediate) {
+  function _applyPlacement(viewerCard, rect, placement, immediate) {
     const vp = viewerCard.osdViewer.viewport;
     const OSD = window.OpenSeadragon;
-    const visW = rect.width / s;
-    const visH = rect.height / s;
-    const topLeft = { x: anchorImg.x - F.x / s, y: anchorImg.y - F.y / s };
-    const targetVp = vp.imageToViewportRectangle(
-      new OSD.Rect(topLeft.x, topLeft.y, visW, visH)
-    );
+    const r = _viewerImageRect(placement, rect);
+    const targetVp = vp.imageToViewportRectangle(new OSD.Rect(r.x, r.y, r.w, r.h));
     vp.fitBounds(targetVp, immediate);
   }
   function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
@@ -3844,7 +3858,7 @@
       const y = parseFloat(step.y);
       const zoom = parseFloat(step.zoom);
       if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-      const urls = _computeTileUrls(baseUrl, info, x, y, zoom);
+      const urls = _computeTileUrls(baseUrl, info, x, y, zoom, _plateViewerSize(sceneIndex));
       for (const url of urls) {
         const link = document.createElement("link");
         link.rel = "prefetch";
@@ -3855,34 +3869,55 @@
     }).catch(() => {
     });
   }
+  function _plateViewerSize(sceneIndex) {
+    const el = state.viewerPlates?.[sceneIndex]?.container;
+    if (el?.clientWidth > 0 && el.clientHeight > 0) {
+      return { width: el.clientWidth, height: el.clientHeight };
+    }
+    return { width: window.innerWidth, height: window.innerHeight };
+  }
   function _tileSourceShape(info) {
     return {
       imageW: info.width,
       imageH: info.height,
       tileSize: info.tiles?.[0]?.width || 512,
-      scaleFactors: info.tiles?.[0]?.scaleFactors || [1]
+      scaleFactors: info.tiles?.[0]?.scaleFactors || [1],
+      version: _imageApiVersion(info)
     };
   }
-  function _prefetchRegion(imageW, imageH, x, y, zoom) {
+  function _imageApiVersion(info) {
+    const context = [].concat(info["@context"] || []).join(" ");
+    return context.includes("/image/3/") || info.type === "ImageService3" ? 3 : 2;
+  }
+  function _tileUrl(baseUrl, { imageW, imageH, tileSize, version: version2 }, tile, scaleFactor) {
+    const levelW = Math.ceil(imageW / scaleFactor);
+    const levelH = Math.ceil(imageH / scaleFactor);
+    const oneTile = levelW < tileSize && levelH < tileSize;
+    const region = oneTile || tile.x === 0 && tile.y === 0 && tile.w === imageW && tile.h === imageH ? "full" : `${tile.x},${tile.y},${tile.w},${tile.h}`;
+    const outW = oneTile ? levelW : Math.ceil(tile.w / scaleFactor);
+    const outH = oneTile ? levelH : Math.ceil(tile.h / scaleFactor);
+    let size;
+    if (version2 === 3) {
+      size = outW === imageW && outH === imageH ? "max" : `${outW},${outH}`;
+    } else {
+      size = outW === imageW ? "full" : `${outW},`;
+    }
+    return `${baseUrl}/${region}/${size}/0/default.jpg`;
+  }
+  function _prefetchRegion(imageW, imageH, x, y, zoom, container) {
     const vpW = window.innerWidth;
     const vpH = window.innerHeight;
     const r = state.cardOverlayRect;
     const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
     const placementMode = _deriveCardPlacement(cardBox, vpW, vpH);
     const target = computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
-    let centreX, centreY, halfW, halfH;
-    if (target) {
-      centreX = target.focalImg.x;
-      centreY = target.focalImg.y;
-      halfW = target.diameterImg / 2;
-      halfH = target.diameterImg / 2;
-    } else {
-      centreX = x * imageW;
-      centreY = y * imageH;
-      const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
-      halfW = vpW * pixelsPerViewportPx / 2;
-      halfH = vpH * pixelsPerViewportPx / 2;
-    }
+    const shown = target && visibleImageRegion(target, zoom, container || { width: vpW, height: vpH });
+    if (shown) return shown;
+    const centreX = x * imageW;
+    const centreY = y * imageH;
+    const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
+    const halfW = vpW * pixelsPerViewportPx / 2;
+    const halfH = vpH * pixelsPerViewportPx / 2;
     return {
       left: Math.max(0, centreX - halfW),
       top: Math.max(0, centreY - halfH),
@@ -3903,7 +3938,8 @@
     }
     return scaleFactor;
   }
-  function _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFactor) {
+  function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
+    const { imageW, imageH, tileSize } = shape;
     const effectiveTile = tileSize * scaleFactor;
     const urls = [];
     for (let tx = Math.floor(region.left / effectiveTile); tx * effectiveTile < region.right; tx++) {
@@ -3913,19 +3949,17 @@
         const rw = Math.min(effectiveTile, imageW - rx);
         const rh = Math.min(effectiveTile, imageH - ry);
         if (rw <= 0 || rh <= 0) continue;
-        const outW = Math.ceil(rw / scaleFactor);
-        const url = `${baseUrl}/${rx},${ry},${rw},${rh}/${outW},/0/default.jpg`;
-        urls.push(url);
+        urls.push(_tileUrl(baseUrl, shape, { x: rx, y: ry, w: rw, h: rh }, scaleFactor));
         if (urls.length >= 9) return urls;
       }
     }
     return urls;
   }
-  function _computeTileUrls(baseUrl, info, x, y, zoom) {
-    const { imageW, imageH, tileSize, scaleFactors } = _tileSourceShape(info);
-    const region = _prefetchRegion(imageW, imageH, x, y, zoom);
-    const scaleFactor = _prefetchScaleFactor(scaleFactors, tileSize, region);
-    return _tileUrlsForRegion(baseUrl, region, imageW, imageH, tileSize, scaleFactor);
+  function _computeTileUrls(baseUrl, info, x, y, zoom, container) {
+    const shape = _tileSourceShape(info);
+    const region = _prefetchRegion(shape.imageW, shape.imageH, x, y, zoom, container);
+    const scaleFactor = _prefetchScaleFactor(shape.scaleFactors, shape.tileSize, region);
+    return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor);
   }
 
   // node_modules/lenis/dist/lenis.mjs

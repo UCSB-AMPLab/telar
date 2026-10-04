@@ -507,6 +507,48 @@ function _placedPoint(focalImg, imgW, imgH, zoom) {
 }
 
 /**
+ * The image-px rectangle a placement fills a container with (pure): the
+ * container's own size at scale `s`, placed so `anchorImg` lands at
+ * `anchorPx`. Parts of it can lie beyond the image, where the viewer shows
+ * background.
+ *
+ * @param {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}} placement
+ * @param {{width:number,height:number}} container  Element px.
+ * @returns {{x:number,y:number,w:number,h:number}} Image px.
+ */
+function _viewerImageRect({ s, anchorImg, anchorPx }, container) {
+  return {
+    x: anchorImg.x - anchorPx.x / s,
+    y: anchorImg.y - anchorPx.y / s,
+    w: container.width / s,
+    h: container.height / s,
+  };
+}
+
+/**
+ * The part of the image a step shows at rest (pure): the rectangle
+ * framePlacement fills the container with, cut to the image's own bounds.
+ *
+ * @param {{focalImg:{x:number,y:number}, diameterImg:number,
+ *          region:{x:number,y:number,w:number,h:number},
+ *          imageW:number, imageH:number}} target  From computeFocalTarget.
+ * @param {number} zoom  Authored zoom (> 0).
+ * @param {{width:number,height:number}} container  Viewer container size, element px.
+ * @returns {{left:number,top:number,right:number,bottom:number}|null}
+ *   Image px, or null when none of the image is in the container.
+ */
+export function visibleImageRegion(target, zoom, container) {
+  const r = _viewerImageRect(framePlacement(target, zoom, container), container);
+  const shown = {
+    left:   Math.max(0, r.x),
+    top:    Math.max(0, r.y),
+    right:  Math.min(target.imageW, r.x + r.w),
+    bottom: Math.min(target.imageH, r.y + r.h),
+  };
+  return (shown.right > shown.left && shown.bottom > shown.top) ? shown : null;
+}
+
+/**
  * A placement part of the way from one settled placement to another (pure).
  *
  * The scale and the image's top-left corner on screen each move in a straight
@@ -577,20 +619,18 @@ function _livePlacement(viewerCard, x, y, zoom) {
  * settled endpoint by delegating the scale→zoom and centre conversion to OSD's own
  * coordinate transform, with no transient sample and no hand-rolled `k`.
  */
-function _applyPlacement(viewerCard, rect, { s, anchorImg, anchorPx: F }, immediate) {
+function _applyPlacement(viewerCard, rect, placement, immediate) {
   const vp  = viewerCard.osdViewer.viewport;
   const OSD = window.OpenSeadragon;
 
   // TARGET RECT — the image-px rectangle that fills the viewer at scale `s`, placed so
-  // anchorImg lands at element px F. Its aspect equals the container's, so fitBounds maps
-  // it 1:1 (no letterbox growth). After fitBounds the rect centre maps to the container
-  // centre, so anchorImg (offset F − centre at scale s) lands exactly at F.
-  const visW    = rect.width  / s;   // visible image-px width  at scale s
-  const visH    = rect.height / s;   // visible image-px height at scale s
-  const topLeft = { x: anchorImg.x - F.x / s, y: anchorImg.y - F.y / s };
-  const targetVp = vp.imageToViewportRectangle(
-    new OSD.Rect(topLeft.x, topLeft.y, visW, visH)
-  );
+  // anchorImg lands at element px anchorPx. Its aspect equals the container's, so
+  // fitBounds maps it 1:1 (no letterbox growth). After fitBounds the rect centre maps to
+  // the container centre, so anchorImg lands exactly at anchorPx. The tile prefetch
+  // reads the same rectangle (visibleImageRegion), so what is fetched ahead is what
+  // is shown here.
+  const r = _viewerImageRect(placement, rect);
+  const targetVp = vp.imageToViewportRectangle(new OSD.Rect(r.x, r.y, r.w, r.h));
   vp.fitBounds(targetVp, immediate);
 }
 
