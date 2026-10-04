@@ -767,12 +767,16 @@ def _add_christmas_tree_warnings(df, all_warnings):
     Appended rather than substituted: the point is to see them beside
     whatever the story really produced.
     """
-    # Inject test warnings for various error types
+    # Every message here is one the build really emits, because the point of
+    # this mode is to look at the warnings as an author would see them. A
+    # message written only for the demonstration shows something no story can
+    # produce, and is a string nothing else keeps honest.
     fake_warnings = [
         {
             'step': 1,
             'type': 'viewer',
-            'message': get_lang_string('errors.object_warnings.missing_object_id')
+            'message': get_lang_string('errors.object_warnings.object_not_found',
+                                       object_id='an-object-not-in-objects-csv')
         },
         {
             'step': 2,

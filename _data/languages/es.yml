@@ -6,7 +6,6 @@
 navigation:
   home: "Inicio"
   objects: "Objetos"
-  stories: "Historias"
   glossary: "Glosario"
   about: "Acerca de"
 
@@ -48,10 +47,6 @@ object:
 
   # Controles del visor
   viewer:
-    fullscreen: "Pantalla completa"
-    exit_fullscreen: "Cerrar pantalla completa"
-    thumbnails: "Miniaturas"
-    page: "Página"
     # Paginación para objetos IIIF de varias páginas
     prev_page: "Página anterior"
     next_page: "Página siguiente"
@@ -108,7 +103,6 @@ object:
   video_frame_title: "Video: __TITLE__"
 
   # Miniaturas de objetos
-  no_image: "Sin imagen"
 
 # Etiquetas de contenido de demostración
 demo:
@@ -177,8 +171,6 @@ objects:
   search_placeholder: "Buscar objetos…"
   clear_search: "Limpiar búsqueda"
   filter_by: "Filtrar por:"
-  loading_filters: "Cargando filtros…"
-  no_results: "Ningún objeto coincide con tu búsqueda"
   type: "Tipo"
   medium: "Medio/Género"
   creator: "Creador"
@@ -229,7 +221,6 @@ errors:
   image_viewer_unavailable: "⚠️ Visor de imágenes no disponible"
   image_viewer_unavailable_alt: "⚠️ Visor de imágenes no disponible"
   check_objects_csv: "Revisa <code>telar-content/spreadsheets/objects.csv</code> para asegurarte de que el objeto existe y tiene una URL válida de manifiesto IIIF."
-  failed_to_load: "Error al cargar"
   no_image: "Sin imagen"
 
   # Errores de imagen en paneles (mostrados dentro del panel por JS)
@@ -310,8 +301,6 @@ errors:
     iiif_503: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 503). Error 503 significa \"Service Unavailable\": el servidor IIIF está temporalmente fuera de servicio, quizá por mantenimiento o sobrecarga. Intenta reconstruir tu sitio más tarde."
     iiif_502: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 502). Error 502 significa \"Bad Gateway\": hay un problema en la infraestructura del servidor IIIF. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
     iiif_error_generic: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error {{ code }})"
-    iiif_unreachable: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no respondió"
-    iiif_slow: "la URL del manifiesto IIIF que especificaste en tu CSV de configuración o en Google Sheets está respondiendo muy lento. Es posible que el servidor de imágenes esté experimentando alta carga o demoras de red. El manifiesto debería seguir funcionando cuando las personas visiten tu sitio."
     iiif_validation_failed: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación"
 
     # Etiquetas de error cortas (para listas de advertencia)
@@ -323,8 +312,6 @@ errors:
     short_503: "Error 503: servicio no disponible (intenta más tarde)"
     short_502: "Error 502: problema de conectividad (intenta más tarde)"
     short_error_generic: "Error {{ code }}: no se pudo acceder"
-    short_network_error: "Error de red: no se pudo alcanzar"
-    short_slow: "Respuesta lenta: el servidor podría estar experimentando demoras"
     short_validation_error: "Error de validación: no se pudo validar"
 
     # Errores de fuente de imagen
@@ -346,13 +333,10 @@ errors:
     # Errores de archivo de contenido
     content_missing_label: "Contenido faltante"
     content_file_missing: "Falta el archivo de contenido: <code>{{ file_ref }}</code><br>Agrega este archivo en <code>telar-content/texts/stories/</code> o elimina la referencia del CSV."
-    layer_file_missing_named: "el archivo del panel {{ layer_num }}, <code>{{ filename }}</code>, no se encontró"
     layer_file_missing: "el archivo del panel {{ layer_num }} no se encontró"
 
     # Errores de enlaces al glosario
     glossary_term_not_found: "el término '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una entrada en tu hoja de cálculo del glosario o en <code>telar-content/texts/glossary/</code>."
-    short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
-    glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
 
     # Límites de la respuesta de un paso
     answer_image_dropped: "En `{{ story }}` quitamos una imagen o un elemento incrustado de la respuesta del paso {{ step }}. La respuesta de un paso es texto corrido: pon ese contenido en un panel o conviértelo en el objeto del paso."
