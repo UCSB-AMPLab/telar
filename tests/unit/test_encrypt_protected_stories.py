@@ -13,6 +13,7 @@ Version: v1.8.0
 import base64
 import json
 import os
+import pathlib
 import sys
 
 import pytest
@@ -784,3 +785,89 @@ class TestGlossaryIsExempt:
 
         with pytest.raises(GateFailure, match="Reword whichever copy"):
             process_site(site, data_dir, config)
+
+
+class TestProtectedStorySeoIsTextOnly:
+    """The one <meta> a protected story emits itself.
+
+    `story.html` suppresses `{% seo %}` on a protected page and writes the
+    description tag by hand, because jekyll-seo-tag would pull `page.description`
+    and the excerpt into it and put authored content in front of a crawler that
+    the unlock gate exists to keep it from. What it writes instead is
+    `site.description`, which is safe to publish — but it is also the one value
+    an author may legitimately have written markup into, because `index.html`
+    renders it as prose where a link or emphasis is wanted.
+
+    Unfiltered in an attribute that is two separate faults. Markup reaches a
+    crawler as characters; and a double quote anywhere in the description ends
+    the attribute early, so the description is truncated there and the rest of
+    it is parsed as junk attributes on the tag.
+    """
+
+    LAYOUT = pathlib.Path(__file__).resolve().parents[2] / '_layouts' / 'story.html'
+    INDEX = pathlib.Path(__file__).resolve().parents[2] / '_layouts' / 'index.html'
+
+    def _description_meta(self):
+        """The tag itself, not the comment above it explaining why it is there.
+
+        Matching any line that mentions `name="description"` finds the comment
+        first, and a guard reading a comment passes or fails on prose.
+        """
+        lines = [
+            l for l in self.LAYOUT.read_text(encoding='utf-8').splitlines()
+            if l.lstrip().startswith('<meta name="description"')
+        ]
+        assert len(lines) == 1, (
+            f'expected exactly one description meta in story.html, found {len(lines)}'
+        )
+        return lines[0]
+
+    def test_the_description_is_stripped_of_markup(self):
+        assert 'strip_html' in self._description_meta()
+
+    def test_the_description_is_escaped_for_the_attribute(self):
+        # Without this a quote in the description ends content="..." early.
+        assert 'escape_once' in self._description_meta()
+
+    def test_the_index_page_keeps_the_markup(self):
+        """The same value, rendered as prose rather than as an attribute.
+
+        Stripping it here would take away a capability the Compositor offers
+        on that field and the index page legitimately uses, so the two must
+        not be brought into line with each other.
+        """
+        source = self.INDEX.read_text(encoding='utf-8')
+        assert '{{ site.description }}' in source
+        assert 'site.description | strip_html' not in source
+
+    def test_an_attribute_with_a_quote_in_it_parses_whole(self):
+        """The failure the filters prevent, run through a real parser.
+
+        Rendering Liquid is out of reach here, so this asserts the property the
+        filters produce rather than the template: escaped, the whole
+        description survives as one attribute; unescaped, it does not.
+        """
+        from html.parser import HTMLParser
+
+        description = 'A <strong>bold</strong> claim: they call it "the loom" & mean it.'
+
+        def attributes_of(content):
+            found = []
+
+            class Reader(HTMLParser):
+                def handle_starttag(self, tag, attrs):
+                    if tag == 'meta':
+                        found.append(attrs)
+
+            Reader().feed(f'<meta name="description" content="{content}">')
+            return found[0]
+
+        raw = attributes_of(description)
+        assert len(raw) > 2, 'the unescaped case is supposed to break; it did not'
+        assert raw[1][1] != description
+
+        escaped = (description.replace('&', '&amp;').replace('<', '&lt;')
+                   .replace('>', '&gt;').replace('"', '&quot;'))
+        safe = attributes_of(escaped)
+        assert len(safe) == 2
+        assert safe[1] == ('content', description)

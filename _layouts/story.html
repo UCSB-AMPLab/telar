@@ -166,7 +166,15 @@
     The public title is already set in <title> above; here we add just a generic description and the
     canonical URL.
   {%- endcomment -%}
-  <meta name="description" content="{{ site.description }}">
+  {%- comment -%}
+    Stripped and escaped, unlike the index page, which renders this same value
+    as prose where an author's link or emphasis is wanted. A meta tag takes
+    text: markup reaches a crawler as characters, and an unescaped quote in the
+    description ends the attribute early and breaks the tag. Same treatment
+    jekyll-seo-tag gives it on the unprotected path below, so a story reads the
+    same to a crawler whether or not it is locked.
+  {%- endcomment -%}
+  <meta name="description" content="{{ site.description | strip_html | normalize_whitespace | escape_once }}">
   <link rel="canonical" href="{{ page.url | absolute_url }}">
   {% else %}
   {% seo %}
