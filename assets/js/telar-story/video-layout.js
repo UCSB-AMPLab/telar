@@ -19,8 +19,7 @@
  *
  * The embed builders and the clip-time format are here because, like the
  * layout, they are arithmetic on their arguments with nothing to tear down.
- * video-card.js, which owns the players, re-exports all of it, so its
- * importers are unchanged.
+ * video-card.js owns the players.
  *
  * @version v1.8.0
  */
@@ -332,7 +331,7 @@ export function computeVideoLetterboxRegion(W, H, below = null, topBand = 0) {
   return _besideRegion(W, H, pad, topBand);
 }
 
-/** Compute stacked layout for mobile. */
+/** Compute stacked layout for the vertical layout. */
 function _computeStackedLayout(W, H, aspectRatio) {
   const pad = mediaPadding(W, H);
   const stackVideoMaxW = W - pad * 2;

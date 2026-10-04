@@ -78,7 +78,7 @@ NOT_DELIVERED_PREFIXES = (
     '.github/', 'scripts/migrations/', 'scripts/telar_upgrade', 'assets/audio/peaks/',
 )
 NOT_DELIVERED_FILES = {
-    '_config.yml', '.gitignore', 'index.md', 'pages/glossary.md', 'migration.json',
+    '_config.yml', '.gitignore', '.gitattributes', 'index.md', 'pages/glossary.md', 'migration.json',
     'UPGRADE_SUMMARY.md', 'UPGRADE_VERSION.txt', 'pytest.ini', 'vitest.config.js',
 }
 
@@ -304,7 +304,7 @@ class TestRemovals:
         assert m._remove_stale_manifest() == []
 
 
-# ---------- Phase 7: the stale engine ----------
+# ---------- Phase 9: the stale engine ----------
 
 RELEASED_ENGINE = _git('show', 'v1.7.0:scripts/telar_upgrade.py').stdout
 LAUNCHER = f"LAUNCHER_MARKER = '{LAUNCHER_MARKER}'\n"

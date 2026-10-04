@@ -40,7 +40,6 @@ class Migration120to121(BaseMigration):
 
         # Phase 2: Update version
         print("  Phase 2: Updating version...")
-        from datetime import date
         stamped = self.release_date
         if self._update_config_version("1.2.1", stamped):
             changes.append(f"Updated _config.yml: version 1.2.1 ({stamped})")

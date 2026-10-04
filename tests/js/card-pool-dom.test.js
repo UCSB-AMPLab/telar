@@ -32,7 +32,7 @@ import { IiifPlate } from '../../assets/js/telar-story/plates/iiif-plate.js';
 import { makePlate } from './iiif-plate-helpers.js';
 
 // Video-card is spied, not replaced: every export keeps its real body, and the
-// two the card pool routes plate handovers through are wrapped so a test can
+// two the card stack routes plate handovers through are wrapped so a test can
 // assert the routing. A plate with no player wrapper reaches the same DOM
 // whichever branch takes it, so the call is the only evidence there is.
 vi.mock('../../assets/js/telar-story/video-card.js', async (importOriginal) => {
@@ -88,7 +88,7 @@ describe('activateCard — same-object jump re-shows a hidden viewer plate', () 
     state.viewerCards = [];
     state.activeTitleCardIndex = null;
     // Same object as the target step → activateCard takes the text-only branch.
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     // scroll-driven so the IIIF animate path is skipped, isolating the
     // is-active behaviour under test.
     state.scrollDriven = true;
@@ -353,7 +353,7 @@ function resetPoolState() {
   state.textCards = {};
   state.titleCards = {};
   state.activeTitleCardIndex = null;
-  state.currentObjectRun = { objectId: null, runPosition: 0 };
+  state.currentObjectScene = { objectId: null, scenePosition: 0 };
   state.cardOverlayRect = null;
   delete window.audioObjects;
 }
@@ -444,7 +444,7 @@ describe('activateCard — the plate label follows the step', () => {
       { step: '2', object: 'obj-a', question: 'Q2', answer: 'A2', alt_text: 'The cartouche' },
     ]);
     // Already inside the object run, so activation stays on the text-only path.
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     state.scrollDriven = true;
 
     activateCard(1, 'forward');
@@ -459,7 +459,7 @@ describe('activateCard — the plate label follows the step', () => {
   it('falls back to the object title when the step carries no alt text', () => {
     state.objectsIndex = { 'obj-a': { title: 'Mapa de la provincia' } };
     buildStory([{ step: '1', object: 'obj-a', question: 'Q1', answer: 'A1' }]);
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     state.scrollDriven = true;
 
     activateCard(1, 'forward');
@@ -482,7 +482,7 @@ describe('activateCard — framing waits on a viewer that is not ready', () => {
     state.scrollDriven = false;
   });
 
-  it('stores the step framing on the viewer card as a pending animation', () => {
+  it('stores the step framing on the plate as a pending animation', () => {
     // Both steps are details of one object, so the pair is a pan within a
     // scene rather than a mode flip, which would build a plate instead.
     buildStory([
@@ -494,7 +494,7 @@ describe('activateCard — framing waits on a viewer that is not ready', () => {
     const plate = state.viewerPlates[1];
     plate.osdWrapper = {};   // built, so the step frames it rather than rebuilding
     plate.isReady = false;   // and not ready, so the framing is queued
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
 
     activateCard(2, 'forward');
 
@@ -509,7 +509,7 @@ describe('activateCard — framing waits on a viewer that is not ready', () => {
     const plate = state.viewerPlates[1];
     plate.osdWrapper = {};
     plate.isReady = false;
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
 
     activateCard(2, 'forward');
 
@@ -610,7 +610,7 @@ describe('setCardProgress — the arriving plate slides with the scrub', () => {
   });
 });
 
-describe('card pool — a video plate is handed over through the video module', () => {
+describe('card stack — a video plate is handed over through the video module', () => {
   beforeEach(() => {
     resetPoolState();
     vi.mocked(deactivateVideoCard).mockClear();
@@ -644,7 +644,7 @@ describe('card pool — a video plate is handed over through the video module', 
       { step: '2', object: 'test-video', question: 'Q2', answer: 'A2',
         clip_start: '90', clip_end: '120', loop: 'true' },
     ]);
-    state.currentObjectRun = { objectId: 'test-video', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'test-video', scenePosition: 0 };
 
     activateCard(2, 'forward');
 
@@ -653,7 +653,7 @@ describe('card pool — a video plate is handed over through the video module', 
   });
 });
 
-describe('card pool — the viewer pool stays inside its cap', () => {
+describe('card stack — the viewer pool stays inside its cap', () => {
   let savedCap;
 
   /** The plates holding a live viewer, which is what the cap counts. */
@@ -668,7 +668,7 @@ describe('card pool — the viewer pool stays inside its cap', () => {
     // The viewer wrapper needs the vendored global to exist, and fetches its
     // manifest before it touches it. A fetch that never settles leaves the
     // wrapper suspended there, so what runs is the synchronous tail: the
-    // push onto the pool and the eviction that follows it.
+    // push onto the viewer pool and the eviction that follows it.
     vi.stubGlobal('OpenSeadragon', vi.fn());
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   });
@@ -687,7 +687,7 @@ describe('card pool — the viewer pool stays inside its cap', () => {
       { step: '3', object: 'obj-c', question: 'Q3', answer: 'A3' },
       { step: '4', object: 'obj-d', question: 'Q4', answer: 'A4' },
     ]);
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     state.scrollDriven = true;
 
     activateCard(1, 'forward');
@@ -703,13 +703,13 @@ describe('card pool — the viewer pool stays inside its cap', () => {
       { step: '3', object: 'obj-c', question: 'Q3', answer: 'A3' },
       { step: '4', object: 'obj-d', question: 'Q4', answer: 'A4' },
     ]);
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     state.scrollDriven = true;
 
     activateCard(1, 'forward');
 
     // Warming runs outward from the active scene, so the survivors are the
-    // last two opened and the pool never holds a scene farther than those.
+    // last two opened and the viewer pool never holds a scene farther than those.
     const scenes = loadedViewers().map(plate => plate.sceneIndex).sort((a, b) => a - b);
     expect(scenes).toEqual([3, 4]);
     state.scrollDriven = false;
@@ -760,19 +760,19 @@ describe('activateCard — a mode flip on one object re-seats the plate it share
       { step: '2', object: 'obj-a', question: 'Q2', answer: 'A2',
         x: '0.4', y: '0.6', zoom: '4' },
     ]);
-    const viewerCard = state.viewerPlates[1];
-    viewerCard.osdWrapper = {};
-    viewerCard.isReady = false;
-    const plate = viewerCard.container;
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    const iiifPlate = state.viewerPlates[1];
+    iiifPlate.osdWrapper = {};
+    iiifPlate.isReady = false;
+    const plate = iiifPlate.container;
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
 
     activateCard(2, 'forward');
 
     expect(plate.classList.contains('is-active')).toBe(true);
     expect(plate.style.transform).toBe('translateY(0)');
     // The plate stays put, and the step's framing still reaches the viewer —
-    // queued here because this viewer card is not ready yet.
-    expect(viewerCard.pendingZoom).toEqual({ x: 0.4, y: 0.6, zoom: 4, snap: true });
+    // queued here because this plate's viewer is not ready yet.
+    expect(iiifPlate.pendingZoom).toEqual({ x: 0.4, y: 0.6, zoom: 4, snap: true });
   });
 });
 
@@ -867,7 +867,7 @@ describe('reconcilePlatesForJump — closing the plates a jump crossed', () => {
 // The geometry itself is card-fit.test.js's; here, only that an activated
 // card arrives at its question.
 
-describe('card pool — an activated card arrives at its top', () => {
+describe('card stack — an activated card arrives at its top', () => {
   beforeEach(() => {
     resetPoolState();
     vi.stubGlobal('matchMedia', vi.fn().mockImplementation(REDUCED_MOTION));
@@ -890,7 +890,7 @@ describe('card pool — an activated card arrives at its top', () => {
     buildStory(steps);
     const card = state.textCards[1];
     card.scrollTop = 240;
-    state.currentObjectRun = { objectId: 'A', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'A', scenePosition: 0 };
 
     activateCard(1, 'forward');
 

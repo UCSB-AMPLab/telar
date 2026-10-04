@@ -30,7 +30,6 @@ from telar.theme_colours import (
     CONTRAST_FLOOR,
     DERIVED_BACKGROUNDS,
     DERIVED_TEXT_GROUNDS,
-    MANIFEST_SCHEMA,
     LIGHT_COLOUR_LUMINANCE,
     build_manifest,
     contrast_ratio,
@@ -41,7 +40,6 @@ from telar.theme_colours import (
     manifest_path,
     manifest_warnings,
     parse_hex,
-    read_manifest,
     relative_luminance,
     write_manifest,
 )
@@ -50,6 +48,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SHIPPED_THEMES_DIR = REPO_ROOT / '_data' / 'themes'
 SASS_DIR = REPO_ROOT / '_sass'
 JS_DIR = REPO_ROOT / 'assets' / 'js'
+
+
+def _read_manifest(data_dir):
+    return json.loads(manifest_path(data_dir).read_text(encoding='utf-8'))
 
 
 class TestHexParsing:
@@ -197,7 +199,6 @@ class TestShippedThemes:
     def test_every_theme_file_is_covered(self):
         manifest = build_manifest(SHIPPED_THEMES_DIR)
         assert set(manifest['themes']) == set(SHIPPED_ON_COLOURS)
-        assert manifest['schema'] == MANIFEST_SCHEMA
 
     @pytest.mark.parametrize("theme", sorted(SHIPPED_ON_COLOURS))
     def test_on_colours(self, theme):
@@ -553,7 +554,7 @@ class TestOutput:
         )}})
         path = generate(tmp_path, announce=lambda _: None)
         assert path == manifest_path(tmp_path)
-        assert read_manifest(tmp_path)['themes']['one']['on']['button'] == '#FFFFFF'
+        assert _read_manifest(tmp_path)['themes']['one']['on']['button'] == '#FFFFFF'
 
     def test_the_file_is_byte_stable_across_runs(self, tmp_path):
         self._themes(tmp_path, {
@@ -574,12 +575,11 @@ class TestOutput:
     def test_nothing_is_written_without_a_themes_directory(self, tmp_path):
         assert generate(tmp_path, announce=lambda _: None) is None
         assert not manifest_path(tmp_path).exists()
-        assert read_manifest(tmp_path) is None
 
     def test_an_empty_themes_directory_writes_an_empty_set(self, tmp_path):
         self._themes(tmp_path, {})
         generate(tmp_path, announce=lambda _: None)
-        assert read_manifest(tmp_path) == {'schema': MANIFEST_SCHEMA, 'themes': {}}
+        assert _read_manifest(tmp_path) == {'themes': {}}
 
     def test_themes_are_keyed_by_file_stem(self, tmp_path):
         self._themes(tmp_path, {'santa-barbara': {'colors': _theme(
@@ -597,7 +597,7 @@ class TestOutput:
         )}})
         printed = []
         generate(tmp_path, announce=printed.append)
-        assert printed == read_manifest(tmp_path)['themes']['one']['warnings']
+        assert printed == _read_manifest(tmp_path)['themes']['one']['warnings']
         assert printed
 
     def test_a_json_file_is_valid_json_with_a_trailing_newline(self, tmp_path):
@@ -608,7 +608,7 @@ class TestOutput:
         generate(tmp_path, announce=lambda _: None)
         raw = manifest_path(tmp_path).read_text(encoding='utf-8')
         assert raw.endswith('\n')
-        assert json.loads(raw)['schema'] == MANIFEST_SCHEMA
+        assert json.loads(raw)['themes']
 
 
 class TestTheHiddenTramaDefaults:
@@ -697,9 +697,10 @@ class TestTheHiddenTramaDefaults:
 class TestStylesheetConsumesTheDerivedProperties:
     """The partials must read the derived colour, not the raw theme value.
 
-    The four `--color-*-text` properties stay emitted for anything outside
-    this repo that reads them, but nothing in _sass/ may use one, or a theme
+    Nothing in _sass/ may use a raw `--color-*-text` property, or a theme
     whose choice was replaced would keep rendering the illegible value.
+    `--color-button-text` is the only one still emitted, for the waveform
+    palette in JS.
     """
 
     SUPERSEDED = (
@@ -747,12 +748,13 @@ class TestStylesheetConsumesTheDerivedProperties:
         )
         assert files <= allowed, f'{prop} still used in:\n{sorted(files - allowed)}'
 
-    @pytest.mark.parametrize("prop", SUPERSEDED)
-    def test_the_stylesheet_still_emits_it(self, prop):
+    def test_the_stylesheet_emits_only_the_button_text_property(self):
         source = (REPO_ROOT / 'assets' / 'css' / 'telar.scss').read_text(
             encoding='utf-8'
         )
-        assert f'{prop}:' in source
+        assert '--color-button-text:' in source
+        for prop in self.SUPERSEDED[1:]:
+            assert f'{prop}:' not in source
 
     @pytest.mark.parametrize("key", DERIVED_BACKGROUNDS)
     def test_the_stylesheet_emits_the_derived_property(self, key):

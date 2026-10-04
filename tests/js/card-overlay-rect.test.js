@@ -56,7 +56,7 @@ describe('cardOverlayRect — rect populated in reduced-motion synchronous branc
     state.viewerCards  = [];
 
     // Same-object run so activateCard takes the text-only branch (no needsNewViewer)
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     state.activeTitleCardIndex = null;
   });
 
@@ -120,7 +120,7 @@ describe('cardOverlayRect — a card that has left does not write it', () => {
     state.totalScenes = 1;
     state.sceneFirstStep = { 0: 0 };
     state.viewerPlates = {};
-    state.currentObjectRun = { objectId: 'obj-a', runPosition: 0 };
+    state.currentObjectScene = { objectId: 'obj-a', scenePosition: 0 };
     state.activeTitleCardIndex = null;
   });
 

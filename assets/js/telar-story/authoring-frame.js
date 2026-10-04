@@ -17,17 +17,13 @@
  * object page's viewer takes it (`_viewer.scss`), and a surface whose pane
  * has another shape measures against a frame of this shape drawn inside it.
  *
- * The value is fixed. It was chosen in 1.4.0 as the mean of the two authoring
- * surfaces' shapes at the time, and every zoom already published replays
- * through it, so changing it would move every square and portrait step on
- * every site.
+ * The value is fixed: every zoom already published replays through it, so
+ * changing it would move every square and portrait step on every site.
  *
  * The home fit has two arms and both are needed. An image taller than the
  * frame fits by height and letterboxes at the sides; an image wider than the
  * frame fits by width and letterboxes above and below. OpenSeadragon's own
- * home zoom is `min(1, imageAspect / frameAspect)` for exactly that reason,
- * and a derivation that keeps only the first arm is correct for portrait
- * images and wrong for every landscape one.
+ * home zoom is `min(1, imageAspect / frameAspect)` for exactly that reason.
  *
  * @version v1.8.0
  */

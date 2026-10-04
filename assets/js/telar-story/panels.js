@@ -258,7 +258,7 @@ function anyPanelOpen() {
  * The panel freezes the story as a layer does. The URL fragment is not
  * rewritten: it names layers only, and a glossary link writes its own g{n}.
  */
-export function joinGlossaryToStack() {
+function joinGlossaryToStack() {
   const top = state.panelStack[state.panelStack.length - 1];
   if (top?.type !== 'glossary') {
     state.panelStack.push({ type: 'glossary', id: null });
@@ -555,7 +555,7 @@ export function initializeScrollLock() {
  *
  * Also stops Lenis so wheel events do not cause scroll position changes
  * while a panel is open. Safe to call when Lenis is not initialised
- * (mobile/iOS/embed) — optional chaining skips the call silently.
+ * (button navigation) — the call is skipped.
  */
 export function activateScrollLock() {
   state.scrollLockActive = true;
@@ -570,7 +570,7 @@ export function activateScrollLock() {
  * Deactivate scroll lock — allows step navigation and hides backdrop.
  *
  * Also resumes Lenis after a panel closes. Safe to call when Lenis is
- * not initialised (mobile/iOS/embed).
+ * not initialised (button navigation).
  */
 export function deactivateScrollLock() {
   state.scrollLockActive = false;

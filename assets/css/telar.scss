@@ -11,7 +11,7 @@
   {% assign theme = site.data.defaults.themes.trama %}
 {% endunless %}
 {%- comment -%}Derived on-colours, keyed by the same theme name. Absent when
-the site was built without the Python step.{%- endcomment -%}
+the build did not run the Python step.{%- endcomment -%}
 {% assign derived = site.data['telar-build']['theme-colours'] %}
 {% if derived %}{% assign on = derived.themes[theme_key].on %}{% endif %}
 
@@ -52,15 +52,11 @@ the site was built without the Python step.{%- endcomment -%}
   --color-link: {{ theme.colors.text.link | default: "#883C36" }};
   --color-accent: {{ theme.colors.text.link | default: "#883C36" }};
   --color-button-text: {{ theme.colors.text.button | default: "#FFFFFF" }};
-  --color-panel-layer1-text: {{ theme.colors.text.panel_layer1 | default: "#333333" }};
-  --color-panel-layer2-text: {{ theme.colors.text.panel_layer2 | default: "#FFFFFF" }};
-  --color-panel-glossary-text: {{ theme.colors.text.panel_glossary | default: "#333333" }};
 
   /* Text on a theme background, derived by scripts/telar/theme_colours.py to
-     reach a 4.5:1 contrast ratio. These are what _sass/ uses; the four
-     properties above stay for anything outside this repo that reads them.
-     Each falls back to the theme's own choice, then to trama's, so a site
-     built without the Python step renders as it did before. */
+     reach a 4.5:1 contrast ratio. These are what _sass/ uses; the waveform
+     palette in JS reads --color-button-text above. Each falls back to the
+     theme's own choice, then to trama's, when the derived colours are absent. */
   --color-on-button: {{ on.button | default: theme.colors.text.button | default: "#FFFFFF" }};
   --color-on-panel-layer1: {{ on.panel_layer1 | default: theme.colors.text.panel_layer1 | default: "#333333" }};
   --color-on-panel-layer2: {{ on.panel_layer2 | default: theme.colors.text.panel_layer2 | default: "#FFFFFF" }};
@@ -69,7 +65,7 @@ the site was built without the Python step.{%- endcomment -%}
   /* The heading colour is a text colour the stylesheet also paints as a
      ground — the objects filter chip, and the share modal's active tabs and
      copy button. The schema names no text colour to sit on it, so the
-     fallback is the white those rules used to hard-code. */
+     fallback is white. */
   --color-on-heading: {{ on.heading | default: "#FFFFFF" }};
 
   /* Background colors */

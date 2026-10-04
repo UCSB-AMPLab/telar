@@ -443,9 +443,10 @@
 }
 
 /* Glossary callout: a box linking a glossary entry, floated in the text so
-   the text wraps around it. It is a .glossary-inline-link too, so these rules
-   are written to outrank that one's and the panels' general link rule. */
-a.glossary-callout.glossary-inline-link {
+   the text wraps around it. It is a .glossary-inline-link too (the scripts
+   find it by that class), which _panels.scss's inline-link and general link
+   rules leave alone via :not(.glossary-callout). */
+.glossary-callout {
   float: right;
   clear: right;
   display: flex;
@@ -465,40 +466,32 @@ a.glossary-callout.glossary-inline-link {
   text-decoration: none;
 }
 
-a.glossary-callout.glossary-callout--left {
+.glossary-callout--left {
   float: left;
   clear: left;
   margin: 0.35rem 1.4rem 0.9rem 0;
 }
 
-.offcanvas-body a.glossary-callout:not([href^="#_ftn"]) {
-  color: var(--color-on-panel-glossary);
-  text-decoration: none;
-}
-
 /* In the glossary panel its own colours would match the panel, so it takes
    layer 1's, as every widget there does. */
-#panel-glossary a.glossary-callout.glossary-inline-link,
-#panel-glossary .offcanvas-body a.glossary-callout:not([href^="#_ftn"]) {
+#panel-glossary .glossary-callout {
   background: var(--color-panel-layer1-bg);
   color: var(--color-on-panel-layer1);
 }
 
-a.glossary-callout.glossary-inline-link:focus-visible {
+a.glossary-callout:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .offcanvas-body a.glossary-callout:not([href^="#_ftn"]):hover,
-  a.glossary-callout.glossary-inline-link:hover {
+  .glossary-callout:hover {
     color: var(--color-on-panel-glossary);
     text-decoration: none;
     opacity: 0.9;
   }
 
-  #panel-glossary .offcanvas-body a.glossary-callout:not([href^="#_ftn"]):hover,
-  #panel-glossary a.glossary-callout.glossary-inline-link:hover {
+  #panel-glossary .glossary-callout:hover {
     color: var(--color-on-panel-layer1);
   }
 }
@@ -565,10 +558,10 @@ a.glossary-callout.glossary-inline-link:focus-visible {
 
 @media (max-width: 575.98px) {
   /* Too narrow to wrap text beside a 290px box: full width, in the flow. */
-  a.glossary-callout.glossary-inline-link,
-  a.glossary-callout.glossary-callout--left,
-  .offcanvas-body a.glossary-callout.glossary-callout--right,
-  .offcanvas-body a.glossary-callout.glossary-callout--left {
+  .glossary-callout,
+  .glossary-callout--left,
+  .offcanvas-body a.glossary-callout--right,
+  .offcanvas-body a.glossary-callout--left {
     float: none;
     max-width: none;
     width: 100%;

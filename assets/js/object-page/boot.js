@@ -9,17 +9,17 @@
  */
 
 /**
- * Read the page's data block. Null when the layout wrote none, which is how
- * a page that is not an object page stays untouched.
+ * Read the page's data block, which the layout that loads the bundle always
+ * writes: a page without it throws. Null when the block is not valid JSON,
+ * after logging the error.
  *
  * @param {Document} [doc]
  * @returns {Object|null}
  */
 export function readObjectData(doc = document) {
-  const block = doc.getElementById('telar-object-data');
-  if (!block) return null;
+  const text = doc.getElementById('telar-object-data').textContent;
   try {
-    return JSON.parse(block.textContent);
+    return JSON.parse(text);
   } catch (err) {
     console.error('Object page data block is not valid JSON:', err);
     return null;
@@ -39,10 +39,8 @@ export function publishLanguageGlobals(data, win = window) {
 }
 
 /**
- * Run `wire` with the page's data once the DOM is there, or not at all.
- *
- * A bundle is loaded by the layout that also wrote the block, so a missing
- * block means this bundle reached a page it is not for and should do nothing.
+ * Run `wire` with the page's data once the DOM is there, or not at all when
+ * the block is unreadable (readObjectData has logged why).
  *
  * @param {(data: Object) => void} wire
  */

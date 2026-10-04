@@ -68,15 +68,8 @@
 window.telarLoadKatex = function telarLoadKatex() {
   if (telarLoadKatex.started || window.telarRenderLatex) return;
   telarLoadKatex.started = true;
-  var config = window.telarKatexConfig || {};
-  // Fail-safe: if the layout didn't hand us the CDN config (e.g. an
-  // older build, or window.telarKatexConfig got clobbered), warn loudly
-  // rather than silently rendering no LaTeX — silent-blank is the
-  // failure mode this codebase documents and avoids elsewhere.
-  if (!config.urls) {
-    console.warn('Telar: KaTeX config missing (window.telarKatexConfig.urls) — LaTeX will not be loaded on this page.');
-    return;
-  }
+  // _includes/katex-loader.html sets the config before this script loads.
+  var config = window.telarKatexConfig;
 
   // Load KaTeX CSS into the third-party layer (see the note above).
   var css = document.createElement('style');
@@ -104,9 +97,8 @@ window.telarLoadKatex = function telarLoadKatex() {
       // step pool, and the text cards the story has already built from
       // it. Text cards are built once, when the story starts, which for
       // a protected story is the moment it is unlocked; KaTeX arriving
-      // after that reaches them here or not at all. The panels too: one
-      // opened before now rendered nothing. Title cards are plain text
-      // and are left alone.
+      // after that reaches them here or not at all. Panels already open
+      // are rendered too. Title cards are plain text and are left alone.
       var rendered = '.story-step, .text-card, #panel-layer1-content, #panel-layer2-content, ' +
         '#panel-glossary-content';
       document.querySelectorAll(rendered).forEach(function(el) {

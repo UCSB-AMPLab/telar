@@ -294,8 +294,9 @@
 }
 
 
-/* Glossary Inline Links (in story panel content) */
-.glossary-inline-link {
+/* Glossary Inline Links (in story panel content). The glossary callout is
+   styled by _widgets.scss. */
+.glossary-inline-link:not(.glossary-callout) {
   background-color: var(--color-panel-glossary-bg);
   color: var(--color-on-panel-glossary);
   padding: 0.02em 0.4em; /* Minimal vertical padding for very snug fit */
@@ -307,7 +308,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .glossary-inline-link:hover {
+  .glossary-inline-link:not(.glossary-callout):hover {
     opacity: 0.85;
     text-decoration: none;
     color: var(--color-on-panel-glossary);
@@ -424,13 +425,13 @@
 }
 
 /* General Hyperlinks in Panels (non-footnote links) */
-.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]) {
+.offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):not(.glossary-callout) {
   color: var(--color-link);
   text-decoration: underline;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):hover {
+  .offcanvas-body a:not([href^="#_ftn"]):not([href^="#_ftnref"]):not(.glossary-callout):hover {
     opacity: 0.8;
   }
 }
@@ -674,7 +675,7 @@
   }
 
   /* Glossary inline links - slightly smaller on mobile */
-  .glossary-inline-link,
+  .glossary-inline-link:not(.glossary-callout),
   .glossary-link-error {
     padding: 0.1em 0.35em;
     font-size: 0.9em;

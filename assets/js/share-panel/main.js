@@ -56,7 +56,7 @@ export function createSharePanel({
   // DOM elements
   const sharePanel = doc.getElementById('panel-share');
   // What to say where the browser cannot copy, in the site's language.
-  const copyManually = sharePanel?.dataset.copyManually || 'Please manually copy the text';
+  const copyManually = sharePanel?.dataset.copyManually;
 
   // Check if we're on a story page or homepage
   const isStoryPage = doc.body.classList.contains('story-page') ||
@@ -645,7 +645,7 @@ export function createSharePanel({
     // The icon is all a sighted reader gets; the status line says it aloud.
     const status = doc.getElementById('share-copy-status');
     if (status) {
-      status.textContent = status.dataset.copied || 'Copied';
+      status.textContent = status.dataset.copied;
       setTimeout(() => { status.textContent = ''; }, 2000);
     }
 

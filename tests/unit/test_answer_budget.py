@@ -19,7 +19,12 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from telar import answer_budget
-from telar.answer_budget import cut_to_budget, fits, measure_answer
+from telar.answer_budget import cut_to_budget, measure_answer, within_budget
+
+
+def fits(text):
+    return within_budget(measure_answer(text))
+
 
 FIXTURE = os.path.join(os.path.dirname(__file__), '..', 'fixtures', 'answer-budget.json')
 

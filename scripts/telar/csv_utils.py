@@ -80,12 +80,6 @@ IMAGE_EXTENSIONS_ORDERED = (
 # Membership form, for reference-stripping and on-disk existence checks.
 IMAGE_EXTENSIONS = frozenset(IMAGE_EXTENSIONS_ORDERED)
 
-# Rendered by MuPDF rather than decoded by Pillow. Both describe a document
-# rather than a grid of pixels, so the build chooses a resolution for them:
-# process_pdf.py renders a PDF page at 200 DPI, and iiif_utils rasterises an SVG
-# to a fixed longest side. Everything else is decoded at its own size.
-PYMUPDF_EXTENSIONS = frozenset({'.pdf', '.svg'})
-
 
 def build_stem_index(directory):
     """Map filename stem -> list of Path objects for one directory, in a single
@@ -179,9 +173,9 @@ COLUMN_NAME_MAPPING = {
     'firma': 'byline',
     # Both words in both genders. A header this table does not carry yields
     # nothing to `row.get('protected', '')`, so the story is never marked
-    # protected and publishes in the clear — and the interlock that refuses
-    # such a build acts on stories already recognised as protected, so it
-    # cannot fire either.
+    # protected and publishes in the clear — and the prerequisite
+    # check that refuses such a build acts on stories already recognised as
+    # protected, so it cannot fire either.
     'private': 'protected',
     'privada': 'protected',
     'privado': 'protected',
@@ -462,8 +456,7 @@ def normalize_column_names(df, canonical_fields=None, sheet_aliases=None):
     is derived from the thing it describes rather than listed by hand. A
     rename whose target is not in it is skipped, which leaves the author's
     own header in place — the safe direction, because the name they typed
-    is the name they meant. Pass None to apply the whole map, which is the
-    behaviour for every sheet not yet scoped.
+    is the name they meant. Pass None to apply the whole map.
 
     `sheet_aliases` adds the aliases only this sheet reads (see
     GLOSSARY_COLUMN_ALIASES) on top of the shared map, refused on the same
@@ -531,14 +524,12 @@ def _refuse_reserved_columns(df):
     stops seeing the site's own objects -- it adds every demo object,
     including ones whose id the owner is already using.
 
-    Refusing is the whole fix, and the alternatives are worse in a way
-    worth recording. Hiding the collision behind a name harder to type only
-    raises the cost of forging it -- whatever a spreadsheet cannot produce,
-    a CSV committed by hand still can, because the decoder and the parser
-    both pass bytes through. Stripping the column instead would delete the
-    author's own data on a name match, and a remover is what destroys
-    content when its sentinel is forged. This adds nothing to the file and
-    removes nothing from it; it stops and says which column to rename.
+    The build refuses rather than renaming or stripping. A renamed column
+    can still be forged by a hand-committed CSV, because the decoder and the
+    parser both pass bytes through. Stripping deletes the author's own data
+    on a name match, and a remover destroys content when its sentinel is
+    forged. This adds nothing to the file and removes nothing from it; it
+    stops and says which column to rename.
     """
     reserved = sorted({str(col) for col in df.columns
                        if str(col).lower().strip() in RESERVED_COLUMN_NAMES})
@@ -598,19 +589,13 @@ def _refuse_colliding_renames(df, rename_map):
         )
 
 
-# Column spellings a published sheet may still carry after the column itself
-# was removed. They are NOT aliases: nothing renames to them and no processor
-# reads them. They exist so `is_header_row` still recognises a header row that
-# names one, because that check scores a row against the column vocabulary and
-# a spelling missing from it drags the whole row's score down.
-#
-# `quoted_in_stories` and its two Spanish spellings shipped in the 1.8.0 test
-# instance and in a Compositor beta between 13 and 17 September 2026, then were
-# removed with the glossary acknowledgement. A four-column glossary header
-# carrying one of them scores 3/4 -- below the 0.8 threshold -- so the bilingual
-# Spanish row was read as a glossary term titled `titulo`. This is why
-# this set can only grow: a column
-# can leave the vocabulary, but a sheet already published with it cannot.
+# Spellings of removed columns that a published sheet may still carry. They
+# are not aliases: nothing renames to them and no processor reads them.
+# `is_header_row` scores a row against the column vocabulary, and without these
+# a four-column glossary header carrying one scores 3/4, below the 0.8
+# threshold, so the bilingual Spanish row is read as a glossary term titled
+# `titulo`. A column can leave the vocabulary, but a sheet already published
+# with it cannot, so this set only grows.
 LEGACY_HEADER_SPELLINGS = frozenset({
     'quoted_in_stories',
     'citado_en_historias',
@@ -644,11 +629,10 @@ def is_header_row(row_values, sheet_aliases=None):
         valid_names.update(sheet_aliases.values())
 
     # Count how many cells match known column names
-    # A blank cell is absent however the file was read. The glossary readers
-    # give '' for it and `csv_to_json` gives NaN (both keep `NA` as text),
-    # and counting '' as populated made the verdict depend on which reader
-    # got there: a bilingual header row of three names padded with two empty
-    # custom columns fell from 100% to 60% and was published as data.
+    # A blank cell is absent whichever reader supplied it: the glossary
+    # readers give '' and `csv_to_json` gives NaN (both keep `NA` as text).
+    # Counting '' as populated would lower the score of a header row padded
+    # with empty columns.
     matches = 0
     total = 0
     for val in row_values:

@@ -8,18 +8,14 @@
  *   center / sendBack  — the visual position
  *
  * A plate type says what its player is and how to build, frame and free it;
- * the card pool says when. Everything a type knows about itself lives in its
+ * the card stack says when. Everything a type knows about itself lives in its
  * subclass, so adding one is writing a file rather than finding the places
  * that branch.
  *
- * Written by Ana María Cárdenas Gasca on the `telar_refactoring_proposal`
- * branch, commit 016462b, alongside the 3D plate that motivated it. Ported
- * with one addition: `deactivate`, because the card pool has two ways of
- * standing a plate down and her interface has one. Forward, the plate the
- * reader leaves stays exactly where it is and is covered by the plate
- * arriving over it, so it is stood down without moving. `sendBack` is the
- * other way — stood down *and* put back below the fold — and is now defined
- * in terms of it.
+ * A plate is stood down in one of two ways. `deactivate` stands it down
+ * without moving it: forward, the plate the reader leaves stays exactly where
+ * it is and is covered by the plate arriving over it. `sendBack` stands it down
+ * and puts it back off screen below, and is defined in terms of `deactivate`.
  *
  * @version v1.8.0
  */
@@ -57,7 +53,7 @@ export class Plate {
     delete this.container.dataset.loading;
   }
 
-  /** Bring to the front and frame to a step (loads if needed; camera catches up on load). */
+  /** Bring to the front and frame to a step (loads if needed; the framing catches up on load). */
   center(step) {
     this.load();
     this.container.style.zIndex = this.zIndex;
@@ -78,7 +74,7 @@ export class Plate {
     this.onSendBack();
   }
 
-  /** Move the camera to a step (snap, or ease when animate). */
+  /** Apply a step's framing (snap, or ease when animate). */
   goToStep(step, animate = false) {}
 
   /** Per-frame scroll interpolation between two steps. */

@@ -142,7 +142,7 @@ function section(filterType, label) {
 /** The browse-and-search markup of _layouts/objects-index.html, Liquid resolved. */
 export function browseMarkup(records) {
   return `
-<div class="objects-layout">
+<div class="objects-layout" data-no-options="No options available">
   <aside class="objects-sidebar">
     <div class="objects-search-wrapper">
       <input type="text" class="objects-search-input" id="objects-search-input"

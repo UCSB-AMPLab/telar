@@ -146,16 +146,16 @@ class Sheet:
         The mark goes inside the quotes of a quoted field, so `"note"`
         becomes `"#note"` and `note` becomes `#note`; no other byte moves.
         """
-        if self.records is None or not self.header or (mark_first and 0 in indices):
+        if self.records is None:
             return None
-        doomed = set(indices)
+        removed = set(indices)
         records = [(list(fields), ending) for fields, ending in self.records]
         if mark_first:
             first = records[self.header_at][0][0]
             records[self.header_at][0][0] = (
                 '"#' + first[1:] if first.startswith('"') else '#' + first)
         body = ''.join(','.join(field for index, field in enumerate(fields)
-                                if skipped or index not in doomed) + ending
+                                if skipped or index not in removed) + ending
                        for (fields, ending), skipped in zip(records, self.skipped))
         return (_BOM if self.bom else '') + body
 
@@ -586,11 +586,10 @@ def _unrepaired_records(lang, name, header, groups, refused) -> List[ChangeRecor
     for group in groups:
         _claim, kept, dropped = group
         if dropped:
-            if id(group) in reasons:
-                key = ('v180_column_kept_for_header_row' if reasons[id(group)] == HEADER_ROW
-                       else 'v180_column_not_removed')
-                records.extend(_record(lang, key, header[index], name,
-                                       status=ChangeStatus.FAILED) for index in dropped)
+            key = ('v180_column_kept_for_header_row' if reasons[id(group)] == HEADER_ROW
+                   else 'v180_column_not_removed')
+            records.extend(_record(lang, key, header[index], name,
+                                   status=ChangeStatus.FAILED) for index in dropped)
         else:
             named = ', '.join(f'`{header[index]}`' for index in kept)
             records.append(_record(lang, 'v180_columns_hold_values', name, named,

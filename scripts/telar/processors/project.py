@@ -39,15 +39,12 @@ def _story_numbers(df):
     """Each row's order as its story's number, or '' when the cell is empty.
 
     The number is the story's address when it has no `story_id`: the build
-    looks for `story-<number>.json`, named after the story's own sheet. So a
-    column with no empty cell is read exactly as it always was. An empty
-    cell is NaN, which `str()` made `nan`, a story; and pandas reads a column
-    of whole numbers holding one as floats, so every other number came out
-    `2.0`. Empty cells are skipped, and in a column they widened to float,
-    whole numbers are written as the integer column without them gives them.
+    looks for `story-<number>.json`, named after the story's own sheet.
+    Empty cells are skipped. In a column pandas widened to float, whole
+    numbers are written as integers.
     """
     if 'order' not in df.columns:
-        return [str(row.get('order', '')).strip() for _, row in df.iterrows()]
+        return [''] * len(df)
     column = df['order']
     blank = column.isna()
     widened = (column.dtype.kind == 'f' and blank.any()
@@ -59,7 +56,7 @@ def _story_numbers(df):
         elif widened:
             numbers.append(str(int(value)))
         else:
-            numbers.append(str(row.get('order', '')).strip())
+            numbers.append(str(row['order']).strip())
     return numbers
 
 
@@ -112,8 +109,8 @@ def process_project_setup(df):
                 continue
 
             # Check for duplicates — skip the duplicate row entirely so routing
-            # and encryption decisions stay unambiguous (one row can no longer
-            # silently shadow another)
+            # and encryption decisions stay unambiguous (no row silently shadows
+            # another)
             if story_id in seen_ids:
                 print(f"  Warning: Duplicate story_id '{story_id}' in project.csv (row {row_idx}) — skipping duplicate row")
                 continue

@@ -5,11 +5,11 @@
  * navigation modes, chosen automatically based on layout mode and embed
  * status:
  *
- * - Desktop scroll: In horizontal layout (not embedded, not iOS), the
+ * - Scroll navigation: In horizontal layout (not embedded, not iOS), the
  *   scroll engine (scroll-engine.js) drives navigation via Lenis smooth
  *   scroll. Keyboard input is handled by initKeyboardNavigation.
  *
- * - Mobile buttons: In vertical layout, previous/next buttons appear at
+ * - Button navigation: In vertical layout, previous/next buttons appear at
  *   the bottom of the screen. Each tap advances one step with a short
  *   cooldown to prevent double-taps.
  *
@@ -32,7 +32,7 @@
  * the layer keys, the nav button. The scroll engine writes it wherever Lenis
  * runs. Where it does not (vertical layout, iPad), button navigation is the
  * only thing that moves the story and writes it through recordButtonStep.
- * state.currentMobileStep is the step the buttons last moved to. In embed
+ * state.currentButtonStep is the step the buttons last moved to. In embed
  * mode every move is the scroll engine's, the buttons' included, and the
  * buttons show only where the engine is: it hands them each step it puts the
  * story on (followEngine), so they carry on from wherever a link, a key or the
@@ -45,7 +45,7 @@
  * @version v1.8.0
  */
 
-import { state, MOBILE_NAV_COOLDOWN, moveSeconds } from './state.js';
+import { state, BUTTON_NAV_COOLDOWN, moveSeconds } from './state.js';
 import { setMoveSeconds } from './card-height.js';
 import { travelBetween } from './camera-travel.js';
 import { activateCard, releaseTitleCardsForIntro } from './card-pool.js';
@@ -78,7 +78,7 @@ export function initKeyboardNavigation() {
 /**
  * Navigate to a specific step.
  *
- * Delegates all visual transitions to the card pool (activateCard), which
+ * Delegates all visual transitions to the card stack (activateCard), which
  * handles viewer plate switching, text card sliding, and preloading based
  * on whether the object has changed and whether the zoom mode changed.
  *
@@ -96,7 +96,7 @@ export function goToStep(newIndex, direction = 'forward') {
     return;
   }
 
-  // Card pool handles all visual transitions, viewer switching, and preloading
+  // The card stack handles all visual transitions, viewer switching, and preloading
   activateCard(newIndex, direction);
 
   // Panel trigger data update
@@ -119,7 +119,7 @@ function _restoreIntro() {
   releaseTitleCardsForIntro();
   _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
 
-  state.currentObjectRun = { objectId: null, runPosition: 0 };
+  state.currentObjectScene = { objectId: null, scenePosition: 0 };
   _hideStepChrome();
 
   if (state.onStepChange) state.onStepChange(-1);
@@ -181,7 +181,7 @@ function _hideStepChrome() {
   if (creditBadge) creditBadge.classList.add('d-none');
 }
 
-// ── Button navigation (mobile + embed) ───────────────────────────────────────
+// ── Button navigation (vertical layout + embed) ───────────────────────────────────────
 
 /**
  * Record the step button navigation has put the story on, -1 for the intro.
@@ -193,7 +193,7 @@ function _hideStepChrome() {
  *
  * @param {number} index - Step index, or -1 for the intro.
  */
-export function recordButtonStep(index) {
+function recordButtonStep(index) {
   if (state.lenis) return;
   state.currentIndex = index;
   if (state.onStepChange) state.onStepChange(index);
@@ -208,10 +208,10 @@ export function recordButtonStep(index) {
  * @param {number} index - Step index.
  */
 export function jumpButtonsTo(index) {
-  state.currentMobileStep = index;
-  state.mobileInIntro = false;
+  state.currentButtonStep = index;
+  state.buttonInIntro = false;
   state.steps.forEach((step, i) => step.classList.toggle('mobile-active', i === index));
-  updateMobileButtonStates();
+  updateButtonNavStates();
   recordButtonStep(index);
 }
 
@@ -222,11 +222,11 @@ export function jumpButtonsTo(index) {
  * nothing to put back.
  */
 export function putButtonsOnIntro() {
-  if (!state.mobileNavButtons) return;
-  state.mobileInIntro = true;
-  state.currentMobileStep = 0;
+  if (!state.buttonNavButtons) return;
+  state.buttonInIntro = true;
+  state.currentButtonStep = 0;
   state.steps.forEach((step, i) => step.classList.toggle('mobile-active', i === 0));
-  updateMobileButtonStates();
+  updateButtonNavStates();
 }
 
 /**
@@ -241,7 +241,7 @@ export function putButtonsOnIntro() {
  * @param {number} index - Step index, or -1 for the intro.
  */
 export function followEngine(index) {
-  if (!state.mobileNavButtons) return;
+  if (!state.buttonNavButtons) return;
   if (index < 0) {
     putButtonsOnIntro();
   } else {
@@ -283,7 +283,7 @@ function createNavigationButtons() {
 }
 
 /**
- * Set up button-based navigation for mobile or embed mode.
+ * Set up button navigation for the vertical layout or embed mode.
  *
  * Both modes use identical logic — previous/next buttons at the bottom of
  * the screen.
@@ -302,86 +302,86 @@ export function initializeButtonNavigation() {
 
   if (state.steps.length > 0) {
     state.steps[0].classList.add('mobile-active');
-    state.currentMobileStep = 0;
+    state.currentButtonStep = 0;
   }
 
   // The story boots on the intro card, so button navigation starts there:
   // the first "next" dismisses the intro into step 0, and "prev" stays
   // disabled until the intro is dismissed.
-  state.mobileInIntro = !!document.querySelector('.story-intro');
+  state.buttonInIntro = !!document.querySelector('.story-intro');
 
   const buttons = createNavigationButtons();
   if (!buttons) return;
 
-  state.mobileNavButtons = { prev: buttons.prev, next: buttons.next };
+  state.buttonNavButtons = { prev: buttons.prev, next: buttons.next };
 
-  buttons.prev.addEventListener('click', goToPreviousMobileStep);
-  buttons.next.addEventListener('click', goToNextMobileStep);
+  buttons.prev.addEventListener('click', goToPreviousButtonStep);
+  buttons.next.addEventListener('click', goToNextButtonStep);
 
-  updateMobileButtonStates();
+  updateButtonNavStates();
   initKeyboardNavigation();
 }
 
 /**
- * Navigate to the next step (mobile/embed).
+ * Navigate to the next step (button navigation).
  */
-function goToNextMobileStep() {
+function goToNextButtonStep() {
   if (state.lenis) {
     _moveThroughEngine(buttonHeading() + 1);
     return;
   }
   // From intro state → step 0
-  if (state.mobileInIntro) {
-    _dismissMobileIntro();
+  if (state.buttonInIntro) {
+    _dismissButtonIntro();
     return;
   }
-  if (state.currentMobileStep >= state.steps.length - 1) {
+  if (state.currentButtonStep >= state.steps.length - 1) {
     return;
   }
-  goToMobileStep(state.currentMobileStep + 1);
+  goToButtonStep(state.currentButtonStep + 1);
 }
 
 /**
- * Navigate to the previous step (mobile/embed).
+ * Navigate to the previous step (button navigation).
  */
-function goToPreviousMobileStep() {
+function goToPreviousButtonStep() {
   if (state.lenis) {
     _moveThroughEngine(buttonHeading() - 1);
     return;
   }
-  if (state.mobileInIntro) {
+  if (state.buttonInIntro) {
     return;
   }
   // From step 0 → intro state
-  if (state.currentMobileStep === 0) {
-    _restoreMobileIntro();
+  if (state.currentButtonStep === 0) {
+    _restoreButtonIntro();
     return;
   }
-  goToMobileStep(state.currentMobileStep - 1);
+  goToButtonStep(state.currentButtonStep - 1);
 }
 
 /**
- * Restore the intro card on mobile (backward from step 0).
+ * Restore the intro card in button navigation (backward from step 0).
  *
  * The same four pieces the desktop intro restoration moves, plus the two
  * things button navigation owns: the tap cooldown, and the button states
  * that keep "previous" disabled on the intro. The plate is taken by
  * position rather than by object id, because button navigation tracks steps
- * and not object runs.
+ * and not scenes.
  */
-function _restoreMobileIntro() {
-  if (state.mobileNavigationCooldown) return;
+function _restoreButtonIntro() {
+  if (state.buttonNavCooldown) return;
 
-  state.mobileNavigationCooldown = true;
-  setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
+  state.buttonNavCooldown = true;
+  setTimeout(() => { state.buttonNavCooldown = false; }, BUTTON_NAV_COOLDOWN);
 
   // The intro carries no camera travel: the move takes the base.
   setMoveSeconds(moveSeconds(0));
   _showIntroCard();
   _sendFirstTextCardOffScreen();
-  _sendPlateOffScreen(state.viewerPlates?.[0]);
+  _sendPlateOffScreen(state.viewerPlates[0]);
 
-  state.currentObjectRun = { objectId: null, runPosition: 0 };
+  state.currentObjectScene = { objectId: null, scenePosition: 0 };
   _hideStepChrome();
 
   putButtonsOnIntro();
@@ -392,13 +392,13 @@ function _restoreMobileIntro() {
 /**
  * Dismiss the intro card and show step 0 (forward from intro).
  */
-function _dismissMobileIntro() {
-  if (state.mobileNavigationCooldown) return;
+function _dismissButtonIntro() {
+  if (state.buttonNavCooldown) return;
 
-  state.mobileNavigationCooldown = true;
-  setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
+  state.buttonNavCooldown = true;
+  setTimeout(() => { state.buttonNavCooldown = false; }, BUTTON_NAV_COOLDOWN);
 
-  state.mobileInIntro = false;
+  state.buttonInIntro = false;
   setMoveSeconds(moveSeconds(0));
 
   // Hide intro card
@@ -409,10 +409,10 @@ function _dismissMobileIntro() {
   }
 
   // Activate step 0
-  state.currentMobileStep = 0;
+  state.currentButtonStep = 0;
   activateCard(0, 'forward');
   updateViewerInfo(0);
-  updateMobileButtonStates();
+  updateButtonNavStates();
   recordButtonStep(0);
   writeHash();
 }
@@ -434,11 +434,11 @@ function _dismissMobileIntro() {
  */
 function _moveThroughEngine(newIndex) {
   if (newIndex < -1 || newIndex >= state.steps.length) return;
-  if (state.mobileNavigationCooldown) return;
+  if (state.buttonNavCooldown) return;
   if (!advanceToStep(newIndex)) return;
 
-  state.mobileNavigationCooldown = true;
-  setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
+  state.buttonNavCooldown = true;
+  setTimeout(() => { state.buttonNavCooldown = false; }, BUTTON_NAV_COOLDOWN);
 
   if (newIndex >= 0) {
     const plate = state.viewerPlates[state.stepToScene[newIndex]];
@@ -450,17 +450,17 @@ function _moveThroughEngine(newIndex) {
  * Navigate to a specific step where no scroll engine runs (phones, iPads).
  *
  * Handles cooldown, skeleton loading states, step class toggling,
- * and card pool activation.
+ * and card stack activation.
  *
  * @param {number} newIndex - Target step index.
  */
-function goToMobileStep(newIndex) {
+function goToButtonStep(newIndex) {
   if (newIndex < 0 || newIndex >= state.steps.length) {
     return;
   }
 
   // Cooldown to prevent rapid tapping
-  if (state.mobileNavigationCooldown) {
+  if (state.buttonNavCooldown) {
     return;
   }
 
@@ -474,20 +474,20 @@ function goToMobileStep(newIndex) {
   }
 
   // Activate cooldown
-  state.mobileNavigationCooldown = true;
+  state.buttonNavCooldown = true;
   setTimeout(() => {
-    state.mobileNavigationCooldown = false;
-  }, MOBILE_NAV_COOLDOWN);
+    state.buttonNavCooldown = false;
+  }, BUTTON_NAV_COOLDOWN);
 
-  const direction = newIndex > state.currentMobileStep ? 'forward' : 'backward';
-  const travel = travelBetween(state.currentMobileStep, newIndex);
+  const direction = newIndex > state.currentButtonStep ? 'forward' : 'backward';
+  const travel = travelBetween(state.currentButtonStep, newIndex);
 
   // Swap step visibility
-  state.steps[state.currentMobileStep].classList.remove('mobile-active');
+  state.steps[state.currentButtonStep].classList.remove('mobile-active');
   state.steps[newIndex].classList.add('mobile-active');
-  state.currentMobileStep = newIndex;
+  state.currentButtonStep = newIndex;
 
-  updateMobileButtonStates();
+  updateButtonNavStates();
 
   // No scroll engine, so no per-frame writer: this path moves the card itself
   // and is the only thing that can state where the reader now is. The card
@@ -501,12 +501,12 @@ function goToMobileStep(newIndex) {
 }
 
 /**
- * Update mobile button enabled/disabled states at step boundaries.
+ * Update button enabled/disabled states at step boundaries.
  */
-function updateMobileButtonStates() {
-  if (!state.mobileNavButtons) return;
-  state.mobileNavButtons.prev.disabled = !!state.mobileInIntro;
-  state.mobileNavButtons.next.disabled = (state.currentMobileStep === state.steps.length - 1);
+function updateButtonNavStates() {
+  if (!state.buttonNavButtons) return;
+  state.buttonNavButtons.prev.disabled = !!state.buttonInIntro;
+  state.buttonNavButtons.next.disabled = (state.currentButtonStep === state.steps.length - 1);
 }
 
 // ── Keyboard input ─────────────────────────────────────────────────────────
@@ -762,9 +762,9 @@ function _navigateStep(direction) {
     return;
   }
   if (direction === 'forward') {
-    goToNextMobileStep();
+    goToNextButtonStep();
   } else {
-    goToPreviousMobileStep();
+    goToPreviousButtonStep();
   }
 }
 

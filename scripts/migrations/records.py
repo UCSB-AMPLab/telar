@@ -9,9 +9,9 @@ the launcher marker, the state file's name, `coerce_change` and
 `is_hard_failure`, and `apply_config_version`, the one writer of the
 `telar.version` stamp.
 
-`base.py` imports all of it back, so a migration, the engine and the tests
-import these names from `migrations.base` as they always have. They live
-here so that module can be the migration base class alone.
+`base.py` re-exports these names, so `migrations.base` is the one import
+for a migration, the engine and the tests, and holds the migration base
+class alone.
 
 Version: v1.8.0
 """
@@ -62,7 +62,7 @@ class FetchResult:
         content: File content as `str`, or `bytes` when it is not valid
             UTF-8, or None on any failure.
         outcome: OK, TRANSIENT or STRUCTURAL.
-        detail: The underlying error, for the console line. Empty on OK.
+        detail: The underlying error's text. Empty on OK.
     """
 
     content: Optional[Union[str, bytes]]
@@ -74,9 +74,7 @@ class FetchResult:
 class ChangeRecord:
     """A structured record of one change a migration attempted.
 
-    Replaces the old flat list-of-strings return value so the upgrade
-    pipeline can tell success from failure instead of rendering every
-    string as a completed checklist item.
+    The upgrade pipeline reads the status to tell success from failure.
 
     Attributes:
         description: Human-readable description of the change.
@@ -86,9 +84,7 @@ class ChangeRecord:
             surfaced for manual attention but not block the upgrade.
         category: Which UPGRADE_SUMMARY.md heading this belongs under, one
             of ChangeCategory. None leaves the summary to guess from the
-            description, which is what it did for every record before this
-            field existed — a rephrased description silently moved a change
-            to "Other".
+            description.
     """
 
     description: str
@@ -197,8 +193,8 @@ MANUAL_STEP_AUDIENCES = ('all', 'local', 'google-sheets', 'compositor')
 
 # What a manual step asks of its reader. The Compositor groups its
 # post-upgrade screen by this field, and a step it cannot place is shown
-# under a heading of its own, where the screen can no longer say that
-# nothing is required.
+# under a heading of its own, where the screen cannot say that nothing is
+# required.
 #
 #   action   — something the upgrade left undone that the reader may need
 #              to do. A step that applies only in some cases ("if you
@@ -228,10 +224,9 @@ UPGRADE_STATE_FILE = "UPGRADE_STATE.json"
 
 
 # What opens the block this writer edits: a top-level `telar:` and nothing
-# else on the line but whitespace or a comment. `startswith('telar:')` also
-# matched `telar:custom:`, a valid key of its own, and `telar: {version: x}`,
-# an inline mapping that cannot take block entries -- writing into either
-# produced a file no parser would read.
+# else on the line but whitespace or a comment. Not `telar:custom:`, a key
+# of its own, and not `telar: {version: x}`, an inline mapping that cannot
+# take block entries.
 _TELAR_SECTION = re.compile(r'telar:[ \t]*(#.*)?$')
 
 
@@ -243,8 +238,6 @@ def apply_config_version(content, new_version, new_date):
     The two lines it rewrites are the exception, and they are rewritten
     whole: a trailing comment on `version` or `release_date` does not
     survive, and the value comes back double-quoted whatever quoting it had.
-    Both are measured, not intended -- worth knowing before anyone relies on
-    a note written on those lines.
 
     Single source of truth for the version stamp — both BaseMigration (per
     migration) and upgrade.py (the final stamp in main()) call this, so the
@@ -284,16 +277,12 @@ def apply_config_version(content, new_version, new_date):
 
         # A top-level key closes any open section; `telar:` then opens one.
         # Both are decided on the same line, because a second `telar:`
-        # header does both at once -- checking only while outside a section
-        # meant the header that closed one was never seen as opening the
-        # next, and a file with two sections had the first one stamped
-        # while PyYAML read the second.
+        # header does both at once.
         indent_len = len(line) - len(line.lstrip())
         at_top_level = bool(stripped) and indent_len == 0
 
-        # A comment at column 0 is not the end of the section: YAML does not
-        # close a block mapping on one, and treating it as the end left the
-        # stamp outside the section it belongs to.
+        # A comment at column 0 does not end the section: YAML does not close
+        # a block mapping on one.
         if at_top_level and not stripped.startswith('#'):
             in_telar_section = False
             if _TELAR_SECTION.match(line):
@@ -311,9 +300,8 @@ def apply_config_version(content, new_version, new_date):
         if not in_telar_section:
             continue
 
-        # Indentation is learned from a real entry. A comment can sit at any
-        # column without being wrong, so taking the indent from one produced
-        # a stamp that did not line up with the section's own keys.
+        # Indentation is taken from the first real entry; a comment can sit
+        # at any column.
         if stripped and not stripped.startswith('#') and section_indent is None:
             section_indent = line[:indent_len]
 

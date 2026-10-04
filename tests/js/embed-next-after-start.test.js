@@ -50,8 +50,8 @@ describe('Next after Back to Start in an embed', () => {
     mocks.mockActivateCard.mockClear();
     resetState({
       currentIndex: -1, viewerPlates: {}, stepToScene: {}, textCards: {}, panelStack: [],
-      isPanelOpen: false, scrollLockActive: false, mobileNavButtons: null,
-      mobileNavigationCooldown: false, onStepChange: vi.fn(),
+      isPanelOpen: false, scrollLockActive: false, buttonNavButtons: null,
+      buttonNavCooldown: false, onStepChange: vi.fn(),
     });
     state.steps = Array.from(document.querySelectorAll('.story-step'));
     document.querySelectorAll('.mobile-nav').forEach((el) => el.remove());
@@ -77,7 +77,7 @@ describe('Next after Back to Start in an embed', () => {
     expect(state.currentIndex).toBe(-1);
     expect(location.hash).toBe('');
 
-    state.mobileNavigationCooldown = false;
+    state.buttonNavCooldown = false;
     document.querySelector('.mobile-next').click();
     landMove();
 

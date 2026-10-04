@@ -113,7 +113,7 @@ function siteTab() {
 
 /** The story branch of _includes/share-panel.html, Liquid resolved. */
 export function storyPanelMarkup() {
-  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true">
+  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true" data-copy-manually="Please manually copy the text">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header share-panel-header">
@@ -182,7 +182,7 @@ export function storyPanelMarkup() {
 
 /** The branch every non-story page renders, Liquid resolved. */
 export function otherPanelMarkup() {
-  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true">
+  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true" data-copy-manually="Please manually copy the text">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header share-panel-header">

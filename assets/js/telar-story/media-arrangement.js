@@ -35,11 +35,6 @@ export const TOP_CONTROLS = ['.btn-nav-back', '.share-button', '.step-counter'];
 /** The card types whose scenes this module arranges. */
 const VIDEO_TYPES = new Set(['youtube', 'vimeo', 'google-drive']);
 
-/** Whether the page is an embed; main.js sets the state after the first geometry pass. */
-function _isEmbed() {
-  return state.isEmbed || Boolean(window.telarEmbed?.enabled);
-}
-
 /**
  * The lowest bottom edge, in px from the top of the window, of the elements
  * the selectors match. An element not displayed has an empty box and is
@@ -112,7 +107,7 @@ export function arrangeMediaScene(plateEl, cards, { W, H, eligible, besideTop, t
     return null;
   }
   const topBand = band ?? measureTopBand(W, H);
-  if (!eligible || _isEmbed() || cards.length === 0) {
+  if (!eligible || state.isEmbed || cards.length === 0) {
     _clear(plateEl, cards);
     plateEl.dataset.mediaTopBand = String(topBand);
     return null;

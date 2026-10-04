@@ -1,12 +1,6 @@
 {%- comment -%}
   The glossary entries of one kind, assigned to `glossary_kind_entries`.
   Pass the kind (see glossary-kinds.html) as `kind`. The build writes a
-  kind id into every entry's page as `glossary_kind`; an entry without one is
-  of the default kind, so no entry is left out of every kind.
+  kind id into every entry's page as `glossary_kind`.
 {%- endcomment -%}
-{%- assign glossary_kind_id = include.kind.id -%}
-{%- if include.kind.default -%}
-  {%- assign glossary_kind_entries = site.glossary | where_exp: "entry", "entry.glossary_kind == glossary_kind_id or entry.glossary_kind == nil" -%}
-{%- else -%}
-  {%- assign glossary_kind_entries = site.glossary | where: "glossary_kind", glossary_kind_id -%}
-{%- endif -%}
+{%- assign glossary_kind_entries = site.glossary | where: "glossary_kind", include.kind.id -%}

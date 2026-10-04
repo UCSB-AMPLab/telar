@@ -59,7 +59,7 @@ import {
   openPanel,
   closeAllPanels,
 } from './panels.js';
-import { applyDeepLinkOnLoad, handleHashChange, navigateToStep, navigateToIntro, writeHash } from './deep-link.js';
+import { applyDeepLinkOnLoad, handleHashChange, navigateToStep, navigateToIntro } from './deep-link.js';
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
@@ -89,7 +89,11 @@ function initializeStory() {
   // Prefetch manifests in background (async, does not block)
   prefetchStoryManifests();
 
-  // Read card-stack config and initialize card pool (creates all DOM elements)
+  // state.isEmbed is set before the card stack is built, whose first geometry
+  // pass reads it, and so that layout-mode.js callbacks read the correct value.
+  state.isEmbed = window.telarEmbed?.enabled || false;
+
+  // Read card-stack config and initialize the card stack (creates all DOM elements)
   const cardConfig = {
     peekHeight: window.telarConfig?.cardPeekHeight ?? 1,
     messiness: window.telarConfig?.cardMessiness ?? 20,
@@ -97,8 +101,6 @@ function initializeStory() {
   initCardPool(window.storyData, cardConfig);
 
   // Choose navigation mode
-  // state.isEmbed is set first so layout-mode.js callbacks can read the correct value.
-  state.isEmbed = window.telarEmbed?.enabled || false;
   state.layoutMode = getLayoutMode();   // single source of truth — reads CSS vars via layout-mode.js
 
   // Refresh state.cardOverlayRect on every layout flip (layout-mode.js has

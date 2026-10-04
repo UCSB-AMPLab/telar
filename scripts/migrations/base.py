@@ -66,10 +66,10 @@ import time
 from .messages import get_message
 
 
-# The records, the categories and the shared rules live in records.py. Every
-# name is imported back here, the same objects rather than copies, so
-# `from migrations.base import ChangeRecord` keeps working for the migrations,
-# the engine and the tests, and an isinstance check sees one class.
+# The records, the categories and the shared rules live in records.py and are
+# re-exported here, the same objects rather than copies, so the migrations,
+# the engine and the tests import from `migrations.base` alone and an
+# isinstance check sees one class.
 from .records import (  # noqa: F401
     ChangeStatus, FetchOutcome, STRUCTURAL_HTTP_CODES, FetchResult,
     ChangeRecord, ChangeCategory, category_for_path, MANUAL_STEP_AUDIENCES, MANUAL_STEP_KINDS,
@@ -168,8 +168,8 @@ class BaseMigration(ABC):
 
         `audience` says who still has to do the step, and exists because the
         Compositor does some of them for the user. It is required on every
-        step: a step that forgets it is shown to everyone, which is the
-        behaviour it was added to stop, and a default would hide that.
+        step: a step without it would be shown to everyone, and a default
+        would hide that.
 
         The question it answers is narrow — *is this step made unnecessary by
         the Compositor doing it for you?* It is not "who is this step about".
@@ -395,8 +395,7 @@ class BaseMigration(ABC):
         Fetch file content from GitHub telar repository, or None on any failure.
 
         Callers that need to act on *why* a fetch failed use `_fetch_result`
-        instead. This wrapper stays because most of the chain only needs the
-        content, and a None here means exactly what it has always meant.
+        instead.
 
         Args:
             path: Path to file relative to repo root (e.g., "_layouts/story.html")
@@ -581,10 +580,8 @@ class BaseMigration(ABC):
         # a wrong ref, and flagging our way past that would stamp the site
         # with a version whose files it never received. Stop instead.
         #
-        # A one-file map whose only file is genuinely absent is caught here
-        # too, since it looks identical from inside. That is the stall this
-        # issue is about, kept deliberately for the case where continuing
-        # cannot be told apart from continuing into nothing.
+        # A one-file map whose only file is absent is stopped too, since it
+        # looks identical from inside.
         return content_map, blocking + [
             ChangeRecord(description=record.description,
                          status=ChangeStatus.FAILED,
@@ -598,10 +595,8 @@ class BaseMigration(ABC):
     ) -> List[ChangeRecord]:
         """Fetch and write each file as it arrives, reporting one record each.
 
-        The pre-consolidation shape, kept because those migrations are
-        historical and their summary wording is what their users read. It is
-        not atomic and was never meant to be: each file is written the moment
-        it arrives.
+        Used by the per-release migrations, which keep their own summary
+        wording. Not atomic: each file is written the moment it arrives.
 
         What it does share with `_apply_framework_files` is the rule for
         deciding whether a failure stops the chain. A structural failure is

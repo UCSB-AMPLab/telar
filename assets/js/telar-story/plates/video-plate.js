@@ -3,8 +3,8 @@
  *
  * A scene whose object is a YouTube, Vimeo or Google Drive video.
  *
- * One player per scene: the steps of a run share it, and a later step in the
- * run re-clips the running player rather than rebuilding it.
+ * One player per scene: the steps of a scene share it, and a later step in the
+ * scene re-clips the running player rather than rebuilding it.
  *
  * @version v1.8.0
  */
@@ -73,8 +73,6 @@ export class VideoPlate extends MediaPlate {
       loop,
       sceneIndex: this.sceneIndex,
       sourceUrl,
-      onPlay: () => {},
-      onTimeUpdate: () => {},
       onEnded: () => {
         applyClipEndDim(el);
       },

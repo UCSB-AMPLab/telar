@@ -346,10 +346,10 @@ def _add_demo_layers(step_data, step, story_id, glossary_terms):
                 # Initialize warnings list for widget processing
                 widget_warnings = []
 
-                # Process widgets BEFORE markdown conversion
+                # Process widgets before markdown conversion
                 content = process_widgets(content, f'demo-{story_id}', widget_warnings)
 
-                # Process images (sizes and captions) BEFORE markdown conversion
+                # Process images (sizes and captions) before markdown conversion
                 content = process_images(content)
 
                 # Convert markdown to HTML, making glossary links in the

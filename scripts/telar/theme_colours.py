@@ -3,8 +3,7 @@ Derived On-Colours for Theme Backgrounds
 
 A theme in `_data/themes/*.yml` hand-picks a text colour for each of its
 backgrounds — `colors.text.panel_layer1` to sit on
-`colors.background.panel_layer1`, and so on. Nothing checked the pair, and
-one shipped theme fails WCAG AA on its own values. This module reads every
+`colors.background.panel_layer1`, and so on. This module reads every
 theme file and works out, for each background, a text colour that reaches a
 contrast ratio of 4.5:1 against it, writing the result to
 `_data/telar-build/theme-colours.json` for `assets/css/telar.scss` to emit as
@@ -95,8 +94,6 @@ import yaml
 # collide with `_data/<identifier>.json`; Jekyll loads it as
 # `site.data['telar-build']['theme-colours']`.
 MANIFEST_RELATIVE_PATH = Path('telar-build') / 'theme-colours.json'
-
-MANIFEST_SCHEMA = 2
 
 # WCAG 2.1 AA for normal-size text. Panel titles and button labels are not
 # reliably large text, so the large-text 3:1 floor does not apply.
@@ -343,7 +340,7 @@ def build_manifest(themes_dir):
         themes[path.stem] = {'on': on_colours,
                              'light': light_colours(on_colours),
                              'warnings': warnings}
-    return {'schema': MANIFEST_SCHEMA, 'themes': themes}
+    return {'themes': themes}
 
 
 def manifest_warnings(manifest):
@@ -365,22 +362,6 @@ def write_manifest(data_dir, manifest):
         json.dump(manifest, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.write('\n')
     return path
-
-
-def read_manifest(data_dir):
-    """Return the derived colours, or None when this build did not write any."""
-    path = manifest_path(data_dir)
-    if not path.exists():
-        return None
-    with open(path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
-def remove_manifest(data_dir):
-    """Drop a file a later build must not inherit."""
-    path = manifest_path(data_dir)
-    if path.exists():
-        path.unlink()
 
 
 def generate(data_dir='_data', announce=print):

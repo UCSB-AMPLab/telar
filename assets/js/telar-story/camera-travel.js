@@ -2,7 +2,7 @@
  * Telar Story – Camera travel
  *
  * How far a move takes the reader, measured on the live geometry. The scroll
- * engine and the mobile step navigation time a move by it (moveSeconds in
+ * engine and the button navigation time a move by it (moveSeconds in
  * state.js). The measure reads placements from iiif-card.js, which does not
  * import this module.
  *
@@ -62,7 +62,7 @@ export function placementTravel(from, to, region) {
  * @returns {number}
  */
 export function stepTravel(stepIndex) {
-  const steps = state.stepsData || [];
+  const steps = state.stepsData;
   const scene = state.stepToScene[stepIndex];
   if (scene === undefined || scene !== state.stepToScene[stepIndex + 1]) return 0;
   const a = steps[stepIndex] && _authoredFraming(steps[stepIndex]);

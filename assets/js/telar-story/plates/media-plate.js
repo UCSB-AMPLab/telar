@@ -5,9 +5,9 @@
  *
  * `Plate.load()` caches a promise and answers from it forever after. That is
  * right where the plate owns its player and wrong here: `video-card.js` and
- * `audio-card.js` each keep their own pool, capped at three and evicted from
- * inside themselves, so a player can go without the plate being told. The pool
- * is the only thing that knows, and `_hasPlayer` is where each subclass asks it.
+ * `audio-card.js` each keep their own player pool, capped at three and evicted
+ * from inside themselves, so a player can go without the plate being told. The
+ * pool is the only thing that knows, and `_hasPlayer` is where each subclass asks it.
  *
  * The plate also leaves by snapping rather than transitioning. A cross-origin
  * iframe on mobile breaks the compositing a CSS transform transition needs, so
@@ -48,8 +48,8 @@ export class MediaPlate extends Plate {
    * Build the player unless one is already there.
    *
    * Synchronous, and not the base class's cached promise: see the module note.
-   * Answers true while a build is still in flight, because each module pools
-   * its wrapper before the file loads — which is what turns the second of two
+   * A build in flight counts as a player, because each module adds its wrapper
+   * to its pool before the file loads — which is what turns the second of two
    * callers away when a reader crosses several steps at once.
    */
   load() {
@@ -64,7 +64,7 @@ export class MediaPlate extends Plate {
   }
 
   /**
-   * Stand down and go back below the fold.
+   * Stand down and go back off screen below.
    *
    * The base class writes the transform and lets the transition carry it;
    * `onSendBack` here does the move instead, so this does not call up.

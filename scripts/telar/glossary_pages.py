@@ -44,8 +44,8 @@ def _csv_page_rows(csv_path, warn_missing=True):
 
     rows = []
     for _, row in df.iterrows():
-        term_id = str(row.get('term_id', '')).strip()
-        title = str(row.get('title', '')).strip()
+        term_id = str(row['term_id']).strip()
+        title = str(row['title']).strip()
         if not term_id or not title or term_id.startswith('#'):
             continue
         rows.append((term_id, title, row))
@@ -159,12 +159,12 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms, rows=Non
     if rows is None:
         rows = _csv_page_rows(csv_path)
     for term_id, title, row in rows:
-        definition = str(row.get('definition', '')).strip()
+        definition = str(row['definition']).strip()
         related_terms_raw = str(row.get('related_terms', '')).strip()
 
         # Parse related_terms (pipe-separated)
         related_terms = []
-        if related_terms_raw and related_terms_raw != 'nan':
+        if related_terms_raw:
             related_terms = [t.strip() for t in related_terms_raw.split('|') if t.strip()]
 
         # Glossary-to-glossary links are made while the definition renders,

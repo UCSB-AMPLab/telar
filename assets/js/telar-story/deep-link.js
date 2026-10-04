@@ -43,7 +43,7 @@ import { jumpScrollTo, isMoveInFlight } from './scroll-engine.js';
  */
 let _deepLinkTimers = [];
 
-/** When a hashchange last closed panels, for the settle delay before another opens. */
+/** When a hashchange last closed panels, for the delay before another opens. */
 let _lastPanelCloseAt = -Infinity;
 
 /**
@@ -61,9 +61,9 @@ function _cancelDeepLinkTimers() {
 /**
  * Cancel the deep-link timer ladder on the first genuine user interaction.
  * Listens for wheel / keydown / touchstart — all user-initiated. We deliberately
- * do NOT listen for the Lenis 'scroll' event: applyDeepLinkOnLoad's own
+ * do not listen for the Lenis 'scroll' event: applyDeepLinkOnLoad's own
  * immediate jump emits a 'scroll', which would self-cancel the ladder before any
- * panel opened. Must be armed AFTER the jump's scrollTo so it can't be tripped
+ * panel opened. Must be armed after the jump's scrollTo so it can't be tripped
  * by the jump.
  *
  * A click reaches none of these, so Back to Start and a contents link cancel
@@ -246,7 +246,7 @@ export function navigateToStep(stepNumber) {
   reconcilePlatesForJump(targetIndex);
 
   if (state.lenis) {
-    const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
+    const targetPx = (targetIndex + 1) * state.scrollStepPx;
 
     // scrollTo must jump straight to the target with no animation. An animated
     // scroll drives the per-frame IIIF interpolation (lerpIiifPosition) at each
@@ -317,7 +317,7 @@ export function applyDeepLinkOnLoad() {
 function _jumpToIndex(targetIndex) {
   setMoveSeconds(moveSeconds(0));
   if (state.lenis) {
-    const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
+    const targetPx = (targetIndex + 1) * state.scrollStepPx;
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned
 
@@ -327,7 +327,7 @@ function _jumpToIndex(targetIndex) {
     state.currentIndex = targetIndex;
     state.scrollPosition = targetIndex + 1;
   } else {
-    // Button/mobile/iOS mode: no scroll surface — activate card directly
+    // Button navigation (phones, embeds, iOS): no scroll surface — activate card directly
     reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
     jumpButtonsTo(targetIndex);
@@ -365,12 +365,12 @@ function _scheduleGlossaryClick(parsed, targetIndex, delay) {
  */
 function _scheduleLayerOpen(parsed, targetIndex, delay) {
   if (parsed.layer === null) return;
-  const stepNumber = state.steps[targetIndex]?.dataset?.step;
+  const stepNumber = state.steps[targetIndex].dataset.step;
   if (!stepNumber) return;
 
   // Each deferred open also re-checks that we are still on the deep-link
   // target before acting — a backstop that covers navigation paths the
-  // interaction listener can't (e.g. a mobile nav-button tap).
+  // interaction listener can't (e.g. a nav-button tap).
   const onTarget = () => state.currentIndex === targetIndex;
 
   // Open layer1 first if the target is layer2 or deeper
@@ -400,7 +400,7 @@ function _scheduleLayerOpen(parsed, targetIndex, delay) {
 // ── Fragment changes on a loaded story ────────────────────────────────────────
 
 /** Time for a closing panel's slide-out to end before another opens. */
-const PANEL_CLOSE_SETTLE_MS = 400;
+const PANEL_CLOSE_WAIT_MS = 400;
 
 /**
  * The numbered layer on top of the panel stack, or null when none is open.
@@ -445,7 +445,7 @@ function _openGlossaryN() {
  */
 function _panelsBusy() {
   if (state.panelStack.length > 0) return true;
-  if (Date.now() - _lastPanelCloseAt < PANEL_CLOSE_SETTLE_MS) return true;
+  if (Date.now() - _lastPanelCloseAt < PANEL_CLOSE_WAIT_MS) return true;
   return !!document.querySelector('#panel-layer1, #panel-layer2, #panel-glossary')
     && !!document.querySelector('.offcanvas.show, .offcanvas.showing, .offcanvas.hiding');
 }
@@ -454,7 +454,7 @@ function _panelsBusy() {
 function _openDelayAfterClose() {
   if (!_panelsBusy()) return 100;
   _lastPanelCloseAt = Date.now();
-  return PANEL_CLOSE_SETTLE_MS;
+  return PANEL_CLOSE_WAIT_MS;
 }
 
 /**
@@ -483,7 +483,7 @@ function _settleOnStep(parsed, targetIndex) {
     _lastPanelCloseAt = Date.now();
   }
   writeHash();
-  if (wantG !== null) _scheduleGlossaryClick(parsed, targetIndex, curG !== null ? PANEL_CLOSE_SETTLE_MS : 0);
+  if (wantG !== null) _scheduleGlossaryClick(parsed, targetIndex, curG !== null ? PANEL_CLOSE_WAIT_MS : 0);
 }
 
 /**

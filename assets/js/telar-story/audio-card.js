@@ -105,7 +105,7 @@ let _sharedAudioContext = null;
  * Vendored instead of CDN-loaded for the minimal-computing reasons in
  * `assets/vendor/README.md` (no CDN single-point-of-failure, version pinning).
  *
- * MUST agree with telarLoadWaveSurfer in assets/js/wavesurfer-loader.js — same
+ * Must agree with telarLoadWaveSurfer in assets/js/wavesurfer-loader.js — same
  * vendored bundles, same load-once-and-cache strategy. Object pages cannot
  * import this ES module, so that file carries its own classic-script copy
  * (window.telarLoadWaveSurfer, base path passed in rather than read via
@@ -169,7 +169,7 @@ export function formatElapsedTime(seconds) {
  * Bar colours derive from the button text colour so they adapt to any
  * theme (dark themes get light bars, light themes get dark bars).
  *
- * MUST agree with deriveThemeColors in assets/js/object-theme.js — same
+ * Must agree with deriveThemeColors in assets/js/object-theme.js — same
  * inputs, same outputs. Object pages do not load the telar-story.js bundle,
  * so they carry their own copy; if you change this derivation, change that
  * one too.
@@ -680,7 +680,7 @@ export function activateAudioCard(plateEl, sceneIndex) {
 /**
  * Deactivate an audio card plate: pause with crossfade and remove active class.
  *
- * Does NOT touch transform — caller decides positioning (same as video-card.js).
+ * Does not touch transform — the caller decides positioning (same as video-card.js).
  *
  * @param {HTMLElement} plateEl - The audio plate element
  * @param {number} [fadeMs=300] - Crossfade duration in milliseconds */
@@ -767,7 +767,7 @@ const _INJECTED_SELECTORS = [
  * Take this module's nodes back out of a plate.
  *
  * Both teardowns owe this. An evicted plate that keeps its waveform container
- * is one the card pool reads as still holding a player, so the scene is never
+ * is one the card stack reads as still holding a player, so the scene is never
  * rebuilt; and if it were, `_ensureWaveformContainer` would hand the new player
  * the container the dead one left.
  *
@@ -989,9 +989,5 @@ export function layoutAudioPlate(plateEl) {
   const height = _placeAudio(plateEl);
   const wrapper = _getAudioWrapperForPlate(plateEl);
   if (!wrapper || !wrapper.ws) return;
-  try {
-    wrapper.ws.setOptions({ height });
-  } catch (e) {
-    // ws may still be initialising
-  }
+  wrapper.ws.setOptions({ height });
 }

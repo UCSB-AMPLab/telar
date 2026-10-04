@@ -47,13 +47,9 @@ def _category_from_description(description: str) -> str:
     file path out of the description and asks `category_for_path`, which
     is the same function a record with a category answers with.
 
-    It is derived rather than guessed, which is the difference that
-    matters. Matching keywords in the prose put "Updated _includes/head.html"
-    under Configuration, because "config" appears nowhere in it but the
-    substring test for `_config.yml`'s neighbours fired first; and any
-    migration that reworded its own description moved its change to another
-    heading with nothing to notice. A path does not move when the sentence
-    around it is rewritten.
+    The category is derived from the path, not guessed from keywords in the
+    prose. A path in the description does not change when the sentence
+    around it is reworded.
 
     A description naming no file falls to Other, which is honest: there is
     no file for the change to be filed under.
@@ -231,9 +227,7 @@ def _visible_manual_steps(migrations: List[BaseMigration],
     """The manual steps this site's owner is actually meant to act on.
 
     The framework's half of the `audience` contract. The Compositor filters
-    the same field on its own screen; a site upgrading with this engine had
-    nothing doing it, so every step reached every summary -- including the
-    spreadsheet steps, on sites with no spreadsheet.
+    the same field on its own screen.
 
     `local` is not filtered here and cannot be. It means "the Compositor
     does this for you", and a site running this engine is by definition not

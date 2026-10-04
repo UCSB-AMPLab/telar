@@ -363,7 +363,7 @@ def _glossary_callout(match, glossary_terms, lower_map, warnings_list,
     if term_id is None:
         return _missing_entry(raw_term_id, raw_term_id, warnings_list,
                               step_num, layer_name)
-    kind = getattr(glossary_terms, 'kinds', {}).get(term_id, default_kind())
+    kind = glossary_terms.kinds.get(term_id, default_kind())
     rendered = render_widget_html('glossary', {
         'term_id': term_id,
         'term_url': glossary_term_url(term_id, base_url),
@@ -664,11 +664,10 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
         return text
 
     # Build a case-insensitive lookup that resolves an author's [[term]] (any
-    # casing) to the ACTUAL stored key. The glossary sources store term_id verbatim
-    # — load_glossary_terms and the demo bundle do not lowercase keys (e.g. the demo glossary stores 'IIIF'). Resolving to
-    # the stored key (rather than a lowercased copy) keeps the rendered
-    # data-term-id and title lookup on the key the glossary holds. Mirrors the
-    # objects_lower_map pattern in stories.py.
+    # casing) to the stored key. The glossary sources store term_id verbatim
+    # (the demo glossary stores 'IIIF'), and resolving to the stored key
+    # rather than a lowercased copy keeps the rendered data-term-id and title
+    # lookup on the key the glossary holds.
     # If two keys differ only by case, the last one wins — acceptable because the
     # glossary page system would already collide on such keys.
     glossary_lower_map = {key.lower(): key for key in (glossary_terms or {})}

@@ -29,7 +29,7 @@ import pandas as pd
 import telar.config as config
 from telar.core import csv_to_json
 from telar.csv_utils import OBJECT_FIELDS
-from telar.processors.objects.featured import _select_featured_objects
+from telar.processors.objects import process_objects
 from telar.processors.stories import process_story
 
 
@@ -43,7 +43,7 @@ def _build_objects(tmp_path, csv_text):
     csv = tmp_path / 'objects.csv'
     csv.write_text(csv_text, encoding='utf-8')
     out = tmp_path / '_data' / 'objects.json'
-    assert csv_to_json(str(csv), str(out), _select_featured_objects,
+    assert csv_to_json(str(csv), str(out), process_objects,
                        canonical_fields=OBJECT_FIELDS) is True
     return json.loads(out.read_text(encoding='utf-8'))
 

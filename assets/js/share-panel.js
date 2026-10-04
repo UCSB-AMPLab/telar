@@ -36,7 +36,7 @@
     let storyKey = null;
     let includeKey = false;
     const sharePanel = doc.getElementById("panel-share");
-    const copyManually = sharePanel?.dataset.copyManually || "Please manually copy the text";
+    const copyManually = sharePanel?.dataset.copyManually;
     const isStoryPage = doc.body.classList.contains("story-page") || doc.querySelector(".story-layout") !== null || win.location.pathname.includes("/stories/");
     function init() {
       if (!sharePanel) return;
@@ -394,7 +394,7 @@
     function showSuccessFeedback(triggerButton) {
       const status = doc.getElementById("share-copy-status");
       if (status) {
-        status.textContent = status.dataset.copied || "Copied";
+        status.textContent = status.dataset.copied;
         setTimeout(() => {
           status.textContent = "";
         }, 2e3);

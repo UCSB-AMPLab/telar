@@ -111,7 +111,7 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url, backend
         else:
             _generate_tiles_iiif(processed_path, tiles_dir, object_id, base_url)
 
-        # Copy full-resolution image BEFORE cleaning up temp file
+        # Copy full-resolution image before cleaning up temp file
         copy_base_image(processed_path, tiles_dir, object_id)
     finally:
         # Clean up temporary file if created

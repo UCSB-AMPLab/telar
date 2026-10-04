@@ -16,35 +16,35 @@
 // begin with, and the record keeps it off.
 
 /**
- * Turn click-to-zoom off on a card's viewer, recording the two settings the
+ * Turn click-to-zoom off on a plate's viewer, recording the two settings the
  * first time. The record is kept while it exists, so a second hold never
  * records the values the first one wrote.
  *
- * @param {Object} viewerCard  Has osdViewer, and gets heldClickToZoom.
+ * @param {Object} plate  Has osdViewer, and gets heldClickToZoom.
  */
-export function holdClickToZoom(viewerCard) {
-  const { gestureSettingsMouse: mouse, gestureSettingsTouch: touch } = viewerCard.osdViewer;
-  if (!viewerCard.heldClickToZoom) {
-    viewerCard.heldClickToZoom = { mouse: mouse.clickToZoom, touch: touch.clickToZoom };
+export function holdClickToZoom(plate) {
+  const { gestureSettingsMouse: mouse, gestureSettingsTouch: touch } = plate.osdViewer;
+  if (!plate.heldClickToZoom) {
+    plate.heldClickToZoom = { mouse: mouse.clickToZoom, touch: touch.clickToZoom };
   }
   mouse.clickToZoom = false;
   touch.clickToZoom = false;
 }
 
 /**
- * Give a card's viewer the click-to-zoom settings recorded by holdClickToZoom.
+ * Give a plate's viewer the click-to-zoom settings recorded by holdClickToZoom.
  * Does nothing where nothing is held; a viewer already freed only loses the
  * record.
  *
- * @param {Object} viewerCard
+ * @param {Object} plate
  */
-export function releaseClickToZoom(viewerCard) {
-  const held = viewerCard.heldClickToZoom;
+export function releaseClickToZoom(plate) {
+  const held = plate.heldClickToZoom;
   if (!held) return;
-  viewerCard.heldClickToZoom = null;
-  if (!viewerCard.osdViewer) return;
-  viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = held.mouse;
-  viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = held.touch;
+  plate.heldClickToZoom = null;
+  if (!plate.osdViewer) return;
+  plate.osdViewer.gestureSettingsMouse.clickToZoom = held.mouse;
+  plate.osdViewer.gestureSettingsTouch.clickToZoom = held.touch;
 }
 
 // ── Placements that coincide ─────────────────────────────────────────────────
@@ -87,8 +87,8 @@ export const easeOut = (t) => 1 - (1 - t) ** 3;
  *
  * @returns {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}
  */
-export function shownPlacement(viewerCard, rect) {
-  const vp = viewerCard.osdViewer.viewport;
+export function shownPlacement(plate, rect) {
+  const vp = plate.osdViewer.viewport;
   const shown = vp.viewportToImageRectangle(vp.getBounds(true));
   return {
     s: rect.width / shown.width,

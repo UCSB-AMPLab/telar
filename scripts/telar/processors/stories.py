@@ -363,9 +363,8 @@ def _normalise_frame(df):
 def _step_label(step):
     """The step as its author wrote it, not as pandas typed it.
 
-    A page column with a blank in it makes pandas read the whole sheet's
-    step numbers as floats, so a warning about step 1 said "step 1.0".
-    Only the label is normalised; the offending value is quoted exactly as
+    pandas reads step numbers as floats when the column has a blank, so a
+    whole-number float is shown as an integer. Only the label is normalised; the offending value is quoted exactly as
     it was read, because that is the author's own data.
     """
     if isinstance(step, float) and step.is_integer():
@@ -394,10 +393,8 @@ def _page_value(raw, step, warnings):
     """One cell as a page number, or '' with a warning.
 
     float() runs first because a spreadsheet writes a whole number as
-    3.0. OverflowError joins the caught set because it is what
-    int(float('Infinity')) raises, and it is a sibling of ValueError
-    rather than a subclass -- omitting it crashed the build on a cell a
-    person can type by hand.
+    3.0. OverflowError is caught because int(float('Infinity')) raises it
+    and it is a sibling of ValueError rather than a subclass.
     """
     if not pd.notna(raw) or not str(raw).strip():
         return ''
@@ -421,25 +418,15 @@ def _validate_page_column(df, warnings):
     nowhere, so an unusable value is cleared and said out loud rather
     than carried into the JSON.
 
-    The column is rebuilt rather than written cell by cell, and that is
-    the whole of why this function looks like this. pandas gives a column
-    a dtype from what it read, and refuses a value of another type into
-    it:
-
-      - a column pandas read as text (one typo beside real page numbers)
-        rejected the integer, so every *valid* page in that column was
-        cleared and reported as invalid;
-      - a column pandas read as numbers (a 0 from someone counting from
-        zero, beside a blank) rejected the empty string used to clear it,
-        and the TypeError escaped this function and stopped the build.
-
-    Assigning the whole column at once replaces its dtype instead of
-    fighting it, so neither case arises.
+    The column is assigned whole. pandas gives a column a dtype from what
+    it read and refuses a value of another type into it, so per-cell
+    assignment fails on a text column holding page numbers and on a numeric
+    column holding a blank. Assigning the whole column replaces its dtype.
     """
     if 'page' not in df.columns:
         return df
 
-    df['page'] = [_page_value(row.get('page', ''), row.get('step', 'unknown'),
+    df['page'] = [_page_value(row['page'], row.get('step', 'unknown'),
                               warnings)
                   for _, row in df.iterrows()]
     return df
@@ -461,13 +448,7 @@ def _load_objects_data():
     try:
         with open(objects_json_path, 'r', encoding='utf-8') as f:
             objects_list = json.load(f)
-            # Keyed by id, and only by records that have one. The objects
-            # build drops a blank id before it writes this file, so its own
-            # output never carries a null here; the guard is because this
-            # reads a file from disk rather than a frame it produced, and the
-            # matcher lowercases every key, which a null does not survive.
-            return {obj['object_id']: obj for obj in objects_list
-                    if isinstance(obj.get('object_id'), str) and obj['object_id']}
+            return {obj['object_id']: obj for obj in objects_list}
     except Exception as e:
         print(f"  [WARN] Could not load objects.json for validation: {e}")
         return None

@@ -152,9 +152,9 @@ describe('sideCardCeiling', () => {
           const playerBand = measureTopBand(W, H);
           for (const cardH of [ceiling, ceiling - 50]) {
             for (const peek of [0, 1, 20]) {
-              for (const runPos of [0, 3]) {
-                const top = sideCardTop({ H, cardH, runPos, peek, band, pad });
-                const at = `H ${H}, cardH ${cardH}, peek ${peek}, run ${runPos}`;
+              for (const scenePos of [0, 3]) {
+                const top = sideCardTop({ H, cardH, scenePos, peek, band, pad });
+                const at = `H ${H}, cardH ${cardH}, peek ${peek}, run ${scenePos}`;
                 expect(top, at).toBeGreaterThanOrEqual(band);
                 expect(top, at).toBeGreaterThanOrEqual(playerBand);
                 expect(top + cardH, at).toBeLessThanOrEqual(H - pad);

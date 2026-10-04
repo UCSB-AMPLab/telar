@@ -107,12 +107,11 @@ def story_identifier(story: dict) -> str:
     """
     The identifier one story record is known by, or None if it has neither.
 
-    Resolved the SAME way generate_collections names the story data file:
-    story_id if present, otherwise the "story-{number}" fallback. The bare
-    number makes the encryptor look for "{number}.json" while the real file
-    is "story-{number}.json", so a protected story without a semantic
-    story_id is silently left unencrypted and shipped as plaintext. One
-    function so the rule cannot differ between the callers that need it.
+    Resolved as generate_collections names the story data file: story_id if
+    present, otherwise the "story-{number}" fallback. The bare number would
+    name "{number}.json" while the real file is "story-{number}.json", and a
+    protected story without a semantic story_id would be left unencrypted.
+    One function so the rule cannot differ between the callers that need it.
 
     Args:
         story: One story record from project.json

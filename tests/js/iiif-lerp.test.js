@@ -71,7 +71,7 @@ describe('lerpIiifPosition — moving between two steps on one object', () => {
     const mid = framedCentre();
 
     fitBounds.mockClear();
-    state.viewerPlates[0].settledAt = null;
+    state.viewerPlates[0].restingAt = null;
     lerpIiifPosition(0, 0.999, stepsData);
     const late = framedCentre();
 
@@ -88,7 +88,7 @@ describe('lerpIiifPosition — moving between two steps on one object', () => {
     const early = framedCentre();
 
     fitBounds.mockClear();
-    state.viewerPlates[0].settledAt = null;
+    state.viewerPlates[0].restingAt = null;
     lerpIiifPosition(0, 0.8, stepsData);
     const late = framedCentre();
 
@@ -118,7 +118,7 @@ describe('lerpIiifPosition — between an overview and a detail', () => {
   }
 
   function frameAt(stepIndex, progress, steps = stepsData) {
-    state.viewerPlates[0].settledAt = null;
+    state.viewerPlates[0].restingAt = null;
     lerpIiifPosition(stepIndex, progress, steps);
     return framedImage();
   }
@@ -194,7 +194,7 @@ describe('lerpIiifPosition — zooming between two details', () => {
   it('frames zoom 4 half way from zoom 2 to zoom 8', () => {
     lerpIiifPosition(0, 0.5, [makeStep('fig1', 0.4, 0.4, 2), makeStep('fig1', 0.6, 0.6, 8)]);
     const halfWay = width();
-    state.viewerPlates[0].settledAt = null;
+    state.viewerPlates[0].restingAt = null;
     lerpIiifPosition(0, 0, [makeStep('fig1', 0.5, 0.5, 4)]);
     expect(halfWay).toBeCloseTo(width(), 6);
   });
@@ -219,7 +219,7 @@ describe('lerpIiifPosition — at rest on a step', () => {
     const atRest = framedCentre();
 
     fitBounds.mockClear();
-    state.viewerPlates[0].settledAt = null;
+    state.viewerPlates[0].restingAt = null;
     lerpIiifPosition(0, 0.05, stepsData);
     const justPast = framedCentre();
 
@@ -229,7 +229,7 @@ describe('lerpIiifPosition — at rest on a step', () => {
   it('records what it settled on', () => {
     lerpIiifPosition(0, 0, stepsData);
 
-    expect(state.viewerPlates[0].settledAt)
+    expect(state.viewerPlates[0].restingAt)
       .toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
   });
 
@@ -249,13 +249,13 @@ describe('lerpIiifPosition — at rest on a step', () => {
   it('states the authored framing on the last step of the story', () => {
     lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
     expect(fitBounds).toHaveBeenCalledTimes(1);
-    expect(state.viewerPlates[0].settledAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
+    expect(state.viewerPlates[0].restingAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
   });
 
   it('states the authored framing on the last step before another object', () => {
     lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig2', 0.8, 0.8, 3)]);
     expect(fitBounds).toHaveBeenCalledTimes(1);
-    expect(state.viewerPlates[0].settledAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
+    expect(state.viewerPlates[0].restingAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
   });
 
   // A title card still active at the arrival refuses the write. The step is
@@ -265,7 +265,7 @@ describe('lerpIiifPosition — at rest on a step', () => {
     state.activeTitleCardIndex = 0;
     lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
     expect(fitBounds).not.toHaveBeenCalled();
-    expect(state.viewerPlates[0].settledAt).toBeNull();
+    expect(state.viewerPlates[0].restingAt).toBeNull();
 
     state.activeTitleCardIndex = null;
     lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
@@ -305,7 +305,7 @@ describe('lerpIiifPosition — what it declines to move', () => {
 
   // The viewer staying put is defended twice: here, and again in
   // computeFocalTarget, which returns null for anything non-finite. So the
-  // call count alone cannot say which guard held. `settledAt` can — it is
+  // call count alone cannot say which guard held. `restingAt` can — it is
   // written before the framing is handed on, so only the guard here keeps it
   // null — and both are asserted, because both are the behaviour owed.
   it('leaves the viewer alone when the step it leaves authored no position', () => {
@@ -314,7 +314,7 @@ describe('lerpIiifPosition — what it declines to move', () => {
       makeStep('fig1', 0.8, 0.8, 3),
     ]);
     expect(fitBounds).not.toHaveBeenCalled();
-    expect(state.viewerPlates[0].settledAt).toBeNull();
+    expect(state.viewerPlates[0].restingAt).toBeNull();
   });
 
   it('leaves the viewer alone when the step it travels to authored none', () => {
@@ -323,7 +323,7 @@ describe('lerpIiifPosition — what it declines to move', () => {
       { object: 'fig1', x: '0.8', y: 'not a number', zoom: '3' },
     ]);
     expect(fitBounds).not.toHaveBeenCalled();
-    expect(state.viewerPlates[0].settledAt).toBeNull();
+    expect(state.viewerPlates[0].restingAt).toBeNull();
   });
 
   it('waits for a viewer that is not ready yet', () => {

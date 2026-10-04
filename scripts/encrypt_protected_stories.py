@@ -306,7 +306,7 @@ def derive_sentinels(steps):
             continue
         for field in PROSE_FIELDS:
             text = step.get(field) or ''
-            # Tags are stripped from EVERY prose field, not just answers
+            # Tags are stripped from every prose field, not just answers
             # (answers arrive as rendered HTML; the others may carry inline
             # markup too): markup vocabulary — class names, URLs — lives on
             # every page and must never become a sentinel.
@@ -400,8 +400,7 @@ def sweep_files(site_dir, skip_top=('telar-content', 'glossary')):
     thought of publishing a locked story's prose; a quotation an author
     typed into a definition is a decision, and failing the build over it
     leaves them rewording prose the site was always going to publish. An
-    author who wants the quotation locked has no answer here yet, which is
-    filed rather than built.
+    author who wants the quotation locked has no answer here.
 
     Both exclusions are by top-level directory, so a site that renames the
     glossary permalink is swept rather than skipped. That direction is the

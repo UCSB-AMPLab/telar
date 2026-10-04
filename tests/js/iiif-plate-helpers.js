@@ -33,6 +33,7 @@ export function makePlate(objectId = 'obj-a', sceneIndex = 0,
     plate.isReady = true;
     plate.osdWrapper = {
       containerEl: { getBoundingClientRect: () => ({ ...FAKE_CONTAINER }) },
+      destroy: () => {},
     };
     plate.osdViewer = {
       world: { getItemAt: () => ({ source: { ...FAKE_IMAGE } }) },

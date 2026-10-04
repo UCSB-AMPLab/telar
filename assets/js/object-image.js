@@ -2,10 +2,9 @@
 (() => {
   // assets/js/object-page/boot.js
   function readObjectData(doc = document) {
-    const block = doc.getElementById("telar-object-data");
-    if (!block) return null;
+    const text = doc.getElementById("telar-object-data").textContent;
     try {
-      return JSON.parse(block.textContent);
+      return JSON.parse(text);
     } catch (err) {
       console.error("Object page data block is not valid JSON:", err);
       return null;
@@ -142,22 +141,22 @@
     isEmbed: false,
     /** @type {DOMRect | null} Active text card's getBoundingClientRect; null when no active text card (title card, full-object mode). Populated by card-pool.js on activation + layout-mode.js on layoutchange. */
     cardOverlayRect: null,
-    // ── Mobile button navigation ─────────────────────────────────────────────
-    /** Index of the current step in mobile/embed button mode. */
-    currentMobileStep: 0,
-    /** Whether mobile navigation is showing the intro card (before step 0). */
-    mobileInIntro: false,
+    // ── Button navigation ────────────────────────────────────────────────────
+    /** Index of the current step in button navigation. */
+    currentButtonStep: 0,
+    /** Whether button navigation is showing the intro card (before step 0). */
+    buttonInIntro: false,
     /** References to the prev/next button DOM elements. */
-    mobileNavButtons: null,
-    /** Whether mobile navigation is in its cooldown period. */
-    mobileNavigationCooldown: false,
+    buttonNavButtons: null,
+    /** Whether button navigation is in its cooldown period. */
+    buttonNavCooldown: false,
     // ── Connection speed ─────────────────────────────────────────────────────
     /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
     manifestLoadTimes: [],
     /**
      * Map of sceneIndex -> Plate, one per scene, built once and never evicted.
      * `.container` is the element. What a plate holds — a viewer, a player,
-     * nothing yet — is the plate's own business; the pool inside an image
+     * nothing yet — is the plate's own business; the viewer pool inside an image
      * plate is the only thing here that is capped.
      */
     viewerPlates: {},
@@ -167,8 +166,8 @@
     titleCards: {},
     /** Index of the currently active title card step, or null when none is active. */
     activeTitleCardIndex: null,
-    /** Current object run tracking (for peek stack positioning). */
-    currentObjectRun: { objectId: null, runPosition: 0 },
+    /** The scene of the current object, and the card's position in it (for peek stack positioning). */
+    currentObjectScene: { objectId: null, scenePosition: 0 },
     // ── Scene maps (populated at initCardPool time) ───────────────────────────
     /**
      * Filtered step data (metadata rows removed), in the same index space as
@@ -187,7 +186,7 @@
     totalScenes: 0,
     // ── Viewer preloading config (set from telarConfig in main.js) ───────────
     config: {
-      /** Maximum IIIF wrapper instances kept in memory (per-scene pool cap). */
+      /** Maximum IIIF wrapper instances kept in memory (viewer pool cap). */
       maxViewerCards: 8,
       /** Steps to preload ahead of the current position. */
       preloadSteps: 6,

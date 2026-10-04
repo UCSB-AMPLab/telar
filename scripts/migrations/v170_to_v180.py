@@ -20,32 +20,32 @@ Nine kinds of change reach an existing site, in this order.
    `migration.json`, the manifest of the 1.5.4 upgrade, which Jekyll
    publishes as a page.
 
-3. Built-in pages (Phase 1a): one default-content line in `index.md` and
+3. Built-in pages (Phase 3): one default-content line in `index.md` and
    one in `pages/glossary.md`, where it is still the template's.
 
-4. Colliding columns (Phase 2b): the build now refuses a sheet with two
+4. Colliding columns (Phase 4): the build now refuses a sheet with two
    columns claiming one name, and a failed regeneration leaves the site at
    1.7.0, so a benign collision is repaired here, before regeneration.
 
-5. `_config.yml` (Phase 3): four `exclude` entries. `telar-content/texts/`
+5. `_config.yml` (Phase 5): four `exclude` entries. `telar-content/texts/`
    keeps Jekyll from publishing the sources the build generates pages from;
    the other three keep Telar's own tests out of the site.
 
-6. Page sources (Phase 4): a `layout` or `permalink` that repeats what the
+6. Page sources (Phase 6): a `layout` or `permalink` that repeats what the
    build supplies is removed. The build ignores both keys, so this is
    tidiness, not safety.
 
-7. Glossary markdown (Phase 5): a `related_terms` written as one scalar
+7. Glossary markdown (Phase 7): a `related_terms` written as one scalar
    becomes a list, which is what the glossary layout iterates.
 
-8. Step answers (Phase 6): reported, not changed. Every answer the build
+8. Step answers (Phase 8): reported, not changed. Every answer the build
    will cut, or strip of content an answer cannot show, is named in the
    summary before the first build runs.
 
-9. The stale engine (Phase 7): a launcher site's leftover
+9. The stale engine (Phase 9): a launcher site's leftover
    `scripts/telar_upgrade.py` and its three helpers are removed.
 
-Phases 3 to 7 are in `v180_sources.py` and `v180_sheets.py`; each is
+Phases 3 to 8 are in `v180_sources.py` and `v180_sheets.py`; each is
 idempotent, so a run that stops at regeneration and is repeated after the
 author fixes the cause completes.
 
@@ -61,6 +61,9 @@ Not delivered:
     tarball, which `scripts/upgrade.py` downloads.
   - `_config.yml`, `index.md`, `pages/glossary.md`, `.gitignore` — the
     site's own, edited in place where the release needs a line in them.
+  - `.gitattributes` — the site's own once v1.6.0 created it. The release
+    changes only which bundles GitHub collapses as generated; a site's file
+    still naming `object-page.js` affects nothing.
 
 The version stamp (telar.version -> 1.8.0) is not written here. The engine
 applies it once after every migration step and the regeneration succeed.
@@ -260,7 +263,7 @@ ENGINE_FILES = [
 ]
 
 # The sha256 of every copy of those files a release put in a site: the
-# v1.7.0 engine, and no helper, since no release shipped one. Phase 7
+# v1.7.0 engine, and no helper, since no release shipped one. Phase 9
 # deletes a file only when its bytes are one of these, so a file a site
 # wrote or edited itself stays. Computed from the release tags, and
 # recomputed from them by the tests.
@@ -276,7 +279,7 @@ _ENGINE_MODULES = ('__main__', 'telar_upgrade', 'telar_upgrade_common',
                    'telar_upgrade_regen', 'telar_upgrade_report')
 
 # The scripts directory this module was imported from. Compared with the
-# site's own before Phase 7 deletes anything.
+# site's own before Phase 9 deletes anything.
 _ENGINE_SCRIPTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _DOCS = 'https://telar.org/docs/setup/upgrading/'
@@ -307,8 +310,7 @@ class Migration170to180(BaseMigration):
 
     from_version = "1.7.0"
     to_version = "1.8.0"
-    # Filled from the v1.8.0 tag when it exists; until then the engine
-    # stamps the day it runs and says so.
+    # None: the engine stamps the date it runs and says so.
     release_date = None
     description = ("v1.8.0 framework files, removal of the single object-page bundle and "
                    "the stale migration.json, colliding-column repair, the exclude entries, "
@@ -341,19 +343,19 @@ class Migration170to180(BaseMigration):
             print(f"  {label}...")
             changes.extend(phase(self.repo_root, lang))
 
-        print("  Phase 7: Removing the stale upgrade engine...")
+        print("  Phase 9: Removing the stale upgrade engine...")
         changes.extend(self._remove_stale_engine())
         return changes
 
     @staticmethod
     def _site_phases():
         return (
-            ('Phase 1a: Updating the built-in pages', v180_sources.update_site_pages),
-            ('Phase 2b: Checking spreadsheet columns', v180_sheets.repair_colliding_columns),
-            ('Phase 3: Updating _config.yml', v180_sources.add_exclude_entries),
-            ('Phase 4: Tidying page sources', v180_sources.strip_page_sources),
-            ('Phase 5: Checking glossary entries', v180_sources.list_related_terms),
-            ('Phase 6: Checking story answers', v180_sheets.report_step_answers),
+            ('Phase 3: Updating the built-in pages', v180_sources.update_site_pages),
+            ('Phase 4: Checking spreadsheet columns', v180_sheets.repair_colliding_columns),
+            ('Phase 5: Updating _config.yml', v180_sources.add_exclude_entries),
+            ('Phase 6: Tidying page sources', v180_sources.strip_page_sources),
+            ('Phase 7: Checking glossary entries', v180_sources.list_related_terms),
+            ('Phase 8: Checking story answers', v180_sheets.report_step_answers),
         )
 
     # ------------------------------------------------------------------ #
@@ -419,7 +421,7 @@ class Migration170to180(BaseMigration):
         return True
 
     # ------------------------------------------------------------------ #
-    # Phase 7
+    # Phase 9
     # ------------------------------------------------------------------ #
 
     def _remove_stale_engine(self) -> List[ChangeRecord]:

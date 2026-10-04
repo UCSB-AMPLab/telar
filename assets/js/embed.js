@@ -155,16 +155,14 @@
     const message = banner.querySelector('.telar-embed-banner-message');
     const update = function() {
       banner.classList.remove('is-compact');
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       const windowHeight = window.innerHeight;
       const buttons = windowHeight <= ROW_MAX_WINDOW_HEIGHT ? ROW_HEIGHT : COLUMN_HEIGHT;
       const needed = banner.getBoundingClientRect().bottom + 0.75 * rem + buttons + 0.5 * rem;
       const compact = windowHeight <= COLUMN_MAX_WINDOW_HEIGHT && needed > windowHeight;
       banner.classList.toggle('is-compact', compact);
-      if (message) {
-        if (compact) message.title = message.textContent.trim();
-        else message.removeAttribute('title');
-      }
+      if (compact) message.title = message.textContent.trim();
+      else message.removeAttribute('title');
       body.style.setProperty('--telar-embed-banner-bottom',
         Math.ceil(banner.getBoundingClientRect().bottom) + 'px');
     };
@@ -173,16 +171,13 @@
 
     // The window's height alone can change the decision, and it does not resize the banner.
     window.addEventListener('resize', update);
-    let observer = null;
-    if (typeof ResizeObserver === 'function') {
-      // Deferred a frame: the update resizes the banner it observes, and a size
-      // change delivered in the same frame is reported as a ResizeObserver loop.
-      observer = new ResizeObserver(function() { requestAnimationFrame(update); });
-      observer.observe(banner);
-    }
+    // Deferred a frame: the update resizes the banner it observes, and a size
+    // change delivered in the same frame is reported as a ResizeObserver loop.
+    const observer = new ResizeObserver(function() { requestAnimationFrame(update); });
+    observer.observe(banner);
     stopTracking = function() {
       window.removeEventListener('resize', update);
-      if (observer) observer.disconnect();
+      observer.disconnect();
     };
   }
 

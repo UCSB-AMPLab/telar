@@ -893,10 +893,7 @@ def ensure_spreadsheet_columns(migration: BaseMigration) -> List[ChangeRecord]:
                 row.extend(column[language] for column in missing)
 
         _write_rows(path, rows)
-        # Named in the site's language, because that is the spelling the
-        # header row just gained. Naming them in English told the owner of a
-        # Spanish sheet that "Credit" had been added to a column now headed
-        # "Crédito".
+        # Named in the site's language, the spelling the header row now holds.
         site_language = migration._detect_language()
         named = ', '.join(column.get(site_language, column['en'])
                           for column in missing)

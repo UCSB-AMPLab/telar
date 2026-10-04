@@ -2,10 +2,9 @@
 (() => {
   // assets/js/object-page/boot.js
   function readObjectData(doc = document) {
-    const block = doc.getElementById("telar-object-data");
-    if (!block) return null;
+    const text = doc.getElementById("telar-object-data").textContent;
     try {
-      return JSON.parse(block.textContent);
+      return JSON.parse(text);
     } catch (err) {
       console.error("Object page data block is not valid JSON:", err);
       return null;

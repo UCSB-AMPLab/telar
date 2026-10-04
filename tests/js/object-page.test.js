@@ -86,8 +86,8 @@ const flush = () => Promise.resolve().then(() => Promise.resolve());
 // ── The data block ──────────────────────────────────────────────────────────
 
 describe('readObjectData', () => {
-  it('is null on a page with no data block', () => {
-    expect(readObjectData()).toBeNull();
+  it('throws on a page with no data block', () => {
+    expect(() => readObjectData()).toThrow(TypeError);
   });
 
   it('parses the block the layout writes', () => {
@@ -584,15 +584,6 @@ describe('onObjectPage', () => {
     const seen = [];
     onObjectPage((d) => seen.push(d));
     expect(seen).toEqual([{ mediaType: 'Audio', objectId: 'a' }]);
-  });
-
-  it('does nothing at all on a page the layout wrote no block into', () => {
-    // A bundle that reached a page it is not for. Silence, not an error.
-    document.body.innerHTML = '<div id="object-viewer">untouched</div>';
-    const seen = [];
-    onObjectPage((d) => seen.push(d));
-    expect(seen).toEqual([]);
-    expect(document.getElementById('object-viewer').textContent).toBe('untouched');
   });
 
   it('does nothing when the block is there but unreadable', () => {

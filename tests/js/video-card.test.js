@@ -17,7 +17,7 @@ import {
   buildYouTubeEmbedConfig,
   buildGDriveEmbedUrl,
   formatClipTime,
-} from '../../assets/js/telar-story/video-card.js';
+} from '../../assets/js/telar-story/video-layout.js';
 import { state } from '../../assets/js/telar-story/state.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

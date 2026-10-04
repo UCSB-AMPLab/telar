@@ -155,7 +155,7 @@ export function createObjectsFilter({
       if (entries.length === 0) {
         const empty = doc.createElement('span');
         empty.className = 'objects-filter-empty';
-        empty.textContent = elements.layout?.dataset.noOptions || 'No options available';
+        empty.textContent = elements.layout.dataset.noOptions;
         optionsContainer.replaceChildren(empty);
         return;
       }

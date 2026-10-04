@@ -116,7 +116,7 @@ class TestEmbedModeNavigation:
         assert first_step == 1
         expect(page.locator(".card-stack .text-card.is-active")).to_be_visible()
 
-        # MOBILE_NAV_COOLDOWN is 400 ms and a tap inside it is dropped on
+        # BUTTON_NAV_COOLDOWN is 400 ms and a tap inside it is dropped on
         # purpose, so the second tap waits it out. What follows is waited for by
         # its result rather than by a duration: the counter says where the
         # reader is, so it changes when the move lands, not when the button is

@@ -38,6 +38,6 @@ export function isStoryInput({ deltaY, event } = {}) {
   if (!event) return true;
   if (event.ctrlKey) return false;                 // pinch or browser zoom
   if (deltaY === 0) return false;                  // a tap, a click, or across the story's axis
-  const path = event.composedPath ? event.composedPath() : [];
+  const path = event.composedPath();
   return !path.some((node) => node instanceof HTMLElement && isInsidePanel(node));
 }

@@ -3,7 +3,7 @@
  *
  * This module handles the positioning, activation, destruction, and
  * per-frame interpolation of IIIF viewer plates in the card-stack layout.
- * It does NOT create viewer plates or inject viewer instances — that work
+ * It does not create viewer plates or inject viewer instances — that work
  * lives in card-pool.js, which pre-creates all plate DOM elements at init
  * time and injects the IIIF wrapper on demand via its internal
  * _initOsdInPlate().
@@ -26,24 +26,22 @@
  *   it interpolates x/y evenly and zoom by equal ratios between the two steps
  *   based on scroll progress and applies the result via snapIiifToPosition
  *   (immediate=true).
- *   A pair either side of zoom 1 is blended between the two steps' settled
+ *   A pair either side of zoom 1 is blended between the two steps' resting
  *   placements instead, because an overview and a detail place different
  *   image points at the region centre.
  *   Smoothness comes from Lenis's animatedScroll, not from OSD animations.
  *   Different-object pairs are skipped — the viewer freezes at its last
  *   position while the new plate slides in on top.
  *
- *   Destruction — `destroyIiifCard()` releases GPU memory before calling
- *   the wrapper's destroy(). OpenSeadragon holds WebGL render state that
- *   the browser cannot reclaim until the context is explicitly released.
- *   Per OSD issue #2693, the module calls WEBGL_lose_context.loseContext()
- *   first, then the wrapper's destroy(), then removes the DOM element.
+ *   Destruction — `destroyIiifCard()` calls the wrapper's destroy(), nulls
+ *   the references and removes the plate element. The viewer uses the
+ *   Canvas2D drawer, so there is no WebGL context to release first.
  *
  * @version v1.8.0
  */
 
 import { state } from './state.js';
-import { onLayoutChange, isLandscapeSideCard } from './layout-mode.js';
+import { onLayoutChange, isPhoneHeightSideCard } from './layout-mode.js';
 import { authoringHomeZoom } from './authoring-frame.js';
 import { stepFraming } from './plates/framing.js';
 import { sideCardWidthPx } from './video-layout.js';
@@ -55,8 +53,9 @@ import {
 // ── Type definition ──────────────────────────────────────────────────────────
 
 /**
- * @typedef {Object} ViewerCard
- * @property {string} objectId - The object this card displays.
+ * @typedef {Object} IiifPlate
+ * An image plate as this module reads it; plates/iiif-plate.js defines the class.
+ * @property {string} objectId - The object this plate displays.
  * @property {number|undefined} page - Page number for multi-page objects.
  * @property {HTMLElement} element - The plate's container element in the DOM.
  * @property {Object|null} osdWrapper - The IIIF viewer wrapper (iiif-viewer.js).
@@ -136,10 +135,10 @@ function _defaultCardBox(placement, viewportW, viewportH) {
 /**
  * Derive the card placement mode from the card's measured rect geometry.
  *
- * The centring branch keys off card PLACEMENT, not
- * state.layoutMode. A landscape phone has state.layoutMode='vertical' but
- * its card is placed as a side card; feeding 'vertical' to the algorithm
- * would subtract the card from the top — wrong.
+ * The centring branch keys off the card's placement, not state.layoutMode.
+ * A phone-height window has state.layoutMode='vertical' but its card is placed as a
+ * side card; feeding 'vertical' to the algorithm would subtract the card from
+ * the top.
  *
  * Heuristic: if the card's right edge is left of 60% of the viewport width,
  * it is a side card (horizontal placement). The horizontal side card
@@ -154,12 +153,12 @@ function _defaultCardBox(placement, viewportW, viewportH) {
 export function _deriveCardPlacement(cardBox, viewportW, viewportH) {
   if (!cardBox) {
     // No measured rect (e.g. focal applied before the card's slide-in transition
-    // has settled state.cardOverlayRect). Fall back to the layout mode — but a
-    // short landscape viewport renders a SIDE card (the `@media (max-height: …)`
-    // rule) even though getLayoutMode() reports 'vertical' (it is
-    // < 1024px wide). Without this check the fallback picks a bottom-card region
-    // and the focal lands against the wrong (top-strip) frame on landscape phones.
-    if (isLandscapeSideCard()) return 'horizontal';
+    // has set state.cardOverlayRect). Fall back to the layout mode — but a
+    // phone-height window renders a side card (the `@media (max-height: …)` rule) even
+    // though getLayoutMode() reports 'vertical' (it is < 1024px wide). Without
+    // this check the fallback picks a bottom-card region and the focal lands
+    // against the wrong (top-strip) frame in a phone-height window.
+    if (isPhoneHeightSideCard()) return 'horizontal';
     return state.layoutMode === 'vertical' ? 'vertical' : 'horizontal';
   }
   // Side card: right edge left of 60% of viewport width
@@ -194,7 +193,7 @@ const FOCAL_DIAMETER_FRAC = 0.90;   // focal circle diameter as a fraction of au
  *   4. Return the inputs the OSD apply recipe needs: focal point in
  *      image px and diameter in image px (zoom is computed live in the apply step).
  *
- * Title-card skip is NOT applied here — it lives in _livePlacement
+ * The title-card skip is not applied here — it lives in _livePlacement
  * so the pure function remains reusable.
  *
  * @param {number} x            Authored focal-point x in [0, 1].
@@ -244,9 +243,7 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
   //
   // The home fit has two arms: an image taller than the authoring frame fits
   // by height, and a wider one fits by width and cannot zoom out past its own
-  // edges. Keeping only the first arm made every landscape image's authored
-  // frame narrower than it was, by AUTHORING_ASPECT / imageAspect, and so
-  // published it over-zoomed.
+  // edges. A landscape image fits by width, so homeZoomAuth uses both arms.
   const imageAspect    = imageW / imageH;
   const homeZoomAuth   = authoringHomeZoom(imageAspect);
   const frameWidthImg  = imageW / (homeZoomAuth * zoom);
@@ -304,13 +301,10 @@ export function overviewPullFraction(zoom) {
  *
  * Both hold together whenever the image is wide enough, which is the ordinary case.
  * Where they cannot both hold — a focal nearer an image edge than the radius —
- * **coverage wins**: the focal is held where the image still reaches the region edge,
- * and the circle is allowed to straddle it.
- *
- * That reverses the trade this function was written with, which kept the circle intact
- * and accepted background at the region edge. Ruled by Juan on 19 September, on the
- * plain ground that a reader sees a band of background beside the image at once and
- * does not see a framed detail sitting nearer the region edge than intended.
+ * coverage wins: the focal is held where the image still reaches the region edge,
+ * and the circle is allowed to straddle it. A visible band of background beside the
+ * image is the worse failure: a reader sees it at once, and does not see a framed
+ * detail sitting nearer the region edge than intended.
  *
  * Where the image is shorter than the region on an axis, it cannot cover it, and the
  * two coverage bounds cross: between them lie the positions that keep the whole image
@@ -322,7 +316,7 @@ export function overviewPullFraction(zoom) {
  * it is not moved. An image exactly as long as the region (zoom 1, on its limiting
  * axis) covers it, and is placed edge to edge.
  *
- * Note: this returns the target focal POSITION (not a pan delta) and reads no live
+ * This returns the target focal position (not a pan delta) and reads no live
  * OSD state, so the apply path is independent of the transient (mid-animation) zoom.
  *
  * @param {{x:number,y:number,w:number,h:number}} region  Uncovered region, element px.
@@ -378,13 +372,13 @@ export function framePlacement(target, zoom, container) {
   const { focalImg, diameterImg, region, imageW: imgW, imageH: imgH } = target;
   const rect = container;
 
-  // SCALE — radius match (Circle A→B) with the Rule A overview cap. `s` is element px
+  // Scale — radius match (Circle A→B) with the Rule A overview cap. `s` is element px
   // per image px; z_tgt/k reduces to exactly this, so no OSD-zoom calibration is needed.
-  // Rule A's whole-image fit is measured against the UNCOVERED REGION, the frame every
+  // Rule A's whole-image fit is measured against the uncovered region, the frame every
   // step is composed into, not the container: an image fit to the container is wider
   // than the region by the width of the text card, so a quarter of it would sit under
   // the card. At an overview (zoom ≤ 1, the full-object framing) that fit is also the
-  // ceiling — the whole object is what the step shows, so the image is never scaled
+  // limit — the whole object is what the step shows, so the image is never scaled
   // past the size at which all of it fits the region.
   // A region with no area — a card box that covers the viewport — leaves nothing to
   // compose into, and both region-derived scales collapse to zero; the container fit
@@ -397,15 +391,13 @@ export function framePlacement(target, zoom, container) {
     : Math.min(rect.width / imgW, rect.height / imgH);
   // At and below an overview the authored zoom is a fraction of the fit, so 1
   // is the whole object filling the region and anything under it is the same
-  // object standing back from the frame with margin around it. 1 therefore
-  // means exactly what it has always meant, and the range below it — which
-  // used to give the same framing whatever was typed in it — reads as the
-  // pull-back an author writing 0.6 is asking for. The floor keeps the object
-  // recognisable rather than a speck, and keeps the rectangle handed to OSD
-  // away from degenerate.
+  // object standing back from the frame with margin around it. A value below 1
+  // reads as the pull-back an author writing 0.6 is asking for. The floor keeps
+  // the object recognisable rather than a speck, and keeps the rectangle handed
+  // to OSD away from degenerate.
   //
   // Bridge the different overview/detail scales across 1 < zoom < 2. Joining
-  // at 2 uses the widest band that preserves every zoom >= 2 detail. A straight
+  // at 2 uses the widest range that preserves every zoom >= 2 detail. A straight
   // segment is monotone, has no overshoot, and preserves the original endpoints
   // exactly; slope continuity is not required. Since s_tgt is proportional to
   // zoom, s_tgt * (2 / zoom) is the authored-circle scale at the join.
@@ -419,20 +411,20 @@ export function framePlacement(target, zoom, container) {
       ? s_fit + (zoom - 1) * (Math.max(s_tgt * (2 / zoom), s_fit) - s_fit)
       : Math.max(s_tgt, s_fit);  // applied scale (px / img px)
 
-  // ANCHOR — the image point placed at the uncovered-region centre. An overview
+  // Anchor — the image point placed at the uncovered-region centre. An overview
   // shows the whole object, so it is centred in the region and the authored x/y
   // do not move it: the anchor is the image centre at zoom ≤ 1. Above 1 a step
   // frames a detail, and the anchor is exactly the authored focal point, so
   // the x/y an author captured is the point the reader sees at the centre,
   // unless the clamp below has to move it to keep background out of the
   // region or the image inside it.
-  // The settled framing of a focal off centre therefore changes at zoom 1.
+  // The resting framing of a focal off centre therefore changes at zoom 1.
   // Motion between two steps on either side of 1 does not pass through this
-  // function at intermediate zooms: lerpIiifPosition blends the two settled
+  // function at intermediate zooms: lerpIiifPosition blends the two resting
   // placements instead (blendPlacements).
   const anchorImg = _placedPoint(focalImg, imgW, imgH, zoom);
 
-  // FOCAL POSITION — uncovered-region centre, clamped by the keep-circle rule. The
+  // Focal position — uncovered-region centre, clamped by the keep-circle rule. The
   // edges are the anchor→image-edge distances at the applied scale `s`; all element px.
   const CB    = { x: region.x + region.w / 2, y: region.y + region.h / 2 };
   const edges = {
@@ -445,10 +437,9 @@ export function framePlacement(target, zoom, container) {
   // where there is image. A focal near a corner carries a circle that reaches
   // past the image's own edge — at x 0.05 on a 1200 px-wide image the radius is
   // 106.6 image px against 60 to the edge — and the part that overhangs holds
-  // nothing. Reserving room for it put background on screen; requiring it on
-  // screen asked for the impossible. Capped at the largest circle centred on
-  // the anchor that lies inside the image, which is scale-free: the overhang
-  // is a property of where the focal sits, not of how far in the viewer is.
+  // nothing. The circle is capped at the largest circle centred on the anchor
+  // that lies inside the image, which is scale-free: the overhang is a property
+  // of where the focal sits, not of how far in the viewer is.
   const radiusPx = Math.min(
     (diameterImg * s) / 2,
     edges.eLeft, edges.eRight, edges.eTop, edges.eBottom,
@@ -515,7 +506,7 @@ export function visibleImageRegion(target, zoom, container) {
 }
 
 /**
- * A placement part of the way from one settled placement to another (pure).
+ * A placement part of the way from one resting placement to another (pure).
  *
  * Every frame lies on the straight segment between the two placements in
  * (scale, top-left corner) space, so t = 0 and t = 1 are the two placements
@@ -561,9 +552,9 @@ export function blendPlacements(from, to, t) {
  * @returns {{rect: DOMRect, region: {x:number,y:number,w:number,h:number},
  *   placement: {s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}|null}
  */
-export function _livePlacement(viewerCard, x, y, zoom) {
+export function _livePlacement(plate, x, y, zoom) {
   // Source dims required; leave viewer at home if unavailable
-  const source = viewerCard.osdViewer.world.getItemAt(0)?.source;
+  const source = plate.osdViewer.world.getItemAt(0)?.source;
   if (!source?.width || !source?.height) return null;
 
   // Title-card skip: when a title card is active, do not apply compensation
@@ -579,7 +570,7 @@ export function _livePlacement(viewerCard, x, y, zoom) {
   if (!target) return null;
 
   // Container rect from the wrapper's container element (IiifViewer.containerEl)
-  const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
+  const rect = plate.osdWrapper.containerEl.getBoundingClientRect();
   return { rect, region: target.region, placement: framePlacement(target, zoom, rect) };
 }
 
@@ -587,17 +578,17 @@ export function _livePlacement(viewerCard, x, y, zoom) {
  * Put a placement on the viewer.
  *
  * The target is expressed as a viewport rectangle and applied with fitBounds, so
- * the apply path reads NO live OSD zoom. This is what makes it robust on the
+ * the apply path reads no live OSD zoom. This is what makes it robust on the
  * animate path (immediate=false): a pan computed from the live zoom is taken at
- * the TRANSIENT mid-animation zoom and mis-scales. fitBounds reaches the requested
- * settled endpoint by delegating the scale→zoom and centre conversion to OSD's own
+ * the transient mid-animation zoom and mis-scales. fitBounds reaches the requested
+ * resting endpoint by delegating the scale→zoom and centre conversion to OSD's own
  * coordinate transform, with no transient sample and no hand-rolled `k`.
  */
-function _applyPlacement(viewerCard, rect, placement, immediate) {
-  const vp  = viewerCard.osdViewer.viewport;
+function _applyPlacement(plate, rect, placement, immediate) {
+  const vp  = plate.osdViewer.viewport;
   const OSD = window.OpenSeadragon;
 
-  // TARGET RECT — the image-px rectangle that fills the viewer at scale `s`, placed so
+  // Target rect — the image-px rectangle that fills the viewer at scale `s`, placed so
   // anchorImg lands at element px anchorPx. Its aspect equals the container's, so
   // fitBounds maps it 1:1 (no letterbox growth). After fitBounds the rect centre maps to
   // the container centre, so anchorImg lands exactly at anchorPx. The tile prefetch
@@ -615,7 +606,7 @@ function _applyPlacement(viewerCard, rect, placement, immediate) {
  * conversion. _livePlacement resolves the geometry and the skip guards,
  * framePlacement computes the scale and the focal position, and _applyPlacement
  * puts the result on the viewer:
- *   - SCALE: s = max(s_tgt, s_fit) at zoom ≥ 2 — element px per image px, where
+ *   - Scale: s = max(s_tgt, s_fit) at zoom ≥ 2 — element px per image px, where
  *       s_tgt = min(region.w, region.h) / diameterImg  (radius match, Circle A→B)
  *       s_fit = min(region.w/imgW, region.h/imgH)      (Rule A: whole-image fit in
  *       the uncovered region). At an overview (zoom ≤ 1) s is s_fit scaled by the
@@ -625,24 +616,24 @@ function _applyPlacement(viewerCard, rect, placement, immediate) {
  *       the detail scale at 2. This keeps scale continuous without changing
  *       either overview or zoom ≥ 2 framing.
  *     No OSD-zoom calibration (no `k`): fitBounds derives the zoom from the rect.
- *   - FOCAL: move the anchor to the uncovered-region centre, clamped to the
+ *   - Focal: move the anchor to the uncovered-region centre, clamped to the
  *     keep-circle bound (_clampFocalPx) — keep scale, hold the anchor at least the
- *     circle's radius from every region edge. Does NOT rely on OSD's visibilityRatio.
+ *     circle's radius from every region edge. It does not rely on OSD's visibilityRatio.
  *     The anchor is the image centre at zoom ≤ 1 (an overview is centred whatever
  *     its x/y) and the authored focal point at every zoom above 1.
- *   - APPLY (_applyPlacement): build the image-px rectangle that fills the viewer at
+ *   - Apply (_applyPlacement): build the image-px rectangle that fills the viewer at
  *     scale s with the anchor at the clamped position, then vp.fitBounds(rect,
  *     immediate). The target is a rectangle, not a delta off the live zoom, so it
  *     holds while the zoom is still springing on the animate path.
  *
- * Skip guards (in _livePlacement):
+ * Skip conditions (in _livePlacement):
  *   - Title-card active: return false immediately (caller leaves viewer at home).
  *   - Source dims unavailable, or a framing computeFocalTarget refuses: return false.
  *   - Full-object mode: state.cardOverlayRect is null → the null-rect
  *     path → _defaultCardBox gives a full-viewer region → focal centred in viewer.
  *     No dedicated full-object branch needed.
  *
- * @param {ViewerCard} viewerCard - The card to position.
+ * @param {IiifPlate} plate - The plate to position.
  * @param {number} x    Authored focal-point x in [0, 1].
  * @param {number} y    Authored focal-point y in [0, 1].
  * @param {number} zoom Authored zoom multiplier (> 0).
@@ -651,29 +642,29 @@ function _applyPlacement(viewerCard, rect, placement, immediate) {
  * @returns {boolean} false if skipped (title-card, source dims unavailable, or a
  *   framing computeFocalTarget refuses), true otherwise.
  */
-function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
-  const live = _livePlacement(viewerCard, x, y, zoom);
+function _applyFocalTarget(plate, x, y, zoom, immediate) {
+  const live = _livePlacement(plate, x, y, zoom);
   if (!live) return false;
-  _applyPlacement(viewerCard, live.rect, live.placement, immediate);
+  _applyPlacement(plate, live.rect, live.placement, immediate);
   return true;
 }
 
 /**
- * Put a viewer part of the way between two steps' settled placements.
+ * Put a viewer part of the way between two steps' resting placements.
  *
  * Used where the two steps sit either side of zoom 1. An overview places the
  * image centre and a detail places its focal point, so interpolating x/y/zoom
  * and placing each frame would move the image by the focal's offset from
  * centre in the one frame the zoom crosses 1. Both placements are computed
- * from the live geometry, so t = 0 and t = 1 are what each step settles on.
+ * from the live geometry, so t = 0 and t = 1 are where each step rests.
  *
  * @returns {boolean} false when either step cannot be placed.
  */
-function _applyBetween(viewerCard, a, b, t) {
-  const from = _livePlacement(viewerCard, a.x, a.y, a.zoom);
-  const to   = _livePlacement(viewerCard, b.x, b.y, b.zoom);
+function _applyBetween(plate, a, b, t) {
+  const from = _livePlacement(plate, a.x, a.y, a.zoom);
+  const to   = _livePlacement(plate, b.x, b.y, b.zoom);
   if (!from || !to) return false;
-  _applyPlacement(viewerCard, to.rect, blendPlacements(from.placement, to.placement, t), true);
+  _applyPlacement(plate, to.rect, blendPlacements(from.placement, to.placement, t), true);
   return true;
 }
 
@@ -682,7 +673,7 @@ function _applyBetween(viewerCard, a, b, t) {
 // ── Plate destruction ────────────────────────────────────────────────────────
 
 /**
- * Destroy a viewer card and release its DOM resources.
+ * Destroy a viewer plate and release its DOM resources.
  *
  * The IIIF viewer uses the Canvas2D drawer (see iiif-viewer.js), not WebGL,
  * so there is no WebGL context or GPU texture memory to release first — the
@@ -691,19 +682,19 @@ function _applyBetween(viewerCard, a, b, t) {
  * the canvas-drawer viewer; this function then nulls references so the GC
  * can reclaim JS memory and removes the plate element from the DOM.
  *
- * @param {ViewerCard} viewerCard - The card to destroy.
+ * @param {IiifPlate} plate - The plate to destroy.
  */
-export function destroyIiifCard(viewerCard) {
-  if (!viewerCard) return;
+export function destroyIiifCard(plate) {
+  if (!plate) return;
 
-  if (viewerCard.osdWrapper && typeof viewerCard.osdWrapper.destroy === 'function') {
-    viewerCard.osdWrapper.destroy();
+  if (plate.osdWrapper && typeof plate.osdWrapper.destroy === 'function') {
+    plate.osdWrapper.destroy();
   }
-  viewerCard.osdWrapper = null;
-  viewerCard.osdViewer = null;
+  plate.osdWrapper = null;
+  plate.osdViewer = null;
 
-  if (viewerCard.element && viewerCard.element.parentNode) {
-    viewerCard.element.parentNode.removeChild(viewerCard.element);
+  if (plate.element && plate.element.parentNode) {
+    plate.element.parentNode.removeChild(plate.element);
   }
 }
 
@@ -721,7 +712,7 @@ export function destroyIiifCard(viewerCard) {
  * at the clamped region centre by fitting the corresponding image-px rectangle with
  * vp.fitBounds. Rule A and the keep-circle clamp are enforced in framePlacement.
  *
- * @param {ViewerCard} viewerCard - The card to position.
+ * @param {IiifPlate} plate - The plate to position.
  * @param {number} x - Normalised horizontal position (0–1).
  * @param {number} y - Normalised vertical position (0–1).
  * @param {number} zoom - Zoom multiplier relative to home zoom.
@@ -729,14 +720,14 @@ export function destroyIiifCard(viewerCard) {
  *   title card is active, before the source size is known, or for a framing
  *   computeFocalTarget refuses.
  */
-export function snapIiifToPosition(viewerCard, x, y, zoom) {
-  if (!viewerCard || !viewerCard.osdViewer) {
+export function snapIiifToPosition(plate, x, y, zoom) {
+  if (!plate || !plate.osdViewer) {
     console.warn('snapIiifToPosition: viewer not ready for snap');
     return false;
   }
   // A snap takes the viewer from any move animating it.
-  stopCameraMove(viewerCard);
-  return _applyFocalTarget(viewerCard, x, y, zoom, true);
+  stopCameraMove(plate);
+  return _applyFocalTarget(plate, x, y, zoom, true);
 }
 
 /**
@@ -749,11 +740,11 @@ export function snapIiifToPosition(viewerCard, x, y, zoom) {
  * The move's hold on click-to-zoom ends with it, so a newer move that follows
  * records the reader's own settings again, not the ones the older one wrote.
  *
- * @param {ViewerCard} viewerCard
+ * @param {IiifPlate} plate
  */
-export function stopCameraMove(viewerCard) {
-  viewerCard.cameraMove = (viewerCard.cameraMove || 0) + 1;
-  releaseClickToZoom(viewerCard);
+export function stopCameraMove(plate) {
+  plate.cameraMove = (plate.cameraMove || 0) + 1;
+  releaseClickToZoom(plate);
 }
 
 /**
@@ -776,24 +767,24 @@ export function stopCameraMove(viewerCard) {
  * image during it does not zoom, and is restored to the viewer's own settings
  * when the move ends or is stopped.
  *
- * @param {ViewerCard} viewerCard - The card to animate.
+ * @param {IiifPlate} plate - The plate to animate.
  * @param {number} x - Normalised horizontal position (0–1).
  * @param {number} y - Normalised vertical position (0–1).
  * @param {number} zoom - Zoom multiplier relative to home zoom.
  */
-export function animateIiifToPosition(viewerCard, x, y, zoom) {
-  if (!viewerCard || !viewerCard.osdViewer) {
+export function animateIiifToPosition(plate, x, y, zoom) {
+  if (!plate || !plate.osdViewer) {
     console.warn('animateIiifToPosition: viewer not ready for animation');
     return;
   }
 
-  stopCameraMove(viewerCard);
-  const token = viewerCard.cameraMove;
-  holdClickToZoom(viewerCard);
+  stopCameraMove(plate);
+  const token = plate.cameraMove;
+  holdClickToZoom(plate);
 
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    _applyFocalTarget(viewerCard, x, y, zoom, true);
-    releaseClickToZoom(viewerCard);
+    _applyFocalTarget(plate, x, y, zoom, true);
+    releaseClickToZoom(plate);
     return;
   }
 
@@ -801,27 +792,27 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
   let from = null;
   let start = null;
   const frame = (now) => {
-    if (viewerCard.cameraMove !== token || !viewerCard.osdViewer) return;
-    const live = _livePlacement(viewerCard, x, y, zoom);
-    if (!live) return releaseClickToZoom(viewerCard);
+    if (plate.cameraMove !== token || !plate.osdViewer) return;
+    const live = _livePlacement(plate, x, y, zoom);
+    if (!live) return releaseClickToZoom(plate);
     const first = start === null;
-    if (first) [start, from] = [now, shownPlacement(viewerCard, live.rect)];
+    if (first) [start, from] = [now, shownPlacement(plate, live.rect)];
     // A camera already at the framing has nowhere to travel.
     const rests = first && placementsCoincide(from, live.placement, live.rect);
     const t = rests ? 1 : Math.min(1, (now - start) / ms);
     const placement = t < 1 ? blendPlacements(from, live.placement, easeOut(t)) : live.placement;
-    _applyPlacement(viewerCard, live.rect, placement, true);
+    _applyPlacement(plate, live.rect, placement, true);
     if (t < 1) requestAnimationFrame(frame);
-    else releaseClickToZoom(viewerCard);
+    else releaseClickToZoom(plate);
   };
   requestAnimationFrame(frame);
 }
 
 // ── Per-frame IIIF interpolation ─────────────────────────────────────────────
 
-/** The object a step shows, under either of the names step data carries it by. */
+/** The object a step shows. */
 function _objectOf(step) {
-  return step.object || step.objectId || '';
+  return step.object || '';
 }
 
 /**
@@ -838,9 +829,9 @@ export function _authoredFraming(step) {
 }
 
 /** Whether a viewer already rests at this framing for this step. */
-function _restsAt(settled, stepIndex, x, y, zoom) {
-  return Boolean(settled) && settled.step === stepIndex &&
-    settled.x === x && settled.y === y && settled.zoom === zoom;
+function _restsAt(resting, stepIndex, x, y, zoom) {
+  return Boolean(resting) && resting.step === stepIndex &&
+    resting.x === x && resting.y === y && resting.zoom === zoom;
 }
 
 /**
@@ -852,7 +843,7 @@ function _restsAt(settled, stepIndex, x, y, zoom) {
  * at step B). Applies the interpolated position via snapIiifToPosition
  * with immediate=true, so OSD does not add its own spring animation on top
  * of the per-frame updates. Where one step is at zoom 1 or below and the
- * other above it, the frame is the two settled placements blended
+ * other above it, the frame is the two resting placements blended
  * (blendPlacements), applied the same way.
  *
  * Different-object pairs are not interpolated (the viewer freezes at its
@@ -871,10 +862,10 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
 
   // A whole step is a resting place, and the framing there is the author's
   // own, stated rather than approached. The interpolation stops a fraction of
-  // a step short — the scroll settles and the last frame written is the one
-  // before the boundary — so a step reached this way would otherwise keep the
-  // framing of a position just outside it. Stating the authored endpoint
-  // exactly is what a reader resting on a step is owed.
+  // a step short — the scroll comes to rest and the last frame written is the
+  // one before the boundary — so a step reached this way would otherwise keep
+  // the framing of a position just outside it. The authored endpoint is stated
+  // exactly.
   const atRest = progress < 0.001;
 
   // A scene's last step has nothing on its object to travel towards, and is a
@@ -892,41 +883,41 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // a plate for each, and an objectId lookup finds the wrong one on backward
   // navigation. `isReady` is the image plate's own flag, so a plate holding a
   // player answers undefined and is passed over.
-  const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
-  if (!viewerCard || !viewerCard.isReady) return;
+  const plate = state.viewerPlates[state.stepToScene[stepIndex]];
+  if (!plate || !plate.isReady) return;
 
   // At rest the same framing is true on every frame, and a snap is a forced
   // layout in OSD, so the resting write happens once per arrival rather than
   // for as long as the reader stays on the step.
   if (atRest) {
-    if (_restsAt(viewerCard.settledAt, stepIndex, a.x, a.y, a.zoom)) return;
-    // Settled only once the framing has reached the viewer: a write a title
+    if (_restsAt(plate.restingAt, stepIndex, a.x, a.y, a.zoom)) return;
+    // Resting only once the framing has reached the viewer: a write a title
     // card refuses is made again on the next frame at rest.
-    if (snapIiifToPosition(viewerCard, a.x, a.y, a.zoom)) {
-      viewerCard.settledAt = { step: stepIndex, ...a };
+    if (snapIiifToPosition(plate, a.x, a.y, a.zoom)) {
+      plate.restingAt = { step: stepIndex, ...a };
     }
     return;
   }
 
-  viewerCard.settledAt = null;
-  _travel(viewerCard, a, b, progress);
+  plate.restingAt = null;
+  _travel(plate, a, b, progress);
 }
 
 /**
  * Put a viewer part of the way from one step's framing to the next.
  *
  * The zoom changes by equal ratios over equal parts of the way, as it does in
- * blendPlacements, and the position moves evenly. Either side of zoom 1 the two steps place different image points (the
- * centre and the focal point), so the frame is the two settled placements
- * blended rather than a placement of the blended x/y/zoom.
+ * blendPlacements, and the position moves evenly. Either side of zoom 1 the two
+ * steps place different image points (the centre and the focal point), so the
+ * frame is the two resting placements blended rather than a placement of the blended x/y/zoom.
  */
-function _travel(viewerCard, a, b, t) {
+function _travel(plate, a, b, t) {
   if ((a.zoom <= 1) !== (b.zoom <= 1)) {
-    _applyBetween(viewerCard, a, b, t);
+    _applyBetween(plate, a, b, t);
     return;
   }
   const along = (from, to) => from + (to - from) * t;
-  snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
+  snapIiifToPosition(plate, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
 }
 
 // ── Recompute on resize / layout change ──────────────────────────────────────
@@ -934,7 +925,7 @@ function _travel(viewerCard, a, b, t) {
 /**
  * Re-snap the currently active IIIF viewer to its authored position.
  *
- * Looks up the active viewer card (the one whose plate element carries
+ * Looks up the active viewer plate (the one whose element carries
  * is-active), reads the active step's authored x/y/zoom from
  * window.storyData.steps, and calls snapIiifToPosition so the
  * compensation runs again with the current (post-resize) cardOverlayRect
@@ -946,12 +937,12 @@ function _travel(viewerCard, a, b, t) {
  */
 export function reSnapActiveViewer() {
   // Found by the plate element's is-active class, not by
-  // state.currentObjectRun.objectId, which is not unique when the same object
+  // state.currentObjectScene.objectId, which is not unique when the same object
   // appears in several scenes.
-  const viewerCard = Object.values(state.viewerPlates).find(
-    plate => plate.container?.classList.contains('is-active')
+  const plate = Object.values(state.viewerPlates).find(
+    p => p.container?.classList.contains('is-active')
   );
-  if (!viewerCard || !viewerCard.isReady) return;
+  if (!plate || !plate.isReady) return;
 
   // Find the active text card to retrieve its step index
   const activeTextCard = document.querySelector('.text-card.is-active');
@@ -967,7 +958,7 @@ export function reSnapActiveViewer() {
 
   // A cell left blank falls back as it does on activation: to the whole object.
   const { x, y, zoom } = stepFraming(step);
-  snapIiifToPosition(viewerCard, x, y, zoom);
+  snapIiifToPosition(plate, x, y, zoom);
 }
 
 // Subscribe to layout-mode events (no new ad-hoc resize listeners).
@@ -976,12 +967,12 @@ export function reSnapActiveViewer() {
 // resize, and card-pool.js's resize pass refreshes state.cardOverlayRect and
 // calls reSnapActiveViewer after writing the card geometry.
 //
-// onLayoutChange: fires on horizontal↔vertical mode flip, BEFORE onViewportResize.
+// onLayoutChange: fires on horizontal↔vertical mode flip, before onViewportResize.
 // Wrap the re-snap in requestAnimationFrame so CSS reflows before we read the rect,
 // guaranteeing the post-reflow geometry.
 onLayoutChange(() => {
   requestAnimationFrame(() => {
-    // Re-read the active card rect after the CSS reflow has settled.
+    // Re-read the active card rect after the CSS reflow.
     const activeCard = document.querySelector('.text-card.is-active');
     state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
     reSnapActiveViewer();

@@ -134,10 +134,9 @@ jobs:
           # Canonicalised through the engine's own grammar rather than read
           # raw. This value names the version in the commit message, the
           # upgrade issue and the job summary, and the engine normalises what
-          # it puts in UPGRADE_SUMMARY.md — so a second unnormalised reader
-          # here is how a site ends up told two different versions of where
-          # it started. The tooling in $TMP is the verified copy the next step
-          # runs, so the grammar is the same one that decides the chain.
+          # it puts in UPGRADE_SUMMARY.md, so this value uses the engine's
+          # grammar to match it. The tooling in $TMP is the verified copy the
+          # next step runs, so the grammar is the same one that decides the chain.
           TMP="${{ steps.fetch.outputs.tmp }}"
           CURRENT_VERSION=$(python3 -c "import sys, yaml; sys.path.insert(0, '$TMP/scripts'); from telar_upgrade import _canonical_version; raw = (yaml.safe_load(open('_config.yml')) or {}).get('telar', {}).get('version', '0.2.0-beta'); print(_canonical_version(raw) or raw)")
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"

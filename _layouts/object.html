@@ -7,11 +7,11 @@ layout: default
   _layouts/default.html (the base page frame). One template serves all three media
   types (Image, Video, Audio); the media type,
   injected into frontmatter by generate_collections.py as `page.media_type`, switches which
-  viewer and which author-facing tools appear. This is the large (~1,230-line) object page,
-  long mostly because each media branch carries its own viewer wiring, metadata block, and
-  copy-to-clipboard scripts; the shared algorithmic pieces (theme-colour maths, video embed
-  resolution, coordinate normalisation) live in assets/js/object-theme.js,
-  assets/js/video-embed.js, and assets/js/telar-story/iiif-viewer.js.
+  viewer and which author-facing tools appear. The author tools are includes under
+  _includes/objects/, and the viewer wiring is in the per-type bundles built from
+  assets/js/object-page/; the shared pieces (the audio waveform's theme-colour maths, video
+  embed resolution, the IIIF viewer) live in assets/js/object-theme.js, assets/js/video-embed.js,
+  and assets/js/telar-story/iiif-viewer.js.
 
   What it renders — a two-column layout: a viewer on the left and a metadata sidebar on the
   right. The viewer branches by media type — an OpenSeadragon IIIF viewer for images (with a
@@ -53,8 +53,8 @@ layout: default
   here at all — it is --color-on-button, the same property the button beside
   them uses, so the two cannot disagree.
 
-  Falls back to trama's, and then to the dark ground four of the five shipped
-  themes have, which is what the panel looked like before any of this.
+  A theme with no entry in the manifest takes trama's, as assets/css/telar.scss
+  does, and a manifest with neither takes the dark ground.
 {%- endcomment -%}
 {%- assign theme_colours = site.data['telar-build']['theme-colours'] -%}
 {%- assign theme_light = theme_colours.themes[site.telar_theme].light -%}
@@ -196,11 +196,10 @@ layout: default
   </div>
 </div>
 
-<!-- Object-page helpers: theme-colour maths shared by the author panels and
-     the audio waveform (all media types), and video embed resolution (video
-     only). Classic scripts — parsed before the type's bundle below, so
-     window.telarObjectTheme / window.telarVideoEmbed are ready. -->
-<script src="{{ '/assets/js/object-theme.js' | relative_url }}"></script>
+<!-- Object-page helpers: the audio waveform's theme-colour maths (audio only) and
+     video embed resolution (video only). Classic scripts — parsed before the
+     type's bundle below, so window.telarObjectTheme / window.telarVideoEmbed
+     are ready. -->
 {% if object_media_type == 'Video' %}
 <script src="{{ '/assets/js/video-embed.js' | relative_url }}"></script>
 {% endif %}
@@ -209,6 +208,7 @@ layout: default
 <script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
 {% endif %}
 {% if object_media_type == 'Audio' %}
+<script src="{{ '/assets/js/object-theme.js' | relative_url }}"></script>
 <script src="{{ '/assets/js/wavesurfer-loader.js' | relative_url }}"></script>
 {% endif %}
 
@@ -247,8 +247,8 @@ them, and WaveSurfer decodes the audio itself.
 {%- endif -%}
 {% assign external_source = page.source_url | default: page.iiif_manifest %}
 {% assign escaped_title = page.title | escape %}
-{% assign video_frame_title = lang.object.video_frame_title | default: 'Video: __TITLE__' | replace: '__TITLE__', escaped_title %}
-{% assign waveform_label = lang.object.audio_controls.waveform_label | default: 'Audio waveform for __TITLE__' | replace: '__TITLE__', escaped_title %}
+{% assign video_frame_title = lang.object.video_frame_title | default: "Video: __TITLE__" | replace: '__TITLE__', escaped_title %}
+{% assign waveform_label = lang.object.audio_controls.waveform_label | default: "Audio waveform for __TITLE__" | replace: '__TITLE__', escaped_title %}
 <script id="telar-object-data" type="application/json">
 {
   "mediaType": {{ object_media_type | jsonify }},
@@ -261,7 +261,7 @@ them, and WaveSurfer decodes the audio itself.
   "videoFrameTitle": {{ video_frame_title | jsonify | replace: '</', '<\/' }},
   "waveformLabel": {{ waveform_label | jsonify | replace: '</', '<\/' }},
   "lang": {
-    "copied": {{ lang.object.coordinates.copied | default: "...copied" | jsonify }},
+    "copied": {{ lang.object.coordinates.copied | default: "Copied!" | jsonify }},
     "viewer": {
       "prev_page": {{ lang.object.viewer.prev_page | jsonify }},
       "next_page": {{ lang.object.viewer.next_page | jsonify }},
@@ -273,11 +273,11 @@ them, and WaveSurfer decodes the audio itself.
     "embedUnavailable": {{ lang.object.errors.embed_unavailable | default: "This video could not be loaded." | jsonify }},
     "openOnDrive": {{ lang.object.errors.open_on_drive | default: "Open it on Google Drive." | jsonify }},
     "audioNotFound": {{ lang.object.errors.audio_not_found | default: "Audio file not available." | jsonify }},
-    "play": {{ lang.object.audio_controls.play | default: 'Play audio' | jsonify }},
-    "pause": {{ lang.object.audio_controls.pause | default: 'Pause audio' | jsonify }},
-    "restart": {{ lang.object.audio_controls.restart | default: 'Restart from beginning' | jsonify }},
-    "mute": {{ lang.object.audio_controls.mute | default: 'Mute audio' | jsonify }},
-    "unmute": {{ lang.object.audio_controls.unmute | default: 'Unmute audio' | jsonify }}
+    "play": {{ lang.object.audio_controls.play | default: "Play audio" | jsonify }},
+    "pause": {{ lang.object.audio_controls.pause | default: "Pause audio" | jsonify }},
+    "restart": {{ lang.object.audio_controls.restart | default: "Restart from beginning" | jsonify }},
+    "mute": {{ lang.object.audio_controls.mute | default: "Mute audio" | jsonify }},
+    "unmute": {{ lang.object.audio_controls.unmute | default: "Unmute audio" | jsonify }}
   }
 }
 </script>

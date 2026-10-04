@@ -76,17 +76,8 @@ export class AudioPlate extends MediaPlate {
       loop,
       sceneIndex: this.sceneIndex,
       isEmbed,
-      onPlay: () => {
-        // Audio hold gate not implemented (audio has no hold gate)
-      },
-      onTimeUpdate: () => {
-        // Progress update handled internally by audio-card.js
-      },
       onEnded: () => {
         applyAudioClipEndDim(el);
-      },
-      onAutoplayBlocked: () => {
-        // Play overlay shown by audio-card.js internally
       },
     });
   }

@@ -78,10 +78,10 @@ function boot({ hash = '', lenis = null } = {}) {
   history.replaceState(null, '', `/telar/stories/s/${hash}`);
   Object.assign(state, {
     currentIndex: -1,
-    currentMobileStep: 0,
-    mobileInIntro: false,
-    mobileNavButtons: null,
-    mobileNavigationCooldown: false,
+    currentButtonStep: 0,
+    buttonInIntro: false,
+    buttonNavButtons: null,
+    buttonNavCooldown: false,
     lenis: null,
     panelStack: [],
     isPanelOpen: false,
@@ -98,12 +98,12 @@ function boot({ hash = '', lenis = null } = {}) {
 
 /** Tap a button; the tap cooldown is a timer, so it is lifted between taps. */
 function tap(which) {
-  state.mobileNavigationCooldown = false;
+  state.buttonNavCooldown = false;
   document.querySelector(which === 'next' ? '.mobile-next' : '.mobile-prev').click();
 }
 
 function press(key) {
-  state.mobileNavigationCooldown = false;
+  state.buttonNavCooldown = false;
   document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 }
 
@@ -137,7 +137,7 @@ describe('button navigation: the current step', () => {
     boot({ hash: '#s3' });
     tap('next');
     expect(state.currentIndex).toBe(3);
-    expect(state.currentMobileStep).toBe(3);
+    expect(state.currentButtonStep).toBe(3);
     expect(location.hash).toBe('#s4');
     expect(lastNavButtonIndex()).toBe(3);
   });
@@ -165,7 +165,7 @@ describe('button navigation: the current step', () => {
   it('returning to the intro clears the step and the fragment', () => {
     boot({ hash: '#s1' });
     tap('prev');
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(state.currentIndex).toBe(-1);
     expect(location.hash).toBe('');
     expect(lastNavButtonIndex()).toBe(-1);
@@ -206,26 +206,26 @@ describe('button navigation: the keyboard', () => {
     boot({ hash: '#s1' });
     press('ArrowUp');
     expect(state.currentIndex).toBe(-1);
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
   });
 });
 
 describe('buttons with a scroll engine (embed mode)', () => {
   it('leave the current step to the engine', () => {
     boot({ lenis: {} });
-    state.mobileInIntro = false;
-    state.currentMobileStep = 1;
+    state.buttonInIntro = false;
+    state.currentButtonStep = 1;
     state.currentIndex = 1;
     tap('next');
     expect(mocks.advanceToStep).toHaveBeenCalledWith(2);
-    expect(state.currentMobileStep).toBe(1);
+    expect(state.currentButtonStep).toBe(1);
     expect(state.currentIndex).toBe(1);
   });
 
   it('leave it to the engine when leaving the intro', () => {
     boot({ lenis: {} });
     tap('next');
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(state.currentIndex).toBe(-1);
     expect(state.onStepChange).not.toHaveBeenCalled();
   });
@@ -249,7 +249,7 @@ describe('the intro, however the buttons arrive at it', () => {
     expect(disabled().prev).toBe(false);
 
     navigateToIntro();
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(disabled()).toEqual(onLoad);
     expect(onLoad.prev).toBe(true);
   });
@@ -276,14 +276,14 @@ describe('the intro, however the buttons arrive at it', () => {
     vi.stubGlobal('requestAnimationFrame', () => 0);
     try {
       boot({ lenis: lenisStub() });
-      state.mobileInIntro = false;
-      state.currentMobileStep = 2;
+      state.buttonInIntro = false;
+      state.currentButtonStep = 2;
       state.currentIndex = 2;
       navigateToIntro();
       expect(disabled()).toEqual({ prev: true, next: false });
 
       tap('next');
-      expect(state.currentMobileStep).toBe(0);
+      expect(state.currentButtonStep).toBe(0);
       expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
     } finally {
       vi.unstubAllGlobals();
@@ -300,7 +300,7 @@ describe('the intro, however the buttons arrive at it', () => {
       expect(disabled()).toEqual({ prev: true, next: false });
 
       tap('next');
-      expect(state.currentMobileStep).toBe(0);
+      expect(state.currentButtonStep).toBe(0);
       expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
     } finally {
       vi.unstubAllGlobals();
@@ -357,7 +357,7 @@ describe('buttons beside a scroll engine (embed mode)', () => {
   it('a tap does not move the buttons before the engine does', () => {
     boot({ lenis: {} });
     tap('next');
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(disabled()).toEqual({ prev: true, next: false });
 
     navigation.followEngine(0);                 // the scroll reaches step 1
@@ -386,18 +386,18 @@ describe('buttons beside a scroll engine (embed mode)', () => {
     state.currentIndex = 1;
     navigation.followEngine(1);
     mocks.advanceToStep.mockReturnValueOnce(false);
-    state.mobileNavigationCooldown = false;
+    state.buttonNavCooldown = false;
     document.querySelector('.mobile-next').click();
-    expect(state.currentMobileStep).toBe(1);
-    expect(state.mobileNavigationCooldown).toBe(false);
+    expect(state.currentButtonStep).toBe(1);
+    expect(state.buttonNavCooldown).toBe(false);
   });
 
   it('the buttons follow a step the engine reached, and next goes on from it', () => {
     boot({ lenis: {} });
     state.currentIndex = 2;
     navigation.followEngine(2);
-    expect(state.mobileInIntro).toBe(false);
-    expect(state.currentMobileStep).toBe(2);
+    expect(state.buttonInIntro).toBe(false);
+    expect(state.currentButtonStep).toBe(2);
     expect(document.querySelector('.story-step[data-step="3"]').classList.contains('mobile-active')).toBe(true);
     expect(disabled()).toEqual({ prev: false, next: false });
 
@@ -415,7 +415,7 @@ describe('buttons beside a scroll engine (embed mode)', () => {
     boot({ lenis: {} });
     navigation.followEngine(2);
     navigation.followEngine(-1);
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(disabled()).toEqual({ prev: true, next: false });
 
     tap('next');
@@ -424,11 +424,11 @@ describe('buttons beside a scroll engine (embed mode)', () => {
 
   it('a story with no buttons has nothing to follow', () => {
     buildButtonPage();
-    Object.assign(state, { mobileNavButtons: null, currentMobileStep: 0, mobileInIntro: false });
+    Object.assign(state, { buttonNavButtons: null, currentButtonStep: 0, buttonInIntro: false });
     state.steps = Array.from(document.querySelectorAll('.story-step'));
     navigation.followEngine(2);
     expect(document.querySelectorAll('.mobile-active')).toHaveLength(0);
-    expect(state.currentMobileStep).toBe(0);
+    expect(state.currentButtonStep).toBe(0);
   });
 });
 

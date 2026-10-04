@@ -75,7 +75,7 @@ def csv_to_json(csv_path, json_path, process_func=None, canonical_fields=None,
         process_func: Optional function to process the dataframe before conversion
         canonical_fields: The canonical column names this sheet's consumer
             reads, scoping the bilingual alias map to them. None applies the
-            whole map, which is the behaviour for every sheet not yet scoped.
+            whole map.
         refusals: A list that receives `(source, message)` when the sheet is
             refused, or when a sheet it reads (the glossary) is. The caller
             decides the exit; without a list a refusal is only printed.
@@ -206,7 +206,7 @@ def find_csv_with_fallback(base_path, spanish_name):
 
 
 # The build workflow must invoke this script for protected content to be
-# encrypted before deployment. The interlock below greps build.yml for the
+# encrypted before deployment. The prerequisite check below greps build.yml for the
 # script path itself, so the check cannot drift from the thing it checks.
 ENCRYPT_SCRIPT_MARKER = 'encrypt_protected_stories.py'
 BUILD_WORKFLOW_PATH = Path('.github/workflows/build.yml')

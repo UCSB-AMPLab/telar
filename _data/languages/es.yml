@@ -425,8 +425,6 @@ share:
   copy_manually: "Copia el texto a mano"
   copied: "Copiado al portapapeles"
 
-  # Claves heredadas (mantenidas por compatibilidad)
-
 # Pantalla de desbloqueo de historias protegidas
 unlock:
   title: "Esta historia está protegida"

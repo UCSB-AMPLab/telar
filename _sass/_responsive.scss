@@ -34,14 +34,13 @@ $telar-vertical-min-aspect:  0.75;
 // The side card's left edge and width are what _story.scss builds the text
 // card from and what video-layout.js places a video player beside. On a
 // horizontal layout card-fit.js writes the width for the window on the root
-// element, over the 37% here, which a landscape phone's side card keeps.
-// The mobile values are the existing mobile media query geometry.
+// element, over the 37% here, which a phone-height side card keeps.
 $telar-card-side-left:               3%;
 $telar-card-side-width:              37%;
 $telar-card-mobile-bottom:           max(1rem, env(safe-area-inset-bottom));
 $telar-card-mobile-max-height:       40vh;
 $telar-card-mobile-max-height-media: 35vh;
-$telar-card-landscape-max-height:    480px;  // viewport-height threshold below which the text card becomes a side card (landscape phones); read by card-pool.js via the mirrored custom property so JS and CSS share one source
+$telar-card-landscape-max-height:    480px;  // viewport-height threshold below which the text card becomes the phone-height side card; read by card-pool.js via the mirrored custom property so JS and CSS share one source
 
 // ── Side card width ──────────────────────────────────────────────────────────
 // On a horizontal layout the side card is
@@ -94,12 +93,12 @@ $telar-density-mini:        0.7;
 $telar-density-comfortable: 1;
 
 // ── Audio/video scaling factors ──────────────────────────────────────────────
-// Values must match the JS literals exactly so any future migration to read
-// these from the custom properties is a mechanical substitution.
-$telar-audio-height-mobile:  0.35;  // audio-card.js:330,545 — window.innerHeight * 0.35
-$telar-audio-height-resize:  0.5;   // audio-card.js:829     — window.innerHeight * 0.5
-$telar-video-pad-factor:     0.025; // video-card.js:139,214 — Math.min(W,H) * 0.025
-$telar-video-stack-max-h:    0.58;  // video-card.js:156,216 — H * 0.58
+// Read from the mirrored custom properties by audio-card.js, audio-layout.js
+// and video-layout.js, whose literals are the fallbacks and equal these values.
+$telar-audio-height-mobile:  0.35;  // fraction of window.innerHeight
+$telar-audio-height-resize:  0.5;   // fraction of window.innerHeight
+$telar-video-pad-factor:     0.025; // fraction of Math.min(W, H)
+$telar-video-stack-max-h:    0.58;  // fraction of H
 
 // ── Media card below ─────────────────────────────────────────────────────────
 // On a horizontal layout a video or audio step puts its text card below the
@@ -157,11 +156,10 @@ $telar-audio-wave-side-width:     calc(100% - var(--telar-card-side-left) - var(
 }
 
 // ── @mixin vertical-layout ───────────────────────────────────────────────────
-// Wraps rules in the media query that defines "vertical layout mode": narrow
-// width (phone portrait) OR tall-and-narrow aspect ratio (phone landscape /
-// small tablet) OR short height (a window no taller than
-// $telar-card-landscape-max-height, where the card is the landscape phone's
-// side card) OR one of $telar-vertical-short-windows, which layout-mode.js
+// Wraps rules in the media query that defines the vertical layout: narrow
+// width, OR tall-and-narrow aspect ratio (a phone or small tablet), OR short
+// height (a window no taller than $telar-card-landscape-max-height, where the
+// card is the phone-height side card) OR one of $telar-vertical-short-windows, which layout-mode.js
 // reads from the mirrored property. Consumers call @include vertical-layout
 // without namespace because telar.scss loads this partial as `@use 'responsive'
 // as *`. The aspect-ratio clause uses 3/4 = 0.75, matching
@@ -184,14 +182,14 @@ $telar-audio-wave-side-width:     calc(100% - var(--telar-card-side-left) - var(
 //
 // Each comment identifies the inline style being fought.
 @media (prefers-reduced-motion: reduce) {
-  // Card-slide transitions — _story.scss:66, 350, 418
+  // Card-slide transitions;
   // fights JS-set transform inline style on sliding card plates
   .viewer-plate,
   .text-card {
     transition: none !important; // fights JS-set transform inline style
   }
 
-  // Panel transitions — _panels.scss:35, 186, 201, 523
+  // Panel transitions;
   // fights JS-set transform/translate inline style on panel open/close
   .offcanvas,
   [data-telar-panel],
@@ -201,7 +199,7 @@ $telar-audio-wave-side-width:     calc(100% - var(--telar-card-side-left) - var(
 }
 
 // ── Height-density consolidation ──────────────────────────────────────────────
-// One set of density reductions, using the most aggressive values needed
+// One set of density reductions (the compact type size), using the most aggressive values needed
 // across the affected partials; clamp()-based fluid scaling could add
 // intermediate gradations later.
 //
@@ -211,10 +209,10 @@ $telar-audio-wave-side-width:     calc(100% - var(--telar-card-side-left) - var(
 //     reasonably small).
 //     Note: iPhone SE at 667h is not triggered by 600px. This is
 //     deliberate: only devices at or below 600px trigger (very small
-//     Androids + landscape phones).
-//   • Landscape phones (iPhone Pro Max landscape = 430h; all modern
-//     landscape phones are ≤ 600h) — a max-width clause would exclude
-//     landscape phones wider than 768px; this block correctly includes them.
+//     Androids + phones on their side).
+//   • Phones on their side (iPhone Pro Max on its side = 430h; all modern
+//     phones on their side are ≤ 600h) — a max-width clause would exclude
+//     those wider than 768px; this block correctly includes them.
 //
 // This block is unlayered — matches the reduced-motion block precedent above.
 // Unlayered CSS beats any @layer rule (including telar-components), so these

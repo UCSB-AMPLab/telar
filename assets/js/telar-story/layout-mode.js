@@ -15,7 +15,7 @@
  *     Subscribers receive { from, to, viewport: {w, h}, isEmbed }. Because the
  *     browser's matchMedia fires only on a genuine flip, no JS-side comparison
  *     is needed — JS-vs-CSS formula drift is structurally impossible.
- *   onViewportResize — fires on every settled resize, debounced 100 ms to
+ *   onViewportResize — fires once a resize has stopped, debounced 100 ms to
  *     match the existing audio-card.js and video-card.js idiom. Subscribers
  *     receive { viewport: {w, h} }.
  *
@@ -29,13 +29,13 @@
  *                                     immediately (no debounce — discrete event)
  *
  * Dispatch order on a mode-flipping event is onLayoutChange first so that
- * mode-flip handlers settle branching state before geometry handlers re-read
+ * mode-flip handlers set branching state before geometry handlers re-read
  * viewport dimensions. state.layoutMode is the exception: this module writes
  * it before the first onLayoutChange subscriber runs, so no subscriber sees
  * the previous mode.
  *
  * First-call semantics: getLayoutMode() initialises the listener exactly once
- * (via _initOnce()) and returns a synchronous answer. onLayoutChange does NOT
+ * (via _initOnce()) and returns a synchronous answer. onLayoutChange does not
  * broadcast the initial mode — subscribers that need the current value should
  * call getLayoutMode() at subscribe time.
  *
@@ -80,7 +80,7 @@ function _readBreakpoints() {
  * @param {string} raw - The property's value
  * @returns {string[]}
  */
-export function shortWindowClauses(raw) {
+function shortWindowClauses(raw) {
   return raw.split(',').map((pair) => pair.trim().split(/\s+/))
     .filter((pair) => pair.length === 2 && pair.every((v) => Number.isFinite(parseFloat(v))))
     .map(([h, w]) => `(max-height: ${h}) and (max-width: ${w})`);
@@ -144,7 +144,7 @@ function _onResize() {
  * Immediate orientationchange handler — no debounce.
  * Clears any pending resize timer, re-evaluates mode (in case the matchMedia
  * 'change' event lags on some engines), then flushes both subscription
- * surfaces. onLayoutChange fires FIRST so branching state settles before
+ * surfaces. onLayoutChange fires first so branching state is set before
  * geometry handlers run.
  */
 function _onOrientationChange() {
@@ -209,7 +209,7 @@ export function onLayoutChange(cb) {
 
 /**
  * Subscribe to every debounced viewport resize.
- * Fires on every resize event that has settled for 100 ms. Also fires
+ * Fires once resizing has paused for 100 ms. Also fires
  * immediately on orientationchange (no debounce — discrete event).
  *
  * @param {(ev: { viewport: { w: number, h: number } }) => void} cb
@@ -244,7 +244,7 @@ export function getIsEmbed() {
 }
 
 /**
- * True when the viewport is short enough that the landscape side-card rule in
+ * True when the viewport is short enough that the phone-height side-card rule in
  * `_story.scss` (`@media (max-height: …)`) is active — i.e. the text card is a
  * side card although getLayoutMode() reports 'vertical' (the vertical layout's
  * height clause is the same threshold). The threshold is read from the
@@ -253,12 +253,12 @@ export function getIsEmbed() {
  * breakpoint matchMedia above).
  *
  * Consumers: card-pool.js (`_recomputeCardGeometry`) and iiif-card.js
- * (`_deriveCardPlacement` null-rect fallback) — both must agree that a short
- * landscape viewport is side-card, not bottom-card.
+ * (`_deriveCardPlacement` null-rect fallback) — both must agree that a phone-height
+ * window has a side card, not a bottom card.
  *
  * @returns {boolean}
  */
-export function isLandscapeSideCard() {
+export function isPhoneHeightSideCard() {
   return window.matchMedia(`(max-height: ${getCardLandscapeMaxHeight()}px)`).matches;
 }
 

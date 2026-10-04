@@ -75,7 +75,7 @@ from telar.pages import (  # noqa: F401
 )
 
 # Fields already handled explicitly in generate_objects() frontmatter.
-# Any key NOT in this set is treated as a custom field and written to extra_metadata.
+# Any key not in this set is treated as a custom field and written to extra_metadata.
 # The object fields the build knows about. Two consumers, one meaning:
 # anything outside it is the author's own column and goes to
 # extra_metadata, and a bilingual alias is only applied to an objects

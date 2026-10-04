@@ -11,7 +11,7 @@
  *
  * OSD is loaded via the vendored `<script>` tag at `assets/vendor/openseadragon.min.js`
  * and reached at runtime through `window.OpenSeadragon`. The
- * wrapper deliberately does NOT `import` OpenSeadragon: doing so would
+ * wrapper deliberately does not `import` OpenSeadragon: doing so would
  * either fail the esbuild bundle (if OSD is not an npm dep) or silently
  * pull the entire library into `assets/js/telar-story.js`, defeating the
  * vendoring strategy.
@@ -186,13 +186,13 @@ export class IiifViewer {
       // the image briefly shows at OSD's default-centered home position
       // before snapping to the step's coordinates.
       //
-      // Timing fix: `preserveViewport: true` protects the
-      // viewport only across PAGE opens — not the very first open. OSD's
-      // initial home-fit can land AFTER a synchronous zoomTo/panTo in
-      // ready.then, resetting the viewer to home zoom. Deferring via one
-      // requestAnimationFrame after the first 'open' event lets the home-fit
-      // settle before .ready resolves, so any authored position applied in
-      // ready.then arrives AFTER the home-fit rather than racing it.
+      // `preserveViewport: true` protects the viewport only across page
+      // opens — not the very first open. OSD's initial home-fit can land after
+      // a synchronous zoomTo/panTo in ready.then, resetting the viewer to home
+      // zoom. Deferring via one requestAnimationFrame after the first 'open'
+      // event lets the home-fit finish before .ready resolves, so any authored
+      // position applied in ready.then arrives after the home-fit rather than
+      // racing it.
       //
       // 'open-failed' rejects so the catch below renders the error UI.
       await new Promise((resolve, reject) => {
@@ -218,7 +218,7 @@ export class IiifViewer {
       // Race guard for subsequent setPage() transitions.
       // `viewer.open()` is async (fetches info.json then tiles); the 'open'
       // event fires once the new tile source is fully loaded. We register
-      // this handler AFTER the initial-open await above so it only fires
+      // this handler after the initial-open await above so it only fires
       // for page-change opens, not the first load. viewer.destroy() tears
       // down its own handlers, so no explicit cleanup is needed.
       this.viewer.addHandler('open', (event) => {

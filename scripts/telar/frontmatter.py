@@ -59,13 +59,8 @@ _FrontmatterDumper.add_representer(str, _represent_str)
 def _frontmatter_block(fields):
     """Serialise frontmatter fields as YAML.
 
-    `safe_dump` rather than a hand-built string with an escape table. It
-    quotes anything that would parse back as another type, which an escape
-    table has to be told about one character at a time — and the fields that
-    were assembled outside the table did not get escaped at all: an
-    `object_id` beginning `*` made the document an alias reference, and a
-    quote anywhere in `year` ended its scalar early and left the rest of the
-    frontmatter malformed.
+    `safe_dump` quotes anything that would parse back as another type: an
+    `object_id` beginning `*`, or a quote anywhere in `year`.
 
     `sort_keys=False` keeps the order the build writes, which is the order a
     site owner reading the file expects, and `allow_unicode` keeps accented

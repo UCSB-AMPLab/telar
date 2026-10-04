@@ -253,11 +253,10 @@ def locate_image(image_path, base_url=None):
       already begins with the site's baseurl and the file is found under the
       rest of it, the baseurl is not counted twice. When the site root has
       no such file, the path is tried under each of BARE_IMAGE_FOLDERS, so a
-      subfolder written relative to assets/images/ (`historia/x.jpg`), as
-      carousels were written before, still resolves.
+      subfolder written relative to assets/images/ (`historia/x.jpg`) resolves.
     - A bare file name is looked for in each of BARE_IMAGE_FOLDERS in turn,
       and the first folder holding it wins. When none does, the answer is
-      the first folder, which is where a carousel image was always expected.
+      the first folder, which is where a bare name is expected.
 
     The path returned is the file found on disk, in its own letter case, so
     what is published, validated and measured is one file. The caller

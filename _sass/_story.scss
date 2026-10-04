@@ -5,9 +5,7 @@
  * the entire viewport as backgrounds; text cards float over them on the left.
  * All transitions are pure CSS slide animations — no fading, no opacity changes.
  *
- * Card-stack architecture introduced in v1.0.0-beta.
- *
- * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
+ * Also here: button navigation, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
  *
  * @version v1.8.0
@@ -55,20 +53,20 @@
 .card-stack {
   position: absolute;
   inset: 0;
-  // CRITICAL: NO z-index here — mandatory for z-index banding to work
+  // No z-index here: card z-index banding needs this container not to create a stacking context.
   overflow: visible;
 
   // EN: A card's slide, a covered card's lift and a plate's travel are one
   //     movement seen from three places, so they run for one duration. Every
   //     transition for a card or a plate below reads this property instead of
   //     restating the figure. The figure here is only what stands until the
-  //     card pool writes over it at init with the pace of a move to a step,
+  //     card stack writes over it at init with the pace of a move to a step,
   //     which is the same movement measured at the scroll.
   // ES: El deslizamiento de una tarjeta, el ascenso de una tarjeta cubierta y
-  //     el recorrido de una placa son un mismo movimiento visto desde tres
+  //     el recorrido de una lámina son un mismo movimiento visto desde tres
   //     puntos, así que duran lo mismo. Todas las transiciones de tarjeta o de
-  //     placa que vienen más abajo leen esta propiedad en vez de repetir la
-  //     cifra. La cifra que está aquí solo rige hasta que el card pool la
+  //     lámina que vienen más abajo leen esta propiedad en vez de repetir la
+  //     cifra. La cifra que está aquí solo rige hasta que la pila de tarjetas la
   //     sobrescribe al arrancar con el ritmo de un desplazamiento a un paso,
   //     que es ese mismo movimiento medido en el scroll.
   --card-motion-duration: 0.5s;
@@ -503,7 +501,7 @@
   //     transition above.
   // ES: Una tarjeta cubierta se va hacia arriba y sale de la pantalla cuando
   //     nada sube a taparla, y no va a ninguna parte cuando la que sube es una
-  //     placa. Eso lo escribe card-pool.js en línea, no esta hoja: el
+  //     lámina. Eso lo escribe card-pool.js en línea, no esta hoja: el
   //     `transform` de una tarjeta va en línea en cada activación, así que una
   //     regla aquí perdería en la cascada. Lo que sí le corresponde a la hoja
   //     de estilos es el reloj del recorrido: la transición de arriba.
@@ -573,7 +571,7 @@
 //
 // In horizontal mode, .text-card is 37% to 52% of the window wide
 // (card-fit.js), so (max-width: 480px) fires on the narrower windows; a
-// landscape phone's side card is 37% wide, where (max-width: 360px) fires.
+// phone-height side card is 37% wide, where (max-width: 360px) fires.
 // In vertical mode, .text-card is calc(100% - 2rem) wide — both breakpoints
 // fire on all mobile viewports, so the user gets Tier-3 density by default.
 @container (max-width: 480px) {
@@ -781,7 +779,7 @@
 
 // ── Title cards ───────────────────────────────────────────────────────────────
 // Full-viewport chapter heading dividers, visually identical to the story
-// intro card. Each title card is its own scene in the card pool.
+// intro card. Each title card is its own scene in the card stack.
 
 .title-card {
   position: absolute;
@@ -903,18 +901,18 @@
   display: none;
 }
 
-// ── Mobile Navigation Buttons ─────────────────────────────────────────────────
+// ── Button navigation ─────────────────────────────────────────────────
 
-// The previous/next buttons exist only where button navigation runs: a
-// vertical layout at load, embed mode, and iOS in either layout. An iPad in
-// landscape is a horizontal layout, and a window opened narrow keeps the
-// buttons when widened, so the placement holds in every layout: fixed to the
-// right side, centred vertically over the full viewport, where it covers no
-// text card. Embed mode places them itself (_embed.scss).
+// The previous/next buttons (.mobile-nav) exist only where button navigation
+// runs: a vertical layout at load, embed mode, and iOS in either layout. An
+// iPad on its side is a horizontal layout, and a window opened narrow keeps
+// the buttons when widened, so the placement holds in every layout: fixed to
+// the right side, centred vertically over the full viewport, where it covers
+// no text card. Embed mode places them itself (_embed.scss).
 
 .mobile-nav {
   position: fixed;
-  right: max(1rem, env(safe-area-inset-right));  // -right honours iPhone Pro landscape side-notch; the centred bottom is intentional.
+  right: max(1rem, env(safe-area-inset-right));  // -right honours iPhone Pro side-notch on its side; the centred bottom is intentional.
   bottom: 50%;
   transform: translateY(50%);
   z-index: 9900;
@@ -954,7 +952,7 @@
 }
 
 @include vertical-layout {
-  // Mobile nav button — icon-only circular button
+  // Navigation button — icon-only circular button
   .btn-nav-back {
     min-height: 44px;
     min-width: 44px;
@@ -1006,7 +1004,7 @@
     max-width: calc(100vw - 5rem);
   }
 
-  // ── Mobile text card: full-width bottom-anchored card ──────────────────────
+  // ── Bottom card: full-width, bottom-anchored ───────────────────────────────
   .text-card {
     left: 1rem;
     width: calc(100% - 2rem);
@@ -1019,18 +1017,18 @@
     transition: transform var(--card-motion-duration) var(--card-motion-easing);  // one duration with the camera: its rect is read when the slide ends
   }
 
-  // dvh override for mobile text card — same structure as story-container above.
+  // dvh override for the bottom card — same structure as story-container above.
   // The $telar-card-mobile-max-height Sass var (40vh) is intentionally left as
   // the vh fallback source-of-truth; this @supports block provides the dvh value
   // at the rule level — simplest approach, no Sass var duplication.
   //
-  // EN: The dvh cap has to precede the block that overrides for landscape: both
+  // EN: The dvh cap has to precede the block that overrides for the phone-height side card: both
   //     select `.text-card` at the same specificity, so source order decides it,
-  //     and that block's `max-height: none` only holds if it comes last.
-  // ES: El tope en dvh debe ir antes del bloque que anula para horizontal:
-  //     ambas reglas seleccionan `.text-card` con la misma especificidad, así
-  //     que lo decide el orden de aparición, y el `max-height: none` de ese
-  //     bloque solo se mantiene si va de última.
+  //     and that block's `max-height` only holds if it comes last.
+  // ES: El tope en dvh tiene que ir antes del bloque de la tarjeta lateral de poca altura:
+  //     las dos reglas seleccionan `.text-card` con la misma especificidad, así
+  //     que gana la que aparece después en la hoja, y el `max-height` de ese
+  //     bloque solo se impone si ese bloque queda después.
   @supports (height: 100dvh) {
     .text-card {
       max-height: 40dvh;
@@ -1099,33 +1097,34 @@
 
 }
 
-// ── Short-window side card ────────────────────────────────────────────────────
+// ── Phone-height side card ────────────────────────────────────────────────────
 // EN: When the viewport is too short for a bottom card (height ≤ 480px), the
 //     side-card geometry applies instead, at any width. The same height is the
-//     vertical layout's height clause, so a landscape phone and a short desktop
-//     window are both in vertical layout here.
-//     isLandscapeSideCard() in layout-mode.js tests the same height alone, and
+//     vertical layout's height clause, so a phone on its side and a desktop
+//     window this short are both in the vertical layout here.
+//     isPhoneHeightSideCard() in layout-mode.js tests the same height alone, and
 //     card-pool.js sizes the card to its content on that test. The rule comes
 //     after the vertical-layout block so that it overrides the bottom card's
 //     rules of the same specificity.
-//     Threshold 480px catches all modern landscape phones (≤ 430px tall) and
-//     misses all portrait phones (iPhone SE 667px, SE 1st-gen 568px).
-//     card-pool.js controls `top` via inline style with !important;
+//     Threshold 480px catches all modern phones on their side (≤ 430px tall)
+//     and misses all portrait phones (iPhone SE 667px, SE 1st-gen 568px).
+//     card-pool.js sets `top` as an inline style with !important;
 //     bottom: auto releases the bottom anchor so the side card positions correctly.
 // ES: Cuando el viewport es demasiado bajo para una tarjeta inferior (altura
 //     ≤ 480px), se aplica en su lugar la geometría de tarjeta lateral, sea cual
 //     sea el ancho. Ese mismo umbral es la condición de altura del diseño
-//     vertical (vertical-layout), así que aquí tanto un teléfono en horizontal
-//     como una ventana de escritorio baja usan el diseño vertical.
-//     isLandscapeSideCard() de layout-mode.js comprueba solo esa misma
-//     altura, y card-pool.js se basa en esa comprobación para ajustar la
-//     tarjeta a su contenido. La regla va después del bloque vertical-layout para anular
-//     las reglas de la tarjeta inferior que tienen la misma especificidad.
-//     El umbral de 480px captura todos los teléfonos modernos en horizontal
-//     (≤ 430px de alto) y excluye los teléfonos en vertical (iPhone SE 667px,
-//     SE 1.ª gen. 568px). card-pool.js controla `top` mediante estilo en línea
-//     con !important; bottom: auto libera el ancla inferior para que la
-//     tarjeta lateral se posicione correctamente.
+//     vertical, así que aquí tanto un teléfono de lado como una ventana de
+//     escritorio de esa altura usan el diseño vertical.
+//     `isPhoneHeightSideCard()`, en layout-mode.js, comprueba solo esa
+//     altura, y card-pool.js usa esa comprobación para ajustar la altura de
+//     la tarjeta a su contenido. La regla va después del bloque
+//     `@include vertical-layout` para anular las reglas de la tarjeta
+//     inferior que tienen la misma especificidad.
+//     El umbral de 480px abarca todos los teléfonos modernos de lado
+//     (≤ 430px de alto) y deja por fuera todos los teléfonos en orientación
+//     vertical (iPhone SE 667px, SE 1.ª gen. 568px). card-pool.js asigna
+//     `top` como estilo en línea con `!important`; `bottom: auto` suelta el
+//     ancla inferior para que la tarjeta lateral quede donde la pone ese `top`.
 @media (max-height: $telar-card-landscape-max-height) {
   .text-card {
     left: $telar-card-side-left;
@@ -1133,22 +1132,23 @@
     top: auto !important;     // seam: card-pool sets top via style.setProperty('top', ..., 'important')
     bottom: auto;
     // EN: content-height side card — override the inline `height: viewportH*0.80`
-    //     that card-pool.js sets for the tall portrait/desktop card; the short
-    //     landscape viewport must size the card to its content, and card-pool
+    //     that card-pool.js sets for the tall portrait/desktop card; a
+    //     viewport this short must size the card to its content, and card-pool
     //     then centres it by the measured height.
-    // ES: tarjeta lateral de altura según contenido — anula el `height` en línea
-    //     (viewportH*0.80) que card-pool.js asigna a la tarjeta vertical/escritorio;
-    //     el viewport corto en horizontal debe ajustar la tarjeta a su contenido y
-    //     card-pool la centra según la altura medida.
+    // ES: Tarjeta lateral de altura según contenido: anula el `height` en línea
+    //     (`viewportH*0.80`) que card-pool.js asigna a la tarjeta alta de los
+    //     teléfonos en orientación vertical y del escritorio. En un viewport tan
+    //     bajo, la tarjeta tiene que tomar la altura de su contenido, y luego
+    //     card-pool.js la centra según la altura medida.
     height: auto !important;
     // EN: The cap is the viewport less the card's inset at top and bottom, so the
-    //     side card can use nearly the whole short viewport. It is the fallback
+    //     side card can use nearly the whole viewport. It is the fallback
     //     before card-pool.js has run its geometry: once it has, an inline
     //     max-height overrides it. card-pool.js writes the ceiling that keeps
     //     the card clear of the top controls, the side card's ceiling from
     //     card-fit.js, and the card scrolls inside itself past it. A cap of 40dvh is
     //     the portrait bottom card's share of a tall viewport and leaves a
-    //     landscape card far too short; no cap at all lets the content-height card
+    //     phone-height side card far too short; no cap at all lets the content-height card
     //     grow past both edges of a 430px viewport, from where nothing brings it
     //     back.
     // ES: El tope es la altura del viewport menos la separación de la tarjeta
@@ -1165,7 +1165,7 @@
     //     de un viewport de 430px, de donde nada la devuelve al área visible.
     max-height: calc(100vh - 2rem);
 
-    // The dvh value sits inside the landscape block, in the same shape as the
+    // The dvh value sits inside the phone-height block, in the same shape as the
     // vh-then-dvh pattern above, so the cap and its fallback stay together.
     @supports (height: 100dvh) {
       max-height: calc(100dvh - 2rem);
@@ -1174,7 +1174,7 @@
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STORY UNLOCK OVERLAY (v0.8.0 - Protected Stories)
+// STORY UNLOCK OVERLAY (protected stories)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 .story-unlock-overlay {

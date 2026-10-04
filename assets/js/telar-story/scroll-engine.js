@@ -91,7 +91,7 @@ let navSeq = 0;
 // chose, so reading it as a place the reader left the scroll makes the press
 // re-issue the move already running: the reader presses and nothing happens,
 // and nothing ever will. The fractional position is still the right reading
-// for a scroll the reader did leave part way, which is what it was written for.
+// for a scroll the reader did leave part way.
 //
 // Held against a token so that only the move that is still current can be
 // stepped from. Every other programmatic path takes a token of its own, which
@@ -169,15 +169,15 @@ function _clampPosition(position) {
   return Math.max(0, Math.min(position, totalPositions - 1));
 }
 
-// How far the scroll must move since it last held the scrub open for a frame
+// How far the scroll must move since it last held `is-scrubbing` open for a frame
 // to count as still travelling: the half pixel at which Lenis calls a smoothed
 // move complete. Lenis completes a move only when its value rounds to its
 // target's rounding, so a target on a half pixel (an odd wheel total under a
 // wheel multiplier of 0.5) is approached from below and never completes; its
-// frames differ by millionths of a pixel and, read as travel, would hold the
-// scrub open for good and keep the gesture from being carried to a step.
+// frames differ by millionths of a pixel and, read as travel, would hold
+// `is-scrubbing` open for good and keep the gesture from being carried to a step.
 const SCROLL_MOVING_PX = 0.5;
-let armedAt = 0;  // the scroll offset at which a frame last held the scrub open
+let armedAt = 0;  // the scroll offset at which a frame last held is-scrubbing open
 
 // How near a whole step counts as resting on it. A scroll lands on fractions
 // of a pixel, and a thousandth of a viewport is under a pixel on every cell.
@@ -277,7 +277,7 @@ export function initScrollEngine(stepCount) {
 
   // Create Snap plugin with lock mode — directional snapping (forward on
   // scroll-down, backward on scroll-up).  Lerp-only (no fixed duration) for
-  // a gradual settle.  The dwell on complete (see dwellTimer below) absorbs
+  // a gradual approach.  The dwell on complete (see dwellTimer below) absorbs
   // residual scroll input while the cards arrive.
   snap = new Snap(lenis, {
     type: 'lock',
@@ -406,7 +406,7 @@ export function initScrollEngine(stepCount) {
 }
 
 /**
- * Hold the scrub open for another 100 ms.
+ * Hold `is-scrubbing` for another 100 ms.
  *
  * Re-armed by raw input and by every scroll frame the reader's scroll produces,
  * so the window covers the whole gesture — wheel, smoothing tail, snap lerp —
@@ -418,13 +418,13 @@ function armScrubEnd() {
 }
 
 /**
- * Close the scrub: the cards go back on their CSS transitions, and the position
+ * End scrubbing: the cards go back on their CSS transitions, and the position
  * they were tracking frame by frame is stated once more as the place they rest.
  *
  * Also the handover to programmatic navigation. A keyboard or button move is
- * not the reader's scroll and animates on the transitions the scrub suppresses,
- * so a move made mid-gesture closes the scrub before it starts rather than
- * inheriting a window that would turn its slide into a jump.
+ * not the reader's scroll and animates on the transitions `is-scrubbing`
+ * suppresses, so a move made mid-gesture ends scrubbing before it starts rather
+ * than inheriting a window that would turn its slide into a jump.
  */
 function endScrub({ carry = true } = {}) {
   clearTimeout(scrubEndTimer);
@@ -436,7 +436,7 @@ function endScrub({ carry = true } = {}) {
   const position = lenis.animatedScroll / _stepPx();
   settleCards(position);
   // Only a reader's own gesture coming to rest is carried to the nearer step.
-  // A programmatic move closes the scrub on its way past and already knows its
+  // A programmatic move ends scrubbing on its way past and already knows its
   // landing, so carrying it as well would put two moves on one scroll.
   if (carry) carryToNearestStep(position);
 }
@@ -794,7 +794,7 @@ function _enterStep(stepIndex, direction) {
 export function keyboardNav(direction) {
   if (!lenis) return;
 
-  // The move begins here, not at the scroll that ends it. Closing the scrub and
+  // The move begins here, not at the scroll that ends it. Ending scrubbing and
   // clearing the dwell below both call into Lenis, which emits a scroll frame
   // of its own as it starts again — and a frame arriving while the scroll still
   // looks like the reader's arms the settle, which then fires part way through
@@ -816,7 +816,7 @@ export function keyboardNav(direction) {
   const token = beginNav();
   navTargetToken = token;
 
-  // The keyboard is not the reader's scroll: close any scrub still open so the
+  // The keyboard is not the reader's scroll: end scrubbing if it is still on so the
   // move animates on the CSS transitions rather than being written per frame,
   // and without the carry — this move already knows where it is going, so a
   // carry to the nearer step would put two moves on one scroll.
@@ -846,7 +846,7 @@ export function keyboardNav(direction) {
 
   // State the target before the scroll starts for it: the keyboard knows its
   // landing, so the cards can slide to it on their own transitions over the
-  // same move, whatever a scrub left half-placed on the way in. Both directions
+  // same move, whatever scrubbing left half-placed on the way in. Both directions
   // go through it — a backward move's departing card is the card the target
   // position puts a viewport down.
   settleCards(target);
@@ -954,10 +954,10 @@ export function updateScrollPosition(position) {
   // own target, and passes over whole steps on the way there; restating the
   // rest of one of those would push the arriving card back down mid-flight.
   if (!keyboardNavInFlight || progress >= 0.001) setCardProgress(stepIndex, progress);
-  // Feed the FILTERED steps (state.stepsData) — stepIndex is a filtered-space
+  // Feed the filtered steps (state.stepsData) — stepIndex is a filtered-space
   // index (it drives state.stepToScene), so the unfiltered window.storyData
   // .steps would mis-index on stories that contain metadata rows.
-  lerpIiifPosition(stepIndex, progress, state.stepsData || []);
+  lerpIiifPosition(stepIndex, progress, state.stepsData);
 
   // Integer boundary crossings. Skipped during keyboard nav: keyboardNav()
   // already entered the step and the scroll position hasn't caught up yet.

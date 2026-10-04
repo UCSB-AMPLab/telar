@@ -422,8 +422,6 @@ share:
   copy_manually: "Please manually copy the text"
   copied: "Copied to the clipboard"
 
-  # Legacy keys (kept for compatibility)
-
 # Protected stories unlock screen
 unlock:
   title: "This story is protected"

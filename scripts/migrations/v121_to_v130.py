@@ -278,7 +278,7 @@ class Migration121to130(BaseMigration):
         changes.extend(self._replace_body_if_default(
             'pages/objects.md', OBJECTS_MD_V121_BODY, OBJECTS_MD_NEW_BODY, 'objects intro'
         ))
-        # acerca.md create runs BEFORE about.md replacement so the gating check
+        # acerca.md is created before about.md is replaced, so the check
         # sees the user's actual about.md (not the freshly-written v1.3.0 body)
         changes.extend(self._create_acerca_for_es_with_default_about())
         changes.extend(self._replace_body_if_default(
@@ -289,7 +289,6 @@ class Migration121to130(BaseMigration):
 
         # Phase 3: Version bump
         print("  Phase 3: Updating version...")
-        from datetime import date
         stamped = self.release_date
         if self._update_config_version("1.3.0", stamped):
             changes.append(f"Updated _config.yml: version 1.3.0 ({stamped})")

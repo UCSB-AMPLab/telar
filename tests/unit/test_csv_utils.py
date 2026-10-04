@@ -287,7 +287,9 @@ class TestImageExtensionsAndStemIndex:
         Image.init()  # plugin registration is lazy; without this every format looks unsupported
 
         import pymupdf
-        from telar.csv_utils import IMAGE_EXTENSIONS_ORDERED, PYMUPDF_EXTENSIONS
+        from telar.csv_utils import IMAGE_EXTENSIONS_ORDERED
+
+        PYMUPDF_EXTENSIONS = {'.pdf', '.svg'}
 
         for ext in IMAGE_EXTENSIONS_ORDERED:
             if ext in PYMUPDF_EXTENSIONS:

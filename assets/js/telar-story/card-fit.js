@@ -4,22 +4,22 @@
  * The side card on a horizontal layout takes the height its content needs,
  * under a ceiling, and clears the controls at the top of the window. This
  * module holds that geometry at every window height; the portrait bottom
- * card keeps its own, in card-pool.js. A landscape phone's card is placed in the same band, sized
- * by its content and scrolled by the browser.
+ * card keeps its own, in card-pool.js. A phone-height side card is placed in the
+ * same band, sized by its content and scrolled by the browser.
  *
  * Width. The card is sized from both window dimensions: the larger of 37% of
  * the width and 1544 − 1.6·H px, that line held to 718px, and never more than
  * 52% of the width. The terms are declared in _sass/_responsive.scss, which
  * also generates the vertical layout's short-window clauses from them, and
- * read here from their :root mirror. A shorter window gets a wider card, so its answer
- * keeps the room it needs on fewer lines. The width is published once per
+ * read here from their :root mirror. A shorter window gets a wider card, so its
+ * answer keeps the room it needs on fewer lines. The width is published once per
  * pass as `--telar-card-side-width` on the root element, where the stylesheet
  * and every placement beside the card read it (sideCardWidth).
  *
  * Ceiling. The card's top clears the lowest of the top controls, the embed
  * banner included, by one padding, and its bottom stays one padding above the
- * window's edge. Above the side-card threshold T (the height a landscape
- * phone's card is sized under) the ceiling is also held to 80% of the window,
+ * window's edge. Above the side-card threshold T (the height a phone-height
+ * side card is sized under) the ceiling is also held to 80% of the window,
  * but never below its value at T, so that it cannot fall as the window grows
  * through the threshold (sideCardCeiling).
  *
@@ -31,8 +31,8 @@
  * Re-measuring. Anything that changes a card's content height (an image
  * loading, KaTeX rendering, a web font arriving) is seen by one
  * ResizeObserver on each card's content wrapper, and a font that finishes
- * loading re-places every card whether or not a height changed. The embed banner's arrival and dismissal move the controls the card
- * clears, and embed.js says so with `telar:embed-banner`.
+ * loading re-places every card whether or not a height changed. The embed
+ * banner's arrival and dismissal move the controls the card clears, and embed.js says so with `telar:embed-banner`.
  *
  * @version v1.8.0
  */
@@ -49,7 +49,7 @@ export const SIDE_CARD_CONTROLS = [...TOP_CONTROLS, '.telar-embed-banner'];
  * recorded after its placement and still be the pass's own write, in px. Exact
  * up to float noise.
  */
-export const CONTENT_TOLERANCE_PX = 0.01;
+const CONTENT_TOLERANCE_PX = 0.01;
 
 // ── Geometry (pure, unit-tested) ─────────────────────────────────────────────
 
@@ -97,8 +97,8 @@ export function sideCardWidth(W, H) {
 
 /**
  * Publish the side card's width for this window on the root element, or
- * clear it, so the stylesheet's 37% holds, on a vertical layout, whose side
- * card (a landscape phone's) keeps that share.
+ * clear it, so the stylesheet's 37% holds, on a vertical layout, whose
+ * phone-height side card keeps that share.
  *
  * @param {number} W - Viewport width in px
  * @param {number} H - Viewport height in px
@@ -137,7 +137,7 @@ export function sideCardCeiling({ H, W, C, T, fraction, pad = unroundedMediaPadd
 }
 
 /**
- * The side card's top, in px: centred with its run's peek, and held between
+ * The side card's top, in px: centred with its scene's peek, and held between
  * the band under the controls and one padding above the window's bottom.
  * Where the two bounds cross, the band wins, so the question is never under
  * the controls; a card no taller than the ceiling never meets that case.
@@ -145,14 +145,14 @@ export function sideCardCeiling({ H, W, C, T, fraction, pad = unroundedMediaPadd
  * @param {Object} g
  * @param {number} g.H - Viewport height in px
  * @param {number} g.cardH - The card's rendered height in px
- * @param {number} g.runPos - Position within the card's run
- * @param {number} g.peek - Pixels each later card in a run settles lower
+ * @param {number} g.scenePos - Position within the card's scene
+ * @param {number} g.peek - Pixels each later card in a scene sits lower
  * @param {number} g.band - The controls' bottom plus one padding, in px
  * @param {number} g.pad - The padding, rounded, in px
  * @returns {number}
  */
-export function sideCardTop({ H, cardH, runPos, peek, band, pad }) {
-  const centred = (H - cardH) / 2 + runPos * peek;
+export function sideCardTop({ H, cardH, scenePos, peek, band, pad }) {
+  const centred = (H - cardH) / 2 + scenePos * peek;
   return Math.max(band, Math.min(centred, H - pad - cardH));
 }
 
@@ -177,7 +177,7 @@ function _capCard(card, ceilingPx) {
  * @param {number} activeIndex
  * @returns {HTMLElement[]}
  */
-export function fitOrder(cards, activeIndex) {
+function fitOrder(cards, activeIndex) {
   const near = [];
   const rest = [];
   for (const card of cards) {
@@ -195,7 +195,7 @@ export function fitOrder(cards, activeIndex) {
  * @param {Object} how
  * @param {number} how.W - Viewport width in px
  * @param {number} how.H - Viewport height in px
- * @param {number} how.peek - Pixels each later card in a run settles lower
+ * @param {number} how.peek - Pixels each later card in a scene sits lower
  * @param {number} how.fraction - The side card's share of a tall viewport
  * @param {number} how.activeIndex - The current step
  * @returns {{ band: number, pad: number, ceiling: number,
@@ -206,7 +206,7 @@ export function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
   const { band, pad, ceiling } = sideCardBand({ W, H, fraction });
 
   const topOf = (card) => sideCardTop({
-    H, cardH: card.offsetHeight, runPos: parseInt(card.dataset.runPosition, 10) || 0,
+    H, cardH: card.offsetHeight, scenePos: parseInt(card.dataset.runPosition, 10) || 0,
     peek, band, pad,
   });
   for (const card of fitOrder(cards, activeIndex)) {
@@ -219,7 +219,7 @@ export function fitSideCards(cards, { W, H, peek, fraction, activeIndex }) {
 
 /**
  * The band under the top controls and the ceiling above it, for one window.
- * The side card and a landscape phone's card, which is sized by its content
+ * The side card and the phone-height side card, which is sized by its content
  * and scrolled by the browser, are placed by the same band.
  *
  * @param {Object} g
@@ -246,11 +246,7 @@ export function timeGeometryPass(pass) {
   pass();
   if (!perf?.mark || !perf.measure) return;
   perf.mark('telar-card-geometry-end');
-  try {
-    perf.measure('telar-card-geometry', 'telar-card-geometry-start', 'telar-card-geometry-end');
-  } catch {
-    // A page whose performance timeline refuses the measure still gets its pass.
-  }
+  perf.measure('telar-card-geometry', 'telar-card-geometry-start', 'telar-card-geometry-end');
 }
 
 // ── Watching card content ────────────────────────────────────────────────────
@@ -347,7 +343,7 @@ export function watchCardContent(cards, refit, { raf = (cb) => requestAnimationF
   }
 
   // A load is re-placed once, by whichever of `loadingdone` and `fonts.ready`
-  // comes first: WebKit settles `ready` but never fires `loadingdone`, and
+  // comes first: WebKit resolves `ready` but never fires `loadingdone`, and
   // the other browsers fire both for the same load.
   let loadOpen = false;
   const onFonts = () => {

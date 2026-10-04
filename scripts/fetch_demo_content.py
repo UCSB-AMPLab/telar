@@ -57,16 +57,6 @@ except ImportError:
 # with no leading zeros, ASCII digits only, and -beta preserved in the input
 # because a site really is on "1.0.0-beta" -- it is dropped from the group
 # this script uses, since bundles are published per release number.
-#
-# It replaces a `lstrip('vV')` guarded by a later fullmatch. lstrip removes
-# *every* leading v, so "vv1.6.2" became "1.6.2" and this script fetched the
-# 1.6.2 bundle for a site whose version string no upgrade can read. The
-# engine refuses that spelling; accepting it here made the two disagree
-# about what a version is.
-#
-# -alpha is no longer accepted. The old comment said it stripped one, but
-# Telar has never shipped an alpha and the engine's grammar has no such
-# suffix, so accepting it here could only ever have been a divergence.
 _SITE_VERSION_RE = re.compile(
     r'[vV]?'
     r'(?P<release>'
@@ -191,13 +181,9 @@ def find_best_version(site_version, available_versions):
         None: If no compatible version exists
     """
     def parse_version(v):
-        # Deliberately looser than _SITE_VERSION_RE, and for a different
-        # input: these are rows from the remote versions.json, compared as
-        # numbers rather than matched against a chain, so short forms are
-        # padded below rather than rejected. What it no longer tolerates is
-        # a repeated prefix — lstrip('vV') removed every leading v, which
-        # let a malformed "vv1.6.2" row sort as the real 1.6.2 and be
-        # returned as the bundle to fetch.
+        # Looser than _SITE_VERSION_RE: rows from the remote versions.json
+        # are compared as numbers, so short forms are padded below; a
+        # repeated prefix is rejected.
         match = re.fullmatch(r'[vV]?(?P<number>[0-9]+(?:\.[0-9]+){0,2})', v)
         if match is None:
             raise ValueError(f"Bad version: {v}")

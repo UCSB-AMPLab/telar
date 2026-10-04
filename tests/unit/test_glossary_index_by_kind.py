@@ -136,11 +136,6 @@ class TestAGlossaryOfTermsAlone:
         assert '<p>Key terms and concepts used in these stories.</p>' in html
         assert '<p>Key terms and primary sources' not in html
 
-    def test_an_entry_without_a_kind_is_listed_as_a_term(self, tmp_path):
-        html = _build(tmp_path, [('telar', 'Telar', None), ('letter', 'Letter', 'source')])
-
-        assert _entries(html) == ['telar', 'letter']
-
 
 ALL_KINDS = TERMS_ONLY + [
     ('letter', 'Letter of 1810', 'source'),
@@ -248,7 +243,6 @@ class TestTheEntryPage:
         ('en', 'entity', 'Person or entity'), ('es', 'entity', 'Persona o entidad'),
         ('en', 'place', 'Place'), ('es', 'place', 'Lugar'),
         ('en', 'species', 'Species'), ('es', 'species', 'Species'),
-        ('en', None, 'Key term'),
     ])
     def test_carries_the_label_of_its_kind_for_the_panel(self, tmp_path, language, kind, label):
         _build(tmp_path, [('carta', 'Carta', kind)], language=language, site_kinds=SPECIES)

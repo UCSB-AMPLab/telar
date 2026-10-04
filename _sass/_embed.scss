@@ -7,7 +7,7 @@
  * that links to the standalone version, and responsive adjustments for narrow
  * or short embed containers.
  *
- * In embed mode, navigation uses buttons (like mobile) rather than scroll
+ * In embed mode, navigation uses buttons rather than scroll
  * detection, because scroll events inside iframes are unreliable across
  * different host pages. The layout stays desktop-style but steps use static
  * positioning with show/hide logic instead of the absolute
@@ -51,12 +51,12 @@ body.embed-mode {
     padding-top: 0;
   }
 
-  /* Always show navigation buttons in embed mode (like mobile) */
+  /* Always show navigation buttons in embed mode */
   .story-navigation {
     display: block;
   }
 
-  /* Show mobile hint in embed mode (hide desktop hint) */
+  /* Show the button-navigation hint in embed mode (hide desktop hint) */
   .hint-desktop {
     display: none;
   }
@@ -66,8 +66,8 @@ body.embed-mode {
   }
 
   /**
-   * Embed mode navigation pattern (v0.5.0):
-   * - Button navigation (like mobile) for iframe/Canvas LMS compatibility
+   * Embed mode navigation pattern:
+   * - Button navigation for iframe/Canvas LMS compatibility
    * - Desktop-style layout and vertical centering
    * - Static positioning instead of absolute (simpler show/hide logic)
    */
@@ -317,7 +317,7 @@ body.embed-mode {
 
   body.embed-mode.embed-banner-shown .mobile-nav {
     top: min(
-      max(calc(50% - 45px - 0.375rem), calc(var(--telar-embed-banner-bottom, 7rem) + 0.75rem)),
+      max(calc(50% - 45px - 0.375rem), calc(var(--telar-embed-banner-bottom) + 0.75rem)),
       calc(100% - 102px - 0.5rem)
     );
     bottom: auto;
@@ -327,7 +327,7 @@ body.embed-mode {
   @media (max-height: 229px) {
     body.embed-mode.embed-banner-shown .mobile-nav {
       flex-direction: row;
-      top: min(calc(var(--telar-embed-banner-bottom, 7rem) + 0.75rem), calc(100% - 45px - 0.5rem));
+      top: min(calc(var(--telar-embed-banner-bottom) + 0.75rem), calc(100% - 45px - 0.5rem));
     }
   }
 }

@@ -94,19 +94,6 @@ describe('embed banner clearance', () => {
     expect(observers[0].disconnected).toBe(true);
   });
 
-  it('falls back to the window resize event where ResizeObserver is absent', async () => {
-    vi.stubGlobal('ResizeObserver', undefined);
-    await load();
-    expect(property()).toBe('95px');
-    bottom = 117;
-    window.dispatchEvent(new Event('resize'));
-    expect(property()).toBe('117px');
-    banner().querySelector('.telar-embed-banner-close').click();
-    bottom = 200;
-    window.dispatchEvent(new Event('resize'));
-    expect(property()).toBe('');
-  });
-
   it('publishes nothing when the layout has no banner strings', async () => {
     window.telarLang = {};
     await load();

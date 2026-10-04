@@ -380,14 +380,12 @@
   }
 }
 
-/* Theme-aware button colors. The `!important` on `color` is deliberate: these
-   buttons render as `<a class="btn btn-primary">`, and the unlayered link color
-   otherwise wins over this layered rule (cascade layers lose to unlayered
-   styles), leaving theme-coloured text on the theme-coloured button. */
+/* Theme-aware button colors. These buttons render as `<a class="btn btn-primary">`;
+   this layer comes after Bootstrap's, so its rule wins without `!important`. */
 .btn-primary {
   background-color: var(--color-button-bg);
   border-color: var(--color-button-bg);
-  color: var(--color-on-button) !important;
+  color: var(--color-on-button);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -395,7 +393,7 @@
     background-color: var(--color-button-bg);
     border-color: var(--color-button-bg);
     opacity: 0.9;
-    color: var(--color-on-button) !important;
+    color: var(--color-on-button);
   }
 }
 
@@ -404,7 +402,7 @@
   background-color: var(--color-button-bg);
   border-color: var(--color-button-bg);
   opacity: 0.9;
-  color: var(--color-on-button) !important;
+  color: var(--color-on-button);
 }
 
 /* Telar Alert Standardization */
@@ -529,7 +527,7 @@
 }
 
 /* ============================================================================
-   Objects Browse & Search (v0.8.0)
+   Objects Browse & Search
    Mobile-first design with collapsible filter panel
    ============================================================================ */
 

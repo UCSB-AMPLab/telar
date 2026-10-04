@@ -185,12 +185,12 @@ function resetState(overrides = {}) {
   state.lenis = {}; // truthy — enables keyboardNav path
   state.textCards = {};
   state.viewerPlates = {};
-  state.currentObjectRun = { objectId: null, runPosition: 0 };
+  state.currentObjectScene = { objectId: null, scenePosition: 0 };
   state.onStepChange = null;
-  state.mobileInIntro = false;
-  state.mobileNavButtons = null;
-  state.mobileNavigationCooldown = false;
-  state.currentMobileStep = 0;
+  state.buttonInIntro = false;
+  state.buttonNavButtons = null;
+  state.buttonNavCooldown = false;
+  state.currentButtonStep = 0;
   Object.assign(state, overrides);
 }
 
@@ -367,7 +367,7 @@ describe('Space on a focused control', () => {
 // ── Fallback when snap is null ────────────────────────────────────────────────
 
 /** Steps as elements, as button navigation moves a class between them. */
-function useButtonSteps(currentMobileStep) {
+function useButtonSteps(currentButtonStep) {
   state.lenis = null;
   state.steps = Array.from({ length: 5 }, (_, i) => {
     const el = document.createElement('div');
@@ -376,8 +376,8 @@ function useButtonSteps(currentMobileStep) {
     return el;
   });
   state.stepToScene = {};
-  state.currentMobileStep = currentMobileStep;
-  state.currentIndex = currentMobileStep;
+  state.currentButtonStep = currentButtonStep;
+  state.currentIndex = currentButtonStep;
 }
 
 describe('a button move on a phone', () => {
@@ -772,7 +772,7 @@ describe('goToStep(-1) — intro restoration', () => {
     state.viewerPlates = { leviathan: plate };
     window.storyData = { steps: [], firstObject: 'leviathan' };
 
-    state.currentObjectRun = { objectId: 'leviathan', runPosition: 2 };
+    state.currentObjectScene = { objectId: 'leviathan', scenePosition: 2 };
   });
 
   it('slides the intro card back into view', () => {
@@ -806,7 +806,7 @@ describe('goToStep(-1) — intro restoration', () => {
   it('resets the object run and hides the credit badge', () => {
     goToStep(-1, 'backward');
 
-    expect(state.currentObjectRun).toEqual({ objectId: null, runPosition: 0 });
+    expect(state.currentObjectScene).toEqual({ objectId: null, scenePosition: 0 });
     expect(creditBadge.classList.contains('d-none')).toBe(true);
   });
 
@@ -889,9 +889,9 @@ describe('mobile previous button — restoring the intro', () => {
     state.lenis = null;
 
     // The story boots on the intro; these tests start from step 0 instead.
-    state.mobileInIntro = false;
-    state.currentMobileStep = 0;
-    state.mobileNavButtons.prev.disabled = false;
+    state.buttonInIntro = false;
+    state.currentButtonStep = 0;
+    state.buttonNavButtons.prev.disabled = false;
   }
 
   beforeEach(() => {
@@ -904,15 +904,15 @@ describe('mobile previous button — restoring the intro', () => {
 
   it('slides the intro card back into view', () => {
     buildMobileStory();
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(intro.style.transform).toBe('translateY(0)');
   });
 
   it('sends the first text card off the bottom carrying its authored messiness', () => {
     buildMobileStory();
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(firstCard.classList.contains('is-active')).toBe(false);
     expect(firstCard.style.transform).toBe('translateY(100vh) rotate(-1deg) translate(5px, 6px)');
@@ -920,7 +920,7 @@ describe('mobile previous button — restoring the intro', () => {
 
   it('slides the first plate down and deactivates it', () => {
     buildMobileStory();
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(plate.container.style.transform).toBe('translateY(100%)');
     expect(plate.container.classList.contains('is-active')).toBe(false);
@@ -928,30 +928,30 @@ describe('mobile previous button — restoring the intro', () => {
 
   it('resets the object run, hides the credit badge and disables itself', () => {
     buildMobileStory();
-    state.currentObjectRun = { objectId: 'leviathan', runPosition: 1 };
+    state.currentObjectScene = { objectId: 'leviathan', scenePosition: 1 };
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(state.currentObjectRun).toEqual({ objectId: null, runPosition: 0 });
+    expect(state.currentObjectScene).toEqual({ objectId: null, scenePosition: 0 });
     expect(creditBadge.classList.contains('d-none')).toBe(true);
-    expect(state.mobileNavButtons.prev.disabled).toBe(true);
+    expect(state.buttonNavButtons.prev.disabled).toBe(true);
   });
 
   it('does nothing while the navigation cooldown is running', () => {
     buildMobileStory();
-    state.mobileNavigationCooldown = true;
+    state.buttonNavCooldown = true;
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(state.mobileInIntro).toBe(false);
+    expect(state.buttonInIntro).toBe(false);
     expect(intro.style.transform).toBe('');
   });
 
   it('does nothing when the intro is already showing', () => {
     buildMobileStory();
-    state.mobileInIntro = true;
+    state.buttonInIntro = true;
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(intro.style.transform).toBe('');
     expect(plate.container.style.transform).toBe('');
@@ -962,15 +962,15 @@ describe('mobile previous button — restoring the intro', () => {
     state.viewerPlates = {};
     buildMobileStory({ withIntro: false });
 
-    expect(() => state.mobileNavButtons.prev.click()).not.toThrow();
-    expect(state.mobileInIntro).toBe(true);
+    expect(() => state.buttonNavButtons.prev.click()).not.toThrow();
+    expect(state.buttonInIntro).toBe(true);
   });
 
   it('activates no card, because the intro is not a step', () => {
     buildMobileStory();
     mocks.mockActivateCard.mockClear();
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(mocks.mockActivateCard).not.toHaveBeenCalled();
   });

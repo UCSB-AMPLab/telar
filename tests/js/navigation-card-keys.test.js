@@ -66,10 +66,10 @@ function storyOnStep(index, { lenis = true } = {}) {
     return el;
   });
   state.currentIndex = index;
-  state.currentMobileStep = index;
-  state.mobileInIntro = false;
-  state.mobileNavigationCooldown = false;
-  state.mobileNavButtons = null;
+  state.currentButtonStep = index;
+  state.buttonInIntro = false;
+  state.buttonNavCooldown = false;
+  state.buttonNavButtons = null;
   state.scrollLockActive = false;
   state.isPanelOpen = false;
   state.panelStack = [];

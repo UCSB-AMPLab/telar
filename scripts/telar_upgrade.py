@@ -85,16 +85,13 @@ MIGRATIONS = discover_migrations()
 # Where a completed upgrade lands, which is where the chain ends.
 LATEST_VERSION = MIGRATIONS[-1].to_version
 
-# And when that release was published. `telar.release_date` means the date
-# of the release the site is on, which is what the Compositor has always
-# written; the engine used to write the day the upgrade ran, so two sites
-# on one version disagreed and the key answered neither question. Reading
-# it from the release also makes an upgrade reproducible: the same site
-# upgraded twice now produces the same file.
+# And when that release was published. `telar.release_date` is the date of
+# the release the site is on, the value the Compositor writes too, so two
+# sites on one version agree and the same site upgraded twice produces the
+# same file.
 #
 # None while a release is still being built, since its date is not a fact
-# until it is tagged. `_stamp_date` says so rather than quietly reaching
-# for the clock.
+# until it is tagged; `_stamp_date` then uses the clock and says so.
 LATEST_RELEASE_DATE = getattr(MIGRATIONS[-1], 'release_date', None)
 
 
@@ -209,11 +206,10 @@ def get_migration_path(from_version: str, repo_root: str) -> List[BaseMigration]
     for MigrationClass in MIGRATIONS:
         migration = MigrationClass(repo_root)
 
-        # Strict chaining: a migration only joins the path when the version
-        # reached so far is one it can be entered from. The old `or migrations_to_run`
-        # heuristic ran EVERY later migration once the list was non-empty, so a
-        # version gap (e.g. a 0.4.2-beta site, or a v-prefix mismatch) silently
-        # produced the wrong chain instead of a clear "no path" signal.
+        # Strict chaining: a migration joins the chain only when the version
+        # reached so far is one it can be entered from, so a version gap (a
+        # 0.4.2-beta site, or a v-prefix mismatch) ends in "no path" rather
+        # than a wrong chain.
         if current_version in migration.entry_versions:
             # A migration covering several releases is entered from whichever
             # one the site is on; pin it before asking anything of the
@@ -344,8 +340,7 @@ def _stamp_date(lang: str) -> str:
 
     The release's date, so that both upgrade routes write the same value
     and a site upgraded twice produces the same file. Falls back to the
-    clock only for a release that is not tagged yet, and says so, because
-    a silent clock stamp is the behaviour being removed.
+    clock only for a release that is not tagged yet, and says so.
     """
     if LATEST_RELEASE_DATE:
         return LATEST_RELEASE_DATE
@@ -608,9 +603,9 @@ def main():
         print(get_message(lang, 'dry_run_instruction'))
         return EXIT_OK
 
-    # Fail closed: if any framework-file step hard-failed, do NOT stamp the
-    # version, do NOT write UPGRADE_VERSION.txt. The site keeps its old version
-    # so a re-run retries the same migrations.
+    # Fail closed: if any framework-file step hard-failed, the version is not
+    # stamped and UPGRADE_VERSION.txt is not written. The site keeps its old
+    # version, so a re-run retries the same migrations.
     hard_failures = [r for r in all_changes if is_hard_failure(r)]
     if hard_failures:
         print('\n' + get_message(lang, 'upgrade_failed_steps', len(hard_failures)))

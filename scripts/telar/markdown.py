@@ -32,7 +32,7 @@ writes them.
 
 Content trust model (raw-HTML pass-through is intentional)
 ----------------------------------------------------------
-Markdown is converted WITHOUT an HTML sanitiser, so raw HTML
+Markdown is converted without an HTML sanitiser, so raw HTML
 embedded in author markdown/CSV content passes straight through to the
 rendered page. This is by design: Telar is a minimal-computing static-site
 framework whose content is authored by trusted contributors (the same
@@ -57,12 +57,11 @@ import markdown
 import yaml
 from markdown.extensions.md_in_html import HTMLExtractorExtra
 
-from telar.frontmatter import FRONTMATTER_LOAD_ERRORS
+from telar.frontmatter import FRONTMATTER_LOAD_ERRORS, FRONTMATTER_PATTERN
 from telar.images import process_images, resolve_path_case_insensitive
 from telar.latex import MARKDOWN_EXTENSIONS, convert_markdown, protect_latex
 from telar.widgets import process_widgets
 
-FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 # Anchored, because `subtitle:` ends in `title:` and an unanchored search
 # matches inside it. A top-level YAML key sits at column 0, so no leading
 # whitespace is allowed either: an indented `title:` belongs to the mapping
@@ -86,17 +85,15 @@ def _split_frontmatter(content, source='content'):
     visible YAML on the page, where its author can see it, while content
     mistaken for front matter simply disappears.
 
-    A block that does parse as a YAML mapping and still has no title is the
-    case that is now shown rather than swallowed, so it is worth saying so
-    — otherwise its author sees their metadata on the page and no reason
-    for it. Ordinary prose under a rule does not parse as a mapping and so
-    says nothing, which is the common case and stays quiet.
+    A block that does parse as a YAML mapping and has no title is kept as
+    content and warned about, so its author sees why their metadata appears
+    on the page. Ordinary prose under a rule does not parse as a mapping and
+    says nothing.
 
-    A single prose line containing a colon does parse as a mapping, so it
-    is warned about when it was only ever a sentence. That is the right
-    direction for the warning to be wrong in: it is advisory, the text is
-    kept either way, and the remedy it suggests — separate the block from
-    the text below it — is good advice for a line that ambiguous.
+    A single prose line containing a colon does parse as a mapping, so it is
+    warned about too. The warning is advisory, the text is kept either way,
+    and the remedy it suggests — separate the block from the text below it —
+    is good advice for a line that ambiguous.
 
     Args:
         content: Raw text that may begin with a `---`-delimited frontmatter block
@@ -139,8 +136,8 @@ def _split_frontmatter(content, source='content'):
         # A title is text, and YAML types it: `yes` is a boolean, `~` and
         # `null` are null, `[a]` a list. `str()` on those puts a Python
         # literal on the page -- `True`, `None`, `['a']` -- which is neither
-        # what the author typed nor anything they can search for. The gate
-        # has already matched the line, so its reading is the text as typed.
+        # what the author typed nor anything they can search for. The title
+        # pattern has already matched the line, so its reading is the text as typed.
         return title_match.group(1).strip(), body
 
     print(f"  Warning: {source}'s front matter could not be parsed as "

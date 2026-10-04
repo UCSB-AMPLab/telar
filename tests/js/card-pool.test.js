@@ -108,17 +108,17 @@ describe('getCardMessiness', () => {
 // ── Peek positioning ──────────────────────────────────────────────────────────
 
 describe('computeCardTop', () => {
-  it('returns 75 when centred (viewportH=1000, cardH=850, runPos=0, peekH=1)', () => {
+  it('returns 75 when centred (viewportH=1000, cardH=850, scenePos=0, peekH=1)', () => {
     // (1000 - 850) / 2 = 75
     expect(computeCardTop(1000, 850, 0, 1)).toBe(75);
   });
 
-  it('returns 76 when runPosition=1, peekH=1', () => {
+  it('returns 76 when scenePosition=1, peekH=1', () => {
     // 75 + 1 * 1 = 76
     expect(computeCardTop(1000, 850, 1, 1)).toBe(76);
   });
 
-  it('returns 78 when runPosition=3, peekH=1', () => {
+  it('returns 78 when scenePosition=3, peekH=1', () => {
     // 75 + 3 * 1 = 78
     expect(computeCardTop(1000, 850, 3, 1)).toBe(78);
   });
@@ -234,7 +234,7 @@ describe('computeZIndexPlan — title cards', () => {
     const maxPlate = Math.max(...Object.values(result.plateZ));
     const maxText = Math.max(...Object.values(result.textCardZ));
     expect(maxPlate).toBeLessThanOrEqual(9800);
-    expect(maxText).toBeLessThanOrEqual(9800 + 1); // textCard = bandBase + 1 + runPos
+    expect(maxText).toBeLessThanOrEqual(9800 + 1); // textCard = bandBase + 1 + scenePos
     // Bands below the cap are unchanged (scene 50 → 5100).
     expect(result.plateZ[50]).toBe(5100);
   });

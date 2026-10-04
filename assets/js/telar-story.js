@@ -1,28 +1,25 @@
 /* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
 (() => {
   // assets/js/telar-story/state.js
-  var MOBILE_NAV_COOLDOWN = 400;
-  var MOVE = { base: 1.2, perUnit: 1.33, ceiling: 3 };
+  var BUTTON_NAV_COOLDOWN = 400;
+  var MOVE = { base: 1.2, perUnit: 1.33, maxSeconds: 3 };
   var _moveTuning = null;
   var _moveSearch = null;
   function _moveTuningNow() {
-    const search = typeof window === "undefined" ? "" : window.location.search;
+    const search = window.location.search;
     if (_moveTuning && search === _moveSearch) return _moveTuning;
     _moveSearch = search;
     _moveTuning = { ...MOVE };
-    try {
-      const raw = new URLSearchParams(search).get("nav");
-      const [base, perUnit, ceiling] = (raw || "").split(",").map(Number);
-      if (base >= 0.1 && base <= 20) _moveTuning.base = base;
-      if (perUnit >= 0 && perUnit <= 20) _moveTuning.perUnit = perUnit;
-      if (ceiling >= 0.1 && ceiling <= 20) _moveTuning.ceiling = ceiling;
-    } catch {
-    }
+    const raw = new URLSearchParams(search).get("nav");
+    const [base, perUnit, maxSeconds] = (raw || "").split(",").map(Number);
+    if (base >= 0.1 && base <= 20) _moveTuning.base = base;
+    if (perUnit >= 0 && perUnit <= 20) _moveTuning.perUnit = perUnit;
+    if (maxSeconds >= 0.1 && maxSeconds <= 20) _moveTuning.maxSeconds = maxSeconds;
     return _moveTuning;
   }
   function moveSeconds(travel) {
-    const { base, perUnit, ceiling } = _moveTuningNow();
-    return Math.max(base, Math.min(ceiling, perUnit * (travel || 0)));
+    const { base, perUnit, maxSeconds } = _moveTuningNow();
+    return Math.max(base, Math.min(maxSeconds, perUnit * travel));
   }
   var state = {
     // ── Navigation ───────────────────────────────────────────────────────────
@@ -71,22 +68,22 @@
     isEmbed: false,
     /** @type {DOMRect | null} Active text card's getBoundingClientRect; null when no active text card (title card, full-object mode). Populated by card-pool.js on activation + layout-mode.js on layoutchange. */
     cardOverlayRect: null,
-    // ── Mobile button navigation ─────────────────────────────────────────────
-    /** Index of the current step in mobile/embed button mode. */
-    currentMobileStep: 0,
-    /** Whether mobile navigation is showing the intro card (before step 0). */
-    mobileInIntro: false,
+    // ── Button navigation ────────────────────────────────────────────────────
+    /** Index of the current step in button navigation. */
+    currentButtonStep: 0,
+    /** Whether button navigation is showing the intro card (before step 0). */
+    buttonInIntro: false,
     /** References to the prev/next button DOM elements. */
-    mobileNavButtons: null,
-    /** Whether mobile navigation is in its cooldown period. */
-    mobileNavigationCooldown: false,
+    buttonNavButtons: null,
+    /** Whether button navigation is in its cooldown period. */
+    buttonNavCooldown: false,
     // ── Connection speed ─────────────────────────────────────────────────────
     /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
     manifestLoadTimes: [],
     /**
      * Map of sceneIndex -> Plate, one per scene, built once and never evicted.
      * `.container` is the element. What a plate holds — a viewer, a player,
-     * nothing yet — is the plate's own business; the pool inside an image
+     * nothing yet — is the plate's own business; the viewer pool inside an image
      * plate is the only thing here that is capped.
      */
     viewerPlates: {},
@@ -96,8 +93,8 @@
     titleCards: {},
     /** Index of the currently active title card step, or null when none is active. */
     activeTitleCardIndex: null,
-    /** Current object run tracking (for peek stack positioning). */
-    currentObjectRun: { objectId: null, runPosition: 0 },
+    /** The scene of the current object, and the card's position in it (for peek stack positioning). */
+    currentObjectScene: { objectId: null, scenePosition: 0 },
     // ── Scene maps (populated at initCardPool time) ───────────────────────────
     /**
      * Filtered step data (metadata rows removed), in the same index space as
@@ -116,7 +113,7 @@
     totalScenes: 0,
     // ── Viewer preloading config (set from telarConfig in main.js) ───────────
     config: {
-      /** Maximum IIIF wrapper instances kept in memory (per-scene pool cap). */
+      /** Maximum IIIF wrapper instances kept in memory (viewer pool cap). */
       maxViewerCards: 8,
       /** Steps to preload ahead of the current position. */
       preloadSteps: 6,
@@ -215,7 +212,7 @@
     viewportResizeSubs.add(cb);
     return () => viewportResizeSubs.delete(cb);
   }
-  function isLandscapeSideCard() {
+  function isPhoneHeightSideCard() {
     return window.matchMedia(`(max-height: ${getCardLandscapeMaxHeight()}px)`).matches;
   }
   function getCardLandscapeMaxHeight() {
@@ -623,21 +620,21 @@
   }
 
   // assets/js/telar-story/camera-move.js
-  function holdClickToZoom(viewerCard) {
-    const { gestureSettingsMouse: mouse, gestureSettingsTouch: touch } = viewerCard.osdViewer;
-    if (!viewerCard.heldClickToZoom) {
-      viewerCard.heldClickToZoom = { mouse: mouse.clickToZoom, touch: touch.clickToZoom };
+  function holdClickToZoom(plate) {
+    const { gestureSettingsMouse: mouse, gestureSettingsTouch: touch } = plate.osdViewer;
+    if (!plate.heldClickToZoom) {
+      plate.heldClickToZoom = { mouse: mouse.clickToZoom, touch: touch.clickToZoom };
     }
     mouse.clickToZoom = false;
     touch.clickToZoom = false;
   }
-  function releaseClickToZoom(viewerCard) {
-    const held = viewerCard.heldClickToZoom;
+  function releaseClickToZoom(plate) {
+    const held = plate.heldClickToZoom;
     if (!held) return;
-    viewerCard.heldClickToZoom = null;
-    if (!viewerCard.osdViewer) return;
-    viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = held.mouse;
-    viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = held.touch;
+    plate.heldClickToZoom = null;
+    if (!plate.osdViewer) return;
+    plate.osdViewer.gestureSettingsMouse.clickToZoom = held.mouse;
+    plate.osdViewer.gestureSettingsTouch.clickToZoom = held.touch;
   }
   var UNSEEN_PX = 0.5;
   function placementsCoincide(a, b, container) {
@@ -651,8 +648,8 @@
     return Math.abs(ca.x - cb.x) < UNSEEN_PX && Math.abs(ca.y - cb.y) < UNSEEN_PX && edge * container.width < UNSEEN_PX && edge * container.height < UNSEEN_PX;
   }
   var easeOut = (t) => 1 - (1 - t) ** 3;
-  function shownPlacement(viewerCard, rect) {
-    const vp = viewerCard.osdViewer.viewport;
+  function shownPlacement(plate, rect) {
+    const vp = plate.osdViewer.viewport;
     const shown = vp.viewportToImageRectangle(vp.getBounds(true));
     return {
       s: rect.width / shown.width,
@@ -694,7 +691,7 @@
   }
   function _deriveCardPlacement(cardBox, viewportW, viewportH) {
     if (!cardBox) {
-      if (isLandscapeSideCard()) return "horizontal";
+      if (isPhoneHeightSideCard()) return "horizontal";
       return state.layoutMode === "vertical" ? "vertical" : "horizontal";
     }
     if (cardBox.x + cardBox.w < viewportW * 0.6) return "horizontal";
@@ -812,8 +809,8 @@
       anchorPx: { x: mix(a.x, b.x), y: mix(a.y, b.y) }
     };
   }
-  function _livePlacement(viewerCard, x, y, zoom) {
-    const source = viewerCard.osdViewer.world.getItemAt(0)?.source;
+  function _livePlacement(plate, x, y, zoom) {
+    const source = plate.osdViewer.world.getItemAt(0)?.source;
     if (!source?.width || !source?.height) return null;
     if (state.activeTitleCardIndex != null) return null;
     const r = state.cardOverlayRect;
@@ -821,82 +818,82 @@
     const placementMode = _deriveCardPlacement(cardBox, window.innerWidth, window.innerHeight);
     const target = computeFocalTarget(x, y, zoom, source.width, source.height, cardBox, placementMode);
     if (!target) return null;
-    const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
+    const rect = plate.osdWrapper.containerEl.getBoundingClientRect();
     return { rect, region: target.region, placement: framePlacement(target, zoom, rect) };
   }
-  function _applyPlacement(viewerCard, rect, placement, immediate) {
-    const vp = viewerCard.osdViewer.viewport;
+  function _applyPlacement(plate, rect, placement, immediate) {
+    const vp = plate.osdViewer.viewport;
     const OSD = window.OpenSeadragon;
     const r = _viewerImageRect(placement, rect);
     const targetVp = vp.imageToViewportRectangle(new OSD.Rect(r.x, r.y, r.w, r.h));
     vp.fitBounds(targetVp, immediate);
   }
-  function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
-    const live = _livePlacement(viewerCard, x, y, zoom);
+  function _applyFocalTarget(plate, x, y, zoom, immediate) {
+    const live = _livePlacement(plate, x, y, zoom);
     if (!live) return false;
-    _applyPlacement(viewerCard, live.rect, live.placement, immediate);
+    _applyPlacement(plate, live.rect, live.placement, immediate);
     return true;
   }
-  function _applyBetween(viewerCard, a, b, t) {
-    const from = _livePlacement(viewerCard, a.x, a.y, a.zoom);
-    const to = _livePlacement(viewerCard, b.x, b.y, b.zoom);
+  function _applyBetween(plate, a, b, t) {
+    const from = _livePlacement(plate, a.x, a.y, a.zoom);
+    const to = _livePlacement(plate, b.x, b.y, b.zoom);
     if (!from || !to) return false;
-    _applyPlacement(viewerCard, to.rect, blendPlacements(from.placement, to.placement, t), true);
+    _applyPlacement(plate, to.rect, blendPlacements(from.placement, to.placement, t), true);
     return true;
   }
-  function snapIiifToPosition(viewerCard, x, y, zoom) {
-    if (!viewerCard || !viewerCard.osdViewer) {
+  function snapIiifToPosition(plate, x, y, zoom) {
+    if (!plate || !plate.osdViewer) {
       console.warn("snapIiifToPosition: viewer not ready for snap");
       return false;
     }
-    stopCameraMove(viewerCard);
-    return _applyFocalTarget(viewerCard, x, y, zoom, true);
+    stopCameraMove(plate);
+    return _applyFocalTarget(plate, x, y, zoom, true);
   }
-  function stopCameraMove(viewerCard) {
-    viewerCard.cameraMove = (viewerCard.cameraMove || 0) + 1;
-    releaseClickToZoom(viewerCard);
+  function stopCameraMove(plate) {
+    plate.cameraMove = (plate.cameraMove || 0) + 1;
+    releaseClickToZoom(plate);
   }
-  function animateIiifToPosition(viewerCard, x, y, zoom) {
-    if (!viewerCard || !viewerCard.osdViewer) {
+  function animateIiifToPosition(plate, x, y, zoom) {
+    if (!plate || !plate.osdViewer) {
       console.warn("animateIiifToPosition: viewer not ready for animation");
       return;
     }
-    stopCameraMove(viewerCard);
-    const token = viewerCard.cameraMove;
-    holdClickToZoom(viewerCard);
+    stopCameraMove(plate);
+    const token = plate.cameraMove;
+    holdClickToZoom(plate);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      _applyFocalTarget(viewerCard, x, y, zoom, true);
-      releaseClickToZoom(viewerCard);
+      _applyFocalTarget(plate, x, y, zoom, true);
+      releaseClickToZoom(plate);
       return;
     }
     const ms = moveSecondsNow() * 1e3;
     let from = null;
     let start = null;
     const frame = (now) => {
-      if (viewerCard.cameraMove !== token || !viewerCard.osdViewer) return;
-      const live = _livePlacement(viewerCard, x, y, zoom);
-      if (!live) return releaseClickToZoom(viewerCard);
+      if (plate.cameraMove !== token || !plate.osdViewer) return;
+      const live = _livePlacement(plate, x, y, zoom);
+      if (!live) return releaseClickToZoom(plate);
       const first = start === null;
-      if (first) [start, from] = [now, shownPlacement(viewerCard, live.rect)];
+      if (first) [start, from] = [now, shownPlacement(plate, live.rect)];
       const rests = first && placementsCoincide(from, live.placement, live.rect);
       const t = rests ? 1 : Math.min(1, (now - start) / ms);
       const placement = t < 1 ? blendPlacements(from, live.placement, easeOut(t)) : live.placement;
-      _applyPlacement(viewerCard, live.rect, placement, true);
+      _applyPlacement(plate, live.rect, placement, true);
       if (t < 1) requestAnimationFrame(frame);
-      else releaseClickToZoom(viewerCard);
+      else releaseClickToZoom(plate);
     };
     requestAnimationFrame(frame);
   }
   function _objectOf(step) {
-    return step.object || step.objectId || "";
+    return step.object || "";
   }
   function _authoredFraming(step) {
     const x = parseFloat(step.x), y = parseFloat(step.y), zoom = parseFloat(step.zoom);
     if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
     return { x, y, zoom };
   }
-  function _restsAt(settled, stepIndex, x, y, zoom) {
-    return Boolean(settled) && settled.step === stepIndex && settled.x === x && settled.y === y && settled.zoom === zoom;
+  function _restsAt(resting, stepIndex, x, y, zoom) {
+    return Boolean(resting) && resting.step === stepIndex && resting.x === x && resting.y === y && resting.zoom === zoom;
   }
   function lerpIiifPosition(stepIndex, progress, stepsData) {
     const stepA = stepsData[stepIndex];
@@ -908,31 +905,31 @@
     const a = _authoredFraming(stepA);
     const b = travels ? _authoredFraming(stepB) : a;
     if (!a || !b) return;
-    const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
-    if (!viewerCard || !viewerCard.isReady) return;
+    const plate = state.viewerPlates[state.stepToScene[stepIndex]];
+    if (!plate || !plate.isReady) return;
     if (atRest) {
-      if (_restsAt(viewerCard.settledAt, stepIndex, a.x, a.y, a.zoom)) return;
-      if (snapIiifToPosition(viewerCard, a.x, a.y, a.zoom)) {
-        viewerCard.settledAt = { step: stepIndex, ...a };
+      if (_restsAt(plate.restingAt, stepIndex, a.x, a.y, a.zoom)) return;
+      if (snapIiifToPosition(plate, a.x, a.y, a.zoom)) {
+        plate.restingAt = { step: stepIndex, ...a };
       }
       return;
     }
-    viewerCard.settledAt = null;
-    _travel(viewerCard, a, b, progress);
+    plate.restingAt = null;
+    _travel(plate, a, b, progress);
   }
-  function _travel(viewerCard, a, b, t) {
+  function _travel(plate, a, b, t) {
     if (a.zoom <= 1 !== b.zoom <= 1) {
-      _applyBetween(viewerCard, a, b, t);
+      _applyBetween(plate, a, b, t);
       return;
     }
     const along = (from, to) => from + (to - from) * t;
-    snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
+    snapIiifToPosition(plate, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
   }
   function reSnapActiveViewer() {
-    const viewerCard = Object.values(state.viewerPlates).find(
-      (plate) => plate.container?.classList.contains("is-active")
+    const plate = Object.values(state.viewerPlates).find(
+      (p) => p.container?.classList.contains("is-active")
     );
-    if (!viewerCard || !viewerCard.isReady) return;
+    if (!plate || !plate.isReady) return;
     const activeTextCard = document.querySelector(".text-card.is-active");
     if (!activeTextCard) return;
     const stepIndex = parseInt(activeTextCard.dataset.stepIndex, 10);
@@ -941,7 +938,7 @@
     const step = steps[stepIndex];
     if (!step) return;
     const { x, y, zoom } = stepFraming(step);
-    snapIiifToPosition(viewerCard, x, y, zoom);
+    snapIiifToPosition(plate, x, y, zoom);
   }
   onLayoutChange(() => {
     requestAnimationFrame(() => {
@@ -998,9 +995,6 @@
   // assets/js/telar-story/media-arrangement.js
   var TOP_CONTROLS = [".btn-nav-back", ".share-button", ".step-counter"];
   var VIDEO_TYPES = /* @__PURE__ */ new Set(["youtube", "vimeo", "google-drive"]);
-  function _isEmbed() {
-    return state.isEmbed || Boolean(window.telarEmbed?.enabled);
-  }
   function measureControlsBottom(selectors) {
     let bottom = 0;
     for (const selector of selectors) {
@@ -1032,7 +1026,7 @@
       return null;
     }
     const topBand = band ?? measureTopBand(W, H);
-    if (!eligible || _isEmbed() || cards.length === 0) {
+    if (!eligible || state.isEmbed || cards.length === 0) {
       _clear(plateEl, cards);
       plateEl.dataset.mediaTopBand = String(topBand);
       return null;
@@ -1111,8 +1105,8 @@
     const room = (h) => h - C - 2 * pad(W, h) - 1;
     return Math.floor(Math.min(room(H), Math.max(fraction * H, room(T))));
   }
-  function sideCardTop({ H, cardH, runPos, peek, band, pad }) {
-    const centred = (H - cardH) / 2 + runPos * peek;
+  function sideCardTop({ H, cardH, scenePos, peek, band, pad }) {
+    const centred = (H - cardH) / 2 + scenePos * peek;
     return Math.max(band, Math.min(centred, H - pad - cardH));
   }
   function _capCard(card, ceilingPx) {
@@ -1133,7 +1127,7 @@
     const topOf = (card) => sideCardTop({
       H,
       cardH: card.offsetHeight,
-      runPos: parseInt(card.dataset.runPosition, 10) || 0,
+      scenePos: parseInt(card.dataset.runPosition, 10) || 0,
       peek,
       band,
       pad
@@ -1157,10 +1151,7 @@
     pass();
     if (!perf?.mark || !perf.measure) return;
     perf.mark("telar-card-geometry-end");
-    try {
-      perf.measure("telar-card-geometry", "telar-card-geometry-start", "telar-card-geometry-end");
-    } catch {
-    }
+    perf.measure("telar-card-geometry", "telar-card-geometry-start", "telar-card-geometry-end");
   }
   var _recordedHeights = /* @__PURE__ */ new WeakMap();
   function _contentWrapper(card) {
@@ -1274,7 +1265,7 @@
       this.container.querySelector(".telar-alert")?.remove();
       delete this.container.dataset.loading;
     }
-    /** Bring to the front and frame to a step (loads if needed; camera catches up on load). */
+    /** Bring to the front and frame to a step (loads if needed; the framing catches up on load). */
     center(step) {
       this.load();
       this.container.style.zIndex = this.zIndex;
@@ -1292,7 +1283,7 @@
       this.container.style.transform = "translateY(100%)";
       this.onSendBack();
     }
-    /** Move the camera to a step (snap, or ease when animate). */
+    /** Apply a step's framing (snap, or ease when animate). */
     goToStep(step, animate = false) {
     }
     /** Per-frame scroll interpolation between two steps. */
@@ -1333,8 +1324,8 @@
      * Build the player unless one is already there.
      *
      * Synchronous, and not the base class's cached promise: see the module note.
-     * Answers true while a build is still in flight, because each module pools
-     * its wrapper before the file loads — which is what turns the second of two
+     * A build in flight counts as a player, because each module adds its wrapper
+     * to its pool before the file loads — which is what turns the second of two
      * callers away when a reader crosses several steps at once.
      */
     load() {
@@ -1347,7 +1338,7 @@
       this._deactivatePlayer();
     }
     /**
-     * Stand down and go back below the fold.
+     * Stand down and go back off screen below.
      *
      * The base class writes the transform and lets the transition carry it;
      * `onSendBack` here does the move instead, so this does not call up.
@@ -1915,10 +1906,6 @@
         loop,
         sceneIndex: this.sceneIndex,
         sourceUrl,
-        onPlay: () => {
-        },
-        onTimeUpdate: () => {
-        },
         onEnded: () => {
           applyClipEndDim(el);
         },
@@ -2458,10 +2445,7 @@
     const height = _placeAudio(plateEl);
     const wrapper = _getAudioWrapperForPlate(plateEl);
     if (!wrapper || !wrapper.ws) return;
-    try {
-      wrapper.ws.setOptions({ height });
-    } catch (e) {
-    }
+    wrapper.ws.setOptions({ height });
   }
 
   // assets/js/telar-story/plates/audio-plate.js
@@ -2510,14 +2494,8 @@
         loop,
         sceneIndex: this.sceneIndex,
         isEmbed,
-        onPlay: () => {
-        },
-        onTimeUpdate: () => {
-        },
         onEnded: () => {
           applyAudioClipEndDim(el);
-        },
-        onAutoplayBlocked: () => {
         }
       });
     }
@@ -3069,7 +3047,7 @@
 
   // assets/js/telar-story/plates/iiif-plate.js
   var _viewerSeq = 0;
-  var IiifPlate = class _IiifPlate extends Plate {
+  var IiifPlate = class extends Plate {
     // The class every viewer plate already carries. Named here so the base
     // constructor has something true to add rather than a class of its own.
     static containerClass = "viewer-plate";
@@ -3081,7 +3059,7 @@
       this.osdViewer = null;
       this.isReady = false;
       this.pendingZoom = null;
-      this.settledAt = null;
+      this.restingAt = null;
     }
     /** The plate element, under the name `iiif-card.js` reads it by. */
     get element() {
@@ -3102,21 +3080,19 @@
     /** Free the viewer and its GPU memory; the plate element stays in the DOM. */
     unload() {
       stopCameraMove(this);
-      if (this.osdWrapper && typeof this.osdWrapper.destroy === "function") {
-        this.osdWrapper.destroy();
-      }
+      this.osdWrapper?.destroy();
       this.osdWrapper = null;
       this.osdViewer = null;
       this.isReady = false;
       this.pendingZoom = null;
-      this.settledAt = null;
+      this.restingAt = null;
       this.container.querySelector(".viewer-instance")?.remove();
       delete this.container.dataset.loading;
     }
     /**
      * Bring the plate's viewer to a step, building it if it has none.
      *
-     * The card pool has already moved the element; what is left is the viewer
+     * The card stack has already moved the element; what is left is the viewer
      * inside it. Snapped rather than animated, because a plate arriving is not
      * panning across an image the reader is already looking at.
      *
@@ -3147,7 +3123,6 @@
     goToStep(step, snap2 = false) {
       if (state.scrollDriven && !snap2) return;
       const { x, y, zoom } = stepFraming(step);
-      if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
       if (!this.isReady) {
         this.pendingZoom = { x, y, zoom, snap: snap2 };
         return;
@@ -3161,7 +3136,7 @@
     /**
      * The div OSD mounts into.
      *
-     * A plate evicted from the pool keeps its own element but loses this child,
+     * A plate whose viewer was evicted keeps its own element but loses this child,
      * so re-entering the scene builds a fresh one. A plate that still has one is
      * given the new viewer's id rather than a second div.
      *
@@ -3179,19 +3154,6 @@
       viewerDiv.id = viewerId;
       this.container.appendChild(viewerDiv);
       return viewerDiv;
-    }
-    /**
-     * The framing a viewer opens at, or null when the step authored none.
-     *
-     * Snapping rather than animating, because there is nothing yet on screen to
-     * animate from.
-     *
-     * @param {{x: number, y: number, zoom: number}} framing
-     * @returns {{ x: number, y: number, zoom: number, snap: boolean }|null}
-     */
-    static _openingFraming({ x, y, zoom }) {
-      if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
-      return { x, y, zoom, snap: true };
     }
     _build(step) {
       const { x, y, zoom, page } = stepFraming(step);
@@ -3215,12 +3177,11 @@
       this.osdWrapper = osdWrapper;
       this.osdViewer = null;
       this.isReady = false;
-      this.pendingZoom = _IiifPlate._openingFraming({ x, y, zoom });
+      this.pendingZoom = { x, y, zoom, snap: true };
       osdWrapper.ready.then(() => {
         this.osdViewer = osdWrapper.viewer;
         this.isReady = true;
         delete plateEl.dataset.loading;
-        osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
         const stop = () => stopCameraMove(this);
         osdWrapper.viewer.addHandler("canvas-press", stop);
         osdWrapper.viewer.addHandler("canvas-pinch", stop);
@@ -3241,11 +3202,11 @@
     /**
      * Re-apply the opening framing if the viewer's home fit overwrote it.
      *
-     * Belt-and-braces on top of the rAF-deferred `.ready`: a residual race can
-     * still leave the viewer at home zoom. One frame after the apply, compare
-     * the current zoom against home; matching — with an authored zoom
-     * meaningfully above it — means the apply was dropped. Tolerance is 5% of
-     * home zoom, and the re-apply happens exactly once.
+     * A second check on top of the rAF-deferred `.ready`: the viewer can still
+     * end up at home zoom. One frame after the apply, compare the current zoom
+     * against home; matching — with an authored zoom meaningfully above it —
+     * means the apply was dropped. Tolerance is 5% of home zoom, and the
+     * re-apply happens exactly once.
      *
      * `pendingZoom` is cleared only afterwards, so the values are still there
      * for the re-apply if it is needed.
@@ -3276,7 +3237,7 @@
   // assets/js/telar-story/card-pool.js
   function computeZIndexPlan(steps) {
     let scene = -1;
-    let runPos = 0;
+    let scenePos = 0;
     let currentObjectId = null;
     let titleCounter = 0;
     const plateZ = {};
@@ -3286,16 +3247,16 @@
       const effectiveId = objectId === "" ? "__title_" + titleCounter++ + "__" : objectId;
       if (effectiveId !== currentObjectId) {
         scene++;
-        runPos = 0;
+        scenePos = 0;
         currentObjectId = effectiveId;
       }
       if (scene === 97) {
-        console.warn("[Telar] Story has more than 98 unique scenes; z-index banding is clamped at 9800 and panel/UI chrome layering may overlap.");
+        console.warn("[Telar] Story has more than 98 unique scenes; z-index ranges are clamped at 9800 and panel/UI chrome layering may overlap.");
       }
-      const bandBase = Math.min((scene + 1) * 100, 9800);
-      plateZ[i] = bandBase;
-      textCardZ[i] = bandBase + 1 + runPos;
-      runPos++;
+      const rangeBase = Math.min((scene + 1) * 100, 9800);
+      plateZ[i] = rangeBase;
+      textCardZ[i] = rangeBase + 1 + scenePos;
+      scenePos++;
     }
     return { plateZ, textCardZ };
   }
@@ -3314,12 +3275,12 @@
     const offY = seededRandom(seed * 3 + 3) * maxOffY * 2 - maxOffY;
     return { rot, offX, offY };
   }
-  function _cardRunPosition(card) {
-    return parseInt(card?.dataset?.runPosition, 10) || 0;
+  function _cardScenePosition(card) {
+    return parseInt(card.dataset.runPosition, 10) || 0;
   }
-  function computeCardTop(viewportH, cardH, runPosition, peekHeightPx) {
+  function computeCardTop(viewportH, cardH, scenePosition, peekHeightPx) {
     const centred = (viewportH - cardH) / 2;
-    return centred + runPosition * peekHeightPx;
+    return centred + scenePosition * peekHeightPx;
   }
   function _buildAriaLabel(objectId, stepAlt, PlateClass) {
     if (stepAlt) return stepAlt;
@@ -3333,7 +3294,6 @@
   var _config = { peekHeight: 1, messiness: 20, preloadSteps: 5 };
   var _zPlan = { viewerPlateZ: {}, textCardZ: {} };
   var _prefetchedScenes = /* @__PURE__ */ new Set();
-  var _settleHooks = [];
   function _buildSceneMaps(steps) {
     let scene = -1;
     let currentObjectId = null;
@@ -3388,7 +3348,6 @@
     return _isTitleStep(over) && !!_plateForScene(getSceneIndex(stepIndex));
   }
   function placeCard(el, base) {
-    if (!el) return;
     const transform = buildTransform(_readCardMessiness(el), base);
     if (el.style.transform !== transform) el.style.transform = transform;
   }
@@ -3412,12 +3371,12 @@
     };
   }
   var SIDE_CARD_VIEWPORT_FRACTION = 0.8;
-  function _sizeCardToContent(card, viewportH, runPos, peekHeight, bandGeo = null) {
+  function _sizeCardToContent(card, viewportH, scenePos, peekHeight, bandGeo = null) {
     card.style.height = "";
     if (bandGeo) card.style.maxHeight = `${bandGeo.ceiling}px`;
     else card.style.removeProperty("max-height");
     const cardH = card.offsetHeight;
-    const topPx = bandGeo ? sideCardTop({ H: viewportH, cardH, runPos, peek: peekHeight, band: bandGeo.band, pad: bandGeo.pad }) : computeCardTop(viewportH, cardH, runPos, peekHeight);
+    const topPx = bandGeo ? sideCardTop({ H: viewportH, cardH, scenePos, peek: peekHeight, band: bandGeo.band, pad: bandGeo.pad }) : computeCardTop(viewportH, cardH, scenePos, peekHeight);
     card.style.setProperty("top", `${topPx}px`, "important");
   }
   function _recomputeCardGeometry(viewportW, viewportH, changed = null) {
@@ -3425,7 +3384,7 @@
   }
   function _geometryPass(viewportW, viewportH, changed) {
     const peekHeight = _config.peekHeight;
-    const landscapeSideCard = isLandscapeSideCard();
+    const phoneHeightSideCard = isPhoneHeightSideCard();
     const horizontal = getLayoutMode() !== "vertical";
     publishSideCardWidth(viewportW, viewportH, horizontal);
     const cards = document.querySelectorAll(".text-card");
@@ -3436,10 +3395,10 @@
       fraction: SIDE_CARD_VIEWPORT_FRACTION,
       activeIndex: state.currentIndex
     }) : null;
-    const phoneBand = _phoneBandFor(landscapeSideCard, viewportW, viewportH);
+    const phoneBand = _phoneBandFor(phoneHeightSideCard, viewportW, viewportH);
     if (!horizontal) {
       for (const card of cards) {
-        _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand);
+        _fitCardByLayout(card, viewportH, peekHeight, phoneHeightSideCard, phoneBand);
       }
     }
     _arrangeMediaScenes(cards, viewportW, viewportH, horizontal, side);
@@ -3447,10 +3406,10 @@
   function _phoneBandFor(eligible, viewportW, viewportH) {
     return eligible && getLayoutMode() === "vertical" && viewportW > viewportH ? sideCardBand({ W: viewportW, H: viewportH, fraction: SIDE_CARD_VIEWPORT_FRACTION }) : null;
   }
-  function _fitCardByLayout(card, viewportH, peekHeight, landscapeSideCard, phoneBand) {
-    const runPos = parseInt(card.dataset.runPosition, 10) || 0;
-    if (landscapeSideCard) {
-      _sizeCardToContent(card, viewportH, runPos, peekHeight, phoneBand);
+  function _fitCardByLayout(card, viewportH, peekHeight, phoneHeightSideCard, phoneBand) {
+    const scenePos = parseInt(card.dataset.runPosition, 10) || 0;
+    if (phoneHeightSideCard) {
+      _sizeCardToContent(card, viewportH, scenePos, peekHeight, phoneBand);
     } else {
       card.style.removeProperty("top");
       card.style.removeProperty("max-height");
@@ -3539,7 +3498,7 @@
     }
   }
   function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
-    const sceneRunPosition = {};
+    const nextScenePosition = {};
     for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
       const step = steps[stepIdx];
       const objectId = step.object || "";
@@ -3557,18 +3516,18 @@
         continue;
       }
       const objectIndex = getSceneIndex(stepIdx);
-      if (!Object.hasOwn(sceneRunPosition, objectIndex)) {
-        sceneRunPosition[objectIndex] = 0;
+      if (!Object.hasOwn(nextScenePosition, objectIndex)) {
+        nextScenePosition[objectIndex] = 0;
       }
-      const runPos = sceneRunPosition[objectIndex];
-      sceneRunPosition[objectIndex]++;
+      const scenePos = nextScenePosition[objectIndex];
+      nextScenePosition[objectIndex]++;
       const zIndex = _zPlan.textCardZ[stepIdx];
       const messiness = getCardMessiness(stepIdx, messinessPercent);
       const card = document.createElement("div");
       card.className = "text-card";
       card.dataset.stepIndex = stepIdx;
       card.dataset.object = objectId;
-      card.dataset.runPosition = runPos;
+      card.dataset.runPosition = scenePos;
       card.style.zIndex = zIndex;
       card.style.transform = buildTransform(messiness, "translateY(100vh)");
       card.dataset.messinessRot = messiness.rot;
@@ -3728,7 +3687,7 @@
   function reconcilePlatesForJump(targetIndex) {
     const targetScene = state.stepToScene[targetIndex];
     const moved = [];
-    for (const [sceneIndex, plate] of Object.entries(state.viewerPlates || {})) {
+    for (const [sceneIndex, plate] of Object.entries(state.viewerPlates)) {
       if (!plate || Number(sceneIndex) === targetScene) continue;
       const el = plate.container;
       el.style.transition = "none";
@@ -3742,7 +3701,6 @@
     }
   }
   function _restoreBackwardTarget(cardEl) {
-    if (!cardEl) return;
     if (cardEl.classList.contains("is-stacked") || cardEl.classList.contains("is-active")) return;
     const idx = _cardStepIndex(cardEl);
     _snapTransform(cardEl, buildTransform(
@@ -3753,13 +3711,13 @@
   function _activateForward(index2, direction, card, step, objectId, prevObjectId, needsNewViewer) {
     if (needsNewViewer) {
       _activateNewViewerPlate(objectId, index2, prevObjectId, step, direction);
-      state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
+      state.currentObjectScene = { objectId, scenePosition: _cardScenePosition(card) };
       _deactivatePreviousTextCard(index2, direction);
       _clearActiveTitleCard(direction);
       _activateTextCard(card);
       updateObjectCredits(objectId);
     } else {
-      state.currentObjectRun.runPosition = _cardRunPosition(card);
+      state.currentObjectScene.scenePosition = _cardScenePosition(card);
       _deactivatePreviousTextCard(index2, direction);
       _activateTextCard(card);
       const plate = _plateForScene(getSceneIndex(index2));
@@ -3790,13 +3748,13 @@
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
       const prevPlate = state.viewerPlates[getSceneIndex(index2)];
       _swapPlatesBackward(currentPlate, prevPlate, index2);
-      state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
+      state.currentObjectScene = { objectId, scenePosition: _cardScenePosition(card) };
       _deactivatePreviousTextCard(index2, direction);
       _clearActiveTitleCard(direction);
       _activateTextCard(card);
       updateObjectCredits(objectId);
     } else {
-      state.currentObjectRun.runPosition = _cardRunPosition(card);
+      state.currentObjectScene.scenePosition = _cardScenePosition(card);
       _deactivatePreviousTextCard(index2, direction);
       _activateTextCard(card);
       _retargetPlateForStep(_plateForScene(getSceneIndex(index2)), objectId, step, index2);
@@ -3828,7 +3786,7 @@
     const step = _stepsData[index2] || {};
     const prevStep = index2 > 0 ? _stepsData[index2 - 1] : null;
     const objectId = card.dataset.object;
-    const prevObjectId = state.currentObjectRun.objectId;
+    const prevObjectId = state.currentObjectScene.objectId;
     const needsNewViewer = _needsNewViewer(step, prevStep, objectId, prevObjectId);
     const args = [
       index2,
@@ -3879,12 +3837,11 @@
     const stepIndex = Math.floor(contentPos);
     const progress = contentPos - stepIndex;
     for (let i = 0; i <= stepIndex + 2; i++) {
-      const el = i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i];
+      const el = state.textCards[i] || state.titleCards[i];
       if (!el) continue;
       placeCard(el, cardBaseFor(i, stepIndex, progress));
     }
     _settlePlates(stepIndex, progress);
-    for (const hook of _settleHooks) hook(stepIndex, progress);
   }
   function _wireViewerForPlate(newPlate, sceneIndex, step) {
     newPlate.center(step);
@@ -3976,17 +3933,17 @@
       _writeCardOverlayRect(cardEl);
       return;
     }
-    if (cardEl._settleHandler) {
-      cardEl.removeEventListener("transitionend", cardEl._settleHandler);
+    if (cardEl._transitionEndHandler) {
+      cardEl.removeEventListener("transitionend", cardEl._transitionEndHandler);
     }
-    const onSettled = (ev) => {
+    const onTransitionEnd = (ev) => {
       if (ev.target !== cardEl || ev.propertyName !== "transform") return;
-      cardEl.removeEventListener("transitionend", onSettled);
-      cardEl._settleHandler = null;
+      cardEl.removeEventListener("transitionend", onTransitionEnd);
+      cardEl._transitionEndHandler = null;
       if (cardEl.classList.contains("is-active")) _writeCardOverlayRect(cardEl);
     };
-    cardEl._settleHandler = onSettled;
-    cardEl.addEventListener("transitionend", onSettled);
+    cardEl._transitionEndHandler = onTransitionEnd;
+    cardEl.addEventListener("transitionend", onTransitionEnd);
   }
   function _stackPreviousTitleCard(index2, direction) {
     if (state.activeTitleCardIndex == null || state.activeTitleCardIndex === index2) return;
@@ -4018,7 +3975,7 @@
     titleCard.classList.add("is-active");
     titleCard.style.transform = "translateY(0)";
     state.activeTitleCardIndex = index2;
-    state.currentObjectRun = { objectId: "", runPosition: 0 };
+    state.currentObjectScene = { objectId: "", scenePosition: 0 };
     state.cardOverlayRect = null;
     updateObjectCredits("");
     preloadAhead(index2, _config.preloadSteps, 2);
@@ -4083,7 +4040,7 @@
     });
   }
   function _plateViewerSize(sceneIndex) {
-    const el = state.viewerPlates?.[sceneIndex]?.container;
+    const el = state.viewerPlates[sceneIndex]?.container;
     if (el?.clientWidth > 0 && el.clientHeight > 0) {
       return { width: el.clientWidth, height: el.clientHeight };
     }
@@ -4213,7 +4170,7 @@
     return Math.acosh(1 + (pan * pan + (b.w - a.w) ** 2) / (2 * a.w * b.w)) / RHO;
   }
   function stepTravel(stepIndex) {
-    const steps = state.stepsData || [];
+    const steps = state.stepsData;
     const scene = state.stepToScene[stepIndex];
     if (scene === void 0 || scene !== state.stepToScene[stepIndex + 1]) return 0;
     const a = steps[stepIndex] && _authoredFraming(steps[stepIndex]);
@@ -5899,7 +5856,7 @@
     setMoveSeconds(moveSeconds(0));
     reconcilePlatesForJump(targetIndex);
     if (state.lenis) {
-      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
+      const targetPx = (targetIndex + 1) * state.scrollStepPx;
       jumpScrollTo(targetPx);
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       reconcileStackForJump(targetIndex);
@@ -5925,7 +5882,7 @@
   function _jumpToIndex(targetIndex) {
     setMoveSeconds(moveSeconds(0));
     if (state.lenis) {
-      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
+      const targetPx = (targetIndex + 1) * state.scrollStepPx;
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       reconcileStackForJump(targetIndex);
@@ -5950,7 +5907,7 @@
   }
   function _scheduleLayerOpen(parsed, targetIndex, delay) {
     if (parsed.layer === null) return;
-    const stepNumber = state.steps[targetIndex]?.dataset?.step;
+    const stepNumber = state.steps[targetIndex].dataset.step;
     if (!stepNumber) return;
     const onTarget = () => state.currentIndex === targetIndex;
     if (parsed.layer >= 2) {
@@ -5969,7 +5926,7 @@
     }
     _armDeepLinkCancellation();
   }
-  var PANEL_CLOSE_SETTLE_MS = 400;
+  var PANEL_CLOSE_WAIT_MS = 400;
   function _openLayerNumber() {
     for (let i = state.panelStack.length - 1; i >= 0; i--) {
       const m = state.panelStack[i].type.match(/^layer(\d+)$/);
@@ -5994,13 +5951,13 @@
   }
   function _panelsBusy() {
     if (state.panelStack.length > 0) return true;
-    if (Date.now() - _lastPanelCloseAt < PANEL_CLOSE_SETTLE_MS) return true;
+    if (Date.now() - _lastPanelCloseAt < PANEL_CLOSE_WAIT_MS) return true;
     return !!document.querySelector("#panel-layer1, #panel-layer2, #panel-glossary") && !!document.querySelector(".offcanvas.show, .offcanvas.showing, .offcanvas.hiding");
   }
   function _openDelayAfterClose() {
     if (!_panelsBusy()) return 100;
     _lastPanelCloseAt = Date.now();
-    return PANEL_CLOSE_SETTLE_MS;
+    return PANEL_CLOSE_WAIT_MS;
   }
   function _settleOnStep(parsed, targetIndex) {
     const wantG = parsed.subType === "g" ? parsed.subN : null;
@@ -6023,7 +5980,7 @@
       _lastPanelCloseAt = Date.now();
     }
     writeHash();
-    if (wantG !== null) _scheduleGlossaryClick(parsed, targetIndex, curG !== null ? PANEL_CLOSE_SETTLE_MS : 0);
+    if (wantG !== null) _scheduleGlossaryClick(parsed, targetIndex, curG !== null ? PANEL_CLOSE_WAIT_MS : 0);
   }
   function handleHashChange() {
     if (!state.steps.length) return;
@@ -6066,7 +6023,7 @@
     if (!event) return true;
     if (event.ctrlKey) return false;
     if (deltaY === 0) return false;
-    const path = event.composedPath ? event.composedPath() : [];
+    const path = event.composedPath();
     return !path.some((node) => node instanceof HTMLElement && isInsidePanel(node));
   }
 
@@ -6498,7 +6455,7 @@
     const progress = clamped - stepIndex;
     state.scrollProgress = progress;
     if (!keyboardNavInFlight || progress >= 1e-3) setCardProgress(stepIndex, progress);
-    lerpIiifPosition(stepIndex, progress, state.stepsData || []);
+    lerpIiifPosition(stepIndex, progress, state.stepsData);
     if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
       _enterStep(stepIndex, stepIndex > state.currentIndex ? "forward" : "backward");
     }
@@ -6524,7 +6481,7 @@
     _sendFirstTextCardOffScreen();
     releaseTitleCardsForIntro();
     _sendPlateOffScreen(state.viewerPlates?.[window.storyData?.firstObject]);
-    state.currentObjectRun = { objectId: null, runPosition: 0 };
+    state.currentObjectScene = { objectId: null, scenePosition: 0 };
     _hideStepChrome();
     if (state.onStepChange) state.onStepChange(-1);
   }
@@ -6559,21 +6516,21 @@
     if (state.onStepChange) state.onStepChange(index2);
   }
   function jumpButtonsTo(index2) {
-    state.currentMobileStep = index2;
-    state.mobileInIntro = false;
+    state.currentButtonStep = index2;
+    state.buttonInIntro = false;
     state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === index2));
-    updateMobileButtonStates();
+    updateButtonNavStates();
     recordButtonStep(index2);
   }
   function putButtonsOnIntro() {
-    if (!state.mobileNavButtons) return;
-    state.mobileInIntro = true;
-    state.currentMobileStep = 0;
+    if (!state.buttonNavButtons) return;
+    state.buttonInIntro = true;
+    state.currentButtonStep = 0;
     state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === 0));
-    updateMobileButtonStates();
+    updateButtonNavStates();
   }
   function followEngine(index2) {
-    if (!state.mobileNavButtons) return;
+    if (!state.buttonNavButtons) return;
     if (index2 < 0) {
       putButtonsOnIntro();
     } else {
@@ -6609,125 +6566,125 @@
     });
     if (state.steps.length > 0) {
       state.steps[0].classList.add("mobile-active");
-      state.currentMobileStep = 0;
+      state.currentButtonStep = 0;
     }
-    state.mobileInIntro = !!document.querySelector(".story-intro");
+    state.buttonInIntro = !!document.querySelector(".story-intro");
     const buttons = createNavigationButtons();
     if (!buttons) return;
-    state.mobileNavButtons = { prev: buttons.prev, next: buttons.next };
-    buttons.prev.addEventListener("click", goToPreviousMobileStep);
-    buttons.next.addEventListener("click", goToNextMobileStep);
-    updateMobileButtonStates();
+    state.buttonNavButtons = { prev: buttons.prev, next: buttons.next };
+    buttons.prev.addEventListener("click", goToPreviousButtonStep);
+    buttons.next.addEventListener("click", goToNextButtonStep);
+    updateButtonNavStates();
     initKeyboardNavigation();
   }
-  function goToNextMobileStep() {
+  function goToNextButtonStep() {
     if (state.lenis) {
       _moveThroughEngine(buttonHeading() + 1);
       return;
     }
-    if (state.mobileInIntro) {
-      _dismissMobileIntro();
+    if (state.buttonInIntro) {
+      _dismissButtonIntro();
       return;
     }
-    if (state.currentMobileStep >= state.steps.length - 1) {
+    if (state.currentButtonStep >= state.steps.length - 1) {
       return;
     }
-    goToMobileStep(state.currentMobileStep + 1);
+    goToButtonStep(state.currentButtonStep + 1);
   }
-  function goToPreviousMobileStep() {
+  function goToPreviousButtonStep() {
     if (state.lenis) {
       _moveThroughEngine(buttonHeading() - 1);
       return;
     }
-    if (state.mobileInIntro) {
+    if (state.buttonInIntro) {
       return;
     }
-    if (state.currentMobileStep === 0) {
-      _restoreMobileIntro();
+    if (state.currentButtonStep === 0) {
+      _restoreButtonIntro();
       return;
     }
-    goToMobileStep(state.currentMobileStep - 1);
+    goToButtonStep(state.currentButtonStep - 1);
   }
-  function _restoreMobileIntro() {
-    if (state.mobileNavigationCooldown) return;
-    state.mobileNavigationCooldown = true;
+  function _restoreButtonIntro() {
+    if (state.buttonNavCooldown) return;
+    state.buttonNavCooldown = true;
     setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
+      state.buttonNavCooldown = false;
+    }, BUTTON_NAV_COOLDOWN);
     setMoveSeconds(moveSeconds(0));
     _showIntroCard();
     _sendFirstTextCardOffScreen();
-    _sendPlateOffScreen(state.viewerPlates?.[0]);
-    state.currentObjectRun = { objectId: null, runPosition: 0 };
+    _sendPlateOffScreen(state.viewerPlates[0]);
+    state.currentObjectScene = { objectId: null, scenePosition: 0 };
     _hideStepChrome();
     putButtonsOnIntro();
     recordButtonStep(-1);
     writeHash();
   }
-  function _dismissMobileIntro() {
-    if (state.mobileNavigationCooldown) return;
-    state.mobileNavigationCooldown = true;
+  function _dismissButtonIntro() {
+    if (state.buttonNavCooldown) return;
+    state.buttonNavCooldown = true;
     setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
-    state.mobileInIntro = false;
+      state.buttonNavCooldown = false;
+    }, BUTTON_NAV_COOLDOWN);
+    state.buttonInIntro = false;
     setMoveSeconds(moveSeconds(0));
     const intro = document.querySelector(".story-intro");
     if (intro) {
       intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
       intro.style.transform = "translateY(-100%)";
     }
-    state.currentMobileStep = 0;
+    state.currentButtonStep = 0;
     activateCard(0, "forward");
     updateViewerInfo(0);
-    updateMobileButtonStates();
+    updateButtonNavStates();
     recordButtonStep(0);
     writeHash();
   }
   function _moveThroughEngine(newIndex) {
     if (newIndex < -1 || newIndex >= state.steps.length) return;
-    if (state.mobileNavigationCooldown) return;
+    if (state.buttonNavCooldown) return;
     if (!advanceToStep(newIndex)) return;
-    state.mobileNavigationCooldown = true;
+    state.buttonNavCooldown = true;
     setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
+      state.buttonNavCooldown = false;
+    }, BUTTON_NAV_COOLDOWN);
     if (newIndex >= 0) {
       const plate = state.viewerPlates[state.stepToScene[newIndex]];
       if (!plate || !plate.isReady) showViewerSkeletonState();
     }
   }
-  function goToMobileStep(newIndex) {
+  function goToButtonStep(newIndex) {
     if (newIndex < 0 || newIndex >= state.steps.length) {
       return;
     }
-    if (state.mobileNavigationCooldown) {
+    if (state.buttonNavCooldown) {
       return;
     }
     const plate = state.viewerPlates[state.stepToScene[newIndex]];
     if (!plate || !plate.isReady) {
       showViewerSkeletonState();
     }
-    state.mobileNavigationCooldown = true;
+    state.buttonNavCooldown = true;
     setTimeout(() => {
-      state.mobileNavigationCooldown = false;
-    }, MOBILE_NAV_COOLDOWN);
-    const direction = newIndex > state.currentMobileStep ? "forward" : "backward";
-    const travel = travelBetween(state.currentMobileStep, newIndex);
-    state.steps[state.currentMobileStep].classList.remove("mobile-active");
+      state.buttonNavCooldown = false;
+    }, BUTTON_NAV_COOLDOWN);
+    const direction = newIndex > state.currentButtonStep ? "forward" : "backward";
+    const travel = travelBetween(state.currentButtonStep, newIndex);
+    state.steps[state.currentButtonStep].classList.remove("mobile-active");
     state.steps[newIndex].classList.add("mobile-active");
-    state.currentMobileStep = newIndex;
-    updateMobileButtonStates();
+    state.currentButtonStep = newIndex;
+    updateButtonNavStates();
     setMoveSeconds(moveSeconds(travel));
     activateCard(newIndex, direction);
     updateViewerInfo(newIndex);
     recordButtonStep(newIndex);
     writeHash();
   }
-  function updateMobileButtonStates() {
-    if (!state.mobileNavButtons) return;
-    state.mobileNavButtons.prev.disabled = !!state.mobileInIntro;
-    state.mobileNavButtons.next.disabled = state.currentMobileStep === state.steps.length - 1;
+  function updateButtonNavStates() {
+    if (!state.buttonNavButtons) return;
+    state.buttonNavButtons.prev.disabled = !!state.buttonInIntro;
+    state.buttonNavButtons.next.disabled = state.currentButtonStep === state.steps.length - 1;
   }
   var KEY_ACTIONS = /* @__PURE__ */ new Map([
     ["ArrowDown", (e) => _stepKey(e, "forward")],
@@ -6820,9 +6777,9 @@
       return;
     }
     if (direction === "forward") {
-      goToNextMobileStep();
+      goToNextButtonStep();
     } else {
-      goToPreviousMobileStep();
+      goToPreviousButtonStep();
     }
   }
   function _openNextLayer() {
@@ -6898,12 +6855,12 @@
     state.config.minReadyViewers = Math.min(viewerConfig.min_ready_viewers, state.config.preloadSteps);
     buildObjectsIndex();
     prefetchStoryManifests();
+    state.isEmbed = window.telarEmbed?.enabled || false;
     const cardConfig = {
       peekHeight: window.telarConfig?.cardPeekHeight ?? 1,
       messiness: window.telarConfig?.cardMessiness ?? 20
     };
     initCardPool(window.storyData, cardConfig);
-    state.isEmbed = window.telarEmbed?.enabled || false;
     state.layoutMode = getLayoutMode();
     onLayoutChange(() => {
       const activeCard = document.querySelector(".text-card.is-active");

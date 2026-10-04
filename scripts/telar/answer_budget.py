@@ -200,11 +200,6 @@ def within_budget(measure):
     return measure.cost <= ANSWER_BUDGET and measure.paragraphs <= MAX_PARAGRAPHS
 
 
-def fits(text):
-    """Whether answer HTML *text* is within the budget."""
-    return within_budget(measure_answer(text))
-
-
 def _open_elements(tokens):
     """The names of the elements *tokens* leave open, outermost first."""
     stack = []

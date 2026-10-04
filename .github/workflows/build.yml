@@ -208,10 +208,7 @@ jobs:
             NEEDS_AUDIO="${{ inputs.force_audio }}"
           fi
 
-          # Same hole as the tile cache, smaller blast radius. A site with no
-          # audio is expected to restore nothing, which is why the warning on
-          # that path reads as unremarkable and hid the case where a site does
-          # have audio and the cache has gone.
+          # If the site has audio but the audio cache is empty, reprocess.
           if [ "$NEEDS_AUDIO" = "false" ] && [ "$HAVE_AUDIO" = "true" ]; then
             if [ ! -d "cached-audio" ] || [ -z "$(ls -A cached-audio 2>/dev/null)" ]; then
               echo "⚠️  The audio cache did not answer (expired, or never saved)."
@@ -320,8 +317,8 @@ jobs:
               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
               # Check if any images, objects.csv, or _config.yml changed
-              # Note: _config.yml added in v0.4.3 - IIIF tiles embed base URL from config (thanks Tara)
-              # v0.5.0: CSV-aware image monitoring - only triggers for images matching object_ids
+              # IIIF tiles embed the base URL from _config.yml, so a change to it
+              # regenerates them. Image changes count only for images matching object_ids.
 
               # Always regenerate if objects.csv or _config.yml changed
               if echo "$CHANGED_FILES" | grep -qE '^telar-content/spreadsheets/objects\.csv$|^_config\.yml$'; then
@@ -371,7 +368,7 @@ jobs:
           # GitHub evicts a cache after seven days without access, so a quiet
           # repository that then receives a commit touching no image would skip
           # generation, restore nothing, and deploy with every self-hosted image
-          # missing, every step reporting success. Verify rather than assume.
+          # missing, every step reporting success.
           if [ "$NEEDS_IIIF" = "false" ]; then
             if [ -d "telar-content/objects" ] && [ -n "$(ls -A telar-content/objects 2>/dev/null)" ]; then
               if [ ! -d "cached-iiif" ] || [ -z "$(ls -A cached-iiif 2>/dev/null)" ]; then
@@ -388,7 +385,7 @@ jobs:
       - name: Generate IIIF tiles into _site
         if: steps.detect-changes.outputs.needs_iiif == 'true'
         run: |
-          # v0.5.0: Check if source images directory exists (flattened structure)
+          # Check if the source images directory exists
           if [ -d "telar-content/objects" ]; then
             # Extract URL and baseurl from _config.yml
             SITE_URL=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('url', ''))")
@@ -397,8 +394,8 @@ jobs:
 
             echo "Generating IIIF tiles with base URL: $FULL_URL"
 
-            # v0.5.0: Removed --source-dir parameter (script now defaults to telar-content/objects/)
-            # v0.5.0: Script is now CSV-driven - only processes objects listed in objects.json
+            # The script defaults to telar-content/objects/ and processes only
+            # the objects listed in objects.json.
             python scripts/generate_iiif.py \
               --output-dir _site/iiif/objects \
               --base-url "$FULL_URL"

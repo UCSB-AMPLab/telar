@@ -19,7 +19,7 @@ vi.mock('../../assets/js/telar-story/state.js', () => ({
   state: {
     steps: [],
     currentIndex: -1,
-    currentMobileStep: -1,
+    currentButtonStep: -1,
     scrollPosition: 0,
     lenis: null,
     snap: null,
@@ -59,8 +59,9 @@ describe('applyDeepLinkOnLoad — panel-open timer ladder', () => {
     openPanel.mockClear();
     state.steps = makeSteps(5);
     state.currentIndex = -1;
-    state.currentMobileStep = -1;
+    state.currentButtonStep = -1;
     state.lenis = { scrollTo: vi.fn(), stop: vi.fn(), start: vi.fn() }; // desktop path
+    state.scrollStepPx = window.innerHeight;
     state.snap = null;
     window.location.hash = '';
   });
@@ -144,6 +145,7 @@ describe('applyDeepLinkOnLoad — a move by Back to Start or a contents link', (
     state.steps = makeSteps(5);
     state.currentIndex = -1;
     state.lenis = { scrollTo: vi.fn(), stop: vi.fn(), start: vi.fn() };
+    state.scrollStepPx = window.innerHeight;
     state.snap = null;
     window.location.hash = '';
   });
@@ -212,6 +214,7 @@ describe('handleHashChange — a fragment change on a loaded story', () => {
     state.currentIndex = 0;
     state.panelStack = [];
     state.lenis = { scrollTo: vi.fn(), stop: vi.fn(), start: vi.fn() };
+    state.scrollStepPx = window.innerHeight;
     state.snap = null;
     window.location.hash = '';
   });

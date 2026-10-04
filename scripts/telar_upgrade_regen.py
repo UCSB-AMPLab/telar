@@ -135,7 +135,7 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool, bool]:
 
 # Import names that data regeneration transitively requires. csv_to_json.py and
 # generate_collections.py load the scripts/telar package, which eagerly imports
-# these; regeneration cannot run unless every one resolves. These are IMPORT
+# these; regeneration cannot run unless every one resolves. These are import
 # names, not pip package names — requirements.txt lists the packages that
 # provide them (PIL comes from Pillow, yaml from pyyaml).
 _REGENERATION_IMPORTS = ["markdown", "PIL", "jinja2", "cryptography", "yaml", "pandas"]
