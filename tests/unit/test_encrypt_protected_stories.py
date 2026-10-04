@@ -2,11 +2,13 @@
 Unit Tests for Post-Build Story Encryption
 
 This module tests scripts/encrypt_protected_stories.py — envelope round-trip,
-sentinel derivation, stub injection, the shape and content gates — and the
-pipeline-side prerequisite check in telar/core.py that refuses to run when
-the build workflow predates the post-build encryption step.
+sentinel derivation, stub injection, the shape and content gates, the
+glossary overlap acknowledgement that suppresses one story's hit on one
+term's page — and the pipeline-side prerequisite check in telar/core.py
+that refuses to run when the build workflow predates the post-build
+encryption step.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import base64
@@ -16,10 +18,14 @@ import sys
 
 import pytest
 
+from html import escape
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from encrypt_protected_stories import (
     _emit_actions_error,
+    ACKNOWLEDGEMENT_COLUMN,
+    read_glossary_acknowledgements,
     check_no_orphan_fragments,
     load_page_manifest,
     resolve_story_page,
@@ -162,17 +168,27 @@ class TestFragmentExtraction:
 
 
 class TestInjection:
-    STUB_PAGE = (
-        "<script>\nwindow.storyData = {\"encrypted\": true, \"salt\": \"\", "
-        "\"iv\": \"\", \"ciphertext\": \"" + STUB_TOKEN + "\"};\n"
-        "window.objectsData = {};\n</script>"
-    )
+    """The fixture mirrors what story.html emits for a protected page.
+
+    Both assignments, in the order the layout writes them: the page's claim
+    about which story it is, then the stub it expects to have replaced.
+    """
+
+    @staticmethod
+    def stub_page(identifier="s"):
+        return (
+            "<script>\n"
+            'window.telarStoryId = "%s";\n' % identifier
+            + "window.storyData = {\"encrypted\": true, \"salt\": \"\", "
+            "\"iv\": \"\", \"ciphertext\": \"" + STUB_TOKEN + "\"};\n"
+            "window.objectsData = {};\n</script>"
+        )
 
     def test_replaces_stub_with_envelope(self, tmp_path):
         page = tmp_path / "index.html"
-        page.write_text(self.STUB_PAGE)
+        page.write_text(self.stub_page())
         envelope = encrypt_story({"steps": []}, STORY_KEY, aad="s")
-        inject_envelope(page, envelope)
+        inject_envelope(page, envelope, "s")
         html = page.read_text()
         assert STUB_TOKEN not in html
         assert envelope["ciphertext"] in html
@@ -181,9 +197,62 @@ class TestInjection:
 
     def test_page_without_stub_fails(self, tmp_path):
         page = tmp_path / "index.html"
-        page.write_text("<script>window.storyData = {steps: []};</script>")
+        page.write_text('<script>window.telarStoryId = "s";\n'
+                        "window.storyData = {steps: []};</script>")
         with pytest.raises(GateFailure):
-            inject_envelope(page, encrypt_story([], STORY_KEY))
+            inject_envelope(page, encrypt_story([], STORY_KEY), "s")
+
+    def test_a_page_claiming_another_story_is_refused(self, tmp_path):
+        """The manifest says where a story renders; the page says who it is.
+
+        Swapping two identifiers inside an otherwise valid manifest puts
+        each envelope on the other's page. Both stubs are consumed and no
+        destination conflict occurs, so nothing downstream notices — and
+        the site ships two protected stories that cannot be opened, because
+        the identifier the browser passes as the envelope's additional
+        authenticated data is the one on the page, not the one encrypted.
+        """
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page("the-other-story"))
+
+        with pytest.raises(GateFailure) as failure:
+            inject_envelope(page, encrypt_story({"steps": []}, STORY_KEY,
+                                                aad="s"), "s")
+
+        assert "the-other-story" in str(failure.value)
+
+    def test_the_refused_page_is_left_alone(self, tmp_path):
+        """A gate that has already written is not a gate."""
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page("the-other-story"))
+        before = page.read_text()
+
+        with pytest.raises(GateFailure):
+            inject_envelope(page, encrypt_story({"steps": []}, STORY_KEY,
+                                                aad="s"), "s")
+
+        assert page.read_text() == before
+
+    def test_a_page_that_names_no_story_is_refused(self, tmp_path):
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page().replace(
+            'window.telarStoryId = "s";\n', ''))
+
+        with pytest.raises(GateFailure) as failure:
+            inject_envelope(page, encrypt_story({"steps": []}, STORY_KEY,
+                                                aad="s"), "s")
+
+        assert "telarStoryId" in str(failure.value)
+
+    def test_an_identifier_needing_escapes_still_matches(self, tmp_path):
+        """`jsonify` writes a JSON string, so the claim is parsed as one."""
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page("acentu\\u00e1da"))
+        envelope = encrypt_story({"steps": []}, STORY_KEY, aad="acentuáda")
+
+        inject_envelope(page, envelope, "acentuáda")
+
+        assert STUB_TOKEN not in page.read_text()
 
 
 class TestSweeps:
@@ -224,7 +293,7 @@ def build_site_fixture(tmp_path, story_id="prot-story", page_slug=None,
     site = tmp_path / site_name
     story_dir = site / "stories" / (page_slug or story_id)
     story_dir.mkdir(parents=True)
-    (story_dir / "index.html").write_text(TestInjection.STUB_PAGE)
+    (story_dir / "index.html").write_text(TestInjection.stub_page(story_id))
 
     fragment_dir = site / FRAGMENT_URL_PREFIX / story_id
     fragment_dir.mkdir(parents=True)
@@ -452,13 +521,86 @@ class TestProcessSite:
         # Jekyll lets a user page declare a story's permalink: it warns
         # about the conflict, then lets that page win the destination. The
         # manifest still names the right path, so what stops the build is
-        # the absence of the protected layout's stub on the page found
-        # there — the second half of what this script trusts.
+        # the page found there, which neither names this story nor carries
+        # the protected layout's stub. Either refusal is enough; the first
+        # is the one that fires.
         site, data_dir, config = build_site_fixture(tmp_path)
         (site / "stories" / "prot-story" / "index.html").write_text(
             "<html><body>a page that is not the story</body></html>"
         )
-        with pytest.raises(GateFailure, match="no stub envelope found"):
+        with pytest.raises(GateFailure, match="does not declare which story"):
+            process_site(site, data_dir, config)
+
+    def test_a_swapped_manifest_fails_closed(self, tmp_path):
+        """Two identifiers exchanged inside an otherwise valid manifest.
+
+        Each envelope goes to the other's page: both stubs are consumed,
+        no destination conflict occurs, and every downstream sweep passes,
+        because nothing leaked — the site simply ships two protected
+        stories that no password can open.
+        """
+        site, data_dir, config = build_site_fixture(tmp_path)
+        other = site / "stories" / "other-story"
+        other.mkdir(parents=True)
+        (other / "index.html").write_text(TestInjection.stub_page("other-story"))
+        # Edited after the fact, because build_manifest derives the URL
+        # from the identifier and so cannot express the swap — which is
+        # the threat exactly: a manifest that did not come from a build.
+        manifest = build_manifest([("prot-story", "_stories/prot-story.md")])
+        manifest['stories']['prot-story']['url'] = '/stories/other-story/'
+        write_manifest(data_dir, manifest)
+
+        # Matched on the gate's own wording: a bare identifier also
+        # appears in the failures a disabled gate would produce later.
+        with pytest.raises(GateFailure, match="but that page is"):
+            process_site(site, data_dir, config)
+
+    def test_two_swapped_stories_fail_closed(self, tmp_path):
+        """The shape the deferral was about, with nothing else to catch it.
+
+        With one story misdirected the shape sweep still fires, because the
+        story left alone keeps its stub. With two exchanged, both stubs are
+        consumed, both fragments are deleted, no destination conflict
+        occurs and every sweep passes — and the site ships two protected
+        stories that no password opens, because the identifier the browser
+        passes as the envelope's additional authenticated data is the one
+        written on the page.
+        """
+        data_dir = tmp_path / "_data"
+        data_dir.mkdir()
+        identifiers = ["story-one", "story-two"]
+        (data_dir / "project.json").write_text(json.dumps(
+            [{"stories": [{"number": str(n), "title": "P", "story_id": i,
+                           "protected": True}
+                          for n, i in enumerate(identifiers, 1)]}]
+        ))
+        for identifier in identifiers:
+            (data_dir / f"{identifier}.json").write_text(json.dumps(STEPS))
+
+        manifest = build_manifest(
+            [(i, f"_stories/{i}.md") for i in identifiers])
+        manifest['stories']['story-one']['url'] = '/stories/story-two/'
+        manifest['stories']['story-two']['url'] = '/stories/story-one/'
+        write_manifest(data_dir, manifest)
+
+        config = tmp_path / "_config.yml"
+        config.write_text(f'story_key: "{STORY_KEY}"\n')
+
+        site = tmp_path / "_site"
+        for identifier in identifiers:
+            story_dir = site / "stories" / identifier
+            story_dir.mkdir(parents=True)
+            (story_dir / "index.html").write_text(
+                TestInjection.stub_page(identifier))
+            fragment_dir = site / FRAGMENT_URL_PREFIX / identifier
+            fragment_dir.mkdir(parents=True)
+            (fragment_dir / "index.html").write_text(
+                f"<html><body>{FRAGMENT_START}<div class='step-data'>steps"
+                f"</div>{FRAGMENT_END}</body></html>"
+            )
+        (site / "index.html").write_text("<html>homepage</html>")
+
+        with pytest.raises(GateFailure, match="but that page is"):
             process_site(site, data_dir, config)
 
     def test_missing_manifest_fails(self, tmp_path):
@@ -604,3 +746,530 @@ class TestPipelinePrerequisites:
             _check_protected_prerequisites(data_dir, workflow_path=workflow)
 
         assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
+
+
+
+# A passage of the fixture story's own prose, long enough to be a sentinel.
+QUOTED_PASSAGE = "What does the unit fixture ask about exactly"
+
+SECOND_STEPS = [
+    {"step": "1",
+     "question": "Which passage does the second story keep to itself",
+     "answer": "A second plain protected passage, from the other story."},
+]
+SECOND_PASSAGE = "Which passage does the second story keep to itself"
+
+
+def meta_tag(name, value):
+    """One tag as the layout writes it: the value as JSON, then escaped."""
+    return (f'<meta name="{name}" '
+            f'content="{escape(json.dumps(value), quote=True)}">')
+
+
+def glossary_markup(term_id, definition, acknowledges=(), term_meta=None,
+                    meta=None, head=True):
+    """A rendered glossary term page, as the glossary layout writes one.
+
+    `term_meta` and `meta` replace a tag's content verbatim, for the shapes
+    a layout should not be able to emit and the sweep must refuse anyway;
+    `head=False` puts the tags in the body, where they say nothing.
+    """
+    tags = []
+    if term_meta is not None:
+        tags.append(f'<meta name="telar-term-id" content="{term_meta}">')
+    else:
+        tags.append(meta_tag("telar-term-id", term_id))
+    if meta is not None:
+        tags.append(f'<meta name="telar-quoted-in-stories" content="{meta}">')
+    elif acknowledges:
+        tags.append(meta_tag("telar-quoted-in-stories", list(acknowledges)))
+    markup = "".join(tags)
+    if head:
+        return ("<html><head>" + markup + "</head><body><p>" + definition
+                + "</p></body></html>")
+    return ("<html><head></head><body>" + markup + "<p>" + definition
+            + "</p></body></html>")
+
+
+def add_glossary_page(site, term_id, definition, acknowledges=(), url=None,
+                      markup=None, **shape):
+    """Write the page a glossary term rendered to, tags and all.
+
+    The page is the whole input: the sweep reads the acknowledgement out of
+    _site and never asks a record where the term was going to render.
+    """
+    page = site / (url or f"glossary/{term_id}") / "index.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(markup if markup is not None else glossary_markup(
+        term_id, definition, acknowledges, **shape))
+    return page
+
+
+def build_two_story_fixture(tmp_path):
+    """The one-story fixture with a second protected story beside it."""
+    site, data_dir, config = build_site_fixture(tmp_path)
+    (data_dir / "project.json").write_text(json.dumps(
+        [{"stories": [
+            {"number": "1", "title": "P", "story_id": "prot-story",
+             "protected": True},
+            {"number": "2", "title": "Q", "story_id": "other-story",
+             "protected": True},
+        ]}]
+    ))
+    (data_dir / "other-story.json").write_text(json.dumps(SECOND_STEPS))
+    write_manifest(data_dir, build_manifest(
+        [("prot-story", "_stories/prot-story.md"),
+         ("other-story", "_stories/other-story.md")]
+    ))
+    story_dir = site / "stories" / "other-story"
+    story_dir.mkdir(parents=True)
+    (story_dir / "index.html").write_text(TestInjection.stub_page("other-story"))
+    fragment_dir = site / FRAGMENT_URL_PREFIX / "other-story"
+    fragment_dir.mkdir(parents=True)
+    (fragment_dir / "index.html").write_text(
+        f"<html><body>{FRAGMENT_START}<div>second story</div>"
+        f"{FRAGMENT_END}</body></html>"
+    )
+    return site, data_dir, config
+
+
+def open_stories_fixture(tmp_path):
+    """A site with stories, none of them protected."""
+    data_dir = tmp_path / "_data"
+    data_dir.mkdir()
+    (data_dir / "project.json").write_text(json.dumps(
+        [{"stories": [{"number": "1", "title": "O", "story_id": "open-story"}]}]
+    ))
+    config = tmp_path / "_config.yml"
+    config.write_text("story_key: ''\n")
+    site = tmp_path / "_site"
+    site.mkdir()
+    (site / "index.html").write_text("<html>homepage</html>")
+    return site, data_dir, config
+
+
+class TestOverlapAcknowledgement:
+    """A glossary term names the protected stories it quotes on purpose.
+
+    The page states it, at the path it rendered to. The acknowledgement is
+    one record wide and one story wide: it belongs to the page the author
+    wrote the quotation on, and to the story they named there.
+    """
+
+    def test_an_acknowledged_overlap_passes(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=["prot-story"])
+
+        assert process_site(site, data_dir, config) == 1
+
+    def test_the_suppression_is_reported_with_the_record_and_column(
+            self, tmp_path, capsys):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        page = add_glossary_page(site, "unit-fixture",
+                                 f"A term that quotes: {QUOTED_PASSAGE}.",
+                                 acknowledges=["prot-story"])
+        process_site(site, data_dir, config)
+
+        out = capsys.readouterr().out
+        assert str(page) in out
+        assert "prot-story" in out
+        assert "glossary.csv:unit-fixture.quoted_in_stories" in out
+
+    def test_a_story_the_page_does_not_name_still_fails(self, tmp_path):
+        # The acknowledgement covers one story, not the page: a passage
+        # from a second protected story on the same term's page is a leak
+        # nobody declared.
+        site, data_dir, config = build_two_story_fixture(tmp_path)
+        add_glossary_page(
+            site, "unit-fixture",
+            f"A term that quotes: {QUOTED_PASSAGE}. And also: "
+            f"{SECOND_PASSAGE}.",
+            acknowledges=["prot-story"]
+        )
+
+        with pytest.raises(GateFailure, match="other-story"):
+            process_site(site, data_dir, config)
+
+    def test_the_same_passage_on_another_page_still_fails(self, tmp_path):
+        # The acknowledgement is one record wide. A paste of the same
+        # quotation onto a page that acknowledges nothing is the case the
+        # gate exists for.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=["prot-story"])
+        (site / "index.html").write_text(f"<html>{QUOTED_PASSAGE}</html>")
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+
+    def test_a_symlink_to_an_acknowledged_page_grants_nothing(self, tmp_path):
+        # The reproduced defect: resolving both paths to the file they
+        # share made the homepage's own hit look like the glossary page's.
+        # Paths are compared as the sweep names them, and a link to a page
+        # is not the page the acknowledgement was written on.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        page = add_glossary_page(site, "unit-fixture",
+                                 f"A term that quotes: {QUOTED_PASSAGE}.",
+                                 acknowledges=["prot-story"])
+        (site / "index.html").unlink()
+        (site / "index.html").symlink_to(page)
+
+        with pytest.raises(GateFailure, match="index.html"):
+            process_site(site, data_dir, config)
+
+    def test_an_empty_slug_does_not_acknowledge_the_glossary_index(
+            self, tmp_path):
+        # A term id of pure punctuation slugifies to nothing, and a sweep
+        # that built /glossary/<slug>/index.html from it named the glossary
+        # index instead. Nothing is built from the id any more.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "!!!", "A term that quotes nothing.",
+                          acknowledges=["prot-story"], url="glossary/punct")
+        index = site / "glossary" / "index.html"
+        index.parent.mkdir(parents=True, exist_ok=True)
+        index.write_text(f"<html>{QUOTED_PASSAGE}</html>")
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+
+    def test_two_ids_with_one_slug_keep_their_own_pages(self, tmp_path):
+        # `a-b` and `a_b` slugify alike. One file has one path, so the two
+        # pages cannot share a record whatever their ids look like.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "a-b", f"Quoting: {QUOTED_PASSAGE}.",
+                          acknowledges=["prot-story"], url="glossary/a-b")
+        add_glossary_page(site, "a_b", f"Quoting: {QUOTED_PASSAGE}.",
+                          url="glossary/a-b-1")
+
+        with pytest.raises(GateFailure, match="a-b-1"):
+            process_site(site, data_dir, config)
+
+    def test_a_page_carries_its_tags_wherever_it_rendered(self, tmp_path):
+        # A document-level permalink puts a term somewhere no permalink
+        # template predicts. The page says what it is at the address it is.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=["prot-story"], url="elsewhere")
+
+        assert process_site(site, data_dir, config) == 1
+
+    def test_an_unacknowledged_glossary_hit_names_the_way_out(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.")
+
+        with pytest.raises(GateFailure) as failure:
+            process_site(site, data_dir, config)
+
+        message = str(failure.value)
+        assert "prot-story" in message
+        assert "unit-fixture" in message
+        assert ACKNOWLEDGEMENT_COLUMN in message
+
+    def test_a_leak_off_the_glossary_offers_only_the_two_exits(self, tmp_path):
+        # A page with no acknowledgement column of its own must not be
+        # pointed at one.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        (site / "index.html").write_text(f"<html>{QUOTED_PASSAGE}</html>")
+
+        with pytest.raises(GateFailure) as failure:
+            process_site(site, data_dir, config)
+
+        assert ACKNOWLEDGEMENT_COLUMN not in str(failure.value)
+
+    def test_an_unknown_story_warns_with_the_term_and_the_id(
+            self, tmp_path, capsys):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          "A term that quotes nothing protected.",
+                          acknowledges=["ghost-story"])
+        process_site(site, data_dir, config)
+
+        out = capsys.readouterr().out
+        assert "WARNING" in out
+        assert "unit-fixture" in out
+        assert "ghost-story" in out
+
+    def test_an_unknown_story_warns_where_nothing_is_protected(
+            self, tmp_path, capsys):
+        # The warning is about a typo, which is a typo whether or not this
+        # site protects a story today.
+        site, data_dir, config = open_stories_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture", "A term.",
+                          acknowledges=["ghost-story"])
+
+        assert process_site(site, data_dir, config) == 0
+        out = capsys.readouterr().out
+        assert "unit-fixture" in out
+        assert "ghost-story" in out
+
+    def test_an_unprotected_story_is_silent(self, tmp_path, capsys):
+        # An author who unprotects a story is not told the acknowledgement
+        # is stale: there is nothing left to acknowledge.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        (data_dir / "project.json").write_text(json.dumps(
+            [{"stories": [
+                {"number": "1", "title": "P", "story_id": "prot-story",
+                 "protected": True},
+                {"number": "2", "title": "O", "story_id": "open-story"},
+            ]}]
+        ))
+        add_glossary_page(site, "unit-fixture",
+                          "A term that quotes nothing protected.",
+                          acknowledges=["open-story"])
+        process_site(site, data_dir, config)
+
+        assert "WARNING" not in capsys.readouterr().out
+
+    @pytest.mark.parametrize("content", [
+        # The mapping the first build let through: joined with pipes it
+        # read as three ids, one of them the story.
+        escape('{"x"=>"x|prot-story|x"}', quote=True),
+        escape(json.dumps({"x": "prot-story"}), quote=True),
+        escape(json.dumps("prot-story"), quote=True),
+        escape(json.dumps([["prot-story"]]), quote=True),
+        escape(json.dumps(["prot-story", 3]), quote=True),
+        escape(json.dumps(["prot-story", ""]), quote=True),
+        escape(json.dumps(["prot-story\nother"]), quote=True),
+        "",
+        "prot-story",
+    ])
+    def test_an_unreadable_acknowledgement_grants_nothing(
+            self, tmp_path, capsys, content):
+        # The value decides whether a page may publish a protected story's
+        # prose, so the reading of one this cannot decode is "nothing".
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          meta=content)
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+        assert "not a list of story ids" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("content", [
+        "",
+        escape(json.dumps(""), quote=True),
+        escape(json.dumps("a\nb"), quote=True),
+        escape(json.dumps(["unit-fixture"]), quote=True),
+        "unit-fixture",
+    ])
+    def test_a_term_id_that_is_not_plain_text_states_no_record(
+            self, tmp_path, capsys, content):
+        # A page that cannot say which term it is cannot be pointed at a
+        # row in the spreadsheet, and a newline would break the line the
+        # gate prints about it.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=["prot-story"], term_meta=content)
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+        assert "not plain text" in capsys.readouterr().out
+
+    def test_a_commented_out_tag_grants_nothing(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        tags = glossary_markup("unit-fixture", "", acknowledges=["prot-story"])
+        head = tags.split("<head>")[1].split("</head>")[0]
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup=f"<html><head><!-- {head} --></head><body><p>"
+                   f"{QUOTED_PASSAGE}</p></body></html>"
+        )
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+
+    def test_a_tag_inside_a_script_grants_nothing(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        tags = glossary_markup("unit-fixture", "", acknowledges=["prot-story"])
+        head = tags.split("<head>")[1].split("</head>")[0]
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup="<html><head><script>var t = '" + head
+                   + "';</script></head><body><p>" + QUOTED_PASSAGE
+                   + "</p></body></html>"
+        )
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+
+    def test_a_tag_in_the_body_grants_nothing(self, tmp_path):
+        # The layout writes to the head. A body tag is not conforming
+        # markup, and honouring one would attribute the decision to a
+        # spreadsheet row that need not exist.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=["prot-story"], head=False)
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+
+    @pytest.mark.parametrize("head", [
+        '<meta content={content} name="telar-quoted-in-stories">'
+        '<meta content={term} name="telar-term-id">',
+        '<meta  name = "telar-term-id"  content = {term} >'
+        '<meta  name = "telar-quoted-in-stories"  content = {content} >',
+        "<META NAME='telar-term-id' CONTENT={term}>"
+        "<META NAME='telar-quoted-in-stories' CONTENT={content}>",
+    ])
+    def test_the_tags_are_read_however_they_are_written(self, tmp_path, head):
+        # An emitter chooses attribute order, spacing, quoting and case;
+        # none of that is the acknowledgement.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        markup = head.format(
+            term='"' + escape(json.dumps("unit-fixture"), quote=True) + '"',
+            content='"' + escape(json.dumps(["prot-story"]), quote=True) + '"',
+        )
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup=f"<html><head>{markup}</head><body><p>{QUOTED_PASSAGE}"
+                   "</p></body></html>"
+        )
+
+        assert process_site(site, data_dir, config) == 1
+
+    @pytest.mark.parametrize("story", ["x|prot-story|x", "prot-story'other"])
+    def test_a_separator_inside_an_id_does_not_divide_it(
+            self, tmp_path, capsys, story):
+        # Joining with pipes made the shape of the value invisible, and a
+        # pattern read a value as ending at an apostrophe: both took half
+        # an id for a story this site protects. JSON says where an id ends.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=[story])
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+        assert repr(story) in capsys.readouterr().out
+
+    @pytest.mark.parametrize("head", [
+        # No `</head>`: a head ends at the first thing that cannot be in
+        # one, which is how a browser reads it too.
+        "<head><body>{tags}",
+        "<head><p>{tags}",
+        "<head><title>t</title><div>{tags}",
+        # Conditional content is not something a page states.
+        "<head><noscript>{tags}</noscript></head><body>",
+        "<head><noscript><noscript>{tags}</noscript></noscript></head>",
+        # Inert until a script clones it, so not something the page states.
+        "<head><template>{tags}</template></head><body>",
+        # A head that opens after content began is not this document's head.
+        "<html><body><head>{tags}</head>",
+        # And neither is a second one after the first has closed.
+        "<head></head><body></body><head>{tags}</head>",
+    ])
+    def test_tags_outside_an_open_head_grant_nothing(self, tmp_path, head):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        tags = (meta_tag("telar-term-id", "unit-fixture")
+                + meta_tag("telar-quoted-in-stories", ["prot-story"]))
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup="<html>" + head.format(tags=tags)
+                   + f"<p>{QUOTED_PASSAGE}</p></body></html>"
+        )
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+
+    @pytest.mark.parametrize("head", [
+        "<html><head><title>t</title>{tags}</head><body>",
+        # A doctype and the html element precede every real head.
+        "<!doctype html><html><head>{tags}</head><body>",
+        # A template's contents are not in the head, so they do not end it.
+        "<html><head><template><div></div></template>{tags}</head><body>",
+    ])
+    def test_a_real_head_still_states_its_tags(self, tmp_path, head):
+        """The guards above must not cost the shape the layout writes."""
+        site, data_dir, config = build_site_fixture(tmp_path)
+        tags = (meta_tag("telar-term-id", "unit-fixture")
+                + meta_tag("telar-quoted-in-stories", ["prot-story"]))
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup=head.format(tags=tags)
+                   + f"<p>{QUOTED_PASSAGE}</p></body></html>"
+        )
+
+        assert process_site(site, data_dir, config) == 1
+
+    def test_a_tag_with_no_content_states_nothing(self, tmp_path, capsys):
+        # The parser reports a missing attribute as None, which is a shape
+        # like any other rather than a reason to stop the build.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup='<html><head>'
+                   + meta_tag("telar-term-id", "unit-fixture")
+                   + '<meta name="telar-quoted-in-stories">'
+                   + f"</head><body><p>{QUOTED_PASSAGE}</p></body></html>"
+        )
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+        assert "not a list of story ids" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("control", ["\x00", "\x1f", "\x7f", "\x85",
+                                         "\x9b", "\u2028", "\u2029"])
+    def test_a_control_character_in_an_id_states_nothing(
+            self, tmp_path, capsys, control):
+        # C1 and the Unicode separators end a line wherever the build
+        # output is read, and none of them is a character typed into a
+        # cell.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(site, "unit-fixture",
+                          f"A term that quotes: {QUOTED_PASSAGE}.",
+                          acknowledges=[f"prot{control}story"])
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+        assert "not a list of story ids" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("control", ["\x00", "\x1f", "\x7f", "\x85",
+                                         "\x9b", "\u2028", "\u2029"])
+    def test_a_control_character_in_a_term_id_states_nothing(
+            self, tmp_path, capsys, control):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        add_glossary_page(
+            site, "unit-fixture", "",
+            markup="<html><head>"
+                   + meta_tag("telar-term-id", f"unit{control}fixture")
+                   + meta_tag("telar-quoted-in-stories", ["prot-story"])
+                   + f"</head><body><p>{QUOTED_PASSAGE}</p></body></html>"
+        )
+
+        with pytest.raises(GateFailure, match="Protected plaintext"):
+            process_site(site, data_dir, config)
+        assert "not plain text" in capsys.readouterr().out
+
+    def test_a_page_with_no_tags_is_not_a_record(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+
+        assert read_glossary_acknowledgements(site) == {}
+
+    def test_a_term_acknowledging_nothing_is_still_located(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        page = add_glossary_page(site, "unit-fixture",
+                                 "A term that quotes nothing protected.")
+
+        assert read_glossary_acknowledgements(site) == {
+            str(page): ("unit-fixture", set())
+        }
+
+    def test_escaped_ids_are_read_back_as_written(self, tmp_path):
+        # The layout escapes the JSON into an attribute; the parser hands
+        # it back unescaped, so an ampersand in an id survives the trip.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        page = add_glossary_page(site, "café", "A term.",
+                                 acknowledges=["a&b", 'quote"d'],
+                                 url="glossary/cafe")
+
+        assert read_glossary_acknowledgements(site) == {
+            str(page): ("café", {"a&b", 'quote"d'})
+        }

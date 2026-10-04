@@ -106,6 +106,32 @@
   jekyll-seo-tag would otherwise add a second, English <title>. og:title/twitter:title still come
   from seo-tag (bound to static page.title) and remain a known untranslated surface. {%- endcomment -%}
   {% seo title=false %}
+
+  {%- comment -%} A glossary term page states which term it is and which protected
+  stories its definition quotes on purpose. The post-build leak sweep
+  (scripts/encrypt_protected_stories.py) reads these two tags out of _site and
+  suppresses a protected story's sentinel on this page only. It has to come from
+  the page, at the path the page rendered to: a sweep that asked a record where a
+  term rendered would be deciding from a claim about the page rather than from the
+  page, and any disagreement between the two — a symlink, a document permalink, a
+  slug rule read differently by Ruby and by Python — grants the permission
+  somewhere the author never wrote it. The <head> is where this belongs and this
+  layout owns it.
+
+  Guarded on `term_id` alone rather than on the layout: a page carries that field
+  only because generate_collections wrote it, and a term whose site gives it a
+  layout of its own would otherwise have its acknowledgement silently discarded.
+
+  Serialised as JSON, not joined: a separator makes the shape of the value
+  invisible, so `{"x" => "x|prot-story|x"}` and `["a|b"]` both read as a list of
+  ids that the author never wrote. `jsonify` preserves the shape, and the sweep
+  refuses anything that is not a list of plain ids rather than guessing at it. {%- endcomment -%}
+  {% if page.term_id %}
+  <meta name="telar-term-id" content="{{ page.term_id | jsonify | escape }}">
+  {% if page.quoted_in_stories %}
+  <meta name="telar-quoted-in-stories" content="{{ page.quoted_in_stories | jsonify | escape }}">
+  {% endif %}
+  {% endif %}
 </head>
 <body>
   {% include header.html %}

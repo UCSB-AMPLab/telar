@@ -38,7 +38,7 @@ permalink template is Jekyll's job, not this module's, and a guess is what
 we are removing. The encryptor reports that as the reason it cannot locate
 pages, which is what it was already trying to say.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import json
@@ -67,19 +67,25 @@ def jekyll_slug(value):
 
     Characters that are marks, letters or decimal digits pass through; every
     other run collapses to a single hyphen; leading and trailing hyphens are
-    dropped and the result is lower-cased.
+    dropped and each character is lower-cased on its own.
+
+    Per character, because Ruby's `downcase` has no contextual rule and
+    Python's `str.lower` has one: a Greek sigma ending a word lowercases to
+    the final form in Python and to the ordinary form in Ruby, so `ΟΣ`
+    renders at `/stories/οσ/` while a whole-string lower-casing looks for
+    `/stories/ος/` and finds no page.
     """
     out = []
     prev_hyphen = False
     for char in value:
         category = unicodedata.category(char)
         if category[0] in ('M', 'L') or category == 'Nd':
-            out.append(char)
+            out.append(char.lower())
             prev_hyphen = False
         elif not prev_hyphen:
             out.append('-')
             prev_hyphen = True
-    return ''.join(out).strip('-').lower()
+    return ''.join(out).strip('-')
 
 
 def stories_permalink(config):

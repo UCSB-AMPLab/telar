@@ -101,3 +101,14 @@ class TestTheAccentPropertyHolds:
     def test_both_genders_survive_as_separate_entries(self):
         for spelling in ('privado', 'privada', 'protegido', 'protegida'):
             assert COLUMN_NAME_MAPPING[spelling] == 'protected'
+
+    def test_both_spellings_of_the_acknowledgement_column_are_accepted(self):
+        """`citado` and `citada` are the same column, written either way.
+
+        The header carries the protected stories a glossary term quotes on
+        purpose. A spelling this table misses leaves the column under the
+        author's own name, the acknowledgement goes unread, and the build
+        fails on an overlap they already declared.
+        """
+        for spelling in ('citado_en_historias', 'citada_en_historias'):
+            assert COLUMN_NAME_MAPPING[spelling] == 'quoted_in_stories'

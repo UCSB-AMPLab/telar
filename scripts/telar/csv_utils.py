@@ -167,6 +167,13 @@ COLUMN_NAME_MAPPING = {
     'definicion': 'definition',
     'términos_relacionados': 'related_terms',
     'terminos_relacionados': 'related_terms',
+    # The glossary acknowledgement column: the protected stories a term
+    # deliberately quotes. Both genders, as with the protection column —
+    # a header this table does not carry is left under the author's own
+    # name, so the acknowledgement is never read and the build fails on an
+    # overlap the author has already declared.
+    'citado_en_historias': 'quoted_in_stories',
+    'citada_en_historias': 'quoted_in_stories',
 }
 
 
