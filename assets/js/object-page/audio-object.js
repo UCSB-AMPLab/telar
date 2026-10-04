@@ -4,7 +4,8 @@
  *
  * The file's URL arrives in the JSON block the object layout writes, built
  * from the manifest the Python build produces as it scans the objects
- * directory. Nothing here asks the server which extension exists.
+ * directory. Nothing here asks the server which extension exists. The peaks
+ * URL arrives the same way, and is empty where the build has no peaks file.
  *
  * Version: v1.8.0
  */
@@ -33,7 +34,6 @@ export function controlsMarkup(data) {
 
 export async function initAudioPlayer(data, doc = document) {
   const viewer = doc.getElementById('object-viewer');
-  const objectId = data.objectId;
   const baseUrl = data.baseUrl;
 
   const audioUrl = data.audioUrl;
@@ -67,13 +67,15 @@ export async function initAudioPlayer(data, doc = document) {
   // in for the audio object viewer (see themeColors.patternColor, unused here).
   viewer.style.background = bgColor;
 
-  // Load peaks if available
-  const peaksUrl = baseUrl + '/assets/audio/peaks/' + objectId + '.json';
+  // The layout names the peaks file only when the build has one; without it
+  // WaveSurfer decodes the audio itself.
   let peaksData = null;
-  try {
-    const peaksResp = await fetch(peaksUrl);
-    if (peaksResp.ok) peaksData = await peaksResp.json();
-  } catch (e) { /* no pre-computed peaks, WaveSurfer will decode */ }
+  if (data.peaksUrl) {
+    try {
+      const peaksResp = await fetch(data.peaksUrl);
+      if (peaksResp.ok) peaksData = await peaksResp.json();
+    } catch (e) { /* unreadable peaks: WaveSurfer decodes instead */ }
+  }
 
   // Create WaveSurfer instance — interact: true for clip region selection
   const wsOptions = {

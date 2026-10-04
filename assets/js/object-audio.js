@@ -37,7 +37,6 @@
   }
   async function initAudioPlayer(data, doc = document) {
     const viewer = doc.getElementById("object-viewer");
-    const objectId = data.objectId;
     const baseUrl = data.baseUrl;
     const audioUrl = data.audioUrl;
     if (!audioUrl) {
@@ -55,12 +54,13 @@
     const unplayedColor = themeColors.unplayedColor;
     const bgColor = themeColors.backgroundColor;
     viewer.style.background = bgColor;
-    const peaksUrl = baseUrl + "/assets/audio/peaks/" + objectId + ".json";
     let peaksData = null;
-    try {
-      const peaksResp = await fetch(peaksUrl);
-      if (peaksResp.ok) peaksData = await peaksResp.json();
-    } catch (e) {
+    if (data.peaksUrl) {
+      try {
+        const peaksResp = await fetch(data.peaksUrl);
+        if (peaksResp.ok) peaksData = await peaksResp.json();
+      } catch (e) {
+      }
     }
     const wsOptions = {
       container: "#audio-waveform",

@@ -282,6 +282,53 @@ describe('audio helpers', () => {
     expect(asked).toEqual([]);
   });
 
+  describe('peaks', () => {
+    // Stands in for WaveSurfer: records the options it was created with and
+    // answers every call the player makes with something that accepts more.
+    const inert = () => new Proxy(function () {}, {
+      get: (_t, key) => (key === 'then' ? undefined : inert()),
+      apply: () => inert(),
+    });
+    let created;
+    let asked;
+    let realFetch;
+
+    beforeEach(() => {
+      document.body.innerHTML = '<div id="object-viewer"></div>';
+      created = null;
+      asked = [];
+      realFetch = global.fetch;
+      global.fetch = async (url) => {
+        asked.push(url);
+        return { ok: true, json: async () => ({ peaks: [0.1, 0.5] }) };
+      };
+      window.telarLoadWaveSurfer = async () => {};
+      window.telarObjectTheme = { deriveThemeColors: () => ({}) };
+      window.WaveSurfer = { create: (opts) => { created = opts; return inert(); }, Regions: inert() };
+    });
+
+    afterEach(() => {
+      global.fetch = realFetch;
+      delete window.telarLoadWaveSurfer;
+      delete window.telarObjectTheme;
+      delete window.WaveSurfer;
+      delete window._objectPageWaveSurfer;
+    });
+
+    it('asks for nothing when the build has no peaks file, and lets WaveSurfer decode', async () => {
+      await initAudioPlayer(data({ mediaType: 'Audio', audioUrl: '/t/a.mp3', peaksUrl: '' }));
+      expect(asked).toEqual([]);
+      expect(created.url).toBe('/t/a.mp3');
+      expect(created.peaks).toBeUndefined();
+    });
+
+    it('fetches the peaks file the build named and hands its peaks to WaveSurfer', async () => {
+      await initAudioPlayer(data({ mediaType: 'Audio', audioUrl: '/t/a.mp3', peaksUrl: '/t/assets/audio/peaks/a.json' }));
+      expect(asked).toEqual(['/t/assets/audio/peaks/a.json']);
+      expect(created.peaks).toEqual([0.1, 0.5]);
+    });
+  });
+
   it('renders the three controls with their labels', () => {
     const markup = controlsMarkup(data({ mediaType: 'Audio' }));
     document.body.innerHTML = markup;

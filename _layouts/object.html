@@ -232,6 +232,19 @@ for a fact already written down.
 {%- else -%}
 {%- assign audio_url = '' -%}
 {%- endif -%}
+{%- comment -%}
+The peaks file is Jekyll's to know rather than csv_to_json's. process_audio.py
+writes it, or the build restores it from the audio cache, after the data
+scripts have run and before Jekyll does, so the static files are the one list
+that holds it on every route. A page told there are no peaks does not request
+them, and WaveSurfer decodes the audio itself.
+{%- endcomment -%}
+{%- assign peaks_url = '' -%}
+{%- if audio_extension -%}
+{%- assign peaks_path = '/assets/audio/peaks/' | append: page.object_id | append: '.json' -%}
+{%- assign peaks_file = site.static_files | where: 'path', peaks_path | first -%}
+{%- if peaks_file -%}{%- assign peaks_url = site.baseurl | append: peaks_path -%}{%- endif -%}
+{%- endif -%}
 {% assign external_source = page.source_url | default: page.iiif_manifest %}
 {% assign escaped_title = page.title | escape %}
 {% assign video_frame_title = lang.object.video_frame_title | default: 'Video: __TITLE__' | replace: '__TITLE__', escaped_title %}
@@ -244,6 +257,7 @@ for a fact already written down.
   "externalSource": {{ external_source | default: '' | jsonify | replace: '</', '<\/' }},
   "baseUrl": {{ site.baseurl | jsonify }},
   "audioUrl": {{ audio_url | jsonify | replace: '</', '<\/' }},
+  "peaksUrl": {{ peaks_url | jsonify | replace: '</', '<\/' }},
   "videoFrameTitle": {{ video_frame_title | jsonify | replace: '</', '<\/' }},
   "waveformLabel": {{ waveform_label | jsonify | replace: '</', '<\/' }},
   "lang": {

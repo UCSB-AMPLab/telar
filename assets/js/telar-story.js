@@ -2034,7 +2034,7 @@
       }
       const basePath = getBasePath();
       const audioUrl = `${basePath}/telar-content/objects/${this.objectId}.${ext}`;
-      const peaksUrl = `${basePath}/assets/audio/peaks/${this.objectId}.json`;
+      const peaksUrl = (window.audioPeaks || []).includes(this.objectId) ? `${basePath}/assets/audio/peaks/${this.objectId}.json` : null;
       const clipStart = parseFloat(el.dataset.clipStart) || 0;
       const clipEnd = parseFloat(el.dataset.clipEnd) || 0;
       const loop = isTruthy(el.dataset.loop);
