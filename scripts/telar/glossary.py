@@ -81,8 +81,8 @@ def load_glossary_from_csv(csv_path):
         # already lowercases internally for lookup, so pre-lowercasing here was
         # redundant and needlessly mutated the actual header labels, diverging
         # from every other CSV's column-casing behaviour.
-        from telar.csv_utils import normalize_column_names
-        df = normalize_column_names(df)
+        from telar.csv_utils import normalize_column_names, GLOSSARY_COLUMN_ALIASES
+        df = normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
 
         if 'term_id' not in df.columns or 'title' not in df.columns:
             print(f"  ⚠️ glossary.csv missing required columns (term_id, title)")

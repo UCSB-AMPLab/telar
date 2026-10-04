@@ -12,6 +12,10 @@ layout: default
   for any chapter whose `glossary_terms` list names this term, giving readers a path
   from a definition back into the narrative where the term is used. User-facing strings
   resolve through the active language file via `lang`, falling back to English.
+
+  The definition carries the entry's kind (see glossary-kinds.html) and that
+  kind's panel label, which telar.js reads when it shows this page's content in
+  the glossary panel. The page itself does not show the label.
 {%- endcomment -%}
 
 {% if site.telar_language and site.data.languages[site.telar_language] %}
@@ -29,7 +33,11 @@ layout: default
 
       <h1>{{ page.title }}{% if page.demo %}<span class="demo-badge-inline">{{ lang.demo.panel_badge }}</span>{% endif %}</h1>
 
-      <div class="glossary-content mt-4">
+      {% include glossary-kinds.html %}
+      {% assign glossary_kind = glossary_all_kinds | where: "id", page.glossary_kind | first %}
+      {% unless glossary_kind %}{% assign glossary_kind = glossary_default_kind %}{% endunless %}
+      {% include glossary-kind-text.html kind=glossary_kind part="label" lang=lang %}
+      <div class="glossary-content mt-4" data-glossary-kind="{{ glossary_kind.id | escape }}" data-glossary-kind-label="{{ glossary_kind_text | escape }}">
         {{ content }}
       </div>
 

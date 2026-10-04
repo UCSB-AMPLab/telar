@@ -18,6 +18,14 @@
  * loaded fragment. Re-opening an already-open panel waits for it to finish hiding
  * before loading the new term, so the swap reads as a clean transition.
  *
+ * Kind label — the line above the entry's title names its kind ("Key term",
+ * "Primary source"). The entry's own page carries that label on its
+ * `.glossary-content`, written by the build from _data/glossary_kinds.yml, so
+ * the panel reads the label from the page it fetched, whichever link opened
+ * it. The label is hidden while the entry loads, so it never shows the kind
+ * of the entry shown before; a page without one gets the default kind's
+ * label, which panels.html writes on the label element.
+ *
  * Click-outside-to-close — registered globally so the glossary panel dismisses on an
  * outside click on any page, while clicks on panels, glossary links and triggers are
  * left alone so they can do their own work.
@@ -308,6 +316,9 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
     titleElement.appendChild(badge);
   }
 
+  const kindLabel = panel.querySelector('.glossary-term-prefix');
+  if (kindLabel) kindLabel.style.visibility = 'hidden';
+
   // Show loading state
   contentElement.innerHTML = '<p class="text-muted">Loading...</p>';
 
@@ -334,6 +345,7 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
       const glossaryContent = doc.querySelector('.glossary-content');
 
       if (glossaryContent) {
+        showKindLabel(kindLabel, glossaryContent.dataset.glossaryKindLabel);
         contentElement.innerHTML = glossaryContent.innerHTML;
 
         // Re-render LaTeX in fetched glossary content
@@ -346,8 +358,23 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
     })
     .catch(error => {
       console.error('Error loading glossary term:', error);
+      showKindLabel(kindLabel, null);
       contentElement.innerHTML = '<div class="alert alert-danger">Failed to load glossary term. Please try again.</div>';
     });
+}
+
+/**
+ * Show the glossary panel's kind label, or the default kind's when the
+ * entry's page names none. The colon is the template's, as in panels.html.
+ *
+ * @param {Element|null} kindLabel - The panel's `.glossary-term-prefix`
+ * @param {string|null|undefined} label - The label the entry's page carries
+ */
+function showKindLabel(kindLabel, label) {
+  if (!kindLabel) return;
+  const text = label || kindLabel.dataset.defaultLabel;
+  if (text) kindLabel.textContent = text + ':';
+  kindLabel.style.visibility = '';
 }
 
 /**

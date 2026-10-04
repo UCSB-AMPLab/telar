@@ -22,6 +22,13 @@ from telar.core import find_csv_with_fallback
 from telar.latex import convert_markdown, has_latex
 from telar.frontmatter import FRONTMATTER_PATTERN, _as_text, _frontmatter_block
 from telar.story_pages import jekyll_slug
+from telar.glossary_kinds import resolve_kind, write_site_kinds
+
+
+# A markdown entry's kind, under its English or Spanish key. Its value may be
+# quoted, as any front-matter scalar may.
+_KIND_LINE = re.compile(r'^(?:kind|tipo)[ \t]*:[ \t]*["\']?(.*?)["\']?[ \t]*$',
+                        re.MULTILINE | re.IGNORECASE)
 
 
 def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
@@ -50,9 +57,10 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
     # before, and refusing it at upgrade over the casing of its own headers
     # would be a regression, not a fix.
     from telar.csv_utils import (normalize_column_names, is_header_row,
-                                 ColumnCollisionError, ReservedColumnError)
+                                 ColumnCollisionError, ReservedColumnError,
+                                 GLOSSARY_COLUMN_ALIASES)
     try:
-        df = normalize_column_names(df)
+        df = normalize_column_names(df, sheet_aliases=GLOSSARY_COLUMN_ALIASES)
     except (ColumnCollisionError, ReservedColumnError) as e:
         e.source = str(csv_path)
         raise
@@ -62,7 +70,8 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
     df = df[[col for col in df.columns if not col.startswith('#')]]
 
     # Drop duplicate header row (bilingual CSVs have Spanish aliases in row 2)
-    if len(df) > 0 and is_header_row(df.iloc[0].values):
+    if len(df) > 0 and is_header_row(df.iloc[0].values,
+                                     sheet_aliases=GLOSSARY_COLUMN_ALIASES):
         df = df.iloc[1:].reset_index(drop=True)
 
     required_cols = ['term_id', 'title', 'definition']
@@ -124,6 +133,8 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
             fields['related_terms'] = [_as_text(term) for term in related_terms]
         if has_latex(processed):
             fields['has_latex'] = True
+        fields['glossary_kind'] = resolve_kind(
+            row.get('kind', ''), where=f"Glossary entry '{term_id}'")
         fields['layout'] = 'glossary'
 
         # Write Jekyll file
@@ -177,6 +188,13 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
         term_id = term_id_match.group(1)
         filepath = glossary_dir / f"{term_id}.md"
 
+        # Written as a key of its own after the author's front matter, which
+        # is copied verbatim and may spell the kind in either language.
+        kind_match = _KIND_LINE.search(frontmatter_text)
+        glossary_kind = resolve_kind(
+            kind_match.group(1) if kind_match else '',
+            where=f"Glossary entry '{term_id}' ({source_file.name})")
+
         # Process body through the same pipeline as pages
         warnings_list = []
 
@@ -202,8 +220,12 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
             latex_flag = "\nhas_latex: true"
 
         # Write to collection with layout added
+        # Quoted as front matter: a site kind's id is whatever its config
+        # gives.
+        kind_line = _frontmatter_block({'glossary_kind': _as_text(glossary_kind)}).rstrip('\n')
         output_content = f"""---
 {frontmatter_text}
+{kind_line}
 layout: glossary{latex_flag}
 ---
 
@@ -234,6 +256,10 @@ def generate_glossary():
         print(f"✓ Cleaned up old glossary files")
 
     glossary_dir.mkdir(parents=True, exist_ok=True)
+
+    # The site's own kinds, for the layouts; written whether or not it has any,
+    # so a kind removed from _config.yml leaves the page with the rest.
+    write_site_kinds()
 
     # Load glossary terms for link processing (enables glossary-to-glossary linking)
     glossary_terms = load_glossary_terms()
@@ -281,6 +307,9 @@ def generate_glossary():
             # Create markdown with frontmatter
             fields = {'term_id': _as_text(term_id),
                       'title': _as_text(term.get('title', term_id)),
+                      'glossary_kind': resolve_kind(
+                          term.get('kind', ''),
+                          where=f"Demo glossary entry '{term_id}'"),
                       'layout': 'glossary',
                       # The layout tests this as a boolean.
                       'demo': True}

@@ -1,0 +1,13 @@
+{%- comment -%}
+  The kinds the site has glossary entries of, in the order the glossary page
+  lists them (see glossary-kinds.html), assigned to `glossary_kinds_used`,
+  with the default kind assigned to `glossary_default_kind`.
+{%- endcomment -%}
+{%- include glossary-kinds.html -%}
+{%- assign glossary_kinds_used = "" | split: "" -%}
+{%- for glossary_kind in glossary_all_kinds -%}
+  {%- include glossary-kind-entries.html kind=glossary_kind -%}
+  {%- if glossary_kind_entries.size > 0 -%}
+    {%- assign glossary_kinds_used = glossary_kinds_used | push: glossary_kind -%}
+  {%- endif -%}
+{%- endfor -%}

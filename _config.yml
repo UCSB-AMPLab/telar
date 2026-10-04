@@ -27,6 +27,17 @@ collection_interface:
   show_sample_on_homepage: true # Set to true to show a sample of objects on homepage
   featured_count: 4 # Number of objects to show on homepage (default 4)
 
+# Glossary Kinds (optional)
+# A glossary entry is a key term, a primary source, a person or entity, or a
+# place. Add kinds of your own here; write each label and heading in your
+# site's language. Entries of a kind name it in the glossary's kind column.
+# glossary:
+#   kinds:
+#     - id: species
+#       label: Species        # above the entry's title in the glossary panel
+#       heading: Species      # over the kind's entries on the glossary page
+#       values: [species, taxon]   # optional; the id is always accepted
+
 # Story Protection (optional)
 # Stories with protected=yes in project.csv will be encrypted.
 # Viewers need this key to unlock protected stories.

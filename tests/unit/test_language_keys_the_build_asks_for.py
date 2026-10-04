@@ -53,6 +53,9 @@ DYNAMIC_CALLS = {
     ('telar/processors/objects/remote.py', 'iiif_{code}'),
     ('telar/processors/objects/remote.py', 'short_{code}'),
     ('telar/processors/stories.py', 'answer kinds'),
+    # kind_text() reads a core glossary kind's panel_label or section_heading,
+    # which GLOSSARY_KIND_KEYS below reads from the registry.
+    ('telar/glossary_kinds.py', 'glossary kind keys'),
 }
 
 
@@ -124,9 +127,24 @@ def _lang_string_calls():
             yield path, node.lineno, key
 
 
+# The glossary layouts read the keys each glossary kind names — its panel
+# label, section heading and intro — through `_data/glossary_kinds.yml`, as
+# `lang[section][key]`, which no pattern over the templates can follow. They
+# are read from that file, so a kind added there is held to both directions.
+GLOSSARY_KINDS = REPO / '_data' / 'glossary_kinds.yml'
+GLOSSARY_KIND_KEY_FIELDS = ('panel_label', 'section_heading', 'intro')
+
+
+def _glossary_kind_keys():
+    kinds = yaml.safe_load(GLOSSARY_KINDS.read_text(encoding='utf-8'))
+    return sorted({kind[field] for kind in kinds
+                   for field in GLOSSARY_KIND_KEY_FIELDS if kind.get(field)})
+
+
 ALL_CALLS = list(_lang_string_calls())
 LITERAL_CALLS = [(p, n, k) for p, n, k in ALL_CALLS if k is not None]
 DYNAMIC_KEYS = _dynamic_keys()
+GLOSSARY_KIND_KEYS = _glossary_kind_keys()
 
 
 def test_the_sweep_finds_the_call_sites():
@@ -135,6 +153,7 @@ def test_the_sweep_finds_the_call_sites():
     # stopped seeing, not to be kept in step with the code.
     assert len(ALL_CALLS) > 25
     assert len(DYNAMIC_KEYS) > 10
+    assert len(GLOSSARY_KIND_KEYS) >= 6
 
 
 @pytest.mark.parametrize('code', ['en', 'es'])
@@ -174,6 +193,17 @@ def test_every_key_built_at_runtime_resolves_too(code):
     missing = [key for key in DYNAMIC_KEYS if not isinstance(_resolve(catalogue, key), str)]
     assert not missing, (
         f'{len(missing)} key(s) a runtime-built call can produce are absent '
+        f'from {code}.yml:\n  ' + '\n  '.join(missing)
+    )
+
+
+@pytest.mark.parametrize('code', ['en', 'es'])
+def test_every_key_a_glossary_kind_names_resolves(code):
+    catalogue = _catalogue(code)
+    missing = [key for key in GLOSSARY_KIND_KEYS
+               if not isinstance(_resolve(catalogue, key), str)]
+    assert not missing, (
+        f'{len(missing)} key(s) named in _data/glossary_kinds.yml are absent '
         f'from {code}.yml:\n  ' + '\n  '.join(missing)
     )
 
@@ -295,9 +325,10 @@ def _leaf_paths(node, prefix=''):
 
 
 def _asked_for():
-    """Every path anything asks for, by any of the three routes."""
+    """Every path anything asks for, by any of the four routes."""
     literal = {key for _path, _lineno, key in LITERAL_CALLS}
-    return _paths_liquid_asks_for() | literal | set(DYNAMIC_KEYS)
+    return (_paths_liquid_asks_for() | literal | set(DYNAMIC_KEYS)
+            | set(GLOSSARY_KIND_KEYS))
 
 
 ASKED_FOR = _asked_for()

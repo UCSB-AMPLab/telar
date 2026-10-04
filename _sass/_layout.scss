@@ -346,6 +346,24 @@
   }
 }
 
+/* Glossary kinds. The page renders these elements only when it lists more
+   than the default kind, so a glossary of key terms alone is unaffected. A
+   kind heading sits above the letter headings under it. */
+.glossary-section + .glossary-section {
+  margin-top: 4rem;
+}
+
+.glossary-section-heading {
+  margin-top: 2rem;
+  font-size: 2.25rem;
+  color: var(--color-heading);
+}
+
+.glossary-section .glossary-letter {
+  margin-top: 2rem;
+  font-size: 1.5rem;
+}
+
 /* Global Button Styling - Rounded like panel-trigger buttons */
 .btn {
   border-radius: 20px;
@@ -477,6 +495,14 @@
 
   .glossary-term-link {
     font-size: 1rem;
+  }
+
+  .glossary-section-heading {
+    font-size: 1.75rem;
+  }
+
+  .glossary-section .glossary-letter {
+    font-size: 1.25rem;
   }
 }
 

@@ -367,8 +367,8 @@ def _cleanup_stale_data_files(data_dir, structures_dir, demo_bundle):
 
     Every JSON file this pipeline writes to _data/ falls into one of three
     buckets: the fixed non-story files (project.json, objects.json,
-    audio_objects.json, demo-glossary.json — each already self-manages its
-    own staleness elsewhere), one file per source CSV in
+    audio_objects.json, demo-glossary.json, glossary_site_kinds.json — each
+    already self-manages its own staleness elsewhere), one file per source CSV in
     telar-content/spreadsheets/ (stem + '.json'), or one file per story_id
     in the fetched demo bundle. A file whose identifier is in none of these
     buckets has nothing left to regenerate it. This runs after CSV
@@ -382,7 +382,8 @@ def _cleanup_stale_data_files(data_dir, structures_dir, demo_bundle):
             disabled/unavailable.
     """
     non_story_files = {
-        'project.json', 'objects.json', 'audio_objects.json', 'demo-glossary.json'
+        'project.json', 'objects.json', 'audio_objects.json', 'demo-glossary.json',
+        'glossary_site_kinds.json',
     }
 
     expected_stems = {csv_file.stem for csv_file in structures_dir.glob('*.csv')}

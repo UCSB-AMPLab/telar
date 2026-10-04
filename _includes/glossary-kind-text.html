@@ -1,0 +1,17 @@
+{%- comment -%}
+  A kind's panel label (`part="label"`) or glossary-page heading
+  (`part="heading"`), assigned to `glossary_kind_text`. A site kind carries its
+  own, written in the site's language; a core kind names a language key, read
+  from `lang`, the site's catalogue.
+{%- endcomment -%}
+{%- if include.part == "label" -%}
+  {%- assign glossary_kind_text = include.kind.label -%}
+  {%- assign glossary_kind_key = include.kind.panel_label -%}
+{%- else -%}
+  {%- assign glossary_kind_text = include.kind.heading -%}
+  {%- assign glossary_kind_key = include.kind.section_heading -%}
+{%- endif -%}
+{%- unless glossary_kind_text -%}
+  {%- assign glossary_kind_path = glossary_kind_key | split: "." -%}
+  {%- assign glossary_kind_text = include.lang[glossary_kind_path.first][glossary_kind_path.last] -%}
+{%- endunless -%}

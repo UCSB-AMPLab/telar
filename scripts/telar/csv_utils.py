@@ -190,6 +190,16 @@ COLUMN_NAME_MAPPING = {
     'terminos_relacionados': 'related_terms',
 }
 
+# Aliases one sheet reads and no other. The table above applies to every
+# sheet, and `tipo` is a word an author uses for a column of their own on an
+# objects or story sheet — the type of document, say — which the build would
+# otherwise rename to a name nothing on that sheet reads. A sheet's reader
+# passes its own table as `sheet_aliases`; every other sheet keeps the header
+# as the author wrote it.
+GLOSSARY_COLUMN_ALIASES = {
+    'tipo': 'kind',
+}
+
 
 def sanitize_dataframe(df):
     """
@@ -311,7 +321,7 @@ def text_column_dtypes():
     return {header: str for header in headers}
 
 
-def normalize_column_names(df, canonical_fields=None):
+def normalize_column_names(df, canonical_fields=None, sheet_aliases=None):
     """
     Normalize column names to English using bilingual mapping.
     Supports both English and Spanish column headers (v0.6.0+).
@@ -332,6 +342,10 @@ def normalize_column_names(df, canonical_fields=None):
     is the name they meant. Pass None to apply the whole map, which is the
     behaviour for every sheet not yet scoped.
 
+    `sheet_aliases` adds the aliases only this sheet reads (see
+    GLOSSARY_COLUMN_ALIASES) on top of the shared map, refused on the same
+    collisions.
+
     Args:
         df: pandas DataFrame with potentially Spanish column names
 
@@ -341,15 +355,16 @@ def normalize_column_names(df, canonical_fields=None):
     _refuse_reserved_columns(df)
 
     # Create a mapping for this dataframe's columns
+    mapping = {**COLUMN_NAME_MAPPING, **(sheet_aliases or {})}
     rename_map = {}
     for col in df.columns:
         col_lower = col.lower().strip()
         if (canonical_fields is not None
-                and COLUMN_NAME_MAPPING.get(col_lower) not in canonical_fields):
+                and mapping.get(col_lower) not in canonical_fields):
             continue
-        if col_lower in COLUMN_NAME_MAPPING:
-            rename_map[col] = COLUMN_NAME_MAPPING[col_lower]
-            print(f"  [INFO] Normalized column '{col}' -> '{COLUMN_NAME_MAPPING[col_lower]}'")
+        if col_lower in mapping:
+            rename_map[col] = mapping[col_lower]
+            print(f"  [INFO] Normalized column '{col}' -> '{mapping[col_lower]}'")
 
     _refuse_colliding_renames(df, rename_map)
 
@@ -480,12 +495,14 @@ LEGACY_HEADER_SPELLINGS = frozenset({
 })
 
 
-def is_header_row(row_values):
+def is_header_row(row_values, sheet_aliases=None):
     """
     Check if a row contains header names (English or Spanish).
 
     Args:
         row_values: List of cell values from a row
+        sheet_aliases: The aliases only this sheet reads, whose names count
+            as header names here too
 
     Returns:
         bool: True if row appears to be a header row
@@ -498,6 +515,10 @@ def is_header_row(row_values):
 
     # And spellings a published sheet may carry for a column since removed.
     valid_names.update(LEGACY_HEADER_SPELLINGS)
+
+    if sheet_aliases:
+        valid_names.update(sheet_aliases.keys())
+        valid_names.update(sheet_aliases.values())
 
     # Count how many cells match known column names
     # A blank cell is absent however the file was read. A sheet read with

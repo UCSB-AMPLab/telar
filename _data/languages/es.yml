@@ -150,6 +150,7 @@ pages:
   objects_intro_sample_collection: "Hay {count} objetos en la colección. Mira {sample} de ellos a continuación."
   collection_mode_heading: "Explora la colección"
   glossary_intro: "Términos y conceptos clave que aparecen en estas historias."
+  glossary_intro_with_sources: "Palabras clave y fuentes primarias que aparecen en estas historias."
 
 # Default content for the homepage welcome (rendered by index.md via markdownify)
 index_page:
@@ -195,7 +196,13 @@ objects:
 # Sistema de paneles
 panels:
   default_title: "Título del panel"
-  glossary_term_prefix: "Palabra clave"
+  # Etiqueta que aparece encima del título de cada entrada en el panel
+  # del glosario, según el tipo de entrada. Los tipos se definen en
+  # _data/glossary_kinds.yml.
+  glossary_kind_term: "Palabra clave"
+  glossary_kind_source: "Fuente primaria"
+  glossary_kind_entity: "Persona o entidad"
+  glossary_kind_place: "Lugar"
   glossary_term_title: "Término del glosario"
 
 # Notas al pie. El texto que aparece al pasar el cursor sobre la flecha que
@@ -210,6 +217,12 @@ footnotes:
 glossary:
   related_terms: "Términos relacionados"
   appears_in: "Aparece en"
+  # Encabezados de la página del glosario, uno por tipo de entrada.
+  # Los tipos se definen en _data/glossary_kinds.yml.
+  section_terms: "Palabras clave"
+  section_sources: "Fuentes primarias"
+  section_entities: "Personas y entidades"
+  section_places: "Lugares"
 
 # Widgets (controles del carrusel; resueltos por widgets.py durante la construcción)
 widgets:
@@ -221,7 +234,7 @@ widgets:
 empty_states:
   no_stories: "Aún no hay historias disponibles. Agrega historias a tu hoja de cálculo o crea archivos CSV en <code>telar-content/spreadsheets/</code>."
   no_objects: "Aún no hay objetos en la colección. Agrega objetos a tu hoja de cálculo o a <code>telar-content/spreadsheets/objects.csv</code>."
-  no_glossary: "Aún no hay términos en el glosario. Agrega archivos de glosario a <code>telar-content/texts/glossary/</code>."
+  no_glossary: "Aún no hay entradas en el glosario. Agrégalas a tu hoja de cálculo del glosario o como archivos en <code>telar-content/texts/glossary/</code>."
   thumbnail_load_error: "Error al cargar"
 
 # Mensajes de error y advertencias (visibles para el usuario)
@@ -344,7 +357,7 @@ errors:
     layer_file_missing: "el archivo del panel {{ layer_num }} no se encontró"
 
     # Errores de enlaces al glosario
-    glossary_term_not_found: "el término '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una entrada en tu hoja de cálculo del glosario o en <code>telar-content/texts/glossary/</code>."
+    glossary_term_not_found: "la entrada '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una fila de tu hoja de cálculo del glosario o de un archivo de <code>telar-content/texts/glossary/</code>."
 
     # Límites de la respuesta de un paso
     answer_image_dropped: "En `{{ story }}` quitamos una imagen o un elemento incrustado de la respuesta del paso {{ step }}. La respuesta de un paso es texto corrido: pon ese contenido en un panel o conviértelo en el objeto del paso."

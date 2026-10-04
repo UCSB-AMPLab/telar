@@ -1,0 +1,62 @@
+# Glossary entry kinds
+#
+# The core kinds a glossary entry can be, listed in the order the glossary
+# page shows them. One entry here, with its language keys in every catalogue
+# under _data/languages/, is all a new core kind needs: the build and the
+# layouts read this list and nothing else names a kind. A site adds kinds of
+# its own under `glossary: kinds:` in _config.yml; the build checks them and
+# writes the ones it accepts to _data/glossary_site_kinds.json, and the page
+# lists them after these.
+#
+# The build (scripts/telar/glossary_kinds.py) matches the `kind` column of the
+# glossary sheet (`tipo` in Spanish), and the `kind:` or `tipo:` front matter
+# of a glossary markdown file, against `values`, and writes the matching `id`
+# into the entry's page as `glossary_kind`. The layouts read that id back here
+# to label the glossary panel and to group the glossary page.
+#
+#   id               written into the entry's page; always accepted as a value
+#   values           what an author may write for this kind, compared without
+#                    case, accents, underscores, hyphens or repeated spaces
+#   default          the kind of an entry whose kind is blank, absent or not
+#                    recognised; exactly one kind has it
+#   panel_label      language key of the label above the entry's title in the
+#                    glossary panel
+#   section_heading  language key of the heading over the kind's entries on
+#                    the glossary page; the page shows headings unless every
+#                    entry is of the default kind
+#   intro            language key of the glossary page's introduction when the
+#                    site has entries of this kind; the page uses
+#                    pages.glossary_intro otherwise. One kind has one.
+#
+# Language keys are two-part `section.key` paths.
+
+- id: term
+  default: true
+  values: [term, término, key term, palabra clave]
+  panel_label: panels.glossary_kind_term
+  section_heading: glossary.section_terms
+
+- id: source
+  values: [source, fuente, primary source, fuente primaria]
+  panel_label: panels.glossary_kind_source
+  section_heading: glossary.section_sources
+  intro: pages.glossary_intro_with_sources
+
+- id: entity
+  values: [entity, entities, person, people, character, characters, group,
+           groups, organization, organisation, organizations, institution,
+           institutions, community, communities, family, families,
+           corporate body, corporate bodies, agent, agents,
+           entidad, entidades, persona, personas, personaje, personajes,
+           grupo, grupos, organización, organizaciones, institución,
+           instituciones, colectivo, colectivos, comunidad, comunidades,
+           familia, familias, entidad corporativa, entidades corporativas,
+           agente, agentes]
+  panel_label: panels.glossary_kind_entity
+  section_heading: glossary.section_entities
+
+- id: place
+  values: [place, places, site, sites, territory, territories,
+           lugar, lugares, sitio, sitios, territorio, territorios]
+  panel_label: panels.glossary_kind_place
+  section_heading: glossary.section_places

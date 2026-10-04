@@ -1,0 +1,13 @@
+{%- comment -%}
+  Every glossary kind, in the order the glossary page lists them, assigned to
+  `glossary_all_kinds`: the core kinds of _data/glossary_kinds.yml, then the
+  site's own from _config.yml, which the build checks and writes to
+  _data/glossary_site_kinds.json. The default kind is assigned to
+  `glossary_default_kind`.
+{%- endcomment -%}
+{%- if site.data.glossary_site_kinds -%}
+  {%- assign glossary_all_kinds = site.data.glossary_kinds | concat: site.data.glossary_site_kinds -%}
+{%- else -%}
+  {%- assign glossary_all_kinds = site.data.glossary_kinds -%}
+{%- endif -%}
+{%- assign glossary_default_kind = site.data.glossary_kinds | where: "default", true | first -%}

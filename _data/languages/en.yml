@@ -149,6 +149,7 @@ pages:
   objects_intro_sample_collection: "There are {count} objects in the collection. Have a look at {sample} of them below."
   collection_mode_heading: "Explore the collection"
   glossary_intro: "Key terms and concepts used in these stories."
+  glossary_intro_with_sources: "Key terms and primary sources used in these stories."
 
 # Default content for the homepage welcome (rendered by index.md via markdownify)
 index_page:
@@ -194,7 +195,12 @@ objects:
 # Panels system
 panels:
   default_title: "Panel Title"
-  glossary_term_prefix: "Key term"
+  # The label above an entry's title in the glossary panel, by the
+  # entry's kind. The kinds are defined in _data/glossary_kinds.yml.
+  glossary_kind_term: "Key term"
+  glossary_kind_source: "Primary source"
+  glossary_kind_entity: "Person or entity"
+  glossary_kind_place: "Place"
   glossary_term_title: "Glossary Term"
 
 # Footnote backlinks. The tooltip on the arrow that returns a reader to
@@ -208,6 +214,12 @@ footnotes:
 glossary:
   related_terms: "Related Terms"
   appears_in: "Appears in"
+  # Headings on the glossary page, one per kind of entry.
+  # The kinds are defined in _data/glossary_kinds.yml.
+  section_terms: "Key terms"
+  section_sources: "Primary sources"
+  section_entities: "People and entities"
+  section_places: "Places"
 
 # Widgets (carousel controls; resolved by widgets.py at build)
 widgets:
@@ -219,7 +231,7 @@ widgets:
 empty_states:
   no_stories: "No stories available yet. Add stories to your spreadsheet or create CSV files in <code>telar-content/spreadsheets/</code>."
   no_objects: "No objects in the collection yet. Add objects to your spreadsheet or to <code>telar-content/spreadsheets/objects.csv</code>."
-  no_glossary: "No glossary terms available yet. Add glossary files to <code>telar-content/texts/glossary/</code>."
+  no_glossary: "There are no glossary entries yet. Add them to your glossary spreadsheet, or as files in <code>telar-content/texts/glossary/</code>."
   thumbnail_load_error: "Failed to load"
 
 # Error messages and warnings (user-facing)
@@ -342,7 +354,7 @@ errors:
     layer_file_missing: "the file for the layer {{ layer_num }} panel was not found"
 
     # Glossary link errors
-    glossary_term_not_found: "the term '<strong>{{ term_id }}</strong>' does not exist in your glossary. Check that it matches the <code>term_id</code> of an entry in your glossary spreadsheet or in <code>telar-content/texts/glossary/</code>."
+    glossary_term_not_found: "the entry '<strong>{{ term_id }}</strong>' does not exist in your glossary. Check that it matches the <code>term_id</code> of a row in your glossary spreadsheet or of a file in <code>telar-content/texts/glossary/</code>."
 
     # Step answer limits
     answer_image_dropped: "An image or embed in the answer to step {{ step }} of `{{ story }}` was removed. A step's answer is plain prose: put the image in a layer panel, or make it the step's object."

@@ -62,7 +62,11 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
   <div class="offcanvas-body">
-    <div class="glossary-term-prefix">{{ lang.panels.glossary_term_prefix }}:</div>
+    {%- comment -%} The label follows the kind of the entry shown (_data/glossary_kinds.yml): telar.js sets it from the entry's page, and falls back to the default kind's label written here. {%- endcomment -%}
+    {%- assign glossary_default_kind = site.data.glossary_kinds | where: "default", true | first -%}
+    {%- assign glossary_label_key = glossary_default_kind.panel_label | split: "." -%}
+    {%- assign glossary_default_label = lang[glossary_label_key.first][glossary_label_key.last] -%}
+    <div class="glossary-term-prefix" data-default-label="{{ glossary_default_label | escape }}">{{ glossary_default_label }}:</div>
     <h1 class="offcanvas-title" id="panel-glossary-title">{{ lang.panels.glossary_term_title }}</h1>
     <div id="panel-glossary-content">
       <!-- Content populated by JavaScript -->
