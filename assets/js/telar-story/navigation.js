@@ -350,11 +350,11 @@ function goToMobileStep(newIndex) {
   }
 
   // Check if viewer needs loading
-  const newStep = state.steps[newIndex];
-  const objectId = newStep.dataset.object;
-  const viewerCard = state.viewerCards.find(vc => vc.objectId === objectId);
+  // Keyed by scene: an object appearing in several scenes has a plate for
+  // each, and asking by objectId answers for whichever was built first.
+  const plate = state.viewerPlates[state.stepToScene[newIndex]];
 
-  if (!viewerCard || !viewerCard.isReady) {
+  if (!plate || !plate.isReady) {
     showViewerSkeletonState();
   }
 

@@ -5748,10 +5748,8 @@
     if (state.mobileNavigationCooldown) {
       return;
     }
-    const newStep = state.steps[newIndex];
-    const objectId = newStep.dataset.object;
-    const viewerCard = state.viewerCards.find((vc) => vc.objectId === objectId);
-    if (!viewerCard || !viewerCard.isReady) {
+    const plate = state.viewerPlates[state.stepToScene[newIndex]];
+    if (!plate || !plate.isReady) {
       showViewerSkeletonState();
     }
     state.mobileNavigationCooldown = true;
