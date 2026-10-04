@@ -139,7 +139,7 @@ _PARAGRAPH_END = re.compile(rf'''
   | \^[ \t\r\f\v]*(?:\n|\Z)
   | {_IAL.replace(' {0,3}', '[ ]{0,3}', 1)}
   | [ ]{{0,3}}<(?>(?!(?:{_LAZY_SPAN})\b){_NAME})
-  | [ ]{{0,3}}(?:[+*-]|\d+\.)[\t |]
+  | [ ]{{0,3}}(?:[+*-]|[0-9]+\.)[\t |]
   | \#{{1,6}}[\t ]
   | [ ]{{0,3}}:[\t |]
   | [ ]{{0,3}}>
@@ -152,6 +152,8 @@ _LEAD = re.compile(r' {0,3}')
 _INDENT = re.compile(r'[ \t]*')
 _TRAILING = re.compile(r'(?:[ \t]*\n)?')
 _FENCE_START = re.compile(r' {0,3}[~`]{3,}')
+# A line that could close a fence: its run alone, then whitespace.
+_FENCE_CLOSE_LINE = re.compile(rf'(?m)^ {{0,3}}([~`]{{3,}}){_S}*?(?:\n|\Z)')
 _FENCE_OPENING = re.compile(rf' {{0,3}}(([~`]){{3,}}){_S}*?(?:[^ \t\n\r\f\v]+?(?:\?[^ \t\n\r\f\v]*)?)?'
                             rf'{_S}*?\n')
 # Block maths: kramdown's BLOCK_MATH_START without its backslash, which the
@@ -239,7 +241,7 @@ class _Blocks:
         self.skips = []
         self.regions = []
         self.no_comment_close = False
-        self.open_fences = set()
+        self.fence_closes = None
         # Whether the block before ended at a blank line, an EOB or IAL
         # line, or is the start of the text.
         self.boundary = True
@@ -299,16 +301,22 @@ class _Blocks:
         return match.end()
 
     def fence(self, pos):
-        """The fenced code block opening at *pos*, or None. A fence left open
-        stays open for every later one of its character and length, whose
-        close would close it, so that search is made once."""
+        """The fenced code block opening at *pos*, or None. The fence is
+        searched for only when a line after it could close it. The fence's
+        run may be any start of three or more of the opening's, the rest
+        being read as its info string."""
         opening = _FENCE_OPENING.match(self.text, pos)
-        if not opening or opening.group(1) in self.open_fences:
+        if not opening:
             return None
-        match = _FENCE.match(self.text, pos)
-        if not match:
-            self.open_fences.add(opening.group(1))
-        return match
+        run, closes = opening.group(1), self.closes()
+        if not any(closes.after(run[:length], opening.end()) for length in range(3, len(run) + 1)):
+            return None
+        return _FENCE.match(self.text, pos)
+
+    def closes(self):
+        if self.fence_closes is None:
+            self.fence_closes = _FenceCloses(self.text)
+        return self.fence_closes
 
     def marker_line(self, pos):
         """An EOB or IAL line, which prints nothing."""
@@ -403,6 +411,44 @@ class _Blocks:
             match = _OPEN_TAG.match(text, lead)
             return not match or match.group(1).lower() in _SPAN_ELEMENTS
         return False
+
+
+class _FenceCloses:
+    """Every line in a text that could close a fence, found once: a run of
+    three or more tildes and backticks alone on its line. A run closes a
+    fence opened by the same run followed by more of its last character, so
+    runs are filed under their stem, the run without the repeats of its last
+    character at its end."""
+
+    def __init__(self, text):
+        self.lines = {}
+        for match in _FENCE_CLOSE_LINE.finditer(text):
+            stem, repeats = _fence_stem(match.group(1))
+            self.lines.setdefault(stem, []).append((match.start(), repeats))
+        # For each stem, where its lines start, and from each line on the
+        # longest run of repeats: a fence closes where some line after it has
+        # at least as many as its opening.
+        self.starts = {stem: [start for start, _ in lines] for stem, lines in self.lines.items()}
+        self.longest = {stem: list(itertools.accumulate((repeats for _, repeats in reversed(lines)),
+                                                        max))[::-1]
+                        for stem, lines in self.lines.items()}
+
+    def after(self, run, pos):
+        """Whether a line starting at or after *pos* closes a fence opened with
+        *run*."""
+        stem, repeats = _fence_stem(run)
+        starts = self.starts.get(stem)
+        if not starts:
+            return False
+        index = bisect.bisect_left(starts, pos)
+        return index < len(starts) and self.longest[stem][index] >= repeats
+
+
+def _fence_stem(run):
+    """*run* without the repeats of its last character at its end, with that
+    character, and how many there were."""
+    stem = run.rstrip(run[-1])
+    return (stem, run[-1]), len(run) - len(stem)
 
 
 def _heading(text, pos):

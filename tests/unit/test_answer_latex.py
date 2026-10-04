@@ -140,6 +140,15 @@ class TestAStrayDoubleDollar:
         assert _answer_maths_for_kramdown(written) == written
 
 
+# 20,000 fences left open: no two with the same run; or all the same, with
+# only a close of the other character at the end.
+_FENCES = {
+    'distinct-fences': 'a\n' + ''.join(
+        '``' + format(i, 'b').replace('0', '~').replace('1', '`') + ' x\n' for i in range(20000)),
+    'fences-and-another-close': 'a\n' + '```x\n' * 20000 + '~~~~\n',
+}
+
+
 class TestALongMalformedAnswerIsReadInLinearTime:
     """An opening with no close is searched past once, not once per
     formula: 20,000 of any of these take well under a second."""
@@ -147,10 +156,11 @@ class TestALongMalformedAnswerIsReadInLinearTime:
     @pytest.mark.parametrize('unit', ['`x ', '``y ', '\\begin{align} ', '\\( ', '\\[ ',
                                       '$$ ', '$x ', '<code>a ', '](x(y ', '<!-- ',
                                       '<![CDATA[ ', '<u>a ', '<b markdown="0">a ',
-                                      '\n{:x', '\n<div>', '\n: a', '\n````\n```', '\n```x\n'])
+                                      '\n{:x', '\n<div>', '\n: a', '\n````\n```', '\n```x\n',
+                                      'distinct-fences', 'fences-and-another-close'])
     def test_bounded(self, unit):
         started = time.perf_counter()
-        _answer_maths_for_kramdown(unit * 20000)
+        _answer_maths_for_kramdown(_FENCES.get(unit) or unit * 20000)
         assert time.perf_counter() - started < 1.0
 
     def test_many_guarded_stretches_and_formulas(self):
