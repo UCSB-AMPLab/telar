@@ -372,6 +372,10 @@ STRADDLING_MARKUP = [
     '[the catalogue](https://example.org/x)',
     '[[Colonial Period|colonial-period]]',
     '`code and more`',
+    '``code and more``',
+    '``code with ` inside``',
+    '`code and more``',
+    '```code and more```',
     '<em class="title">Mill</em>',
     '$a + b$',
     '$$a + b$$',
@@ -395,6 +399,27 @@ class TestTheCutNeverSplitsMarkup:
         df = _story_df([{'step': '1', 'answer': answer}])
         out = process_story(df, story_name='mill')
         assert out.iloc[0]['answer'] == _words(199) + '…'
+
+    def test_a_stray_backtick_does_not_hide_a_boundary(self, site):
+        """A backtick with no closing run of its length is literal, as the
+        template reads it, so it pairs with nothing and the cut stays at
+        the limit.
+        """
+        site()
+        answer = "It`s " + _words(199) + ' ' + _words(5, start=500)
+        df = _story_df([{'step': '1', 'answer': answer}])
+        out = process_story(df, story_name='mill')
+        assert out.iloc[0]['answer'] == "It`s " + _words(199) + '…'
+
+    def test_backticks_in_a_tag_open_nothing(self, site):
+        """kramdown reads the tag before code, so the backticks in its
+        attribute do not pair with a later run and pull the cut back."""
+        site()
+        # The tag is two words, so the limit falls after word 198.
+        answer = '<br title="``"> ' + _words(198) + ' ' + _words(5, start=500) + '``'
+        df = _story_df([{'step': '1', 'answer': answer}])
+        out = process_story(df, story_name='mill')
+        assert out.iloc[0]['answer'] == '<br title="``"> ' + _words(198) + '…'
 
     def test_markup_holding_no_whitespace_survives_whole(self, site):
         """A word boundary never falls inside a token, so markup written

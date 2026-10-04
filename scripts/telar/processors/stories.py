@@ -69,7 +69,7 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.code_spans import code_regions
+from telar.code_spans import code_regions, code_spans
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
@@ -221,12 +221,12 @@ _ANSWER_KIND_KEYS = {
 # Markup a cut must not land inside. Each of these is one thing to a reader
 # and to the renderer, so half of one publishes as broken syntax rather than
 # as a shortened answer. LaTeX comes from telar.latex, which owns the
-# question of what maths looks like. A footnote reference is absent because
-# the prose rules have already taken it out.
+# question of what maths looks like, and code spans from telar.code_spans,
+# which reads them as the template does. A footnote reference is absent
+# because the prose rules have already taken it out.
 _ANSWER_ATOMIC = [
     re.compile(r'\[\[[^\]]*\]\]'),        # glossary reference
     re.compile(r'\[[^\]]*\]\([^)]*\)'),   # markdown link
-    re.compile(r'`[^`]*`'),               # code span
     re.compile(r'<[^>]+>'),               # inline HTML tag
 ]
 
@@ -269,6 +269,7 @@ def _answer_atomic_spans(text):
              for pattern in _ANSWER_ATOMIC
              for match in pattern.finditer(text)]
     spans.extend(latex_spans(text))
+    spans.extend(code_spans(text))
     return spans
 
 
