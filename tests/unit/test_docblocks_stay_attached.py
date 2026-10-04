@@ -35,9 +35,9 @@ JS_DIR = Path(__file__).resolve().parents[2] / 'assets' / 'js'
 
 # The esbuild output. Generated, and it concatenates its sources, so a bundle
 # reproduces whatever its modules hold and would report each finding twice.
-BUNDLES = {'telar-story.js', 'object-page.js', 'home-page.js',
-           'objects-index-page.js', 'iiif-url-warning.js',
-           'objects-filter.js', 'share-panel.js'}
+BUNDLES = {'telar-story.js', 'object-image.js', 'object-video.js',
+           'object-audio.js', 'home-page.js', 'objects-index-page.js',
+           'iiif-url-warning.js', 'objects-filter.js', 'share-panel.js'}
 
 DOCBLOCK = re.compile(r'/\*\*.*?\*/', re.S)
 DOCUMENTS_A_CALLABLE = re.compile(r'@(param|returns)\b')

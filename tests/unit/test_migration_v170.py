@@ -15,8 +15,8 @@ it removes a Python module that a package has replaced. These tests guard:
   - the launcher: `scripts/upgrade.py` is delivered, and the file in this
     repository carries the marker the engine looks for, so a site that
     receives it is recognised as a launcher site;
-  - that every delivered path exists in the working tree, so a typo cannot
-    ship as a fetch failure on somebody's site;
+  - that every delivered path exists at the tag the migration fetches from,
+    so a typo cannot ship as a fetch failure on somebody's site;
   - fail-closed ordering: a failed framework record skips both later phases;
   - the deletions: idempotent, recorded, soft on OSError;
   - the `.gitignore` entry: added once, not duplicated on a second run;
@@ -33,6 +33,7 @@ Version: v1.7.0
 import errno
 import os
 import pathlib
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
@@ -163,11 +164,38 @@ class TestFrameworkFilesDeliverySet:
         assert LAUNCHER_MARKER in source
         assert upgrade.LAUNCHER_MARKER == LAUNCHER_MARKER
 
-    def test_every_delivered_path_exists_in_this_repository(self):
-        """A path that is not in the tree is a 404 on somebody's site, and a
-        404 is a HARD failure that stops the whole upgrade."""
-        missing = [p for p in sorted(FRAMEWORK_FILES) if not (REPO_ROOT / p).is_file()]
-        assert missing == [], f"delivered paths absent from the repository: {missing}"
+    def test_every_delivered_path_exists_at_the_tag_it_is_fetched_from(self):
+        """A path that is not there is a 404 on somebody's site, and a 404 is a
+        HARD failure that stops the whole upgrade.
+
+        Against the tag, not the working tree. The fetch is pinned to
+        `_TARGET_TAG` so a re-run after a failure gets byte-identical content,
+        which means the tree this repository happens to hold today has no
+        bearing on what a site receives. Checking the tree instead passed for
+        as long as nothing was renamed after v1.7.0 and then failed on a change
+        that could not affect any site: v1.8.0 split `object-page.js` into one
+        bundle per media type, and the v1.7.0 migration still correctly
+        delivers the file v1.7.0 shipped.
+        """
+        tag = Migration162to170._TARGET_TAG
+        missing = []
+        for path in sorted(FRAMEWORK_FILES):
+            probe = subprocess.run(
+                ['git', '-C', str(REPO_ROOT), 'cat-file', '-e', f'{tag}:{path}'],
+                capture_output=True)
+            if probe.returncode != 0:
+                missing.append(path)
+        assert missing == [], f"delivered paths absent at {tag}: {missing}"
+
+    def test_the_tag_this_is_checked_against_is_in_the_repository(self):
+        """Without the tag every path reads as absent, or every path as present
+        depending on how the probe fails — either way the check above stops
+        being about anything."""
+        tag = Migration162to170._TARGET_TAG
+        probe = subprocess.run(
+            ['git', '-C', str(REPO_ROOT), 'rev-parse', '--verify', f'{tag}^{{commit}}'],
+            capture_output=True)
+        assert probe.returncode == 0, f'{tag} is not a tag in this repository'
 
     def test_descriptions_are_nonempty(self):
         for path, desc in FRAMEWORK_FILES.items():

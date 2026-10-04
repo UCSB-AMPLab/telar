@@ -1,8 +1,12 @@
 /**
- * The audio object page: find the audio file, render the waveform with its
- * overlaid controls, and give the clip panel a draggable region.
+ * The audio object page: render the waveform with its overlaid controls, and
+ * give the clip panel a draggable region.
  *
- * Version: v1.7.0
+ * The file's URL arrives in the JSON block the object layout writes, built
+ * from the manifest the Python build produces as it scans the objects
+ * directory. Nothing here asks the server which extension exists.
+ *
+ * Version: v1.8.0
  */
 
 const PLAY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>';
@@ -11,24 +15,10 @@ const RESTART_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height=
 const VOLUME_ON_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>';
 const VOLUME_OFF_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
 
-const EXTENSIONS = ['.mp3', '.ogg', '.m4a'];
-
 export function formatTime(secs) {
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return m + ':' + (s < 10 ? '0' : '') + s;
-}
-
-/** The first of the candidate audio URLs the server answers for, or null. */
-export async function findAudioUrl(baseUrl, objectId, fetchFn = fetch) {
-  for (const ext of EXTENSIONS) {
-    const testUrl = baseUrl + '/telar-content/objects/' + objectId + ext;
-    try {
-      const resp = await fetchFn(testUrl, { method: 'HEAD' });
-      if (resp.ok) return testUrl;
-    } catch (e) { /* continue */ }
-  }
-  return null;
 }
 
 export function controlsMarkup(data) {
@@ -46,7 +36,7 @@ export async function initAudioPlayer(data, doc = document) {
   const objectId = data.objectId;
   const baseUrl = data.baseUrl;
 
-  const audioUrl = await findAudioUrl(baseUrl, objectId);
+  const audioUrl = data.audioUrl;
   if (!audioUrl) {
     viewer.innerHTML = '<div class="alert alert-warning">' + data.lang.audioNotFound + '</div>';
     return;

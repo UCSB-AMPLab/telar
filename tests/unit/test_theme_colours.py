@@ -718,7 +718,7 @@ class TestStylesheetConsumesTheDerivedProperties:
     JS_BUTTON_TEXT_EXEMPT = {
         'object-theme.js',              # deriveThemeColors, waveform palette
         'object-page/audio-object.js',  # passes it to deriveThemeColors
-        'object-page.js',               # bundle of object-page/
+        'object-audio.js',              # bundle carrying audio-object.js
         'telar-story/audio-card.js',    # deriveThemeColors, waveform palette
         'telar-story.js',               # bundle of telar-story/
     }
@@ -779,13 +779,28 @@ class TestStylesheetConsumesTheDerivedProperties:
         assert f'theme.colors.text.{key}' not in line
 
     def test_the_object_layout_writes_the_panel_ground_from_the_manifest(self):
-        """The class comes from the build's own flag, not from the browser."""
-        source = (REPO_ROOT / '_layouts' / 'object.html').read_text(
+        """The class comes from the build's own flag, not from the browser.
+
+        `panel_ground` is assigned in the layout and read in the three author
+        panels, which are includes now — one per media type, so a page carries
+        only its own. Liquid gives an include the including template's scope,
+        so the assignment stays where it is and each panel reads it; what this
+        checks is that all three still do, since an include that lost the class
+        would render an unstyled panel rather than fail.
+        """
+        layout = (REPO_ROOT / '_layouts' / 'object.html').read_text(
             encoding='utf-8'
         )
-        assert "theme_colours.themes[site.telar_theme].light" in source
-        assert "theme_light.button == false" in source
-        assert source.count('coordinate-panel {{ panel_ground }}') == 3
+        assert "theme_colours.themes[site.telar_theme].light" in layout
+        assert "theme_light.button == false" in layout
+
+        tools = REPO_ROOT / '_includes' / 'objects' / 'tools'
+        panels = sorted(tools.glob('*.html'))
+        assert len(panels) == 3, f'expected one panel per media type, found {panels}'
+        for panel in panels:
+            assert 'coordinate-panel {{ panel_ground }}' in panel.read_text(
+                encoding='utf-8'
+            ), f'{panel.name} does not take its ground from the build' 
 
     def test_no_script_decides_the_panel_ground(self):
         hits = subprocess.run(
