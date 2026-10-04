@@ -164,6 +164,19 @@ function _clampPosition(position) {
   return Math.max(0, Math.min(position, totalPositions - 1));
 }
 
+// How far the scroll has to have moved since it last held the scrub open for
+// a frame to count as the reader's scroll still travelling: the half pixel at
+// which Lenis itself calls a smoothed move complete. Lenis completes a move
+// only when its value rounds to its target's rounding, so a target on a half
+// pixel (an odd wheel total under a wheel multiplier of 0.5) is approached from
+// below and never completes: it goes on emitting frames that differ by
+// millionths of a pixel. Read as travel, they would hold the scrub open for
+// good and the gesture would never be carried to a step.
+const SCROLL_MOVING_PX = 0.5;
+
+// The scroll offset at which a frame last held the scrub open.
+let armedAt = 0;
+
 // How near a whole step counts as resting on it. A scroll lands on fractions
 // of a pixel, and a thousandth of a viewport is under a pixel on every cell.
 const REST_TOLERANCE = 0.001;
@@ -247,6 +260,7 @@ export function initScrollEngine(stepCount) {
   if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
   if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
   if (scrubEndTimer) { clearTimeout(scrubEndTimer); scrubEndTimer = null; }
+  armedAt = 0;
   navToken = 0;
   navTarget = null;
   navTargetToken = 0;
@@ -391,7 +405,10 @@ export function initScrollEngine(stepCount) {
     // path states a position for, so a gesture that drifts to a stop away from
     // a waypoint would leave the stack at whatever position the flag happened
     // to lapse on.
-    if (!navToken) armScrubEnd();
+    if (!navToken && Math.abs(l.animatedScroll - armedAt) >= SCROLL_MOVING_PX) {
+      armedAt = l.animatedScroll;
+      armScrubEnd();
+    }
   });
 
   // Start rAF loop — drives Lenis physics every frame

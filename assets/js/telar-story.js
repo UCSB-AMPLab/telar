@@ -2381,6 +2381,8 @@
   function _clampPosition(position) {
     return Math.max(0, Math.min(position, totalPositions - 1));
   }
+  var SCROLL_MOVING_PX = 0.5;
+  var armedAt = 0;
   var REST_TOLERANCE = 1e-3;
   function _isInsidePanel(node) {
     return node.closest(".offcanvas") !== null || node.closest("[data-telar-panel]") !== null;
@@ -2413,6 +2415,7 @@
       clearTimeout(scrubEndTimer);
       scrubEndTimer = null;
     }
+    armedAt = 0;
     navToken = 0;
     navTarget = null;
     navTargetToken = 0;
@@ -2483,7 +2486,10 @@
         lastPosition = position;
       }
       updateScrollPosition(position);
-      if (!navToken) armScrubEnd();
+      if (!navToken && Math.abs(l.animatedScroll - armedAt) >= SCROLL_MOVING_PX) {
+        armedAt = l.animatedScroll;
+        armScrubEnd();
+      }
     });
     rafId = requestAnimationFrame(function raf(time) {
       lenis.raf(time);
