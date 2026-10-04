@@ -30,8 +30,11 @@
  * the layer keys, the nav button. The scroll engine writes it wherever Lenis
  * runs. Where it does not (vertical layout, iPad), button navigation is the
  * only thing that moves the story and writes it through recordButtonStep.
- * state.currentMobileStep is the step the buttons last moved to, which in
- * embed mode runs ahead of the scroll while it is in flight.
+ * state.currentMobileStep is the step the buttons last moved to. In embed
+ * mode every move is the scroll engine's, the buttons' included, and the
+ * buttons show only where the engine is: it hands them each step it puts the
+ * story on (followEngine), so they carry on from wherever a link, a key or the
+ * wheel left the reader, and a move refused or cut short leaves them right.
  *
  * All navigation is blocked when a panel is open (the "panel freeze" system
  * managed by panels.js). This prevents accidental step changes while the
@@ -42,7 +45,7 @@
 
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
 import { activateCard, releaseTitleCardsForIntro } from './card-pool.js';
-import { advanceToStep, keyboardNav } from './scroll-engine.js';
+import { advanceToStep, buttonHeading, keyboardNav } from './scroll-engine.js';
 import { writeHash } from './deep-link.js';
 import { initializeLoadingShimmer, showViewerSkeletonState } from './viewer.js';
 import {
@@ -211,12 +214,8 @@ export function jumpButtonsTo(index) {
 /**
  * Put button navigation on the intro, in the state a first load leaves it in:
  * step 0 is the step "next" leaves the intro for, and "previous" is disabled
- * because there is nothing before the intro.
- *
- * The previous button on step 1 and Back to Start both end here. The scroll
- * engine's own returns to the intro in embed mode do not: the engine moves no
- * button state on its way back out of the intro either. A story with no
- * buttons has nothing to put back.
+ * because there is nothing before the intro. A story with no buttons has
+ * nothing to put back.
  */
 export function putButtonsOnIntro() {
   if (!state.mobileNavButtons) return;
@@ -224,6 +223,26 @@ export function putButtonsOnIntro() {
   state.currentMobileStep = 0;
   state.steps.forEach((step, i) => step.classList.toggle('mobile-active', i === 0));
   updateMobileButtonStates();
+}
+
+/**
+ * Put the buttons on the step the scroll engine has put the story on, -1 for
+ * the intro.
+ *
+ * Only an embed has both. The engine calls this for every step it reaches,
+ * whatever started the move, so the next tap goes on from where the reader is
+ * and the buttons are disabled for that step. Without buttons (the desktop
+ * scroll engine) there is nothing to move.
+ *
+ * @param {number} index - Step index, or -1 for the intro.
+ */
+export function followEngine(index) {
+  if (!state.mobileNavButtons) return;
+  if (index < 0) {
+    putButtonsOnIntro();
+  } else {
+    jumpButtonsTo(index);
+  }
 }
 
 /**
@@ -303,6 +322,10 @@ export function initializeButtonNavigation() {
  * Navigate to the next step (mobile/embed).
  */
 function goToNextMobileStep() {
+  if (state.lenis) {
+    _moveThroughEngine(buttonHeading() + 1);
+    return;
+  }
   // From intro state → step 0
   if (state.mobileInIntro) {
     _dismissMobileIntro();
@@ -318,6 +341,10 @@ function goToNextMobileStep() {
  * Navigate to the previous step (mobile/embed).
  */
 function goToPreviousMobileStep() {
+  if (state.lenis) {
+    _moveThroughEngine(buttonHeading() - 1);
+    return;
+  }
   if (state.mobileInIntro) {
     return;
   }
@@ -353,7 +380,7 @@ function _restoreMobileIntro() {
 
   putButtonsOnIntro();
   recordButtonStep(-1);
-  if (!state.lenis) writeHash();
+  writeHash();
 }
 
 /**
@@ -380,11 +407,40 @@ function _dismissMobileIntro() {
   updateViewerInfo(0);
   updateMobileButtonStates();
   recordButtonStep(0);
-  if (!state.lenis) writeHash();
+  writeHash();
 }
 
 /**
- * Navigate to a specific step (mobile/embed).
+ * Move the story by a button tap in embed mode, where the scroll engine
+ * carries every move: the cards, the intro, the fragment and the buttons
+ * follow its scroll as they do a key press or the wheel. The target is taken
+ * from where the engine is going, so a second tap during a move goes on from
+ * that move's landing.
+ *
+ * Nothing here says where the reader is. The counter, the current step and
+ * the buttons are the scroll's to write as it reaches the step; a tap that
+ * wrote them first would leave them wrong whenever the move is refused or cut
+ * short, and would show the count going forwards, back and forwards again on
+ * a second tap.
+ *
+ * @param {number} newIndex - Target step index, or -1 for the intro.
+ */
+function _moveThroughEngine(newIndex) {
+  if (newIndex < -1 || newIndex >= state.steps.length) return;
+  if (state.mobileNavigationCooldown) return;
+  if (!advanceToStep(newIndex)) return;
+
+  state.mobileNavigationCooldown = true;
+  setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
+
+  if (newIndex >= 0) {
+    const plate = state.viewerPlates[state.stepToScene[newIndex]];
+    if (!plate || !plate.isReady) showViewerSkeletonState();
+  }
+}
+
+/**
+ * Navigate to a specific step where no scroll engine runs (phones, iPads).
  *
  * Handles cooldown, skeleton loading states, step class toggling,
  * and card pool activation.
@@ -425,23 +481,11 @@ function goToMobileStep(newIndex) {
 
   updateMobileButtonStates();
 
-  // If Lenis is available, use animated scroll
-  // transition through the scroll engine. Otherwise fall back to direct
-  // activateCard with CSS transition (mobile/iOS without Lenis).
-  if (state.lenis) {
-    // The move is the scroll engine's now, and the counter follows the scroll:
-    // it says where the reader is, not where they are going. Writing the
-    // destination here instead put a number on screen that the engine's own
-    // per-frame write then corrected back — so a second tap during a move
-    // showed the step count going forwards, backwards and forwards again.
-    advanceToStep(newIndex);
-  } else {
-    // No scroll engine, so no per-frame writer: this path moves the card
-    // itself and is the only thing that can state where the reader now is.
-    activateCard(newIndex, direction);
-    updateViewerInfo(newIndex);
-    recordButtonStep(newIndex);
-  }
+  // No scroll engine, so no per-frame writer: this path moves the card itself
+  // and is the only thing that can state where the reader now is.
+  activateCard(newIndex, direction);
+  updateViewerInfo(newIndex);
+  recordButtonStep(newIndex);
 
   writeHash();
 }

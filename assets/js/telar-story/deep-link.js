@@ -28,6 +28,7 @@ import { state } from './state.js';
 import { activateCard, reconcileStackForJump, reconcilePlatesForJump } from './card-pool.js';
 import { goToStep, jumpButtonsTo, putButtonsOnIntro } from './navigation.js';
 import { openPanel } from './panels.js';
+import { jumpScrollTo } from './scroll-engine.js';
 
 // ── Deep-link panel-open timer ladder ───────────────────────────────────────────
 
@@ -181,12 +182,16 @@ export function navigateToIntro() {
   }
 
   if (state.lenis) {
-    state.lenis.stop();
-    document.documentElement.scrollTop = 0;
-    state.lenis.animatedScroll = 0;
-    state.lenis.targetScroll = 0;
+    // Through Lenis, which writes the offset with behavior: instant. A direct
+    // scrollTop write is animated under the page's scroll-behavior: smooth,
+    // and WebKit can abandon that animation part way, leaving the story on the
+    // intro and the scroll on the step. The index is stated first, so the
+    // jump's own scroll frame finds the story already on the intro.
     state.currentIndex = -1;
     state.scrollPosition = 0;
+    jumpScrollTo(0);
+    if (state.snap) state.snap.currentSnapIndex = 0;
+    state.lenis.stop();
     requestAnimationFrame(() => { state.lenis.start(); });
   }
 
@@ -226,7 +231,7 @@ export function navigateToStep(stepNumber) {
     // instead of landing exactly on the target position. immediate:true removes
     // the intermediate frames entirely; force:true overrides the Snap plugin's
     // lock/stopped state so the jump isn't blocked.
-    state.lenis.scrollTo(targetPx, { immediate: true, force: true });
+    jumpScrollTo(targetPx);
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned (matches keyboardNav)
 
     reconcileStackForJump(targetIndex);

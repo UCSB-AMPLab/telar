@@ -4,12 +4,21 @@ Playwright E2E Test Configuration
 This module configures pytest-playwright for end-to-end testing of Telar sites.
 It provides fixtures for browser setup, page navigation, and a local Jekyll server.
 
-The tests require a pre-built Jekyll site. Before running E2E tests:
-1. Build the site: bundle exec jekyll build
-2. Run tests: pytest tests/e2e/ -v
+The tests need the site built with its data and tiles, served under the
+/telar baseurl, with its protected stories encrypted. A plain `jekyll serve`
+leaves the locked fixture in the clear, and the six unlock tests in
+test_story_locking.py then fail on an overlay with nothing to decrypt.
 
-For development with live server:
+    python scripts/csv_to_json.py
+    python scripts/generate_collections.py
+    python scripts/generate_iiif.py --base-url http://127.0.0.1:4001/telar
+    bundle exec jekyll serve --port 4001 --no-watch
+    python scripts/encrypt_protected_stories.py    # once the server is up
     pytest tests/e2e/ -v --base-url http://127.0.0.1:4001/telar
+
+--no-watch keeps Jekyll from regenerating _site over the encrypted page. The
+alternative is `python scripts/build_local_site.py --build-only`, which builds
+and encrypts, with _site then served statically under /telar on port 4001.
 
 Version: v1.8.0
 """

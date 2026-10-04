@@ -14,128 +14,28 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ── Hoisted mocks ─────────────────────────────────────────────────────────────
-// vi.hoisted() runs before vi.mock() factories, ensuring all variables are
-// initialized before the factory closures capture them.
+// ── Mocks ─────────────────────────────────────────────────────────────────────
+// Each factory imports the harness, so the engine and this suite share its spies.
 
-const mocks = vi.hoisted(() => {
-  // Lenis instance methods
-  const lenisOn = vi.fn();
-  const lenisRaf = vi.fn();
-  const lenisScrollTo = vi.fn();
-  const lenisResize = vi.fn();
-
-  // Snap instance methods
-  const snapAdd = vi.fn(() => vi.fn()); // returns a remover function
-  const snapRemove = vi.fn();
-  const snapResize = vi.fn();
-
-  // Track constructor calls
-  const lenisConstructorArgs = [];
-  const snapConstructorArgs = [];
-
-  // Lenis constructor — must be a regular function to work with `new`
-  function MockLenis(opts) {
-    lenisConstructorArgs.push(opts);
-    this.on = lenisOn;
-    this.raf = lenisRaf;
-    this.scrollTo = lenisScrollTo;
-    this.resize = lenisResize;
-    this.stop = vi.fn(function () { this.isStopped = true; });
-    this.start = vi.fn(function () { this.isStopped = false; });
-    this.isStopped = false;
-    this.isScrolling = false;
-    this.animatedScroll = 0;
-    this.targetScroll = 0;
-  }
-
-  // Snap constructor — must be a regular function to work with `new`
-  function MockSnap(lenis, opts) {
-    snapConstructorArgs.push({ lenis, opts });
-    this.add = snapAdd;
-    this.remove = snapRemove;
-    this.resize = snapResize;
-    this.next = vi.fn();
-    this.previous = vi.fn();
-  }
-
-  const mockActivateCard = vi.fn();
-  const mockSettleCards = vi.fn();
-  const mockGoToStep = vi.fn();
-  const mockInitKeyboardNavigation = vi.fn();
-  const mockInitializeLoadingShimmer = vi.fn();
-
-  return {
-    MockLenis,
-    MockSnap,
-    lenisOn,
-    lenisScrollTo,
-    lenisResize,
-    snapAdd,
-    snapRemove,
-    lenisConstructorArgs,
-    snapConstructorArgs,
-    mockActivateCard,
-    mockSettleCards,
-    mockGoToStep,
-    mockInitKeyboardNavigation,
-    mockInitializeLoadingShimmer,
-  };
-});
-
-vi.mock('lenis', () => ({ default: mocks.MockLenis }));
-vi.mock('lenis/snap', () => ({ default: mocks.MockSnap }));
-
-vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
-  activateCard: mocks.mockActivateCard,
-  setCardProgress: vi.fn(),
-  settleCards: mocks.mockSettleCards,
-}));
-
-vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
-  lerpIiifPosition: vi.fn(),
-  snapIiifToPosition: vi.fn(),
-  animateIiifToPosition: vi.fn(),
-  createIiifCard: vi.fn(),
-  getOrCreateIiifCard: vi.fn(),
-  activateIiifCard: vi.fn(),
-  destroyIiifCard: vi.fn(),
-}));
-
-vi.mock('../../assets/js/telar-story/navigation.js', () => ({
-  goToStep: mocks.mockGoToStep,
-  initKeyboardNavigation: mocks.mockInitKeyboardNavigation,
-  updateViewerInfo: vi.fn(),
-}));
-
-vi.mock('../../assets/js/telar-story/viewer.js', () => ({
-  initializeLoadingShimmer: mocks.mockInitializeLoadingShimmer,
-  buildObjectsIndex: vi.fn(),
-  prefetchStoryManifests: vi.fn(),
-  initializeCredits: vi.fn(),
-  getManifestUrl: vi.fn(),
-  updateObjectCredits: vi.fn(),
-  showViewerSkeletonState: vi.fn(),
-}));
+vi.mock('lenis', async () => (await import('./scroll-engine-harness.js')).lenisModule);
+vi.mock('lenis/snap', async () => (await import('./scroll-engine-harness.js')).snapModule);
+vi.mock('../../assets/js/telar-story/card-pool.js',
+  async () => (await import('./scroll-engine-harness.js')).cardPoolModule);
+vi.mock('../../assets/js/telar-story/iiif-card.js',
+  async () => (await import('./scroll-engine-harness.js')).iiifCardModule);
+vi.mock('../../assets/js/telar-story/navigation.js',
+  async () => (await import('./scroll-engine-harness.js')).navigationModule);
+vi.mock('../../assets/js/telar-story/viewer.js',
+  async () => (await import('./scroll-engine-harness.js')).viewerModule);
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav } from '../../assets/js/telar-story/scroll-engine.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
 import { state } from '../../assets/js/telar-story/state.js';
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function resetState(overrides = {}) {
-  state.steps = Array.from({ length: 5 }, (_, i) => ({ index: i }));
-  state.currentIndex = -1;
-  state.scrollPosition = 0;
-  state.scrollProgress = 0;
-  state.isSnapping = false;
-  state.lenis = null;
-  state.snap = null;
-  Object.assign(state, overrides);
-}
+import {
+  mocks, engineStory, stubEngineGlobals, readerTakesOver, wheelEvent, scrollFrame, resetState,
+} from './scroll-engine-harness.js';
 
 // ── updateScrollPosition: position model ──────────────────────────────────────
 
@@ -243,9 +143,22 @@ describe('advanceToStep', () => {
     state.lenis = mockLenis;
   });
 
-  it('does nothing if targetIndex < 0', () => {
-    advanceToStep(-1);
+  it('does nothing if targetIndex < -1', () => {
+    advanceToStep(-2);
     expect(state.lenis.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('takes -1 to the intro, at the top of the surface', () => {
+    advanceToStep(-1);
+    expect(state.lenis.scrollTo).toHaveBeenCalledWith(0, expect.any(Object));
+  });
+
+  it('writes the fragment for the step it lands on', () => {
+    history.replaceState(null, '', '/telar/stories/s/#s1');
+    advanceToStep(2);
+    state.currentIndex = 2;          // the scroll's own frames state the step
+    state.lenis.scrollTo.mock.calls[0][1].onComplete();
+    expect(location.hash).toBe('#s3');
   });
 
   it('does nothing if targetIndex >= steps.length', () => {
@@ -291,14 +204,7 @@ describe('getScrollEngineState', () => {
 
 describe('initScrollEngine', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div class="scroll-surface"></div>
-      <div class="card-stack">
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-      </div>
-    `;
+    engineStory(3);
     // Clear constructor arg tracking arrays
     mocks.lenisConstructorArgs.length = 0;
     mocks.snapConstructorArgs.length = 0;
@@ -414,29 +320,13 @@ describe('initScrollEngine', () => {
 
 describe('keyboardNav — arriving at the intro', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div class="scroll-surface"></div>
-      <div class="card-stack">
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-      </div>
-    `;
+    engineStory(3);
     mocks.mockGoToStep.mockClear();
     mocks.mockActivateCard.mockClear();
     mocks.lenisScrollTo.mockClear();
     resetState({ currentIndex: 0 });
 
-    vi.stubGlobal('requestAnimationFrame', vi.fn());
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
-      matches: false, media: query, onchange: null,
-      addListener: vi.fn(), removeListener: vi.fn(),
-      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
-    })));
-    try {
-      Object.defineProperty(history, 'scrollRestoration',
-        { writable: true, value: 'auto', configurable: true });
-    } catch (_) { /* already writable here */ }
+    stubEngineGlobals();
 
     initScrollEngine(3);
     state.currentIndex = 0;
@@ -496,31 +386,13 @@ describe('keyboardNav — arriving at the intro', () => {
 
 describe('keyboardNav — a press while a move is in flight', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div class="scroll-surface"></div>
-      <div class="card-stack">
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-      </div>
-    `;
+    engineStory(5);
     mocks.lenisScrollTo.mockClear();
     mocks.mockActivateCard.mockClear();
     mocks.mockGoToStep.mockClear();
     resetState({ currentIndex: -1 });
 
-    vi.stubGlobal('requestAnimationFrame', vi.fn());
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
-      matches: false, media: query, onchange: null,
-      addListener: vi.fn(), removeListener: vi.fn(),
-      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
-    })));
-    try {
-      Object.defineProperty(history, 'scrollRestoration',
-        { writable: true, value: 'auto', configurable: true });
-    } catch (_) { /* already writable here */ }
+    stubEngineGlobals();
 
     initScrollEngine(5);
   });
@@ -652,32 +524,14 @@ describe('keyboardNav — a press while a move is in flight', () => {
 
 describe('a move the reader interrupts with the scroll', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div class="scroll-surface"></div>
-      <div class="card-stack">
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-      </div>
-    `;
+    engineStory(5);
     mocks.lenisScrollTo.mockClear();
     mocks.mockActivateCard.mockClear();
     mocks.mockSettleCards.mockClear();
     mocks.mockGoToStep.mockClear();
     resetState({ currentIndex: -1 });
 
-    vi.stubGlobal('requestAnimationFrame', vi.fn());
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
-      matches: false, media: query, onchange: null,
-      addListener: vi.fn(), removeListener: vi.fn(),
-      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
-    })));
-    try {
-      Object.defineProperty(history, 'scrollRestoration',
-        { writable: true, value: 'auto', configurable: true });
-    } catch (_) { /* already writable here */ }
+    stubEngineGlobals();
 
     initScrollEngine(5);
   });
@@ -687,24 +541,8 @@ describe('a move the reader interrupts with the scroll', () => {
     vi.unstubAllGlobals();
   });
 
-  /** The listener Lenis calls the moment raw input arrives. */
-  function readerTakesOver(payload) {
-    mocks.lenisOn.mock.calls.find(([event]) => event === 'virtual-scroll')[1](payload);
-  }
 
-  /** A wheel gesture as Lenis reports one, with the fields the filter reads. */
-  const wheelEvent = (over = {}) => ({
-    deltaX: 0, deltaY: -120,
-    event: { ctrlKey: false, composedPath: () => [] },
-    ...over,
-  });
 
-  /** One frame of Lenis's smoothed output, at `position` viewports. */
-  function scrollFrame(position) {
-    const { lenis } = getScrollEngineState();
-    lenis.animatedScroll = position * window.innerHeight;
-    mocks.lenisOn.mock.calls.find(([event]) => event === 'scroll')[1](lenis);
-  }
 
   it('gives the cards back to the scroll', () => {
     keyboardNav('forward');                 // travelling towards position 1
@@ -811,32 +649,14 @@ describe('a move the reader interrupts with the scroll', () => {
 
 describe('a window that changes height', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div class="scroll-surface"></div>
-      <div class="card-stack">
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-      </div>
-    `;
+    engineStory(5);
     mocks.lenisScrollTo.mockClear();
     mocks.mockActivateCard.mockClear();
     resetState({ currentIndex: -1 });
 
     vi.useFakeTimers();
     vi.stubGlobal('innerHeight', 900);
-    vi.stubGlobal('requestAnimationFrame', vi.fn());
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
-      matches: false, media: query, onchange: null,
-      addListener: vi.fn(), removeListener: vi.fn(),
-      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
-    })));
-    try {
-      Object.defineProperty(history, 'scrollRestoration',
-        { writable: true, value: 'auto', configurable: true });
-    } catch (_) { /* already writable here */ }
+    stubEngineGlobals();
 
     initScrollEngine(5);
   });

@@ -796,6 +796,9 @@ describe('mobile previous button — restoring the intro', () => {
     document.body.appendChild(creditBadge);
 
     initializeButtonNavigation();
+    // A phone: no scroll engine beside the buttons. In an embed the engine
+    // carries the move back to the intro instead (button-navigation.test.js).
+    state.lenis = null;
 
     // The story boots on the intro; these tests start from step 0 instead.
     state.mobileInIntro = false;

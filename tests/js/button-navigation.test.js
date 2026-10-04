@@ -5,9 +5,10 @@
  * no scroll engine. state.currentIndex is still the current step there: the
  * fragment, the layer keys and the nav button all read it. These drive the
  * real navigation and deep-link modules through the buttons, the keyboard and
- * a deep link, with no Lenis, and read what each reader sees. The last block
- * gives the story a Lenis, as embed mode has, and checks the buttons leave
- * currentIndex to the scroll engine there.
+ * a deep link, with no Lenis, and read what each reader sees. The blocks that
+ * give the story a Lenis, as embed mode has, check that the buttons leave
+ * currentIndex to the scroll engine there, move the story through it, and
+ * follow the steps it reports.
  *
  * @version v1.8.0
  */
@@ -17,7 +18,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   openPanel: vi.fn(),
   activateCard: vi.fn(),
-  advanceToStep: vi.fn(),
+  advanceToStep: vi.fn(() => true),
+  buttonHeading: vi.fn(),
 }));
 
 vi.mock('../../assets/js/telar-story/panels.js', () => ({
@@ -41,9 +43,12 @@ vi.mock('../../assets/js/telar-story/viewer.js', () => ({
 
 vi.mock('../../assets/js/telar-story/scroll-engine.js', () => ({
   advanceToStep: mocks.advanceToStep,
+  buttonHeading: mocks.buttonHeading,
   keyboardNav: vi.fn(),
+  jumpScrollTo: vi.fn(),
 }));
 
+import * as navigation from '../../assets/js/telar-story/navigation.js';
 import { initializeButtonNavigation } from '../../assets/js/telar-story/navigation.js';
 import { applyDeepLinkOnLoad, navigateToStep, navigateToIntro } from '../../assets/js/telar-story/deep-link.js';
 import { state } from '../../assets/js/telar-story/state.js';
@@ -106,6 +111,9 @@ beforeEach(() => {
   mocks.openPanel.mockClear();
   mocks.activateCard.mockClear();
   mocks.advanceToStep.mockClear();
+  // The engine, as the buttons see it: at rest on the current step.
+  mocks.buttonHeading.mockReset();
+  mocks.buttonHeading.mockImplementation(() => state.currentIndex);
   document.querySelectorAll('.mobile-nav').forEach((el) => el.remove());
 });
 
@@ -207,14 +215,14 @@ describe('buttons with a scroll engine (embed mode)', () => {
     state.currentIndex = 1;
     tap('next');
     expect(mocks.advanceToStep).toHaveBeenCalledWith(2);
-    expect(state.currentMobileStep).toBe(2);
+    expect(state.currentMobileStep).toBe(1);
     expect(state.currentIndex).toBe(1);
   });
 
   it('leave it to the engine when leaving the intro', () => {
     boot({ lenis: {} });
     tap('next');
-    expect(state.mobileInIntro).toBe(false);
+    expect(state.mobileInIntro).toBe(true);
     expect(state.currentIndex).toBe(-1);
     expect(state.onStepChange).not.toHaveBeenCalled();
   });
@@ -227,7 +235,7 @@ const disabled = () => ({
 });
 
 /** A scroll engine's Lenis, as far as the return to the intro touches it. */
-const lenisStub = () => ({ stop: vi.fn(), start: vi.fn(), animatedScroll: 0, targetScroll: 0 });
+const lenisStub = () => ({ stop: vi.fn(), start: vi.fn(), scrollTo: vi.fn(), animatedScroll: 0, targetScroll: 0 });
 
 describe('the intro, however the buttons arrive at it', () => {
   it('back to the start from a step walked to disables the previous button', () => {
@@ -273,7 +281,7 @@ describe('the intro, however the buttons arrive at it', () => {
 
       tap('next');
       expect(state.currentMobileStep).toBe(0);
-      expect(mocks.advanceToStep).not.toHaveBeenCalled();
+      expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -282,20 +290,116 @@ describe('the intro, however the buttons arrive at it', () => {
   it('back to the start from a deep link in embed mode, then next, leaves for step 1', () => {
     vi.stubGlobal('requestAnimationFrame', () => 0);
     try {
-      boot({ hash: '#s3', lenis: { ...lenisStub(), scrollTo: vi.fn() } });
+      boot({ hash: '#s3', lenis: lenisStub() });
       expect(state.currentIndex).toBe(2);
 
       navigateToIntro();
       expect(disabled()).toEqual({ prev: true, next: false });
 
-      mocks.activateCard.mockClear();
       tap('next');
-      expect(mocks.activateCard).toHaveBeenCalledWith(0, 'forward');
       expect(state.currentMobileStep).toBe(0);
-      expect(mocks.advanceToStep).not.toHaveBeenCalled();
+      expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+// In an embed the scroll engine moves the story, whether a button, a key, the
+// wheel or a link started the move, and the buttons carry on from wherever it
+// put the reader.
+describe('buttons beside a scroll engine (embed mode)', () => {
+  it('next from the intro moves the engine to step 1', () => {
+    boot({ lenis: {} });
+    tap('next');
+    expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
+  });
+
+  it('a tap leaves the step counter to the engine, hidden on the intro until the move lands', () => {
+    boot({ lenis: {} });
+    const counter = document.getElementById('step-counter');
+    counter.classList.add('d-none');
+    tap('next');
+    expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
+    expect(counter.classList.contains('d-none')).toBe(true);
+    expect(mocks.activateCard).not.toHaveBeenCalled();
+  });
+
+  it('a tap does not move the buttons before the engine does', () => {
+    boot({ lenis: {} });
+    tap('next');
+    expect(state.mobileInIntro).toBe(true);
+    expect(disabled()).toEqual({ prev: true, next: false });
+
+    navigation.followEngine(0);                 // the scroll reaches step 1
+    expect(disabled()).toEqual({ prev: false, next: false });
+  });
+
+  it('previous from step 1 moves the engine to the intro', () => {
+    boot({ lenis: {} });
+    state.currentIndex = 0;
+    navigation.followEngine(0);
+    tap('prev');
+    expect(mocks.advanceToStep).toHaveBeenCalledWith(-1);
+  });
+
+  it('a second tap goes on from where the engine is heading', () => {
+    boot({ lenis: {} });
+    state.currentIndex = 1;
+    navigation.followEngine(1);
+    mocks.buttonHeading.mockReturnValue(2);     // a first tap still in flight
+    tap('next');
+    expect(mocks.advanceToStep).toHaveBeenCalledWith(3);
+  });
+
+  it('a tap the engine refuses leaves the buttons where they were, and the next tap is taken', () => {
+    boot({ lenis: {} });
+    state.currentIndex = 1;
+    navigation.followEngine(1);
+    mocks.advanceToStep.mockReturnValueOnce(false);
+    state.mobileNavigationCooldown = false;
+    document.querySelector('.mobile-next').click();
+    expect(state.currentMobileStep).toBe(1);
+    expect(state.mobileNavigationCooldown).toBe(false);
+  });
+
+  it('the buttons follow a step the engine reached, and next goes on from it', () => {
+    boot({ lenis: {} });
+    state.currentIndex = 2;
+    navigation.followEngine(2);
+    expect(state.mobileInIntro).toBe(false);
+    expect(state.currentMobileStep).toBe(2);
+    expect(document.querySelector('.story-step[data-step="3"]').classList.contains('mobile-active')).toBe(true);
+    expect(disabled()).toEqual({ prev: false, next: false });
+
+    tap('next');
+    expect(mocks.advanceToStep).toHaveBeenCalledWith(3);
+  });
+
+  it('the buttons follow the engine onto the last step', () => {
+    boot({ lenis: {} });
+    navigation.followEngine(STEPS - 1);
+    expect(disabled()).toEqual({ prev: false, next: true });
+  });
+
+  it('the buttons follow the engine back to the intro, and next leaves it', () => {
+    boot({ lenis: {} });
+    navigation.followEngine(2);
+    navigation.followEngine(-1);
+    expect(state.mobileInIntro).toBe(true);
+    expect(disabled()).toEqual({ prev: true, next: false });
+
+    tap('next');
+    expect(mocks.advanceToStep).toHaveBeenCalledWith(0);
+  });
+
+  it('a story with no buttons has nothing to follow', () => {
+    buildButtonPage();
+    Object.assign(state, { mobileNavButtons: null, currentMobileStep: 0, mobileInIntro: false });
+    state.steps = Array.from(document.querySelectorAll('.story-step'));
+    navigation.followEngine(2);
+    expect(document.querySelectorAll('.mobile-active')).toHaveLength(0);
+    expect(state.currentMobileStep).toBe(0);
   });
 });
 

@@ -5550,12 +5550,11 @@
       plate.container.classList.remove("is-active");
     }
     if (state.lenis) {
-      state.lenis.stop();
-      document.documentElement.scrollTop = 0;
-      state.lenis.animatedScroll = 0;
-      state.lenis.targetScroll = 0;
       state.currentIndex = -1;
       state.scrollPosition = 0;
+      jumpScrollTo(0);
+      if (state.snap) state.snap.currentSnapIndex = 0;
+      state.lenis.stop();
       requestAnimationFrame(() => {
         state.lenis.start();
       });
@@ -5570,7 +5569,7 @@
     reconcilePlatesForJump(targetIndex);
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
-      state.lenis.scrollTo(targetPx, { immediate: true, force: true });
+      jumpScrollTo(targetPx);
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
@@ -5649,6 +5648,7 @@
   var lastPosition = 0;
   var moveTarget = null;
   var moveTargetToken = 0;
+  var buttonMoveToken = 0;
   var remapping = false;
   function beginNav() {
     navToken = ++navSeq;
@@ -5704,6 +5704,7 @@
     navTargetToken = 0;
     moveTarget = null;
     moveTargetToken = 0;
+    buttonMoveToken = 0;
     remapping = false;
     keyboardNavInFlight = false;
     state.steps = Array.from(document.querySelectorAll(".story-step"));
@@ -5753,7 +5754,8 @@
       if (_isScrollTakeover(payload)) {
         navTarget = null;
         keyboardNavInFlight = false;
-        if (navToken === navTargetToken) navToken = 0;
+        if (navToken === navTargetToken || navToken === buttonMoveToken) navToken = 0;
+        buttonMoveToken = 0;
       }
       armScrubEnd();
     });
@@ -5852,6 +5854,7 @@
       navToken = 0;
       navTarget = null;
       navTargetToken = 0;
+      buttonMoveToken = 0;
       keyboardNavInFlight = false;
       state.isSnapping = false;
       if (Number.isInteger(position)) snap.currentSnapIndex = position;
@@ -5869,25 +5872,62 @@
     }
   }
   function advanceToStep(targetIndex) {
-    if (targetIndex < 0 || targetIndex >= state.steps.length) return;
+    if (targetIndex < -1 || targetIndex >= state.steps.length) return false;
     const lenisInstance = state.lenis || lenis;
-    if (!lenisInstance) return;
+    if (!lenisInstance) return false;
+    _clearDwell();
+    if (lenisInstance.isStopped || lenisInstance.isLocked) return false;
     const token = beginNav();
+    buttonMoveToken = token;
+    keyboardNavInFlight = false;
+    navTarget = null;
     _recordMoveTarget(token, targetIndex + 1);
     endScrub({ carry: false });
     const targetPx = (targetIndex + 1) * _stepPx();
+    _endMoveHeldAt(lenisInstance, targetPx);
     lenisInstance.scrollTo(targetPx, {
       duration: navSeconds().button,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
-      onComplete: () => endNav(token)
+      onComplete: () => {
+        if (buttonMoveToken === token) buttonMoveToken = 0;
+        endNav(token);
+        followEngine(state.currentIndex);
+        writeHash();
+      }
     });
+    return true;
+  }
+  function buttonHeading() {
+    const ownMove = navToken && (navToken === buttonMoveToken || navToken === navTargetToken);
+    if (ownMove && moveTargetToken === navToken && moveTarget !== null) return moveTarget - 1;
+    return state.currentIndex;
+  }
+  function _endMoveHeldAt(lenisInstance, px) {
+    if (px !== lenisInstance.targetScroll || lenisInstance.isScrolling !== "smooth") return;
+    keyboardNavInFlight = false;
+    lenisInstance.stop();
+    lenisInstance.start();
+  }
+  function jumpScrollTo(px) {
+    standDownMoves();
+    _endMoveHeldAt(state.lenis, px);
+    state.lenis.scrollTo(px, { immediate: true, force: true });
+  }
+  function standDownMoves() {
+    navToken = 0;
+    navTarget = null;
+    navTargetToken = 0;
+    moveTarget = null;
+    moveTargetToken = 0;
+    buttonMoveToken = 0;
+    keyboardNavInFlight = false;
   }
   function _clearDwell() {
     if (dwellTimer) {
       clearTimeout(dwellTimer);
       dwellTimer = null;
-      lenis.start();
+      if (!state.isPanelOpen) lenis.start();
     }
   }
   function _keyboardTarget(direction, inFlight, position) {
@@ -5900,15 +5940,23 @@
   function _activateKeyboardTarget(target, direction) {
     const targetStep = target - 1;
     if (targetStep >= 0 && targetStep !== state.currentIndex) {
-      state.scrollDriven = true;
-      activateCard(targetStep, direction);
-      state.scrollDriven = false;
-      state.currentIndex = targetStep;
-      updateViewerInfo(targetStep);
-      if (state.onStepChange) state.onStepChange(targetStep);
+      _enterStep(targetStep, direction);
     } else if (targetStep < 0 && state.currentIndex >= 0) {
-      goToStep(-1, "backward");
+      _enterStep(-1, "backward");
     }
+  }
+  function _enterStep(stepIndex, direction) {
+    if (stepIndex < 0) {
+      goToStep(-1, "backward");
+    } else {
+      state.scrollDriven = true;
+      activateCard(stepIndex, direction);
+      state.scrollDriven = false;
+      state.currentIndex = stepIndex;
+      updateViewerInfo(stepIndex);
+      if (state.onStepChange) state.onStepChange(stepIndex);
+    }
+    followEngine(stepIndex);
   }
   function keyboardNav(direction) {
     if (!lenis) return;
@@ -5965,7 +6013,7 @@
     if (position < 1) {
       state.scrollProgress = 0;
       if (state.currentIndex >= 0 && !keyboardNavInFlight) {
-        goToStep(-1, "backward");
+        _enterStep(-1, "backward");
       }
       if (!keyboardNavInFlight) settleCards(position);
       return;
@@ -5977,13 +6025,7 @@
     if (!keyboardNavInFlight || progress >= 1e-3) setCardProgress(stepIndex, progress);
     lerpIiifPosition(stepIndex, progress, state.stepsData || []);
     if (stepIndex !== state.currentIndex && !keyboardNavInFlight) {
-      const direction = stepIndex > state.currentIndex ? "forward" : "backward";
-      state.scrollDriven = true;
-      activateCard(stepIndex, direction);
-      state.scrollDriven = false;
-      state.currentIndex = stepIndex;
-      updateViewerInfo(stepIndex);
-      if (state.onStepChange) state.onStepChange(stepIndex);
+      _enterStep(stepIndex, stepIndex > state.currentIndex ? "forward" : "backward");
     }
   }
 
@@ -6055,6 +6097,14 @@
     state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === 0));
     updateMobileButtonStates();
   }
+  function followEngine(index2) {
+    if (!state.mobileNavButtons) return;
+    if (index2 < 0) {
+      putButtonsOnIntro();
+    } else {
+      jumpButtonsTo(index2);
+    }
+  }
   function createNavigationButtons() {
     if (document.querySelector(".mobile-nav")) {
       console.warn("Navigation buttons already exist, skipping creation");
@@ -6096,6 +6146,10 @@
     initKeyboardNavigation();
   }
   function goToNextMobileStep() {
+    if (state.lenis) {
+      _moveThroughEngine(buttonHeading() + 1);
+      return;
+    }
     if (state.mobileInIntro) {
       _dismissMobileIntro();
       return;
@@ -6106,6 +6160,10 @@
     goToMobileStep(state.currentMobileStep + 1);
   }
   function goToPreviousMobileStep() {
+    if (state.lenis) {
+      _moveThroughEngine(buttonHeading() - 1);
+      return;
+    }
     if (state.mobileInIntro) {
       return;
     }
@@ -6128,7 +6186,7 @@
     _hideStepChrome();
     putButtonsOnIntro();
     recordButtonStep(-1);
-    if (!state.lenis) writeHash();
+    writeHash();
   }
   function _dismissMobileIntro() {
     if (state.mobileNavigationCooldown) return;
@@ -6147,7 +6205,20 @@
     updateViewerInfo(0);
     updateMobileButtonStates();
     recordButtonStep(0);
-    if (!state.lenis) writeHash();
+    writeHash();
+  }
+  function _moveThroughEngine(newIndex) {
+    if (newIndex < -1 || newIndex >= state.steps.length) return;
+    if (state.mobileNavigationCooldown) return;
+    if (!advanceToStep(newIndex)) return;
+    state.mobileNavigationCooldown = true;
+    setTimeout(() => {
+      state.mobileNavigationCooldown = false;
+    }, MOBILE_NAV_COOLDOWN);
+    if (newIndex >= 0) {
+      const plate = state.viewerPlates[state.stepToScene[newIndex]];
+      if (!plate || !plate.isReady) showViewerSkeletonState();
+    }
   }
   function goToMobileStep(newIndex) {
     if (newIndex < 0 || newIndex >= state.steps.length) {
@@ -6169,13 +6240,9 @@
     state.steps[newIndex].classList.add("mobile-active");
     state.currentMobileStep = newIndex;
     updateMobileButtonStates();
-    if (state.lenis) {
-      advanceToStep(newIndex);
-    } else {
-      activateCard(newIndex, direction);
-      updateViewerInfo(newIndex);
-      recordButtonStep(newIndex);
-    }
+    activateCard(newIndex, direction);
+    updateViewerInfo(newIndex);
+    recordButtonStep(newIndex);
     writeHash();
   }
   function updateMobileButtonStates() {

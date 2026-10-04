@@ -219,11 +219,14 @@ class TestEmbedModeIframe:
         next_btn = frame.locator(".mobile-next")
         expect(next_btn).to_be_visible()
         next_btn.click()
-        page.wait_for_timeout(700)
 
-        # Counter appears with a step number and an active card shows
-        assert read_step_counter(frame) is not None
-        expect(frame.locator(".card-stack .text-card.is-active")).to_be_visible()
+        # The counter says where the reader is, so it changes when the move
+        # through the scroll engine lands, not when the button is pressed: it
+        # is waited for by its result rather than by a duration.
+        expect(frame.locator("#step-counter")).to_have_text(
+            re.compile(r"Step 1 / \d+"), timeout=2000)
+        assert read_step_counter(frame) == 1
+        expect(frame.locator(".card-stack .text-card.is-active")).to_be_visible(timeout=2000)
 
 
 class TestEmbedModeWithoutParam:
