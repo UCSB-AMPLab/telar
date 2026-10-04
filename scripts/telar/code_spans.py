@@ -308,8 +308,7 @@ class _Blocks:
         opening = _FENCE_OPENING.match(self.text, pos)
         if not opening:
             return None
-        run, closes = opening.group(1), self.closes()
-        if not any(closes.after(run[:length], opening.end()) for length in range(3, len(run) + 1)):
+        if not self.closes().close_after(opening.group(1), opening.end()):
             return None
         return _FENCE.match(self.text, pos)
 
@@ -417,38 +416,44 @@ class _FenceCloses:
     """Every line in a text that could close a fence, found once: a run of
     three or more tildes and backticks alone on its line. A run closes a
     fence opened by the same run followed by more of its last character, so
-    runs are filed under their stem, the run without the repeats of its last
-    character at its end."""
+    each is filed in a trie under its stem, the run without the repeats of
+    its last character at its end, and then under that character."""
 
     def __init__(self, text):
-        self.lines = {}
+        self.root = ({}, {})
         for match in _FENCE_CLOSE_LINE.finditer(text):
-            stem, repeats = _fence_stem(match.group(1))
-            self.lines.setdefault(stem, []).append((match.start(), repeats))
-        # For each stem, where its lines start, and from each line on the
-        # longest run of repeats: a fence closes where some line after it has
-        # at least as many as its opening.
-        self.starts = {stem: [start for start, _ in lines] for stem, lines in self.lines.items()}
-        self.longest = {stem: list(itertools.accumulate((repeats for _, repeats in reversed(lines)),
-                                                        max))[::-1]
-                        for stem, lines in self.lines.items()}
+            run = match.group(1)
+            stem = run.rstrip(run[-1])
+            node = self.root
+            for char in stem:
+                node = node[0].setdefault(char, ({}, {}))
+            node[1].setdefault(run[-1], []).append(match.start())
 
-    def after(self, run, pos):
+    def close_after(self, run, pos):
         """Whether a line starting at or after *pos* closes a fence opened with
-        *run*."""
-        stem, repeats = _fence_stem(run)
-        starts = self.starts.get(stem)
-        if not starts:
-            return False
-        index = bisect.bisect_left(starts, pos)
-        return index < len(starts) and self.longest[stem][index] >= repeats
+        *run*, or with any start of it three or more long, the rest of which
+        GFM then reads as the info string.
 
-
-def _fence_stem(run):
-    """*run* without the repeats of its last character at its end, with that
-    character, and how many there were."""
-    stem = run.rstrip(run[-1])
-    return (stem, run[-1]), len(run) - len(stem)
+        Each stretch of one character in *run*, from j to e, is where such a
+        start with the stem `run[:j]` ends. Any close line under that stem
+        and character closes one of them when e is at least three, since a
+        close line is itself at least three long. So the trie is walked once
+        along the run."""
+        node, start = self.root, 0
+        while start < len(run):
+            char = run[start]
+            end = start
+            while end < len(run) and run[end] == char:
+                end += 1
+            lines = node[1].get(char)
+            if end >= 3 and lines and lines[-1] >= pos:
+                return True
+            for step in run[start:end]:
+                node = node[0].get(step)
+                if node is None:
+                    return False
+            start = end
+        return False
 
 
 def _heading(text, pos):

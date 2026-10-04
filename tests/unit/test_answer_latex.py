@@ -140,12 +140,15 @@ class TestAStrayDoubleDollar:
         assert _answer_maths_for_kramdown(written) == written
 
 
-# 20,000 fences left open: no two with the same run; or all the same, with
-# only a close of the other character at the end.
+# Fences left open: 20,000 with no two runs the same; 20,000 the same, with
+# only a close of the other character at the end; one run 20,000 long; and
+# 20,000 after the only close line.
 _FENCES = {
     'distinct-fences': 'a\n' + ''.join(
         '``' + format(i, 'b').replace('0', '~').replace('1', '`') + ' x\n' for i in range(20000)),
     'fences-and-another-close': 'a\n' + '```x\n' * 20000 + '~~~~\n',
+    'one-long-run': 'a\n\n' + '`' * 20000 + '\n',
+    'a-close-before-the-fences': 'a\n\n~~~\n\n' + '~~~x\n' * 20000,
 }
 
 
@@ -157,7 +160,8 @@ class TestALongMalformedAnswerIsReadInLinearTime:
                                       '$$ ', '$x ', '<code>a ', '](x(y ', '<!-- ',
                                       '<![CDATA[ ', '<u>a ', '<b markdown="0">a ',
                                       '\n{:x', '\n<div>', '\n: a', '\n````\n```', '\n```x\n',
-                                      'distinct-fences', 'fences-and-another-close'])
+                                      'distinct-fences', 'fences-and-another-close',
+                                      'one-long-run', 'a-close-before-the-fences'])
     def test_bounded(self, unit):
         started = time.perf_counter()
         _answer_maths_for_kramdown(_FENCES.get(unit) or unit * 20000)
