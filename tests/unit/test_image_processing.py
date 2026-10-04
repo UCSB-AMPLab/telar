@@ -10,7 +10,7 @@ Supported syntax:
 - ![alt](path){size} — image with size class (sm, md, lg, full)
 - Line after image becomes caption (optional "caption:" prefix stripped)
 
-Version: v0.7.0-beta
+Version: v1.8.0
 """
 
 import sys
@@ -37,8 +37,51 @@ class TestProcessImages:
     def test_prepends_default_path(self):
         """Should prepend /telar-content/objects/ to relative paths."""
         text = '![Alt](photo.jpg)'
-        result = process_images(text)
+        result = process_images(text, base_url='')
         assert 'src="/telar-content/objects/photo.jpg"' in result
+
+    def test_relative_path_carries_the_site_base_url(self):
+        """A bare file name resolves under the site's baseurl.
+
+        The HTML is published unrewritten on a glossary page, in the glossary
+        panel and on a user page, so a path without the baseurl is fetched
+        from the host root and 404s on a project site.
+        """
+        result = process_images('![Alt](photo.jpg)', base_url='/telar')
+        assert 'src="/telar/telar-content/objects/photo.jpg"' in result
+
+    def test_base_url_leaves_author_paths_alone(self):
+        """A root-absolute path or a URL is the author's, written as given."""
+        assert 'src="/custom/image.jpg"' in process_images(
+            '![Alt](/custom/image.jpg)', base_url='/telar')
+        assert 'src="https://example.com/i.jpg"' in process_images(
+            '![Alt](https://example.com/i.jpg)', base_url='/telar')
+
+    def test_base_url_defaults_to_the_site_config(self, tmp_path, monkeypatch):
+        from telar import widgets
+        (tmp_path / '_config.yml').write_text('baseurl: "/mysite/"\n', encoding='utf-8')
+        monkeypatch.chdir(tmp_path)
+        widgets.reset_base_url_cache()
+        try:
+            result = process_images('![Alt](photo.jpg)')
+        finally:
+            widgets.reset_base_url_cache()
+        assert 'src="/mysite/telar-content/objects/photo.jpg"' in result
+
+    def test_inline_panel_and_glossary_content_carries_the_base_url(
+            self, tmp_path, monkeypatch):
+        """Spreadsheet content, as a story panel or a CSV glossary definition
+        is written, reaches process_images with the configured baseurl."""
+        from telar import widgets
+        from telar.markdown import process_inline_content
+        (tmp_path / '_config.yml').write_text('baseurl: "/telar"\n', encoding='utf-8')
+        monkeypatch.chdir(tmp_path)
+        widgets.reset_base_url_cache()
+        try:
+            result = process_inline_content('Text.\n\n![Alt](photo.jpg)')
+        finally:
+            widgets.reset_base_url_cache()
+        assert 'src="/telar/telar-content/objects/photo.jpg"' in result['content']
 
     def test_preserves_absolute_paths(self):
         """Should preserve paths starting with /."""

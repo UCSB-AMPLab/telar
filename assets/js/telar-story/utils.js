@@ -38,9 +38,11 @@ export function getBasePath() {
 /**
  * Fix image URLs in HTML content by prepending the base path.
  *
- * Panel content arrives as pre-rendered HTML from the build pipeline.
- * Image src attributes use site-relative paths (starting with /)
- * that need the Jekyll baseurl prepended to resolve correctly.
+ * Panel content arrives as pre-rendered HTML from the build pipeline. The
+ * build already resolves a bare file name and a carousel slide against the
+ * site's baseurl, so a src that starts with the base path is left alone:
+ * prefixing it again would ask for /telar/telar/…. Any other root-absolute
+ * src is the author's own path and gets the base path prepended.
  *
  * @param {string} htmlContent - HTML string that may contain img tags.
  * @param {string} basePath - The base URL path to prepend.
@@ -53,7 +55,8 @@ export function fixImageUrls(htmlContent, basePath) {
   const images = tempDiv.querySelectorAll('img');
   images.forEach(img => {
     const src = img.getAttribute('src');
-    if (src && src.startsWith('/') && !src.startsWith('//')) {
+    const alreadyUnderBase = basePath !== '' && src && src.startsWith(basePath + '/');
+    if (src && src.startsWith('/') && !src.startsWith('//') && !alreadyUnderBase) {
       img.setAttribute('src', basePath + src);
     }
   });

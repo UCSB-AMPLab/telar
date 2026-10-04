@@ -16,14 +16,16 @@ Each widget type has its own parser:
 
 - `parse_carousel_widget()` expects `key: value` blocks separated by `---`,
   where each block defines one slide (image, alt, caption, credit). It
-  validates that images exist using `validate_image_path()` from the images
-  module, and calls `get_image_dimensions()` to calculate aspect ratios.
+  warns when a slide's image is not in the site, and calls
+  `get_image_dimensions()` to calculate aspect ratios.
   The maximum aspect ratio across all slides determines the carousel's
   CSS size class (compact, default, tall, or portrait). It also resolves
   each slide's final `src`: absolute http(s) URLs pass through unchanged,
-  while everything else is joined to the site's configured `baseurl` plus
-  `/assets/images/`. The carousel template only ever renders `item.src` —
-  it carries no URL logic of its own.
+  while a file in the site is found by `locate_image()` (a path with a
+  folder in it from the site root, a bare file name in `assets/images/` and
+  then `telar-content/objects/`) and joined to the site's configured
+  `baseurl`. The carousel template only ever renders `item.src` — it
+  carries no URL logic of its own.
 
   The base URL is read here rather than left as a Liquid token because the
   two render paths do not treat such a token alike. A widget in a page is
@@ -59,7 +61,7 @@ from pathlib import Path
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from telar.config import get_lang_string
-from telar.images import validate_image_path, get_image_dimensions
+from telar.images import BARE_IMAGE_FOLDERS, get_image_dimensions, locate_image
 from telar.latex import convert_markdown
 
 
@@ -227,6 +229,14 @@ def reset_base_url_cache():
     _cached_base_url = _BASE_URL_UNSET
 
 
+def _missing_image_message(image, site_path):
+    if '/' in image:
+        return f'Carousel image not found: {image} (expected at {site_path})'
+    folders = ' or '.join(f'{folder}/' for folder in BARE_IMAGE_FOLDERS)
+    return (f'Carousel image not found: {image} (looked in {folders}; '
+            f'the slide points at {site_path})')
+
+
 def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
     """
     Parse carousel widget content.
@@ -273,24 +283,23 @@ def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
             })
             continue
 
-        # Validate image exists
-        image_exists, full_path = validate_image_path(data['image'], file_path)
-        if not image_exists:
-            warnings_list.append({
-                'type': 'widget',
-                'widget_type': 'carousel',
-                'message': f'Carousel image not found: {data["image"]} (expected at {full_path})'
-            })
-
         # Resolve the final image src here rather than in the template.
-        # Absolute http(s) URLs are used as given; everything else is joined
-        # to the site's configured baseurl, so the value that reaches the
-        # browser is a path it can fetch by whichever route the widget
+        # Absolute http(s) URLs are used as given; a file in the site is
+        # joined to the site's configured baseurl, so the value that reaches
+        # the browser is a path it can fetch by whichever route the widget
         # travelled.
-        if data['image'].startswith('http://') or data['image'].startswith('https://'):
-            data['src'] = data['image']
+        image = data['image']
+        if image.startswith('http://') or image.startswith('https://'):
+            data['src'] = image
         else:
-            data['src'] = '%s/assets/images/%s' % (base_url, data['image'])
+            site_path, found = locate_image(image, base_url)
+            data['src'] = '%s/%s' % (base_url, site_path)
+            if not found:
+                warnings_list.append({
+                    'type': 'widget',
+                    'widget_type': 'carousel',
+                    'message': _missing_image_message(image, site_path)
+                })
 
         # Warn if alt text missing
         if 'alt' not in data:

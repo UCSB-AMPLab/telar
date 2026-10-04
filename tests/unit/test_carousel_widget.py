@@ -28,9 +28,9 @@ class TestParseCarouselWidget:
 
     @pytest.fixture
     def mock_image_validation(self):
-        """Mock validate_image_path to always return True."""
-        with patch('telar.widgets.validate_image_path') as mock:
-            mock.return_value = (True, '/full/path/to/image.jpg')
+        """Find every bare file name in assets/images/."""
+        with patch('telar.widgets.locate_image') as mock:
+            mock.side_effect = lambda image, base_url=None: (f'assets/images/{image}', True)
             yield mock
 
     @pytest.fixture
@@ -148,8 +148,8 @@ caption: Has caption but no alt"""
 
     def test_warns_image_not_found(self, mock_image_dimensions):
         """Should warn when image file doesn't exist."""
-        with patch('telar.widgets.validate_image_path') as mock:
-            mock.return_value = (False, '/path/to/missing.jpg')
+        with patch('telar.widgets.locate_image') as mock:
+            mock.return_value = ('assets/images/missing.jpg', False)
             content = """image: missing.jpg
 alt: Missing image"""
             warnings = []

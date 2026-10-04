@@ -221,7 +221,8 @@
     const images = tempDiv.querySelectorAll("img");
     images.forEach((img) => {
       const src = img.getAttribute("src");
-      if (src && src.startsWith("/") && !src.startsWith("//")) {
+      const alreadyUnderBase = basePath !== "" && src && src.startsWith(basePath + "/");
+      if (src && src.startsWith("/") && !src.startsWith("//") && !alreadyUnderBase) {
         img.setAttribute("src", basePath + src);
       }
     });
