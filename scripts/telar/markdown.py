@@ -49,6 +49,7 @@ import re
 
 import yaml
 
+from telar.frontmatter import FRONTMATTER_LOAD_ERRORS
 from telar.images import process_images, resolve_path_case_insensitive
 from telar.latex import convert_markdown
 from telar.widgets import process_widgets
@@ -120,7 +121,7 @@ def _split_frontmatter(content, source='content'):
     # whatever is between them untouched, backslashes included.
     try:
         parsed = yaml.safe_load(frontmatter_text)
-    except yaml.YAMLError:
+    except FRONTMATTER_LOAD_ERRORS:
         parsed = None
 
     if isinstance(parsed, dict) and 'title' in parsed:
@@ -147,7 +148,7 @@ def _looks_like_metadata(block):
     """
     try:
         return isinstance(yaml.safe_load(block), dict)
-    except yaml.YAMLError:
+    except FRONTMATTER_LOAD_ERRORS:
         return False
 
 

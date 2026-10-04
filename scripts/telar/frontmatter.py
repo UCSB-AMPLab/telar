@@ -16,6 +16,13 @@ import yaml
 
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
 
+# What loading an author's frontmatter can raise. YAML that parses can still
+# fail to become values: `2024-13-45` is read as a date that does not exist,
+# and a tag such as `!!float` or `!` hands its text to a constructor that
+# rejects it. PyYAML raises those as the builtin errors, not as YAMLError, so
+# a caller that catches YAMLError alone lets them end the build of the file.
+FRONTMATTER_LOAD_ERRORS = (yaml.YAMLError, ValueError, TypeError, KeyError)
+
 
 def _as_text(value):
     """A frontmatter value as the text the author typed.

@@ -18,7 +18,7 @@ from telar.widgets import process_widgets
 from telar.images import process_images
 from telar.glossary import process_glossary_links, load_glossary_terms
 from telar.latex import convert_markdown
-from telar.frontmatter import FRONTMATTER_PATTERN
+from telar.frontmatter import FRONTMATTER_LOAD_ERRORS, FRONTMATTER_PATTERN
 
 
 # Front-matter keys a page source does not get to decide. A page's URL comes
@@ -81,7 +81,7 @@ def _parse_page_frontmatter(source_file):
 
     try:
         frontmatter_dict = yaml.safe_load(frontmatter_text) or {}
-    except yaml.YAMLError as e:
+    except FRONTMATTER_LOAD_ERRORS as e:
         print(f"❌ Error: Invalid YAML frontmatter in {source_file}: {e}")
         return None
 
