@@ -84,6 +84,7 @@ from . import v180_sheets, v180_sources
 FRAMEWORK_FILES = {
     # Root documents and dependency manifests.
     'README.md': 'Project README for v1.8.0',
+    'requirements.txt': 'Python dependencies, with pandas bounded to the release the sheet repair was checked against',
     'package.json': 'Build scripts for the three object-page bundles, and the dependencies',
     'package-lock.json': 'Lockfile matching package.json — always ships with it',
 

@@ -21,7 +21,7 @@ most phases any migration has. These tests guard:
   - one run over a whole 1.7.0-shaped site, and a second that changes
     nothing.
 
-The phases' own rules are tested in test_migration_v180_sheets.py and
+The phases' own rules are tested in test_migration_v180_sheets.py,
 test_migration_v180_sources.py. Network fetches are not exercised here.
 
 Version: v1.8.0
@@ -71,7 +71,8 @@ RELEASE_REF = TAG if _tag_exists() else 'HEAD'
 # content and configuration the site owns, this repository's own tooling
 # and tests, the engine, and the files the template carries only because it
 # is also the development repository. `index.md` and `pages/glossary.md` are
-# the site's; the one line each needs is edited in place.
+# the site's; the one line each needs is edited in place. So is the pandas
+# line of `requirements.txt`, which a site adds its own packages to.
 NOT_DELIVERED_PREFIXES = (
     'telar-content/', 'tests/', 'docs/',
     '.github/', 'scripts/migrations/', 'scripts/telar_upgrade', 'assets/audio/peaks/',
