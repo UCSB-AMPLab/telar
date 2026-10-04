@@ -83,6 +83,15 @@ def load_glossary_from_csv(csv_path):
             term_id = str(row.get('term_id', '')).strip()
             title = str(row.get('title', '')).strip()
 
+            # A row whose id begins `#` is a comment the author left for
+            # themselves, and the page generator gives it no page. The link
+            # map has to exclude it on the same stripped value, or a term
+            # resolves to a link with nothing behind it. `strip()` settles
+            # every way such a row can arrive -- leading spaces, and the
+            # U+0085 a paste into a spreadsheet cell can carry.
+            if term_id.startswith('#'):
+                continue
+
             if term_id and title:
                 glossary_terms[term_id] = title
 
