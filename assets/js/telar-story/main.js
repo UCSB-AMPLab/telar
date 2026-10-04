@@ -28,7 +28,7 @@
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -124,7 +124,10 @@ function initializeStory() {
     // iOS desktop (iPad) — use button nav, Lenis momentum scroll is unreliable
     initializeButtonNavigation();
   } else {
-    // Lenis-powered continuous scroll engine
+    // Lenis-powered continuous scroll engine. The marker keeps the keyboard
+    // hint on the intro when the window is later narrowed into the vertical
+    // layout, which does not change the navigation.
+    document.documentElement.dataset.navigation = 'scroll';
     const stepCount = (window.storyData?.steps || []).filter(s => !s._metadata).length;
     initScrollEngine(stepCount);
   }

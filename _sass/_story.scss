@@ -659,17 +659,31 @@
     color: #9aabbf;
   }
 
-  // Responsive hint text
+  // The hint names the navigation in use. main.js marks the root with
+  // data-navigation once it has chosen; until then (before the script runs,
+  // or while a protected story waits to be unlocked) the layout stands in
+  // for it, since a vertical layout always gets the buttons.
   .hint-mobile {
     display: none;
   }
 
-  @include vertical-layout {
+  :root[data-navigation='buttons'] & {
     .hint-desktop {
       display: none;
     }
     .hint-mobile {
       display: inline;
+    }
+  }
+
+  @include vertical-layout {
+    :root:not([data-navigation]) & {
+      .hint-desktop {
+        display: none;
+      }
+      .hint-mobile {
+        display: inline;
+      }
     }
   }
 

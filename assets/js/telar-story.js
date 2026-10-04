@@ -6076,6 +6076,7 @@
     return { container: navContainer, prev: prevButton, next: nextButton };
   }
   function initializeButtonNavigation() {
+    document.documentElement.dataset.navigation = "buttons";
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     initializeLoadingShimmer();
     state.steps.forEach((step) => {
@@ -6318,6 +6319,7 @@
     } else if (isIOS) {
       initializeButtonNavigation();
     } else {
+      document.documentElement.dataset.navigation = "scroll";
       const stepCount = (window.storyData?.steps || []).filter((s) => !s._metadata).length;
       initScrollEngine(stepCount);
     }

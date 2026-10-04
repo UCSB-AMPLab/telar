@@ -266,6 +266,9 @@ function createNavigationButtons() {
  * the screen.
  */
 export function initializeButtonNavigation() {
+  // The intro's hint is chosen in CSS from this marker, so it has to be set
+  // wherever the buttons are the navigation, whatever the layout.
+  document.documentElement.dataset.navigation = 'buttons';
   state.steps = Array.from(document.querySelectorAll('.story-step'));
 
   initializeLoadingShimmer();

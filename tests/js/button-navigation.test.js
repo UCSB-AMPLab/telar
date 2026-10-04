@@ -298,3 +298,30 @@ describe('the intro, however the buttons arrive at it', () => {
     }
   });
 });
+
+// The intro's hint is chosen in CSS from this marker, so it names the buttons
+// wherever they are the navigation in use: an iPad held either way, an embed,
+// and a window opened narrow and then widened.
+describe('the document says button navigation is in use', () => {
+  beforeEach(() => {
+    delete document.documentElement.dataset.navigation;
+  });
+
+  it('is unmarked before button navigation starts', () => {
+    buildButtonPage();
+    expect(document.documentElement.dataset.navigation).toBeUndefined();
+  });
+
+  it('is marked once button navigation starts', () => {
+    boot();
+    expect(document.documentElement.dataset.navigation).toBe('buttons');
+  });
+
+  it('stays marked when the buttons already exist', () => {
+    boot();
+    delete document.documentElement.dataset.navigation;
+    initializeButtonNavigation();
+    expect(document.querySelectorAll('.mobile-nav')).toHaveLength(1);
+    expect(document.documentElement.dataset.navigation).toBe('buttons');
+  });
+});
