@@ -157,6 +157,36 @@ def restore_latex(html, replacements):
     return html
 
 
+# An HTML start or end tag, with quoted attribute values read whole so a
+# `>` inside one does not end the match. Markdown reads inline HTML within one
+# paragraph, so the text is matched a paragraph at a time: a `<b` in prose
+# must not pair with a `>` further down the page.
+_HTML_TAG = re.compile(r"""<[A-Za-z/][^<>"']*(?:(?:"[^"]*"|'[^']*')[^<>"']*)*>""")
+_BLANK_LINE = re.compile(r'(\n[ \t]*\n)')
+
+# Stands for `[^` inside a tag while the converter runs. Letters only, so
+# neither Markdown nor an HTML sanitiser has anything in it to rewrite.
+_TAG_FOOTNOTE_MARK = 'TFNTAGOPENEND'
+
+
+def _hold_tag_footnote_marks(text):
+    """*text* with every `[^` inside an HTML tag replaced by a placeholder.
+
+    The footnotes extension matches `[^label]` anywhere in inline text,
+    including inside a raw tag's attribute values, and the `<sup>` it
+    writes there ends the attribute at its first quote. A reference in an
+    attribute is not one a reader can follow, so it is kept as text.
+    """
+    if not text or '[^' not in text:
+        return text
+
+    def _hold(match):
+        return match.group(0).replace('[^', _TAG_FOOTNOTE_MARK)
+
+    return ''.join(_HTML_TAG.sub(_hold, paragraph)
+                   for paragraph in _BLANK_LINE.split(text))
+
+
 def _with_localised_footnotes(extensions, footnote_scope=None):
     """(extensions, extension_configs) for footnotes: reading order, translated tooltip.
 
@@ -231,6 +261,9 @@ def convert_markdown(text, extensions=None, post_process=None,
     converted before this call -- keep the numbers their own conversion
     gave them.
 
+    A footnote reference written inside an HTML tag -- `<span
+    title="[^b]">` -- stays literal text, and the tag stays intact.
+
     *footnote_scope* keeps this conversion's note anchors apart from any
     other conversion's on the same page. Two widget sections may both
     define `[^s]`; without a scope each writes `id="fn:s"`, and the second
@@ -261,9 +294,11 @@ def convert_markdown(text, extensions=None, post_process=None,
         str: Rendered HTML with the original LaTeX intact.
     """
     protected, replacements = protect_latex(text)
+    protected = _hold_tag_footnote_marks(protected)
     extensions, configs = _with_localised_footnotes(extensions, footnote_scope)
     html = markdown.markdown(protected, extensions=extensions,
                              extension_configs=configs)
+    html = html.replace(_TAG_FOOTNOTE_MARK, '[^')
     if post_process is not None:
         html = post_process(html)
     if restore_as_text:
