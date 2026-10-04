@@ -177,6 +177,27 @@ def _extra_metadata(obj):
     return {'extra_metadata': extra} if extra else {}
 
 
+# YAML 1.1 line-break characters besides \n and \r. A scalar containing one
+# of these must be double-quoted, or the character survives the dump and
+# then reads back as something else: YAML 1.1 parsers fold it (and its
+# surrounding whitespace) the way they fold a real line break, so the value
+# a reader gets back is not the value written.
+_YAML_1_1_LINE_BREAKS = ('\x85', ' ', ' ')
+
+
+class _FrontmatterDumper(yaml.SafeDumper):
+    """A Dumper scoped to this module, so the style override below cannot
+    reach any other `yaml.safe_dump` call in the codebase."""
+
+
+def _represent_str(dumper, data):
+    style = '"' if any(ch in data for ch in _YAML_1_1_LINE_BREAKS) else None
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style=style)
+
+
+_FrontmatterDumper.add_representer(str, _represent_str)
+
+
 def _frontmatter_block(fields):
     """Serialise frontmatter fields as YAML.
 
@@ -190,10 +211,15 @@ def _frontmatter_block(fields):
 
     `sort_keys=False` keeps the order the build writes, which is the order a
     site owner reading the file expects, and `allow_unicode` keeps accented
-    text as itself rather than as escapes.
+    text as itself rather than as escapes. `_FrontmatterDumper` forces
+    double-quoted style for a string carrying a YAML 1.1 line-break
+    character (see `_YAML_1_1_LINE_BREAKS`) so it is written as an escape
+    instead of the raw character; every other string keeps whatever style
+    the default representer would have chosen.
     """
-    return yaml.safe_dump(fields, sort_keys=False, allow_unicode=True,
-                          default_flow_style=False, width=10 ** 6)
+    return yaml.dump(fields, Dumper=_FrontmatterDumper, sort_keys=False,
+                     allow_unicode=True, default_flow_style=False,
+                     width=10 ** 6)
 
 
 def _object_page(obj):

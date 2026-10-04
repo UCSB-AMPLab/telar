@@ -149,9 +149,12 @@ ACKNOWLEDGEMENT_META = 'telar-quoted-in-stories'
 # either would break the line the gate prints about it. C1 as well as C0,
 # and the two Unicode separators: NEL and the line separator end a line
 # wherever the build output is read, and nothing between U+007F and U+009F
-# is a character an author types into a cell.
+# is a character an author types into a cell. Lone surrogates (U+D800-
+# U+DFFF) are included too: `json.loads` decodes an unpaired `\uD800`-style
+# escape into one rather than rejecting it, and a str carrying one can
+# never equal a real id and breaks whatever tries to print or encode it.
 CONTROL_CHARACTERS = re.compile(
-    '[\u0000-\u001f\u007f-\u009f\u2028\u2029]')
+    '[\u0000-\u001f\u007f-\u009f\u2028\u2029\ud800-\udfff]')
 
 # The elements a document head may hold. Collection ends at the first start
 # tag that is not one of them, because a head is closed by the first thing

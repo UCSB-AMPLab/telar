@@ -1216,7 +1216,12 @@ class TestOverlapAcknowledgement:
         assert "not a list of story ids" in capsys.readouterr().out
 
     @pytest.mark.parametrize("control", ["\x00", "\x1f", "\x7f", "\x85",
-                                         "\x9b", "\u2028", "\u2029"])
+                                         "\x9b", "\u2028", "\u2029",
+                                         # A lone surrogate: `json.loads`
+                                         # decodes an unpaired `\uD800`
+                                         # escape into one rather than
+                                         # rejecting it.
+                                         "\ud800"])
     def test_a_control_character_in_an_id_states_nothing(
             self, tmp_path, capsys, control):
         # C1 and the Unicode separators end a line wherever the build
@@ -1232,7 +1237,12 @@ class TestOverlapAcknowledgement:
         assert "not a list of story ids" in capsys.readouterr().out
 
     @pytest.mark.parametrize("control", ["\x00", "\x1f", "\x7f", "\x85",
-                                         "\x9b", "\u2028", "\u2029"])
+                                         "\x9b", "\u2028", "\u2029",
+                                         # A lone surrogate: `json.loads`
+                                         # decodes an unpaired `\uD800`
+                                         # escape into one rather than
+                                         # rejecting it.
+                                         "\ud800"])
     def test_a_control_character_in_a_term_id_states_nothing(
             self, tmp_path, capsys, control):
         site, data_dir, config = build_site_fixture(tmp_path)

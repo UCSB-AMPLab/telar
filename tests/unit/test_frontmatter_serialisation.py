@@ -12,17 +12,23 @@ out as the same string that went in — not merely as something equal to it,
 because YAML will hand back `True` for `'true'` and `1234` for `'1234'`,
 and both compare equal to nothing the author wrote.
 
-The fixture list is shared with the Telar Compositor, which serialises the
-same fields on its own publish path. Its three additions are the ones a
-list written from scratch tends to miss: sexagesimals and dates, which are
-YAML 1.1 types a byline can plausibly contain; alternate number bases,
-which look like catalogue numbers; and the float specials, which a
-scientific caption can produce.
+The corpus is shared with the Telar Compositor, which serialises the same
+fields on its own publish path. Its three additions are the ones a list
+written from scratch tends to miss: sexagesimals and dates, which are YAML
+1.1 types a byline can plausibly contain; alternate number bases, which
+look like catalogue numbers; and the float specials, which a scientific
+caption can produce.
+
+It lives in `tests/fixtures/frontmatter-scalars.json` rather than here,
+so the two sides pin against one file instead of two lists neither can
+see. Each entry carries the text as written in the sheet, the type the
+author meant, and the scalar this side writes it as.
 
 Version: v1.8.0
 """
 
 import csv
+import json
 import os
 import sys
 
@@ -35,28 +41,18 @@ import generate_collections
 from generate_collections import _object_page
 
 
-# The union of both sides' lists. Every one of these is a string an author
-# could type into a cell, and every one of them must come back a string.
-AWKWARD = [
-    # Parses as a boolean in YAML 1.1
-    'true', 'false', 'yes', 'no', 'on', 'off',
-    # Parses as null
-    'null', '~', '',
-    # Parses as a number, including the bases a catalogue number looks like
-    '1234', '3.14', '1e5', '0x1F', '0o17', '-', '+',
-    # Float specials, which a caption can carry
-    '.inf', '.nan',
-    # Whitespace, which quoting has to preserve
-    ' ', '  leading', 'trailing  ',
-    # Characters with meaning in YAML at the start of a scalar
-    '*star', '&anchor', '#hash', '!tag', '%directive', '@at', '`backtick',
-    '[bracket', '{brace', '- dash item', '? question', ': colon-leading',
-    # Structural characters inside a value
-    'A "quoted" title', 'Title: with a colon', 'A backslash \\ in the middle',
-    'Line one\nLine two', '---\nlooks like frontmatter',
-    # YAML 1.1 sexagesimals and dates, which differ between parsers
-    '2026-09-13', '12:30', '1:2:3',
-]
+FIXTURE = os.path.join(os.path.dirname(__file__), '..', 'fixtures',
+                       'frontmatter-scalars.json')
+
+
+def _scalars():
+    with open(FIXTURE, encoding='utf-8') as handle:
+        return json.load(handle)['scalars']
+
+
+# Every one of these is a string an author could type into a cell, and
+# every one of them must come back a string.
+AWKWARD = [entry['source'] for entry in _scalars()]
 
 
 def _frontmatter(page):
@@ -210,3 +206,35 @@ class TestAGlossaryTermSurvivesItsOwnMetadata:
             tmp_path, [['*star', 'A term', 'a definition here', '']])
 
         assert terms['*star']['term_id'] == '*star'
+
+
+class TestTheSharedCorpusIsWhatThisSideWrites:
+    """The fixture is the contract, so it is pinned as one.
+
+    A corpus both sides read is only worth having if each side is tested
+    against what it actually writes: a fixture nobody checks the serialised
+    form against records an agreement that may not hold.
+    """
+
+    @pytest.mark.parametrize('entry', _scalars(),
+                             ids=lambda e: repr(e['source']))
+    def test_the_scalar_is_written_as_the_fixture_says(self, entry):
+        block = generate_collections._frontmatter_block({'title': entry['source']})
+
+        scalar = block[len('title:'):].rstrip('\n')
+        assert scalar.lstrip(' ') == entry['expected_yaml']
+
+    @pytest.mark.parametrize('entry', _scalars(),
+                             ids=lambda e: repr(e['source']))
+    def test_it_round_trips_to_the_type_the_author_meant(self, entry):
+        block = generate_collections._frontmatter_block({'title': entry['source']})
+
+        title = yaml.safe_load(block)['title']
+
+        assert entry['intended_type'] == 'string', entry
+        assert isinstance(title, str), (entry, type(title))
+        assert title == entry['source']
+
+    def test_the_corpus_is_not_empty(self):
+        """A fixture that fails to load satisfies every test above it."""
+        assert len(_scalars()) >= 40

@@ -1,0 +1,349 @@
+{
+  "_comment": [
+    "Scalars an author can type into a spreadsheet cell, and the YAML",
+    "each one has to be written as. Shared with the Telar Compositor,",
+    "which serialises the same fields on its own publish path and keeps",
+    "its own copy: one corpus, two implementations, in the manner of",
+    "tests/fixtures/column-headers.json.",
+    "",
+    "Both sides maintain the union, so a scalar either side has been",
+    "caught by is a scalar both are tested against. Three of these came",
+    "from the Compositor and are the ones a list written from scratch",
+    "misses: sexagesimals and dates, alternate number bases, and the",
+    "float specials.",
+    "",
+    "`expected_yaml` binds the framework serialiser only: it is the exact",
+    "bytes PyYAML writes for the scalar here, and a change in them fails",
+    "this repository's test. The Compositor's serialiser quotes",
+    "differently and pins only the property above, value and type, so a",
+    "green run there is agreement on meaning, never on bytes.",
+    "",
+    "`intended_type` is what the author meant the cell to be. It is",
+    "'string' throughout, because a cell is text: the property that",
+    "matters is that `yes`, `1234` and `12:30` come back as the text",
+    "they were typed as rather than as a boolean, an integer and a",
+    "sexagesimal. `expected_yaml` is the scalar as this side writes it,",
+    "quoting included, so a change of quoting style is visible in a",
+    "diff rather than only in a passing test.",
+    "",
+    "Two of the Compositor's cases are excluded here: a value with a bare",
+    "carriage return and one with a CRLF pair. The Compositor's serialiser",
+    "normalises both to a single LF on its publish path, for a documented",
+    "reason; the framework writes back what the author typed, CR and CRLF",
+    "included. The two sides have different correct values for the same",
+    "source, so the union cannot hold one entry that both agree on — those",
+    "two stay Compositor-only."
+  ],
+  "scalars": [
+    {
+      "note": "Parses as a boolean in YAML 1.1",
+      "source": "true",
+      "intended_type": "string",
+      "expected_yaml": "'true'"
+    },
+    {
+      "source": "false",
+      "intended_type": "string",
+      "expected_yaml": "'false'"
+    },
+    {
+      "source": "yes",
+      "intended_type": "string",
+      "expected_yaml": "'yes'"
+    },
+    {
+      "source": "no",
+      "intended_type": "string",
+      "expected_yaml": "'no'"
+    },
+    {
+      "source": "on",
+      "intended_type": "string",
+      "expected_yaml": "'on'"
+    },
+    {
+      "source": "off",
+      "intended_type": "string",
+      "expected_yaml": "'off'"
+    },
+    {
+      "note": "Parses as null",
+      "source": "null",
+      "intended_type": "string",
+      "expected_yaml": "'null'"
+    },
+    {
+      "source": "~",
+      "intended_type": "string",
+      "expected_yaml": "'~'"
+    },
+    {
+      "source": "",
+      "intended_type": "string",
+      "expected_yaml": "''"
+    },
+    {
+      "note": "Parses as a number, including the bases a catalogue number looks like",
+      "source": "1234",
+      "intended_type": "string",
+      "expected_yaml": "'1234'"
+    },
+    {
+      "source": "3.14",
+      "intended_type": "string",
+      "expected_yaml": "'3.14'"
+    },
+    {
+      "source": "1e5",
+      "intended_type": "string",
+      "expected_yaml": "1e5"
+    },
+    {
+      "source": "0x1F",
+      "intended_type": "string",
+      "expected_yaml": "'0x1F'"
+    },
+    {
+      "source": "0o17",
+      "intended_type": "string",
+      "expected_yaml": "0o17"
+    },
+    {
+      "source": "-",
+      "intended_type": "string",
+      "expected_yaml": "'-'"
+    },
+    {
+      "source": "+",
+      "intended_type": "string",
+      "expected_yaml": "+"
+    },
+    {
+      "note": "Float specials, which a caption can carry",
+      "source": ".inf",
+      "intended_type": "string",
+      "expected_yaml": "'.inf'"
+    },
+    {
+      "source": ".nan",
+      "intended_type": "string",
+      "expected_yaml": "'.nan'"
+    },
+    {
+      "note": "Whitespace, which quoting has to preserve",
+      "source": " ",
+      "intended_type": "string",
+      "expected_yaml": "' '"
+    },
+    {
+      "source": "  leading",
+      "intended_type": "string",
+      "expected_yaml": "'  leading'"
+    },
+    {
+      "source": "trailing  ",
+      "intended_type": "string",
+      "expected_yaml": "'trailing  '"
+    },
+    {
+      "note": "Characters with meaning in YAML at the start of a scalar",
+      "source": "*star",
+      "intended_type": "string",
+      "expected_yaml": "'*star'"
+    },
+    {
+      "source": "&anchor",
+      "intended_type": "string",
+      "expected_yaml": "'&anchor'"
+    },
+    {
+      "source": "#hash",
+      "intended_type": "string",
+      "expected_yaml": "'#hash'"
+    },
+    {
+      "source": "!tag",
+      "intended_type": "string",
+      "expected_yaml": "'!tag'"
+    },
+    {
+      "source": "%directive",
+      "intended_type": "string",
+      "expected_yaml": "'%directive'"
+    },
+    {
+      "source": "@at",
+      "intended_type": "string",
+      "expected_yaml": "'@at'"
+    },
+    {
+      "source": "`backtick",
+      "intended_type": "string",
+      "expected_yaml": "'`backtick'"
+    },
+    {
+      "source": "[bracket",
+      "intended_type": "string",
+      "expected_yaml": "'[bracket'"
+    },
+    {
+      "source": "{brace",
+      "intended_type": "string",
+      "expected_yaml": "'{brace'"
+    },
+    {
+      "source": "- dash item",
+      "intended_type": "string",
+      "expected_yaml": "'- dash item'"
+    },
+    {
+      "source": "? question",
+      "intended_type": "string",
+      "expected_yaml": "'? question'"
+    },
+    {
+      "source": ": colon-leading",
+      "intended_type": "string",
+      "expected_yaml": "': colon-leading'"
+    },
+    {
+      "note": "Structural characters inside a value. Also the layer-title case the Compositor reported: correct YAML that a regex reader, since replaced by a YAML parse, returned with its backslashes.",
+      "source": "A \"quoted\" title",
+      "intended_type": "string",
+      "expected_yaml": "A \"quoted\" title"
+    },
+    {
+      "source": "Title: with a colon",
+      "intended_type": "string",
+      "expected_yaml": "'Title: with a colon'"
+    },
+    {
+      "source": "A backslash \\ in the middle",
+      "intended_type": "string",
+      "expected_yaml": "A backslash \\ in the middle"
+    },
+    {
+      "source": "Line one\nLine two",
+      "intended_type": "string",
+      "expected_yaml": "'Line one\n\n  Line two'"
+    },
+    {
+      "source": "---\nlooks like frontmatter",
+      "intended_type": "string",
+      "expected_yaml": "'---\n\n  looks like frontmatter'"
+    },
+    {
+      "note": "YAML 1.1 sexagesimals and dates, which differ between parsers",
+      "source": "2026-09-13",
+      "intended_type": "string",
+      "expected_yaml": "'2026-09-13'"
+    },
+    {
+      "source": "12:30",
+      "intended_type": "string",
+      "expected_yaml": "'12:30'"
+    },
+    {
+      "source": "1:2:3",
+      "intended_type": "string",
+      "expected_yaml": "'1:2:3'"
+    },
+    {
+      "_group_note": "The six below came from the Compositor's Psych measurements: control and separator characters that either need forcing to double-quoted style to round-trip (the three YAML 1.1 line breaks), or already round-trip correctly and are pinned here to confirm the fix leaves them alone.",
+      "note": "NEL: Psych does not error, it silently replaces it with a space",
+      "source": "ab",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\Nb\""
+    },
+    {
+      "note": "Line separator: Psych tolerates it raw, PyYAML folds it, some JS consumers treat it as a line break",
+      "source": "a b",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\Lb\""
+    },
+    {
+      "note": "Paragraph separator, same reason",
+      "source": "a b",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\Pb\""
+    },
+    {
+      "note": "DEL: Psych raises 'control characters are not allowed' when raw",
+      "source": "ab",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\x7Fb\""
+    },
+    {
+      "note": "End of the C1 block, the other 31 of which Psych rejects the same way",
+      "source": "ab",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\x9Fb\""
+    },
+    {
+      "note": "Noncharacter: Psych rejects it raw, as it does U+FFFF",
+      "source": "a￾b",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\uFFFEb\""
+    },
+    {
+      "note": "A value that is only a document marker",
+      "source": "---",
+      "intended_type": "string",
+      "expected_yaml": "'---'"
+    },
+    {
+      "note": "A value that is only a comment introducer",
+      "source": "#",
+      "intended_type": "string",
+      "expected_yaml": "'#'"
+    },
+    {
+      "note": "Single-letter YAML 1.1 boolean",
+      "source": "y",
+      "intended_type": "string",
+      "expected_yaml": "y"
+    },
+    {
+      "note": "Single-letter YAML 1.1 boolean, the other one",
+      "source": "n",
+      "intended_type": "string",
+      "expected_yaml": "n"
+    },
+    {
+      "note": "Tab inside a value",
+      "source": "a\tb",
+      "intended_type": "string",
+      "expected_yaml": "\"a\\tb\""
+    },
+    {
+      "note": "The six literal characters of an escape, which must not be decoded into a real NEL",
+      "source": "\\u0085",
+      "intended_type": "string",
+      "expected_yaml": "\\u0085"
+    },
+    {
+      "note": "Accented Spanish, the common case on these sites",
+      "source": "á é í ó ú ñ ü",
+      "intended_type": "string",
+      "expected_yaml": "á é í ó ú ñ ü"
+    },
+    {
+      "note": "Inverted Spanish punctuation",
+      "source": "¿Cómo estás? ¡Muy bien!",
+      "intended_type": "string",
+      "expected_yaml": "¿Cómo estás? ¡Muy bien!"
+    },
+    {
+      "note": "Non-Latin scripts",
+      "source": "Привет мир 你好世界",
+      "intended_type": "string",
+      "expected_yaml": "Привет мир 你好世界"
+    },
+    {
+      "note": "Correctly paired surrogates must survive untouched",
+      "source": "Título 😀 con emoji",
+      "intended_type": "string",
+      "expected_yaml": "Título 😀 con emoji"
+    }
+  ]
+}
