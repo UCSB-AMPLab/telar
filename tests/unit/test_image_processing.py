@@ -84,6 +84,27 @@ class TestProcessImages:
             '![Tom &amp; Jerry & "friends" <b>](a.jpg)', base_url='')
         assert 'alt="Tom &amp; Jerry &amp; &quot;friends&quot; &lt;b&gt;"' in result
 
+    def test_an_inline_image_resolves_its_path_as_a_block_image_does(self):
+        """An image inside a sentence stays inline, but a relative path
+        still resolves under the site's baseurl, or it 404s."""
+        result = process_images('Text ![a](x.jpg) inline', base_url='/telar')
+        assert result == 'Text ![a](/telar/telar-content/objects/x.jpg) inline'
+
+    def test_an_inline_image_keeps_author_paths_and_titles(self):
+        text = ('See ![a](/custom/x.jpg), ![b](https://e.org/y.jpg) and '
+                '![c [d]](z.jpg "Title") here')
+        assert process_images(text, base_url='/telar') == (
+            'See ![a](/custom/x.jpg), ![b](https://e.org/y.jpg) and '
+            '![c [d]](/telar/telar-content/objects/z.jpg "Title") here')
+
+    def test_an_inline_image_renders_in_its_sentence(self):
+        from telar.markdown import process_inline_content
+        out = process_inline_content('Text ![a](x.jpg) inline', [])
+        html = out.get('content') if isinstance(out, dict) else out
+        assert '<figure' not in html
+        assert 'src="x.jpg"' not in html
+        assert '/telar-content/objects/x.jpg"' in html
+
     def test_base_url_defaults_to_the_site_config(self, tmp_path, monkeypatch):
         from telar import widgets
         (tmp_path / '_config.yml').write_text('baseurl: "/mysite/"\n', encoding='utf-8')

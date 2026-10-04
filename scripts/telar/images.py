@@ -154,11 +154,31 @@ def process_images(text, base_url=None):
 
             result.append(html)
         else:
-            result.append(line)
+            result.append(_resolve_inline_images(line, base_url))
 
         i += 1
 
     return '\n'.join(result)
+
+
+_INLINE_IMAGE = re.compile(r'(!\[(?:[^\[\]]|\[[^\[\]]*\])*\]\()([^)\s]+)((?:\s+"[^"]*")?\))')
+
+
+def _resolve_inline_images(line, base_url):
+    """Resolve the path of an image written inside a line of text.
+
+    The markdown library renders it in its sentence, with no figure or
+    caption, but a relative path must resolve as a block image's does or
+    it is fetched relative to the page. Root-absolute paths and URLs are
+    the author's, left as written.
+    """
+    def resolve(match):
+        src = match.group(2)
+        if src.startswith('/') or src.startswith('http'):
+            return match.group(0)
+        return f'{match.group(1)}{base_url}/telar-content/objects/{src}{match.group(3)}'
+
+    return _INLINE_IMAGE.sub(resolve, line)
 
 
 def resolve_path_case_insensitive(base_dir, relative_path):
