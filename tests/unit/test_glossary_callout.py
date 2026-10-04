@@ -299,10 +299,6 @@ class TestWhereItWorks:
 
 class TestAStepsAnswer:
 
-    @pytest.mark.xfail(strict=True, reason=(
-        'No answer rule removes a widget block: :::glossary, like :::carousel, '
-        'stays in the answer as literal text. Reported for a ruling; a new rule '
-        'is part of the contract the Compositor mirrors.'))
     def test_the_answer_rules_remove_it(self):
         from telar.processors.stories import _reduce_answer_to_prose
         answer = 'Before.\n\n:::glossary\nentry: carta\n:::\n\nAfter.'

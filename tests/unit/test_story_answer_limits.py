@@ -123,6 +123,7 @@ def _rule_set_docstring():
 # it got without repeating the whole sentence.
 KEY_BY_KIND = {
     'media': 'image or embed',
+    'widgets': 'widgets (blocks that start with',
     'footnotes': 'footnotes in the answer',
     'markup': 'markup in the answer',
 }
@@ -166,6 +167,10 @@ REMOVED = [
     ('media', 'Before <object data="folio.pdf"></object> after.',
      'Before  after.'),
     ('media', 'Before ![The plate](plate.jpg) after.', 'Before  after.'),
+    ('widgets', 'Before.\n\n:::glossary\nentry: carta\nalign: left\n:::\n\nAfter.',
+     'Before.\n\n\nAfter.'),
+    ('widgets', 'Before.\n\n:::carousel\nimage: a.jpg\n---\nimage: b.jpg\n:::\nAfter.',
+     'Before.\n\nAfter.'),
     ('media', 'Before ![The plate [La lámina]](plate.jpg) after.',
      'Before  after.'),
     ('footnotes', 'The mill ran on water.[^1]', 'The mill ran on water.'),
@@ -203,7 +208,7 @@ KEPT = [
     'See https://example.org/plate.jpg for the plate.',
 ]
 
-KINDS = ['media', 'footnotes', 'markup']
+KINDS = ['media', 'widgets', 'footnotes', 'markup']
 
 
 class TestAnAnswerIsPlainProse:
@@ -259,11 +264,12 @@ class TestAnAnswerIsPlainProse:
 
     def test_each_kind_earns_its_own_warning(self, site):
         site()
-        answer = '# Title\n\nWater.[^1] ![plate](p.jpg)\n'
+        answer = ('# Title\n\nWater.[^1] ![plate](p.jpg)\n\n'
+                  ':::glossary\nentry: carta\n:::\n')
         df = _story_df([{'step': '1', 'answer': answer}])
         out = process_story(df, story_name='mill')
         messages = [w['message'] for w in _answer_warnings(out)]
-        assert len(messages) == 3
+        assert len(messages) == 4
         for message, kind in zip(messages, KINDS):
             assert KEY_BY_KIND[kind] in message
 
@@ -513,7 +519,7 @@ class TestAnAnswerCarryingEverythingAtOnce:
         out = process_story(df, story_name='mill')
         messages = [w['message'] for w in _answer_warnings(out)]
         assert len(messages) == 3
-        for message, kind in zip(messages, KINDS):
+        for message, kind in zip(messages, ['media', 'footnotes', 'markup']):
             assert KEY_BY_KIND[kind] in message
 
     def test_the_prose_inside_it_is_untouched(self, site):

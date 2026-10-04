@@ -95,12 +95,18 @@ part of that shared contract and cannot move quietly.
 """
 
 ANSWER_MEDIA = 'media'
+ANSWER_WIDGETS = 'widgets'
 ANSWER_FOOTNOTES = 'footnotes'
 ANSWER_MARKUP = 'markup'
 
 _ProseRule = namedtuple('_ProseRule', 'name kind pattern replacement')
 
 ANSWER_PROSE_RULES = (
+    _ProseRule(
+        'widget', ANSWER_WIDGETS,
+        re.compile(r'^[ \t]*:::[A-Za-z0-9_]+[ \t]*\n[\s\S]*?^[ \t]*:::[ \t]*$\n?',
+                   re.MULTILINE),
+        ''),
     _ProseRule(
         'fenced code block', ANSWER_MARKUP,
         re.compile(r'^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*\n?',
@@ -157,6 +163,11 @@ and their order are part of it.
 
 Removed outright, with the words inside them:
 
+  - **widget** -- a `:::name` line through the next line that is `:::`
+    alone, which is the block the widget pass renders in a panel. It runs
+    first, so a carousel's images and a callout's lines go with it and
+    are reported once, as a widget. Widgets do not go in a step's answer;
+    they belong in a layer panel.
   - **fenced code block** -- ``` or ~~~ through its matching fence.
   - **table** -- a pipe-table block: a row carrying a pipe, a delimiter
     row, and the body rows that follow while they carry one.
@@ -195,11 +206,12 @@ comes back byte for byte and markdown decides what the rest means.
 
 # The order warnings are reported in, one per answer per kind, whatever
 # order the rules that fired sit in.
-ANSWER_KINDS = (ANSWER_MEDIA, ANSWER_FOOTNOTES, ANSWER_MARKUP)
+ANSWER_KINDS = (ANSWER_MEDIA, ANSWER_WIDGETS, ANSWER_FOOTNOTES, ANSWER_MARKUP)
 
 # What each kind is called in the message catalogue.
 _ANSWER_KIND_KEYS = {
     ANSWER_MEDIA: 'answer_image_dropped',
+    ANSWER_WIDGETS: 'answer_widget_dropped',
     ANSWER_FOOTNOTES: 'answer_footnotes_dropped',
     ANSWER_MARKUP: 'answer_markup_flattened',
 }
