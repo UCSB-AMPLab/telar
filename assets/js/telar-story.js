@@ -5559,12 +5559,9 @@
       requestAnimationFrame(() => {
         state.lenis.start();
       });
-    } else {
-      state.currentMobileStep = -1;
-      state.mobileInIntro = true;
-      state.steps.forEach((step) => step.classList.remove("mobile-active"));
     }
     goToStep(-1, "backward");
+    putButtonsOnIntro();
     writeHash();
   }
   function navigateToStep(stepNumber) {
@@ -6051,6 +6048,13 @@
     updateMobileButtonStates();
     recordButtonStep(index2);
   }
+  function putButtonsOnIntro() {
+    if (!state.mobileNavButtons) return;
+    state.mobileInIntro = true;
+    state.currentMobileStep = 0;
+    state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === 0));
+    updateMobileButtonStates();
+  }
   function createNavigationButtons() {
     if (document.querySelector(".mobile-nav")) {
       console.warn("Navigation buttons already exist, skipping creation");
@@ -6116,13 +6120,12 @@
     setTimeout(() => {
       state.mobileNavigationCooldown = false;
     }, MOBILE_NAV_COOLDOWN);
-    state.mobileInIntro = true;
     _showIntroCard();
     _sendFirstTextCardOffScreen();
     _sendPlateOffScreen(state.viewerPlates?.[0]);
     state.currentObjectRun = { objectId: null, runPosition: 0 };
     _hideStepChrome();
-    updateMobileButtonStates();
+    putButtonsOnIntro();
     recordButtonStep(-1);
     if (!state.lenis) writeHash();
   }

@@ -45,7 +45,7 @@ vi.mock('../../assets/js/telar-story/scroll-engine.js', () => ({
 }));
 
 import { initializeButtonNavigation } from '../../assets/js/telar-story/navigation.js';
-import { applyDeepLinkOnLoad, navigateToStep } from '../../assets/js/telar-story/deep-link.js';
+import { applyDeepLinkOnLoad, navigateToStep, navigateToIntro } from '../../assets/js/telar-story/deep-link.js';
 import { state } from '../../assets/js/telar-story/state.js';
 
 const STEPS = 5;
@@ -217,5 +217,84 @@ describe('buttons with a scroll engine (embed mode)', () => {
     expect(state.mobileInIntro).toBe(false);
     expect(state.currentIndex).toBe(-1);
     expect(state.onStepChange).not.toHaveBeenCalled();
+  });
+});
+
+/** Whether each button is disabled. */
+const disabled = () => ({
+  prev: document.querySelector('.mobile-prev').disabled,
+  next: document.querySelector('.mobile-next').disabled,
+});
+
+/** A scroll engine's Lenis, as far as the return to the intro touches it. */
+const lenisStub = () => ({ stop: vi.fn(), start: vi.fn(), animatedScroll: 0, targetScroll: 0 });
+
+describe('the intro, however the buttons arrive at it', () => {
+  it('back to the start from a step walked to disables the previous button', () => {
+    boot();
+    const onLoad = disabled();
+    tap('next');
+    tap('next');
+    expect(disabled().prev).toBe(false);
+
+    navigateToIntro();
+    expect(state.mobileInIntro).toBe(true);
+    expect(disabled()).toEqual(onLoad);
+    expect(onLoad.prev).toBe(true);
+  });
+
+  it('back to the start from a deep link disables the previous button', () => {
+    boot({ hash: '#s3' });
+    navigateToIntro();
+    expect(disabled()).toEqual({ prev: true, next: false });
+    expect(location.hash).toBe('');
+  });
+
+  it('next after back to the start leaves the intro for step 1', () => {
+    boot({ hash: '#s3' });
+    navigateToIntro();
+    mocks.activateCard.mockClear();
+    tap('next');
+    expect(mocks.activateCard).toHaveBeenCalledWith(0, 'forward');
+    expect(state.currentIndex).toBe(0);
+    expect(location.hash).toBe('#s1');
+    expect(disabled().prev).toBe(false);
+  });
+
+  it('back to the start in embed mode disables the previous button', () => {
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot({ lenis: lenisStub() });
+      state.mobileInIntro = false;
+      state.currentMobileStep = 2;
+      state.currentIndex = 2;
+      navigateToIntro();
+      expect(disabled()).toEqual({ prev: true, next: false });
+
+      tap('next');
+      expect(state.currentMobileStep).toBe(0);
+      expect(mocks.advanceToStep).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('back to the start from a deep link in embed mode, then next, leaves for step 1', () => {
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot({ hash: '#s3', lenis: { ...lenisStub(), scrollTo: vi.fn() } });
+      expect(state.currentIndex).toBe(2);
+
+      navigateToIntro();
+      expect(disabled()).toEqual({ prev: true, next: false });
+
+      mocks.activateCard.mockClear();
+      tap('next');
+      expect(mocks.activateCard).toHaveBeenCalledWith(0, 'forward');
+      expect(state.currentMobileStep).toBe(0);
+      expect(mocks.advanceToStep).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -26,7 +26,7 @@
 
 import { state } from './state.js';
 import { activateCard, reconcileStackForJump, reconcilePlatesForJump } from './card-pool.js';
-import { goToStep, jumpButtonsTo } from './navigation.js';
+import { goToStep, jumpButtonsTo, putButtonsOnIntro } from './navigation.js';
 import { openPanel } from './panels.js';
 
 // ── Deep-link panel-open timer ladder ───────────────────────────────────────────
@@ -170,8 +170,9 @@ function _writeHashFragment(glossaryN) {
 /**
  * Navigate back to the intro / title card from within the story.
  *
- * Scrolls to position 0 (or activates intro in button mode), restores the
- * intro card via goToStep(-1), hides all viewer plates, and clears the hash.
+ * Scrolls to position 0 where the scroll engine runs, restores the intro card
+ * via goToStep(-1), puts the navigation buttons on the intro, hides all viewer
+ * plates, and clears the hash.
  */
 export function navigateToIntro() {
   // Hide all active viewer plates
@@ -187,14 +188,13 @@ export function navigateToIntro() {
     state.currentIndex = -1;
     state.scrollPosition = 0;
     requestAnimationFrame(() => { state.lenis.start(); });
-  } else {
-    state.currentMobileStep = -1;
-    state.mobileInIntro = true;
-    state.steps.forEach(step => step.classList.remove('mobile-active'));
   }
 
   // Use the navigation module to restore intro card visuals
   goToStep(-1, 'backward');
+  // Buttons are present in button navigation and in embed mode, where the
+  // scroll engine runs beside them and does not move them.
+  putButtonsOnIntro();
   writeHash();
 }
 

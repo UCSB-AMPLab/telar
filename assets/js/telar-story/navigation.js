@@ -209,6 +209,24 @@ export function jumpButtonsTo(index) {
 }
 
 /**
+ * Put button navigation on the intro, in the state a first load leaves it in:
+ * step 0 is the step "next" leaves the intro for, and "previous" is disabled
+ * because there is nothing before the intro.
+ *
+ * The previous button on step 1 and Back to Start both end here. The scroll
+ * engine's own returns to the intro in embed mode do not: the engine moves no
+ * button state on its way back out of the intro either. A story with no
+ * buttons has nothing to put back.
+ */
+export function putButtonsOnIntro() {
+  if (!state.mobileNavButtons) return;
+  state.mobileInIntro = true;
+  state.currentMobileStep = 0;
+  state.steps.forEach((step, i) => step.classList.toggle('mobile-active', i === 0));
+  updateMobileButtonStates();
+}
+
+/**
  * Create the previous/next navigation button elements.
  *
  * Returns null if buttons already exist (prevents duplicate initialisation).
@@ -323,8 +341,6 @@ function _restoreMobileIntro() {
   state.mobileNavigationCooldown = true;
   setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
 
-  state.mobileInIntro = true;
-
   _showIntroCard();
   _sendFirstTextCardOffScreen();
   _sendPlateOffScreen(state.viewerPlates?.[0]);
@@ -332,7 +348,7 @@ function _restoreMobileIntro() {
   state.currentObjectRun = { objectId: null, runPosition: 0 };
   _hideStepChrome();
 
-  updateMobileButtonStates();
+  putButtonsOnIntro();
   recordButtonStep(-1);
   if (!state.lenis) writeHash();
 }
