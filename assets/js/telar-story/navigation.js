@@ -698,15 +698,18 @@ function _isSpaceControl(e) {
 }
 
 /**
- * Whether the key event came from inside an open modal dialog, which reads
- * the arrow keys itself and sits over the story without opening a panel.
+ * Whether the key event came from inside a modal dialog, which reads the arrow
+ * keys itself and sits over the story without opening a panel.
+ *
+ * The dialog counts while it closes: Escape hides it before the key reaches
+ * the document, so a test for `.show` would pass the key on to the story.
  *
  * @param {KeyboardEvent} e
  * @returns {boolean}
  */
 function _isInOpenDialog(e) {
   const target = e.target;
-  return !!(target && target.closest && target.closest('.modal.show, dialog[open]'));
+  return !!(target && target.closest && target.closest('.modal, dialog[open]'));
 }
 
 /**

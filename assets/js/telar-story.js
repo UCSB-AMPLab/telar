@@ -2849,7 +2849,64 @@
         if (panelType === "glossary" && !panel.classList.contains("show")) {
           panel.removeAttribute("data-deep-link-n");
         }
+        settleFocusTraps();
       });
+      panel.addEventListener("shown.bs.offcanvas", settleFocusTraps);
+    });
+    initializeShareHandoff();
+  }
+  function focusTrap(el, Component) {
+    const instance = el && Component.getInstance(el);
+    const trap = instance?._focustrap;
+    if (!trap) return null;
+    return {
+      isHeld: () => trap._isActive,
+      hold: () => {
+        trap.deactivate();
+        trap.activate();
+      },
+      release: () => {
+        const held = trap._isActive;
+        trap.deactivate();
+        return held;
+      }
+    };
+  }
+  var shareOpen = false;
+  var isSettledOpen = (el) => el.classList.contains("show") && !el.classList.contains("hiding");
+  function topmostOpenPanel() {
+    const els = state.panelStack.map((p) => document.getElementById(`panel-${p.type}`));
+    const fromStack = els.reverse().find((el) => el && isSettledOpen(el));
+    if (fromStack) return fromStack;
+    const open = PANEL_TYPES.map((t) => document.getElementById(`panel-${t}`)).filter((el) => el && isSettledOpen(el));
+    return open[open.length - 1] || null;
+  }
+  function releasePanelTraps(except = null) {
+    return PANEL_TYPES.map((t) => document.getElementById(`panel-${t}`)).filter((el) => el && el !== except).map((el) => focusTrap(el, bootstrap.Offcanvas)?.release()).some(Boolean);
+  }
+  function settleFocusTraps() {
+    if (shareOpen) {
+      const share = document.getElementById("panel-share");
+      const shareTrap = focusTrap(share, bootstrap.Modal);
+      const shareHeld = shareTrap?.isHeld();
+      if (releasePanelTraps() && shareHeld) shareTrap.hold();
+      return;
+    }
+    const top = topmostOpenPanel();
+    releasePanelTraps(top);
+    if (top) focusTrap(top, bootstrap.Offcanvas)?.hold();
+  }
+  function initializeShareHandoff() {
+    const share = document.getElementById("panel-share");
+    if (!share) return;
+    share.addEventListener("show.bs.modal", () => {
+      shareOpen = true;
+      releasePanelTraps();
+    });
+    share.addEventListener("hidden.bs.modal", () => {
+      shareOpen = false;
+      settleFocusTraps();
+      setTimeout(() => topmostOpenPanel()?.focus(), 0);
     });
   }
   function anyPanelOpen() {
@@ -3317,7 +3374,7 @@
   }
   function _isInOpenDialog(e) {
     const target = e.target;
-    return !!(target && target.closest && target.closest(".modal.show, dialog[open]"));
+    return !!(target && target.closest && target.closest(".modal, dialog[open]"));
   }
   function _edgeKey(e, edge) {
     if (state.isPanelOpen || _isInOpenDialog(e)) return;

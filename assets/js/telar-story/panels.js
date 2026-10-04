@@ -118,7 +118,121 @@ export function initializePanels() {
       if (panelType === 'glossary' && !panel.classList.contains('show')) {
         panel.removeAttribute('data-deep-link-n');
       }
+      settleFocusTraps();
     });
+    panel.addEventListener('shown.bs.offcanvas', settleFocusTraps);
+  });
+
+  initializeShareHandoff();
+}
+
+/**
+ * A panel's or the Share dialog's Bootstrap focus trap, or null.
+ *
+ * Bootstrap 5.3.0, which the layouts pin, keeps the trap on the component
+ * instance as `_focustrap`, with its state in `_isActive`; neither is public,
+ * so a change of Bootstrap version has to be checked against this helper. All
+ * traps share one set of document listeners: `activate()` replaces whichever
+ * trap held them, and `deactivate()` on a trap marked active removes them for
+ * every trap. `activate()` does nothing on a trap already marked active, so
+ * `hold()` clears the mark first. `release()` reports whether the trap was
+ * marked active, that is whether it removed the listeners.
+ *
+ * @param {Element|null} el - A panel or the Share dialog.
+ * @param {Function} Component - `bootstrap.Offcanvas` for a panel, `bootstrap.Modal` for Share.
+ * @returns {{isHeld: function(): boolean, hold: function(): void, release: function(): boolean}|null}
+ */
+function focusTrap(el, Component) {
+  const instance = el && Component.getInstance(el);
+  const trap = instance?._focustrap;
+  if (!trap) return null;
+  return {
+    isHeld: () => trap._isActive,
+    hold: () => { trap.deactivate(); trap.activate(); },
+    release: () => {
+      const held = trap._isActive;
+      trap.deactivate();
+      return held;
+    },
+  };
+}
+
+/** Whether the Share dialog is open, from the start of its show to the end of its hide. */
+let shareOpen = false;
+
+/** Whether a panel is open and not closing. */
+const isSettledOpen = (el) => el.classList.contains('show') && !el.classList.contains('hiding');
+
+/**
+ * The topmost panel that is open and not closing, or null.
+ *
+ * The stack orders the panels; a panel Bootstrap closed without the stack (its
+ * X button) leaves it only once hidden, so a closing panel is skipped.
+ */
+function topmostOpenPanel() {
+  const els = state.panelStack.map((p) => document.getElementById(`panel-${p.type}`));
+  const fromStack = els.reverse().find((el) => el && isSettledOpen(el));
+  if (fromStack) return fromStack;
+  const open = PANEL_TYPES.map((t) => document.getElementById(`panel-${t}`))
+    .filter((el) => el && isSettledOpen(el));
+  return open[open.length - 1] || null;
+}
+
+/** Release every panel's trap; true if one of them held the document listeners. */
+function releasePanelTraps(except = null) {
+  return PANEL_TYPES.map((t) => document.getElementById(`panel-${t}`))
+    .filter((el) => el && el !== except)
+    .map((el) => focusTrap(el, bootstrap.Offcanvas)?.release())
+    .some(Boolean);
+}
+
+/**
+ * Give the one active focus trap to whatever is on top.
+ *
+ * Bootstrap activates a panel's trap when the panel finishes opening and
+ * deactivates it when the panel starts to close, without regard to the panels
+ * below or to the Share dialog. While Share is open it holds focus and no
+ * panel's trap may; a panel trap that was active has taken the listeners from
+ * Share, which gets them back. Otherwise the topmost open, non-closing panel's
+ * trap is the one active, and every other panel's is released.
+ */
+function settleFocusTraps() {
+  if (shareOpen) {
+    const share = document.getElementById('panel-share');
+    const shareTrap = focusTrap(share, bootstrap.Modal);
+    const shareHeld = shareTrap?.isHeld();
+    if (releasePanelTraps() && shareHeld) shareTrap.hold();
+    return;
+  }
+  const top = topmostOpenPanel();
+  releasePanelTraps(top);
+  if (top) focusTrap(top, bootstrap.Offcanvas)?.hold();
+}
+
+/**
+ * Hand focus and keys to the Share dialog while it is open over a panel, and
+ * back to the topmost panel when it closes.
+ *
+ * Share opens over panels that stay open. A panel's focus trap sends focus
+ * that leaves the panel back into it, so the panels' traps stay off while
+ * Share shows, including one that finishes opening meanwhile. On close the
+ * topmost open panel's trap is restored and focus goes to that panel, after
+ * Bootstrap has returned it to the Share button, which sits outside the panel.
+ */
+function initializeShareHandoff() {
+  const share = document.getElementById('panel-share');
+  if (!share) return;
+
+  share.addEventListener('show.bs.modal', () => {
+    shareOpen = true;
+    releasePanelTraps();
+  });
+  share.addEventListener('hidden.bs.modal', () => {
+    shareOpen = false;
+    settleFocusTraps();
+    // Bootstrap's own return of focus to the Share button runs after this
+    // listener; the move into the panel has to come after it.
+    setTimeout(() => topmostOpenPanel()?.focus(), 0);
   });
 }
 

@@ -187,8 +187,9 @@ function initializeClickOutsideClose() {
     // Check if glossary panel is open
     if (!glossaryPanel.classList.contains('show')) return;
 
-    // Don't close if clicking inside any panel
-    if (e.target.closest('.offcanvas')) return;
+    // Don't close if clicking inside any panel, or on Share or inside its
+    // dialog, which opens over an open panel and leaves it open
+    if (e.target.closest('.offcanvas, .modal, .share-button')) return;
 
     // Don't close if clicking on glossary links or triggers
     if (e.target.closest('.glossary-term-link')) return;
