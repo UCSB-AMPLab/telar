@@ -47,11 +47,13 @@ Version: v1.8.0
 
 import re
 
+import markdown
 import yaml
+from markdown.extensions.md_in_html import HTMLExtractorExtra
 
 from telar.frontmatter import FRONTMATTER_LOAD_ERRORS
 from telar.images import process_images, resolve_path_case_insensitive
-from telar.latex import convert_markdown
+from telar.latex import convert_markdown, protect_latex
 from telar.widgets import process_widgets
 
 FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
@@ -152,6 +154,52 @@ def _looks_like_metadata(block):
         return False
 
 
+def _unclosed_html_blocks(body):
+    """Tags the Markdown library's HTML block pass leaves open at the end of *body*.
+
+    The answer comes from the library's own parser, fed the way its
+    html_block preprocessor feeds it: after the preprocessors that run
+    before it, so a tag inside a fenced code block is code and is not
+    counted. The tags come back outermost first. Left open, Python Markdown
+    closes only to the nearest tag of the same name, and two nested
+    containers of one name lose the outer one's text.
+
+    LaTeX is held out first, as convert_markdown does, so a `<div>` inside
+    a formula is not read as a tag.
+    """
+    protected, _ = protect_latex(body)
+    md = markdown.Markdown(extensions=['extra', 'nl2br'])
+    html_block = md.preprocessors['html_block']
+    lines = protected.split('\n')
+    for preprocessor in md.preprocessors:
+        if preprocessor is html_block:
+            break
+        lines = preprocessor.run(lines)
+    parser = HTMLExtractorExtra(md)
+    parser.feed('\n'.join(lines))
+    return list(parser.mdstack)
+
+
+def _close_html_blocks(body, source):
+    """Append the closing tags *body* is missing, and warn once.
+
+    Author text is never dropped: the result renders as *body* would if its
+    author had closed every container at the end, innermost first. Text
+    that closes everything it opens is returned as it is.
+    """
+    unclosed = _unclosed_html_blocks(body)
+    if not unclosed:
+        return body
+    opened = ', '.join(f'<{tag}>' for tag in unclosed)
+    closers = ''.join(f'</{tag}>' for tag in reversed(unclosed))
+    pronoun = 'it' if len(unclosed) == 1 else 'them'
+    where = 'inline content' if source == 'inline-content' else source
+    print(f"  Warning: {where} opens {opened} and does not close {pronoun}. "
+          f"The build closes {pronoun} at the end of the text; add {closers} "
+          f"where the text should end.")
+    return body + '\n' + closers
+
+
 def _process_pipeline(body, widget_source, widget_warnings):
     """
     Run the widget/image/markdown pipeline shared by file-based and inline
@@ -171,6 +219,7 @@ def _process_pipeline(body, widget_source, widget_warnings):
     """
     body = process_widgets(body, widget_source, widget_warnings)
     body = process_images(body)
+    body = _close_html_blocks(body, widget_source)
     return convert_markdown(body, extensions=['extra', 'nl2br'])
 
 
