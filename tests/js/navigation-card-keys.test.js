@@ -483,3 +483,57 @@ describe('the first press inside an open dialog', () => {
     expect(mocks.keyboardNav).toHaveBeenCalledWith('forward');
   });
 });
+
+describe('ArrowLeft, ArrowRight and Escape inside an open dialog', () => {
+  function panelOpenBehind() {
+    state.isPanelOpen = true;
+    state.panelStack = [{ type: 'layer1' }];
+  }
+
+  for (const withPanel of [false, true]) {
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Escape']) {
+      it(`leaves ${key} to the dialog and acts on no panel${withPanel ? ' with a panel open behind' : ''}`, async () => {
+        const panels = await import('../../assets/js/telar-story/panels.js');
+        panels.openPanel.mockClear();
+        panels.closeTopPanel.mockClear();
+        panels.stepHasLayer1Content.mockReturnValue(true);
+        panels.stepHasLayer2Content.mockReturnValue(true);
+        window.storyData = { steps: [{ step: 3 }] };
+        if (withPanel) panelOpenBehind();
+        const { dialog, inner } = openDialogTarget();
+        const input = document.createElement('input');
+        inner.append(input);
+        const ev = pressOn(input, key);
+        dialog.remove();
+        panels.stepHasLayer1Content.mockReturnValue(false);
+        panels.stepHasLayer2Content.mockReturnValue(false);
+        expect(ev.defaultPrevented).toBe(false);
+        expect(panels.openPanel).not.toHaveBeenCalled();
+        expect(panels.closeTopPanel).not.toHaveBeenCalled();
+      });
+    }
+  }
+
+  it('still opens the next layer on ArrowRight outside a dialog', async () => {
+    const panels = await import('../../assets/js/telar-story/panels.js');
+    panels.openPanel.mockClear();
+    panels.stepHasLayer1Content.mockReturnValue(true);
+    window.storyData = { steps: [{ step: 3 }] };
+    const ev = pressCardKey('ArrowRight');
+    panels.stepHasLayer1Content.mockReturnValue(false);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(panels.openPanel).toHaveBeenCalledWith('layer1', '3');
+  });
+
+  for (const key of ['ArrowLeft', 'Escape']) {
+    it(`still closes the top panel on ${key} outside a dialog`, async () => {
+      const panels = await import('../../assets/js/telar-story/panels.js');
+      panels.closeTopPanel.mockClear();
+      state.isPanelOpen = true;
+      state.panelStack = [{ type: 'layer1' }];
+      const ev = pressCardKey(key);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(panels.closeTopPanel).toHaveBeenCalledTimes(1);
+    });
+  }
+});

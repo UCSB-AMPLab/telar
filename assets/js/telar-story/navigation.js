@@ -522,9 +522,9 @@ const KEY_ACTIONS = new Map([
   ['PageDown',   (e) => _stepKey(e, 'forward', 'page')],
   ['ArrowUp',    (e) => _stepKey(e, 'backward', 'line')],
   ['PageUp',     (e) => _stepKey(e, 'backward', 'page')],
-  ['ArrowRight', (e) => { e.preventDefault(); _openNextLayer(); }],
-  ['ArrowLeft',  (e) => { e.preventDefault(); _closeTopmostPanel(e); }],
-  ['Escape',     (e) => _closeTopmostPanel(e)],
+  ['ArrowRight', (e) => _rightKey(e)],
+  ['ArrowLeft',  (e) => _leftKey(e)],
+  ['Escape',     (e) => _escapeKey(e)],
   [' ',          (e) => _spaceKey(e)],
   ['Home',       (e) => _edgeKey(e, 'start')],
   ['End',        (e) => _edgeKey(e, 'end')],
@@ -563,7 +563,9 @@ const EDGE_KEYS = new Map([
  * Lenis, unless it comes from a control or an open dialog, which keep it. Over
  * a side card that scrolls inside itself a repeat also scrolls the card, to
  * its end and no further. Home and End go to the intro and the last step on
- * the first press; their repeats are cancelled and take no step.
+ * the first press; their repeats are cancelled and take no step. Every key this
+ * reads is left to an open dialog when it comes from inside one: the step
+ * keys, Space, Home and End, ArrowLeft, ArrowRight and Escape.
  *
  * @param {KeyboardEvent} e
  */
@@ -628,6 +630,51 @@ function _stepKey(e, direction, kind) {
   e.preventDefault();
   if (cardTakesKey(direction, kind) === 'scrolled') return;
   _navigateStep(direction);
+}
+
+/**
+ * Open the next layer panel on ArrowRight.
+ *
+ * From inside an open dialog the key is the dialog's, to move a caret or an
+ * option, and is left uncancelled with no panel opened behind it.
+ *
+ * @param {KeyboardEvent} e
+ */
+function _rightKey(e) {
+  if (_isInOpenDialog(e)) return;
+
+  e.preventDefault();
+  _openNextLayer();
+}
+
+/**
+ * Close the topmost panel on ArrowLeft.
+ *
+ * From inside an open dialog the key is the dialog's, to move a caret or an
+ * option, and is left uncancelled with no panel closed behind it.
+ *
+ * @param {KeyboardEvent} e
+ */
+function _leftKey(e) {
+  if (_isInOpenDialog(e)) return;
+
+  e.preventDefault();
+  _closeTopmostPanel(e);
+}
+
+/**
+ * Close the topmost panel on Escape.
+ *
+ * The Share dialog can be opened over an open panel, which stays open under
+ * it. Escape from inside the dialog closes the dialog alone, so the key is
+ * left to the dialog and the panel behind it is not closed.
+ *
+ * @param {KeyboardEvent} e
+ */
+function _escapeKey(e) {
+  if (_isInOpenDialog(e)) return;
+
+  _closeTopmostPanel(e);
 }
 
 /**

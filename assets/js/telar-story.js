@@ -3242,15 +3242,9 @@
     ["PageDown", (e) => _stepKey(e, "forward", "page")],
     ["ArrowUp", (e) => _stepKey(e, "backward", "line")],
     ["PageUp", (e) => _stepKey(e, "backward", "page")],
-    ["ArrowRight", (e) => {
-      e.preventDefault();
-      _openNextLayer();
-    }],
-    ["ArrowLeft", (e) => {
-      e.preventDefault();
-      _closeTopmostPanel(e);
-    }],
-    ["Escape", (e) => _closeTopmostPanel(e)],
+    ["ArrowRight", (e) => _rightKey(e)],
+    ["ArrowLeft", (e) => _leftKey(e)],
+    ["Escape", (e) => _escapeKey(e)],
     [" ", (e) => _spaceKey(e)],
     ["Home", (e) => _edgeKey(e, "start")],
     ["End", (e) => _edgeKey(e, "end")]
@@ -3292,6 +3286,20 @@
     e.preventDefault();
     if (cardTakesKey(direction, kind) === "scrolled") return;
     _navigateStep(direction);
+  }
+  function _rightKey(e) {
+    if (_isInOpenDialog(e)) return;
+    e.preventDefault();
+    _openNextLayer();
+  }
+  function _leftKey(e) {
+    if (_isInOpenDialog(e)) return;
+    e.preventDefault();
+    _closeTopmostPanel(e);
+  }
+  function _escapeKey(e) {
+    if (_isInOpenDialog(e)) return;
+    _closeTopmostPanel(e);
   }
   var SPACE_CONTROLS = 'button, summary, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])';
   function _isSpaceControl(e) {
