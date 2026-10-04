@@ -21,6 +21,7 @@ from telar.markdown import read_markdown_file, process_inline_content
 from telar.core import find_csv_with_fallback
 from telar.latex import convert_markdown, has_latex
 from telar.frontmatter import FRONTMATTER_PATTERN, _as_text, _frontmatter_block
+from telar.story_pages import jekyll_slug
 
 
 def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
@@ -257,9 +258,22 @@ def generate_glossary():
         with open(demo_glossary_path, 'r', encoding='utf-8') as f:
             demo_glossary = json.load(f)
 
+        # The directory was emptied above, so what it holds now is the
+        # site's own glossary. Compared by slug, not file name: Jekyll
+        # publishes `Viewer.md` and `viewer.md` both at /glossary/viewer/,
+        # and a case-insensitive disk holds them as one file.
+        site_slugs = {jekyll_slug(path.stem)
+                      for path in glossary_dir.glob('*.md')}
+
         for term in demo_glossary:
             term_id = term.get('term_id', '')
             if not term_id:
+                continue
+
+            if jekyll_slug(term_id) in site_slugs:
+                print(f"  ⚠️ Demo glossary term '{term_id}' skipped: the "
+                      f"site's glossary has a term at the same address, "
+                      f"which is kept.")
                 continue
 
             filepath = glossary_dir / f"{term_id}.md"
