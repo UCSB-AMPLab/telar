@@ -136,6 +136,17 @@ function _stepPx() {
   return state.scrollStepPx || window.innerHeight;
 }
 
+/**
+ * State where a move that has just completed landed, if it is still the move
+ * current. The scroll handler reads no frame while the layout and the window
+ * disagree, so a move that completes in that interval has left the story's
+ * position at wherever the last frame read; a relayout keeps the reader at
+ * that position, and would put them back a step.
+ */
+function _stateLanding(token, position) {
+  if (navToken === token) state.scrollPosition = position;
+}
+
 /** End a programmatic move, unless a later one has taken over. */
 function endNav(token) {
   if (navToken === token) navToken = 0;
@@ -286,7 +297,13 @@ export function initScrollEngine(stepCount) {
       // Force a final position update — the last scroll callback may have
       // fired just before the snap landed (e.g. position 0.99 instead of
       // 1.0), so state.currentIndex would not yet reflect the snapped step.
-      const finalPosition = lenis.animatedScroll / _stepPx();
+      // Between the window's resize and the relayout the offset is read
+      // against a surface laid out for another height, and the browser has
+      // clamped it: the step the snap was heading for is the landing then.
+      const layoutStale = remapping || window.innerHeight !== _stepPx();
+      const finalPosition = layoutStale && Number.isInteger(snap.currentSnapIndex)
+        ? snap.currentSnapIndex
+        : lenis.animatedScroll / _stepPx();
       updateScrollPosition(finalPosition);
       writeHash();
       lenis.stop();
@@ -469,6 +486,7 @@ function carryToNearestStep(position) {
     duration: navSeconds().button,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
+      _stateLanding(token, nearest);
       endNav(token);
       writeHash();
     },
@@ -525,6 +543,7 @@ function _positionToKeep() {
  */
 function _remapToHeight(surface, height) {
   const { position, moving } = _positionToKeep();
+  const enteredFrom = state.currentIndex;
 
   remapping = true;
   // Stop the move outright rather than trusting the jump to: Lenis skips a
@@ -557,7 +576,9 @@ function _remapToHeight(surface, height) {
   // Settles the cards at the kept position, and carries a gesture that was
   // stopped between steps on to the step it was heading for.
   armScrubEnd();
-  if (moving) writeHash();
+  // A move that landed while the window and the layout disagreed states its
+  // step here, so the fragment is written here too.
+  if (moving || state.currentIndex !== enteredFrom) writeHash();
 }
 
 /**
@@ -615,6 +636,7 @@ export function advanceToStep(targetIndex) {
     duration: navSeconds().button,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
+      _stateLanding(token, targetIndex + 1);
       if (buttonMoveToken === token) buttonMoveToken = 0;
       endNav(token);
       followEngine(state.currentIndex);
@@ -865,6 +887,7 @@ export function keyboardNav(direction) {
       // Only the move still current may stand itself down. Lenis calls this
       // straight away for a scrollTo whose target it is already holding, so a
       // superseded move can reach here while a later one is still travelling.
+      _stateLanding(token, target);
       if (navToken === token) {
         keyboardNavInFlight = false;
         navTarget = null;

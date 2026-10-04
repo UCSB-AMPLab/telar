@@ -5655,6 +5655,9 @@
   function _stepPx() {
     return state.scrollStepPx || window.innerHeight;
   }
+  function _stateLanding(token, position) {
+    if (navToken === token) state.scrollPosition = position;
+  }
   function endNav(token) {
     if (navToken === token) navToken = 0;
   }
@@ -5729,7 +5732,8 @@
       },
       onSnapComplete: () => {
         state.isSnapping = false;
-        const finalPosition = lenis.animatedScroll / _stepPx();
+        const layoutStale = remapping || window.innerHeight !== _stepPx();
+        const finalPosition = layoutStale && Number.isInteger(snap.currentSnapIndex) ? snap.currentSnapIndex : lenis.animatedScroll / _stepPx();
         updateScrollPosition(finalPosition);
         writeHash();
         lenis.stop();
@@ -5808,6 +5812,7 @@
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
+        _stateLanding(token, nearest);
         endNav(token);
         writeHash();
       }
@@ -5833,6 +5838,7 @@
   }
   function _remapToHeight(surface, height) {
     const { position, moving } = _positionToKeep();
+    const enteredFrom = state.currentIndex;
     remapping = true;
     if (moving && !lenis.isStopped) {
       lenis.stop();
@@ -5856,7 +5862,7 @@
     lastPosition = position;
     updateScrollPosition(position);
     armScrubEnd();
-    if (moving) writeHash();
+    if (moving || state.currentIndex !== enteredFrom) writeHash();
   }
   function registerSnapPoints(count) {
     snapRemovers.forEach((fn) => fn());
@@ -5884,6 +5890,7 @@
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
+        _stateLanding(token, targetIndex + 1);
         if (buttonMoveToken === token) buttonMoveToken = 0;
         endNav(token);
         followEngine(state.currentIndex);
@@ -5984,6 +5991,7 @@
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
+        _stateLanding(token, target);
         if (navToken === token) {
           keyboardNavInFlight = false;
           navTarget = null;

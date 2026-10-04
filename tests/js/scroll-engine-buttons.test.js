@@ -271,6 +271,47 @@ describe('a button move refused or cut short', () => {
   });
 });
 
+// ── A button move that lands while a resize is pending ───────────────────────
+//
+// The scroll handler reads no frame between the window's resize and the
+// relayout, so a move that lands in that interval reaches the buttons and the
+// URL only through the relayout. Card, counter and fragment have to agree
+// once it has run.
+
+describe('a button move that lands before the relayout', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.mockFollowEngine.mockClear();
+    mocks.lenisScrollTo.mockClear();
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    vi.stubGlobal('innerHeight', 900);
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    restAt(2);                                    // on step 1
+    window.location.hash = '#s2';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves the card, the buttons and the fragment on the step it reached', () => {
+    expect(advanceToStep(2)).toBe(true);          // towards position 3
+    vi.stubGlobal('innerHeight', 720);
+    window.dispatchEvent(new Event('resize'));
+    landMove();
+    vi.advanceTimersByTime(100);
+
+    expect(state.scrollPosition).toBe(3);
+    expect(state.currentIndex).toBe(2);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(2);
+    expect(window.location.hash).toBe('#s3');
+  });
+});
+
 // ── A move to the offset Lenis already holds as its target ───────────────────
 //
 // Lenis skips a scrollTo to its current target and calls the completion at

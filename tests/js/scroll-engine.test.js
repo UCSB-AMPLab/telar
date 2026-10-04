@@ -715,7 +715,7 @@ describe('a window that changes height', () => {
   }
 
   /** The immediate jump the relayout made, if any. */
-  const relayoutJump = () => mocks.lenisScrollTo.mock.calls.find(
+  const relayoutJump = (spy = mocks.lenisScrollTo) => spy.mock.calls.find(
     ([, opts]) => opts?.immediate === true && opts?.force === true);
 
   it('puts the scroll at the same step in the new height', () => {
@@ -768,6 +768,67 @@ describe('a window that changes height', () => {
     scrollFrameAt(4 * 720);
     expect(mocks.mockActivateCard).toHaveBeenCalled();
     expect(state.currentIndex).toBe(3);
+  });
+
+  it('keeps a keyboard move that lands before the relayout on its landing step', () => {
+    scrollFrameAt(2 * 900);                 // step index 1
+    keyboardNav('forward');                 // towards position 3
+    const { lenis } = getScrollEngineState();
+    const move = mocks.lenisScrollTo.mock.calls.findLast(([, opts]) => opts?.onComplete);
+    mocks.lenisScrollTo.mockClear();
+
+    // The window changes; the debounce has not fired, so frames are ignored.
+    vi.stubGlobal('innerHeight', 720);
+    window.dispatchEvent(new Event('resize'));
+    lenis.isScrolling = false;
+    lenis.animatedScroll = 3 * 900;
+    move[1].onComplete();                   // the move lands during the debounce
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump()?.[0]).toBe(3 * 720);
+    expect(state.scrollPosition).toBe(3);
+    expect(state.currentIndex).toBe(2);
+    expect(window.location.hash).toBe('#s3');
+  });
+
+  it('keeps a carry that lands before the relayout on the step it carried to', () => {
+    const lenis = modelLenis();
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    restAt(1);
+    restAt(1.4);
+    vi.advanceTimersByTime(150);            // the gesture rests; the carry heads for 2
+    expect(lenis.inFlight?.px).toBe(2 * 900);
+
+    vi.stubGlobal('innerHeight', 720);
+    window.dispatchEvent(new Event('resize'));
+    landMove();                             // the carry lands during the debounce
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump(lenis.scrollTo)?.[0]).toBe(2 * 720);
+    expect(state.scrollPosition).toBe(2);
+    expect(state.currentIndex).toBe(1);
+    expect(window.location.hash).toBe('#s2');
+  });
+
+  it('keeps a snap that lands against a clamped offset on the step it was heading for', () => {
+    const lenis = modelLenis();
+    const { snap } = getScrollEngineState();
+    const { opts } = mocks.snapConstructorArgs.at(-1);
+    restAt(4);
+    opts.onSnapStart();
+    snap.currentSnapIndex = 5;              // heading for the last position
+
+    // The window grows before the snap lands: the browser clamps the offset
+    // to the larger window and the surface is still laid out for 900.
+    vi.stubGlobal('innerHeight', 1000);
+    window.dispatchEvent(new Event('resize'));
+    lenis.animatedScroll = 6 * 900 - 1000;
+    opts.onSnapComplete();
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump(lenis.scrollTo)?.[0]).toBe(5 * 1000);
+    expect(state.scrollPosition).toBe(5);
+    expect(state.currentIndex).toBe(4);
   });
 
   it('leaves the scroll alone when only the width changes', () => {
