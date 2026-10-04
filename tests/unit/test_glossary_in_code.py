@@ -15,6 +15,7 @@ Version: v1.8.0
 
 import os
 import sys
+import time
 
 import pytest
 
@@ -67,6 +68,21 @@ class TestInAnswerMarkdown:
 
     def test_an_unmatched_backtick_does_not_hide_a_link(self):
         assert LINK in _linked("It`s [[iiif]] here.", markdown=True)
+
+    def test_a_code_span_in_an_element_made_read_keeps_the_syntax(self):
+        markdown = 'Type <u markdown="span">`[[iiif]]`</u> here.'
+        assert _linked(markdown, markdown=True) == markdown
+
+    def test_a_raw_element_that_is_not_code_is_linked(self):
+        # As in a panel: only code shows the syntax. kramdown prints the
+        # element as written, so the link inside it works.
+        assert LINK in _linked('Type <u>[[iiif]]</u> here.', markdown=True)
+
+    def test_many_code_elements_and_links_are_read_in_linear_time(self):
+        markdown = '<code>x</code> ' * 10000 + '[[iiif]] ' * 10000
+        started = time.perf_counter()
+        _linked(markdown, markdown=True)
+        assert time.perf_counter() - started < 2.0
 
 
 class TestAMissingTermInCodeIsNotReported:

@@ -97,6 +97,11 @@ ANSWERS = {
     'closing_run_longer': 'Type `a|b`` then x | y',
     'lone_backtick_then_span': 'Say ` x | y `a` here',
     'maths_in_code_element': '<code>$$a|b$$</code> x | y',
+    'pipe_in_script': 'Run <script>var x = 1 | 2;</script> then x | y',
+    'pipe_in_raw_element': 'A <u>a | b</u> then x | y',
+    'maths_in_raw_span': '<span markdown="0">$$a|b$$</span> x | y',
+    'pipe_in_comment': 'A <!-- a | b --> c',
+    'pipe_in_cdata': 'A <![CDATA[a | b]]> c',
 }
 
 
@@ -259,10 +264,39 @@ class TestAPipeInsideDisplayMaths:
             r'<p>If x | y then \(\vert x\vert  \le \vert y\vert\) holds</p>')
 
     def test_in_a_code_element_is_not_maths(self, rendered):
-        # kramdown leaves the element's content raw, so the entity prints a
-        # pipe and nothing there is maths.
+        # kramdown leaves the element's content raw and reads no table row
+        # inside it, so the pipe is left as written and nothing there is
+        # maths.
         assert _answer(rendered, 'maths_in_code_element') == (
-            '<p><code>$$a&#124;b$$</code> x | y</p>')
+            '<p><code>$$a|b$$</code> x | y</p>')
+
+    def test_in_an_element_made_raw_is_not_maths(self, rendered):
+        assert _answer(rendered, 'maths_in_raw_span') == (
+            '<p><span>$$a|b$$</span> x | y</p>')
+
+
+class TestAPipeInsideRawHtml:
+    """kramdown prints an element it leaves raw as written and reads no
+    table row inside it, so a pipe there is left alone: in a script an
+    entity would change the code."""
+
+    def test_in_a_script(self, rendered):
+        assert _answer(rendered, 'pipe_in_script') == (
+            '<p>Run <script>var x = 1 | 2;</script> then x | y</p>')
+
+    def test_in_a_raw_element(self, rendered):
+        assert _answer(rendered, 'pipe_in_raw_element') == (
+            '<p>A <u>a | b</u> then x | y</p>')
+
+    def test_in_cdata_is_set_between_two(self, rendered):
+        # CDATA's text counts as the line's, and an entity inside it is
+        # printed as written, so the pipe goes between two CDATA sections.
+        assert _answer(rendered, 'pipe_in_cdata') == '<p>A a | b c</p>'
+
+    def test_in_a_comment_is_escaped(self, rendered):
+        # A comment's text counts as the line's, so its pipe would make a
+        # table; the entity inside a comment is never shown.
+        assert _answer(rendered, 'pipe_in_comment') == '<p>A <!-- a &#124; b --> c</p>'
 
     def test_in_a_code_span_is_code_not_maths(self, rendered):
         assert _answer(rendered, 'maths_in_code_span') == (

@@ -69,7 +69,8 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.code_spans import code_and_maths, code_regions, code_spans, stray_dollars
+from telar.code_spans import (answer_regions, code_elements, code_spans, overlaps, raw_regions,
+                              stray_dollars)
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
@@ -735,7 +736,8 @@ _LINK_DESTINATION = re.compile(r'\]\((?:[^()]|\([^()]*\))*\)')
 def _escape_stray_dollars(text):
     """*text* with each `$$` kramdown prints as it is written `\\$\\$`, which
     it still prints as `$$` but which cannot pair with a formula written as
-    `$$…$$` after it in the same paragraph."""
+    `$$…$$` after it in the same paragraph. A backslash kramdown drops
+    before one goes with it."""
     out = []
     pos = 0
     for start, end in stray_dollars(text):
@@ -748,16 +750,17 @@ def _escape_stray_dollars(text):
 def _answer_maths_for_kramdown(text):
     """*text* with each maths span written as kramdown's $$...$$.
 
-    Left as written: maths inside a code span, a raw code element, an HTML
-    tag or a link destination, since none of those is maths on the page; a
+    Left as written: maths inside a code span, a code element, an HTML
+    element kramdown leaves raw, an HTML tag or a link destination, since
+    none of those is maths on the page; a
     $...$ with no LaTeX character, which is currency; and a span holding
     another dollar, which is one formula inside another and has no single
     reading.
     """
     text = _escape_stray_dollars(text)
-    guarded = (code_regions(text)
-               + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
-               + [(m.start(), m.end()) for m in _LINK_DESTINATION.finditer(text)])
+    guarded = overlaps(raw_regions(text) + code_elements(text)
+                       + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
+                       + [(m.start(), m.end()) for m in _LINK_DESTINATION.finditer(text)])
     # Each pattern's next match from the current position, searched again
     # only once the position passes it, so a long answer is scanned once
     # per pattern rather than once per formula.
@@ -776,7 +779,7 @@ def _answer_maths_for_kramdown(text):
         start, end = match.span()
         out.append(text[pos:start])
         span = text[start:end]
-        if group is not None and not any(s < end and start < e for s, e in guarded):
+        if group is not None and not guarded(start, end):
             inner = match.group(group)
             if '$' not in inner and (group == 0 or not span.startswith('$')
                                      or _LATEX_CHARS.search(inner)):
@@ -793,6 +796,12 @@ def _maths_pipes(maths):
     return '\\|'.join(part.replace('|', '\\vert ') for part in maths.split('\\|'))
 
 
+_REGION_PIPES = {
+    'maths': _maths_pipes,
+    'cdata': lambda cdata: cdata.replace('|', ']]>&#124;<![CDATA['),
+}
+
+
 def _answer_pipes_for_kramdown(text):
     """*text* with every pipe kramdown would read as a table cell escaped.
 
@@ -800,16 +809,21 @@ def _answer_pipes_for_kramdown(text):
     and an author's `\\|`, becomes `&#124;`, which prints a bare pipe. Code
     and `$$…$$` are printed as written, so an entity there would reach the
     reader as text: a pipe in code is left alone, and one in maths becomes
-    `\\vert `. Code and maths are found as kramdown finds them
-    (`telar.code_spans`).
+    `\\vert `. kramdown does not look for a table row inside an HTML
+    element, and an element it leaves raw is printed as written, so a pipe
+    there is left alone too: in a `<script>` an entity would change the
+    code. CDATA is the exception: its text counts as the line's, and it
+    prints an entity as written, so the CDATA is closed around the pipe
+    and the entity put between. All of these are found as kramdown finds
+    them (`telar.code_spans`).
     """
     if '|' not in text:
         return text
     out = []
     pos = 0
-    for kind, start, end in code_and_maths(text):
+    for kind, start, end in answer_regions(text):
         out.append(text[pos:start].replace('\\|', '&#124;').replace('|', '&#124;'))
-        out.append(text[start:end] if kind == 'code' else _maths_pipes(text[start:end]))
+        out.append(_REGION_PIPES.get(kind, str)(text[start:end]))
         pos = end
     out.append(text[pos:].replace('\\|', '&#124;').replace('|', '&#124;'))
     return ''.join(out)

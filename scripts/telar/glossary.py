@@ -59,7 +59,7 @@ Version: v1.8.0
 import html
 import re
 from pathlib import Path
-from telar.code_spans import code_elements, code_regions
+from telar.code_spans import code_elements, code_regions, overlaps
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
@@ -419,11 +419,11 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # a panel's HTML.
     tags = [m.span() for m in re.finditer(
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
-    literal = tags + (code_regions(text) if markdown else code_elements(text))
+    literal = overlaps(tags + (code_regions(text) if markdown else code_elements(text)))
 
     def link_outside_tags(match):
         start = match.start()
-        if any(a < start < b for a, b in literal):
+        if literal(start, start + 1):
             return match.group(0)
         return replace_glossary_link(match)
 

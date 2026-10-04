@@ -70,9 +70,14 @@ class TestWhatIsNotMathsIsLeftAsWritten:
         '\\(a $b$\\)',
         'Bare \\ce{H2O} here',
         'No maths at all',
+        'a <u>$x^2$ and \\(y^2\\)</u>',
+        'a <span markdown="0">\\(x^2\\)</span>',
+        'a <SCRIPT>$x^2$</script> then',
+        'a <![CDATA[\\(x^2\\)]]> then',
     ], ids=['currency', 'currency-tight', 'escaped', 'code', 'double-backtick-code',
             'link-destination', 'html-attribute', 'nested-dollars',
-            'nested-in-paren', 'bare-chemistry', 'plain'])
+            'nested-in-paren', 'bare-chemistry', 'plain', 'raw-element',
+            'made-raw', 'raw-any-case', 'cdata'])
     def test_unchanged(self, written):
         assert _answer_maths_for_kramdown(written) == written
 
@@ -89,6 +94,13 @@ class TestWhatIsNotMathsIsLeftAsWritten:
     def test_what_does_not_pair_or_is_code_does_not_move(self, written, expected):
         assert _answer_maths_for_kramdown(written) == expected
 
+    @pytest.mark.parametrize('written, expected', [
+        ('a <u markdown="span">\\(x^2\\)</u>', 'a <u markdown="span">$$x^2$$</u>'),
+        ('a <details>\\(x^2\\)</details>', 'a <details>$$x^2$$</details>'),
+    ], ids=['made-read', 'block-model'])
+    def test_maths_in_an_element_kramdown_reads_is_rewritten(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
     def test_maths_in_a_link_text_is_rewritten(self):
         assert (_answer_maths_for_kramdown('See [$x^2$](https://x.test) here')
                 == 'See [$$x^2$$](https://x.test) here')
@@ -103,7 +115,10 @@ class TestAStrayDoubleDollar:
         ('Costs $$ 5, then \\(x^2\\) here', 'Costs \\$\\$ 5, then $$x^2$$ here'),
         ('Area $$x^2$$ and $$', 'Area $$x^2$$ and \\$\\$'),
         ('Just $$ money', 'Just \\$\\$ money'),
-    ], ids=['before-a-formula', 'after-a-pair', 'alone'])
+        # kramdown drops the backslash before a paragraph's opening `$$`
+        # when the next `$$` ends a line, so the escape replaces it.
+        ('Cost\n\n\\$$ 5\n\n$$', 'Cost\n\n\\$\\$ 5\n\n\\$\\$'),
+    ], ids=['before-a-formula', 'after-a-pair', 'alone', 'backslash-dropped'])
     def test_escaped(self, written, expected):
         assert _answer_maths_for_kramdown(written) == expected
 
@@ -111,7 +126,12 @@ class TestAStrayDoubleDollar:
         'Code `$$` here',
         '<code>$$</code> here',
         'Escaped \\$$ here',
-    ], ids=['in-code', 'in-a-code-element', 'after-an-escape'])
+        '<![CDATA[$$]]> then',
+        'a <u>$$</u> then',
+        '\\$$$$',
+        'a\n\n    $$ in a code block\n\nb',
+    ], ids=['in-code', 'in-a-code-element', 'after-an-escape', 'in-cdata', 'in-a-raw-element',
+            'maths-after-a-dropped-backslash', 'in-an-indented-code-block'])
     def test_not_stray(self, written):
         assert _answer_maths_for_kramdown(written) == written
 
@@ -121,10 +141,19 @@ class TestALongMalformedAnswerIsReadInLinearTime:
     formula: 20,000 of any of these take well under a second."""
 
     @pytest.mark.parametrize('unit', ['`x ', '``y ', '\\begin{align} ', '\\( ', '\\[ ',
-                                      '$$ ', '$x ', '<code>a ', '](x(y '])
+                                      '$$ ', '$x ', '<code>a ', '](x(y ', '<!-- ',
+                                      '<![CDATA[ ', '<u>a ', '<b markdown="0">a '])
     def test_bounded(self, unit):
         started = time.perf_counter()
         _answer_maths_for_kramdown(unit * 20000)
+        assert time.perf_counter() - started < 1.0
+
+    def test_many_guarded_stretches_and_formulas(self):
+        # Each formula is checked against the guarded stretches by a
+        # search, not against each one in turn.
+        answer = '<code>x</code> ' * 10000 + '\\(x^2\\) ' * 10000
+        started = time.perf_counter()
+        _answer_maths_for_kramdown(answer)
         assert time.perf_counter() - started < 1.0
 
 
@@ -175,6 +204,10 @@ RENDERED_ANSWERS = {
         '<p>Costs $$ 5, and <code class="language-plaintext highlighter-rouge">a b</code>'
         ' then \\(x^2\\) here</p>'),
     'stray_dollars_alone': ('Just $$ money', '<p>Just $$ money</p>'),
+    'maths_in_a_raw_element': ('a <u>$x^2$ and \\(y^2\\)</u>',
+                               '<p>a <u>$x^2$ and \\(y^2\\)</u></p>'),
+    'dollars_in_cdata': ('a <![CDATA[$$]]> then \\(x^2\\)', '<p>a $$ then \\(x^2\\)</p>'),
+    'dropped_backslash': ('\\$$$$', '<p>\\(\\)</p>'),
 }
 
 

@@ -30,7 +30,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
-from telar.code_spans import code_spans
+from telar.code_spans import answer_regions, code_spans
+from telar.processors.stories import _answer_maths_for_kramdown, _answer_pipes_for_kramdown
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -96,6 +97,24 @@ FORMS = [
     '<kbd>`a</kbd> b` c',
     '<u>`a b` no close',
     '<x-y>`a</x-y> b` c',
+    'a <details>`x`</details> then `y`',
+    'a <figure>`x`</figure> then `y`',
+    'a <SCRIPT>`x</script> then `y` z',
+    'a <TEXTAREA>`x</textarea> then `y` z',
+    'a <X>`x</x> then `y` z',
+    'a <u>`x</U> then `y` z',
+    'a <pre>`x`</pre> then `y`',
+    'a <table>`x`</table> then `y`',
+    'a\n\n    `x` $$ and `y`\nlazy `z`\n\nb `w`',
+    'a\n\n\t`x` $$\n\nb `w`',
+    'a <u markdown="span">`x`</u> `y`',
+    'a <u markdown="1">`x`</u> `y`',
+    'a <span markdown="0">`x`</span> `y`',
+    'a <span markdown="block">`x`</span> `y`',
+    'a <U MARKDOWN="span">`x`</U> `y`',
+    'a <u><b markdown="1">`x`</b> `y`</u> `z`',
+    'a <![CDATA[`x]]> `y`',
+    'a <!-- `x --> <!-- `y` -->',
     '` <b title="`">x',
     '`x <b title="`">y',
     '`a b\n\nc` d',
@@ -111,7 +130,9 @@ FORMS = [
 PIECES = ['`', '``', '```', ' ', '\t', '\u00a0', 'a', 'b c', '\\', '\\`', '<em>',
           '</em>', '<br title="`">', '<!--`-->', '[x](y`z)', '$$', '*', '\na',
           '\n\na', '<u>', '</u>', '<code>', '</code>', '<span>', '</span>',
-          '<x-y>', '</x-y>', '<img src="`"/>']
+          '<x-y>', '</x-y>', '<img src="`"/>', '<details>', '</details>', '<SCRIPT>',
+          '</script>', '<b markdown="0">', '</b>', '<u markdown="span">', '<![CDATA[',
+          ']]>', '<!--', '-->', '\\$', '\n\n\\$$', 'x$$', '\n\n    ', '\n\n\t']
 
 
 def _random_answers(count, seed=541):
@@ -148,9 +169,30 @@ def _read_code(answer):
     return contents
 
 
+def _rendered_maths(rendered):
+    """The content of every inline formula kramdown made, in order."""
+    return [_line_ends(html.unescape(content)) for content in
+            re.findall(r'\\\((.*?)\\\)', rendered, re.DOTALL)]
+
+
+def _read_maths(answer):
+    """The content of every `$$…$$` span the reader finds, as kramdown
+    prints it: the delimiters off, and trimmed of ASCII whitespace."""
+    return [_line_ends(answer[start + 2:end - 2].strip(' \t\n\r\f\v'))
+            for kind, start, end in answer_regions(answer) if kind == 'maths']
+
+
+def _prepared(answer):
+    return _answer_pipes_for_kramdown(_answer_maths_for_kramdown(answer))
+
+
+ANSWERS = FORMS + _random_answers(400)
+
+
 @pytest.fixture(scope='module')
 def kramdown(tmp_path_factory):
-    answers = FORMS + _random_answers(400)
+    """Each answer, and each as the build prepares it, rendered."""
+    answers = ANSWERS + [_prepared(answer) for answer in ANSWERS]
     site = tmp_path_factory.mktemp('kramdown')
     (site / '_config.yml').write_text(
         (REPO / '_config.yml').read_text(encoding='utf-8'), encoding='utf-8')
@@ -167,10 +209,31 @@ def kramdown(tmp_path_factory):
 @pytest.mark.parametrize('answer', FORMS)
 def test_a_form_where_kramdown_is_not_commonmark(kramdown, answer):
     assert _read_code(answer) == _rendered_code(kramdown[answer])
+    assert _read_maths(answer) == _rendered_maths(kramdown[answer])
 
 
 def test_random_answers(kramdown):
     disagreements = [(answer, _read_code(answer), _rendered_code(kramdown[answer]))
                      for answer in _random_answers(400)
                      if _read_code(answer) != _rendered_code(kramdown[answer])]
+    assert disagreements == []
+
+
+def test_random_answers_maths(kramdown):
+    disagreements = [(answer, _read_maths(answer), _rendered_maths(kramdown[answer]))
+                     for answer in _random_answers(400)
+                     if _read_maths(answer) != _rendered_maths(kramdown[answer])]
+    assert disagreements == []
+
+
+def test_the_build_changes_nothing_on_the_page(kramdown):
+    """None of these answers holds a formula to rewrite or a pipe, so the
+    only change the build makes is escaping a stray `$$`, which must print
+    what the answer as written prints."""
+    changed = [(answer, _prepared(answer)) for answer in ANSWERS
+               if _prepared(answer) != answer]
+    assert changed
+    disagreements = [(answer, kramdown[answer], kramdown[prepared])
+                     for answer, prepared in changed
+                     if html.unescape(kramdown[answer]) != html.unescape(kramdown[prepared])]
     assert disagreements == []
