@@ -17,12 +17,26 @@ one, an IAL or EOB line, and a link definition line are read for no spans.
 A link definition does not end a paragraph, so it is read only at a
 block's start; its id applies to the whole text.
 
+A quote or a list item holds blocks, as kramdown reads it: its lines,
+without the marks kramdown strips from them (a quote's mark from each, a
+list item's marker, and its indentation from the lines after the first),
+are read as a text of their own, and what is found there is placed back
+in the answer. A block HTML element's closing tag with text after it on
+its line ends the element there, and that text opens a block, so a quote
+or list item can begin in the middle of a line. A list's items are read
+one by one, and a nested list's lines past its first are read with the
+item that holds it. Containers are read to a depth of 32, which keeps the
+reading linear in the answer's length; the content of one nested deeper
+is read as paragraphs, its marks as text. kramdown itself cannot render
+a nesting much deeper than a few hundred.
+
 The names and tags of HTML, and kramdown's content model for its elements,
 are here too, since both the blocks and the spans read them.
 
 Version: v1.8.0
 """
 
+import bisect
 import functools
 import re
 
@@ -88,7 +102,8 @@ _BLANK = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
 _INDENTED = re.compile(r'(?:\t| {4})[ \t]*[^ \t\n\r\f\v]')
 # An IAL line. kramdown's may run over several lines; one on a line of its
 # own is read, which keeps the search to the line.
-_IAL = r' {0,3}\{:(?![:/])(?:\\\}|[^}\n])+\}[ \t\r\f\v]*(?:\n|\Z)'
+_IAL_BODY = r'\{:(?![:/])(?:\\\}|[^}\n])+\}[ \t\r\f\v]*(?:\n|\Z)'
+_IAL = r' {0,3}' + _IAL_BODY
 _IAL_LINE = re.compile(_IAL)
 _EOB_LINE = re.compile(r'\^[ \t\r\f\v]*(?:\n|\Z)')
 # A heading line, and the closing marks its text loses: with no text left,
@@ -139,6 +154,30 @@ _BLOCK_BOUNDARY = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)|\^[ \t\r\f\v]*(?:\n|\Z)'
 # span element: it ends an indented code block.
 _HTML_LINE = re.compile(rf' {{0,3}}</?(?>(?!(?:{_LAZY_SPAN})\b){_NAME})')
 
+# A quote and a list item hold blocks: kramdown takes their lines, strips
+# their marks, and reads what is left as a text of its own. A quote's mark
+# goes from each of its lines once (blockquote.rb).
+_QUOTE_MARK = re.compile(r' {0,3}> ?')
+# A tag of an element that is not a span element, opening or closing,
+# opening a line: LAZY_END_HTML_START and LAZY_END_HTML_STOP.
+_LAZY_HTML = rf'(?:<(?>(?!(?:{_LAZY_SPAN})\b){_NAME})|</(?!(?:{_LAZY_SPAN})\b){_NAME}{_S}*>)'
+# A line that ends a quote's lines (paragraph.rb's LAZY_END).
+_LAZY_END = re.compile(rf'[ \t\r\f\v]*(?:\n|\Z)|\^[ \t\r\f\v]*(?:\n|\Z)|{_IAL}'
+                       rf'| {{0,3}}{_LAZY_HTML}')
+# A list item's marker and the rest of its line (list.rb's LIST_START),
+# unless the line is a horizontal rule, which kramdown reads first.
+_LIST_ITEM = re.compile(r'( {0,3}(?:([+*-])|[0-9]+\.))([\t| ][^\n]*)')
+_RULE = re.compile(r' {0,3}([-*_])[ \t]*\1[ \t]*\1(?:\1|[ \t])*(?:\n|\Z)')
+# An IAL opening a list item's content, which kramdown takes off it
+# (LIST_ITEM_IAL); one holding the whole line sets the item's indentation
+# to four.
+_ITEM_IAL = re.compile(r'\{:(?!(?:[A-Za-z0-9_][A-Za-z0-9_-]*)?:|/)(?:\\\}|[^}\n])+\}[ \t\r\f\v]*')
+_ITEM_BLANK = re.compile(r'[ \t\r\f\v]*')
+_TABS_THEN_SPACES = re.compile(r'(\t*)( *)')
+# How deep quotes and list items are read as containers: each level reads
+# its content again, so a bound on the levels keeps the work linear.
+_NESTING = 32
+
 # The letters Ruby's case-insensitive match folds with a letter outside
 # ASCII: the long s and the Kelvin sign. It folds no others with a known
 # element's name, which are ASCII, so not the dotted or dotless i, both of
@@ -172,13 +211,15 @@ def _attributes(source, known):
 class _Blocks:
     """kramdown's blocks in *text*, as far as span syntax needs them: the
     stretches it reads span syntax in (a paragraph with the lines kramdown
-    joins to it, a heading, a list item or quote read as one, each term of
-    a definition list), and the stretches it reads none in (a code block,
-    a block HTML element with what it holds, a comment opening a block, an
-    IAL or EOB line)."""
+    joins to it, a heading, each term of a definition list, and these
+    inside a quote or list item), and the stretches it reads none in (a
+    code block, a block HTML element with what it holds, a comment opening
+    a block, an IAL or EOB line)."""
 
-    def __init__(self, text):
+    def __init__(self, text, depth=0):
         self.text = text
+        # How many containers hold *text*: the answer itself is at 0.
+        self.depth = depth
         # (start, end) of each stretch read for spans; the starts of those
         # that open after a block boundary, where `\\$$` opens block maths.
         self.units = []
@@ -196,9 +237,15 @@ class _Blocks:
         # Whether the block before ended at a blank line, an EOB or IAL
         # line, or is the start of the text.
         self.boundary = True
+        # Each quote's and list item's content, as (text, origin): the text
+        # kramdown reads, and where each of its characters is in this one.
+        self.containers = []
+        self.item_blank = False
         pos = 0
         while pos is not None and pos < len(text):
             pos = self.block(pos)
+        if not depth:
+            self.read_containers()
 
     def skip(self, start, end, kind=None):
         self.skips.append((start, end))
@@ -215,14 +262,18 @@ class _Blocks:
         if blank:
             self.boundary = True
             return blank.end() if blank.end() > pos else None
-        for reader in (self.code_block, self.fenced, self.marker_line, self.block_html,
-                       self.block_maths, self.link_definition):
+        for reader in (self.code_block, self.fenced, self.quote, self.list_item,
+                       self.marker_line, self.block_html, self.block_maths,
+                       self.link_definition):
             end = reader(pos)
             if end is not None:
                 # An EOB line is a boundary; an IAL line leaves it as it was,
-                # since it belongs to the block before it or after it.
-                self.boundary = (reader == self.marker_line
-                                 and (self.boundary or _EOB_LINE.match(self.text, pos)))
+                # since it belongs to the block before it or after it. A list
+                # item ending in a blank line gives that line back to the
+                # text around it, unless an EOB line ends it.
+                self.boundary = ((reader == self.marker_line
+                                  and (self.boundary or _EOB_LINE.match(self.text, pos)))
+                                 or (reader == self.list_item and self.item_blank))
                 return end
         end = self.paragraph(pos)
         self.boundary = False
@@ -267,6 +318,108 @@ class _Blocks:
         if self.fence_closes is None:
             self.fence_closes = _FenceCloses(self.text)
         return self.fence_closes
+
+    def quote(self, pos):
+        """A quote: its first line, and the lines after it to a blank line
+        or a line that ends them (LAZY_END), each without its mark."""
+        text = self.text
+        if self.depth >= _NESTING or not _QUOTE_MARK.match(text, pos):
+            return None
+        content, start = _Content(text), pos
+        while True:
+            end = self.line_end(start)
+            mark = _QUOTE_MARK.match(text, start, end)
+            after = min(end + 1, len(text))
+            content.add(mark.end() if mark else start, after)
+            if after == len(text) or _LAZY_END.match(text, after):
+                break
+            start = after
+        self.containers.append(content.done(after))
+        return after
+
+    def list_item(self, pos):
+        """A list item: its first line past its marker, and the lines after
+        it that parse_list gives it, each without the item's indentation.
+        A line opening the next item of its list ends it, to be read as an
+        item of its own; an EOB line ending it is its own and prints
+        nothing."""
+        text = self.text
+        match = self.depth < _NESTING and _LIST_ITEM.match(text, pos)
+        if not match or _RULE.match(text, pos):
+            return None
+        indentation, start = _item_start(match)
+        content = _Content(text)
+        after = min(match.end() + 1, len(text))
+        content.add(min(start, after), after)
+        end, self.item_blank = self.item_lines(content, after, indentation,
+                                               match.group(2) is not None)
+        self.containers.append(content.done(end))
+        eob = _EOB_LINE.match(text, end)
+        if eob and end < len(text):
+            self.item_blank = False
+            self.skip(end, eob.end())
+            return eob.end()
+        return end
+
+    def item_lines(self, content, line, indentation, bullet):
+        """Add to *content* the lines after a list item's first that
+        kramdown gives it; where the item ends, and whether a blank line
+        ends it."""
+        text = self.text
+        patterns = _item_patterns(indentation, bullet)
+        blank = False
+        while line < len(text):
+            kind = self.item_line(line, blank, patterns)
+            if kind is None:
+                break
+            after = min(self.line_end(line) + 1, len(text))
+            if kind == 'content':
+                content.add_indented(line, after, indentation)
+            else:
+                content.add(line, after)
+            blank = kind == 'blank'
+            line = after
+        return line, blank
+
+    def item_line(self, line, blank, patterns):
+        """How parse_list takes the line at *line*, after a list item's
+        first: 'content', 'blank', or None where the item ends. After a
+        blank line only a line indented as the item's content goes on."""
+        text = self.text
+        lines, lazy_stop, next_item = patterns
+        if ((blank and _RULE.match(text, line)) or _EOB_LINE.match(text, line)
+                or next_item.match(text, line)):
+            return None
+        if lines.match(text, line):
+            return 'content'
+        is_blank = _BLANK.match(text, line)
+        if not (blank or is_blank or lazy_stop.match(text, line)):
+            return 'content'
+        return 'blank' if is_blank else None
+
+    def read_containers(self):
+        """Read each quote's and list item's content as a text of its own,
+        as kramdown does, and place what it finds in this text. A container
+        inside one is queued in turn, so nesting does not recurse."""
+        pending = [(content, origin, 1) for content, origin in self.containers]
+        while pending:
+            content, origin, depth = pending.pop()
+            inner = _Blocks(content, depth)
+            self.absorb(inner, origin)
+            pending.extend((text, _through(places, origin), depth + 1)
+                           for text, places in inner.containers)
+
+    def absorb(self, inner, origin):
+        """Take what the reading *inner* of a container's content found,
+        placed by *origin* in this text."""
+        self.units += [_placed(origin, start, end) for start, end in inner.units]
+        self.skips += [_placed(origin, start, end) for start, end in inner.skips]
+        self.regions += [(kind, *_placed(origin, start, end))
+                         for kind, start, end in inner.regions]
+        self.boundary_starts += [_place(origin, start) for start in inner.boundary_starts]
+        self.definitions |= inner.definitions
+        self.definition_lines += [_placed(origin, start, end)
+                                  for start, end in inner.definition_lines]
 
     def marker_line(self, pos):
         """An EOB or IAL line, which prints nothing."""
@@ -334,8 +487,8 @@ class _Blocks:
         return definition[1]
 
     def paragraph(self, pos):
-        """A paragraph, heading, list item, quote or definition, read for
-        spans to the line that ends it."""
+        """A paragraph, heading or definition, read for spans to the line
+        that ends it."""
         text = self.text
         if self.boundary:
             self.boundary_starts.append(pos)
@@ -375,6 +528,142 @@ class _Blocks:
             match = _OPEN_TAG.match(text, lead)
             return not match or match.group(1).lower() in _SPAN_ELEMENTS
         return False
+
+
+class _Content:
+    """A quote's or list item's content as kramdown reads it, a text of its
+    own: its lines without the marks it strips, and its origin, which says
+    where each stretch of it is in the text. The spaces kramdown makes of a
+    tab are placed at the character after the tab.
+
+    An origin is (starts, places): each stretch of the content begins at
+    one of *starts*, and its place is (offset, single), where a single
+    stretch stands at that one offset and any other runs on from it. The
+    last start is the content's end, a single stretch at the text's end.
+    A stretch per line keeps an origin, and placing one origin through
+    another, in proportion to the lines rather than the characters."""
+
+    def __init__(self, text):
+        self.text, self.pieces, self.length = text, [], 0
+        self.starts, self.places = [], []
+
+    def add(self, start, end, spaces=0):
+        for size, place in ((spaces, (start, True)), (end - start, (start, False))):
+            if size:
+                self.starts.append(self.length)
+                self.places.append(place)
+                self.length += size
+        self.pieces.append(' ' * spaces + self.text[start:end])
+
+    def add_indented(self, start, end, indentation):
+        """A line after a list item's first, as parse_list takes it: each
+        tab opening it four spaces, then the item's indentation off it if
+        it is that far indented."""
+        lead = _TABS_THEN_SPACES.match(self.text, start)
+        width = 4 * len(lead.group(1))
+        if width + len(lead.group(2)) < indentation:
+            self.add(lead.end(1), end, width)
+        else:
+            self.add(lead.end(1) + max(indentation - width, 0), end, max(width - indentation, 0))
+
+    def done(self, end):
+        """The content, and its origin, which places its end at *end*."""
+        self.starts.append(self.length)
+        self.places.append((end, True))
+        return ''.join(self.pieces), (self.starts, self.places)
+
+
+def _place(origin, offset):
+    """Where the character at *offset* in a container's content is in the
+    text its *origin* places it in."""
+    starts, places = origin
+    index = bisect.bisect_right(starts, offset) - 1
+    place, single = places[index]
+    return place if single else place + offset - starts[index]
+
+
+def _placed(origin, start, end):
+    """The stretch (start, end) of a container's content, placed in the
+    text by its *origin*."""
+    first = _place(origin, start)
+    return first, (_place(origin, end - 1) + 1 if end > start else first)
+
+
+def _through(inner, outer):
+    """The origin *inner*, which places a content in another content, placed
+    in turn through that one's origin *outer*: a stretch that runs across
+    stretches of *outer* is cut where they begin."""
+    starts, places = [], []
+    inner_starts, inner_places = inner
+    for index, (place, single) in enumerate(inner_places):
+        start = inner_starts[index]
+        if single or index + 1 == len(inner_starts):
+            starts.append(start)
+            places.append((_place(outer, place), True))
+            continue
+        for offset, outer_place in _stretches(outer, place, inner_starts[index + 1] - start):
+            starts.append(start + offset)
+            places.append(outer_place)
+    return starts, places
+
+
+def _stretches(origin, place, size):
+    """The stretches of *origin* that the *size* characters from *place*
+    cross, as (offset from *place*, place in the text)."""
+    starts, places = origin
+    index = bisect.bisect_right(starts, place) - 1
+    offset = 0
+    while offset < size and index < len(starts):
+        at, single = places[index]
+        if not single:
+            at += place + offset - starts[index]
+        yield offset, (at, single)
+        index += 1
+        offset = starts[index] - place if index < len(starts) else size
+
+
+def _item_start(match):
+    """The indentation of the list item *match* opens, and where its content
+    starts, as parse_first_list_line reads them, past an IAL opening it. A
+    line holding nothing else gives an indentation of four, and the content
+    starts on the next line."""
+    text, end = match.string, match.end()
+    start = _ITEM_BLANK.match(text, match.start(3), end).end()
+    ial = _ITEM_IAL.match(text, start, end)
+    if ial:
+        start = ial.end()
+    if start == end:
+        return 4, min(end + 1, len(text))
+    marker = len(match.group(1))
+    return marker + _lead_width(match.group(3), marker), start
+
+
+def _lead_width(tail, indentation):
+    """The width of the blanks opening *tail*, the rest of a list item's
+    line after a marker *indentation* columns wide, its tabs expanded as
+    parse_first_list_line expands them."""
+    lead = tail[:len(tail) - len(tail.lstrip(' \t'))]
+    while '\t' in lead:
+        spaces = len(lead) - len(lead.lstrip(' '))
+        tabs = len(lead) - spaces - len(lead[spaces:].lstrip('\t'))
+        width = 4 - (spaces + indentation) % 4 + (tabs - 1) * 4
+        lead = ' ' * (spaces + width) + lead[spaces + tabs:]
+    return len(lead)
+
+
+@functools.lru_cache(maxsize=64)
+def _item_patterns(indentation, bullet):
+    """For a list item of *indentation*, a bullet or a number, the lines
+    after its first as parse_list reads them: a line of its content, the
+    start of a line that is not a lazy line, and a line opening the next
+    item of its list (PARSE_FIRST_LIST_LINE_REGEXP_CACHE, fetch_pattern)."""
+    whole, rest = divmod(indentation, 4)
+    lines = re.compile(rf'(?:(?:\t| {{4}}){{{whole}}} {{{rest}}}|(?:\t| {{4}}){{{whole + 1}}})'
+                       r'[ \t\r\f\v]*[^ \t\n\r\f\v]')
+    lazy_stop = re.compile(rf' {{0,{min(indentation, 3)}}}(?:{_IAL_BODY}|{_LAZY_HTML})')
+    marker = r'[+*-]' if bullet else r'[0-9]+\.'
+    next_item = re.compile(rf' {{0,{min(indentation - 1, 3)}}}{marker}[\t| ]')
+    return lines, lazy_stop, next_item
 
 
 class _FenceCloses:

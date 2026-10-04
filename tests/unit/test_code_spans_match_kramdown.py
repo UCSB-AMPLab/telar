@@ -8,9 +8,10 @@ here goes through Jekyll's own markdown converter, as `markdownify` in
 `story-step.html` sends it, and the code elements that come back are compared
 with the spans the reader finds: a fixed set of the forms where kramdown
 differs from CommonMark, a seeded set of random answers built from
-backtick runs, spaces, escapes, a tag and maths, and two built around
+backtick runs, spaces, escapes, a tag and maths, two built around
 links: one from the parts of a link, a reference, an IAL or an extension,
-and one from brackets, parentheses, quotes and tags in any order.
+and one from brackets, parentheses, quotes and tags in any order, and one
+of quotes and list items opening after a block HTML element's close.
 
 Jekyll needs the Ruby the Gemfile asks for. Where `bundle exec` cannot run
 against it, the tests are skipped and say so.
@@ -316,6 +317,34 @@ FORMS = [
     '[a {::comment}]{:/comment}](`d`)',
     'a `a`{: x\\} `c` y\\} `d`',
     '[[x](<code>)[[x](<code>)`z`',
+    # A quote or list item after a block HTML element's closing tag on its
+    # line, where the prose rules leave its mark: its content is blocks.
+    'a\n<div></A>\n</div>> # [<a/>`x\ny` z',
+    '<div>x</div>> # h `a\nb` c',
+    '<div>x</div>> <div>`a`</div> `b`',
+    '<div>x</div>>     `a`',
+    '<div>x</div>>\t\t`a`',
+    '<div>x</div>> ```\n`a`\n```\n`b`',
+    '<div>x</div>> \\$$a$$\nb `c`',
+    '<div>x</div>> [r]: u`x`\n[a][r]',
+    '<div>x</div>> a\n<div>`b`</div> `c`',
+    '<div>x</div>>> # h `a\nb` c',
+    '<div>x</div>- # h `a\nb` c',
+    '<div>x</div>1. # h `a\nb` c',
+    '<div>x</div>- <div>`a`</div> `b`',
+    '<div>x</div>- ```\n`a`\n```\n`b`',
+    '<div>x</div>- a\n\n    `b` c',
+    '<div>x</div>- a\n\n\t`b` c',
+    '<div>x</div>* a\n\n    `b` c',
+    '<div>x</div>1. a\n\n     `b` c',
+    '<div>x</div>-     `a`\n\n      `b`',
+    '<div>x</div>- a\n<div>`b`</div> `c`',
+    '<div>x</div>- {: .c}\n    `a`',
+    '<div>x</div>- a\n^\n\\$$b$$\nc `d`',
+    '<div>x</div>-\t\\$$\t\n\n\\$$\\$$ `d`',
+    '<hr>- > # h `a\nb` c',
+    '<!-- c -->> - a\n\n    `b` c',
+    '<div>x</div>- - -\n`a`',
 ]
 
 # Forms the reader does not model, pinned as it reads them and as kramdown
@@ -417,6 +446,32 @@ def _free_answers(count, seed=5800):
     return answers
 
 
+# A quote or list item opening after a block HTML element's closing tag, then
+# pieces of what its content may hold. Code and maths that run over a line
+# are compared without the blanks that open each line after the first:
+# kramdown strips a list item's indentation from them, and the reader places
+# the span in the answer as written, where they remain.
+CONTAINER_CLOSES = ['\n<div>x</div>', '<div>x</div>', '\n<hr>', '\n<!-- c -->',
+                    '\n<div></A>\n</div>']
+CONTAINER_STARTS = ['>', '> ', '>>', '- ', '* ', '1. ', '-\t', '>     ', '- # ', '> # ', '- > ',
+                    '> - ']
+CONTAINER_PIECES = ['`', '``', ' ', 'a', 'b c', '\n', '\n\n', '\na', '    ', '<div>', '</div>',
+                    '# ', '```', '\n```\n', '$$', '\\$$', '\n^\n', '[r]: u`x`\n', '[a][r]',
+                    '<span>', '</span>', '<a/>', '[', '\n  ', '\n    ', '<!--', '-->', '<u>',
+                    '</u>']
+
+
+def _container_answers(count, seed=668):
+    rng = random.Random(seed)
+    return [_prose('a' + rng.choice(CONTAINER_CLOSES) + rng.choice(CONTAINER_STARTS)
+                   + ''.join(rng.choice(CONTAINER_PIECES) for _ in range(rng.randint(1, 10))))
+            for _ in range(count)]
+
+
+def _unindented(contents):
+    return [re.sub(r'\n[ \t]*', '\n', content) for content in contents]
+
+
 def _prose(answer):
     reduced = _reduce_answer_to_prose(answer)
     return reduced[0] if isinstance(reduced, tuple) else reduced
@@ -510,12 +565,13 @@ def _prepared(answer):
 
 ANSWERS = (FORMS + list(UNMODELLED) + _random_answers(400) + _random_block_answers(400)
            + _structured_answers(400) + _free_answers(400))
+CONTAINER_ANSWERS = _container_answers(400)
 
 
 @pytest.fixture(scope='module')
 def kramdown(tmp_path_factory):
     """Each answer, and each as the build prepares it, rendered."""
-    answers = ANSWERS + [_prepared(answer) for answer in ANSWERS]
+    answers = ANSWERS + CONTAINER_ANSWERS + [_prepared(answer) for answer in ANSWERS]
     site = tmp_path_factory.mktemp('kramdown')
     (site / '_config.yml').write_text(
         (REPO / '_config.yml').read_text(encoding='utf-8'), encoding='utf-8')
@@ -579,6 +635,15 @@ def test_random_answers_with_blocks(kramdown):
                      for answer in _random_block_answers(400)
                      if (_read_code(answer), _read_maths(answer))
                      != (_rendered_code(kramdown[answer]), _rendered_maths(kramdown[answer]))]
+    assert disagreements == []
+
+
+def test_random_quotes_and_list_items(kramdown):
+    disagreements = [(answer, kramdown[answer]) for answer in CONTAINER_ANSWERS
+                     if (_unindented(_read_code(answer, kramdown[answer])),
+                         _unindented(_read_maths(answer, kramdown[answer])))
+                     != (_unindented(_rendered_code(kramdown[answer])),
+                         _unindented(_rendered_maths(kramdown[answer])))]
     assert disagreements == []
 
 

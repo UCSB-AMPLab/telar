@@ -64,9 +64,13 @@ and a link definition there; an IAL over several lines; a setext heading
 or abbreviation definition; `~~` strikethrough; autolinks, and a `]` that
 emphasis or an autolink hides inside a link's text; a span IAL after
 emphasis, an entity or a footnote marker with a definition, and `<<` and
-`>>`, with or without an IAL after them; footnote definitions; and what an
-`options` extension changes. The answer's prose rules have already
-flattened list, quote and heading marks.
+`>>`, with or without an IAL after them; footnote definitions; a quote or
+list item nested more than 32 deep, whose content is read as paragraphs,
+its marks as text; and what an `options` extension changes. The answer's
+prose rules have already flattened list, quote and heading marks at the
+start of a line; one left after a block HTML element's closing tag on its
+line opens a quote or a list item, whose content is read as blocks, as
+kramdown reads it.
 
 In a panel, which reaches the glossary pass as HTML, a backtick is a
 character and code is an element: a raw `<code>`, `<pre>`, `<kbd>` or
