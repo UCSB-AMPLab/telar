@@ -238,3 +238,47 @@ class TestTheSharedCorpusIsWhatThisSideWrites:
     def test_the_corpus_is_not_empty(self):
         """A fixture that fails to load satisfies every test above it."""
         assert len(_scalars()) >= 40
+
+
+class TestACarriageReturnIsWrittenBackAsTyped:
+    """The two cases the shared corpus cannot hold, pinned on this side alone.
+
+    The fixture's own comment says why they are not in it: the Compositor
+    normalises a bare CR and a CRLF pair to a single LF on its publish path,
+    and the framework writes back what the author typed. The two sides have
+    different correct values for one source, so the union has no entry they
+    could agree on.
+
+    That is a reason to keep them out of the corpus, not a reason to leave
+    the behaviour unpinned. A CR reaches a cell from any spreadsheet edited
+    on Windows, `_YAML_1_1_LINE_BREAKS` exists to force these into an escape
+    rather than a raw character, and nothing else in the suite would notice
+    if that stopped happening.
+    """
+
+    CASES = [('a bare carriage return', 'A\rreturn', '"A\\rreturn"'),
+             ('a CRLF pair', 'Two\r\nlines', '"Two\\r\\nlines"')]
+
+    @pytest.mark.parametrize('label,source,expected', CASES,
+                             ids=[label for label, _, _ in CASES])
+    def test_it_is_written_as_an_escape(self, label, source, expected):
+        block = generate_collections._frontmatter_block({'title': source})
+
+        assert block[len('title:'):].rstrip('\n').lstrip(' ') == expected
+
+    @pytest.mark.parametrize('label,source,expected', CASES,
+                             ids=[label for label, _, _ in CASES])
+    def test_it_comes_back_as_the_string_it_went_in_as(self, label, source,
+                                                       expected):
+        block = generate_collections._frontmatter_block({'title': source})
+
+        assert yaml.safe_load(block)['title'] == source
+
+    @pytest.mark.parametrize('label,source,expected', CASES,
+                             ids=[label for label, _, _ in CASES])
+    def test_the_block_it_is_in_is_not_truncated(self, label, source, expected):
+        """A raw CR would end the scalar and drop the keys after it."""
+        page = '---\n' + generate_collections._frontmatter_block(
+            {'title': source, 'layout': 'object'}) + '---\n\nbody\n'
+
+        assert _frontmatter(page)['layout'] == 'object'
