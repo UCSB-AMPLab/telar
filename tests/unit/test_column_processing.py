@@ -193,6 +193,49 @@ class TestIsHeaderRow:
         assert is_header_row(row) is False
 
 
+class TestABlankCellIsAbsentHoweverTheFileWasRead:
+    """The verdict must not depend on how pandas was told to read blanks.
+
+    A sheet read with `keep_default_na=False` — which the glossary and
+    object readers do, so an author's term titled `NA` survives — hands this
+    function `''` where an inferring read hands it NaN. Counting `''` as a
+    populated cell drops a bilingual header row of three names and two blank
+    custom columns from 100% to 60%, under the threshold, and the row of
+    Spanish aliases is then published as a glossary term.
+    """
+
+    HEADER_WITH_BLANK_TAIL = ['id_termino', 'titulo', 'definicion']
+
+    @pytest.mark.parametrize('blank', [None, '', '   ', '\t'])
+    def test_a_header_row_padded_with_blanks_is_still_a_header(self, blank):
+        row = self.HEADER_WITH_BLANK_TAIL + [blank, blank]
+
+        assert is_header_row(row) is True
+
+    @pytest.mark.parametrize('blank', [None, '', '   '])
+    def test_a_data_row_padded_with_blanks_is_still_data(self, blank):
+        row = ['encomienda', 'Encomienda', 'A grant of labour.', blank, blank]
+
+        assert is_header_row(row) is False
+
+    def test_both_readings_of_one_row_agree(self):
+        """The same sheet, read either way, gets the same answer."""
+        inferred = self.HEADER_WITH_BLANK_TAIL + [None, None]
+        literal = self.HEADER_WITH_BLANK_TAIL + ['', '']
+
+        assert is_header_row(inferred) is is_header_row(literal)
+
+    @pytest.mark.parametrize('row', [
+        [],
+        [None, None, None, None],
+        ['', '', '', ''],
+        ['  ', None, '', '\n'],
+    ])
+    def test_a_row_of_nothing_is_not_a_header(self, row):
+        """No populated cells is not a header, as it was before."""
+        assert is_header_row(row) is False
+
+
 class TestTheAliasMapIsPinned:
     """The alias map is a contract, not an internal detail.
 
@@ -405,6 +448,61 @@ class TestTwoColumnsCannotClaimOneName:
         df = pd.DataFrame([[1, 'X']], columns=['order', 'title'])
 
         assert list(normalize_column_names(df).columns) == ['order', 'title']
+
+
+class TestCaseAndSpacingDoNotGetPastTheCollisionRefusal:
+    """Two spellings of one header are one header.
+
+    Every lookup downstream reads a header case-folded and trimmed, so
+    `Note` beside `note` is the same column written twice. pandas keeps both
+    labels, `row.get('note')` returns a Series, and a caller that lowercased
+    its headers first left the two indistinguishable before the refusal could
+    see them. The refusal folds the spellings itself, so it holds whatever
+    the caller did to the headers on the way in.
+    """
+
+    @pytest.mark.parametrize('columns', [
+        ['term_id', 'Note', 'note'],
+        ['term_id', 'note', 'NOTE'],
+        ['term_id', 'note', ' note '],
+        ['term_id', 'Title', 'title'],
+    ])
+    def test_two_spellings_of_one_header_are_refused(self, columns):
+        df = pd.DataFrame([['a'] * len(columns)], columns=columns)
+
+        with pytest.raises(ColumnCollisionError):
+            normalize_column_names(df)
+
+    def test_the_message_names_both_spellings(self):
+        df = pd.DataFrame([['a', 'b', 'c']], columns=['term_id', 'Note', 'note'])
+
+        with pytest.raises(ColumnCollisionError) as raised:
+            normalize_column_names(df)
+
+        message = str(raised.value)
+        assert "'Note'" in message
+        assert "'note'" in message
+
+    @pytest.mark.parametrize('columns', [
+        ['protected', 'Protegido'],
+        ['Protected', 'privado'],
+        ['PRIVADO', 'protegido'],
+    ])
+    def test_an_alias_still_collides_however_it_is_spelled(self, columns):
+        df = pd.DataFrame([['a'] * len(columns)], columns=columns)
+
+        with pytest.raises(ColumnCollisionError):
+            normalize_column_names(df)
+
+    @pytest.mark.parametrize('columns', [
+        ['Title'],
+        ['Title', 'Note'],
+        ['term_id', 'Title', 'definition'],
+    ])
+    def test_one_spelling_of_each_header_is_untouched(self, columns):
+        df = pd.DataFrame([['a'] * len(columns)], columns=columns)
+
+        assert list(normalize_column_names(df).columns) == columns
 
 
 class TestASheetCannotWriteTelarsOwnBookkeeping:

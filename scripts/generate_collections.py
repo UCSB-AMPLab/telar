@@ -301,10 +301,20 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
     # survives or does not depending on what its neighbours look like.
     df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
 
-    # Normalize column names (lowercase + bilingual mapping)
-    df.columns = df.columns.str.lower().str.strip()
+    # Normalize column names (bilingual mapping), then fold what is left.
+    # The order is the whole point. Folding first left two spellings of one
+    # column as one label written twice, which the collision refusal cannot
+    # tell from a single column; the refusal runs on the headers as the
+    # author wrote them, so it sees `Note` beside `note`.
+    #
+    # The fold still has to happen, after. `Term_ID` is nobody's alias, so
+    # the bilingual map leaves it alone and only the fold makes it findable
+    # under `term_id` below. A hand-edited glossary headed that way built
+    # before, and refusing it at upgrade over the casing of its own headers
+    # would be a regression, not a fix.
     from telar.csv_utils import normalize_column_names, is_header_row
     df = normalize_column_names(df)
+    df.columns = df.columns.str.lower().str.strip()
 
     # Filter out instruction columns starting with #
     df = df[[col for col in df.columns if not col.startswith('#')]]

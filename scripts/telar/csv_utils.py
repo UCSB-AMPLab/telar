@@ -380,21 +380,23 @@ def _refuse_colliding_renames(df, rename_map):
     Refusing here fails just as closed and names the two columns, which is the
     only part the author can act on. There is no safe way to guess which column
     was meant: for `protected` the two answers are publish and do not publish.
-    """
-    existing = [str(col).lower().strip() for col in df.columns
-                if col not in rename_map]
 
+    Two spellings of one header collide on the same terms. Every lookup
+    downstream folds case and trims, so `Note` beside `note` is one column
+    written twice and pandas holds both under one label again. Grouping the
+    sheet's own columns rather than the rename map is what sees it: a caller
+    that folded its headers before calling leaves two identical labels, and
+    a map keyed by label collapses those into a single entry.
+    """
     claimed = {}
-    for source, canonical in rename_map.items():
-        claimed.setdefault(canonical, []).append(str(source))
+    for col in df.columns:
+        canonical = rename_map.get(col, str(col).lower().strip())
+        claimed.setdefault(canonical, []).append(str(col))
 
     collisions = []
     for canonical, sources in sorted(claimed.items()):
-        others = [s for s in sources]
-        if canonical in existing:
-            others.append(canonical)
-        if len(others) > 1:
-            collisions.append((canonical, sorted(others)))
+        if len(sources) > 1:
+            collisions.append((canonical, sorted(sources)))
 
     if collisions:
         detail = '; '.join(
@@ -426,14 +428,23 @@ def is_header_row(row_values):
     valid_names.update(['x', 'y', 'zoom'])
 
     # Count how many cells match known column names
+    # A blank cell is absent however the file was read. A sheet read with
+    # `keep_default_na=False` -- which the glossary and object readers do, so
+    # a term titled `NA` survives -- gives '' where an inferring read gives
+    # NaN, and counting '' as populated made the verdict depend on which
+    # reader got there: a bilingual header row of three names padded with two
+    # empty custom columns fell from 100% to 60% and was published as data.
     matches = 0
     total = 0
     for val in row_values:
-        if pd.notna(val):
-            val_lower = str(val).lower().strip()
-            total += 1
-            if val_lower in valid_names:
-                matches += 1
+        if pd.isna(val):
+            continue
+        val_lower = str(val).lower().strip()
+        if not val_lower:
+            continue
+        total += 1
+        if val_lower in valid_names:
+            matches += 1
 
     # If 80%+ of non-empty cells are column names, it's a header row.
     # Require at least 3 non-empty cells so a sparse first data row whose two

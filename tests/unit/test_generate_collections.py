@@ -690,6 +690,79 @@ class TestGlossaryAcknowledgementColumn:
         assert fields['quoted_in_stories'] == ['hidden-chamber']
 
 
+class TestTheGlossaryGeneratorSeesACaseFoldedCollision:
+    """The generator lowercased its headers before the refusal ran.
+
+    Folding the headers first left `Note` and `note` as one label twice
+    over, which the refusal could not tell from a single column, and the
+    page was written from whichever of the two pandas handed back. It reads
+    the author's headers as they were written, like every other sheet, and
+    the refusal folds the spellings itself.
+    """
+
+    def _generate(self, tmp_path, header, rows):
+        from generate_collections import _generate_glossary_from_csv
+        csv_path = tmp_path / 'glossary.csv'
+        csv_path.write_text(header + rows, encoding='utf-8')
+        glossary_dir = tmp_path / '_glossary'
+        glossary_dir.mkdir()
+        _generate_glossary_from_csv(csv_path, glossary_dir, {})
+        return glossary_dir
+
+    def test_two_spellings_of_one_header_are_refused(self, tmp_path):
+        from telar.csv_utils import ColumnCollisionError
+
+        with pytest.raises(ColumnCollisionError):
+            self._generate(
+                tmp_path,
+                'term_id,title,definition,Note,note\n',
+                'encomienda,Encomienda,A grant of labour.,a,b\n')
+
+    def test_an_alias_beside_the_canonical_name_is_refused(self, tmp_path):
+        from telar.csv_utils import ColumnCollisionError
+
+        with pytest.raises(ColumnCollisionError):
+            self._generate(
+                tmp_path,
+                'term_id,title,definition,protected,Protegido\n',
+                'encomienda,Encomienda,A grant of labour.,yes,\n')
+
+    def test_an_ordinary_sheet_still_generates(self, tmp_path):
+        glossary_dir = self._generate(
+            tmp_path,
+            'term_id,title,definition,Note\n',
+            'encomienda,Encomienda,A grant of labour.,a\n')
+
+        assert (glossary_dir / 'encomienda.md').exists()
+
+    @pytest.mark.parametrize('header', [
+        'Term_ID,Title,Definition\n',
+        'TERM_ID,TITLE,DEFINITION\n',
+        ' term_id , title , definition \n',
+    ])
+    def test_a_capitalised_canonical_header_still_generates(self, tmp_path,
+                                                            header):
+        """A hand-edited sheet that built before still builds.
+
+        `Term_ID` is not an alias, so the bilingual map leaves it alone; it
+        is the fold that made it findable. The fold stays, after the
+        refusal rather than before it, so an existing site is not refused
+        at upgrade over the casing of its own headers.
+        """
+        glossary_dir = self._generate(
+            tmp_path, header, 'encomienda,Encomienda,A grant of labour.\n')
+
+        assert (glossary_dir / 'encomienda.md').exists()
+
+    def test_a_capitalised_alias_still_normalises(self, tmp_path):
+        glossary_dir = self._generate(
+            tmp_path,
+            'ID_Termino,Titulo,Definicion\n',
+            'encomienda,Encomienda,Una merced de trabajo.\n')
+
+        assert (glossary_dir / 'encomienda.md').exists()
+
+
 class TestLegacyMarkdownAcknowledgement:
     """v1.8.0: a hand-written term's frontmatter passes through verbatim.
 

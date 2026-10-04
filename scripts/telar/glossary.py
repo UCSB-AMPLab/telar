@@ -46,6 +46,7 @@ import re
 from pathlib import Path
 import pandas as pd
 from telar.config import get_lang_string
+from telar.csv_utils import ColumnCollisionError, ReservedColumnError
 
 
 def load_glossary_from_csv(csv_path):
@@ -85,6 +86,12 @@ def load_glossary_from_csv(csv_path):
             if term_id and title:
                 glossary_terms[term_id] = title
 
+    except (ColumnCollisionError, ReservedColumnError):
+        # The page generator reads this same file and fails the build on
+        # these two. A loader that swallowed them handed back an empty link
+        # map, so whether the author heard about the sheet at all depended
+        # on which path ran first. Both refuse alike.
+        raise
     except Exception as e:
         print(f"  ⚠️ Could not load glossary.csv: {e}")
 
