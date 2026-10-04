@@ -825,6 +825,45 @@ def _parse_page_frontmatter(source_file):
     return frontmatter_text, frontmatter_dict, body
 
 
+# The one language-file section a page's `title_key` is read from.
+# `_layouts/default.html` resolves `title_key: navigation.objects` to the nav
+# label, so the browser tab says what the menu says. Held to that section so
+# the rest of the language file is the framework's own and can be checked
+# for strings nothing reads.
+TITLE_KEY_SECTION = 'navigation'
+
+# Where a page with front matter can be: the three built-in pages, and the
+# author's pages the pages collection is generated from.
+TITLE_KEY_SOURCES = ('index.md', 'pages/*.md', 'telar-content/texts/pages/*.md')
+
+
+def check_title_keys(root='.'):
+    """Warn about a `title_key` the layout will not read.
+
+    The page still builds, and its tab shows its own `title` instead.
+    Returns the warnings, for the tests.
+    """
+    warnings = []
+    for pattern in TITLE_KEY_SOURCES:
+        for source in sorted(Path(root).glob(pattern)):
+            parsed = _parse_page_frontmatter(source)
+            if parsed is None:
+                continue
+            value = parsed[1].get('title_key')
+            if value is None:
+                continue
+            parts = str(value).split('.')
+            if len(parts) == 2 and parts[0] == TITLE_KEY_SECTION and parts[1]:
+                continue
+            message = (f"{source.relative_to(root)}: title_key '{value}' is not "
+                       f"a {TITLE_KEY_SECTION}.* key, so the browser tab shows "
+                       f"the page's title instead. A page title can only be "
+                       f"translated through a {TITLE_KEY_SECTION}.* key.")
+            print(f"  [WARN] {message}")
+            warnings.append(message)
+    return warnings
+
+
 def generate_pages(telar_language='en'):
     """Generate processed page files from user markdown sources.
 
@@ -1022,6 +1061,7 @@ def main():
     # Always generate pages (passes active language so localized sister files
     # like acerca.md/about.md can be selected at build time)
     generate_pages(telar_language=telar_language)
+    check_title_keys()
 
     # Must follow generate_pages, which can clear _jekyll-files/_pages/ where
     # the fragment pages live, and must run even when stories are skipped: a

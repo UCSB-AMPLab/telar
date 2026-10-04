@@ -4,6 +4,7 @@
 
 # Navigation
 navigation:
+  stories: "Stories"
   home: "Home"
   objects: "Objects"
   glossary: "Glossary"
@@ -17,13 +18,9 @@ buttons:
   back_to_collection: "← Back to Collection"
   back_to_glossary: "← Back to Glossary"
   learn_more: "Learn more"
-  read_more: "Read More"
   view_objects: "View all objects"
-  copy: "Copy"
-  copied: "Copied!"
   close: "Close"
   identify_coordinates: "Identify coordinates"
-  copy_coordinates: "Copy x,y,zoom"
   go_deeper: "Go deeper"
 
 # Generic loading placeholder (object thumbnails and other async content)
@@ -41,6 +38,19 @@ object:
     credit: "Credit"
     iiif_manifest: "IIIF Manifest"
     appears_in_stories: "Appears in Stories"
+    format: "Format"
+    file_size: "File size"
+    duration: "Duration"
+    provider: "Provider"
+    source: "Source"
+    view_on_provider: "View on"
+    embed_url: "Embed URL"
+
+  # Messages shown in the object viewer when its media cannot be shown
+  errors:
+    audio_not_found: "Audio file not available."
+    embed_unavailable: "This video could not be loaded."
+    open_on_drive: "Open it on Google Drive."
 
   # Credits badge (viewer overlay)
   credit_prefix: "Credit:"
@@ -60,9 +70,6 @@ object:
   coordinates:
     heading: "Instructions"
     page_label: "Page"
-    x_label: "X"
-    y_label: "Y"
-    zoom_label: "Zoom"
     copy_page_tooltip: "Copy page number"
     instructions_p1: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling."
     instructions_p2: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once."
@@ -262,7 +269,6 @@ errors:
     local_alternative: "Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:"
     local_fix_check_config: "Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> are correct for production"
     local_fix_run_with_note: "Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)"
-    local_regenerate_note: "(it will use your updated settings)"
 
   # Google Sheets configuration errors
   google_sheets:
@@ -350,7 +356,6 @@ share:
   button: "Share"
   title: "Share"
   copy: "COPY"
-  copied: "Copied!"
 
   # Pill-style tabs
   tab_this_story: "this story"
@@ -400,23 +405,6 @@ share:
   protected_embed_warning: "This story is protected. The embed will show a lock screen until viewers enter the key."
 
   # Legacy keys (kept for compatibility)
-  title_site: "Share This Site"
-  tab_link: "Share Links"
-  tab_embed: "Embed Code"
-  copy_link: "Copy Link"
-  copy_embed: "Copy Embed Code"
-  embed_presets: "Dimension Presets"
-  select_story: "Select a story"
-  share_a_story: "Share a story"
-  select_option: "Select Story"
-  embed_preview: "Embed Code Preview"
-  share_story_heading: "Share This Story"
-  share_site_heading: "Share This Site"
-  help_story_link_homepage: "Copy a direct link to a story to share by email, social media, or messaging apps."
-  help_embed_intro_stories: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
-  help_embed_intro_homepage: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a story and specify a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
-  help_dimensions: "Enter dimensions as pixels (e.g. 800) or percentages (e.g. 100%)."
-  help_embed: "Copy this code and paste it into your website, LMS, or blog post to embed this story."
 
 # Protected stories unlock screen
 unlock:

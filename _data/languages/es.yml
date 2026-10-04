@@ -4,6 +4,7 @@
 
 # Navegación
 navigation:
+  stories: "Historias"
   home: "Inicio"
   objects: "Objetos"
   glossary: "Glosario"
@@ -17,13 +18,9 @@ buttons:
   back_to_collection: "← Volver a la colección"
   back_to_glossary: "← Volver al glosario"
   learn_more: "Saber más"
-  read_more: "Leer más"
   view_objects: "Ver todos los objetos"
-  copy: "Copiar"
-  copied: "¡Copiado!"
   close: "Cerrar"
   identify_coordinates: "Identificar coordenadas"
-  copy_coordinates: "Copiar x,y,zoom"
   go_deeper: "Profundizar"
 
 # Marcador de posición genérico de carga (miniaturas de objetos y otro contenido asíncrono)
@@ -41,6 +38,19 @@ object:
     credit: "Crédito"
     iiif_manifest: "Manifiesto IIIF"
     appears_in_stories: "Aparece en historias"
+    format: "Formato"
+    file_size: "Tamaño del archivo"
+    duration: "Duración"
+    provider: "Plataforma"
+    source: "Fuente"
+    view_on_provider: "Ver en"
+    embed_url: "URL para insertar"
+
+  # Mensajes del visor del objeto cuando no puede mostrar el medio
+  errors:
+    audio_not_found: "El archivo de audio no está disponible."
+    embed_unavailable: "No se pudo cargar este video."
+    open_on_drive: "Ábrelo en Google Drive."
 
   # Insignia de créditos (superposición del visor)
   credit_prefix: "Crédito:"
@@ -60,9 +70,6 @@ object:
   coordinates:
     heading: "Instrucciones"
     page_label: "Página"
-    x_label: "X"
-    y_label: "Y"
-    zoom_label: "Zoom"
     copy_page_tooltip: "Copiar número de página"
     instructions_p1: "Usa este panel para identificar las coordenadas de las ubicaciones en una imagen para tu historia. Las coordenadas se actualizan mientras haces paneo o zoom sobre la imagen con el mouse haciendo clic, arrastrando y usando la rueda."
     instructions_p2: "Cuando encuentres una ubicación, anota los valores de X, Y y Zoom para incluirlos en la hoja de cálculo de estructura. También puedes usar los botones de la derecha para copiar las tres coordenadas de una sola vez."
@@ -264,7 +271,6 @@ errors:
     local_alternative: "Si la configuración del sitio está mal, primero actualiza <code>_config.yml</code> y luego regenera."
     local_fix_check_config: "Verifica que <code>url</code> y <code>baseurl</code> en <code>_config.yml</code> estén correctos para producción"
     local_fix_run_with_note: "Ejecuta <code>python3 scripts/generate_iiif.py</code> (usará tu configuración actualizada)"
-    local_regenerate_note: "(usará tu configuración actualizada)"
 
   # Errores de configuración de Google Sheets
   google_sheets:
@@ -352,7 +358,6 @@ share:
   button: "Compartir"
   title: "Compartir"
   copy: "COPIAR"
-  copied: "¡Copiado!"
 
   # Pestañas estilo píldora
   tab_this_story: "esta historia"
@@ -402,23 +407,6 @@ share:
   protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
 
   # Claves heredadas (mantenidas por compatibilidad)
-  title_site: "Compartir este sitio"
-  tab_link: "Compartir enlaces"
-  tab_embed: "Insertar (*embed*)"
-  copy_link: "Copiar enlace"
-  copy_embed: "Copiar código para insertar (*embed*)"
-  embed_presets: "Tamaños predefinidos"
-  select_story: "Selecciona una historia"
-  share_a_story: "Compartir una historia"
-  select_option: "Seleccionar historia"
-  embed_preview: "Vista previa del código"
-  share_story_heading: "Compartir esta historia"
-  share_site_heading: "Compartir este sitio"
-  help_story_link_homepage: "Copia un enlace directo a una historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
-  help_embed_intro_stories: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar admite esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
-  help_embed_intro_homepage: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar admite esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona una historia e indica un tamaño (usando un tamaño predefinido o indicando dimensiones específicas), luego copia el código y pégalo en tu sitio."
-  help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."
-  help_embed: "Copia este código y pégalo en tu sitio web, LMS o blog para insertar (*embed*) esta historia."
 
 # Pantalla de desbloqueo de historias protegidas
 unlock:
