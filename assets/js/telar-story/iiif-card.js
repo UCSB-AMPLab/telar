@@ -29,11 +29,6 @@
  *   Different-object pairs are skipped — the viewer freezes at its last
  *   position while the new plate slides in on top.
  *
- *   Activation/deactivation — `deactivateIiifCard()` handles direction-aware
- *   plate transitions. Forward: the plate stays in place (covered by the next
- *   plate's higher z-index). Backward: the plate slides back down via
- *   translateY(100%).
- *
  *   Destruction — `destroyIiifCard()` releases GPU memory before calling
  *   the wrapper's destroy(). OpenSeadragon holds WebGL render state that
  *   the browser cannot reclaim until the context is explicitly released.
@@ -502,33 +497,6 @@ function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
 
 // ── Plate activation and deactivation ────────────────────────────────────────
 
-/**
- * Deactivate a viewer plate.
- *
- * Direction determines the visual transition:
- *
- *   Forward — the plate stays at translateY(0). It is not visible because
- *   the incoming plate has a higher z-index and covers it. We only remove
- *   the is-active class so CSS knows the plate is no longer current.
- *
- *   Backward — the plate slides back down via translateY(100%), reversing
- *   the slide-up animation that brought it into view. The plate below it
- *   (which was already at translateY(0)) becomes visible again.
- *
- * @param {ViewerCard} viewerCard - The card to deactivate.
- * @param {'forward'|'backward'} direction - Navigation direction.
- */
-export function deactivateIiifCard(viewerCard, direction) {
-  if (!viewerCard || !viewerCard.element) return;
-
-  viewerCard.element.classList.remove('is-active');
-
-  if (direction === 'backward') {
-    viewerCard.element.style.transform = 'translateY(100%)';
-  }
-  // Forward: plate stays at translateY(0) — covered by newer higher-z plate
-}
-
 // ── Plate destruction ────────────────────────────────────────────────────────
 
 /**
@@ -727,10 +695,11 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   const y    = atRest ? yA : yA + (yB - yA) * progress;
   const zoom = atRest ? zA : zA + (zB - zA) * progress;
 
-  // Find the active viewer card for this scene (not by objectId — repeated objects have
-  // multiple scenes and objectId lookup would find the wrong one on backward nav).
-  const sceneIndex = state.stepToScene[stepIndex];
-  const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
+  // Keyed by scene, not by objectId: an object appearing in several scenes has
+  // a plate for each, and an objectId lookup finds the wrong one on backward
+  // navigation. `isReady` is the image plate's own flag, so a plate holding a
+  // player answers undefined and is passed over.
+  const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
   if (!viewerCard || !viewerCard.isReady) return;
 
   // At rest the same framing is true on every frame, and a snap is a forced
@@ -764,11 +733,11 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
  * time (until then the focal target works from the CSS-derived default box).
  */
 export function reSnapActiveViewer() {
-  // Find the active viewer card by its plate element's is-active class.
-  // (Do not use state.currentObjectRun.objectId — it is not unique when the
-  // same object appears in multiple scenes; use the element flag instead.)
-  const viewerCard = state.viewerCards.find(
-    vc => vc.element && vc.element.classList.contains('is-active')
+  // Found by the plate element's is-active class, not by
+  // state.currentObjectRun.objectId, which is not unique when the same object
+  // appears in several scenes.
+  const viewerCard = Object.values(state.viewerPlates).find(
+    plate => plate.container?.classList.contains('is-active')
   );
   if (!viewerCard || !viewerCard.isReady) return;
 

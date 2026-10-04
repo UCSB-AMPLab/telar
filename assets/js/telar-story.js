@@ -40,11 +40,6 @@
     lenis: null,
     /** Snap plugin instance reference. */
     snap: null,
-    // ── Viewer cards ─────────────────────────────────────────────────────────
-    /** @type {ViewerCard[]} Pool of viewer card objects. */
-    viewerCards: [],
-    /** Counter for generating unique viewer instance DOM IDs. */
-    viewerCardCounter: 0,
     /** Quick lookup: object_id → object data from window.objectsData. */
     objectsIndex: {},
     // ── Panels ───────────────────────────────────────────────────────────────
@@ -78,13 +73,12 @@
     // ── Connection speed ─────────────────────────────────────────────────────
     /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
     manifestLoadTimes: [],
-    // ── Card registry ──────────────────────────────────────────────────────────
     /**
-     * @type {Object[]} Permanent step→card record: one entry per story step,
-     * built once at initCardPool time and never evicted. Not a pool — the
-     * capped, evicting structure is `viewerCards` above.
+     * Map of sceneIndex -> Plate, one per scene, built once and never evicted.
+     * `.container` is the element. What a plate holds — a viewer, a player,
+     * nothing yet — is the plate's own business; the pool inside an image
+     * plate is the only thing here that is capped.
      */
-    /** Map of sceneIndex -> viewer plate element (one plate per scene). */
     viewerPlates: {},
     /** Map of stepIndex -> text card element. */
     textCards: {},
@@ -311,7 +305,7 @@
     if (uniqueViewers >= state.config.loadingThreshold) {
       showViewerSkeletonState();
       const checkReadyViewers = () => {
-        const readyCount = state.viewerCards.filter((v) => v.isReady).length;
+        const readyCount = Object.values(state.viewerPlates).filter((plate) => plate.isReady).length;
         const targetReady = Math.min(state.config.minReadyViewers, uniqueViewers);
         if (readyCount >= targetReady) {
           hideViewerSkeletonState();
@@ -382,531 +376,6 @@
     const match = (sourceUrl || "").match(regexMap[cardType]);
     return match ? match[1] : null;
   }
-
-  // assets/js/telar-story/iiif-manifest.js
-  function extractAllPages(manifest) {
-    const v3Pages = extractV3Pages(manifest);
-    if (v3Pages.length > 0) return v3Pages;
-    const v2Pages = extractV2Pages(manifest);
-    if (v2Pages.length > 0) return v2Pages;
-    return [];
-  }
-  function extractV3Pages(manifest) {
-    const pages = [];
-    try {
-      const items = manifest.items;
-      if (!items) return pages;
-      for (const canvas of items) {
-        const annoPages = canvas.items;
-        if (!annoPages?.[0]) continue;
-        const annos = annoPages[0].items;
-        if (!annos?.[0]) continue;
-        const body = annos[0].body;
-        if (!body) continue;
-        const service = body.service;
-        if (service?.[0]?.id) {
-          pages.push({ tileSource: service[0].id + "/info.json" });
-          continue;
-        }
-        if (body.id && typeof body.id === "string" && body.type === "Image") {
-          const infoUrl = deriveInfoJsonFromImageUrl(body.id);
-          if (infoUrl) {
-            pages.push({ tileSource: infoUrl });
-            continue;
-          }
-          pages.push({ tileSource: { type: "image", url: body.id } });
-        }
-      }
-    } catch {
-    }
-    return pages;
-  }
-  function extractV2Pages(manifest) {
-    const pages = [];
-    try {
-      const sequences = manifest.sequences;
-      if (!sequences?.[0]) return pages;
-      const canvases = sequences[0].canvases;
-      if (!canvases) return pages;
-      for (const canvas of canvases) {
-        const images = canvas.images;
-        if (!images?.[0]) continue;
-        const resource = images[0].resource;
-        if (!resource) continue;
-        const service = resource.service;
-        if (service?.["@id"]) {
-          pages.push({ tileSource: service["@id"] + "/info.json" });
-          continue;
-        }
-        if (resource["@id"] && typeof resource["@id"] === "string") {
-          pages.push({ tileSource: { type: "image", url: resource["@id"] } });
-        }
-      }
-    } catch {
-    }
-    return pages;
-  }
-  function deriveInfoJsonFromImageUrl(url) {
-    const match = url.match(/^(.+\/iiif\/\d+\/[^/]+)\/[^/]+\/[^/]+\/[^/]+\/[^/]+$/);
-    if (match) return match[1] + "/info.json";
-    return null;
-  }
-
-  // assets/js/telar-story/test-hook.js
-  function testEnabled() {
-    if (typeof window === "undefined") return false;
-    if (window.__TELAR_TEST_HOOK__ === true) return true;
-    try {
-      return /[?&]telartest=1(?:&|$)/.test(window.location.search);
-    } catch {
-      return false;
-    }
-  }
-  var registry = [];
-  var installed = false;
-  function registerTestViewer(wrapper) {
-    if (!testEnabled() || !wrapper) return;
-    if (!registry.includes(wrapper)) registry.push(wrapper);
-    installTestHook();
-  }
-  function unregisterTestViewer(wrapper) {
-    const i = registry.indexOf(wrapper);
-    if (i >= 0) registry.splice(i, 1);
-  }
-  function visibleArea(el) {
-    const r = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const w = Math.max(0, Math.min(vw, r.right) - Math.max(0, r.left));
-    const h = Math.max(0, Math.min(vh, r.bottom) - Math.max(0, r.top));
-    return w * h;
-  }
-  function getActiveViewer() {
-    const live = registry.filter(
-      (w) => w && w.viewer && !w._destroyed && w.containerEl && document.contains(w.containerEl)
-    );
-    if (live.length === 0) return null;
-    const plateOf = (w) => w.containerEl.closest(".viewer-plate");
-    const zOf = (w) => {
-      const p = plateOf(w);
-      const z = p ? parseInt(getComputedStyle(p).zIndex, 10) : NaN;
-      return Number.isNaN(z) ? -Infinity : z;
-    };
-    const isActive = (w) => !!plateOf(w)?.classList.contains("is-active");
-    const pool = live.some(isActive) ? live.filter(isActive) : live;
-    pool.sort(
-      (a, b) => zOf(b) - zOf(a) || visibleArea(b.containerEl) - visibleArea(a.containerEl)
-    );
-    return pool[0];
-  }
-  function isSettled() {
-    const w = getActiveViewer();
-    if (!w || !w.viewer) return false;
-    const vp = w.viewer.viewport;
-    const zc = vp.getZoom(true), zt = vp.getZoom(false);
-    const cc = vp.getCenter(true), ct = vp.getCenter(false);
-    return Math.abs(zc - zt) < 1e-4 && Math.abs(cc.x - ct.x) < 1e-4 && Math.abs(cc.y - ct.y) < 1e-4;
-  }
-  function measure(nx, ny) {
-    const w = getActiveViewer();
-    if (!w) return { error: "no-active-viewer" };
-    const v = w.viewer;
-    const OSD = window.OpenSeadragon;
-    if (!OSD || !v.world || v.world.getItemCount() === 0) return { error: "world-empty" };
-    const item = v.world.getItemAt(0);
-    const cs = item.getContentSize();
-    const vp = v.viewport;
-    const rect = w.containerEl.getBoundingClientRect();
-    const elPt = vp.imageToViewerElementCoordinates(new OSD.Point(nx * cs.x, ny * cs.y));
-    const focalScreenPx = { x: rect.left + elPt.x, y: rect.top + elPt.y };
-    const visImg = vp.viewportToImageRectangle(vp.getBounds(true));
-    const homeZoom = vp.getHomeZoom();
-    const zoom = vp.getZoom(true);
-    const cor = state.cardOverlayRect;
-    return {
-      ok: true,
-      input: { nx, ny },
-      viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
-      imageSize: { w: cs.x, h: cs.y, aspect: cs.x / cs.y },
-      homeZoom,
-      zoom,
-      effectiveNzoom: zoom / homeZoom,
-      // what the runtime actually rendered, vs authored
-      osdConfig: {
-        visibilityRatio: v.visibilityRatio,
-        constrainDuringPan: v.constrainDuringPan,
-        minZoomImageRatio: v.minZoomImageRatio,
-        homeFillsViewer: v.homeFillsViewer
-      },
-      viewerRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
-      focalScreenPx,
-      focalInViewerPx: { x: elPt.x, y: elPt.y },
-      visibleImageRect: { x: visImg.x, y: visImg.y, w: visImg.width, h: visImg.height },
-      cardOverlayRect: cor ? { x: cor.x, y: cor.y, w: cor.width, h: cor.height } : null,
-      layoutMode: state.layoutMode ?? null,
-      activeTitleCardIndex: state.activeTitleCardIndex ?? null
-    };
-  }
-  var DEFAULT_SWEEP_STEPS = [
-    { step: 1, x: 0.5, y: 0.5, zoom: 1 },
-    { step: 2, x: 0.477, y: 0.125, zoom: 8.9 },
-    { step: 3, x: 0.486, y: 0.277, zoom: 10 },
-    { step: 4, x: 0.504, y: 0.415, zoom: 2.9 },
-    { step: 5, x: 0.478, y: 0.883, zoom: 10 },
-    { step: 6, x: 0.5, y: 0.5, zoom: 1 },
-    { step: 19, x: 0.516, y: 0.974, zoom: 10 },
-    { step: 20, x: 0.5, y: 0.5, zoom: 1 }
-  ];
-  async function settleAndMeasure(nx, ny, timeoutMs = 9e3) {
-    const start = Date.now();
-    let streak = 0, lastKey = null;
-    while (Date.now() - start < timeoutMs) {
-      const st = state;
-      if (isSettled() && !(st && st.isSnapping)) {
-        const m = measure(nx, ny);
-        if (m && m.ok) {
-          const key = `${Math.round(m.focalScreenPx.x)},${Math.round(m.focalScreenPx.y)},${m.zoom.toFixed(3)}`;
-          if (key === lastKey) streak++;
-          else {
-            lastKey = key;
-            streak = 0;
-          }
-          if (streak >= 3) return m;
-        }
-      } else {
-        streak = 0;
-      }
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    return measure(nx, ny);
-  }
-  async function runSweep(steps) {
-    const nav = window.TelarStory && window.TelarStory.navigateToStep;
-    const out = [];
-    for (const s of steps) {
-      if (nav) nav(s.step);
-      await new Promise((r) => setTimeout(r, 450));
-      const m = await settleAndMeasure(s.x, s.y);
-      out.push({ step: s.step, authored: s, m });
-    }
-    return out;
-  }
-  function maybeAutoCollect() {
-    let params;
-    try {
-      params = new URLSearchParams(window.location.search);
-    } catch {
-      return;
-    }
-    if (!params.has("collect")) return;
-    const url = params.get("collect") || "http://127.0.0.1:8899/collect";
-    const label = params.get("label") || "device";
-    const steps = window.__TELAR_SWEEP_STEPS__ || DEFAULT_SWEEP_STEPS;
-    runSweep(steps).then((results) => {
-      const payload = {
-        label,
-        ua: navigator.userAgent,
-        viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
-        results
-      };
-      try {
-        navigator.sendBeacon(url, new Blob([JSON.stringify(payload)], { type: "text/plain" }));
-      } catch (e) {
-        fetch(url, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) }).catch(() => {
-        });
-      }
-    });
-  }
-  function installTestHook() {
-    if (installed || !testEnabled()) return;
-    installed = true;
-    window.__telarTestHook__ = {
-      version: "v1.4.0",
-      registry,
-      getActiveViewer,
-      isSettled,
-      /** Primary API: exact rendered position + footprint of a focal point. */
-      getFocalScreenPosition: measure,
-      measure,
-      /** Convenience: measure a list of `{nx, ny}` (or `{x, y}`) points in one call. */
-      measurePoints(points) {
-        return points.map((p) => measure(Number(p.nx ?? p.x), Number(p.ny ?? p.y)));
-      },
-      runSweep,
-      settleAndMeasure
-    };
-    setTimeout(maybeAutoCollect, 800);
-  }
-
-  // assets/js/telar-story/iiif-viewer.js
-  var IiifViewer = class _IiifViewer {
-    /**
-     * @param {IiifViewerOptions} options
-     */
-    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false }) {
-      if (!window.OpenSeadragon) {
-        throw new Error("IiifViewer: window.OpenSeadragon not loaded \u2014 vendor <script> ordering issue?");
-      }
-      this.containerEl = typeof container === "string" ? document.querySelector(container) : container;
-      if (!this.containerEl) {
-        throw new Error(`IiifViewer: container ${container} not found`);
-      }
-      this.manifestUrl = manifestUrl;
-      this.startPage = startPage;
-      this.showChrome = showChrome;
-      this.allowZoomGestures = allowZoomGestures;
-      this.pages = [];
-      this.currentPage = startPage;
-      this.viewer = null;
-      this._destroyed = false;
-      this._chromeEl = null;
-      this._pageTransitioning = false;
-      this.ready = this._init();
-    }
-    /**
-     * Fetch the manifest, parse pages, and instantiate OpenSeadragon with
-     * Tify-faithful options. Resolves `this.ready` on success; rejects (and
-     * appends `.telar-iiif-error` to the container) on any failure.
-     */
-    async _init() {
-      try {
-        const res = await fetch(this.manifestUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const manifest = await res.json();
-        this.pages = extractAllPages(manifest);
-        if (this.pages.length === 0) throw new Error("No pages extracted from manifest");
-        this.currentPage = Math.max(0, Math.min(this.startPage, this.pages.length - 1));
-        const gestureSettingsMouse = this.allowZoomGestures ? {} : { scrollToZoom: false };
-        this.viewer = new window.OpenSeadragon({
-          element: this.containerEl,
-          tileSources: this.pages[this.currentPage].tileSource,
-          animationTime: 0.4,
-          drawer: "canvas",
-          immediateRender: true,
-          placeholderFillStyle: "grey",
-          preserveImageSizeOnResize: true,
-          preserveViewport: true,
-          showNavigationControl: false,
-          showZoomControl: false,
-          visibilityRatio: 0.2,
-          gestureSettingsMouse
-        });
-        if (!this.allowZoomGestures) {
-          this.viewer.innerTracker.scrollHandler = false;
-          this.viewer.gestureSettingsMouse.clickToZoom = false;
-        }
-        await new Promise((resolve, reject) => {
-          const onFirstOpen = () => {
-            this.viewer.removeHandler("open", onFirstOpen);
-            this.viewer.removeHandler("open-failed", onOpenFailed);
-            requestAnimationFrame(resolve);
-          };
-          const onOpenFailed = (event) => {
-            this.viewer.removeHandler("open", onFirstOpen);
-            this.viewer.removeHandler("open-failed", onOpenFailed);
-            reject(new Error("OSD open-failed: " + (event?.message || "unknown")));
-          };
-          this.viewer.addHandler("open", onFirstOpen);
-          this.viewer.addHandler("open-failed", onOpenFailed);
-        });
-        this.viewer.addHandler("open", () => {
-          this._pageTransitioning = false;
-          this._updateChrome();
-        });
-        this.viewer.addHandler("open-failed", () => {
-          this._pageTransitioning = false;
-          this._updateChrome();
-        });
-        if (this.showChrome && this.pages.length > 1) {
-          this._injectChrome();
-        }
-        registerTestViewer(this);
-      } catch (err) {
-        console.error("IiifViewer: failed to initialise", err);
-        this._injectErrorUI();
-        throw err;
-      }
-    }
-    /**
-     * Open a different page of the manifest. Silent no-op when destroyed,
-     * out of range, or already on the requested page.
-     *
-     * @param {number} n - 0-indexed page number.
-     */
-    setPage(n) {
-      if (this._destroyed) return;
-      if (n === this.currentPage || n < 0 || n >= this.pages.length) return;
-      this.currentPage = n;
-      this._pageTransitioning = true;
-      this.viewer.open(this.pages[n].tileSource);
-      this._updateChrome();
-    }
-    /**
-     * Tear down the viewer and remove injected chrome.
-     *
-     * Idempotent — second and later calls return early via the `_destroyed`
-     * flag. The viewer uses the Canvas2D drawer, so there is no
-     * WebGL context to release before teardown (OpenSeadragon issue #2693
-     * applies only to the WebGL drawer); this simply calls `viewer.destroy()`.
-     */
-    destroy() {
-      if (this._destroyed) return;
-      this._destroyed = true;
-      unregisterTestViewer(this);
-      if (this.viewer) {
-        this.viewer.destroy();
-        this.viewer = null;
-      }
-      if (this._chromeEl) {
-        this._chromeEl.remove();
-        this._chromeEl = null;
-      }
-    }
-    // ── Chrome ─────────────────────────────────────────────────────────────────
-    // Bootstrap Icons chevron paths (16×16, viewBox 0 0 16 16). Inlined so the
-    // wrapper has no SVG-loading dependency; static path data only — no user
-    // input ever reaches these strings.
-    static _CHEVRON_LEFT = "M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z";
-    static _CHEVRON_RIGHT = "M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z";
-    /**
-     * Substitute the wrapper's %{current} and %{total} placeholders in a
-     * lang-key aria template. Returns '' when the template is missing so
-     * a partially-localised installation does not write `undefined` into
-     * an aria-label.
-     *
-     * @param {string|undefined} template
-     * @param {number} current
-     * @param {number} total
-     * @returns {string}
-     */
-    _formatAriaLabel(template, current, total) {
-      if (!template) return "";
-      return template.replace("%{current}", String(current)).replace("%{total}", String(total));
-    }
-    /**
-     * Build the `<svg><path/></svg>` chevron used by prev / next buttons.
-     * createElementNS keeps the SVG in the SVG namespace; setAttribute
-     * carries no XSS risk because the `d` value is a class-level constant.
-     */
-    _makeChevronSvg(pathData) {
-      const NS = "http://www.w3.org/2000/svg";
-      const svg = document.createElementNS(NS, "svg");
-      svg.setAttribute("xmlns", NS);
-      svg.setAttribute("width", "16");
-      svg.setAttribute("height", "16");
-      svg.setAttribute("viewBox", "0 0 16 16");
-      svg.setAttribute("fill", "currentColor");
-      svg.setAttribute("aria-hidden", "true");
-      const path = document.createElementNS(NS, "path");
-      path.setAttribute("d", pathData);
-      svg.appendChild(path);
-      return svg;
-    }
-    /**
-     * Inject the prev / page-input / next pagination pills into the
-     * container. Telar-namespaced class names only (no Bootstrap utility
-     * classes). The pills float over the OSD canvas; positional
-     * styling lives in `_sass/_viewer.scss`.
-     */
-    _injectChrome() {
-      const lang = window.telarViewerLang ?? {};
-      const total = this.pages.length;
-      const current1 = this.currentPage + 1;
-      const wrap = document.createElement("div");
-      wrap.className = "telar-iiif-pagination";
-      const prevBtn = document.createElement("button");
-      prevBtn.type = "button";
-      prevBtn.className = "prev-btn";
-      prevBtn.setAttribute("aria-label", lang.prev_page ?? "Previous page");
-      prevBtn.appendChild(this._makeChevronSvg(_IiifViewer._CHEVRON_LEFT));
-      prevBtn.disabled = this.currentPage === 0;
-      prevBtn.addEventListener("click", () => {
-        if (this.currentPage > 0) this.setPage(this.currentPage - 1);
-      });
-      const labelEl = document.createElement("label");
-      labelEl.className = "visually-hidden";
-      labelEl.textContent = lang.page_input_label ?? "Page number";
-      const inputId = `telar-iiif-page-${Math.random().toString(36).slice(2, 8)}`;
-      labelEl.setAttribute("for", inputId);
-      const input = document.createElement("input");
-      input.type = "number";
-      input.className = "page-input";
-      input.id = inputId;
-      input.min = "1";
-      input.max = String(total);
-      input.value = String(current1);
-      input.setAttribute(
-        "aria-label",
-        this._formatAriaLabel(lang.page_input_aria, current1, total)
-      );
-      input.addEventListener("change", (e) => {
-        const parsed = parseInt(e.target.value, 10);
-        if (Number.isNaN(parsed)) {
-          input.value = String(this.currentPage + 1);
-          return;
-        }
-        const clamped = Math.max(1, Math.min(parsed, this.pages.length));
-        this.setPage(clamped - 1);
-      });
-      const nextBtn = document.createElement("button");
-      nextBtn.type = "button";
-      nextBtn.className = "next-btn";
-      nextBtn.setAttribute("aria-label", lang.next_page ?? "Next page");
-      nextBtn.appendChild(this._makeChevronSvg(_IiifViewer._CHEVRON_RIGHT));
-      nextBtn.disabled = this.currentPage === total - 1;
-      nextBtn.addEventListener("click", () => {
-        if (this.currentPage < this.pages.length - 1) this.setPage(this.currentPage + 1);
-      });
-      wrap.append(prevBtn, labelEl, input, nextBtn);
-      this.containerEl.append(wrap);
-      this._chromeEl = wrap;
-    }
-    /**
-     * Reflect `currentPage` and `_pageTransitioning` back into the
-     * injected chrome (input value, aria-label, prev/next disabled).
-     * No-op when chrome has not been injected (`showChrome` false or
-     * single-page manifest).
-     */
-    _updateChrome() {
-      if (!this._chromeEl) return;
-      const lang = window.telarViewerLang ?? {};
-      const total = this.pages.length;
-      const current1 = this.currentPage + 1;
-      const input = this._chromeEl.querySelector(".page-input");
-      if (input) {
-        input.value = String(current1);
-        input.setAttribute(
-          "aria-label",
-          this._formatAriaLabel(lang.page_input_aria, current1, total)
-        );
-      }
-      const prevBtn = this._chromeEl.querySelector(".prev-btn");
-      if (prevBtn) prevBtn.disabled = this.currentPage === 0 || this._pageTransitioning;
-      const nextBtn = this._chromeEl.querySelector(".next-btn");
-      if (nextBtn) nextBtn.disabled = this.currentPage === total - 1 || this._pageTransitioning;
-    }
-    // ── Error UI ───────────────────────────────────────────────────────────────
-    /**
-     * Append `.telar-iiif-error` to the container when manifest fetch or
-     * OSD instantiation fails. Uses `textContent` for every string and
-     * never assembles HTML strings; reads localised text from
-     * `window.telarViewerLang` with inline English fallbacks so the wrapper
-     * degrades gracefully if the lang injection is missing.
-     */
-    _injectErrorUI() {
-      const div = document.createElement("div");
-      div.className = "telar-iiif-error";
-      div.setAttribute("role", "alert");
-      div.setAttribute("aria-live", "polite");
-      const lang = window.telarViewerLang ?? {};
-      const strong = document.createElement("strong");
-      strong.textContent = lang.image_unavailable_title ?? "Image unavailable";
-      const p = document.createElement("p");
-      p.textContent = lang.image_unavailable_detail ?? "The IIIF image could not be loaded.";
-      div.append(strong, p);
-      this.containerEl.append(div);
-    }
-  };
 
   // assets/js/telar-story/authoring-frame.js
   var AUTHORING_ASPECT = 1.053;
@@ -1050,13 +519,6 @@
     vp.fitBounds(targetVp, immediate);
     return true;
   }
-  function deactivateIiifCard(viewerCard, direction) {
-    if (!viewerCard || !viewerCard.element) return;
-    viewerCard.element.classList.remove("is-active");
-    if (direction === "backward") {
-      viewerCard.element.style.transform = "translateY(100%)";
-    }
-  }
   function snapIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
       console.warn("snapIiifToPosition: viewer not ready for snap");
@@ -1116,8 +578,7 @@
     const x = atRest ? xA : xA + (xB - xA) * progress;
     const y = atRest ? yA : yA + (yB - yA) * progress;
     const zoom = atRest ? zA : zA + (zB - zA) * progress;
-    const sceneIndex = state.stepToScene[stepIndex];
-    const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
+    const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
     if (!viewerCard || !viewerCard.isReady) return;
     if (atRest) {
       const settled = viewerCard.settledAt;
@@ -1129,8 +590,8 @@
     snapIiifToPosition(viewerCard, x, y, zoom);
   }
   function reSnapActiveViewer() {
-    const viewerCard = state.viewerCards.find(
-      (vc) => vc.element && vc.element.classList.contains("is-active")
+    const viewerCard = Object.values(state.viewerPlates).find(
+      (plate) => plate.container?.classList.contains("is-active")
     );
     if (!viewerCard || !viewerCard.isReady) return;
     const activeTextCard = document.querySelector(".text-card.is-active");
@@ -1213,6 +674,135 @@
     if (isNaN(zoomNum) || zoomNum <= 1) return true;
     return false;
   }
+
+  // assets/js/telar-story/plates/base-plate.js
+  var Plate = class {
+    static containerClass = "base-plate";
+    /** What a screen reader is told this is, when the object says nothing. */
+    static ariaFallback = "Viewer";
+    static deps = () => Promise.resolve();
+    // libraries this type needs (subclass overrides)
+    constructor(container, objectId, sceneIndex, zIndex, initialStep) {
+      this.container = container;
+      this.objectId = objectId;
+      this.sceneIndex = sceneIndex;
+      this.zIndex = zIndex;
+      this._currentStep = initialStep;
+      this._loaded = null;
+      container.classList.add(this.constructor.containerClass);
+    }
+    /** Idempotent: load libraries + build the player once. Safe to call repeatedly. */
+    load() {
+      if (this._loaded) return this._loaded;
+      this._loaded = this.constructor.deps().then(() => this._build());
+      return this._loaded;
+    }
+    /** Tear down the player + free GPU; a later load() rebuilds. */
+    unload() {
+      if (!this._loaded) return;
+      this._teardown();
+      this._loaded = null;
+      this.container.querySelector(".telar-alert")?.remove();
+      delete this.container.dataset.loading;
+    }
+    /** Bring to the front and frame to a step (loads if needed; camera catches up on load). */
+    center(step) {
+      this.load();
+      this.container.style.zIndex = this.zIndex;
+      this.container.style.transform = "translateY(0)";
+      this.container.classList.add("is-active");
+      this.goToStep(step, false);
+    }
+    /** Stand down where it stands: the plate covering it is what hides it. */
+    deactivate() {
+      this.container.classList.remove("is-active");
+    }
+    /** Slide off / behind, and stop any in-flight animation. */
+    sendBack() {
+      this.deactivate();
+      this.container.style.transform = "translateY(100%)";
+      this.onSendBack();
+    }
+    /** Move the camera to a step (snap, or ease when animate). */
+    goToStep(step, animate = false) {
+    }
+    /** Per-frame scroll interpolation between two steps. */
+    scroll(progress, stepA, stepB) {
+    }
+    /** React to a viewport resize. */
+    resize() {
+    }
+    /** Build the player (libraries are loaded by now). */
+    _build() {
+    }
+    /** Free the player + GPU. */
+    _teardown() {
+    }
+    /** Cleanup when sent back (e.g. stop the ease). */
+    onSendBack() {
+    }
+  };
+
+  // assets/js/telar-story/plates/media-plate.js
+  function isTruthy(val) {
+    if (val === true) return true;
+    if (typeof val === "string") {
+      const v = val.trim().toLowerCase();
+      return v === "true" || v === "yes" || v === "s\xED";
+    }
+    return false;
+  }
+  function stepClip(step) {
+    return {
+      start: parseFloat(step.clip_start) || 0,
+      end: parseFloat(step.clip_end) || 0,
+      loop: isTruthy(step.loop)
+    };
+  }
+  var MediaPlate = class extends Plate {
+    /**
+     * Build the player unless one is already there.
+     *
+     * Synchronous, and not the base class's cached promise: see the module note.
+     * Answers true while a build is still in flight, because each module pools
+     * its wrapper before the file loads — which is what turns the second of two
+     * callers away when a reader crosses several steps at once.
+     */
+    load() {
+      if (this._hasPlayer()) return;
+      this._build();
+    }
+    /** Stand down, and stop the player rather than leaving it running unseen. */
+    deactivate() {
+      super.deactivate();
+      this._deactivatePlayer();
+    }
+    /**
+     * Stand down and go back below the fold.
+     *
+     * The base class writes the transform and lets the transition carry it;
+     * `onSendBack` here does the move instead, so this does not call up.
+     */
+    sendBack() {
+      this.deactivate();
+      this.onSendBack();
+    }
+    /** Off screen in one frame, with the transition suppressed for the move. */
+    onSendBack() {
+      const el = this.container;
+      el.style.transition = "none";
+      el.style.transform = "translateY(100%)";
+      void el.offsetHeight;
+      el.style.transition = "";
+    }
+    /** Whether this plate's module still holds a player for it. */
+    _hasPlayer() {
+      return false;
+    }
+    /** Stop the player where it stands. */
+    _deactivatePlayer() {
+    }
+  };
 
   // assets/js/telar-story/video-card.js
   var _cs = getComputedStyle(document.documentElement);
@@ -1791,6 +1381,10 @@
   function _getWrapperForPlate(plateEl) {
     return _videoPlayers.find((w) => w.element === plateEl) || null;
   }
+  function hasVideoPlayer(plateEl) {
+    const wrapper = _getWrapperForPlate(plateEl);
+    return Boolean(wrapper) && !wrapper._destroyed;
+  }
   function _applyVideoLayout(plateEl) {
     const W = window.innerWidth;
     const H = window.innerHeight;
@@ -1822,6 +1416,60 @@
       }
     }
   });
+
+  // assets/js/telar-story/plates/video-plate.js
+  var VideoPlate = class extends MediaPlate {
+    static containerClass = "video-plate";
+    static ariaFallback = "Video player";
+    /** Bring the plate to the front and start its player, building it if needed. */
+    center() {
+      this.load();
+      activateVideoCard(this.container, this.sceneIndex);
+    }
+    /** Re-clip the running player to this step's window. */
+    goToStep(step) {
+      const clip = stepClip(step);
+      updateVideoClip(this.container, clip.start, clip.end || void 0, clip.loop);
+    }
+    _hasPlayer() {
+      return hasVideoPlayer(this.container);
+    }
+    _deactivatePlayer() {
+      deactivateVideoCard(this.container);
+    }
+    _build() {
+      const el = this.container;
+      const objectData = state.objectsIndex[this.objectId] || {};
+      const sourceUrl = objectData.source_url || objectData.iiif_manifest || "";
+      const cardType = el.dataset.cardType;
+      const videoId = extractVideoId(cardType, sourceUrl);
+      if (!videoId) {
+        console.error("VideoPlate: no video ID for", this.objectId, sourceUrl);
+        return;
+      }
+      const clipStart = parseFloat(el.dataset.clipStart) || 0;
+      const clipEnd = parseFloat(el.dataset.clipEnd) || 0;
+      const loop = isTruthy(el.dataset.loop);
+      el.style.zIndex = this.zIndex;
+      createVideoPlayer(el, cardType, videoId, {
+        clipStart,
+        clipEnd: clipEnd || void 0,
+        loop,
+        sceneIndex: this.sceneIndex,
+        sourceUrl,
+        onPlay: () => {
+        },
+        onTimeUpdate: () => {
+        },
+        onEnded: () => {
+          applyClipEndDim(el);
+        },
+        onAutoplayBlocked: () => {
+          _showVideoPlayOverlay(el);
+        }
+      });
+    }
+  };
 
   // assets/js/telar-story/audio-card.js
   var _cs2 = getComputedStyle(document.documentElement);
@@ -2327,6 +1975,10 @@
   function _getAudioWrapperForPlate(plateEl) {
     return _audioPlayers.find((w) => w.element === plateEl) || null;
   }
+  function hasAudioPlayer(plateEl) {
+    const wrapper = _getAudioWrapperForPlate(plateEl);
+    return Boolean(wrapper) && !wrapper._destroyed;
+  }
   function _showPlayOverlay(plateEl) {
     const overlay = plateEl.querySelector(".audio-play-overlay");
     if (overlay) overlay.style.display = "flex";
@@ -2352,15 +2004,802 @@
     }
   });
 
-  // assets/js/telar-story/card-pool.js
-  function _isTruthy(val) {
-    if (val === true) return true;
-    if (typeof val === "string") {
-      const v = val.trim().toLowerCase();
-      return v === "true" || v === "yes" || v === "s\xED";
+  // assets/js/telar-story/plates/audio-plate.js
+  var AudioPlate = class extends MediaPlate {
+    static containerClass = "audio-plate";
+    static ariaFallback = "Audio player";
+    /** Bring the plate to the front and start its player, building it if needed. */
+    center() {
+      this.load();
+      activateAudioCard(this.container, this.sceneIndex);
     }
-    return false;
+    /** Re-clip the running player to this step's window. */
+    goToStep(step) {
+      const clip = stepClip(step);
+      updateAudioClip(this.container, clip.start, clip.end || void 0, clip.loop);
+    }
+    _hasPlayer() {
+      return hasAudioPlayer(this.container);
+    }
+    _deactivatePlayer() {
+      deactivateAudioCard(this.container);
+    }
+    _build() {
+      const el = this.container;
+      const audioObjects = window.audioObjects || {};
+      const ext = audioObjects[this.objectId];
+      if (!ext) {
+        console.error("AudioPlate: no audio extension for", this.objectId);
+        return;
+      }
+      const basePath = getBasePath();
+      const audioUrl = `${basePath}/telar-content/objects/${this.objectId}.${ext}`;
+      const peaksUrl = `${basePath}/assets/audio/peaks/${this.objectId}.json`;
+      const clipStart = parseFloat(el.dataset.clipStart) || 0;
+      const clipEnd = parseFloat(el.dataset.clipEnd) || 0;
+      const loop = isTruthy(el.dataset.loop);
+      const isEmbed = document.body.classList.contains("embed-mode");
+      el.style.zIndex = this.zIndex;
+      createAudioPlayer(el, audioUrl, peaksUrl, {
+        clipStart,
+        clipEnd: clipEnd || void 0,
+        loop,
+        sceneIndex: this.sceneIndex,
+        isEmbed,
+        onPlay: () => {
+        },
+        onTimeUpdate: () => {
+        },
+        onEnded: () => {
+          applyAudioClipEndDim(el);
+        },
+        onAutoplayBlocked: () => {
+        }
+      });
+    }
+  };
+
+  // assets/js/telar-story/iiif-manifest.js
+  function extractAllPages(manifest) {
+    const v3Pages = extractV3Pages(manifest);
+    if (v3Pages.length > 0) return v3Pages;
+    const v2Pages = extractV2Pages(manifest);
+    if (v2Pages.length > 0) return v2Pages;
+    return [];
   }
+  function extractV3Pages(manifest) {
+    const pages = [];
+    try {
+      const items = manifest.items;
+      if (!items) return pages;
+      for (const canvas of items) {
+        const annoPages = canvas.items;
+        if (!annoPages?.[0]) continue;
+        const annos = annoPages[0].items;
+        if (!annos?.[0]) continue;
+        const body = annos[0].body;
+        if (!body) continue;
+        const service = body.service;
+        if (service?.[0]?.id) {
+          pages.push({ tileSource: service[0].id + "/info.json" });
+          continue;
+        }
+        if (body.id && typeof body.id === "string" && body.type === "Image") {
+          const infoUrl = deriveInfoJsonFromImageUrl(body.id);
+          if (infoUrl) {
+            pages.push({ tileSource: infoUrl });
+            continue;
+          }
+          pages.push({ tileSource: { type: "image", url: body.id } });
+        }
+      }
+    } catch {
+    }
+    return pages;
+  }
+  function extractV2Pages(manifest) {
+    const pages = [];
+    try {
+      const sequences = manifest.sequences;
+      if (!sequences?.[0]) return pages;
+      const canvases = sequences[0].canvases;
+      if (!canvases) return pages;
+      for (const canvas of canvases) {
+        const images = canvas.images;
+        if (!images?.[0]) continue;
+        const resource = images[0].resource;
+        if (!resource) continue;
+        const service = resource.service;
+        if (service?.["@id"]) {
+          pages.push({ tileSource: service["@id"] + "/info.json" });
+          continue;
+        }
+        if (resource["@id"] && typeof resource["@id"] === "string") {
+          pages.push({ tileSource: { type: "image", url: resource["@id"] } });
+        }
+      }
+    } catch {
+    }
+    return pages;
+  }
+  function deriveInfoJsonFromImageUrl(url) {
+    const match = url.match(/^(.+\/iiif\/\d+\/[^/]+)\/[^/]+\/[^/]+\/[^/]+\/[^/]+$/);
+    if (match) return match[1] + "/info.json";
+    return null;
+  }
+
+  // assets/js/telar-story/test-hook.js
+  function testEnabled() {
+    if (typeof window === "undefined") return false;
+    if (window.__TELAR_TEST_HOOK__ === true) return true;
+    try {
+      return /[?&]telartest=1(?:&|$)/.test(window.location.search);
+    } catch {
+      return false;
+    }
+  }
+  var registry = [];
+  var installed = false;
+  function registerTestViewer(wrapper) {
+    if (!testEnabled() || !wrapper) return;
+    if (!registry.includes(wrapper)) registry.push(wrapper);
+    installTestHook();
+  }
+  function unregisterTestViewer(wrapper) {
+    const i = registry.indexOf(wrapper);
+    if (i >= 0) registry.splice(i, 1);
+  }
+  function visibleArea(el) {
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = Math.max(0, Math.min(vw, r.right) - Math.max(0, r.left));
+    const h = Math.max(0, Math.min(vh, r.bottom) - Math.max(0, r.top));
+    return w * h;
+  }
+  function getActiveViewer() {
+    const live = registry.filter(
+      (w) => w && w.viewer && !w._destroyed && w.containerEl && document.contains(w.containerEl)
+    );
+    if (live.length === 0) return null;
+    const plateOf = (w) => w.containerEl.closest(".viewer-plate");
+    const zOf = (w) => {
+      const p = plateOf(w);
+      const z = p ? parseInt(getComputedStyle(p).zIndex, 10) : NaN;
+      return Number.isNaN(z) ? -Infinity : z;
+    };
+    const isActive = (w) => !!plateOf(w)?.classList.contains("is-active");
+    const pool = live.some(isActive) ? live.filter(isActive) : live;
+    pool.sort(
+      (a, b) => zOf(b) - zOf(a) || visibleArea(b.containerEl) - visibleArea(a.containerEl)
+    );
+    return pool[0];
+  }
+  function isSettled() {
+    const w = getActiveViewer();
+    if (!w || !w.viewer) return false;
+    const vp = w.viewer.viewport;
+    const zc = vp.getZoom(true), zt = vp.getZoom(false);
+    const cc = vp.getCenter(true), ct = vp.getCenter(false);
+    return Math.abs(zc - zt) < 1e-4 && Math.abs(cc.x - ct.x) < 1e-4 && Math.abs(cc.y - ct.y) < 1e-4;
+  }
+  function measure(nx, ny) {
+    const w = getActiveViewer();
+    if (!w) return { error: "no-active-viewer" };
+    const v = w.viewer;
+    const OSD = window.OpenSeadragon;
+    if (!OSD || !v.world || v.world.getItemCount() === 0) return { error: "world-empty" };
+    const item = v.world.getItemAt(0);
+    const cs = item.getContentSize();
+    const vp = v.viewport;
+    const rect = w.containerEl.getBoundingClientRect();
+    const elPt = vp.imageToViewerElementCoordinates(new OSD.Point(nx * cs.x, ny * cs.y));
+    const focalScreenPx = { x: rect.left + elPt.x, y: rect.top + elPt.y };
+    const visImg = vp.viewportToImageRectangle(vp.getBounds(true));
+    const homeZoom = vp.getHomeZoom();
+    const zoom = vp.getZoom(true);
+    const cor = state.cardOverlayRect;
+    return {
+      ok: true,
+      input: { nx, ny },
+      viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+      imageSize: { w: cs.x, h: cs.y, aspect: cs.x / cs.y },
+      homeZoom,
+      zoom,
+      effectiveNzoom: zoom / homeZoom,
+      // what the runtime actually rendered, vs authored
+      osdConfig: {
+        visibilityRatio: v.visibilityRatio,
+        constrainDuringPan: v.constrainDuringPan,
+        minZoomImageRatio: v.minZoomImageRatio,
+        homeFillsViewer: v.homeFillsViewer
+      },
+      viewerRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
+      focalScreenPx,
+      focalInViewerPx: { x: elPt.x, y: elPt.y },
+      visibleImageRect: { x: visImg.x, y: visImg.y, w: visImg.width, h: visImg.height },
+      cardOverlayRect: cor ? { x: cor.x, y: cor.y, w: cor.width, h: cor.height } : null,
+      layoutMode: state.layoutMode ?? null,
+      activeTitleCardIndex: state.activeTitleCardIndex ?? null
+    };
+  }
+  var DEFAULT_SWEEP_STEPS = [
+    { step: 1, x: 0.5, y: 0.5, zoom: 1 },
+    { step: 2, x: 0.477, y: 0.125, zoom: 8.9 },
+    { step: 3, x: 0.486, y: 0.277, zoom: 10 },
+    { step: 4, x: 0.504, y: 0.415, zoom: 2.9 },
+    { step: 5, x: 0.478, y: 0.883, zoom: 10 },
+    { step: 6, x: 0.5, y: 0.5, zoom: 1 },
+    { step: 19, x: 0.516, y: 0.974, zoom: 10 },
+    { step: 20, x: 0.5, y: 0.5, zoom: 1 }
+  ];
+  async function settleAndMeasure(nx, ny, timeoutMs = 9e3) {
+    const start = Date.now();
+    let streak = 0, lastKey = null;
+    while (Date.now() - start < timeoutMs) {
+      const st = state;
+      if (isSettled() && !(st && st.isSnapping)) {
+        const m = measure(nx, ny);
+        if (m && m.ok) {
+          const key = `${Math.round(m.focalScreenPx.x)},${Math.round(m.focalScreenPx.y)},${m.zoom.toFixed(3)}`;
+          if (key === lastKey) streak++;
+          else {
+            lastKey = key;
+            streak = 0;
+          }
+          if (streak >= 3) return m;
+        }
+      } else {
+        streak = 0;
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return measure(nx, ny);
+  }
+  async function runSweep(steps) {
+    const nav = window.TelarStory && window.TelarStory.navigateToStep;
+    const out = [];
+    for (const s of steps) {
+      if (nav) nav(s.step);
+      await new Promise((r) => setTimeout(r, 450));
+      const m = await settleAndMeasure(s.x, s.y);
+      out.push({ step: s.step, authored: s, m });
+    }
+    return out;
+  }
+  function maybeAutoCollect() {
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch {
+      return;
+    }
+    if (!params.has("collect")) return;
+    const url = params.get("collect") || "http://127.0.0.1:8899/collect";
+    const label = params.get("label") || "device";
+    const steps = window.__TELAR_SWEEP_STEPS__ || DEFAULT_SWEEP_STEPS;
+    runSweep(steps).then((results) => {
+      const payload = {
+        label,
+        ua: navigator.userAgent,
+        viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+        results
+      };
+      try {
+        navigator.sendBeacon(url, new Blob([JSON.stringify(payload)], { type: "text/plain" }));
+      } catch (e) {
+        fetch(url, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) }).catch(() => {
+        });
+      }
+    });
+  }
+  function installTestHook() {
+    if (installed || !testEnabled()) return;
+    installed = true;
+    window.__telarTestHook__ = {
+      version: "v1.4.0",
+      registry,
+      getActiveViewer,
+      isSettled,
+      /** Primary API: exact rendered position + footprint of a focal point. */
+      getFocalScreenPosition: measure,
+      measure,
+      /** Convenience: measure a list of `{nx, ny}` (or `{x, y}`) points in one call. */
+      measurePoints(points) {
+        return points.map((p) => measure(Number(p.nx ?? p.x), Number(p.ny ?? p.y)));
+      },
+      runSweep,
+      settleAndMeasure
+    };
+    setTimeout(maybeAutoCollect, 800);
+  }
+
+  // assets/js/telar-story/iiif-viewer.js
+  var IiifViewer = class _IiifViewer {
+    /**
+     * @param {IiifViewerOptions} options
+     */
+    constructor({ container, manifestUrl, startPage = 0, showChrome = false, allowZoomGestures = false }) {
+      if (!window.OpenSeadragon) {
+        throw new Error("IiifViewer: window.OpenSeadragon not loaded \u2014 vendor <script> ordering issue?");
+      }
+      this.containerEl = typeof container === "string" ? document.querySelector(container) : container;
+      if (!this.containerEl) {
+        throw new Error(`IiifViewer: container ${container} not found`);
+      }
+      this.manifestUrl = manifestUrl;
+      this.startPage = startPage;
+      this.showChrome = showChrome;
+      this.allowZoomGestures = allowZoomGestures;
+      this.pages = [];
+      this.currentPage = startPage;
+      this.viewer = null;
+      this._destroyed = false;
+      this._chromeEl = null;
+      this._pageTransitioning = false;
+      this.ready = this._init();
+    }
+    /**
+     * Fetch the manifest, parse pages, and instantiate OpenSeadragon with
+     * Tify-faithful options. Resolves `this.ready` on success; rejects (and
+     * appends `.telar-iiif-error` to the container) on any failure.
+     */
+    async _init() {
+      try {
+        const res = await fetch(this.manifestUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const manifest = await res.json();
+        this.pages = extractAllPages(manifest);
+        if (this.pages.length === 0) throw new Error("No pages extracted from manifest");
+        this.currentPage = Math.max(0, Math.min(this.startPage, this.pages.length - 1));
+        const gestureSettingsMouse = this.allowZoomGestures ? {} : { scrollToZoom: false };
+        this.viewer = new window.OpenSeadragon({
+          element: this.containerEl,
+          tileSources: this.pages[this.currentPage].tileSource,
+          animationTime: 0.4,
+          drawer: "canvas",
+          immediateRender: true,
+          placeholderFillStyle: "grey",
+          preserveImageSizeOnResize: true,
+          preserveViewport: true,
+          showNavigationControl: false,
+          showZoomControl: false,
+          visibilityRatio: 0.2,
+          gestureSettingsMouse
+        });
+        if (!this.allowZoomGestures) {
+          this.viewer.innerTracker.scrollHandler = false;
+          this.viewer.gestureSettingsMouse.clickToZoom = false;
+        }
+        await new Promise((resolve, reject) => {
+          const onFirstOpen = () => {
+            this.viewer.removeHandler("open", onFirstOpen);
+            this.viewer.removeHandler("open-failed", onOpenFailed);
+            requestAnimationFrame(resolve);
+          };
+          const onOpenFailed = (event) => {
+            this.viewer.removeHandler("open", onFirstOpen);
+            this.viewer.removeHandler("open-failed", onOpenFailed);
+            reject(new Error("OSD open-failed: " + (event?.message || "unknown")));
+          };
+          this.viewer.addHandler("open", onFirstOpen);
+          this.viewer.addHandler("open-failed", onOpenFailed);
+        });
+        this.viewer.addHandler("open", () => {
+          this._pageTransitioning = false;
+          this._updateChrome();
+        });
+        this.viewer.addHandler("open-failed", () => {
+          this._pageTransitioning = false;
+          this._updateChrome();
+        });
+        if (this.showChrome && this.pages.length > 1) {
+          this._injectChrome();
+        }
+        registerTestViewer(this);
+      } catch (err) {
+        console.error("IiifViewer: failed to initialise", err);
+        this._injectErrorUI();
+        throw err;
+      }
+    }
+    /**
+     * Open a different page of the manifest. Silent no-op when destroyed,
+     * out of range, or already on the requested page.
+     *
+     * @param {number} n - 0-indexed page number.
+     */
+    setPage(n) {
+      if (this._destroyed) return;
+      if (n === this.currentPage || n < 0 || n >= this.pages.length) return;
+      this.currentPage = n;
+      this._pageTransitioning = true;
+      this.viewer.open(this.pages[n].tileSource);
+      this._updateChrome();
+    }
+    /**
+     * Tear down the viewer and remove injected chrome.
+     *
+     * Idempotent — second and later calls return early via the `_destroyed`
+     * flag. The viewer uses the Canvas2D drawer, so there is no
+     * WebGL context to release before teardown (OpenSeadragon issue #2693
+     * applies only to the WebGL drawer); this simply calls `viewer.destroy()`.
+     */
+    destroy() {
+      if (this._destroyed) return;
+      this._destroyed = true;
+      unregisterTestViewer(this);
+      if (this.viewer) {
+        this.viewer.destroy();
+        this.viewer = null;
+      }
+      if (this._chromeEl) {
+        this._chromeEl.remove();
+        this._chromeEl = null;
+      }
+    }
+    // ── Chrome ─────────────────────────────────────────────────────────────────
+    // Bootstrap Icons chevron paths (16×16, viewBox 0 0 16 16). Inlined so the
+    // wrapper has no SVG-loading dependency; static path data only — no user
+    // input ever reaches these strings.
+    static _CHEVRON_LEFT = "M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z";
+    static _CHEVRON_RIGHT = "M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z";
+    /**
+     * Substitute the wrapper's %{current} and %{total} placeholders in a
+     * lang-key aria template. Returns '' when the template is missing so
+     * a partially-localised installation does not write `undefined` into
+     * an aria-label.
+     *
+     * @param {string|undefined} template
+     * @param {number} current
+     * @param {number} total
+     * @returns {string}
+     */
+    _formatAriaLabel(template, current, total) {
+      if (!template) return "";
+      return template.replace("%{current}", String(current)).replace("%{total}", String(total));
+    }
+    /**
+     * Build the `<svg><path/></svg>` chevron used by prev / next buttons.
+     * createElementNS keeps the SVG in the SVG namespace; setAttribute
+     * carries no XSS risk because the `d` value is a class-level constant.
+     */
+    _makeChevronSvg(pathData) {
+      const NS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("xmlns", NS);
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("fill", "currentColor");
+      svg.setAttribute("aria-hidden", "true");
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", pathData);
+      svg.appendChild(path);
+      return svg;
+    }
+    /**
+     * Inject the prev / page-input / next pagination pills into the
+     * container. Telar-namespaced class names only (no Bootstrap utility
+     * classes). The pills float over the OSD canvas; positional
+     * styling lives in `_sass/_viewer.scss`.
+     */
+    _injectChrome() {
+      const lang = window.telarViewerLang ?? {};
+      const total = this.pages.length;
+      const current1 = this.currentPage + 1;
+      const wrap = document.createElement("div");
+      wrap.className = "telar-iiif-pagination";
+      const prevBtn = document.createElement("button");
+      prevBtn.type = "button";
+      prevBtn.className = "prev-btn";
+      prevBtn.setAttribute("aria-label", lang.prev_page ?? "Previous page");
+      prevBtn.appendChild(this._makeChevronSvg(_IiifViewer._CHEVRON_LEFT));
+      prevBtn.disabled = this.currentPage === 0;
+      prevBtn.addEventListener("click", () => {
+        if (this.currentPage > 0) this.setPage(this.currentPage - 1);
+      });
+      const labelEl = document.createElement("label");
+      labelEl.className = "visually-hidden";
+      labelEl.textContent = lang.page_input_label ?? "Page number";
+      const inputId = `telar-iiif-page-${Math.random().toString(36).slice(2, 8)}`;
+      labelEl.setAttribute("for", inputId);
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "page-input";
+      input.id = inputId;
+      input.min = "1";
+      input.max = String(total);
+      input.value = String(current1);
+      input.setAttribute(
+        "aria-label",
+        this._formatAriaLabel(lang.page_input_aria, current1, total)
+      );
+      input.addEventListener("change", (e) => {
+        const parsed = parseInt(e.target.value, 10);
+        if (Number.isNaN(parsed)) {
+          input.value = String(this.currentPage + 1);
+          return;
+        }
+        const clamped = Math.max(1, Math.min(parsed, this.pages.length));
+        this.setPage(clamped - 1);
+      });
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.className = "next-btn";
+      nextBtn.setAttribute("aria-label", lang.next_page ?? "Next page");
+      nextBtn.appendChild(this._makeChevronSvg(_IiifViewer._CHEVRON_RIGHT));
+      nextBtn.disabled = this.currentPage === total - 1;
+      nextBtn.addEventListener("click", () => {
+        if (this.currentPage < this.pages.length - 1) this.setPage(this.currentPage + 1);
+      });
+      wrap.append(prevBtn, labelEl, input, nextBtn);
+      this.containerEl.append(wrap);
+      this._chromeEl = wrap;
+    }
+    /**
+     * Reflect `currentPage` and `_pageTransitioning` back into the
+     * injected chrome (input value, aria-label, prev/next disabled).
+     * No-op when chrome has not been injected (`showChrome` false or
+     * single-page manifest).
+     */
+    _updateChrome() {
+      if (!this._chromeEl) return;
+      const lang = window.telarViewerLang ?? {};
+      const total = this.pages.length;
+      const current1 = this.currentPage + 1;
+      const input = this._chromeEl.querySelector(".page-input");
+      if (input) {
+        input.value = String(current1);
+        input.setAttribute(
+          "aria-label",
+          this._formatAriaLabel(lang.page_input_aria, current1, total)
+        );
+      }
+      const prevBtn = this._chromeEl.querySelector(".prev-btn");
+      if (prevBtn) prevBtn.disabled = this.currentPage === 0 || this._pageTransitioning;
+      const nextBtn = this._chromeEl.querySelector(".next-btn");
+      if (nextBtn) nextBtn.disabled = this.currentPage === total - 1 || this._pageTransitioning;
+    }
+    // ── Error UI ───────────────────────────────────────────────────────────────
+    /**
+     * Append `.telar-iiif-error` to the container when manifest fetch or
+     * OSD instantiation fails. Uses `textContent` for every string and
+     * never assembles HTML strings; reads localised text from
+     * `window.telarViewerLang` with inline English fallbacks so the wrapper
+     * degrades gracefully if the lang injection is missing.
+     */
+    _injectErrorUI() {
+      const div = document.createElement("div");
+      div.className = "telar-iiif-error";
+      div.setAttribute("role", "alert");
+      div.setAttribute("aria-live", "polite");
+      const lang = window.telarViewerLang ?? {};
+      const strong = document.createElement("strong");
+      strong.textContent = lang.image_unavailable_title ?? "Image unavailable";
+      const p = document.createElement("p");
+      p.textContent = lang.image_unavailable_detail ?? "The IIIF image could not be loaded.";
+      div.append(strong, p);
+      this.containerEl.append(div);
+    }
+  };
+
+  // assets/js/telar-story/plates/iiif-plate.js
+  var _viewerSeq = 0;
+  var FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
+  function stepFraming(step) {
+    const num = (value, fallback) => {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    return {
+      x: num(step.x, FULL_OBJECT_FRAMING.x),
+      y: num(step.y, FULL_OBJECT_FRAMING.y),
+      zoom: num(step.zoom, FULL_OBJECT_FRAMING.zoom),
+      page: step.page ? parseInt(step.page, 10) : void 0
+    };
+  }
+  var IiifPlate = class _IiifPlate extends Plate {
+    // The class every viewer plate already carries. Named here so the base
+    // constructor has something true to add rather than a class of its own.
+    static containerClass = "viewer-plate";
+    static ariaFallback = "Image viewer";
+    constructor(container, objectId, sceneIndex, zIndex, initialStep) {
+      super(container, objectId, sceneIndex, zIndex, initialStep);
+      this.page = void 0;
+      this.osdWrapper = null;
+      this.osdViewer = null;
+      this.isReady = false;
+      this.pendingZoom = null;
+      this.settledAt = null;
+    }
+    /** The plate element, under the name `iiif-card.js` reads it by. */
+    get element() {
+      return this.container;
+    }
+    /**
+     * Build the viewer for a step, unless this plate already has one.
+     *
+     * Synchronous rather than the base class's promise: this type has no
+     * libraries to fetch, and every caller here builds and moves on.
+     *
+     * @param {Object} step - The step whose framing and page the viewer opens at
+     */
+    load(step) {
+      if (this.osdWrapper) return;
+      this._build(step);
+    }
+    /** Free the viewer and its GPU memory; the plate element stays in the DOM. */
+    unload() {
+      if (this.osdWrapper && typeof this.osdWrapper.destroy === "function") {
+        this.osdWrapper.destroy();
+      }
+      this.osdWrapper = null;
+      this.osdViewer = null;
+      this.isReady = false;
+      this.pendingZoom = null;
+      this.settledAt = null;
+      this.container.querySelector(".viewer-instance")?.remove();
+      delete this.container.dataset.loading;
+    }
+    /**
+     * Bring the plate's viewer to a step, building it if it has none.
+     *
+     * The card pool has already moved the element; what is left is the viewer
+     * inside it. Snapped rather than animated, because a plate arriving is not
+     * panning across an image the reader is already looking at.
+     *
+     * @param {Object} step - Step data
+     */
+    center(step) {
+      if (this.osdWrapper) {
+        this.goToStep(step, true);
+        return;
+      }
+      this.load(step);
+    }
+    /**
+     * Frame the viewer on a step.
+     *
+     * A viewer that is not ready yet is given the framing to apply when it is:
+     * the build is asynchronous and a reader can cross several steps before it
+     * resolves, so the last framing queued is the one that lands.
+     *
+     * Nothing is written while the scroll engine is driving, because it moves
+     * this viewer itself, frame by frame, through `lerpIiifPosition`. A second
+     * writer there would fight it. Snapping is the exception: a plate arriving
+     * has to be placed whatever else is happening.
+     *
+     * @param {Object} step - Step data
+     * @param {boolean} [snap=false] - Arrive at it rather than travel to it
+     */
+    goToStep(step, snap2 = false) {
+      if (state.scrollDriven && !snap2) return;
+      const { x, y, zoom } = stepFraming(step);
+      if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
+      if (!this.isReady) {
+        this.pendingZoom = { x, y, zoom, snap: snap2 };
+        return;
+      }
+      if (snap2) {
+        snapIiifToPosition(this, x, y, zoom);
+      } else {
+        animateIiifToPosition(this, x, y, zoom);
+      }
+    }
+    /**
+     * The div OSD mounts into.
+     *
+     * A plate evicted from the pool keeps its own element but loses this child,
+     * so re-entering the scene builds a fresh one. A plate that still has one is
+     * given the new viewer's id rather than a second div.
+     *
+     * @param {string} viewerId
+     * @returns {HTMLElement}
+     */
+    _viewerInstanceDiv(viewerId) {
+      const existing = this.container.querySelector(".viewer-instance");
+      if (existing) {
+        existing.id = viewerId;
+        return existing;
+      }
+      const viewerDiv = document.createElement("div");
+      viewerDiv.className = "viewer-instance";
+      viewerDiv.id = viewerId;
+      this.container.appendChild(viewerDiv);
+      return viewerDiv;
+    }
+    /**
+     * The framing a viewer opens at, or null when the step authored none.
+     *
+     * Snapping rather than animating, because there is nothing yet on screen to
+     * animate from.
+     *
+     * @param {{x: number, y: number, zoom: number}} framing
+     * @returns {{ x: number, y: number, zoom: number, snap: boolean }|null}
+     */
+    static _openingFraming({ x, y, zoom }) {
+      if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
+      return { x, y, zoom, snap: true };
+    }
+    _build(step) {
+      const { x, y, zoom, page } = stepFraming(step);
+      const plateEl = this.container;
+      const manifestUrl = getManifestUrl(this.objectId, page);
+      if (!manifestUrl) {
+        console.error("IiifPlate: no manifest URL for", this.objectId);
+        return;
+      }
+      plateEl.dataset.loading = "true";
+      const viewerId = `iiif-viewer-${_viewerSeq++}`;
+      this._viewerInstanceDiv(viewerId);
+      const startPage = page && page > 1 ? page - 1 : 0;
+      const osdWrapper = new IiifViewer({
+        container: "#" + viewerId,
+        manifestUrl,
+        startPage,
+        showChrome: false
+      });
+      this.page = page || void 0;
+      this.osdWrapper = osdWrapper;
+      this.osdViewer = null;
+      this.isReady = false;
+      this.pendingZoom = _IiifPlate._openingFraming({ x, y, zoom });
+      osdWrapper.ready.then(() => {
+        this.osdViewer = osdWrapper.viewer;
+        this.isReady = true;
+        delete plateEl.dataset.loading;
+        osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
+        if (!this.pendingZoom) return;
+        const pz = this.pendingZoom;
+        if (pz.snap) {
+          snapIiifToPosition(this, pz.x, pz.y, pz.zoom);
+        } else {
+          animateIiifToPosition(this, pz.x, pz.y, pz.zoom);
+        }
+        this._verifyFramingLanded();
+      }).catch((err) => {
+        console.error(`IiifPlate: IiifViewer failed for ${this.objectId}:`, err);
+        this.isReady = true;
+        delete plateEl.dataset.loading;
+      });
+    }
+    /**
+     * Re-apply the opening framing if the viewer's home fit overwrote it.
+     *
+     * Belt-and-braces on top of the rAF-deferred `.ready`: a residual race can
+     * still leave the viewer at home zoom. One frame after the apply, compare
+     * the current zoom against home; matching — with an authored zoom
+     * meaningfully above it — means the apply was dropped. Tolerance is 5% of
+     * home zoom, and the re-apply happens exactly once.
+     *
+     * `pendingZoom` is cleared only afterwards, so the values are still there
+     * for the re-apply if it is needed.
+     */
+    _verifyFramingLanded() {
+      requestAnimationFrame(() => {
+        const pz = this.pendingZoom;
+        if (pz && this.osdViewer) {
+          const vp = this.osdViewer.viewport;
+          const homeZoom = vp.getHomeZoom();
+          const curZoom = vp.getZoom(true);
+          const TOL = 0.05;
+          const authoredIsZoomed = pz.zoom > 1.1;
+          const droppedToHome = Math.abs(curZoom - homeZoom) < homeZoom * TOL;
+          if (authoredIsZoomed && droppedToHome) {
+            if (pz.snap) {
+              snapIiifToPosition(this, pz.x, pz.y, pz.zoom);
+            } else {
+              animateIiifToPosition(this, pz.x, pz.y, pz.zoom);
+            }
+          }
+        }
+        this.pendingZoom = null;
+      });
+    }
+  };
+
+  // assets/js/telar-story/card-pool.js
   function computeZIndexPlan(steps) {
     let scene = -1;
     let runPos = 0;
@@ -2408,15 +2847,13 @@
     const centred = (viewportH - cardH) / 2;
     return centred + runPosition * peekHeightPx;
   }
-  function _buildAriaLabel(objectId, stepAlt, cardType) {
+  function _buildAriaLabel(objectId, stepAlt, PlateClass) {
     if (stepAlt) return stepAlt;
     const obj = state.objectsIndex[objectId] || {};
     if (obj.alt_text) return obj.alt_text;
     if (obj.title) return obj.title;
     if (objectId) return objectId;
-    if (cardType === "youtube" || cardType === "vimeo" || cardType === "google-drive") return "Video player";
-    if (cardType === "audio") return "Audio player";
-    return "Image viewer";
+    return PlateClass.ariaFallback;
   }
   var _stepsData = [];
   var _config = { peekHeight: 1, messiness: 20, preloadSteps: 5 };
@@ -2549,22 +2986,17 @@
       file_path: audioExt ? `objects/${objectId}.${audioExt}` : ""
     });
   }
-  var _MEDIA_PLATE_CLASSES = {
-    "youtube": "video-plate",
-    "vimeo": "video-plate",
-    "google-drive": "video-plate",
-    "audio": "audio-plate"
+  var _PLATE_TYPES = {
+    "youtube": VideoPlate,
+    "vimeo": VideoPlate,
+    "google-drive": VideoPlate,
+    "audio": AudioPlate
   };
-  function _isVideoPlate(plate) {
-    return _MEDIA_PLATE_CLASSES[plate?.dataset?.cardType] === "video-plate";
-  }
-  function _isAudioPlate(plate) {
-    return plate?.dataset?.cardType === "audio";
+  function _plateClassFor(cardType) {
+    return _PLATE_TYPES[cardType] || IiifPlate;
   }
   function _markMediaPlate(plate, cardType, firstStep) {
-    const mediaClass = _MEDIA_PLATE_CLASSES[cardType];
-    if (!mediaClass) return;
-    plate.classList.add(mediaClass);
+    if (!_PLATE_TYPES[cardType]) return;
     if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
     if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
     if (firstStep.loop) plate.dataset.loop = firstStep.loop;
@@ -2583,11 +3015,21 @@
       plate.dataset.cardType = sceneCardType;
       plate.style.zIndex = _zPlan.plateZ[firstStepIdx];
       plate.setAttribute("role", "img");
-      plate.setAttribute("aria-label", _buildAriaLabel(objectId, firstStep.alt_text, sceneCardType));
+      plate.setAttribute(
+        "aria-label",
+        _buildAriaLabel(objectId, firstStep.alt_text, _plateClassFor(sceneCardType))
+      );
       plate.style.transform = "translateY(100%)";
       _markMediaPlate(plate, sceneCardType, firstStep);
       cardStack.appendChild(plate);
-      state.viewerPlates[sceneIdx] = plate;
+      const PlateClass = _plateClassFor(sceneCardType);
+      state.viewerPlates[sceneIdx] = new PlateClass(
+        plate,
+        objectId,
+        sceneIdx,
+        _zPlan.plateZ[firstStepIdx],
+        firstStep
+      );
     }
   }
   function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
@@ -2641,19 +3083,6 @@
       state.textCards[stepIdx] = card;
     }
   }
-  var _FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
-  function _stepFraming(step) {
-    const num = (value, fallback) => {
-      const n = parseFloat(value);
-      return Number.isFinite(n) ? n : fallback;
-    };
-    return {
-      x: num(step.x, _FULL_OBJECT_FRAMING.x),
-      y: num(step.y, _FULL_OBJECT_FRAMING.y),
-      zoom: num(step.zoom, _FULL_OBJECT_FRAMING.zoom),
-      page: step.page ? parseInt(step.page, 10) : void 0
-    };
-  }
   function _resolveCardConfig(config) {
     return {
       peekHeight: config?.peekHeight ?? 1,
@@ -2667,15 +3096,8 @@
     const firstObjectId = firstStep.object || "";
     const plate = state.viewerPlates[0];
     if (!firstObjectId || !plate) return;
-    const zIndex = _zPlan.plateZ[0];
-    if (_isVideoPlate(plate)) {
-      _initVideoInPlate(plate, firstObjectId, 0, zIndex);
-    } else if (_isAudioPlate(plate)) {
-      _initAudioInPlate(plate, firstObjectId, 0, zIndex);
-    } else {
-      const { x, y, zoom, page } = _stepFraming(firstStep);
-      _initOsdInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
-    }
+    plate.load(firstStep);
+    _evictBeyondPoolCap(0);
   }
   function initCardPool(storyData, config) {
     const cardStack = document.querySelector(".card-stack");
@@ -2734,23 +3156,8 @@
     </div>
   `;
   }
-  function _stepClip(step) {
-    return {
-      start: parseFloat(step.clip_start) || 0,
-      end: parseFloat(step.clip_end) || 0,
-      loop: _isTruthy(step.loop)
-    };
-  }
   function _retargetPlateForStep(plate, objectId, step, stepIndex) {
-    if (_isVideoPlate(plate)) {
-      const clip = _stepClip(step);
-      updateVideoClip(plate, clip.start, clip.end || void 0, clip.loop);
-    } else if (_isAudioPlate(plate)) {
-      const clip = _stepClip(step);
-      updateAudioClip(plate, clip.start, clip.end || void 0, clip.loop);
-    } else if (!state.scrollDriven) {
-      _animateViewerToStep(objectId, step, stepIndex);
-    }
+    plate?.goToStep(step);
   }
   function _deactivateTitleCard(titleCard, direction) {
     titleCard.classList.remove("is-active");
@@ -2805,16 +3212,15 @@
     const moved = [];
     for (const [sceneIndex, plate] of Object.entries(state.viewerPlates || {})) {
       if (!plate || Number(sceneIndex) === targetScene) continue;
-      plate.classList.remove("is-active");
-      plate.style.transition = "none";
-      plate.style.transform = "translateY(100%)";
-      if (_isVideoPlate(plate)) deactivateVideoCard(plate);
-      else if (_isAudioPlate(plate)) deactivateAudioCard(plate);
-      moved.push(plate);
+      const el = plate.container;
+      el.style.transition = "none";
+      el.style.transform = "translateY(100%)";
+      plate.deactivate();
+      moved.push(el);
     }
     if (moved.length) {
       void moved[0].offsetHeight;
-      for (const plate of moved) plate.style.transition = "";
+      for (const el of moved) el.style.transition = "";
     }
   }
   function _restoreBackwardTarget(cardEl) {
@@ -2839,47 +3245,24 @@
       _deactivatePreviousTextCard(index2, direction);
       _activateTextCard(card);
       const plate = _plateForScene(getSceneIndex(index2));
-      if (plate && !plate.classList.contains("is-active")) {
-        plate.style.transform = "translateY(0)";
-        plate.classList.add("is-active");
+      if (plate && !plate.container.classList.contains("is-active")) {
+        plate.container.style.transform = "translateY(0)";
+        plate.container.classList.add("is-active");
       }
       _retargetPlateForStep(plate, objectId, step, index2);
     }
   }
-  function _swapPlatesBackward(currentPlate, prevPlate, index2, prevObjectId) {
-    if (currentPlate) {
-      if (_isVideoPlate(currentPlate)) {
-        currentPlate.style.transition = "none";
-        currentPlate.style.transform = "translateY(100%)";
-        void currentPlate.offsetHeight;
-        currentPlate.style.transition = "";
-        deactivateVideoCard(currentPlate);
-      } else if (_isAudioPlate(currentPlate)) {
-        currentPlate.style.transition = "none";
-        currentPlate.style.transform = "translateY(100%)";
-        void currentPlate.offsetHeight;
-        currentPlate.style.transition = "";
-        deactivateAudioCard(currentPlate);
-      } else {
-        deactivateIiifCard(
-          { element: currentPlate, objectId: prevObjectId },
-          "backward"
-        );
-      }
-      currentPlate.classList.remove("is-active");
-    }
+  function _swapPlatesBackward(currentPlate, prevPlate, index2) {
+    currentPlate?.sendBack();
     if (prevPlate) {
-      prevPlate.style.zIndex = _zPlan.plateZ[index2];
-      prevPlate.style.transition = "none";
-      prevPlate.style.transform = "translateY(0)";
-      void prevPlate.offsetHeight;
-      prevPlate.style.transition = "";
-      prevPlate.classList.add("is-active");
-      if (_isVideoPlate(prevPlate)) {
-        activateVideoCard(prevPlate, getSceneIndex(index2));
-      } else if (_isAudioPlate(prevPlate)) {
-        activateAudioCard(prevPlate, getSceneIndex(index2));
-      }
+      const el = prevPlate.container;
+      el.style.zIndex = _zPlan.plateZ[index2];
+      el.style.transition = "none";
+      el.style.transform = "translateY(0)";
+      void el.offsetHeight;
+      el.style.transition = "";
+      el.classList.add("is-active");
+      if (prevPlate instanceof MediaPlate) prevPlate.center();
     }
   }
   function _activateBackward(index2, direction, card, step, objectId, prevObjectId, needsNewViewer) {
@@ -2888,7 +3271,7 @@
       const currentSceneIndex = getSceneIndex(index2 + 1);
       const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
       const prevPlate = state.viewerPlates[getSceneIndex(index2)];
-      _swapPlatesBackward(currentPlate, prevPlate, index2, prevObjectId);
+      _swapPlatesBackward(currentPlate, prevPlate, index2);
       state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
       _deactivatePreviousTextCard(index2, direction);
       _clearActiveTitleCard(direction);
@@ -2912,8 +3295,10 @@
     const plate = state.viewerPlates[state.stepToScene[index2]];
     if (!plate) return;
     const stepAlt = (_stepsData[index2] || {}).alt_text || "";
-    const cardType = plate.dataset.cardType || "iiif";
-    plate.setAttribute("aria-label", _buildAriaLabel(objectId, stepAlt, cardType));
+    plate.container.setAttribute(
+      "aria-label",
+      _buildAriaLabel(objectId, stepAlt, plate.constructor)
+    );
   }
   function activateCard(index2, direction) {
     if (state.titleCards[index2]) {
@@ -2947,8 +3332,9 @@
   function _settlePlates(stepIndex, progress) {
     const place = (plate, y) => {
       if (!plate) return;
+      const el = plate.container;
       const transform = `translateY(${y}%)`;
-      if (plate.style.transform !== transform) plate.style.transform = transform;
+      if (el.style.transform !== transform) el.style.transform = transform;
     };
     const here = getSceneIndex(stepIndex);
     const next = getSceneIndex(stepIndex + 1);
@@ -2982,68 +3368,33 @@
     _settlePlates(stepIndex, progress);
     for (const hook of _settleHooks) hook(stepIndex, progress);
   }
-  function _applyFramingToViewer(viewerCard, x, y, zoom, snap2) {
-    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-    if (!viewerCard.isReady) {
-      viewerCard.pendingZoom = { x, y, zoom, snap: snap2 };
-      return;
-    }
-    if (snap2) {
-      snapIiifToPosition(viewerCard, x, y, zoom);
-    } else {
-      animateIiifToPosition(viewerCard, x, y, zoom);
-    }
-  }
-  function _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step) {
-    const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
-    const { x, y, zoom, page } = _stepFraming(step);
-    if (_isAudioPlate(newPlate)) {
-      if (!newPlate.querySelector(".waveform-container")) {
-        const zIndex = _zPlan.plateZ[stepIndex];
-        _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
-      }
-      activateAudioCard(newPlate, sceneIndex);
-    } else if (_isVideoPlate(newPlate)) {
-      if (!newPlate.querySelector(".video-iframe, iframe")) {
-        const zIndex = _zPlan.plateZ[stepIndex];
-        _initVideoInPlate(newPlate, objectId, sceneIndex, zIndex);
-      }
-      activateVideoCard(newPlate, sceneIndex);
-    } else if (!viewerCard) {
-      const zIndex = _zPlan.plateZ[stepIndex];
-      _initOsdInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
-    } else {
-      _applyFramingToViewer(viewerCard, x, y, zoom, true);
-    }
+  function _wireViewerForPlate(newPlate, sceneIndex, step) {
+    newPlate.center(step);
+    _evictBeyondPoolCap(sceneIndex);
   }
   function _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction) {
+    const el = newPlate.container;
     if (direction === "forward") {
       if (sceneIndex === 0) {
-        const currentTransform = newPlate.style.transform;
+        const currentTransform = el.style.transform;
         if (!currentTransform || currentTransform === "translateY(100%)") {
-          newPlate.style.transform = "translateY(100%)";
-          void newPlate.offsetHeight;
+          el.style.transform = "translateY(100%)";
+          void el.offsetHeight;
         }
       } else {
-        newPlate.style.transform = "translateY(100%)";
-        void newPlate.offsetHeight;
+        el.style.transform = "translateY(100%)";
+        void el.offsetHeight;
       }
-      newPlate.style.transform = "translateY(0)";
+      el.style.transform = "translateY(0)";
     } else {
-      newPlate.style.transform = "translateY(0)";
+      el.style.transform = "translateY(0)";
       if (prevPlate) {
-        prevPlate.style.transform = "translateY(100%)";
+        prevPlate.container.style.transform = "translateY(100%)";
       }
     }
   }
   function _deactivateDepartingPlate(plate) {
-    if (_isVideoPlate(plate)) {
-      deactivateVideoCard(plate);
-    } else if (_isAudioPlate(plate)) {
-      deactivateAudioCard(plate);
-    } else {
-      plate.classList.remove("is-active");
-    }
+    plate.deactivate();
   }
   function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direction) {
     const sceneIndex = getSceneIndex(stepIndex);
@@ -3051,191 +3402,33 @@
     const prevPlate = _plateForScene(prevSceneIndex);
     const newPlate = _plateForScene(sceneIndex);
     if (!newPlate) return;
-    newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
+    newPlate.container.style.zIndex = _zPlan.plateZ[stepIndex];
     const samePlate = prevPlate && prevPlate === newPlate;
     if (samePlate) {
-      newPlate.style.transform = "translateY(0)";
+      newPlate.container.style.transform = "translateY(0)";
     } else {
       _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
     }
-    newPlate.classList.add("is-active");
+    newPlate.container.classList.add("is-active");
     if (prevPlate && !samePlate) _deactivateDepartingPlate(prevPlate);
-    _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step);
-  }
-  function _viewerInstanceDiv(plateEl, viewerId) {
-    const existing = plateEl.querySelector(".viewer-instance");
-    if (existing) {
-      existing.id = viewerId;
-      return existing;
-    }
-    const viewerDiv = document.createElement("div");
-    viewerDiv.className = "viewer-instance";
-    viewerDiv.id = viewerId;
-    plateEl.appendChild(viewerDiv);
-    return viewerDiv;
-  }
-  function _initialPendingZoom(x, y, zoom) {
-    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
-    return { x, y, zoom, snap: true };
+    _wireViewerForPlate(newPlate, sceneIndex, step);
   }
   function _evictBeyondPoolCap(currentScene) {
-    while (state.viewerCards.length > state.config.maxViewerCards) {
-      let farthestIdx = 0;
+    const loaded = () => Object.values(state.viewerPlates).filter((p) => p instanceof IiifPlate && p.osdWrapper);
+    let live = loaded();
+    while (live.length > state.config.maxViewerCards) {
+      let farthest = live[0];
       let maxDist = -1;
-      for (let i = 0; i < state.viewerCards.length; i++) {
-        const dist = Math.abs(state.viewerCards[i].sceneIndex - currentScene);
+      for (const plate of live) {
+        const dist = Math.abs(plate.sceneIndex - currentScene);
         if (dist > maxDist) {
           maxDist = dist;
-          farthestIdx = i;
+          farthest = plate;
         }
       }
-      const evicted = state.viewerCards.splice(farthestIdx, 1)[0];
-      _evictOsdInstance(evicted);
+      farthest.unload();
+      live = loaded();
     }
-  }
-  function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
-    const manifestUrl = getManifestUrl(objectId, page);
-    if (!manifestUrl) {
-      console.error("_initOsdInPlate: no manifest URL for", objectId);
-      return;
-    }
-    plateEl.dataset.loading = "true";
-    const viewerId = `iiif-viewer-${state.viewerCardCounter}`;
-    _viewerInstanceDiv(plateEl, viewerId);
-    const startPage = page && page > 1 ? page - 1 : 0;
-    const osdWrapper = new IiifViewer({
-      container: "#" + viewerId,
-      manifestUrl,
-      startPage,
-      showChrome: false
-    });
-    const viewerCard = {
-      sceneIndex,
-      // scene this card belongs to
-      objectId,
-      page: page || void 0,
-      element: plateEl,
-      osdWrapper,
-      osdViewer: null,
-      isReady: false,
-      pendingZoom: _initialPendingZoom(x, y, zoom),
-      zIndex
-    };
-    osdWrapper.ready.then(() => {
-      viewerCard.osdViewer = osdWrapper.viewer;
-      viewerCard.isReady = true;
-      delete plateEl.dataset.loading;
-      osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
-      if (viewerCard.pendingZoom) {
-        const pz = viewerCard.pendingZoom;
-        if (pz.snap) {
-          snapIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
-        } else {
-          animateIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
-        }
-        requestAnimationFrame(() => {
-          const pzAfter = viewerCard.pendingZoom;
-          if (pzAfter && viewerCard.osdViewer) {
-            const vp = viewerCard.osdViewer.viewport;
-            const homeZoom = vp.getHomeZoom();
-            const curZoom = vp.getZoom(true);
-            const TOL = 0.05;
-            const authoredIsZoomed = pzAfter.zoom > 1.1;
-            const droppedToHome = Math.abs(curZoom - homeZoom) < homeZoom * TOL;
-            if (authoredIsZoomed && droppedToHome) {
-              if (pzAfter.snap) {
-                snapIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
-              } else {
-                animateIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
-              }
-            }
-          }
-          viewerCard.pendingZoom = null;
-        });
-      } else {
-        viewerCard.pendingZoom = null;
-      }
-    }).catch((err) => {
-      console.error(`_initOsdInPlate: IiifViewer failed for ${objectId}:`, err);
-      viewerCard.isReady = true;
-      delete plateEl.dataset.loading;
-    });
-    state.viewerCards.push(viewerCard);
-    state.viewerCardCounter++;
-    _evictBeyondPoolCap(sceneIndex);
-  }
-  function _evictOsdInstance(viewerCard) {
-    if (viewerCard.osdWrapper && typeof viewerCard.osdWrapper.destroy === "function") {
-      viewerCard.osdWrapper.destroy();
-    }
-    viewerCard.osdWrapper = null;
-    viewerCard.osdViewer = null;
-    viewerCard.isReady = false;
-    const viewerInstance = viewerCard.element.querySelector(".viewer-instance");
-    if (viewerInstance) viewerInstance.remove();
-  }
-  function _initVideoInPlate(plateEl, objectId, sceneIndex, zIndex) {
-    const objectData = state.objectsIndex[objectId] || {};
-    const sourceUrl = objectData.source_url || objectData.iiif_manifest || "";
-    const cardType = plateEl.dataset.cardType;
-    const videoId = extractVideoId(cardType, sourceUrl);
-    if (!videoId) {
-      console.error("_initVideoInPlate: no video ID for", objectId, sourceUrl);
-      return;
-    }
-    const clipStart = parseFloat(plateEl.dataset.clipStart) || 0;
-    const clipEnd = parseFloat(plateEl.dataset.clipEnd) || 0;
-    const loop = _isTruthy(plateEl.dataset.loop);
-    plateEl.style.zIndex = zIndex;
-    createVideoPlayer(plateEl, cardType, videoId, {
-      clipStart,
-      clipEnd: clipEnd || void 0,
-      loop,
-      sceneIndex,
-      sourceUrl,
-      onPlay: () => {
-      },
-      onTimeUpdate: () => {
-      },
-      onEnded: () => {
-        applyClipEndDim(plateEl);
-      },
-      onAutoplayBlocked: () => {
-        _showVideoPlayOverlay(plateEl);
-      }
-    });
-  }
-  function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
-    const audioObjects = window.audioObjects || {};
-    const ext = audioObjects[objectId];
-    if (!ext) {
-      console.error("_initAudioInPlate: no audio extension for", objectId);
-      return;
-    }
-    const basePath = getBasePath();
-    const audioUrl = `${basePath}/telar-content/objects/${objectId}.${ext}`;
-    const peaksUrl = `${basePath}/assets/audio/peaks/${objectId}.json`;
-    const clipStart = parseFloat(plateEl.dataset.clipStart) || 0;
-    const clipEnd = parseFloat(plateEl.dataset.clipEnd) || 0;
-    const loop = _isTruthy(plateEl.dataset.loop);
-    const isEmbed = document.body.classList.contains("embed-mode");
-    plateEl.style.zIndex = zIndex;
-    createAudioPlayer(plateEl, audioUrl, peaksUrl, {
-      clipStart,
-      clipEnd: clipEnd || void 0,
-      loop,
-      sceneIndex,
-      isEmbed,
-      onPlay: () => {
-      },
-      onTimeUpdate: () => {
-      },
-      onEnded: () => {
-        applyAudioClipEndDim(plateEl);
-      },
-      onAutoplayBlocked: () => {
-      }
-    });
   }
   function _deactivatePreviousTextCard(newIndex, direction) {
     const el = document.querySelector(".text-card.is-active");
@@ -3287,10 +3480,11 @@
     const departingPlate = _plateForScene(departingSceneIndex);
     if (!departingPlate) return;
     if (direction === "backward") {
-      departingPlate.style.transition = "none";
-      departingPlate.style.transform = "translateY(100%)";
-      void departingPlate.offsetHeight;
-      departingPlate.style.transition = "";
+      const el = departingPlate.container;
+      el.style.transition = "none";
+      el.style.transform = "translateY(100%)";
+      void el.offsetHeight;
+      el.style.transition = "";
     }
     _deactivateDepartingPlate(departingPlate);
   }
@@ -3310,14 +3504,6 @@
     updateObjectCredits("");
     preloadAhead(index2, _config.preloadSteps, 2);
   }
-  function _animateViewerToStep(objectId, step, stepIndex) {
-    const { x, y, zoom } = _stepFraming(step);
-    if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-    const sceneIndex = getSceneIndex(stepIndex);
-    const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
-    if (!viewerCard) return;
-    _applyFramingToViewer(viewerCard, x, y, zoom, false);
-  }
   function _warmScene(targetScene) {
     const plate = state.viewerPlates[targetScene];
     if (!plate) return;
@@ -3325,21 +3511,9 @@
     const step = _stepsData[firstStepIdx];
     const objectId = step.object || "";
     if (!objectId) return;
-    const zIndex = _zPlan.plateZ[firstStepIdx];
-    if (_isAudioPlate(plate)) {
-      if (!plate.querySelector(".waveform-container")) {
-        _initAudioInPlate(plate, objectId, targetScene, zIndex);
-      }
-    } else if (_isVideoPlate(plate)) {
-      if (!plate.querySelector(".video-iframe, iframe")) {
-        _initVideoInPlate(plate, objectId, targetScene, zIndex);
-      }
-    } else {
-      if (state.viewerCards.find((vc) => vc.sceneIndex === targetScene)) return;
-      const { x, y, zoom, page } = _stepFraming(step);
-      _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
-      _prefetchTilesForScene(targetScene);
-    }
+    plate.load(step);
+    _evictBeyondPoolCap(targetScene);
+    if (plate instanceof IiifPlate) _prefetchTilesForScene(targetScene);
   }
   function preloadAhead(currentIndex, ahead, behind) {
     const currentScene = getSceneIndex(currentIndex);
@@ -5035,7 +5209,7 @@
   }
   function navigateToIntro() {
     for (const plate of Object.values(state.viewerPlates)) {
-      plate.classList.remove("is-active");
+      plate.container.classList.remove("is-active");
     }
     if (state.lenis) {
       state.lenis.stop();
@@ -5470,8 +5644,8 @@
   }
   function _sendPlateOffScreen(plate) {
     if (!plate) return;
-    plate.style.transform = "translateY(100%)";
-    plate.classList.remove("is-active");
+    plate.container.style.transform = "translateY(100%)";
+    plate.container.classList.remove("is-active");
   }
   function _hideStepChrome() {
     updateViewerInfo(-1);

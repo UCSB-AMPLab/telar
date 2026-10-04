@@ -27,9 +27,6 @@ describe('state', () => {
     expect(state.lenis).toBeNull();
     expect(state.snap).toBeNull();
 
-    // Viewer cards group
-    expect(state.viewerCards).toEqual([]);
-    expect(state.viewerCardCounter).toBe(0);
     expect(state.objectsIndex).toEqual({});
 
     // Panels group
@@ -77,8 +74,16 @@ describe('state', () => {
     expect(state.holdGateArmed).toBeUndefined();
     expect(state.holdGateClipDuration).toBeUndefined();
     // currentObject / currentViewerCard: unused single-value viewer tracking
-    // fields, superseded by the cardRegistry / viewerPlates / viewerCards maps.
+    // fields, superseded by viewerPlates.
     expect(state.currentObject).toBeUndefined();
     expect(state.currentViewerCard).toBeUndefined();
+  });
+
+  it('keeps no viewer pool beside the plates', () => {
+    // A viewer belongs to the plate that holds it. A second structure listing
+    // viewers is the duplication the plate types were built to remove, and the
+    // two disagreeing is what it cost.
+    expect(state.viewerCards).toBeUndefined();
+    expect(state.viewerCardCounter).toBeUndefined();
   });
 });

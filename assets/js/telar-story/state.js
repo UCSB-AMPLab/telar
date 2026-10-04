@@ -103,11 +103,6 @@ export const state = {
   /** Snap plugin instance reference. */
   snap: null,
 
-  // ── Viewer cards ─────────────────────────────────────────────────────────
-  /** @type {ViewerCard[]} Pool of viewer card objects. */
-  viewerCards: [],
-  /** Counter for generating unique viewer instance DOM IDs. */
-  viewerCardCounter: 0,
   /** Quick lookup: object_id → object data from window.objectsData. */
   objectsIndex: {},
 
@@ -147,13 +142,12 @@ export const state = {
   /** @type {number[]} Measured manifest fetch times (ms) for threshold tuning. */
   manifestLoadTimes: [],
 
-  // ── Card registry ──────────────────────────────────────────────────────────
   /**
-   * @type {Object[]} Permanent step→card record: one entry per story step,
-   * built once at initCardPool time and never evicted. Not a pool — the
-   * capped, evicting structure is `viewerCards` above.
+   * Map of sceneIndex -> Plate, one per scene, built once and never evicted.
+   * `.container` is the element. What a plate holds — a viewer, a player,
+   * nothing yet — is the plate's own business; the pool inside an image
+   * plate is the only thing here that is capped.
    */
-  /** Map of sceneIndex -> viewer plate element (one plate per scene). */
   viewerPlates: {},
   /** Map of stepIndex -> text card element. */
   textCards: {},

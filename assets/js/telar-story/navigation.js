@@ -163,8 +163,8 @@ function _sendFirstTextCardOffScreen() {
 function _sendPlateOffScreen(plate) {
   if (!plate) return;
 
-  plate.style.transform = 'translateY(100%)';
-  plate.classList.remove('is-active');
+  plate.container.style.transform = 'translateY(100%)';
+  plate.container.classList.remove('is-active');
 }
 
 /**

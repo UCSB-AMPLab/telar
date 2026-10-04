@@ -94,7 +94,6 @@ vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
   createIiifCard: vi.fn(),
   getOrCreateIiifCard: vi.fn(),
   activateIiifCard: vi.fn(),
-  deactivateIiifCard: vi.fn(),
   destroyIiifCard: vi.fn(),
 }));
 

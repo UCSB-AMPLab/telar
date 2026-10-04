@@ -175,7 +175,7 @@ function _writeHashFragment(glossaryN) {
 export function navigateToIntro() {
   // Hide all active viewer plates
   for (const plate of Object.values(state.viewerPlates)) {
-    plate.classList.remove('is-active');
+    plate.container.classList.remove('is-active');
   }
 
   if (state.lenis) {

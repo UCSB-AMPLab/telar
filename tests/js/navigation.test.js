@@ -89,7 +89,6 @@ vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
   createIiifCard: vi.fn(),
   getOrCreateIiifCard: vi.fn(),
   activateIiifCard: vi.fn(),
-  deactivateIiifCard: vi.fn(),
   destroyIiifCard: vi.fn(),
 }));
 
@@ -101,6 +100,7 @@ import {
   initializeButtonNavigation,
 } from '../../assets/js/telar-story/navigation.js';
 import { state } from '../../assets/js/telar-story/state.js';
+import { IiifPlate } from '../../assets/js/telar-story/plates/iiif-plate.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -165,9 +165,10 @@ function makeTextCard({ rot = 0, offX = 0, offY = 0 } = {}) {
  * @returns {HTMLElement}
  */
 function makeViewerPlate() {
-  const plate = document.createElement('div');
-  plate.className = 'viewer-plate is-active';
-  return plate;
+  const el = document.createElement('div');
+  el.className = 'viewer-plate is-active';
+  el.dataset.cardType = 'iiif';
+  return new IiifPlate(el, 'leviathan', 0, 0);
 }
 
 function resetState(overrides = {}) {
@@ -702,8 +703,8 @@ describe('goToStep(-1) — intro restoration', () => {
   it('slides the first object plate down and deactivates it', () => {
     goToStep(-1, 'backward');
 
-    expect(plate.style.transform).toBe('translateY(100%)');
-    expect(plate.classList.contains('is-active')).toBe(false);
+    expect(plate.container.style.transform).toBe('translateY(100%)');
+    expect(plate.container.classList.contains('is-active')).toBe(false);
   });
 
   it('resets the object run and hides the credit badge', () => {
@@ -742,8 +743,8 @@ describe('goToStep(-1) — intro restoration', () => {
 
     goToStep(-1, 'backward');
 
-    expect(plate.style.transform).toBe('');
-    expect(plate.classList.contains('is-active')).toBe(true);
+    expect(plate.container.style.transform).toBe('');
+    expect(plate.container.classList.contains('is-active')).toBe(true);
   });
 
   it('restores a story that has no intro card, no text cards and no plates', () => {
@@ -822,8 +823,8 @@ describe('mobile previous button — restoring the intro', () => {
     buildMobileStory();
     state.mobileNavButtons.prev.click();
 
-    expect(plate.style.transform).toBe('translateY(100%)');
-    expect(plate.classList.contains('is-active')).toBe(false);
+    expect(plate.container.style.transform).toBe('translateY(100%)');
+    expect(plate.container.classList.contains('is-active')).toBe(false);
   });
 
   it('resets the object run, hides the credit badge and disables itself', () => {
@@ -854,7 +855,7 @@ describe('mobile previous button — restoring the intro', () => {
     state.mobileNavButtons.prev.click();
 
     expect(intro.style.transform).toBe('');
-    expect(plate.style.transform).toBe('');
+    expect(plate.container.style.transform).toBe('');
   });
 
   it('restores a story that has no intro card, no text cards and no plates', () => {

@@ -1,7 +1,7 @@
 /**
  * Telar Story – Card Pool
  *
- * This module owns two distinct lifecycles in the card-stack layout:
+ * This module owns three distinct lifecycles in the card-stack layout:
  *
  *   1. The permanent text cards (state.textCards) — step index → element,
  *      built once at init time. Every card element is created up front and
@@ -13,11 +13,20 @@
  *      to each of those questions rather than a map and a record that can
  *      disagree.
  *
- *   2. The viewer pool (state.viewerCards) — live viewer instances (IIIF,
- *      video, audio) attached to viewer plates. This one genuinely pools:
- *      it is capped at config.maxViewerCards, and when over the cap the
- *      instance farthest by scene distance from the current position is
- *      evicted.
+ *   2. The plates (state.viewerPlates) — scene index → Plate, one per scene,
+ *      built once and permanent. A Plate is the type its scene's object
+ *      asks for, and it owns everything that type knows about itself: what
+ *      its player is, how to build it, how to frame it to a step, how to
+ *      stand it down. This module says when; the plate says how. Adding an
+ *      object type is writing a file in plates/, not finding the places
+ *      that branch.
+ *
+ *   3. The viewers inside the image plates. These genuinely pool: the
+ *      number holding a live OpenSeadragon instance is capped at
+ *      config.maxViewerCards, and when over the cap the plate farthest by
+ *      scene distance from the current position is unloaded. The plate
+ *      stays; only the viewer in it goes. The player types pool their own,
+ *      inside their own modules, on their own caps.
  *
  * Scene maps — a story step references an object by ID, but the same
  * object can appear in multiple non-contiguous scenes (A → B → A). To
@@ -64,14 +73,9 @@
 
 import { state } from './state.js';
 import { detectCardType } from './card-type.js';
-import { extractVideoId } from './card-type.js';
-import { getManifestUrl, updateObjectCredits } from './viewer.js';
+import { updateObjectCredits } from './viewer.js';
 import { getBasePath, escapeHtml } from './utils.js';
-import { IiifViewer } from './iiif-viewer.js';
 import {
-  deactivateIiifCard,
-  animateIiifToPosition,
-  snapIiifToPosition,
   computeFocalTarget,
   reSnapActiveViewer,
   _deriveCardPlacement,
@@ -79,31 +83,10 @@ import {
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
 import { isFitHeight, applyCardMotionDuration } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
-import {
-  createVideoPlayer,
-  activateVideoCard,
-  deactivateVideoCard,
-  updateVideoClip,
-  applyClipEndDim,
-  showVideoPlayOverlay,
-} from './video-card.js';
-import {
-  createAudioPlayer,
-  activateAudioCard,
-  deactivateAudioCard,
-  updateAudioClip,
-  applyAudioClipEndDim,
-} from './audio-card.js';
-
-/** Normalise truthy loop values from CSV/JSON: "true", "TRUE", "yes", "sí", true → true */
-function _isTruthy(val) {
-  if (val === true) return true;
-  if (typeof val === 'string') {
-    const v = val.trim().toLowerCase();
-    return v === 'true' || v === 'yes' || v === 'sí';
-  }
-  return false;
-}
+import { MediaPlate } from './plates/media-plate.js';
+import { VideoPlate } from './plates/video-plate.js';
+import { AudioPlate } from './plates/audio-plate.js';
+import { IiifPlate } from './plates/iiif-plate.js';
 
 // ── Z-index scenes ────────────────────────────────────────────────────────────
 //
@@ -255,25 +238,24 @@ export function computeCardTop(viewportH, cardH, runPosition, peekHeightPx) {
 /**
  * Build an accessible label for a viewer plate using the fallback chain.
  *
- * Priority: step alt_text > object alt_text > object title > object_id > type-aware generic.
- * Type-aware generics: IIIF → "Image viewer", video → "Video player", audio → "Audio player".
- * No provider prefix on video/audio labels.
+ * Priority: step alt_text, then object alt_text, then object title, then the
+ * object id, and last what the plate type calls itself. That last one is the
+ * plate's own, because it is the only step that depends on what the plate
+ * holds; there is no provider in it, so a Vimeo plate and a YouTube plate are
+ * both a video player.
  *
  * @param {string} objectId
  * @param {string} [stepAlt] - Per-step alt_text from _stepsData
- * @param {string} [cardType] - 'iiif'|'youtube'|'vimeo'|'google-drive'|'audio'
+ * @param {typeof Plate} PlateClass - The plate type this scene was built with
  * @returns {string}
  */
-function _buildAriaLabel(objectId, stepAlt, cardType) {
+function _buildAriaLabel(objectId, stepAlt, PlateClass) {
   if (stepAlt) return stepAlt;
   const obj = state.objectsIndex[objectId] || {};
   if (obj.alt_text) return obj.alt_text;
   if (obj.title) return obj.title;
   if (objectId) return objectId;
-  // Type-aware final fallback
-  if (cardType === 'youtube' || cardType === 'vimeo' || cardType === 'google-drive') return 'Video player';
-  if (cardType === 'audio') return 'Audio player';
-  return 'Image viewer';
+  return PlateClass.ariaFallback;
 }
 
 // ── Module-level card pool state ──────────────────────────────────────────────
@@ -679,50 +661,41 @@ function _detectStepCardType(objectId, step, audioObjects) {
   });
 }
 
-/** The plate class each player-backed card type is built with. */
-const _MEDIA_PLATE_CLASSES = {
-  'youtube':      'video-plate',
-  'vimeo':        'video-plate',
-  'google-drive': 'video-plate',
-  'audio':        'audio-plate',
+/** The plate class each card type is built with. */
+const _PLATE_TYPES = {
+  'youtube':      VideoPlate,
+  'vimeo':        VideoPlate,
+  'google-drive': VideoPlate,
+  'audio':        AudioPlate,
 };
 
 /**
- * Whether a plate holds a video or an audio player.
+ * The plate class for a card type.
  *
- * The card type is the data; the `video-plate` and `audio-plate` classes are
- * the styling hook the stylesheet matches on. Asking the class list what kind
- * of object a plate holds makes a CSS rename a behaviour change, so the type
- * test reads `dataset.cardType`, which `_createViewerPlates` writes once.
+ * Every type the detector does not name a player for is an image, which is the
+ * default a story reaches without declaring anything.
  *
- * @param {HTMLElement} plate
- * @returns {boolean}
+ * @param {string} cardType
+ * @returns {typeof Plate}
  */
-function _isVideoPlate(plate) {
-  return _MEDIA_PLATE_CLASSES[plate?.dataset?.cardType] === 'video-plate';
-}
-
-/** Counterpart of `_isVideoPlate` for audio. */
-function _isAudioPlate(plate) {
-  return plate?.dataset?.cardType === 'audio';
+function _plateClassFor(cardType) {
+  return _PLATE_TYPES[cardType] || IiifPlate;
 }
 
 /**
- * Mark a plate that holds a player rather than an image.
+ * Give a plate that holds a player the clip window it opens on.
  *
- * Players are one per scene, so the clip window written here is the scene's
- * first step's; later steps in the same run re-clip the running player
- * instead of rebuilding it. A plate of any other card type is left alone.
+ * Players are one per scene, so the window written here is the scene's first
+ * step's; later steps in the same run re-clip the running player instead of
+ * rebuilding it. A plate of any other card type is left alone.
  *
  * @param {HTMLElement} plate
  * @param {string} cardType
  * @param {Object} firstStep - The scene's first step, which owns the clip
  */
 function _markMediaPlate(plate, cardType, firstStep) {
-  const mediaClass = _MEDIA_PLATE_CLASSES[cardType];
-  if (!mediaClass) return;
+  if (!_PLATE_TYPES[cardType]) return;
 
-  plate.classList.add(mediaClass);
   if (firstStep.clip_start) plate.dataset.clipStart = firstStep.clip_start;
   if (firstStep.clip_end) plate.dataset.clipEnd = firstStep.clip_end;
   if (firstStep.loop) plate.dataset.loop = firstStep.loop;
@@ -751,15 +724,19 @@ function _createViewerPlates(steps, cardStack, audioObjects) {
     plate.style.zIndex = _zPlan.plateZ[firstStepIdx];
     // Accessible label for viewer plate
     plate.setAttribute('role', 'img');
-    plate.setAttribute('aria-label', _buildAriaLabel(objectId, firstStep.alt_text, sceneCardType));
+    plate.setAttribute('aria-label',
+      _buildAriaLabel(objectId, firstStep.alt_text, _plateClassFor(sceneCardType)));
     plate.style.transform = 'translateY(100%)';
 
-    // Video and audio plates carry a class and the scene's clip window
+    // Video and audio plates carry the scene's clip window
     _markMediaPlate(plate, sceneCardType, firstStep);
 
     cardStack.appendChild(plate);
 
-    state.viewerPlates[sceneIdx] = plate;
+    const PlateClass = _plateClassFor(sceneCardType);
+    state.viewerPlates[sceneIdx] = new PlateClass(
+      plate, objectId, sceneIdx, _zPlan.plateZ[firstStepIdx], firstStep,
+    );
   }
 }
 
@@ -843,37 +820,6 @@ function _createTextCards(steps, cardStack, audioObjects, messinessPercent) {
   }
 }
 
-// A step that leaves x, y or zoom blank shows the whole object, and the whole
-// object is a framing like any other: the image centre at zoom 1, which the
-// focal target resolves to the whole image fit and centred in the region the
-// text card leaves uncovered. Without these the viewer keeps whatever OSD's home
-// position gives it — the image centred in the VIEWER, so a side card sits over
-// one edge of it.
-const _FULL_OBJECT_FRAMING = { x: 0.5, y: 0.5, zoom: 1 };
-
-/**
- * The framing a step asks its viewer for.
- *
- * A blank x, y or zoom falls back to the whole-object framing; page is
- * 1-indexed in the story data and absent unless the object is a multi-page
- * external manifest.
- *
- * @param {Object} step - Step data
- * @returns {{ x: number, y: number, zoom: number, page: number|undefined }}
- */
-function _stepFraming(step) {
-  const num = (value, fallback) => {
-    const n = parseFloat(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-  return {
-    x:    num(step.x,    _FULL_OBJECT_FRAMING.x),
-    y:    num(step.y,    _FULL_OBJECT_FRAMING.y),
-    zoom: num(step.zoom, _FULL_OBJECT_FRAMING.zoom),
-    page: step.page ? parseInt(step.page, 10) : undefined,
-  };
-}
-
 /**
  * The card-stack settings a story runs with.
  *
@@ -909,15 +855,8 @@ function _preloadFirstScenePlate(steps) {
   const plate = state.viewerPlates[0];
   if (!firstObjectId || !plate) return;
 
-  const zIndex = _zPlan.plateZ[0];
-  if (_isVideoPlate(plate)) {
-    _initVideoInPlate(plate, firstObjectId, 0, zIndex);
-  } else if (_isAudioPlate(plate)) {
-    _initAudioInPlate(plate, firstObjectId, 0, zIndex);
-  } else {
-    const { x, y, zoom, page } = _stepFraming(firstStep);
-    _initOsdInPlate(plate, firstObjectId, 0, zIndex, x, y, zoom, page);
-  }
+  plate.load(firstStep);
+  _evictBeyondPoolCap(0);
 }
 
 /**
@@ -1067,24 +1006,6 @@ function _buildTitleCardContent(step) {
 // ── Context-sensitive card activation ────────────────────────────────────────
 
 /**
- * The clip window a step asks a media plate for.
- *
- * A missing or unparseable value is 0, which the players read as "from the
- * start" and "to the end" respectively; loop accepts the several spellings
- * of true that reach here from a spreadsheet.
- *
- * @param {Object} step - Step data
- * @returns {{ start: number, end: number, loop: boolean }}
- */
-function _stepClip(step) {
-  return {
-    start: parseFloat(step.clip_start) || 0,
-    end:   parseFloat(step.clip_end)   || 0,
-    loop:  _isTruthy(step.loop),
-  };
-}
-
-/**
  * Point a plate the reader already has at this step's framing.
  *
  * Nothing slides: the scene is unchanged, so video and audio are re-clipped
@@ -1092,21 +1013,13 @@ function _stepClip(step) {
  * skipped while the scroll engine drives the viewer itself, which it does
  * frame by frame through lerpIiifPosition.
  *
- * @param {HTMLElement|null} plate - The plate for this step's scene
+ * @param {Plate|null} plate - The plate for this step's scene
  * @param {string} objectId
  * @param {Object} step - Step data
  * @param {number} stepIndex
  */
 function _retargetPlateForStep(plate, objectId, step, stepIndex) {
-  if (_isVideoPlate(plate)) {
-    const clip = _stepClip(step);
-    updateVideoClip(plate, clip.start, clip.end || undefined, clip.loop);
-  } else if (_isAudioPlate(plate)) {
-    const clip = _stepClip(step);
-    updateAudioClip(plate, clip.start, clip.end || undefined, clip.loop);
-  } else if (!state.scrollDriven) {
-    _animateViewerToStep(objectId, step, stepIndex);
-  }
+  plate?.goToStep(step);
 }
 
 /**
@@ -1261,18 +1174,17 @@ export function reconcilePlatesForJump(targetIndex) {
   for (const [sceneIndex, plate] of Object.entries(state.viewerPlates || {})) {
     if (!plate || Number(sceneIndex) === targetScene) continue;
 
-    plate.classList.remove('is-active');
-    plate.style.transition = 'none';
-    plate.style.transform = 'translateY(100%)';
-    if (_isVideoPlate(plate)) deactivateVideoCard(plate);
-    else if (_isAudioPlate(plate)) deactivateAudioCard(plate);
-    moved.push(plate);
+    const el = plate.container;
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(100%)';
+    plate.deactivate();
+    moved.push(el);
   }
 
   // One forced layout for the whole set, so a story pays for its plates once.
   if (moved.length) {
     void moved[0].offsetHeight;  // force reflow
-    for (const plate of moved) plate.style.transition = '';
+    for (const el of moved) el.style.transition = '';
   }
 }
 
@@ -1345,9 +1257,9 @@ function _activateForward(index, direction, card, step, objectId,
     // already on-screen and never re-shows it, leaving the viewer blank
     // after a same-object jump. Re-show it here — a no-op during
     // continuous scroll where the plate is already active.
-    if (plate && !plate.classList.contains('is-active')) {
-      plate.style.transform = 'translateY(0)';
-      plate.classList.add('is-active');
+    if (plate && !plate.container.classList.contains('is-active')) {
+      plate.container.style.transform = 'translateY(0)';
+      plate.container.classList.add('is-active');
     }
 
     _retargetPlateForStep(plate, objectId, step, index);
@@ -1364,51 +1276,30 @@ function _activateForward(index, direction, card, step, objectId,
  * plate being left is the one ahead, derived from index + 1 rather than from
  * where the reader now is.
  *
- * Video plates are snapped rather than transitioned: an iframe on mobile
- * breaks the compositing a transition needs.
+ * A plate holding a player snaps rather than transitions, in its own
+ * `onSendBack`: an iframe on mobile breaks the compositing a transition needs.
  */
-function _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId) {
-  // Different DOM elements always — slide current plate down, reveal previous
-  if (currentPlate) {
-    if (_isVideoPlate(currentPlate)) {
-      // Snap immediately off-screen. Video/audio iframes on mobile
-      // can break CSS transform transitions (compositing layer issues
-      // with cross-origin iframes), so bypass the transition entirely.
-      currentPlate.style.transition = 'none';
-      currentPlate.style.transform = 'translateY(100%)';
-      void currentPlate.offsetHeight;  // force reflow
-      currentPlate.style.transition = '';
-      deactivateVideoCard(currentPlate);
-    } else if (_isAudioPlate(currentPlate)) {
-      currentPlate.style.transition = 'none';
-      currentPlate.style.transform = 'translateY(100%)';
-      void currentPlate.offsetHeight;
-      currentPlate.style.transition = '';
-      deactivateAudioCard(currentPlate);
-    } else {
-      deactivateIiifCard(
-        { element: currentPlate, objectId: prevObjectId },
-        'backward'
-      );
-    }
-    currentPlate.classList.remove('is-active');
-  }
+function _swapPlatesBackward(currentPlate, prevPlate, index) {
+  // Different DOM elements always — slide the current plate down, reveal the
+  // previous one. How a plate leaves is its own: an image plate transitions,
+  // a plate holding a player snaps, because an iframe on mobile breaks the
+  // compositing a transition needs.
+  currentPlate?.sendBack();
   if (prevPlate) {
-    prevPlate.style.zIndex = _zPlan.plateZ[index];
+    const el = prevPlate.container;
+    el.style.zIndex = _zPlan.plateZ[index];
     // Snap to position without animation — the plate was offscreen
     // from the forward transition and should appear instantly behind
     // the departing plate.
-    prevPlate.style.transition = 'none';
-    prevPlate.style.transform = 'translateY(0)';
-    void prevPlate.offsetHeight; // force reflow
-    prevPlate.style.transition = '';
-    prevPlate.classList.add('is-active');
-    // Re-apply video/audio layout when returning to a media plate
-    if (_isVideoPlate(prevPlate)) {
-      activateVideoCard(prevPlate, getSceneIndex(index));
-    } else if (_isAudioPlate(prevPlate)) {
-      activateAudioCard(prevPlate, getSceneIndex(index));
-    }
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(0)';
+    void el.offsetHeight; // force reflow
+    el.style.transition = '';
+    el.classList.add('is-active');
+    // A plate holding a player has to re-lay-out and restart it. An image
+    // plate needs nothing: its viewer is kept, and the framing it holds is
+    // the one it was left on, which is the step being returned to.
+    if (prevPlate instanceof MediaPlate) prevPlate.center();
   }
 }
 
@@ -1430,7 +1321,7 @@ function _activateBackward(index, direction, card, step, objectId,
     const currentPlate = currentSceneIndex >= 0 ? state.viewerPlates[currentSceneIndex] : null;
     const prevPlate = state.viewerPlates[getSceneIndex(index)];
 
-    _swapPlatesBackward(currentPlate, prevPlate, index, prevObjectId);
+    _swapPlatesBackward(currentPlate, prevPlate, index);
 
     state.currentObjectRun = { objectId, runPosition: _cardRunPosition(card) };
 
@@ -1494,8 +1385,8 @@ function _refreshPlateAriaLabel(index, objectId) {
   if (!plate) return;
 
   const stepAlt = (_stepsData[index] || {}).alt_text || '';
-  const cardType = plate.dataset.cardType || 'iiif';
-  plate.setAttribute('aria-label', _buildAriaLabel(objectId, stepAlt, cardType));
+  plate.container.setAttribute('aria-label',
+    _buildAriaLabel(objectId, stepAlt, plate.constructor));
 }
 
 /**
@@ -1580,8 +1471,9 @@ export function activateCard(index, direction) {
 function _settlePlates(stepIndex, progress) {
   const place = (plate, y) => {
     if (!plate) return;
+    const el = plate.container;
     const transform = `translateY(${y}%)`;
-    if (plate.style.transform !== transform) plate.style.transform = transform;
+    if (el.style.transform !== transform) el.style.transform = transform;
   };
 
   const here  = getSceneIndex(stepIndex);
@@ -1706,64 +1598,22 @@ export function onCardsSettle(hook) {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 /**
- * Put a IIIF viewer where a step's framing says, now or when it is ready.
+ * Hand a plate the step it has arrived on.
  *
- * A step with no authored position leaves the viewer alone. A viewer still
- * loading cannot be moved, so the position is left on the card for its ready
- * handler to apply, carrying the same snap-or-animate choice with it.
+ * The pool has already moved the element; what the plate does inside it —
+ * build a player, start it, frame a viewer, or nothing because it is already
+ * where it should be — is the plate's own business.
  *
- * @param {Object} viewerCard - The ViewerCard for the scene
- * @param {number} x - Normalised centre X
- * @param {number} y - Normalised centre Y
- * @param {number} zoom - OSD zoom multiplier
- * @param {boolean} snap - True to jump, false to animate across
+ * The cap is checked afterwards whatever the type: only plates holding a live
+ * viewer count towards it, so a plate that holds a player passes through.
+ *
+ * @param {Plate} newPlate
+ * @param {number} sceneIndex
+ * @param {Object} step - Step data
  */
-function _applyFramingToViewer(viewerCard, x, y, zoom, snap) {
-  if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-
-  if (!viewerCard.isReady) {
-    viewerCard.pendingZoom = { x, y, zoom, snap };
-    return;
-  }
-  if (snap) {
-    snapIiifToPosition(viewerCard, x, y, zoom);
-  } else {
-    animateIiifToPosition(viewerCard, x, y, zoom);
-  }
-}
-
-function _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step) {
-  // Wire up the OSD wrapper if a ViewerCard exists for this scene
-  const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
-  const { x, y, zoom, page } = _stepFraming(step);
-
-  // Route to audio, video, or IIIF initialisation
-  if (_isAudioPlate(newPlate)) {
-    // Audio plate: initialise player if not already present
-    if (!newPlate.querySelector('.waveform-container')) {
-      const zIndex = _zPlan.plateZ[stepIndex];
-      _initAudioInPlate(newPlate, objectId, sceneIndex, zIndex);
-    }
-    activateAudioCard(newPlate, sceneIndex);
-  } else if (_isVideoPlate(newPlate)) {
-    // Video plate: initialise player if not already present
-    if (!newPlate.querySelector('.video-iframe, iframe')) {
-      const zIndex = _zPlan.plateZ[stepIndex];
-      _initVideoInPlate(newPlate, objectId, sceneIndex, zIndex);
-    }
-    // Always activate — _initVideoInPlate creates .video-iframe container
-    // synchronously (YouTube API loads async inside it), so _applyVideoLayout
-    // can position the container immediately.
-    activateVideoCard(newPlate, sceneIndex);
-  } else if (!viewerCard) {
-    // No wrapper instance yet — the plate DOM element exists but has no viewer.
-    // Create a IIIF card that will initialise the OSD wrapper inside this plate.
-    // We adopt the existing plate element rather than creating a new one.
-    const zIndex = _zPlan.plateZ[stepIndex];
-    _initOsdInPlate(newPlate, objectId, sceneIndex, zIndex, x, y, zoom, page);
-  } else {
-    _applyFramingToViewer(viewerCard, x, y, zoom, true);
-  }
+function _wireViewerForPlate(newPlate, sceneIndex, step) {
+  newPlate.center(step);
+  _evictBeyondPoolCap(sceneIndex);
 }
 
 /**
@@ -1781,25 +1631,26 @@ function _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step) {
  * @param {'forward'|'backward'} direction
  */
 function _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction) {
+  const el = newPlate.container;
   if (direction === 'forward') {
     // For scene 0: skip the reset-to-offscreen if the plate was already
     // positioned by the intro interpolation (scroll-engine intro zone progressive
     // positioning). Scenes 1+ always start clean at translateY(100%).
     if (sceneIndex === 0) {
-      const currentTransform = newPlate.style.transform;
+      const currentTransform = el.style.transform;
       if (!currentTransform || currentTransform === 'translateY(100%)') {
-        newPlate.style.transform = 'translateY(100%)';
-        void newPlate.offsetHeight; // Force reflow so CSS transition fires
+        el.style.transform = 'translateY(100%)';
+        void el.offsetHeight; // Force reflow so CSS transition fires
       }
     } else {
-      newPlate.style.transform = 'translateY(100%)';
-      void newPlate.offsetHeight; // Force reflow so CSS transition fires
+      el.style.transform = 'translateY(100%)';
+      void el.offsetHeight; // Force reflow so CSS transition fires
     }
-    newPlate.style.transform = 'translateY(0)';
+    el.style.transform = 'translateY(0)';
   } else {
-    newPlate.style.transform = 'translateY(0)';
+    el.style.transform = 'translateY(0)';
     if (prevPlate) {
-      prevPlate.style.transform = 'translateY(100%)';
+      prevPlate.container.style.transform = 'translateY(100%)';
     }
   }
 }
@@ -1807,20 +1658,15 @@ function _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction) {
 /**
  * Stop the plate the reader is leaving.
  *
- * A player is stopped through its own module, which drops the active class
- * as part of that. A plain IIIF plate only loses the class: the viewer
- * inside it is kept, so returning to the scene costs nothing.
+ * The plate stays where it is: forward, the arriving plate covers it, so
+ * nothing has to move. A plate holding a player stops it; an image plate only
+ * loses the active class, because the viewer inside it is kept and returning
+ * to the scene then costs nothing.
  *
- * @param {HTMLElement} plate
+ * @param {Plate} plate
  */
 function _deactivateDepartingPlate(plate) {
-  if (_isVideoPlate(plate)) {
-    deactivateVideoCard(plate);
-  } else if (_isAudioPlate(plate)) {
-    deactivateAudioCard(plate);
-  } else {
-    plate.classList.remove('is-active');
-  }
+  plate.deactivate();
 }
 
 /**
@@ -1845,7 +1691,7 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
   if (!newPlate) return;
 
   // Update plate z-index from the scene plan.
-  newPlate.style.zIndex = _zPlan.plateZ[stepIndex];
+  newPlate.container.style.zIndex = _zPlan.plateZ[stepIndex];
 
   // Intra-scene mode change: a full-object↔detail flip within one object's run
   // flags needsNewViewer, but the scene — and therefore the plate element — is
@@ -1860,319 +1706,48 @@ function _activateNewViewerPlate(objectId, stepIndex, prevObjectId, step, direct
   const samePlate = prevPlate && prevPlate === newPlate;
 
   if (samePlate) {
-    newPlate.style.transform = 'translateY(0)';
+    newPlate.container.style.transform = 'translateY(0)';
   } else {
     _slideInNewPlate(newPlate, prevPlate, sceneIndex, direction);
   }
 
-  newPlate.classList.add('is-active');
+  newPlate.container.classList.add('is-active');
   if (prevPlate && !samePlate) _deactivateDepartingPlate(prevPlate);
 
-  _wireViewerForPlate(newPlate, sceneIndex, stepIndex, objectId, step);
-}
-
-/**
- * The div OSD mounts into for a plate.
- *
- * A plate evicted from the pool keeps its own element but loses this child,
- * so re-entering the scene builds a fresh one. A plate that still has one is
- * given the new viewer's id rather than a second div.
- *
- * @param {HTMLElement} plateEl
- * @param {string} viewerId
- * @returns {HTMLElement}
- */
-function _viewerInstanceDiv(plateEl, viewerId) {
-  const existing = plateEl.querySelector('.viewer-instance');
-  if (existing) {
-    existing.id = viewerId;
-    return existing;
-  }
-
-  const viewerDiv = document.createElement('div');
-  viewerDiv.className = 'viewer-instance';
-  viewerDiv.id = viewerId;
-  plateEl.appendChild(viewerDiv);
-  return viewerDiv;
-}
-
-/**
- * The framing a viewer opens at, or null when the step authored none.
- *
- * Snapping rather than animating, because there is nothing yet on screen to
- * animate from.
- *
- * @param {number} x
- * @param {number} y
- * @param {number} zoom
- * @returns {{ x: number, y: number, zoom: number, snap: boolean }|null}
- */
-function _initialPendingZoom(x, y, zoom) {
-  if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
-  return { x, y, zoom, snap: true };
+  _wireViewerForPlate(newPlate, sceneIndex, step);
 }
 
 /**
  * Keep the viewer pool inside its cap.
  *
- * What goes is the instance farthest in scenes from the one just opened —
- * the scene the reader is least likely to reach next, in either direction.
- * The plate element itself stays in the DOM; only the viewer inside it goes.
+ * What goes is the viewer farthest in scenes from the one just opened — the
+ * scene the reader is least likely to reach next, in either direction. The
+ * plate itself is permanent and stays where it is; only the viewer inside it
+ * goes, and re-entering the scene builds another.
+ *
+ * Counted over the plates rather than over a list of viewers, because the
+ * plate holding a viewer and the viewer are now one thing.
  *
  * @param {number} currentScene - Scene the newest viewer belongs to
  */
 function _evictBeyondPoolCap(currentScene) {
-  while (state.viewerCards.length > state.config.maxViewerCards) {
-    let farthestIdx = 0;
+  const loaded = () => Object.values(state.viewerPlates)
+    .filter(p => p instanceof IiifPlate && p.osdWrapper);
+
+  let live = loaded();
+  while (live.length > state.config.maxViewerCards) {
+    let farthest = live[0];
     let maxDist = -1;
-    for (let i = 0; i < state.viewerCards.length; i++) {
-      const dist = Math.abs(state.viewerCards[i].sceneIndex - currentScene);
+    for (const plate of live) {
+      const dist = Math.abs(plate.sceneIndex - currentScene);
       if (dist > maxDist) {
         maxDist = dist;
-        farthestIdx = i;
+        farthest = plate;
       }
     }
-    const evicted = state.viewerCards.splice(farthestIdx, 1)[0];
-    _evictOsdInstance(evicted);
+    farthest.unload();
+    live = loaded();
   }
-}
-
-/**
- * Initialise an IIIF viewer inside an existing plate element.
- *
- * This is called when we need a viewer but no ViewerCard has been created
- * yet for the scene. Rather than creating a new plate, we inject the
- * wrapper into the plate that initCardPool already placed in the DOM.
- *
- * @param {HTMLElement} plateEl - The existing viewer-plate element
- * @param {string} objectId
- * @param {number} sceneIndex - The scene this card belongs to
- * @param {number} zIndex
- * @param {number} x
- * @param {number} y
- * @param {number} zoom
- * @param {number|undefined} page - 1-indexed page for external multi-page manifests; mapped to wrapper's 0-indexed `startPage` below
- */
-function _initOsdInPlate(plateEl, objectId, sceneIndex, zIndex, x, y, zoom, page) {
-  const manifestUrl = getManifestUrl(objectId, page);
-  if (!manifestUrl) {
-    console.error('_initOsdInPlate: no manifest URL for', objectId);
-    return;
-  }
-
-  plateEl.dataset.loading = 'true';
-
-  const viewerId = `iiif-viewer-${state.viewerCardCounter}`;
-  _viewerInstanceDiv(plateEl, viewerId);
-
-  // External multi-page manifests now open at the requested page rather
-  // than always starting at page 1.
-  const startPage = page && page > 1 ? page - 1 : 0;
-
-  const osdWrapper = new IiifViewer({
-    container: '#' + viewerId,
-    manifestUrl,
-    startPage,
-    showChrome: false,
-  });
-
-  const viewerCard = {
-    sceneIndex,    // scene this card belongs to
-    objectId,
-    page: page || undefined,
-    element: plateEl,
-    osdWrapper,
-    osdViewer: null,
-    isReady: false,
-    pendingZoom: _initialPendingZoom(x, y, zoom),
-    zIndex,
-  };
-
-  osdWrapper.ready.then(() => {
-    viewerCard.osdViewer = osdWrapper.viewer;
-    viewerCard.isReady = true;
-    delete plateEl.dataset.loading;
-
-    // Belt-and-braces: the wrapper already sets this in _init(); keeping
-    // the line here documents the Telar invariant (wheel events belong to
-    // Lenis, not OSD) at the call site too.
-    osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
-
-    if (viewerCard.pendingZoom) {
-      const pz = viewerCard.pendingZoom;
-
-      if (pz.snap) {
-        snapIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
-      } else {
-        animateIiifToPosition(viewerCard, pz.x, pz.y, pz.zoom);
-      }
-
-      // Verify-and-retry (belt-and-braces on top of the rAF-deferred
-      // .ready). Even after the rAF settle, a residual race can leave
-      // the viewer at home zoom. One frame after
-      // applying the snap, read the current OSD zoom and compare against home zoom.
-      // If they match — and the authored zoom was meaningfully > 1 — the apply
-      // was dropped; re-apply exactly once. Tolerance: 5% of homeZoom.
-      //
-      // `pendingZoom` is cleared only after the verify/retry so the values
-      // remain available for the re-apply if needed.
-      requestAnimationFrame(() => {
-        const pzAfter = viewerCard.pendingZoom; // still holds pz at this point
-        if (pzAfter && viewerCard.osdViewer) {
-          const vp       = viewerCard.osdViewer.viewport;
-          const homeZoom = vp.getHomeZoom();
-          const curZoom  = vp.getZoom(true);
-          const TOL      = 0.05; // 5% relative tolerance
-          const authoredIsZoomed = pzAfter.zoom > 1.1; // authored multiplier meaningfully above home
-          const droppedToHome    = Math.abs(curZoom - homeZoom) < homeZoom * TOL;
-
-          if (authoredIsZoomed && droppedToHome) {
-            // Home-fit overwrote the snap — re-apply the authored position once.
-            if (pzAfter.snap) {
-              snapIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
-            } else {
-              animateIiifToPosition(viewerCard, pzAfter.x, pzAfter.y, pzAfter.zoom);
-            }
-          }
-        }
-        viewerCard.pendingZoom = null;
-      });
-    } else {
-      // No pending zoom — nothing to verify.
-      viewerCard.pendingZoom = null;
-    }
-
-  }).catch(err => {
-    console.error(`_initOsdInPlate: IiifViewer failed for ${objectId}:`, err);
-    viewerCard.isReady = true;
-    delete plateEl.dataset.loading;
-  });
-
-  state.viewerCards.push(viewerCard);
-  state.viewerCardCounter++;
-
-  // Enforce pool size limit — evict farthest scene
-  _evictBeyondPoolCap(sceneIndex);
-}
-
-/**
- * Evict an OSD viewer wrapper from a plate without removing the plate
- * DOM element. Calls the wrapper's destroy() and keeps the plate div for
- * re-entry. The viewer uses the Canvas2D drawer, so there is no WebGL
- * context to release first (OSD #2693 applies only to the WebGL drawer).
- *
- * @param {Object} viewerCard - The ViewerCard to evict
- */
-function _evictOsdInstance(viewerCard) {
-  if (viewerCard.osdWrapper && typeof viewerCard.osdWrapper.destroy === 'function') {
-    viewerCard.osdWrapper.destroy();
-  }
-  viewerCard.osdWrapper = null;
-  viewerCard.osdViewer = null;
-  viewerCard.isReady = false;
-
-  // Remove viewer-instance child so _initOsdInPlate can recreate cleanly on re-entry
-  const viewerInstance = viewerCard.element.querySelector('.viewer-instance');
-  if (viewerInstance) viewerInstance.remove();
-  // Note: viewerCard.element (the plate div) is NOT removed from DOM
-}
-
-/**
- * Initialise a video player inside an existing video-plate element.
- *
- * Parallel to _initOsdInPlate — called by activateCard and preloadAhead
- * for 'youtube', 'vimeo', and 'google-drive' card types. Video iframes load
- * content immediately on insertion, so player creation is deferred to here
- * (not at initCardPool time).
- *
- * @param {HTMLElement} plateEl - The existing video-plate element
- * @param {string} objectId
- * @param {number} sceneIndex - The scene this card belongs to
- * @param {number} zIndex
- */
-function _initVideoInPlate(plateEl, objectId, sceneIndex, zIndex) {
-  const objectData = state.objectsIndex[objectId] || {};
-  const sourceUrl = objectData.source_url || objectData.iiif_manifest || '';
-  const cardType = plateEl.dataset.cardType;
-  const videoId = extractVideoId(cardType, sourceUrl);
-
-  if (!videoId) {
-    console.error('_initVideoInPlate: no video ID for', objectId, sourceUrl);
-    return;
-  }
-
-  const clipStart = parseFloat(plateEl.dataset.clipStart) || 0;
-  const clipEnd = parseFloat(plateEl.dataset.clipEnd) || 0;
-  const loop = _isTruthy(plateEl.dataset.loop);
-
-  plateEl.style.zIndex = zIndex;
-
-  createVideoPlayer(plateEl, cardType, videoId, {
-    clipStart,
-    clipEnd: clipEnd || undefined,
-    loop,
-    sceneIndex,
-    sourceUrl,
-    onPlay: () => {},
-    onTimeUpdate: () => {},
-    onEnded: () => {
-      applyClipEndDim(plateEl);
-    },
-    onAutoplayBlocked: () => {
-      showVideoPlayOverlay(plateEl);
-    },
-  });
-}
-
-/**
- * Initialise a WaveSurfer audio player inside an existing audio-plate element.
- *
- * Parallel to _initVideoInPlate — called by activateCard and preloadAhead
- * for 'audio' card types.
- *
- * @param {HTMLElement} plateEl - The existing audio-plate element
- * @param {string} objectId
- * @param {number} sceneIndex - The scene this card belongs to
- * @param {number} zIndex
- */
-function _initAudioInPlate(plateEl, objectId, sceneIndex, zIndex) {
-  const audioObjects = window.audioObjects || {};
-  const ext = audioObjects[objectId];
-  if (!ext) {
-    console.error('_initAudioInPlate: no audio extension for', objectId);
-    return;
-  }
-
-  const basePath = getBasePath();
-  const audioUrl = `${basePath}/telar-content/objects/${objectId}.${ext}`;
-  const peaksUrl = `${basePath}/assets/audio/peaks/${objectId}.json`;
-
-  const clipStart = parseFloat(plateEl.dataset.clipStart) || 0;
-  const clipEnd = parseFloat(plateEl.dataset.clipEnd) || 0;
-  const loop = _isTruthy(plateEl.dataset.loop);
-  const isEmbed = document.body.classList.contains('embed-mode');
-
-  plateEl.style.zIndex = zIndex;
-
-  createAudioPlayer(plateEl, audioUrl, peaksUrl, {
-    clipStart,
-    clipEnd: clipEnd || undefined,
-    loop,
-    sceneIndex,
-    isEmbed,
-    onPlay: () => {
-      // Audio hold gate not implemented (audio has no hold gate)
-    },
-    onTimeUpdate: () => {
-      // Progress update handled internally by audio-card.js
-    },
-    onEnded: () => {
-      applyAudioClipEndDim(plateEl);
-    },
-    onAutoplayBlocked: () => {
-      // Play overlay shown by audio-card.js internally
-    },
-  });
 }
 
 /**
@@ -2306,10 +1881,11 @@ function _hideDepartingPlateForTitle(index, direction) {
   if (!departingPlate) return;
 
   if (direction === 'backward') {
-    departingPlate.style.transition = 'none';
-    departingPlate.style.transform = 'translateY(100%)';
-    void departingPlate.offsetHeight;
-    departingPlate.style.transition = '';
+    const el = departingPlate.container;
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(100%)';
+    void el.offsetHeight;
+    el.style.transition = '';
   }
   _deactivateDepartingPlate(departingPlate);
 }
@@ -2358,33 +1934,14 @@ function _activateTitleCardStep(index, direction) {
   preloadAhead(index, _config.preloadSteps, 2);
 }
 
-/**
- * Animate the IIIF viewer for the current scene to the given step's position.
- *
- * @param {string} objectId
- * @param {Object} step - Step data with x, y, zoom properties
- * @param {number} stepIndex - Step index (used to resolve scene index)
- */
-function _animateViewerToStep(objectId, step, stepIndex) {
-  const { x, y, zoom } = _stepFraming(step);
-
-  if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
-
-  const sceneIndex = getSceneIndex(stepIndex);
-  const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
-  if (!viewerCard) return;
-
-  _applyFramingToViewer(viewerCard, x, y, zoom, false);
-}
-
 // ── Preloading ────────────────────────────────────────────────────────────────
 
 /**
  * Get one scene's plate ready before the reader arrives at it.
  *
- * Audio and video plates are cheap and idempotent -- a plate that already
- * has its player is left alone. An IIIF plate is neither, so it is skipped
- * if a viewer card already exists for the scene, and its tiles are fetched
+ * A plate holding a player is asked to load and answers for itself whether
+ * there is anything to do. An IIIF plate is not idempotent, so it is skipped
+ * when a viewer card already exists for the scene, and its tiles are fetched
  * alongside.
  *
  * This was written out twice, once for the scenes ahead and once for those
@@ -2400,27 +1957,12 @@ function _warmScene(targetScene) {
   const objectId = step.object || '';
   if (!objectId) return;
 
-  const zIndex = _zPlan.plateZ[firstStepIdx];
+  plate.load(step);
+  _evictBeyondPoolCap(targetScene);
 
-  if (_isAudioPlate(plate)) {
-    // Audio plate: preload only if no waveform container yet
-    if (!plate.querySelector('.waveform-container')) {
-      _initAudioInPlate(plate, objectId, targetScene, zIndex);
-    }
-  } else if (_isVideoPlate(plate)) {
-    // Video plate: preload only if no video iframe yet
-    if (!plate.querySelector('.video-iframe, iframe')) {
-      _initVideoInPlate(plate, objectId, targetScene, zIndex);
-    }
-  } else {
-    // IIIF plate: skip if already has a ViewerCard
-    if (state.viewerCards.find(vc => vc.sceneIndex === targetScene)) return;
-
-    const { x, y, zoom, page } = _stepFraming(step);
-
-    _initOsdInPlate(plate, objectId, targetScene, zIndex, x, y, zoom, page);
-    _prefetchTilesForScene(targetScene);
-  }
+  // Tiles are an image plate's business: a scene holding a player has none to
+  // fetch, and asking for its info.json is a 404 nothing reads.
+  if (plate instanceof IiifPlate) _prefetchTilesForScene(targetScene);
 }
 
 /**
