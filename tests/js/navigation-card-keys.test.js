@@ -17,8 +17,15 @@ const mocks = vi.hoisted(() => ({
   cardTakesKey: vi.fn(() => 'none'),
   keyboardNav: vi.fn(),
   activateCard: vi.fn(),
+  navigateToIntro: vi.fn(),
+  navigateToStep: vi.fn(),
 }));
 
+vi.mock('../../assets/js/telar-story/deep-link.js', () => ({
+  writeHash: vi.fn(),
+  navigateToIntro: mocks.navigateToIntro,
+  navigateToStep: mocks.navigateToStep,
+}));
 vi.mock('../../assets/js/telar-story/card-scroll.js', () => ({
   cardTakesKey: mocks.cardTakesKey,
 }));
@@ -82,6 +89,8 @@ beforeEach(() => {
   mocks.cardTakesKey.mockReturnValue('none');
   mocks.keyboardNav.mockClear();
   mocks.activateCard.mockClear();
+  mocks.navigateToIntro.mockClear();
+  mocks.navigateToStep.mockClear();
   storyOnStep(2);
 });
 
@@ -286,7 +295,7 @@ describe('a key held down', () => {
   });
 
   it('leaves a key the story does not read to the browser', () => {
-    for (const key of ['Home', 'End', 'a']) {
+    for (const key of ['PageLeft', 'a']) {
       expect(pressCardKey(key, { repeat: true }).defaultPrevented).toBe(false);
     }
   });
@@ -309,5 +318,168 @@ describe('an open panel', () => {
     expect(body.scrollBy).toHaveBeenCalled();
     expect(mocks.cardTakesKey).not.toHaveBeenCalled();
     panel.remove();
+  });
+});
+
+function openDialogTarget() {
+  const dialog = document.createElement('div');
+  dialog.className = 'modal show';
+  const inner = document.createElement('div');
+  inner.tabIndex = -1;
+  dialog.append(inner);
+  document.body.append(dialog);
+  return { dialog, inner };
+}
+
+function pressOn(el, key, extras = {}) {
+  const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extras });
+  el.dispatchEvent(ev);
+  return ev;
+}
+
+describe('Home and End', () => {
+  it('Home goes to the intro through the engine and cancels the native jump', () => {
+    const ev = pressCardKey('Home');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(mocks.navigateToIntro).toHaveBeenCalledTimes(1);
+    expect(mocks.navigateToStep).not.toHaveBeenCalled();
+  });
+
+  it('End goes to the last step through the engine and cancels the native jump', () => {
+    const ev = pressCardKey('End');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(mocks.navigateToStep).toHaveBeenCalledWith(5);
+    expect(mocks.navigateToIntro).not.toHaveBeenCalled();
+  });
+
+  it('moves the same way on the button path', () => {
+    storyOnStep(2, { lenis: false });
+    pressCardKey('Home');
+    pressCardKey('End');
+    expect(mocks.navigateToIntro).toHaveBeenCalledTimes(1);
+    expect(mocks.navigateToStep).toHaveBeenCalledWith(5);
+  });
+
+  it('cancels the key and moves nothing under a scroll lock', () => {
+    state.scrollLockActive = true;
+    const ev = pressCardKey('End');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(mocks.navigateToStep).not.toHaveBeenCalled();
+  });
+
+  for (const key of ['Home', 'End']) {
+    it(`a held ${key} takes no further action and is cancelled`, () => {
+      const repeats = Array.from({ length: 39 }, () => pressCardKey(key, { repeat: true }));
+      expect(repeats.every((ev) => ev.defaultPrevented)).toBe(true);
+      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
+      expect(mocks.navigateToStep).not.toHaveBeenCalled();
+    });
+
+    it(`leaves ${key} alone in an open dialog, first press and repeat`, () => {
+      const { dialog, inner } = openDialogTarget();
+      const first = pressOn(inner, key);
+      const repeat = pressOn(inner, key, { repeat: true });
+      dialog.remove();
+      expect(first.defaultPrevented).toBe(false);
+      expect(repeat.defaultPrevented).toBe(false);
+      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
+      expect(mocks.navigateToStep).not.toHaveBeenCalled();
+    });
+
+    it(`leaves ${key} alone in an open panel, first press and repeat`, () => {
+      state.isPanelOpen = true;
+      state.panelStack = [{ type: 'layer1' }];
+      const first = pressCardKey(key);
+      const repeat = pressCardKey(key, { repeat: true });
+      expect(first.defaultPrevented).toBe(false);
+      expect(repeat.defaultPrevented).toBe(false);
+      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
+      expect(mocks.navigateToStep).not.toHaveBeenCalled();
+    });
+  }
+});
+
+describe('Home and End over a side card', () => {
+  it('ask the card for a full move, backward for Home and forward for End', () => {
+    pressCardKey('Home');
+    expect(mocks.cardTakesKey).toHaveBeenLastCalledWith('backward', 'full');
+    pressCardKey('End');
+    expect(mocks.cardTakesKey).toHaveBeenLastCalledWith('forward', 'full');
+  });
+
+  for (const [key, go] of [['Home', 'navigateToIntro'], ['End', 'navigateToStep']]) {
+    it(`${key} scrolls a card with room, is cancelled, and goes nowhere`, () => {
+      mocks.cardTakesKey.mockReturnValue('scrolled');
+      const ev = pressCardKey(key);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(mocks[go]).not.toHaveBeenCalled();
+    });
+
+    it(`${key} at the card's edge goes to the intro or the last step`, () => {
+      mocks.cardTakesKey.mockReturnValue('at-edge');
+      const ev = pressCardKey(key);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(mocks[go]).toHaveBeenCalledTimes(1);
+    });
+
+    it(`a held ${key} scrolls the card, is cancelled, and never moves the story`, () => {
+      mocks.cardTakesKey.mockReturnValue('scrolled');
+      const ev = pressCardKey(key, { repeat: true });
+      expect(mocks.cardTakesKey).toHaveBeenCalledWith(key === 'Home' ? 'backward' : 'forward', 'full');
+      expect(ev.defaultPrevented).toBe(true);
+      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
+      expect(mocks.navigateToStep).not.toHaveBeenCalled();
+    });
+
+    it(`a held ${key} at the card's edge is cancelled and never moves the story`, () => {
+      mocks.cardTakesKey.mockReturnValue('at-edge');
+      const ev = pressCardKey(key, { repeat: true });
+      expect(ev.defaultPrevented).toBe(true);
+      expect(mocks.navigateToIntro).not.toHaveBeenCalled();
+      expect(mocks.navigateToStep).not.toHaveBeenCalled();
+    });
+
+    it(`${key} in an open dialog never asks the card`, () => {
+      const { dialog, inner } = openDialogTarget();
+      pressOn(inner, key);
+      pressOn(inner, key, { repeat: true });
+      dialog.remove();
+      expect(mocks.cardTakesKey).not.toHaveBeenCalled();
+    });
+  }
+});
+
+describe('the first press inside an open dialog', () => {
+  for (const [key, extras] of [
+    ['ArrowDown', {}], ['ArrowUp', {}], ['PageDown', {}], ['PageUp', {}],
+    [' ', {}], [' ', { shiftKey: true }],
+  ]) {
+    it(`leaves ${JSON.stringify(key)}${extras.shiftKey ? ' with Shift' : ''} to the dialog and steps nothing`, () => {
+      const { dialog, inner } = openDialogTarget();
+      const ev = pressOn(inner, key, extras);
+      dialog.remove();
+      expect(ev.defaultPrevented).toBe(false);
+      expect(mocks.keyboardNav).not.toHaveBeenCalled();
+      expect(mocks.cardTakesKey).not.toHaveBeenCalled();
+    });
+  }
+
+  it('leaves ArrowDown on a select in the dialog to the select', () => {
+    const { dialog, inner } = openDialogTarget();
+    const select = document.createElement('select');
+    inner.append(select);
+    const ev = pressOn(select, 'ArrowDown');
+    dialog.remove();
+    expect(ev.defaultPrevented).toBe(false);
+    expect(mocks.keyboardNav).not.toHaveBeenCalled();
+  });
+
+  it('still steps on ArrowDown from a field outside a dialog', () => {
+    const input = document.createElement('input');
+    document.body.append(input);
+    const ev = pressOn(input, 'ArrowDown');
+    input.remove();
+    expect(ev.defaultPrevented).toBe(true);
+    expect(mocks.keyboardNav).toHaveBeenCalledWith('forward');
   });
 });

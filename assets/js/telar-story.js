@@ -3223,13 +3223,19 @@
       _closeTopmostPanel(e);
     }],
     ["Escape", (e) => _closeTopmostPanel(e)],
-    [" ", (e) => _spaceKey(e)]
+    [" ", (e) => _spaceKey(e)],
+    ["Home", (e) => _edgeKey(e, "start")],
+    ["End", (e) => _edgeKey(e, "end")]
   ]);
   var STORY_KEYS = /* @__PURE__ */ new Map([
     ["ArrowDown", ["forward", "line"]],
     ["PageDown", ["forward", "page"]],
     ["ArrowUp", ["backward", "line"]],
     ["PageUp", ["backward", "page"]]
+  ]);
+  var EDGE_KEYS = /* @__PURE__ */ new Map([
+    ["Home", ["backward", "full"]],
+    ["End", ["forward", "full"]]
   ]);
   function handleKeyboard(e) {
     if (e.repeat && !state.isPanelOpen) {
@@ -3241,6 +3247,11 @@
   function _repeatKey(e) {
     if (_isInOpenDialog(e)) return;
     if (e.key === " " && _isSpaceControl(e)) return;
+    if (EDGE_KEYS.has(e.key)) {
+      e.preventDefault();
+      cardTakesKey(...EDGE_KEYS.get(e.key));
+      return;
+    }
     let motion = STORY_KEYS.get(e.key);
     if (e.key === " ") motion = [e.shiftKey ? "backward" : "forward", "page"];
     if (!motion) return;
@@ -3248,6 +3259,7 @@
     cardTakesKey(...motion);
   }
   function _stepKey(e, direction, kind) {
+    if (_isInOpenDialog(e)) return;
     if (_panelTookScroll(direction === "forward" ? 40 : -40)) return;
     e.preventDefault();
     if (cardTakesKey(direction, kind) === "scrolled") return;
@@ -3262,8 +3274,19 @@
     const target = e.target;
     return !!(target && target.closest && target.closest(".modal.show, dialog[open]"));
   }
+  function _edgeKey(e, edge) {
+    if (state.isPanelOpen || _isInOpenDialog(e)) return;
+    e.preventDefault();
+    if (state.scrollLockActive) return;
+    if (cardTakesKey(edge === "start" ? "backward" : "forward", "full") === "scrolled") return;
+    if (edge === "start") {
+      navigateToIntro();
+    } else {
+      navigateToStep(state.steps.length);
+    }
+  }
   function _spaceKey(e) {
-    if (_isSpaceControl(e)) return;
+    if (_isSpaceControl(e) || _isInOpenDialog(e)) return;
     e.preventDefault();
     if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
     const direction = e.shiftKey ? "backward" : "forward";
@@ -3783,7 +3806,7 @@
     const edge = sign > 0 ? max : 0;
     const rendered = card.scrollTop;
     const moving = Math.abs(e.target - rendered) > EDGE_SLACK;
-    const amount = kind === "page" ? _pageAmount(card) : LINE_PX;
+    const amount = kind === "full" ? max : kind === "page" ? _pageAmount(card) : LINE_PX;
     if (moving && Math.sign(e.target - rendered) === sign) {
       if (Math.abs(e.target - edge) <= EDGE_SLACK) {
         _stop(e);

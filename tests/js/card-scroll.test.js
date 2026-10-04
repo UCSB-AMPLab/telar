@@ -448,6 +448,24 @@ describe('cardTakesKey', () => {
     expect(cardTakesKey('forward', 'page')).toBe('at-edge');
   });
 
+  it('takes the whole extent for a full move, to the end going forward and to the top going back', () => {
+    card.scrollTop = 100;
+    expect(cardTakesKey('forward', 'full')).toBe('scrolled');
+    expect(card.scrollTop).toBe(MAX);
+    expect(cardTakesKey('forward', 'full')).toBe('at-edge');
+    expect(cardTakesKey('backward', 'full')).toBe('scrolled');
+    expect(card.scrollTop).toBe(0);
+    expect(cardTakesKey('backward', 'full')).toBe('at-edge');
+  });
+
+  it('eases a full move, drawing nothing on the key and reaching the edge over the frames', () => {
+    reduce = false;
+    expect(cardTakesKey('forward', 'full')).toBe('scrolled');
+    expect(card.scrollTop).toBe(0);
+    advanceFrames();
+    expect(card.scrollTop).toBe(MAX);
+  });
+
   it('answers none where no card is in scroll mode', () => {
     card.dataset.cardFit = 'natural';
     expect(cardTakesKey('forward', 'line')).toBe('none');

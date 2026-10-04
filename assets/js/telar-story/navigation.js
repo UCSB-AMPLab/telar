@@ -23,10 +23,11 @@
  *
  * Keyboard navigation works in all modes: arrow keys and Page Up/Down move
  * between steps, left/right arrows open and close panels, Space advances
- * (Shift+Space goes back), and Escape closes the current panel. A side card
- * that scrolls inside itself (card-scroll.js) takes the story keys first,
- * after an open panel: a line for an arrow, a page for Page Up/Down and
- * Space, and the key moves a step only once the card is at rest at its edge.
+ * (Shift+Space goes back), Home goes to the intro and End to the last step,
+ * and Escape closes the current panel. A side card that scrolls inside itself
+ * (card-scroll.js) takes the story keys first, after an open panel: a line
+ * for an arrow, a page for Page Up/Down and Space, its whole extent for Home
+ * and End, and the key moves a step only once the card is at rest at its edge.
  *
  * state.currentIndex is the current step in every mode (-1 on the intro), and
  * everything that asks which step the reader is on reads it: the fragment,
@@ -49,7 +50,7 @@
 import { state, MOBILE_NAV_COOLDOWN } from './state.js';
 import { activateCard, releaseTitleCardsForIntro } from './card-pool.js';
 import { advanceToStep, buttonHeading, keyboardNav } from './scroll-engine.js';
-import { writeHash } from './deep-link.js';
+import { writeHash, navigateToIntro, navigateToStep } from './deep-link.js';
 import { cardTakesKey } from './card-scroll.js';
 import { initializeLoadingShimmer, showViewerSkeletonState } from './viewer.js';
 import {
@@ -525,6 +526,8 @@ const KEY_ACTIONS = new Map([
   ['ArrowLeft',  (e) => { e.preventDefault(); _closeTopmostPanel(e); }],
   ['Escape',     (e) => _closeTopmostPanel(e)],
   [' ',          (e) => _spaceKey(e)],
+  ['Home',       (e) => _edgeKey(e, 'start')],
+  ['End',        (e) => _edgeKey(e, 'end')],
 ]);
 
 /**
@@ -540,14 +543,27 @@ const STORY_KEYS = new Map([
 ]);
 
 /**
+ * The keys that go to an end of the story, with the direction and reach they
+ * ask a side card for.
+ *
+ * @type {Map<string, ['forward'|'backward', 'full']>}
+ */
+const EDGE_KEYS = new Map([
+  ['Home', ['backward', 'full']],
+  ['End',  ['forward', 'full']],
+]);
+
+/**
  * Handle keyboard navigation and panel control.
  *
  * Auto-repeat key events never step the story — each physical key press
  * advances exactly one step — but allowed through while a panel is open, so
  * that a held arrow key keeps the panel scrolling. Outside a panel a repeated
  * story key is cancelled, so the browser does not scroll the document under
- * Lenis, unless it comes from a control or an open dialog, which keep it; over a side card that scrolls inside itself it also scrolls the
- * card, to its end and no further.
+ * Lenis, unless it comes from a control or an open dialog, which keep it. Over
+ * a side card that scrolls inside itself a repeat also scrolls the card, to
+ * its end and no further. Home and End go to the intro and the last step on
+ * the first press; their repeats are cancelled and take no step.
  *
  * @param {KeyboardEvent} e
  */
@@ -577,6 +593,11 @@ function handleKeyboard(e) {
 function _repeatKey(e) {
   if (_isInOpenDialog(e)) return;
   if (e.key === ' ' && _isSpaceControl(e)) return;
+  if (EDGE_KEYS.has(e.key)) {
+    e.preventDefault();
+    cardTakesKey(...EDGE_KEYS.get(e.key));
+    return;
+  }
 
   let motion = STORY_KEYS.get(e.key);
   if (e.key === ' ') motion = [e.shiftKey ? 'backward' : 'forward', 'page'];
@@ -591,7 +612,8 @@ function _repeatKey(e) {
  * A panel takes the key first, and the event stays uncancelled in that
  * state so that a panel too long for its own scrolling still gets the
  * browser's. With no panel open the key belongs to the story and is
- * cancelled whether or not a scroll lock lets the step through; a side card
+ * cancelled whether or not a scroll lock lets the step through; from inside
+ * an open dialog the key is the dialog's and is left uncancelled; a side card
  * that scrolls inside itself takes it before the step, until it is at rest
  * at its edge.
  *
@@ -600,6 +622,7 @@ function _repeatKey(e) {
  * @param {'line'|'page'} kind - How far the key scrolls a side card.
  */
 function _stepKey(e, direction, kind) {
+  if (_isInOpenDialog(e)) return;
   if (_panelTookScroll(direction === 'forward' ? 40 : -40)) return;
 
   e.preventDefault();
@@ -640,17 +663,45 @@ function _isInOpenDialog(e) {
 }
 
 /**
+ * Go to the intro (Home) or the last step (End), by the moves Back to Start
+ * and a contents link make, and cancel the browser's own jump, which would
+ * scroll the document under the scroll engine.
+ *
+ * An open panel and an open dialog keep the key, uncancelled. A scroll lock
+ * holds the story where it is, so the key is cancelled and moves nothing. A
+ * side card that scrolls inside itself takes the key first, to its own top or
+ * end, and the story moves only once the card is at rest at that edge.
+ *
+ * @param {KeyboardEvent} e
+ * @param {'start'|'end'} edge
+ */
+function _edgeKey(e, edge) {
+  if (state.isPanelOpen || _isInOpenDialog(e)) return;
+
+  e.preventDefault();
+  if (state.scrollLockActive) return;
+  if (cardTakesKey(edge === 'start' ? 'backward' : 'forward', 'full') === 'scrolled') return;
+
+  if (edge === 'start') {
+    navigateToIntro();
+  } else {
+    navigateToStep(state.steps.length);
+  }
+}
+
+/**
  * Page through the story, or through the open panel or the side card instead.
  *
  * Space carries the page's own scrolling, so it is cancelled in both states.
  * Shift reverses it. On a focused control the key belongs to the control and
- * is left to the browser, uncancelled, with no step moved. A side card that
+ * is left to the browser, uncancelled, with no step moved; so is it inside an
+ * open dialog. A side card that
  * scrolls inside itself takes a page after an open panel and before the step.
  *
  * @param {KeyboardEvent} e
  */
 function _spaceKey(e) {
-  if (_isSpaceControl(e)) return;
+  if (_isSpaceControl(e) || _isInOpenDialog(e)) return;
 
   e.preventDefault();
   if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;

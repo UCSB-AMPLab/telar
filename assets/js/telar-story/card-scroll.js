@@ -494,8 +494,9 @@ export function syncCardScroll(card) {
  * already at rest at that edge hands the key back to the story.
  *
  * @param {'forward'|'backward'} direction
- * @param {'line'|'page'} kind - A line is LINE_PX; a page is the card's height
- *   less one line of its answer
+ * @param {'line'|'page'|'full'} kind - A line is LINE_PX; a page is the card's
+ *   height less one line of its answer; full is the card's whole extent, so the
+ *   target is its top or its end
  * @returns {'scrolled'|'at-edge'|'none'} 'none' where no scroll-mode card is active
  */
 export function cardTakesKey(direction, kind) {
@@ -509,7 +510,7 @@ export function cardTakesKey(direction, kind) {
   const edge = sign > 0 ? max : 0;
   const rendered = card.scrollTop;
   const moving = Math.abs(e.target - rendered) > EDGE_SLACK;
-  const amount = kind === 'page' ? _pageAmount(card) : LINE_PX;
+  const amount = kind === 'full' ? max : kind === 'page' ? _pageAmount(card) : LINE_PX;
 
   if (moving && Math.sign(e.target - rendered) === sign) {
     if (Math.abs(e.target - edge) <= EDGE_SLACK) {
