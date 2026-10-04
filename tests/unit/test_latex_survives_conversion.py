@@ -263,3 +263,56 @@ class TestTheHelperItself:
 
         assert '<b' in convert_markdown(source)
         assert '&lt;b' in convert_markdown(source, restore_as_text=True)
+
+
+# Maths written inside other maths. The patterns hold the maths out one
+# delimiter kind at a time, so an expression a later pattern matches can
+# already contain the placeholder an earlier one left, and that inner
+# placeholder has to come back as the author's text too.
+NESTED = [
+    pytest.param(r'Price $x $$y$$ z$ end', id='display-in-inline'),
+    pytest.param(r'Water $\ce{H2O}$ here', id='chemistry-in-inline'),
+    pytest.param(r'Sum $$a $b^2$ c$$ end', id='inline-in-display'),
+    pytest.param(r'Then \( a $$b^2$$ \) end', id='display-in-alternative-inline'),
+    pytest.param(r'Then \[ a + \ce{H2O} \] end', id='chemistry-in-alternative-display'),
+    pytest.param(r'Env \begin{aligned} $$a$$ \end{aligned} end',
+                 id='display-in-environment'),
+    pytest.param(r'Deep $\( a $$b^2$$ \)$ end', id='three-levels'),
+    pytest.param(r'Two $\ce{A}$ and $x $$y$$ z$ end', id='two-nests-in-one-field'),
+    pytest.param(r'Once $$y$$ and again $x $$y$$ z$ end',
+                 id='the-inner-formula-also-standing-alone'),
+]
+
+
+@pytest.mark.parametrize('site', sorted(SITES), ids=sorted(SITES))
+@pytest.mark.parametrize('source', NESTED)
+class TestNestedMathsReachesThePageAsWritten:
+
+    def test_no_placeholder_reaches_the_page(self, site, source):
+        published = SITES[site](source)
+
+        assert 'TLATEX' not in published, published
+
+    def test_the_published_text_is_the_authors(self, site, source):
+        published = SITES[site](source)
+
+        assert source in _as_text(published), published
+
+
+class TestNestedMathsFromTheHelper:
+
+    def test_the_issue_case_publishes_the_source(self):
+        assert (convert_markdown('Price $x $$y$$ z$ end', extensions=['extra'])
+                == '<p>Price $x $$y$$ z$ end</p>')
+
+    def test_restored_as_text_the_inner_maths_is_escaped_once(self):
+        published = convert_markdown(r'$\ce{A<B}$ and $x $$a<b$$ z$',
+                                     restore_as_text=True)
+
+        assert published == r'<p>$\ce{A&lt;B}$ and $x $$a&lt;b$$ z$</p>'
+
+    def test_the_same_formula_twice_restores_both(self):
+        """One placeholder stands for both, so the restore replaces all."""
+        published = convert_markdown(r'$x $$y$$ z$ or $x $$y$$ z$')
+
+        assert published == r'<p>$x $$y$$ z$ or $x $$y$$ z$</p>'

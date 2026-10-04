@@ -136,7 +136,11 @@ def protect_latex(text):
     replacements = {}
 
     def _make_placeholder(match):
-        original = match.group(0)
+        # A later pattern can match text that already holds an earlier
+        # pattern's placeholder: `$\ce{H2O}$`, or `$x $$y$$ z$`. Each value
+        # is kept as the author's text, so one restore pass returns every
+        # placeholder and none survives inside another.
+        original = restore_latex(match.group(0), replacements)
         # Use a hash-based placeholder unlikely to appear in content
         key = f"TLATEX{hashlib.md5(original.encode()).hexdigest()[:12]}END"
         replacements[key] = original
