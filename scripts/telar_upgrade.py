@@ -53,6 +53,7 @@ from migrations.base import (
 )
 from migrations.messages import get_message
 from migrations.discovery import discover_migrations
+from migrations.records import LAUNCHER_MARKER
 
 # The shared helpers, the summary and the data regeneration live in the three
 # telar_upgrade_* modules beside this one, which the tooling tarball carries
@@ -433,14 +434,8 @@ def _write_failure_summary(repo_root: str, migrations: List[BaseMigration],
     _write_failed_state(repo_root, from_version, LATEST_VERSION, failed)
 
 
-# What marks a site's scripts/upgrade.py as the launcher rather than an older
-# copy of this engine. Defined in the launcher; matched here as text, because
-# importing the site's copy is the thing this engine must never do.
-LAUNCHER_MARKER = 'telar-upgrade-launcher-v1'
-
-
 def _site_runs_the_launcher(repo_root: str) -> bool:
-    """Whether the site's own scripts/upgrade.py is a launcher."""
+    """Whether the site's own scripts/upgrade.py carries LAUNCHER_MARKER."""
     path = os.path.join(repo_root, 'scripts', 'upgrade.py')
     try:
         with open(path, 'r', encoding='utf-8') as handle:

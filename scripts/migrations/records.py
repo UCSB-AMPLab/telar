@@ -5,8 +5,9 @@ The vocabulary a migration reports in, and the rules the chain applies to
 it, none of which needs a migration instance: `ChangeStatus`, `ChangeRecord`
 and `ChangeCategory` with the path-to-heading tables, `FetchOutcome` and
 `FetchResult` for a fetch that produced nothing, the manual-step audiences,
-the state file's name, `coerce_change` and `is_hard_failure`, and
-`apply_config_version`, the one writer of the `telar.version` stamp.
+the launcher marker, the state file's name, `coerce_change` and
+`is_hard_failure`, and `apply_config_version`, the one writer of the
+`telar.version` stamp.
 
 `base.py` imports all of it back, so a migration, the engine and the tests
 import these names from `migrations.base` as they always have. They live
@@ -209,6 +210,16 @@ MANUAL_STEP_AUDIENCES = ('all', 'local', 'google-sheets', 'compositor')
 # The question is independent of `audience`: a workflow recopy is `local`
 # and an `action`.
 MANUAL_STEP_KINDS = ('action', 'optional', 'note')
+
+
+# What marks a site's scripts/upgrade.py as the launcher rather than an older
+# copy of the engine. Defined in the launcher; matched as text, because
+# importing the site's copy is the thing the engine must never do. Here
+# rather than in the engine because two readers need it: the engine, which
+# retires a launcher site's scripts/migrations/, and the v1.8.0 migration,
+# which removes a launcher site's stale scripts/telar_upgrade.py and must
+# not reach into the engine module for it.
+LAUNCHER_MARKER = 'telar-upgrade-launcher-v1'
 
 
 # Shared name for the in-progress / failed state marker (see the module

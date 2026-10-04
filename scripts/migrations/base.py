@@ -73,7 +73,8 @@ from .messages import get_message
 from .records import (  # noqa: F401
     ChangeStatus, FetchOutcome, STRUCTURAL_HTTP_CODES, FetchResult,
     ChangeRecord, ChangeCategory, category_for_path, MANUAL_STEP_AUDIENCES, MANUAL_STEP_KINDS,
-    UPGRADE_STATE_FILE, apply_config_version, coerce_change, is_hard_failure,
+    UPGRADE_STATE_FILE, LAUNCHER_MARKER, apply_config_version, coerce_change,
+    is_hard_failure,
 )
 
 

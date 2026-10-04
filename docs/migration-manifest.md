@@ -19,6 +19,7 @@ Each Telar framework release includes a `migration.json` file that declares user
   "from_version": "1.1.0",
   "to_version": "1.2.0",
   "description": "Human-readable summary of this migration",
+  "release_date": "2026-09-09",
   "operations": [],
   "manual_steps": {}
 }
@@ -32,6 +33,7 @@ Each Telar framework release includes a `migration.json` file that declares user
 | `from_version` | string | Yes | Version this migration upgrades FROM (without `v` prefix) |
 | `to_version` | string | Yes | Version this migration upgrades TO (without `v` prefix) |
 | `description` | string | Yes | One-line summary of what changed |
+| `release_date` | string | No | The date of the release, `YYYY-MM-DD`, taken from its git tag: the same value the command-line upgrade stamps into `telar.release_date`. The compositor refuses a value that is not a real calendar date. Every manifest from 1.8.0 on carries it |
 | `operations` | array | Yes | Ordered list of transform operations (can be empty) |
 | `manual_steps` | object | Yes | Bilingual manual steps shown after upgrade |
 
@@ -182,6 +184,44 @@ Find-and-replace across files matching a glob.
 | `file_glob` | string | Yes | Files to process |
 | `search` | string | Yes | JavaScript-flavoured regex pattern |
 | `replace` | string | Yes | Replacement string (supports `$1`, `$2` groups) |
+
+### yaml_list_add
+
+Add values to a list in a YAML file, editing the text in place.
+
+```json
+{
+  "type": "yaml_list_add",
+  "file": "_config.yml",
+  "key": "exclude",
+  "values": ["telar-content/texts/", "tests/", "pytest.ini", "vitest.config.js"]
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | string | Yes | The YAML file to edit |
+| `key` | string | Yes | The top-level key whose list gains the values |
+| `values` | string[] | Yes | Values to add, in order |
+
+What happens depends on how the key is written:
+
+- **A block list** (`exclude:` followed by `- item` lines) gets the missing values appended in place, at the list's own indentation.
+- **A flow list** (`exclude: [a, b]`) gets them inserted inside the brackets.
+- **A missing key** is added as a block list holding the values.
+- **A scalar or a map** under the key is left alone, and the operation fails: the upgrade stops before committing and names the values to add.
+
+A value already in the list is skipped. Present means the same string after YAML parsing, with one trailing slash dropped from both sides and nothing else normalised: `tests/`, `"tests/"` and `tests` are the same value, while `"tests/ "` (a trailing space inside the quotes), `tests//` and `Tests/` are not.
+
+Three edge cases, handled the same way by the command-line upgrade:
+
+- A bare `exclude:` with no value parses as null. It counts as missing, and is filled as a block list.
+- A scalar or map under the key fails the operation, as above.
+- A file that does not parse as YAML stops the upgrade before anything is committed.
+
+The runner edits the text in place and never re-serialises the YAML, so every comment, key order and blank line in the file survives.
+
+Use this rather than `regex_replace` for a list. A `regex_replace` is applied everywhere it matches with no guard, so an unbounded pattern inserts again on every run, or matches an entry outside the list.
 
 ### create_directory
 

@@ -33,9 +33,9 @@ from one story CSV and performs several passes over the data:
    does not scroll, so it is held to plain prose and to a length that
    fits. `ANSWER_PROSE_RULES` says what comes out of it and what is
    flattened, and an answer still above `ANSWER_WORD_LIMIT` words is cut
-   at a word boundary that does not land inside markup. A softer limit
-   read from `_config.yml` only warns. This pass runs on the answer as
-   the author wrote it, before glossary anchors go into it.
+   at a word boundary that does not land inside markup. This pass runs
+   on the answer as the author wrote it, before glossary anchors go into
+   it.
 
 4. **Coordinates** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting

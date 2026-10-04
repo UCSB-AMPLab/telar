@@ -21,13 +21,13 @@ it removes a Python module that a package has replaced. These tests guard:
   - the deletions: idempotent, recorded, soft on OSError;
   - the `.gitignore` entry: added once, not duplicated on a second run;
   - metadata and bilingual manual steps;
-  - registration: discovery finds it, it ends the chain, and the chain walks
-    unbroken from its first entry to LATEST_VERSION.
+  - registration: discovery finds it, the hop out of 1.7.0 follows it, and
+    the chain walks unbroken from its first entry to LATEST_VERSION.
 
 Network-dependent framework fetches are not exercised here — those are
 covered by the upgrade.py integration tests.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import errno
@@ -42,6 +42,7 @@ from migrations.v162_to_v170 import (
     FRAMEWORK_FILES, GITIGNORE_ENTRIES, GITIGNORE_SECTION_COMMENT,
     REMOVED_FILES, Migration162to170,
 )
+from migrations.v170_to_v180 import Migration170to180
 from migrations.base import ChangeRecord, ChangeStatus
 
 import telar_upgrade as upgrade
@@ -465,11 +466,15 @@ class TestRegistrationCompleteness:
     def test_discovery_finds_it(self):
         assert Migration162to170 in discover_migrations()
 
-    def test_is_last_in_migrations_list(self):
-        assert upgrade.MIGRATIONS[-1] is Migration162to170
+    def test_the_next_hop_follows_it(self):
+        """This migration sits in the chain with the hop out of 1.7.0 straight
+        after it, and nothing in between for a site to fall into."""
+        chain = list(upgrade.MIGRATIONS)
 
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == Migration162to170.to_version == '1.7.0'
+        assert chain[chain.index(Migration162to170) + 1] is Migration170to180
+
+    def test_its_target_is_the_next_hops_entry(self):
+        assert Migration162to170.to_version == Migration170to180.from_version == '1.7.0'
 
     def test_full_chain_resolves_to_latest_version(self):
         """Walking every migration's from_version -> to_version link from the

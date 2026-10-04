@@ -33,8 +33,21 @@ from migrations.discovery import discover_migrations
 MIGRATIONS = discover_migrations()
 DATE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
+# The release under development has no date until it is tagged. Strict, so
+# each of these fails the day the date is filled in and the mark comes off.
+UNDATED = MIGRATIONS[-1].release_date is None
+PENDING_TAG = pytest.mark.xfail(
+    UNDATED, strict=True,
+    reason=f'{MIGRATIONS[-1].__name__}.release_date is filled from its tag at release')
 
-@pytest.mark.parametrize('migration', MIGRATIONS,
+
+def _dated(migration):
+    if migration is MIGRATIONS[-1] and UNDATED:
+        return pytest.param(migration, marks=PENDING_TAG)
+    return migration
+
+
+@pytest.mark.parametrize('migration', [_dated(m) for m in MIGRATIONS],
                          ids=lambda m: m.__name__)
 class TestEveryMigrationKnowsItsReleaseDate:
 
@@ -47,6 +60,7 @@ class TestEveryMigrationKnowsItsReleaseDate:
 
 class TestTheDatesAgreeWithTheChain:
 
+    @PENDING_TAG
     def test_they_run_forward(self):
         """A chain whose dates go backwards means one was mistyped.
 
@@ -74,6 +88,7 @@ class TestTheDatesAgreeWithTheChain:
 
 class TestTheStampDoesNotComeFromTheClock:
 
+    @PENDING_TAG
     def test_it_is_the_release_date_when_there_is_one(self, capsys):
         assert upgrade._stamp_date('en') == upgrade.LATEST_RELEASE_DATE
         assert capsys.readouterr().out == ''

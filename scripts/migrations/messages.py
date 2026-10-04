@@ -317,6 +317,96 @@ MESSAGES = {
         'retire_migrations_warning': 'Could not remove scripts/migrations/: {}. '
                                      'The upgrade completed; the directory is '
                                      'unused and can be deleted by hand.',
+
+        # v1.8.0 migration records
+        'v180_removed_stale_manifest': 'Removed migration.json, the manifest of the 1.5.4 '
+                                       'upgrade, which Jekyll published as a page of your site',
+        'v180_page_line_updated': 'Updated {}: its default content now comes from `{}`',
+        'v180_page_line_current': '{} already has the 1.8.0 line',
+        'v180_page_line_own_text': '{} has its own text in place of the default line, so it '
+                                   'was left as it is. To keep the default content, the '
+                                   'line is now `{}`',
+        'v180_page_absent': 'No {} in this site, so there was nothing to update',
+        'v180_column_dropped': 'Removed the empty column `{}` from `{}`; `{}` holds your values.',
+        'v180_column_dropped_all_empty': 'Removed the empty column `{}` from `{}`; it and '
+                                         '`{}` mean the same thing, both were empty, and '
+                                         '`{}` was kept.',
+        'v180_columns_hold_values': '`{}` has columns that mean the same thing and each '
+                                    'holds values: {}. Telar cannot choose between them, so '
+                                    'the next build will stop. Keep one, move the values you '
+                                    'need into it, and delete the others.',
+        'v180_column_in_sheet': 'Your site reads its content from a Google Sheet, and the '
+                                'next build reads the sheet again. Delete the column `{}` '
+                                'from the tab behind `{}` in the sheet itself, or the build '
+                                'will stop on the same two columns.',
+        'v180_column_not_removed': 'Could not remove the empty column `{}` from `{}` without '
+                                   'changing the rest of the file, so the file was left as it '
+                                   'is. Delete that column by hand: until it is gone the next '
+                                   'build stops.',
+        'v180_reserved_column': '`{}` has a column named `{}`, a name Telar keeps for its own '
+                                'use. Rename that column, or the next build will stop.',
+        'v180_sheet_unreadable': 'Could not read `{}` to check its columns: {}',
+        'v180_sheets_unchecked': 'Could not check the spreadsheets for two columns that mean '
+                                 'the same thing, because the build\'s column rules could not '
+                                 'be loaded ({}). If there are any, the next build stops and '
+                                 'names them.',
+        'v180_sheets_clean': 'No spreadsheet has two columns that mean the same thing',
+        'v180_exclude_added': 'Added {} to `exclude:` in _config.yml, so Jekyll does not '
+                              'publish them as pages of your site',
+        'v180_exclude_present': '_config.yml already excludes {}',
+        'v180_exclude_texts_failed': '_config.yml has no `exclude:` list this upgrade can add '
+                                     '`telar-content/texts/` to: `exclude:` holds a single value '
+                                     'or a mapping, or the file could not be read. Make '
+                                     '`exclude:` a list with `- telar-content/texts/` in it '
+                                     'by hand and run the upgrade again. '
+                                     'Without it, Jekyll publishes an unprocessed copy of every '
+                                     'page, story and glossary source, and a page that sets its '
+                                     'own address stops the build.',
+        'v180_exclude_others_failed': '_config.yml has no `exclude:` list this upgrade can add '
+                                      '{} to. Add them under `exclude:` by hand: they are '
+                                      'Telar\'s own tests, and without the entries Jekyll '
+                                      'publishes them with your site.',
+        'v180_page_keys_removed': 'Removed {} from {}: the build sets a page\'s layout and '
+                                  'address itself',
+        'v180_page_key_kept': '{} sets `{}: {}`, which the build ignores. The page is '
+                              'published at {}.',
+        'v180_page_source_refused': 'Left {} as it is: removing {} would have changed how the '
+                                    'rest of its front matter reads. The build ignores both '
+                                    'keys, so the page is published correctly either way.',
+        'v180_file_unreadable': 'Could not update {}: {}',
+        'v180_pages_clean': 'No page source sets a layout or address of its own',
+        'v180_related_terms_listed': 'Wrote `related_terms` in {} as a list, so the page '
+                                     'links each related term',
+        'v180_related_terms_refused': 'Left `related_terms` in {} as it is, because it is '
+                                      'written in a form this upgrade does not rewrite. Write '
+                                      'it as a list, such as `related_terms: ["term-one", '
+                                      '"term-two"]`, or the page will not link those terms.',
+        'v180_glossary_clean': 'No glossary entry needed its `related_terms` rewritten',
+        'v180_answer_over_limit': 'Story `{}`, step {}: the answer has {} words, and the build '
+                                  'cuts it to {}. Shorten it to keep its ending.',
+        'v180_answer_content_removed': 'Story `{}`, step {}: the build removes {} from the '
+                                       'answer, which shows text only. Move it to a panel to '
+                                       'keep it.',
+        'v180_answer_kind_media': 'images and media',
+        'v180_answer_kind_widgets': 'widgets',
+        'v180_answer_kind_footnotes': 'footnotes',
+        'v180_answer_kind_markup': 'the marks of lists, headings and quotes, and any tables, '
+                                   'code blocks and horizontal rules',
+        'v180_answers_from_local_copies': 'The answers were counted in the local copies of '
+                                          'your spreadsheets. Your site reads a Google Sheet, '
+                                          'and the next build reads it again, so make any '
+                                          'change in the sheet itself.',
+        'v180_answers_unchecked': 'Could not count the story answers, because the build\'s '
+                                  'answer rules could not be loaded ({}). The next build names '
+                                  'every answer it cuts.',
+        'v180_answers_clean': 'No story answer is cut or loses content in the build',
+        'v180_engine_removed': 'Removed {}: the upgrade runs from the verified tooling '
+                               '`scripts/upgrade.py` downloads',
+        'v180_engine_kept': 'Left {} in place: it is not a copy Telar released, so it may be '
+                            'your own. The upgrade does not use it; delete it if nothing of '
+                            'yours does.',
+        'v180_engine_not_removed': 'Could not remove {}: {}. The upgrade completed; the file '
+                                   'is unused and can be deleted by hand.',
     },
 
     'es': {
@@ -628,6 +718,46 @@ MESSAGES = {
         'retire_migrations_warning': 'No se pudo eliminar scripts/migrations/: {}. '
                                      'La actualizaci\u00f3n se complet\u00f3; esa '
                                      'carpeta no se usa y puedes borrarla a mano.',
+
+        # v1.8.0 migration records. Spanish pending review.
+        'v180_removed_stale_manifest': 'ES-PENDIENTE',
+        'v180_page_line_updated': 'ES-PENDIENTE',
+        'v180_page_line_current': 'ES-PENDIENTE',
+        'v180_page_line_own_text': 'ES-PENDIENTE',
+        'v180_page_absent': 'ES-PENDIENTE',
+        'v180_column_dropped': 'ES-PENDIENTE',
+        'v180_column_dropped_all_empty': 'ES-PENDIENTE',
+        'v180_columns_hold_values': 'ES-PENDIENTE',
+        'v180_column_in_sheet': 'ES-PENDIENTE',
+        'v180_column_not_removed': 'ES-PENDIENTE',
+        'v180_reserved_column': 'ES-PENDIENTE',
+        'v180_sheet_unreadable': 'ES-PENDIENTE',
+        'v180_sheets_unchecked': 'ES-PENDIENTE',
+        'v180_sheets_clean': 'ES-PENDIENTE',
+        'v180_exclude_added': 'ES-PENDIENTE',
+        'v180_exclude_present': 'ES-PENDIENTE',
+        'v180_exclude_texts_failed': 'ES-PENDIENTE',
+        'v180_exclude_others_failed': 'ES-PENDIENTE',
+        'v180_page_keys_removed': 'ES-PENDIENTE',
+        'v180_page_key_kept': 'ES-PENDIENTE',
+        'v180_page_source_refused': 'ES-PENDIENTE',
+        'v180_file_unreadable': 'ES-PENDIENTE',
+        'v180_pages_clean': 'ES-PENDIENTE',
+        'v180_related_terms_listed': 'ES-PENDIENTE',
+        'v180_related_terms_refused': 'ES-PENDIENTE',
+        'v180_glossary_clean': 'ES-PENDIENTE',
+        'v180_answer_over_limit': 'ES-PENDIENTE',
+        'v180_answer_content_removed': 'ES-PENDIENTE',
+        'v180_answer_kind_media': 'ES-PENDIENTE',
+        'v180_answer_kind_widgets': 'ES-PENDIENTE',
+        'v180_answer_kind_footnotes': 'ES-PENDIENTE',
+        'v180_answer_kind_markup': 'ES-PENDIENTE',
+        'v180_answers_from_local_copies': 'ES-PENDIENTE',
+        'v180_answers_unchecked': 'ES-PENDIENTE',
+        'v180_answers_clean': 'ES-PENDIENTE',
+        'v180_engine_removed': 'ES-PENDIENTE',
+        'v180_engine_kept': 'ES-PENDIENTE',
+        'v180_engine_not_removed': 'ES-PENDIENTE',
     }
 }
 

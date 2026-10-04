@@ -65,6 +65,7 @@ APPROVED = {
     'v160_to_v161': [N],
     'v161_to_v162': [A, A, N],
     'v162_to_v170': [A, A, O, A, N],
+    'v170_to_v180': [A, O, O, A, A, N],
 }
 
 
