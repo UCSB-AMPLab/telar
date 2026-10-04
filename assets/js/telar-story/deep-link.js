@@ -216,7 +216,7 @@ export function navigateToStep(stepNumber) {
   reconcilePlatesForJump(targetIndex);
 
   if (state.lenis) {
-    const targetPx = (targetIndex + 1) * window.innerHeight;
+    const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
 
     // scrollTo must jump straight to the target with no animation. An animated
     // scroll drives the per-frame IIIF interpolation (lerpIiifPosition) at each
@@ -268,12 +268,13 @@ export function applyDeepLinkOnLoad() {
 
   if (state.lenis) {
     // Desktop Lenis mode: instant scroll jump to the correct viewport position.
-    // Position model: intro = 0, step 0 = 1 * innerHeight, step 1 = 2 * innerHeight …
+    // Position model: intro = 0, step 0 = 1 step height, step 1 = 2 …, where a
+    // step's height is the one the scroll surface is laid out in.
     //
     // scrollTo must jump straight to the target with no animation — see
     // navigateToStep for why (an animated scroll can leave the per-frame IIIF
     // lerp on an interpolated position instead of the authored one).
-    const targetPx = (targetIndex + 1) * window.innerHeight;
+    const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned
 

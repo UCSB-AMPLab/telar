@@ -41,7 +41,12 @@ const mocks = vi.hoisted(() => {
     this.raf = lenisRaf;
     this.scrollTo = lenisScrollTo;
     this.resize = lenisResize;
+    this.stop = vi.fn(function () { this.isStopped = true; });
+    this.start = vi.fn(function () { this.isStopped = false; });
+    this.isStopped = false;
+    this.isScrolling = false;
     this.animatedScroll = 0;
+    this.targetScroll = 0;
   }
 
   // Snap constructor — must be a regular function to work with `new`
@@ -799,5 +804,125 @@ describe('a move the reader interrupts with the scroll', () => {
     vi.advanceTimersByTime(150);
 
     expect(mocks.mockSettleCards).toHaveBeenCalled();
+  });
+});
+
+// ── A resize keeps the reader on their step ──────────────────────────────────
+
+describe('a window that changes height', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="scroll-surface"></div>
+      <div class="card-stack">
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+        <div class="story-step"></div>
+      </div>
+    `;
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    resetState({ currentIndex: -1 });
+
+    vi.useFakeTimers();
+    vi.stubGlobal('innerHeight', 900);
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query) => ({
+      matches: false, media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    try {
+      Object.defineProperty(history, 'scrollRestoration',
+        { writable: true, value: 'auto', configurable: true });
+    } catch (_) { /* already writable here */ }
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** One frame of Lenis's output, at `px` pixels down the surface. */
+  function scrollFrameAt(px) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = px;
+    mocks.lenisOn.mock.calls.findLast(([event]) => event === 'scroll')[1](lenis);
+  }
+
+  /** Change the window's height and let the resize settle. */
+  function resizeTo(height) {
+    vi.stubGlobal('innerHeight', height);
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+  }
+
+  /** The immediate jump the relayout made, if any. */
+  const relayoutJump = () => mocks.lenisScrollTo.mock.calls.find(
+    ([, opts]) => opts?.immediate === true && opts?.force === true);
+
+  it('puts the scroll at the same step in the new height', () => {
+    scrollFrameAt(4 * 900);                 // step index 3
+    expect(state.currentIndex).toBe(3);
+    mocks.mockActivateCard.mockClear();
+
+    resizeTo(720);
+
+    expect(relayoutJump()?.[0]).toBe(4 * 720);
+    expect(state.currentIndex).toBe(3);
+    expect(mocks.mockActivateCard).not.toHaveBeenCalled();
+    expect(document.querySelector('.scroll-surface').style.height).toBe(`${6 * 720}px`);
+  });
+
+  it('reads nothing from a frame reported before the layout catches up', () => {
+    // The browser clamps the offset to the resized window, and Lenis reports
+    // the clamp, before the debounced relayout has run.
+    scrollFrameAt(5 * 900);                 // the last step
+    mocks.mockActivateCard.mockClear();
+    vi.stubGlobal('innerHeight', 1000);
+    scrollFrameAt(5 * 900 - 100);
+
+    expect(state.scrollPosition).toBe(5);
+    expect(mocks.mockActivateCard).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+    expect(relayoutJump()?.[0]).toBe(5 * 1000);
+    expect(state.currentIndex).toBe(4);
+  });
+
+  it('lands a keyboard move under way where it was going, and stands it down', () => {
+    scrollFrameAt(2 * 900);                 // step index 1
+    keyboardNav('forward');                 // towards position 3
+    const { lenis } = getScrollEngineState();
+    lenis.isScrolling = 'smooth';           // the move is travelling
+    lenis.animatedScroll = 2.3 * 900;
+    mocks.lenisScrollTo.mockClear();
+
+    resizeTo(720);
+
+    expect(relayoutJump()?.[0]).toBe(3 * 720);
+    expect(state.currentIndex).toBe(2);
+
+    // Stood down: the move's completion will never run, so nothing may still
+    // hold the cards for it. The reader's next scroll moves the story.
+    lenis.isScrolling = false;
+    mocks.mockActivateCard.mockClear();
+    scrollFrameAt(4 * 720);
+    expect(mocks.mockActivateCard).toHaveBeenCalled();
+    expect(state.currentIndex).toBe(3);
+  });
+
+  it('leaves the scroll alone when only the width changes', () => {
+    scrollFrameAt(4 * 900);
+    mocks.lenisScrollTo.mockClear();
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump()).toBeUndefined();
+    expect(state.currentIndex).toBe(3);
   });
 });

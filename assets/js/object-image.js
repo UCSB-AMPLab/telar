@@ -114,6 +114,13 @@
     lenis: null,
     /** Snap plugin instance reference. */
     snap: null,
+    /**
+     * Pixels one step occupies on the scroll surface: the viewport height the
+     * surface was last laid out for, which trails the window by the resize
+     * debounce. Every conversion between a step and a scroll offset uses it;
+     * 0 when the scroll engine is not running.
+     */
+    scrollStepPx: 0,
     /** Quick lookup: object_id → object data from window.objectsData. */
     objectsIndex: {},
     // ── Panels ───────────────────────────────────────────────────────────────

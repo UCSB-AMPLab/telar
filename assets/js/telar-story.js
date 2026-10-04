@@ -40,6 +40,13 @@
     lenis: null,
     /** Snap plugin instance reference. */
     snap: null,
+    /**
+     * Pixels one step occupies on the scroll surface: the viewport height the
+     * surface was last laid out for, which trails the window by the resize
+     * debounce. Every conversion between a step and a scroll offset uses it;
+     * 0 when the scroll engine is not running.
+     */
+    scrollStepPx: 0,
     /** Quick lookup: object_id → object data from window.objectsData. */
     objectsIndex: {},
     // ── Panels ───────────────────────────────────────────────────────────────
@@ -5517,7 +5524,7 @@
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
     reconcilePlatesForJump(targetIndex);
     if (state.lenis) {
-      const targetPx = (targetIndex + 1) * window.innerHeight;
+      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       reconcileStackForJump(targetIndex);
@@ -5537,7 +5544,7 @@
     const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
     if (targetIndex < 0) return;
     if (state.lenis) {
-      const targetPx = (targetIndex + 1) * window.innerHeight;
+      const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
       if (state.snap) state.snap.currentSnapIndex = targetIndex + 1;
       reconcileStackForJump(targetIndex);
@@ -5595,9 +5602,19 @@
   var navTargetToken = 0;
   var scrollDirection = 1;
   var lastPosition = 0;
+  var moveTarget = null;
+  var moveTargetToken = 0;
+  var remapping = false;
   function beginNav() {
     navToken = ++navSeq;
     return navToken;
+  }
+  function _recordMoveTarget(token, position) {
+    moveTarget = position;
+    moveTargetToken = token;
+  }
+  function _stepPx() {
+    return state.scrollStepPx || window.innerHeight;
   }
   function endNav(token) {
     if (navToken === token) navToken = 0;
@@ -5640,11 +5657,15 @@
     navToken = 0;
     navTarget = null;
     navTargetToken = 0;
+    moveTarget = null;
+    moveTargetToken = 0;
+    remapping = false;
     keyboardNavInFlight = false;
     state.steps = Array.from(document.querySelectorAll(".story-step"));
     history.scrollRestoration = "manual";
     totalPositions = stepCount + 1;
-    surface.style.height = `${totalPositions * window.innerHeight}px`;
+    state.scrollStepPx = window.innerHeight;
+    surface.style.height = `${totalPositions * state.scrollStepPx}px`;
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     lenis = new Lenis({
       lerp: 0.06,
@@ -5668,7 +5689,7 @@
       },
       onSnapComplete: () => {
         state.isSnapping = false;
-        const finalPosition = lenis.animatedScroll / window.innerHeight;
+        const finalPosition = lenis.animatedScroll / _stepPx();
         updateScrollPosition(finalPosition);
         writeHash();
         lenis.stop();
@@ -5692,7 +5713,8 @@
       armScrubEnd();
     });
     lenis.on("scroll", (l) => {
-      const position = l.animatedScroll / window.innerHeight;
+      if (remapping || window.innerHeight !== _stepPx()) return;
+      const position = l.animatedScroll / _stepPx();
       if (position !== lastPosition) {
         scrollDirection = position > lastPosition ? 1 : -1;
         lastPosition = position;
@@ -5705,9 +5727,13 @@
       rafId = requestAnimationFrame(raf);
     });
     onViewportResize(({ viewport }) => {
-      surface.style.height = `${totalPositions * viewport.h}px`;
-      lenis.resize();
-      registerSnapPoints(totalPositions);
+      if (viewport.h === _stepPx()) {
+        surface.style.height = `${totalPositions * viewport.h}px`;
+        lenis.resize();
+        registerSnapPoints(totalPositions);
+        return;
+      }
+      _remapToHeight(surface, viewport.h);
     });
     state.lenis = lenis;
     state.snap = snap;
@@ -5724,7 +5750,7 @@
     if (!cardStackEl) return;
     cardStackEl.classList.remove("is-scrubbing");
     if (!lenis) return;
-    const position = lenis.animatedScroll / window.innerHeight;
+    const position = lenis.animatedScroll / _stepPx();
     settleCards(position);
     if (carry) carryToNearestStep(position);
   }
@@ -5735,7 +5761,8 @@
     if (target < 0 || target >= totalPositions) return;
     const nearest = target;
     const token = beginNav();
-    lenis.scrollTo(nearest * window.innerHeight, {
+    _recordMoveTarget(token, nearest);
+    lenis.scrollTo(nearest * _stepPx(), {
       duration: navSeconds().button,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
@@ -5745,11 +5772,55 @@
       }
     });
   }
+  function _positionToKeep() {
+    const px = _stepPx();
+    let position = state.scrollPosition;
+    let moving = false;
+    if (lenis.isScrolling === "smooth") {
+      moving = true;
+      if (navToken && moveTargetToken === navToken && moveTarget !== null) {
+        position = moveTarget;
+      } else if (state.isSnapping && Number.isInteger(snap.currentSnapIndex)) {
+        position = snap.currentSnapIndex;
+      } else {
+        position = lenis.targetScroll / px;
+      }
+    }
+    const rounded = Math.round(position);
+    if (Math.abs(position - rounded) < REST_TOLERANCE) position = rounded;
+    return { position: _clampPosition(position), moving };
+  }
+  function _remapToHeight(surface, height) {
+    const { position, moving } = _positionToKeep();
+    remapping = true;
+    if (moving && !lenis.isStopped) {
+      lenis.stop();
+      lenis.start();
+    }
+    state.scrollStepPx = height;
+    surface.style.height = `${totalPositions * height}px`;
+    lenis.resize();
+    lenis.scrollTo(position * height, { immediate: true, force: true });
+    remapping = false;
+    registerSnapPoints(totalPositions);
+    if (moving) {
+      navToken = 0;
+      navTarget = null;
+      navTargetToken = 0;
+      keyboardNavInFlight = false;
+      state.isSnapping = false;
+      if (Number.isInteger(position)) snap.currentSnapIndex = position;
+    }
+    lastPosition = position;
+    updateScrollPosition(position);
+    armScrubEnd();
+    if (moving) writeHash();
+  }
   function registerSnapPoints(count) {
     snapRemovers.forEach((fn) => fn());
     snapRemovers = [];
     for (let i = 0; i < count; i++) {
-      snapRemovers.push(snap.add(i * window.innerHeight));
+      snapRemovers.push(snap.add(i * _stepPx()));
     }
   }
   function advanceToStep(targetIndex) {
@@ -5757,8 +5828,9 @@
     const lenisInstance = state.lenis || lenis;
     if (!lenisInstance) return;
     const token = beginNav();
+    _recordMoveTarget(token, targetIndex + 1);
     endScrub({ carry: false });
-    const targetPx = (targetIndex + 1) * window.innerHeight;
+    const targetPx = (targetIndex + 1) * _stepPx();
     lenisInstance.scrollTo(targetPx, {
       duration: navSeconds().button,
       easing: (t) => 1 - Math.pow(1 - t, 3),
@@ -5803,7 +5875,7 @@
     navTargetToken = token;
     endScrub({ carry: false });
     _clearDwell();
-    const vh = window.innerHeight;
+    const vh = _stepPx();
     const position = lenis.animatedScroll / vh;
     const isExact = Math.abs(position - Math.round(position)) < 0.01;
     const rounded = Math.round(position);
@@ -5813,6 +5885,7 @@
       return;
     }
     navTarget = target;
+    _recordMoveTarget(token, target);
     settleCards(target);
     snap.currentSnapIndex = target;
     _activateKeyboardTarget(target, direction);

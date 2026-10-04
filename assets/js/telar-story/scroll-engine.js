@@ -98,10 +98,37 @@ let navTargetToken = 0;
 let scrollDirection = 1;
 let lastPosition = 0;
 
+// Where a move the engine is driving is going, as a scroll position, held
+// beside the token of the move that set it. A resize that lands mid-move ends
+// the move by jumping, and the jump goes where the move was going.
+let moveTarget = null;
+let moveTargetToken = 0;
+
+// Set while the resize lays the surface out again, so the scroll frames Lenis
+// emits on the way are not read as the reader's: each one is an offset in one
+// layout divided by a step height from the other.
+let remapping = false;
+
 /** Begin a programmatic move; the returned token ends it, if still current. */
 function beginNav() {
   navToken = ++navSeq;
   return navToken;
+}
+
+/** Record where the move holding this token is going. */
+function _recordMoveTarget(token, position) {
+  moveTarget = position;
+  moveTargetToken = token;
+}
+
+/**
+ * Pixels one step occupies on the scroll surface. It is the viewport height
+ * the surface was last laid out for, not the window's current one: between the
+ * browser's resize and the debounced relayout the surface is still in the old
+ * layout, and so are its offsets.
+ */
+function _stepPx() {
+  return state.scrollStepPx || window.innerHeight;
 }
 
 /** End a programmatic move, unless a later one has taken over. */
@@ -206,6 +233,9 @@ export function initScrollEngine(stepCount) {
   navToken = 0;
   navTarget = null;
   navTargetToken = 0;
+  moveTarget = null;
+  moveTargetToken = 0;
+  remapping = false;
   keyboardNavInFlight = false;
 
   // Build steps array (navigation.js initializeStepController normally does this)
@@ -218,7 +248,8 @@ export function initScrollEngine(stepCount) {
   totalPositions = stepCount + 1;
 
   // Set scroll surface height so browser has real scrollable overflow
-  surface.style.height = `${totalPositions * window.innerHeight}px`;
+  state.scrollStepPx = window.innerHeight;
+  surface.style.height = `${totalPositions * state.scrollStepPx}px`;
 
   // Create Lenis instance — owns scroll physics
   // Reduced-motion users: skip Lenis smooth-wheel interpolation; snap to native scroll.
@@ -249,7 +280,7 @@ export function initScrollEngine(stepCount) {
       // Force a final position update — the last scroll callback may have
       // fired just before the snap landed (e.g. position 0.99 instead of
       // 1.0), so state.currentIndex would not yet reflect the snapped step.
-      const finalPosition = lenis.animatedScroll / window.innerHeight;
+      const finalPosition = lenis.animatedScroll / _stepPx();
       updateScrollPosition(finalPosition);
       writeHash();
       lenis.stop();
@@ -311,7 +342,13 @@ export function initScrollEngine(stepCount) {
   // drifts to a stop away from a waypoint would leave the stack at whatever
   // position the flag happened to lapse on.
   lenis.on('scroll', (l) => {
-    const position = l.animatedScroll / window.innerHeight;
+    // Nothing is read from the scroll while its layout and the window
+    // disagree. The browser clamps the offset to the resized window before the
+    // surface is laid out again, and Lenis reports the clamped offset: read,
+    // it moves the reader to a step they never scrolled to, and it overwrites
+    // the position the relayout needs to put them back where they were.
+    if (remapping || window.innerHeight !== _stepPx()) return;
+    const position = l.animatedScroll / _stepPx();
     if (position !== lastPosition) {
       scrollDirection = position > lastPosition ? 1 : -1;
       lastPosition = position;
@@ -332,11 +369,16 @@ export function initScrollEngine(stepCount) {
     rafId = requestAnimationFrame(raf);
   });
 
-  // Viewport-resize subscription: recalculate heights and snap points
+  // Viewport-resize subscription: lay the surface out again at the new height
+  // with the reader on the same step.
   onViewportResize(({ viewport }) => {
-    surface.style.height = `${totalPositions * viewport.h}px`;
-    lenis.resize();
-    registerSnapPoints(totalPositions);
+    if (viewport.h === _stepPx()) {
+      surface.style.height = `${totalPositions * viewport.h}px`;
+      lenis.resize();
+      registerSnapPoints(totalPositions);
+      return;
+    }
+    _remapToHeight(surface, viewport.h);
   });
 
   // Store instances on state for external access (panels.js stop/start)
@@ -378,7 +420,7 @@ function endScrub({ carry = true } = {}) {
   cardStackEl.classList.remove('is-scrubbing');
   if (!lenis) return;
 
-  const position = lenis.animatedScroll / window.innerHeight;
+  const position = lenis.animatedScroll / _stepPx();
   settleCards(position);
   // Only a reader's own gesture coming to rest is carried to the nearer step.
   // A programmatic move closes the scrub on its way past and already knows its
@@ -415,7 +457,8 @@ function carryToNearestStep(position) {
   const nearest = target;
 
   const token = beginNav();
-  lenis.scrollTo(nearest * window.innerHeight, {
+  _recordMoveTarget(token, nearest);
+  lenis.scrollTo(nearest * _stepPx(), {
     duration: navSeconds().button,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
@@ -426,6 +469,90 @@ function carryToNearestStep(position) {
 }
 
 /**
+ * Where the reader is on the story, as a scroll position, for a relayout to
+ * put them back on.
+ *
+ * A move still travelling is read as the place it is going: a press or a
+ * button asked for that step, and a snap or a carry was already taking the
+ * reader to it. A gesture still gliding is read as where the wheel sent it.
+ * Otherwise it is the position the story last stated: the scroll handler
+ * stops stating one as soon as the window and the layout disagree, so the
+ * browser's clamp to the new window cannot move it, while a jump to a step by
+ * its link states its own. A position within the rest tolerance of a step is
+ * that step.
+ *
+ * @returns {{position: number, moving: boolean}}
+ */
+function _positionToKeep() {
+  const px = _stepPx();
+  let position = state.scrollPosition;
+  let moving = false;
+  if (lenis.isScrolling === 'smooth') {
+    moving = true;
+    if (navToken && moveTargetToken === navToken && moveTarget !== null) {
+      position = moveTarget;
+    } else if (state.isSnapping && Number.isInteger(snap.currentSnapIndex)) {
+      position = snap.currentSnapIndex;
+    } else {
+      position = lenis.targetScroll / px;
+    }
+  }
+  const rounded = Math.round(position);
+  if (Math.abs(position - rounded) < REST_TOLERANCE) position = rounded;
+  return { position: _clampPosition(position), moving };
+}
+
+/**
+ * Lay the scroll surface out at a new step height, keeping the reader on the
+ * step they were on.
+ *
+ * A step is one viewport tall, so an offset in pixels names a different step
+ * once the height changes; the reader's place is carried across as a position
+ * instead. The jump is immediate, which ends any move under way: Lenis stops
+ * the animation without calling its completion, so what that completion would
+ * have done — standing the move down, stating the step, writing the fragment —
+ * is done here, in that order.
+ *
+ * @param {HTMLElement} surface - The scroll surface.
+ * @param {number} height - The new viewport height, in px.
+ */
+function _remapToHeight(surface, height) {
+  const { position, moving } = _positionToKeep();
+
+  remapping = true;
+  // Stop the move outright rather than trusting the jump to: Lenis skips a
+  // jump to the offset it already holds, and would leave the move running on
+  // to its old-layout offset. A scroll a panel or the post-snap dwell has
+  // stopped has no move to end and stays stopped.
+  if (moving && !lenis.isStopped) {
+    lenis.stop();
+    lenis.start();
+  }
+  state.scrollStepPx = height;
+  surface.style.height = `${totalPositions * height}px`;
+  lenis.resize();
+  lenis.scrollTo(position * height, { immediate: true, force: true });
+  remapping = false;
+  registerSnapPoints(totalPositions);
+
+  if (moving) {
+    navToken = 0;
+    navTarget = null;
+    navTargetToken = 0;
+    keyboardNavInFlight = false;
+    state.isSnapping = false;
+    if (Number.isInteger(position)) snap.currentSnapIndex = position;
+  }
+
+  lastPosition = position;
+  updateScrollPosition(position);
+  // Settles the cards at the kept position, and carries a gesture that was
+  // stopped between steps on to the step it was heading for.
+  armScrubEnd();
+  if (moving) writeHash();
+}
+
+/**
  * Register snap points at each viewport boundary.
  * @param {number} count - Total positions (intro + content steps).
  */
@@ -433,7 +560,7 @@ function registerSnapPoints(count) {
   snapRemovers.forEach(fn => fn());
   snapRemovers = [];
   for (let i = 0; i < count; i++) {
-    snapRemovers.push(snap.add(i * window.innerHeight));
+    snapRemovers.push(snap.add(i * _stepPx()));
   }
 }
 
@@ -455,10 +582,11 @@ export function advanceToStep(targetIndex) {
   if (!lenisInstance) return;
 
   const token = beginNav();
+  _recordMoveTarget(token, targetIndex + 1);
   endScrub({ carry: false });
 
   // +1 to account for intro at position 0
-  const targetPx = (targetIndex + 1) * window.innerHeight;
+  const targetPx = (targetIndex + 1) * _stepPx();
   lenisInstance.scrollTo(targetPx, {
     duration: navSeconds().button,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
@@ -574,7 +702,7 @@ export function keyboardNav(direction) {
   // Clear any active dwell — keyboard overrides scroll dwell
   _clearDwell();
 
-  const vh = window.innerHeight;
+  const vh = _stepPx();
   const position = lenis.animatedScroll / vh;
   const isExact = Math.abs(position - Math.round(position)) < 0.01;
   const rounded = Math.round(position);
@@ -587,6 +715,7 @@ export function keyboardNav(direction) {
 
   // Where the next press steps from, for as long as this move owns the token.
   navTarget = target;
+  _recordMoveTarget(token, target);
 
   // State the target before the scroll starts for it: the keyboard knows its
   // landing, so the cards can slide to it on their own transitions over the
