@@ -69,7 +69,7 @@ from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
-from telar.latex import has_latex, latex_spans
+from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
 
 
@@ -690,6 +690,114 @@ def _resolve_answer_glossary(df, glossary_terms, glossary_warnings):
     return df
 
 
+# Maths in an answer, in the forms KaTeX draws, and whether each keeps its
+# delimiters. kramdown, which renders the answer, eats the backslash of
+# \( \) \[ \] and reads `*` and `_` inside $...$ as emphasis; its own $$...$$
+# is the one form whose content it prints as written, as \(...\) inside a
+# paragraph and \[...\] as a paragraph of its own. Earliest match wins, and at
+# one position the first pattern listed. Single $ follows `has_latex`: a
+# LaTeX character inside, no space inside either dollar, neither escaped.
+_ANSWER_MATHS = (
+    (re.compile(r'\$\$.+?\$\$', re.DOTALL), None),
+    # An opening that is never closed must not pair with a later formula, and
+    # stopping at the next opening keeps the search linear in the answer.
+    (re.compile(r'\\begin\{(align\*?|cases|pmatrix|bmatrix|equation\*?)\}'
+                r'(?:(?!\\begin\{\1\}).)*?\\end\{\1\}', re.DOTALL), 0),
+    (re.compile(r'\\\[((?:(?!\\\[).)+?)\\\]', re.DOTALL), 1),
+    (re.compile(r'\\\(((?:(?!\\\().)+?)\\\)', re.DOTALL), 1),
+    (re.compile(r'(?<![\\$])\$(?!\$)(\S(?:[^$]*?[^\s\\])?)\$(?!\$)'), 1),
+)
+_BACKTICK_RUN = re.compile(r'`+')
+# A destination may hold one level of balanced parentheses, as kramdown allows.
+_LINK_DESTINATION = re.compile(r'\]\((?:[^()]|\([^()]*\))*\)')
+_RAW_CODE_ELEMENT = re.compile(r'<(code|pre|kbd|samp)\b[^>]*>(?:(?!<\1\b).)*?</\1\s*>',
+                               re.DOTALL | re.IGNORECASE)
+
+
+def _answer_code_spans(text):
+    """Code spans as story-step.html reads them: a run of N backticks
+    closed by the next run of exactly N; a run with no match is literal."""
+    runs = [(m.start(), m.end()) for m in _BACKTICK_RUN.finditer(text)]
+    later = {}
+    for index in range(len(runs) - 1, -1, -1):
+        later.setdefault(runs[index][1] - runs[index][0], []).append(index)
+    spans = []
+    i = 0
+    while i < len(runs):
+        start, end = runs[i]
+        same = later[end - start]
+        while same and same[-1] <= i:
+            same.pop()
+        if not same:
+            i += 1
+            continue
+        close = same.pop()
+        spans.append((start, runs[close][1]))
+        i = close + 1
+    return spans
+
+
+def _answer_maths_for_kramdown(text):
+    """*text* with each maths span written as kramdown's $$...$$.
+
+    Left as written: maths inside a code span, a raw code element, an HTML
+    tag or a link destination, since none of those is maths on the page; a
+    $...$ with no LaTeX character, which is currency; and a span holding
+    another dollar, which is one formula inside another and has no single
+    reading.
+    """
+    guarded = (_answer_code_spans(text)
+               + [(m.start(), m.end()) for m in _RAW_CODE_ELEMENT.finditer(text)]
+               + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
+               + [(m.start(), m.end()) for m in _LINK_DESTINATION.finditer(text)])
+    # Each pattern's next match from the current position, searched again
+    # only once the position passes it, so a long answer is scanned once
+    # per pattern rather than once per formula.
+    upcoming = [pattern.search(text) for pattern, _ in _ANSWER_MATHS]
+    out = []
+    pos = 0
+    while True:
+        for order, (pattern, _) in enumerate(_ANSWER_MATHS):
+            if upcoming[order] is not None and upcoming[order].start() < pos:
+                upcoming[order] = pattern.search(text, pos)
+        found = [(match.start(), order) for order, match in enumerate(upcoming) if match]
+        if not found:
+            break
+        _, order = min(found)
+        match, group = upcoming[order], _ANSWER_MATHS[order][1]
+        start, end = match.span()
+        out.append(text[pos:start])
+        span = text[start:end]
+        if group is not None and not any(s < end and start < e for s, e in guarded):
+            inner = match.group(group)
+            if '$' not in inner and (group == 0 or not span.startswith('$')
+                                     or _LATEX_CHARS.search(inner)):
+                span = f'$${inner}$$'
+        out.append(span)
+        pos = end
+    out.append(text[pos:])
+    return ''.join(out)
+
+
+def _prepare_answer_maths(df):
+    """Add `answer_kramdown` where an answer's maths needs rewriting.
+
+    `answer` stays the build's reading of the cell: title cards and the
+    card fallback show it as text, and the Compositor mirrors it. Only
+    story-step.html renders the rewritten form. The column is added only to
+    a story where some answer changes, so a story without maths publishes
+    the same data as before.
+    """
+    if 'answer' not in df.columns:
+        return df
+    answers = [value if isinstance(value, str) else '' for value in df['answer']]
+    rewritten = [_answer_maths_for_kramdown(answer) for answer in answers]
+    if rewritten != answers:
+        df['answer_kramdown'] = [new if new != answer else ''
+                                 for new, answer in zip(rewritten, answers)]
+    return df
+
+
 def _apply_coordinate_defaults(df):
     """A viewer needs somewhere to start, so empty coordinates get one."""
     # Set default coordinates for empty values
@@ -886,6 +994,7 @@ def process_story(df, christmas_tree=False, story_name=''):
     df = _process_content_columns(df, glossary_terms, glossary_warnings,
                                   widget_warnings)
     df = _resolve_answer_glossary(df, glossary_terms, glossary_warnings)
+    df = _prepare_answer_maths(df)
     df = _apply_coordinate_defaults(df)
     coordinate_warnings = []
     df = _check_coordinates(df, story_name, warnings, coordinate_warnings)
