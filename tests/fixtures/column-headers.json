@@ -1,0 +1,289 @@
+{
+  "_comment": [
+    "Spreadsheet header spellings and the canonical column name each",
+    "normalises to. Shared with the Telar Compositor, which keeps its own",
+    "copy and maintains the union: one vocabulary, two implementations,",
+    "and until this existed no test on either side could see the other's.",
+    "Three divergences were found by one side asking the other (the",
+    "'medium' family, the manual-step audience values, and the accented",
+    "aliases); this is the instrument that replaces asking.",
+    "",
+    "Generated from the framework's COLUMN_NAME_MAPPING and then owned by",
+    "hand: regenerating it would only ever restate what this side already",
+    "does, which is the half a shared fixture is not for.",
+    "",
+    "Gender is meaning, not spelling: 'privado' and 'privada' are separate",
+    "entries on purpose. Accent variants may be derived; final vowels may",
+    "never be."
+  ],
+  "headers": [
+    {
+      "header": "texto_alt",
+      "canonical": "alt_text"
+    },
+    {
+      "header": "respuesta",
+      "canonical": "answer"
+    },
+    {
+      "header": "firma",
+      "canonical": "byline"
+    },
+    {
+      "header": "fin_clip",
+      "canonical": "clip_end"
+    },
+    {
+      "header": "inicio_clip",
+      "canonical": "clip_start"
+    },
+    {
+      "header": "creador",
+      "canonical": "creator"
+    },
+    {
+      "header": "credito",
+      "canonical": "credit"
+    },
+    {
+      "header": "crédito",
+      "canonical": "credit"
+    },
+    {
+      "header": "definicion",
+      "canonical": "definition"
+    },
+    {
+      "header": "definición",
+      "canonical": "definition"
+    },
+    {
+      "header": "descripcion",
+      "canonical": "description"
+    },
+    {
+      "header": "descripción",
+      "canonical": "description"
+    },
+    {
+      "header": "dimensiones",
+      "canonical": "dimensions"
+    },
+    {
+      "header": "destacado",
+      "canonical": "featured"
+    },
+    {
+      "header": "boton1",
+      "canonical": "layer1_button"
+    },
+    {
+      "header": "boton_capa1",
+      "canonical": "layer1_button"
+    },
+    {
+      "header": "archivo_capa1",
+      "canonical": "layer1_content"
+    },
+    {
+      "header": "contenido1",
+      "canonical": "layer1_content"
+    },
+    {
+      "header": "contenido_capa1",
+      "canonical": "layer1_content"
+    },
+    {
+      "header": "layer1_file",
+      "canonical": "layer1_content"
+    },
+    {
+      "header": "boton2",
+      "canonical": "layer2_button"
+    },
+    {
+      "header": "boton_capa2",
+      "canonical": "layer2_button"
+    },
+    {
+      "header": "archivo_capa2",
+      "canonical": "layer2_content"
+    },
+    {
+      "header": "contenido2",
+      "canonical": "layer2_content"
+    },
+    {
+      "header": "contenido_capa2",
+      "canonical": "layer2_content"
+    },
+    {
+      "header": "layer2_file",
+      "canonical": "layer2_content"
+    },
+    {
+      "header": "bucle",
+      "canonical": "loop"
+    },
+    {
+      "header": "medio",
+      "canonical": "medium"
+    },
+    {
+      "header": "medio_genero",
+      "canonical": "medium"
+    },
+    {
+      "header": "medium_genre",
+      "canonical": "medium"
+    },
+    {
+      "header": "object_type",
+      "canonical": "medium"
+    },
+    {
+      "header": "tipo_objeto",
+      "canonical": "medium"
+    },
+    {
+      "header": "objeto",
+      "canonical": "object"
+    },
+    {
+      "header": "id_objeto",
+      "canonical": "object_id"
+    },
+    {
+      "header": "orden",
+      "canonical": "order"
+    },
+    {
+      "header": "page",
+      "canonical": "page"
+    },
+    {
+      "header": "pagina",
+      "canonical": "page"
+    },
+    {
+      "header": "página",
+      "canonical": "page"
+    },
+    {
+      "header": "periodo",
+      "canonical": "period"
+    },
+    {
+      "header": "privada",
+      "canonical": "protected"
+    },
+    {
+      "header": "privado",
+      "canonical": "protected"
+    },
+    {
+      "header": "private",
+      "canonical": "protected"
+    },
+    {
+      "header": "protegida",
+      "canonical": "protected"
+    },
+    {
+      "header": "protegido",
+      "canonical": "protected"
+    },
+    {
+      "header": "pregunta",
+      "canonical": "question"
+    },
+    {
+      "header": "terminos_relacionados",
+      "canonical": "related_terms"
+    },
+    {
+      "header": "términos_relacionados",
+      "canonical": "related_terms"
+    },
+    {
+      "header": "mostrar_secciones",
+      "canonical": "show_sections"
+    },
+    {
+      "header": "fuente",
+      "canonical": "source"
+    },
+    {
+      "header": "location",
+      "canonical": "source"
+    },
+    {
+      "header": "ubicacion",
+      "canonical": "source"
+    },
+    {
+      "header": "ubicación",
+      "canonical": "source"
+    },
+    {
+      "header": "url_fuente",
+      "canonical": "source_url"
+    },
+    {
+      "header": "paso",
+      "canonical": "step"
+    },
+    {
+      "header": "id_historia",
+      "canonical": "story_id"
+    },
+    {
+      "header": "materia",
+      "canonical": "subjects"
+    },
+    {
+      "header": "materias",
+      "canonical": "subjects"
+    },
+    {
+      "header": "temas",
+      "canonical": "subjects"
+    },
+    {
+      "header": "subtitulo",
+      "canonical": "subtitle"
+    },
+    {
+      "header": "subtítulo",
+      "canonical": "subtitle"
+    },
+    {
+      "header": "id_termino",
+      "canonical": "term_id"
+    },
+    {
+      "header": "id_término",
+      "canonical": "term_id"
+    },
+    {
+      "header": "miniatura",
+      "canonical": "thumbnail"
+    },
+    {
+      "header": "titulo",
+      "canonical": "title"
+    },
+    {
+      "header": "título",
+      "canonical": "title"
+    },
+    {
+      "header": "ano",
+      "canonical": "year"
+    },
+    {
+      "header": "año",
+      "canonical": "year"
+    }
+  ]
+}
