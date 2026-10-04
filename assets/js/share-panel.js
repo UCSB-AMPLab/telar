@@ -390,6 +390,13 @@
       });
     }
     function showSuccessFeedback(triggerButton) {
+      const status = doc.getElementById("share-copy-status");
+      if (status) {
+        status.textContent = status.dataset.copied || "Copied";
+        setTimeout(() => {
+          status.textContent = "";
+        }, 2e3);
+      }
       const btnIcon = triggerButton.querySelector(".icon");
       if (btnIcon) {
         const originalSvg = btnIcon.outerHTML;

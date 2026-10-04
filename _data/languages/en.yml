@@ -406,6 +406,7 @@ share:
   protected_story_warning: "This story is protected. Recipients will need the key to view it."
   protected_embed_warning: "This story is protected. The embed will show a lock screen until viewers enter the key."
   copy_manually: "Please manually copy the text"
+  copied: "Copied to the clipboard"
 
   # Legacy keys (kept for compatibility)
 

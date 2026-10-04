@@ -502,6 +502,48 @@ describe('copying', () => {
   });
 });
 
+describe('telling a screen reader the copy worked', () => {
+  const addStatus = (copied) => {
+    const status = document.createElement('p');
+    status.id = 'share-copy-status';
+    status.setAttribute('role', 'status');
+    if (copied) status.dataset.copied = copied;
+    el('panel-share').prepend(status);
+    return status;
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    storyPage({ title: ALLEGORICAL.title });
+    stubClipboard();
+  });
+
+  it('says so in the status line, in the language the include wrote, and clears it with the icon', async () => {
+    const status = addStatus('Copiado al portapapeles');
+    await runScript();
+    openPanel();
+
+    el('share-copy-link-btn').click();
+    await settle();
+    expect(status.textContent).toBe('Copiado al portapapeles');
+
+    vi.advanceTimersByTime(2000);
+    expect(status.textContent).toBe('');
+  });
+
+  it('says nothing when the copy fails', async () => {
+    stubAlert();
+    stubClipboard(() => Promise.reject(new Error('denied')));
+    const status = addStatus('Copied to the clipboard');
+    await runScript();
+    openPanel();
+
+    el('share-copy-link-btn').click();
+    await settle();
+    expect(status.textContent).toBe('');
+  });
+});
+
 describe('copying without a working clipboard', () => {
   let alerts;
 

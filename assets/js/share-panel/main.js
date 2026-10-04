@@ -650,6 +650,13 @@ export function createSharePanel({
    * Show success feedback
    */
   function showSuccessFeedback(triggerButton) {
+    // The icon is all a sighted reader gets; the status line says it aloud.
+    const status = doc.getElementById('share-copy-status');
+    if (status) {
+      status.textContent = status.dataset.copied || 'Copied';
+      setTimeout(() => { status.textContent = ''; }, 2000);
+    }
+
     // Update button icon temporarily
     const btnIcon = triggerButton.querySelector('.icon');
     if (btnIcon) {

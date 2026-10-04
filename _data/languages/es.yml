@@ -408,6 +408,7 @@ share:
   protected_story_warning: "Esta historia está protegida. Las personas que la reciban necesitarán la clave para verla."
   protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
   copy_manually: "Copia el texto a mano"
+  copied: "Copiado al portapapeles"
 
   # Claves heredadas (mantenidas por compatibilidad)
 

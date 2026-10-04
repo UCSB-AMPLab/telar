@@ -32,6 +32,8 @@ the language pack here (English fallback) for the translated labels and help tex
 <div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true" data-copy-manually="{{ lang.share.copy_manually | escape }}">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
+      {%- comment -%} The copy buttons confirm with an icon, which a screen reader does not see; this says it. {%- endcomment %}
+      <p class="visually-hidden" id="share-copy-status" role="status" aria-live="polite" data-copied="{{ lang.share.copied | escape }}"></p>
       <div class="modal-header share-panel-header">
         <div class="share-header-row">
           <h5 class="share-panel-title" id="panel-share-title">{{ lang.share.title }}</h5>
