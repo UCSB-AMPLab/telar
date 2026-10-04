@@ -282,6 +282,55 @@ class TestTheScopingOfEachSheet:
 
         assert _converts(site, 'my-story.csv')[1] == []
 
+    def test_a_removal_that_relabels_a_twin_is_repaired_in_turn(self, tmp_path):
+        """Removing `note` turns `note.1` into `note`, which then collides
+        with `Note`; each pass removes one more empty twin, until the build
+        refuses nothing."""
+        site = _site(tmp_path, {'my-story.csv':
+                                'step,answer,note,note,note,Note\n1,Here.,,,,y\n'})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'my-story.csv') == 'step,answer,Note\n1,Here.,y\n'
+        assert _converts(site, 'my-story.csv')[1] == []
+        assert all(r.status is not ChangeStatus.FAILED for r in records)
+
+    def test_the_records_name_the_column_the_file_keeps(self, tmp_path):
+        """A column kept in one pass and removed in the next is never named
+        as the one holding the values."""
+        site = _site(tmp_path, {'my-story.csv':
+                                'step,answer,Note,note,note\n1,Here.,,,value\n'})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'my-story.csv') == 'step,answer,note\n1,Here.,value\n'
+        assert sorted(r.description for r in records) == sorted([
+            get_message('en', 'v180_column_dropped', 'Note', 'my-story.csv', 'note'),
+            get_message('en', 'v180_column_dropped', 'note', 'my-story.csv', 'note'),
+        ])
+
+    def test_columns_that_are_all_empty_are_reported_as_such(self, tmp_path):
+        site = _site(tmp_path, {'my-story.csv': 'step,answer,note,Note\n1,Here.,,\n'})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'my-story.csv') == 'step,answer,note\n1,Here.,\n'
+        assert [r.description for r in records] == [get_message(
+            'en', 'v180_column_dropped_all_empty', 'Note', 'my-story.csv', 'note', 'note')]
+
+    def test_a_collision_a_removal_creates_is_reported_not_left_to_the_build(
+            self, tmp_path):
+        """After the empty `note` goes, the other `note` and `Note` both hold
+        values: the upgrade says so, rather than reporting only success."""
+        site = _site(tmp_path, {'my-story.csv': 'step,answer,note,note,Note\n1,Here.,,x,y\n'})
+
+        records = _repair(site)
+
+        assert _converts(site, 'my-story.csv')[1] != []
+        failed = [r.description for r in records if r.status is ChangeStatus.FAILED]
+        assert failed == [get_message('en', 'v180_columns_hold_values',
+                                      'my-story.csv', '`note`, `Note`')]
+
 # ---------- The file as it was written ----------
 
 class TestTheFileKeepsItsForm:

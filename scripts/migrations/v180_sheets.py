@@ -94,9 +94,10 @@ class Sheet:
     cells `csv` reads. Such a file is never written.
     """
 
-    def __init__(self, path: str):
-        with open(path, 'r', encoding='utf-8', newline='') as handle:
-            text = handle.read()
+    def __init__(self, path: str, text: Optional[str] = None):
+        if text is None:
+            with open(path, 'r', encoding='utf-8', newline='') as handle:
+                text = handle.read()
         self.path = path
         self.bom = text.startswith(_BOM)
         text = text[len(_BOM):] if self.bom else text
@@ -352,29 +353,62 @@ def _resolve(claim: str, indices: List[int], header, rows) -> Tuple[List[int], L
 
 
 def _repair_sheet(repo_root, lang, name, scope, rules, on_sheets) -> List[ChangeRecord]:
+    """Repeated until nothing changes, because a removal can create a
+    collision: pandas labels a repeated header `note.1`, and the suffix goes
+    when its twin is removed, so a column that claimed a name of its own
+    comes to claim the one its twin claimed."""
     path = os.path.join(repo_root, SPREADSHEETS_DIR, name)
     try:
         sheet = Sheet(path)
     except (OSError, UnicodeDecodeError, csv.Error, ValueError) as error:
         return [_record(lang, 'v180_sheet_unreadable', name, error,
                         status=ChangeStatus.FAILED)]
-    header = sheet.header
-    rows = data_rows(sheet, rules, scope.get('sheet_aliases'))
-    groups = [_resolve(claim, indices, header, rows)
-              for claim, indices in claimed_names(sheet.labels, rules, **scope).items()
-              if len(indices) > 1]
-    doomed = [index for _kept, dropped in groups for index in dropped]
-    text = sheet.without_columns(doomed) if doomed else None
-    written = text is not None and _inside(repo_root, path)
-    if written:
-        sheet.write(text)
-    records = _reserved_column_records(lang, name, header, rules)
-    for kept, dropped in groups:
-        if dropped and not written:
+    records = _reserved_column_records(lang, name, sheet.header, rules)
+    writable = _inside(repo_root, path)
+    repaired = None
+    removed = []
+    while True:
+        header = sheet.header
+        rows = data_rows(sheet, rules, scope.get('sheet_aliases'))
+        claims = claimed_names(sheet.labels, rules, **scope)
+        groups = [(claim, *_resolve(claim, indices, header, rows))
+                  for claim, indices in claims.items() if len(indices) > 1]
+        doomed = [index for _claim, _kept, dropped in groups for index in dropped]
+        text = sheet.without_columns(doomed) if doomed and writable else None
+        if text is None:
+            break
+        removed.extend((header[index], claim) for claim, _kept, dropped in groups
+                       for index in dropped)
+        repaired = text
+        sheet = Sheet(path, text)
+    if repaired is not None:
+        sheet.write(repaired)
+    # Every record describes the file as written, so a keeper is named only
+    # once no later pass can remove it.
+    for column, claim in removed:
+        records.extend(_removal_records(lang, name, column, claims[claim], header, rows,
+                                        on_sheets))
+    for _claim, kept, dropped in groups:
+        if dropped:
             records.extend(_record(lang, 'v180_column_not_removed', header[index], name,
                                    status=ChangeStatus.FAILED) for index in dropped)
         else:
-            records.extend(_collision_records(lang, name, header, kept, dropped, on_sheets))
+            named = ', '.join(f'`{header[index]}`' for index in kept)
+            records.append(_record(lang, 'v180_columns_hold_values', name, named,
+                                   status=ChangeStatus.FAILED))
+    return records
+
+
+def _removal_records(lang, name, column, keepers, header, rows, on_sheets) -> List[ChangeRecord]:
+    holding = [index for index in keepers if _holds_values(rows, index)]
+    keeper = header[(holding or keepers)[0]]
+    if holding:
+        records = [_record(lang, 'v180_column_dropped', column, name, keeper)]
+    else:
+        records = [_record(lang, 'v180_column_dropped_all_empty', column, name, keeper, keeper)]
+    if on_sheets:
+        records.append(_record(lang, 'v180_column_in_sheet', column, name,
+                               status=ChangeStatus.FAILED))
     return records
 
 
@@ -388,22 +422,6 @@ def _reserved_column_records(lang, name, header, rules) -> List[ChangeRecord]:
     return [_record(lang, 'v180_reserved_column', name, column, status=ChangeStatus.FAILED)
             for column in header
             if column.lower().strip() in rules.RESERVED_COLUMN_NAMES]
-
-
-def _collision_records(lang, name, header, kept, dropped, on_sheets) -> List[ChangeRecord]:
-    if not dropped:
-        named = ', '.join(f'`{header[index]}`' for index in kept)
-        return [_record(lang, 'v180_columns_hold_values', name, named,
-                        status=ChangeStatus.FAILED)]
-    keeper = header[kept[0]]
-    records = []
-    for index in dropped:
-        column = header[index]
-        records.append(_record(lang, 'v180_column_dropped', column, name, keeper))
-        if on_sheets:
-            records.append(_record(lang, 'v180_column_in_sheet', column, name,
-                                   status=ChangeStatus.FAILED))
-    return records
 
 
 def repair_colliding_columns(repo_root: str, lang: str) -> List[ChangeRecord]:
