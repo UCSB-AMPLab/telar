@@ -79,6 +79,23 @@
   //     del desplazamiento a propósito.
   --card-motion-duration: 0.5s;
 
+  // EN: The same movement also runs on one curve, for the same reason it runs
+  //     for one duration. The scroll eases as `1 - (1-t)³`, and the viewer's
+  //     pan and zoom is written from the scroll position every frame, so it
+  //     arrives on that curve whatever the card does. The CSS `ease-out`
+  //     keyword is a gentler function that only shares the name: over a 1.2s
+  //     move it leaves the card a fifth of its travel behind the image in the
+  //     middle, meeting it only at the end. This is that cubic as a bezier.
+  // ES: Ese mismo movimiento corre además sobre una sola curva, por lo mismo
+  //     que dura lo mismo. El scroll suaviza como `1 - (1-t)³`, y el paneo y
+  //     el zoom del visor se escriben desde la posición del scroll en cada
+  //     cuadro, así que llegan con esa curva haga lo que haga la tarjeta. La
+  //     palabra clave `ease-out` de CSS es una función más suave que solo
+  //     comparte el nombre: en un movimiento de 1.2s deja la tarjeta a un
+  //     quinto de su recorrido por detrás de la imagen en la mitad, y solo la
+  //     alcanza al final. Esta es esa cúbica escrita como bezier.
+  --card-motion-easing: cubic-bezier(0.215, 0.61, 0.355, 1);
+
   // During scroll-driven scrubbing: disable CSS transitions for per-frame control
   &.is-scrubbing .viewer-plate,
   &.is-scrubbing .text-card {
@@ -98,7 +115,7 @@
   inset: 0;
   box-sizing: border-box;
   transform: translateY(100%);                    // offscreen below by default
-  transition: transform var(--card-motion-duration) ease-out;  // pure slide, no fade
+  transition: transform var(--card-motion-duration) var(--card-motion-easing);  // pure slide, no fade
   // Top-edge shadow and border matching text cards (visible during slide-up)
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15), 0 -6px 24px rgba(0, 0, 0, 0.12);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
@@ -431,7 +448,7 @@
 
   pointer-events: auto;
   transform: translateY(100vh);          // offscreen below by default
-  transition: transform var(--card-motion-duration) ease-out;
+  transition: transform var(--card-motion-duration) var(--card-motion-easing);
   // Base shadow — cards always look like cards, not flat divs
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 6px 24px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
 
@@ -562,7 +579,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform var(--card-motion-duration) ease-out;  // slides away via translateY(-120vh)
+  transition: transform var(--card-motion-duration) var(--card-motion-easing);  // slides away via translateY(-120vh)
 }
 
 .intro-floating-card {
@@ -722,7 +739,7 @@
   align-items: center;
   justify-content: center;
   transform: translateY(100vh);
-  transition: transform var(--card-motion-duration) ease-out;
+  transition: transform var(--card-motion-duration) var(--card-motion-easing);
 
   .title-card-inner {
     text-align: center;
@@ -943,7 +960,7 @@
     max-height: $telar-card-mobile-max-height;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    transition: transform calc(var(--card-motion-duration) * 0.8) ease-out;  // slightly faster than the desktop card
+    transition: transform calc(var(--card-motion-duration) * 0.8) var(--card-motion-easing);  // slightly faster than the desktop card
   }
 
   // dvh override for mobile text card — same structure as story-container above.

@@ -684,8 +684,11 @@ describe('goToStep(-1) — intro restoration', () => {
     expect(state.currentIndex).toBe(-1);
     expect(intro.style.transform).toBe('translateY(0)');
     // The intro travels with the card that covers it, so it takes the card
-    // stack's own duration rather than a figure of its own.
-    expect(intro.style.transition).toBe('transform var(--card-motion-duration) ease-out');
+    // stack's own duration and curve rather than figures of its own. Both are
+    // read as properties: a move whose pace or easing is retuned must not
+    // leave the intro behind on the old one.
+    expect(intro.style.transition)
+      .toBe('transform var(--card-motion-duration) var(--card-motion-easing)');
   });
 
   it('sends the first text card off the bottom carrying its authored messiness', () => {

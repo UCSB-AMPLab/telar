@@ -131,7 +131,7 @@ function _showIntroCard() {
   const intro = document.querySelector('.story-intro');
   if (!intro) return;
 
-  intro.style.transition = 'transform var(--card-motion-duration) ease-out';
+  intro.style.transition = 'transform var(--card-motion-duration) var(--card-motion-easing)';
   intro.style.transform = 'translateY(0)';
 }
 
@@ -320,7 +320,7 @@ function _dismissMobileIntro() {
   // Hide intro card
   const intro = document.querySelector('.story-intro');
   if (intro) {
-    intro.style.transition = 'transform var(--card-motion-duration) ease-out';
+    intro.style.transition = 'transform var(--card-motion-duration) var(--card-motion-easing)';
     intro.style.transform = 'translateY(-100%)';
   }
 
@@ -377,12 +377,19 @@ function goToMobileStep(newIndex) {
   // transition through the scroll engine. Otherwise fall back to direct
   // activateCard with CSS transition (mobile/iOS without Lenis).
   if (state.lenis) {
+    // The move is the scroll engine's now, and the counter follows the scroll:
+    // it says where the reader is, not where they are going. Writing the
+    // destination here instead put a number on screen that the engine's own
+    // per-frame write then corrected back — so a second tap during a move
+    // showed the step count going forwards, backwards and forwards again.
     advanceToStep(newIndex);
   } else {
+    // No scroll engine, so no per-frame writer: this path moves the card
+    // itself and is the only thing that can state where the reader now is.
     activateCard(newIndex, direction);
+    updateViewerInfo(newIndex);
   }
 
-  updateViewerInfo(newIndex);
   writeHash();
 }
 

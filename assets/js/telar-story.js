@@ -5465,7 +5465,7 @@
   function _showIntroCard() {
     const intro = document.querySelector(".story-intro");
     if (!intro) return;
-    intro.style.transition = "transform var(--card-motion-duration) ease-out";
+    intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
     intro.style.transform = "translateY(0)";
   }
   function _sendFirstTextCardOffScreen() {
@@ -5568,7 +5568,7 @@
     state.mobileInIntro = false;
     const intro = document.querySelector(".story-intro");
     if (intro) {
-      intro.style.transition = "transform var(--card-motion-duration) ease-out";
+      intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
       intro.style.transform = "translateY(-100%)";
     }
     state.currentMobileStep = 0;
@@ -5602,8 +5602,8 @@
       advanceToStep(newIndex);
     } else {
       activateCard(newIndex, direction);
+      updateViewerInfo(newIndex);
     }
-    updateViewerInfo(newIndex);
     writeHash();
   }
   function updateMobileButtonStates() {
