@@ -3233,16 +3233,19 @@
   ]);
   function handleKeyboard(e) {
     if (e.repeat && !state.isPanelOpen) {
-      _repeatOverCard(e);
+      _repeatKey(e);
       return;
     }
     KEY_ACTIONS.get(e.key)?.(e);
   }
-  function _repeatOverCard(e) {
+  function _repeatKey(e) {
+    if (_isInOpenDialog(e)) return;
+    if (e.key === " " && _isSpaceControl(e)) return;
     let motion = STORY_KEYS.get(e.key);
-    if (e.key === " " && !_isSpaceControl(e)) motion = [e.shiftKey ? "backward" : "forward", "page"];
+    if (e.key === " ") motion = [e.shiftKey ? "backward" : "forward", "page"];
     if (!motion) return;
-    if (cardTakesKey(...motion) !== "none") e.preventDefault();
+    e.preventDefault();
+    cardTakesKey(...motion);
   }
   function _stepKey(e, direction, kind) {
     if (_panelTookScroll(direction === "forward" ? 40 : -40)) return;
@@ -3254,6 +3257,10 @@
   function _isSpaceControl(e) {
     const target = e.target;
     return !!(target && target.closest && target.closest(SPACE_CONTROLS));
+  }
+  function _isInOpenDialog(e) {
+    const target = e.target;
+    return !!(target && target.closest && target.closest(".modal.show, dialog[open]"));
   }
   function _spaceKey(e) {
     if (_isSpaceControl(e)) return;

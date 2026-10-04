@@ -542,18 +542,18 @@ const STORY_KEYS = new Map([
 /**
  * Handle keyboard navigation and panel control.
  *
- * Auto-repeat key events are ignored for story navigation — each physical key
- * press advances exactly one step — but allowed through while a panel is
- * open, so that a held arrow key keeps the panel scrolling. A repeated story
- * key over a side card that scrolls inside itself scrolls the card and is
- * cancelled, at its edge too, so a held key scrolls to the card's end and
- * stops there without stepping.
+ * Auto-repeat key events never step the story — each physical key press
+ * advances exactly one step — but allowed through while a panel is open, so
+ * that a held arrow key keeps the panel scrolling. Outside a panel a repeated
+ * story key is cancelled, so the browser does not scroll the document under
+ * Lenis, unless it comes from a control or an open dialog, which keep it; over a side card that scrolls inside itself it also scrolls the
+ * card, to its end and no further.
  *
  * @param {KeyboardEvent} e
  */
 function handleKeyboard(e) {
   if (e.repeat && !state.isPanelOpen) {
-    _repeatOverCard(e);
+    _repeatKey(e);
     return;
   }
 
@@ -561,15 +561,28 @@ function handleKeyboard(e) {
 }
 
 /**
- * Give an auto-repeated story key to a side card that scrolls inside itself.
+ * Cancel an auto-repeated story key, and give it to a side card that scrolls
+ * inside itself.
+ *
+ * The browser scrolls the document for every one of these keys, and a story's
+ * position belongs to the scroll engine, so a repeat that reaches the browser
+ * moves the page by an amount no step accounts for. A repeat from inside an
+ * open dialog, or of Space from a control Space activates, is that element's
+ * own and is left alone. A field outside a dialog is not exempt: at its edge a
+ * held arrow or Page key passes to the document and scrolls it, and a story
+ * page's fields all sit in the Share dialog.
  *
  * @param {KeyboardEvent} e
  */
-function _repeatOverCard(e) {
+function _repeatKey(e) {
+  if (_isInOpenDialog(e)) return;
+  if (e.key === ' ' && _isSpaceControl(e)) return;
+
   let motion = STORY_KEYS.get(e.key);
-  if (e.key === ' ' && !_isSpaceControl(e)) motion = [e.shiftKey ? 'backward' : 'forward', 'page'];
+  if (e.key === ' ') motion = [e.shiftKey ? 'backward' : 'forward', 'page'];
   if (!motion) return;
-  if (cardTakesKey(...motion) !== 'none') e.preventDefault();
+  e.preventDefault();
+  cardTakesKey(...motion);
 }
 
 /**
@@ -612,6 +625,18 @@ const SPACE_CONTROLS =
 function _isSpaceControl(e) {
   const target = e.target;
   return !!(target && target.closest && target.closest(SPACE_CONTROLS));
+}
+
+/**
+ * Whether the key event came from inside an open modal dialog, which reads
+ * the arrow keys itself and sits over the story without opening a panel.
+ *
+ * @param {KeyboardEvent} e
+ * @returns {boolean}
+ */
+function _isInOpenDialog(e) {
+  const target = e.target;
+  return !!(target && target.closest && target.closest('.modal.show, dialog[open]'));
 }
 
 /**

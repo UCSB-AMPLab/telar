@@ -161,10 +161,134 @@ describe('a held key', () => {
     expect(mocks.keyboardNav).not.toHaveBeenCalled();
   });
 
-  it('is left alone where no card scrolls', () => {
+  it('is cancelled where no card scrolls, and moves no step', () => {
     const ev = pressCardKey('ArrowDown', { repeat: true });
+    expect(ev.defaultPrevented).toBe(true);
+    expect(mocks.keyboardNav).not.toHaveBeenCalled();
+  });
+});
+
+describe('a key held down', () => {
+  const held = [
+    ['ArrowDown', {}, 'forward'],
+    ['PageDown', {}, 'forward'],
+    [' ', {}, 'forward'],
+    ['ArrowUp', {}, 'backward'],
+    ['PageUp', {}, 'backward'],
+    [' ', { shiftKey: true }, 'backward'],
+  ];
+  for (const [key, extras, direction] of held) {
+    it(`${JSON.stringify(key)}${extras.shiftKey ? ' with Shift' : ''} moves one step and every repeat is cancelled`, () => {
+      const first = pressCardKey(key, extras);
+      const repeats = Array.from({ length: 39 }, () => pressCardKey(key, { ...extras, repeat: true }));
+
+      expect(first.defaultPrevented).toBe(true);
+      expect(repeats.every((ev) => ev.defaultPrevented)).toBe(true);
+      expect(mocks.keyboardNav).toHaveBeenCalledTimes(1);
+      expect(mocks.keyboardNav).toHaveBeenCalledWith(direction);
+    });
+  }
+
+  it('moves one step on the button path too', () => {
+    storyOnStep(2, { lenis: false });
+    pressCardKey('ArrowDown');
+    for (let i = 0; i < 39; i++) pressCardKey('ArrowDown', { repeat: true });
+    expect(state.currentIndex).toBe(3);
+  });
+
+  it('leaves Space on a focused control to the control', () => {
+    const button = document.createElement('button');
+    document.body.append(button);
+    const ev = new KeyboardEvent('keydown', { key: ' ', repeat: true, bubbles: true, cancelable: true });
+    button.dispatchEvent(ev);
+    button.remove();
     expect(ev.defaultPrevented).toBe(false);
     expect(mocks.keyboardNav).not.toHaveBeenCalled();
+  });
+
+  it('still cancels Space on a link', () => {
+    const link = document.createElement('a');
+    link.href = '#';
+    document.body.append(link);
+    const ev = new KeyboardEvent('keydown', { key: ' ', repeat: true, bubbles: true, cancelable: true });
+    link.dispatchEvent(ev);
+    link.remove();
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  const heldOn = (el, key) => {
+    document.body.append(el);
+    const ev = new KeyboardEvent('keydown', { key, repeat: true, bubbles: true, cancelable: true });
+    el.dispatchEvent(ev);
+    el.remove();
+    return ev;
+  };
+
+  for (const [name, make] of [
+    ['a select', () => document.createElement('select')],
+    ['a text input', () => document.createElement('input')],
+    ['a textarea', () => document.createElement('textarea')],
+    ['an editable element', () => {
+      const div = document.createElement('div');
+      div.setAttribute('contenteditable', 'true');
+      return div;
+    }],
+  ]) {
+    for (const key of ['ArrowDown', 'PageDown']) {
+      it(`cancels ${key} held on ${name} outside a dialog, which would scroll the page at its edge`, () => {
+        const ev = heldOn(make(), key);
+        expect(ev.defaultPrevented).toBe(true);
+        expect(mocks.keyboardNav).not.toHaveBeenCalled();
+      });
+    }
+  }
+
+  it('leaves ArrowDown held on a select inside an open dialog to the select', () => {
+    const dialog = document.createElement('div');
+    dialog.className = 'modal show';
+    const select = document.createElement('select');
+    dialog.append(select);
+    document.body.append(dialog);
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', repeat: true, bubbles: true, cancelable: true });
+    select.dispatchEvent(ev);
+    dialog.remove();
+    expect(ev.defaultPrevented).toBe(false);
+    expect(mocks.cardTakesKey).not.toHaveBeenCalled();
+  });
+
+  for (const [name, make] of [
+    ['a button', () => document.createElement('button')],
+    ['a summary', () => document.createElement('summary')],
+    ...['checkbox', 'button', 'submit', 'reset', 'image', 'file', 'color'].map((type) => [
+      `a ${type} input`, () => Object.assign(document.createElement('input'), { type }),
+    ]),
+  ]) {
+    it(`cancels ArrowDown held on ${name}, which does not read arrows, and offers it to the card`, () => {
+      const ev = heldOn(make(), 'ArrowDown');
+      expect(ev.defaultPrevented).toBe(true);
+      expect(mocks.cardTakesKey).toHaveBeenCalled();
+      expect(mocks.keyboardNav).not.toHaveBeenCalled();
+    });
+  }
+
+  it('leaves ArrowDown held inside an open dialog to the dialog', () => {
+    const dialog = document.createElement('div');
+    dialog.className = 'modal show';
+    const inner = document.createElement('div');
+    inner.tabIndex = -1;
+    dialog.append(inner);
+    document.body.append(dialog);
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', repeat: true, bubbles: true, cancelable: true });
+    inner.dispatchEvent(ev);
+    dialog.remove();
+    expect(ev.defaultPrevented).toBe(false);
+    expect(mocks.cardTakesKey).not.toHaveBeenCalled();
+  });
+
+  it('leaves a key the story does not read to the browser', () => {
+    for (const key of ['Home', 'End', 'a']) {
+      expect(pressCardKey(key, { repeat: true }).defaultPrevented).toBe(false);
+    }
   });
 });
 
