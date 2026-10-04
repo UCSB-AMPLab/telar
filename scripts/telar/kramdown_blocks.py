@@ -190,8 +190,9 @@ class _Blocks:
         self.no_comment_close = False
         self.fence_closes = None
         # The normalized id of every link definition, which applies to the
-        # whole text.
+        # whole text, and where each definition line is.
         self.definitions = set()
+        self.definition_lines = []
         # Whether the block before ended at a blank line, an EOB or IAL
         # line, or is the start of the text.
         self.boundary = True
@@ -328,6 +329,7 @@ class _Blocks:
         if definition is None:
             return None
         self.definitions.add(_link_id(definition[0]))
+        self.definition_lines.append((pos, definition[1]))
         self.skip(pos, definition[1])
         return definition[1]
 

@@ -34,6 +34,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from telar.code_spans import answer_regions
+from telar.glossary import process_glossary_links
 from telar.processors.stories import _answer_maths_for_kramdown, _prepare_answer_maths
 
 REPO = Path(__file__).resolve().parents[2]
@@ -177,6 +178,23 @@ class TestALongMalformedAnswerIsReadInLinearTime:
         assert time.perf_counter() - started < 1.0
 
 
+    @pytest.mark.parametrize('unit', ['[a](b$)$x ', '![b$](c)$x ', '{::nomarkdown}$ {:/}$x ',
+                                      '[a](b$)\\( ', '[a](b$)$$x '])
+    def test_formulas_opening_after_a_guarded_dollar_are_read_once(self, unit):
+        started = time.perf_counter()
+        _answer_maths_for_kramdown(unit * 20000)
+        assert time.perf_counter() - started < 1.0
+
+    @pytest.mark.parametrize('written, expected', [
+        ('[a](b$)$x^2$', '[a](b$)$$x^2$$'),
+        ('![b$](c)$x^2$', '![b$](c)$$x^2$$'),
+        ('{::nomarkdown}$ {:/}$x^2$', '{::nomarkdown}$ {:/}$$x^2$$'),
+        ('[a](b$)\\(x^2\\)', '[a](b$)$$x^2$$'),
+    ])
+    def test_a_dollar_in_a_guarded_region_does_not_take_the_next_opener(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+
 # Links, images, references, IALs and extensions left open or nested,
 # 20,000 of each: each opener starts a reading of its text, which must not
 # read again what an earlier one read.
@@ -282,6 +300,31 @@ RENDERED_ANSWERS = {
                                '<p>a <u>$x^2$ and \\(y^2\\)</u></p>'),
     'dollars_in_cdata': ('a <![CDATA[$$]]> then \\(x^2\\)', '<p>a $$ then \\(x^2\\)</p>'),
     'dropped_backslash': ('\\$$$$', '<p>\\(\\)</p>'),
+    'maths_in_an_image_text': ('![$x^2$](b)', '<p><img src="b" alt="$x^2$" /></p>'),
+    'maths_in_a_nested_destination': ('[a](b(c(d)) $x^2$)',
+                                      '<p><a href="b(c(d)) $x^2$">a</a></p>'),
+    'maths_in_a_link_definition': ('[a][r]\n\n[r]: b $x^2$', '<p><a href="b $x^2$">a</a></p>'),
+    'maths_after_a_footnote_marker': ('[^a]($x^2$)', '<p>[^a](\\(x^2\\))</p>'),
+    'maths_in_nomarkdown': ('a {::nomarkdown}$x^2$ b{:/} c', '<p>a $x^2$ b c</p>'),
+    'maths_after_a_dollar_destination': ('[a](b$)$x^2$', '<p><a href="b$">a</a>\\(x^2\\)</p>'),
+    'paren_maths_after_a_double_dollar_destination': (
+        '[a](b$$)\\(y^2\\) $$x^2$$', '<p><a href="b$$">a</a>\\(y^2\\) \\(x^2\\)</p>'),
+    'maths_after_a_double_dollar_destination': (
+        '[a](b$$)$y^2$ $$x^2$$', '<p><a href="b$$">a</a>\\(y^2\\) \\(x^2\\)</p>'),
+    'maths_after_a_dollar_image_text': ('![b$](c)$x^2$',
+                                        '<p><img src="c" alt="b$" />\\(x^2\\)</p>'),
+    'maths_after_a_dollar_nomarkdown': ('{::nomarkdown}$ {:/}$x^2$', '<p>$ \\(x^2\\)</p>'),
+    'paren_after_a_dollar_destination': ('[a](b$)\\(x^2\\)',
+                                         '<p><a href="b$">a</a>\\(x^2\\)</p>'),
+    'paren_after_a_dollar_image_text': ('![b$](c)\\(x^2\\)',
+                                        '<p><img src="c" alt="b$" />\\(x^2\\)</p>'),
+    'paren_after_a_dollar_nomarkdown': ('{::nomarkdown}$ {:/}\\(x^2\\)',
+                                        '<p>$ \\(x^2\\)</p>'),
+    'glossary_in_nomarkdown': ('a {::nomarkdown}[[iiif]]{:/} c', '<p>a [[iiif]] c</p>'),
+    'glossary_beside_nomarkdown': (
+        'a {::nomarkdown}b{:/} [[iiif]]',
+        '<p>a b <a href="#" class="glossary-inline-link" data-term-id="iiif"'
+        ' data-term-url="/glossary/iiif/">IIIF</a></p>'),
 }
 
 
@@ -301,6 +344,9 @@ class TestTheStepRendersTheMaths:
         df = pd.DataFrame({'step': [str(i + 1) for i in range(len(names))],
                            'question': names,
                            'answer': [RENDERED_ANSWERS[n][0] for n in names]})
+        # The build's order: glossary links, then maths.
+        df['answer'] = [process_glossary_links(answer, {'iiif': 'IIIF'}, [], base_url='',
+                                               markdown=True) for answer in df['answer']]
         steps = _prepare_answer_maths(df).to_dict('records')
         (site / '_data' / 'steps.json').write_text(json.dumps(steps), encoding='utf-8')
         (site / '_config.yml').write_text('telar_language: en\n', encoding='utf-8')

@@ -43,10 +43,12 @@ destination in parentheses, which may hold spaces, line breaks and
 parentheses nested to any depth, and ends at whitespace before a title;
 one in angle brackets; or a reference, which is a link only when a link
 definition in the text has its id. Destination, title and id are read for
-nothing, and so is a link definition line. Where there is no link, its
-opening is text. A footnote marker `[^…]` is never a link. An IAL `{:…}`
-after an element, and a `comment` or `nomarkdown` extension, print
-nothing, so code inside them is not code; after text, an IAL is text.
+nothing, and so is a link definition line; an image's text becomes its
+`alt` attribute as written. Where there is no link, its opening is text.
+A footnote marker `[^…]` is never a link. An IAL `{:…}` after an
+element and a `comment` extension print nothing, and a `nomarkdown`
+extension prints its body as written, so code inside any of them is not
+code; after text, an IAL is text.
 
 Not modelled, all rare in an answer: a definition list's content past its
 first paragraph; a `markdown` attribute on an element inside block HTML,
@@ -299,6 +301,13 @@ class _Scan:
         self.blocks = sorted(blocks.skips)
         self.regions.extend(blocks.regions)
         self.definitions = blocks.definitions
+        # What a link holds that is read for nothing: each destination,
+        # title or reference id, and each link definition line.
+        self.destinations = list(blocks.definition_lines)
+        # Each `nomarkdown` extension, whose body kramdown prints as written;
+        # and the extension `extension_end` last read, as (name, start, end).
+        self.nomarkdown = []
+        self.extension = None
         self.definition_lengths = {len(key) for key in self.definitions}
         # For each needle and paragraph, the lowest start from which the
         # needle has been searched for and not found.
@@ -439,13 +448,18 @@ class _Scan:
         destination or reference is skipped; or a `]` that is text."""
         if self.links and self.links[-1][0] == i:
             end = self.links.pop()[1]
+            if end > i + 1:
+                self.destinations.append((i + 1, end))
             return self.mark(end, True)
         return self.mark(i + 1, False)
 
     def brace(self, i):
+        self.extension = None
         read = self.brace_end(i, self.element_before(i, self.last), self.limit(i))
         if read is None:
             return self.mark(i + 1, False)
+        if self.extension is not None and self.extension[0] == 'nomarkdown':
+            self.nomarkdown.append(self.extension[1:])
         return self.mark(*read)
 
     def backslash(self, i):
@@ -647,6 +661,7 @@ class _Scan:
         stop = self.extension_stop(name.group(1), close + 1, limit)
         if stop is None:
             return None
+        self.extension = (name.group(1), i, stop)
         return stop, True if name.group(1) != 'options' else before
 
     def brace_close(self, start, limit, empty=False):
@@ -915,6 +930,38 @@ def _regions(text):
     in order of their start, as (kind, start, end) with kind 'code', 'raw',
     'maths' or 'stray', read in one pass as kramdown reads them."""
     return sorted(_Scan(text).run(), key=lambda region: region[1])
+
+
+def unread_regions(text):
+    """Every stretch of an answer that kramdown prints as written, or not at
+    all, and that `answer_regions` does not report, in order of their
+    start, as (kind, start, end): 'destination' for a link's or image's
+    destination with its title, a reference's id, or a link definition
+    line; 'alt' for an image's text, which becomes its `alt` attribute;
+    and 'nomarkdown' for a `nomarkdown` extension, tags included. Glossary
+    links and maths are left as written there. Pipes are not: kramdown's
+    table parser reads a line before any of these."""
+    scan = _Scan(text)
+    scan.run()
+    return sorted([('destination', start, end) for start, end in scan.destinations]
+                  + [('alt', start, end) for start, end in scan.images]
+                  + [('nomarkdown', start, end) for start, end in scan.nomarkdown],
+                  key=lambda region: region[1])
+
+
+def link_destinations(text):
+    """Every stretch of an answer that kramdown reads no span syntax in
+    because a link or image holds it, in order, as (start, end) offsets: a
+    destination in parentheses or angle brackets with its title, a
+    reference's id, and a link definition line. kramdown prints these as
+    written, in an attribute or not at all."""
+    return [(start, end) for kind, start, end in unread_regions(text) if kind == 'destination']
+
+
+def image_texts(text):
+    """The text of every image in an answer, which kramdown writes into its
+    `alt` attribute as written, in order, as (start, end) offsets."""
+    return [(start, end) for kind, start, end in unread_regions(text) if kind == 'alt']
 
 
 def code_spans(text):

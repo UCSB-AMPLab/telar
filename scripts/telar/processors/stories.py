@@ -72,7 +72,7 @@ from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
 from telar.code_spans import (answer_regions, code_elements, code_spans, overlaps, raw_regions,
-                              stray_dollars)
+                              stray_dollars, unread_regions)
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
@@ -1202,8 +1202,6 @@ _ANSWER_MATHS = (
     (re.compile(r'\\\(((?:(?!\\\().)+?)\\\)', re.DOTALL), 1),
     (re.compile(r'(?<![\\$])\$(?!\$)(\S(?:[^$]*?[^\s\\])?)\$(?!\$)'), 1),
 )
-# A destination may hold one level of balanced parentheses, as kramdown allows.
-_LINK_DESTINATION = re.compile(r'\]\((?:[^()]|\([^()]*\))*\)')
 
 
 def _escape_stray_dollars(text):
@@ -1224,8 +1222,10 @@ def _answer_maths_for_kramdown(text):
     """*text* with each maths span written as kramdown's $$...$$.
 
     Left as written: maths inside a code span, a code element, an HTML
-    element kramdown leaves raw, an HTML tag or a link destination, since
-    none of those is maths on the page; a
+    element kramdown leaves raw, an HTML tag, a link's destination, title
+    or id, a link definition, an image's text, which becomes its alt
+    attribute as written, or a `nomarkdown` extension, printed as written,
+    since none of those is maths on the page; a
     $...$ with no LaTeX character, which is currency; and a span holding
     another dollar, which is one formula inside another and has no single
     reading.
@@ -1233,7 +1233,7 @@ def _answer_maths_for_kramdown(text):
     text = _escape_stray_dollars(text)
     guarded = overlaps(raw_regions(text) + code_elements(text)
                        + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
-                       + [(m.start(), m.end()) for m in _LINK_DESTINATION.finditer(text)])
+                       + [(start, end) for _, start, end in unread_regions(text)])
     # Each pattern's next match from the current position, searched again
     # only once the position passes it, so a long answer is scanned once
     # per pattern rather than once per formula.
@@ -1251,6 +1251,13 @@ def _answer_maths_for_kramdown(text):
         match, group = upcoming[order], _ANSWER_MATHS[order][1]
         start, end = match.span()
         out.append(text[pos:start])
+        if guarded(start, start + 1):
+            # A dollar inside an unread region is not an opener, and a match
+            # from it, `$$` included, must not take the opener of a formula
+            # after it.
+            out.append(text[start])
+            pos = start + 1
+            continue
         span = text[start:end]
         if group is not None and not guarded(start, end):
             inner = match.group(group)

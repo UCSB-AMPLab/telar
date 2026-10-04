@@ -66,7 +66,7 @@ from typing import NamedTuple, Optional
 
 import yaml
 
-from telar.code_spans import code_elements, code_regions, overlaps
+from telar.code_spans import code_elements, code_regions, overlaps, unread_regions
 from telar.config import get_lang_string
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
@@ -588,11 +588,18 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     tags = [m.span() for m in re.finditer(
         r'<[A-Za-z/!](?:[^<>"\']|"[^"]*"|\'[^\']*\')*>', text)]
     literal = overlaps(tags + (code_regions(text) if markdown else code_elements(text)))
+    # In markdown, what kramdown puts into an attribute, prints as written or
+    # reads for nothing is left as written if any of the link touches it: a
+    # link's destination, title or id, a link definition, an image's text
+    # (its alt), and a `nomarkdown` extension. In a panel's HTML these are
+    # already inside tags or gone.
+    unread = overlaps([(start, end) for _, start, end in unread_regions(text)]
+                      if markdown else [])
 
     if glossary_terms:
         pieces, written = [], 0
         for link in find_glossary_links(text):
-            if literal(link.start, link.start + 1):
+            if literal(link.start, link.start + 1) or unread(link.start, link.end):
                 continue
             pieces += [text[written:link.start], replace_glossary_link(link)]
             written = link.end
