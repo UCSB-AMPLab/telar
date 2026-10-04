@@ -198,11 +198,13 @@ class _Scan:
 
     def opaque(self, i):
         match = _OPAQUE[self.text[i]].match(self.text, i)
-        if not match:
-            return i + 1
-        if self.text[i] == '$':
+        if match and self.text[i] == '$':
             self.regions.append(('maths', i, match.end()))
-        return match.end()
+        elif self.text.startswith('$$', i):
+            # No close in its paragraph, so kramdown prints it as it is.
+            self.regions.append(('stray', i, i + 2))
+            return i + 2
+        return match.end() if match else i + 1
 
     def backticks(self, i):
         text = self.text
@@ -231,9 +233,9 @@ class _Scan:
 
 
 def _regions(text):
-    """Every code span and `$$…$$` span in *text*, in order, as
-    (kind, start, end) with kind 'code' or 'maths', read in one pass as
-    kramdown reads them."""
+    """Every code span, `$$…$$` span and stray `$$` in *text*, in order,
+    as (kind, start, end) with kind 'code', 'maths' or 'stray', read in one
+    pass as kramdown reads them."""
     return _Scan(text).run()
 
 
@@ -247,7 +249,14 @@ def code_and_maths(text):
     (kind, start, end), kind being 'code' or 'maths'. From the same reading
     as `code_spans`, so a `$$` inside code is code and a backtick inside
     maths is maths."""
-    return _regions(text)
+    return [region for region in _regions(text) if region[0] != 'stray']
+
+
+def stray_dollars(text):
+    """Every `$$` in *text* that kramdown prints as it is, having no close
+    in its paragraph, as (start, end) offsets. Outside code, maths and raw
+    HTML, as `code_and_maths` reads them."""
+    return [(start, end) for kind, start, end in _regions(text) if kind == 'stray']
 
 
 def code_elements(text):

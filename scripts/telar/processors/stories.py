@@ -69,7 +69,7 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.code_spans import code_and_maths, code_regions, code_spans
+from telar.code_spans import code_and_maths, code_regions, code_spans, stray_dollars
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
@@ -732,6 +732,19 @@ _ANSWER_MATHS = (
 _LINK_DESTINATION = re.compile(r'\]\((?:[^()]|\([^()]*\))*\)')
 
 
+def _escape_stray_dollars(text):
+    """*text* with each `$$` kramdown prints as it is written `\\$\\$`, which
+    it still prints as `$$` but which cannot pair with a formula written as
+    `$$…$$` after it in the same paragraph."""
+    out = []
+    pos = 0
+    for start, end in stray_dollars(text):
+        out.append(text[pos:start] + '\\$\\$')
+        pos = end
+    out.append(text[pos:])
+    return ''.join(out)
+
+
 def _answer_maths_for_kramdown(text):
     """*text* with each maths span written as kramdown's $$...$$.
 
@@ -741,6 +754,7 @@ def _answer_maths_for_kramdown(text):
     another dollar, which is one formula inside another and has no single
     reading.
     """
+    text = _escape_stray_dollars(text)
     guarded = (code_regions(text)
                + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
                + [(m.start(), m.end()) for m in _LINK_DESTINATION.finditer(text)])

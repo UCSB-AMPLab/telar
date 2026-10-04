@@ -94,6 +94,28 @@ class TestWhatIsNotMathsIsLeftAsWritten:
                 == 'See [$$x^2$$](https://x.test) here')
 
 
+class TestAStrayDoubleDollar:
+    """A `$$` with no close in its paragraph is printed as it is. Once a
+    formula after it is written `$$…$$`, kramdown would pair the two and read
+    the text between as maths, so it is passed as `\\$\\$`, which prints `$$`."""
+
+    @pytest.mark.parametrize('written, expected', [
+        ('Costs $$ 5, then \\(x^2\\) here', 'Costs \\$\\$ 5, then $$x^2$$ here'),
+        ('Area $$x^2$$ and $$', 'Area $$x^2$$ and \\$\\$'),
+        ('Just $$ money', 'Just \\$\\$ money'),
+    ], ids=['before-a-formula', 'after-a-pair', 'alone'])
+    def test_escaped(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+    @pytest.mark.parametrize('written', [
+        'Code `$$` here',
+        '<code>$$</code> here',
+        'Escaped \\$$ here',
+    ], ids=['in-code', 'in-a-code-element', 'after-an-escape'])
+    def test_not_stray(self, written):
+        assert _answer_maths_for_kramdown(written) == written
+
+
 class TestALongMalformedAnswerIsReadInLinearTime:
     """An opening with no close is searched past once, not once per
     formula: 20,000 of any of these take well under a second."""
@@ -148,6 +170,11 @@ RENDERED_ANSWERS = {
                     '\\[\\begin{cases} a \\\\ b \\end{cases}\\]'),
     'currency': ('Price $5 and $6', '<p>Price $5 and $6</p>'),
     'pipe_in_paren': ('Norm \\(|x|\\) and x | y', '<p>Norm \\(\\vert x\\vert\\) and x | y</p>'),
+    'stray_dollars_then_formula': (
+        'Costs $$ 5, and `a b` then \\(x^2\\) here',
+        '<p>Costs $$ 5, and <code class="language-plaintext highlighter-rouge">a b</code>'
+        ' then \\(x^2\\) here</p>'),
+    'stray_dollars_alone': ('Just $$ money', '<p>Just $$ money</p>'),
 }
 
 
