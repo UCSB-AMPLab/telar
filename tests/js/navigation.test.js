@@ -6,7 +6,7 @@
  * behaviour by calling goToStep and initializeButtonNavigation directly.
  * Covered here:
  *   - ArrowDown/Up/PageDown/PageUp/Space call keyboardNav when lenis is set,
- *     and nextStep/prevStep when it is not
+ *     and make the previous/next button's move when it is not
  *   - the same keys scroll the topmost panel instead when one is open, and
  *     which of them cancel the event in that state
  *   - auto-repeat is ignored for story navigation and allowed for panel
@@ -295,26 +295,35 @@ describe('Space', () => {
 
 // ── Fallback when snap is null ────────────────────────────────────────────────
 
-describe('fallback to nextStep/prevStep when lenis is null', () => {
-  it('ArrowDown calls activateCard (via nextStep) when lenis is null', () => {
-    state.lenis = null;
-    // nextStep calls goToStep(state.currentIndex + 1, 'forward')
-    // which calls activateCard — so mockActivateCard should be invoked
+/** Steps as elements, as button navigation moves a class between them. */
+function useButtonSteps(currentMobileStep) {
+  state.lenis = null;
+  state.steps = Array.from({ length: 5 }, (_, i) => {
+    const el = document.createElement('div');
+    el.className = 'story-step';
+    el.dataset.step = String(i + 1);
+    return el;
+  });
+  state.stepToScene = {};
+  state.currentMobileStep = currentMobileStep;
+  state.currentIndex = currentMobileStep;
+}
+
+describe('step keys when lenis is null', () => {
+  it('ArrowDown makes the next button\'s move', () => {
+    useButtonSteps(0);
     pressKey('ArrowDown');
     expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
-    // goToStep calls activateCard with target index
-    expect(mocks.mockActivateCard).toHaveBeenCalledWith(
-      state.currentIndex, // was already advanced; check it was called
-      expect.any(String)
-    );
+    expect(mocks.mockActivateCard).toHaveBeenCalledWith(1, 'forward');
+    expect(state.currentIndex).toBe(1);
   });
 
-  it('ArrowUp calls activateCard (via prevStep) when lenis is null', () => {
-    state.lenis = null;
-    state.currentIndex = 2;
+  it('ArrowUp makes the previous button\'s move', () => {
+    useButtonSteps(2);
     pressKey('ArrowUp');
     expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
-    expect(mocks.mockActivateCard).toHaveBeenCalled();
+    expect(mocks.mockActivateCard).toHaveBeenCalledWith(1, 'backward');
+    expect(state.currentIndex).toBe(1);
   });
 });
 
@@ -503,7 +512,7 @@ describe('navigation keys with a panel open', () => {
 
 describe('Space with no scroll engine', () => {
   it('advances a step through activateCard', () => {
-    state.lenis = null;
+    useButtonSteps(0);
     pressKey(' ');
 
     expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
@@ -511,8 +520,7 @@ describe('Space with no scroll engine', () => {
   });
 
   it('goes back a step on Shift+Space', () => {
-    state.lenis = null;
-    state.currentIndex = 2;
+    useButtonSteps(2);
     pressKey(' ', { shiftKey: true });
 
     expect(mocks.mockActivateCard).toHaveBeenCalledWith(1, 'backward');

@@ -3296,9 +3296,9 @@
       _retargetPlateForStep(_plateForScene(getSceneIndex(index2)), objectId, step, index2);
     }
   }
-  function _needsNewViewer(step, prevStep2, objectId, prevObjectId) {
+  function _needsNewViewer(step, prevStep, objectId, prevObjectId) {
     const currentMode = isFullObjectMode(step);
-    const prevMode = prevStep2 ? isFullObjectMode(prevStep2) : null;
+    const prevMode = prevStep ? isFullObjectMode(prevStep) : null;
     const isModeChange = prevMode !== null && currentMode !== prevMode;
     const isObjectChange = objectId !== prevObjectId;
     return isObjectChange || isModeChange;
@@ -3320,10 +3320,10 @@
     const card = state.textCards[index2];
     if (!card) return;
     const step = _stepsData[index2] || {};
-    const prevStep2 = index2 > 0 ? _stepsData[index2 - 1] : null;
+    const prevStep = index2 > 0 ? _stepsData[index2 - 1] : null;
     const objectId = card.dataset.object;
     const prevObjectId = state.currentObjectRun.objectId;
-    const needsNewViewer = _needsNewViewer(step, prevStep2, objectId, prevObjectId);
+    const needsNewViewer = _needsNewViewer(step, prevStep, objectId, prevObjectId);
     const args = [
       index2,
       direction,
@@ -5266,17 +5266,9 @@
       state.currentIndex = targetIndex;
       state.scrollPosition = targetIndex + 1;
     } else {
-      state.currentMobileStep = targetIndex;
-      state.mobileInIntro = false;
       reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
-      state.steps.forEach((step, i) => {
-        if (i === targetIndex) {
-          step.classList.add("mobile-active");
-        } else {
-          step.classList.remove("mobile-active");
-        }
-      });
+      jumpButtonsTo(targetIndex);
     }
     writeHash();
   }
@@ -5294,23 +5286,15 @@
       state.currentIndex = targetIndex;
       state.scrollPosition = targetIndex + 1;
     } else {
-      state.currentMobileStep = targetIndex;
-      state.mobileInIntro = false;
       reconcileStackForJump(targetIndex);
       activateCard(targetIndex, "forward");
-      state.steps.forEach((step, i) => {
-        if (i === targetIndex) {
-          step.classList.add("mobile-active");
-        } else {
-          step.classList.remove("mobile-active");
-        }
-      });
+      jumpButtonsTo(targetIndex);
     }
     if (parsed.layer !== null) {
       const stepNumber = state.steps[targetIndex]?.dataset?.step;
       if (stepNumber) {
         let delay = 100;
-        const onTarget = () => state.lenis ? state.currentIndex === targetIndex : state.currentMobileStep === targetIndex;
+        const onTarget = () => state.currentIndex === targetIndex;
         if (parsed.layer >= 2) {
           _deepLinkTimers.push(setTimeout(() => {
             if (onTarget()) openPanel("layer1", stepNumber);
@@ -5650,12 +5634,6 @@
     _hideStepChrome();
     if (state.onStepChange) state.onStepChange(-1);
   }
-  function nextStep() {
-    goToStep(state.currentIndex + 1, "forward");
-  }
-  function prevStep() {
-    goToStep(state.currentIndex - 1, "backward");
-  }
   function _showIntroCard() {
     const intro = document.querySelector(".story-intro");
     if (!intro) return;
@@ -5680,6 +5658,18 @@
     updateViewerInfo(-1);
     const creditBadge = document.getElementById("object-credits-badge");
     if (creditBadge) creditBadge.classList.add("d-none");
+  }
+  function recordButtonStep(index2) {
+    if (state.lenis) return;
+    state.currentIndex = index2;
+    if (state.onStepChange) state.onStepChange(index2);
+  }
+  function jumpButtonsTo(index2) {
+    state.currentMobileStep = index2;
+    state.mobileInIntro = false;
+    state.steps.forEach((step, i) => step.classList.toggle("mobile-active", i === index2));
+    updateMobileButtonStates();
+    recordButtonStep(index2);
   }
   function createNavigationButtons() {
     if (document.querySelector(".mobile-nav")) {
@@ -5718,6 +5708,7 @@
     buttons.prev.addEventListener("click", goToPreviousMobileStep);
     buttons.next.addEventListener("click", goToNextMobileStep);
     updateMobileButtonStates();
+    initKeyboardNavigation();
   }
   function goToNextMobileStep() {
     if (state.mobileInIntro) {
@@ -5752,6 +5743,8 @@
     state.currentObjectRun = { objectId: null, runPosition: 0 };
     _hideStepChrome();
     updateMobileButtonStates();
+    recordButtonStep(-1);
+    if (!state.lenis) writeHash();
   }
   function _dismissMobileIntro() {
     if (state.mobileNavigationCooldown) return;
@@ -5769,6 +5762,8 @@
     activateCard(0, "forward");
     updateViewerInfo(0);
     updateMobileButtonStates();
+    recordButtonStep(0);
+    if (!state.lenis) writeHash();
   }
   function goToMobileStep(newIndex) {
     if (newIndex < 0 || newIndex >= state.steps.length) {
@@ -5795,6 +5790,7 @@
     } else {
       activateCard(newIndex, direction);
       updateViewerInfo(newIndex);
+      recordButtonStep(newIndex);
     }
     writeHash();
   }
@@ -5845,9 +5841,9 @@
       return;
     }
     if (direction === "forward") {
-      nextStep();
+      goToNextMobileStep();
     } else {
-      prevStep();
+      goToPreviousMobileStep();
     }
   }
   function _openNextLayer() {

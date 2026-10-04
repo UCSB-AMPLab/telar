@@ -25,6 +25,14 @@
  * between steps, left/right arrows open and close panels, Space advances
  * (Shift+Space goes back), and Escape closes the current panel.
  *
+ * state.currentIndex is the current step in every mode (-1 on the intro), and
+ * everything that asks which step the reader is on reads it: the fragment,
+ * the layer keys, the nav button. The scroll engine writes it wherever Lenis
+ * runs. Where it does not (vertical layout, iPad), button navigation is the
+ * only thing that moves the story and writes it through recordButtonStep.
+ * state.currentMobileStep is the step the buttons last moved to, which in
+ * embed mode runs ahead of the scroll while it is in flight.
+ *
  * All navigation is blocked when a panel is open (the "panel freeze" system
  * managed by panels.js). This prevents accidental step changes while the
  * user is reading panel content.
@@ -49,10 +57,12 @@ import {
 /**
  * Register keyboard event listener for step and panel navigation.
  *
- * Called by scroll-engine.js after Lenis is initialised. Arrow keys navigate
- * between steps through the scroll engine in desktop mode, and through
- * nextStep/prevStep in mobile/embed mode, where there is no Lenis. Panel keys
- * open and close layers, and Escape closes panels.
+ * Called by scroll-engine.js after Lenis is initialised, and by
+ * initializeButtonNavigation. Embed mode calls both; the listener is one
+ * function, so the second registration adds nothing. Arrow keys navigate
+ * between steps through the scroll engine wherever Lenis runs, and through
+ * the buttons' own moves where it does not. Panel keys open and close
+ * layers, and Escape closes panels.
  */
 export function initKeyboardNavigation() {
   document.addEventListener('keydown', handleKeyboard);
@@ -106,20 +116,6 @@ function _restoreIntro() {
   _hideStepChrome();
 
   if (state.onStepChange) state.onStepChange(-1);
-}
-
-/**
- * Navigate to the next step.
- */
-export function nextStep() {
-  goToStep(state.currentIndex + 1, 'forward');
-}
-
-/**
- * Navigate to the previous step.
- */
-export function prevStep() {
-  goToStep(state.currentIndex - 1, 'backward');
 }
 
 // ── Intro card ───────────────────────────────────────────────────────────────
@@ -179,6 +175,38 @@ function _hideStepChrome() {
 }
 
 // ── Button navigation (mobile + embed) ───────────────────────────────────────
+
+/**
+ * Record the step button navigation has put the story on, -1 for the intro.
+ *
+ * Where no scroll engine runs, this is the only writer of state.currentIndex,
+ * and it tells the nav button, which the engine does on its own path. Where
+ * the engine runs (embed), it writes both as the scroll reaches the step, and
+ * this leaves them to it.
+ *
+ * @param {number} index - Step index, or -1 for the intro.
+ */
+export function recordButtonStep(index) {
+  if (state.lenis) return;
+  state.currentIndex = index;
+  if (state.onStepChange) state.onStepChange(index);
+}
+
+/**
+ * Put button navigation on a step it did not walk to: a deep link, or a jump
+ * from within the story. That step's element is the one marked active, the
+ * buttons are enabled for a step rather than the intro, and the step is
+ * recorded as current.
+ *
+ * @param {number} index - Step index.
+ */
+export function jumpButtonsTo(index) {
+  state.currentMobileStep = index;
+  state.mobileInIntro = false;
+  state.steps.forEach((step, i) => step.classList.toggle('mobile-active', i === index));
+  updateMobileButtonStates();
+  recordButtonStep(index);
+}
 
 /**
  * Create the previous/next navigation button elements.
@@ -247,6 +275,7 @@ export function initializeButtonNavigation() {
   buttons.next.addEventListener('click', goToNextMobileStep);
 
   updateMobileButtonStates();
+  initKeyboardNavigation();
 }
 
 /**
@@ -304,6 +333,8 @@ function _restoreMobileIntro() {
   _hideStepChrome();
 
   updateMobileButtonStates();
+  recordButtonStep(-1);
+  if (!state.lenis) writeHash();
 }
 
 /**
@@ -329,6 +360,8 @@ function _dismissMobileIntro() {
   activateCard(0, 'forward');
   updateViewerInfo(0);
   updateMobileButtonStates();
+  recordButtonStep(0);
+  if (!state.lenis) writeHash();
 }
 
 /**
@@ -388,6 +421,7 @@ function goToMobileStep(newIndex) {
     // itself and is the only thing that can state where the reader now is.
     activateCard(newIndex, direction);
     updateViewerInfo(newIndex);
+    recordButtonStep(newIndex);
   }
 
   writeHash();
@@ -489,9 +523,10 @@ function _panelTookScroll(delta) {
 /**
  * Move one step in the given direction.
  *
- * The scroll engine drives the move wherever Lenis is running; mobile and
- * embed modes, which have no Lenis, move the card pool directly. A scroll
- * lock — an interactive card holding the viewport — blocks both.
+ * The scroll engine drives the move wherever Lenis is running. Where it is
+ * not, the key makes the same move as the matching button, so the buttons,
+ * the intro and the fragment follow it. A scroll lock — an interactive card
+ * holding the viewport — blocks both.
  *
  * @param {string} direction - 'forward' or 'backward'.
  */
@@ -503,9 +538,9 @@ function _navigateStep(direction) {
     return;
   }
   if (direction === 'forward') {
-    nextStep();
+    goToNextMobileStep();
   } else {
-    prevStep();
+    goToPreviousMobileStep();
   }
 }
 

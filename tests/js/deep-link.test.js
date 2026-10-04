@@ -29,7 +29,10 @@ vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
   activateCard: vi.fn(),
   reconcileStackForJump: vi.fn(),
 }));
-vi.mock('../../assets/js/telar-story/navigation.js', () => ({ goToStep: vi.fn() }));
+vi.mock('../../assets/js/telar-story/navigation.js', () => ({
+  goToStep: vi.fn(),
+  jumpButtonsTo: vi.fn(),
+}));
 vi.mock('../../assets/js/telar-story/panels.js', () => ({ openPanel: vi.fn() }));
 
 import { applyDeepLinkOnLoad } from '../../assets/js/telar-story/deep-link.js';
