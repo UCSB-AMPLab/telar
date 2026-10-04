@@ -19,8 +19,9 @@
  *      top edge.
  *   8. framePlacement: an overview (zoom ≤ 1) centres the whole image in the
  *      uncovered region whatever its x/y; any zoom above 1 places the authored
- *      focal point exactly, so a settled framing changes at zoom 1; zoom ≥ 2
- *      places it as pinned. blendPlacements moves continuously between two.
+ *      focal point at the region centre as far as the clamp allows, so a settled
+ *      framing changes at zoom 1, and above 1 it changes continuously with zoom;
+ *      zoom ≥ 2 places it as pinned. blendPlacements moves continuously between two.
  *
  * @version v1.8.0
  */
@@ -420,8 +421,9 @@ describe('computeFocalTarget — null cardBox fallback', () => {
 // path is transient-zoom-free: it never reads the live OSD zoom). These cases lock the
 // rule: the focal lands at the uncovered-region centre where the whole focal circle
 // fits there, stays at least the circle's radius from every region edge, clamps to the
-// image bound while the circle still fits inside the region, and keeps the ideal
-// (region-centre) position where the image is narrower than that on an axis.
+// image bound while the circle still fits inside the region, and, where the image is
+// shorter than the region on an axis, keeps it inside the region as near the ideal
+// (region-centre) position as that allows.
 describe('_clampFocalPx — keep-circle focal clamp', () => {
   it('keeps the region centre when the focal there covers the region (step-3 regression case)', () => {
     // 1440×900 cell, authored 0.486,0.277,zoom10:
@@ -452,14 +454,25 @@ describe('_clampFocalPx — keep-circle focal clamp', () => {
     expect(F.x + radius).toBeLessThanOrEqual(region.x + region.w);
   });
 
-  it('keeps the ideal focal when the image is narrower than the region on an axis', () => {
-    // Image 600 px wide/tall but region is 2000 — cannot cover, so just keep the ideal.
+  it('keeps the ideal focal when a short image already lies inside the region there', () => {
+    // Image 600 px wide/tall in a 2000 px region: it cannot cover, and at the ideal it
+    // runs 577–1177 and 745–1345, inside the region, so the ideal stands.
     const region = { x: 0, y: 0, w: 2000, h: 2000 };
     const edges = { eLeft: 300, eRight: 300, eTop: 300, eBottom: 300 };
     const ideal = { x: 877, y: 1045 };
     const F = _clampFocalPx(region, edges, ideal, 250);
     expect(F.x).toBeCloseTo(877, 5);
     expect(F.y).toBeCloseTo(1045, 5);
+  });
+
+  it('pulls a short image back inside the region where the ideal would hang it past an edge', () => {
+    // At the ideal x 1900 the 600 px image would run to 2200, past the 2000 px region;
+    // at y 100 it would start 200 px above it. It is held flush with those edges.
+    const region = { x: 0, y: 0, w: 2000, h: 2000 };
+    const edges = { eLeft: 300, eRight: 300, eTop: 300, eBottom: 300 };
+    const F = _clampFocalPx(region, edges, { x: 1900, y: 100 }, 250);
+    expect(F.x + edges.eRight).toBeCloseTo(2000, 9);
+    expect(F.y - edges.eTop).toBeCloseTo(0, 9);
   });
 
   it('keeps the image against the region edge when one axis is nearer (corner step)', () => {
@@ -494,9 +507,9 @@ describe('_clampFocalPx — keep-circle focal clamp', () => {
     expect(F.y - edges.eTop).toBeCloseTo(region.y, 0);
   });
 
-  it('leaves the focal alone where the image cannot cover the axis at all', () => {
-    // An overview: the whole object stands inside the region with margin, so there is
-    // no region edge for it to reach and nothing to hold the focal to.
+  it('leaves a centred image that cannot cover the axis where it is', () => {
+    // An overview: the whole object stands centred inside the region with margin, so
+    // it is already inside and the clamp does not move it.
     const region = { x: 0, y: 0, w: 1000, h: 600 };
     const edges = { eLeft: 120, eRight: 120, eTop: 80, eBottom: 80 };
     const ideal = { x: 500, y: 300 };
@@ -596,12 +609,14 @@ describe('_clampFocalPx — an image that exactly fits the region', () => {
     expect(r.right).toBeCloseTo(1440, 6);
   });
 
-  it('still leaves an image a hundredth of a pixel short at the ideal position', () => {
-    // Genuinely smaller than the region, however slightly: the overview rule holds.
+  it('keeps an image a hundredth of a pixel short inside the region', () => {
+    // Genuinely smaller than the region, however slightly: it cannot cover the
+    // axis, so it is held inside it, a hundredth of a pixel from flush.
     const edges = { eLeft: 100, eRight: 763.99, eTop: 50, eBottom: 50 };
     const F = _clampFocalPx(region, edges, centre, 0);
-    expect(F.x).toBe(centre.x);
-    expect(F.y).toBe(centre.y);
+    expect(F.x - edges.eLeft).toBeGreaterThanOrEqual(region.x);
+    expect(F.x + edges.eRight).toBeCloseTo(region.x + region.w, 9);
+    expect(F.y).toBe(centre.y);   // the image is short and centred on y: inside already
   });
 });
 
@@ -653,8 +668,9 @@ describe('overviewPullFraction', () => {
 //
 // An overview step shows the whole object, and it is centred in the uncovered
 // region: the authored x/y do not move it (ruled 26 September). Above zoom 1
-// the authored focal point is what is placed (ruled 27 September), so a step
-// frames exactly the x/y it was authored or captured at. Motion between two
+// the authored focal point is what is placed (ruled 27 September), at the
+// region centre unless the clamp moves it to keep background out of the region
+// or a short image inside it. Motion between two
 // steps either side of 1 is carried by blendPlacements, not by placing the
 // blended x/y/zoom.
 
@@ -775,9 +791,13 @@ describe('framePlacement — above zoom 1 the authored focal point is placed', (
     // the settled framing is not continuous at 1. The portrait image fills the
     // region's height at 1 and not its width, so the jump is horizontal: the
     // focal's offset from centre, 460 image px, at the fit scale 757 / 2000.
+    // At the region centre the 379 px image still lies inside the region, so
+    // nothing holds it elsewhere.
     const a = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 1);
     const b = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 1.001);
     expect(b.centre.x - a.centre.x).toBeGreaterThan(170);
+    expect(b.anchorPx.x).toBeCloseTo(1008, 9);
+    expect(b.right).toBeLessThan(1440);
     expect(Math.abs(b.centre.y - a.centre.y)).toBeLessThan(1);
   });
 });
@@ -823,10 +843,79 @@ describe('blendPlacements — the frames between two settled placements', () => 
   });
 });
 
+// ── Above zoom 1, the framing changes continuously with zoom ──────────────────
+//
+// An image shorter than the region on an axis is kept inside it (ruled 27
+// September). Placed at the region centre instead, it hung past a
+// region edge until it grew long enough to cover the axis, and then jumped
+// edge to edge: 348 px for the landscape case below, and up to 700 px in the
+// 1920×1080 cases sampled with a 420 px side card.
+
+describe('framePlacement — an image shorter than the region stays inside it', () => {
+  const IMAGES = { portrait: [1000, 2000], landscape: [3000, 2000], square: [2400, 2400], tall: [1000, 4000] };
+  const FOCALS = [[0.02, 0.5], [0.98, 0.5], [0.5, 0.02], [0.5, 0.98], [0.04, 0.9], [0.96, 0.04], [0.3, 0.7]];
+
+  for (const [layoutName, layout] of [['desktop side card', DESKTOP], ['phone bottom card', PHONE]]) {
+    it(`never hangs a short image past a region edge (${layoutName})`, () => {
+      const out = [];
+      for (const [name, [w, h]] of Object.entries(IMAGES)) {
+        for (const [x, y] of FOCALS) {
+          for (const zoom of [1.1, 1.3, 1.6, 2, 2.5, 3.5]) {
+            const p = placeImage(layout, w, h, x, y, zoom);
+            const r = computeFocalTarget(x, y, zoom, w, h, layout.box, layout.mode).region;
+            const shortX = p.right - p.left < r.w, shortY = p.bottom - p.top < r.h;
+            if ((shortX && (p.left < r.x - 1e-6 || p.right > r.x + r.w + 1e-6)) ||
+                (shortY && (p.top < r.y - 1e-6 || p.bottom > r.y + r.h + 1e-6))) {
+              out.push(`${name} (${x}, ${y}) zoom ${zoom}`);
+            }
+          }
+        }
+      }
+      expect(out).toEqual([]);
+    });
+  }
+
+  it("holds the portrait step at zoom 2 with its right edge on the window's", () => {
+    // 798.8 px wide in an 864 px region: at the region centre the focal at
+    // x 0.04 would put 400.0 px of background beside the text card and 334.8 px
+    // of the image past the window. It is held with its right edge on the window's.
+    const p = placeImage(DESKTOP, 1000, 2000, 0.04, 0.5, 2);
+    expect(p.s).toBe(0.7987759839611691);           // scale unchanged
+    expect(p.right).toBeCloseTo(1440, 9);
+    expect(p.anchorPx.y).toBe(378.5);                // y covers and is unchanged
+  });
+});
+
+describe('framePlacement — above zoom 1 the framing changes continuously with zoom', () => {
+  // The image's corner is sampled every 0.0001 of zoom; a switch in the clamp
+  // shows as one sample moving by hundreds of pixels however small the step.
+  const CASES = [
+    ['landscape, top-right corner', DESKTOP, 3000, 2000, 0.96, 0.04],
+    ['square, bottom-left corner', DESKTOP, 3000, 3000, 0.02, 0.98],
+    ['portrait, left edge (switches above 2)', DESKTOP, 1500, 3000, 0.04, 0.5],
+    ['landscape, phone', PHONE, 3000, 2000, 0.1, 0.9],
+    ['portrait, phone', PHONE, 1000, 2000, 0.9, 0.05],
+  ];
+
+  for (const [name, layout, w, h, x, y] of CASES) {
+    it(`moves the image by under 2 px per 0.0001 of zoom from 1.0001 to 4 (${name})`, () => {
+      let prev = null, worst = 0, at = 0;
+      for (let i = 10001; i <= 40000; i++) {
+        const p = placeImage(layout, w, h, x, y, i / 10000);
+        if (prev) {
+          const d = Math.hypot(p.left - prev.left, p.top - prev.top);
+          if (d > worst) { worst = d; at = i / 10000; }
+        }
+        prev = p;
+      }
+      expect(worst, `worst at zoom ${at}`).toBeLessThan(2);
+    });
+  }
+});
+
 describe('framePlacement — zoom 2 and above place the focal point as before', () => {
   // Pinned from the placement before overview centring; exact, not approximate.
   const PINS = [
-    [DESKTOP, 1000, 2000, 0.04, 0.5, 2, 0.7987759839611691, 1008, 378.5],
     [DESKTOP, 3000, 2000, 0.9, 0.1, 3, 0.8411111111111111, 1187.6666666666667, 168.22222222222223],
     [DESKTOP, 1000, 2000, 0.3, 0.7, 6, 2.3963279518835074, 1008, 378.5],
     [DESKTOP, 7920, 12237, 0.05, 0.05, 8, 0.5222037976374401, 782.7927038644262, 319.5103935844677],

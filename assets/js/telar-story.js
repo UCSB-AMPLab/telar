@@ -482,7 +482,7 @@
       if (both !== null) return both;
       const covered = into(coverLo, coverHi, want);
       if (covered !== null) return covered;
-      return want;
+      return Math.max(coverHi, Math.min(coverLo, want));
     };
     return {
       x: axis(region.x, region.w, edges.eLeft, edges.eRight, ideal.x),

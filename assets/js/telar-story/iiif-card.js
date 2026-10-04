@@ -346,10 +346,15 @@ export function overviewPullFraction(zoom) {
  * plain ground that a reader sees a band of background beside the image at once and
  * does not see a framed detail sitting nearer the region edge than intended.
  *
- * Where the image cannot cover the axis at all — an overview, where it is meant to
- * stand inside the region with margin around it — there is nothing to hold it to and
- * the ideal position stands. An image exactly as long as the region (zoom 1, on its
- * limiting axis) covers it, and is placed edge to edge.
+ * Where the image is shorter than the region on an axis, it cannot cover it, and the
+ * two coverage bounds cross: between them lie the positions that keep the whole image
+ * inside the region. The focal is held there, as near the ideal as that allows, so
+ * the image never hangs past a region edge under the text card or off the window.
+ * At the length where the image starts to cover the axis the crossed bounds meet
+ * the covering ones at the same point, so the placement changes continuously as the
+ * scale grows through it. An overview is centred and so already inside the region;
+ * it is not moved. An image exactly as long as the region (zoom 1, on its limiting
+ * axis) covers it, and is placed edge to edge.
  *
  * Note: this returns the target focal POSITION (not a pan delta) and reads no live
  * OSD state, so the apply path is independent of the transient (mid-animation) zoom.
@@ -382,7 +387,7 @@ export function _clampFocalPx(region, edges, ideal, radius) {
     const covered = into(coverLo, coverHi, want);
     if (covered !== null) return covered;
 
-    return want;
+    return Math.max(coverHi, Math.min(coverLo, want));   // shorter: kept inside
   };
 
   return {
@@ -452,7 +457,9 @@ export function framePlacement(target, zoom, container) {
   // shows the whole object, so it is centred in the region and the authored x/y
   // do not move it: the anchor is the image centre at zoom ≤ 1. Above 1 a step
   // frames a detail, and the anchor is exactly the authored focal point, so
-  // the x/y an author captured is the point the reader sees at the centre.
+  // the x/y an author captured is the point the reader sees at the centre,
+  // unless the clamp below has to move it to keep background out of the
+  // region or the image inside it.
   // The settled framing of a focal off centre therefore changes at zoom 1.
   // Motion between two steps on either side of 1 does not pass through this
   // function at intermediate zooms: lerpIiifPosition blends the two settled
