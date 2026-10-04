@@ -383,25 +383,12 @@ function _liftBase(progress) {
   return progress ? `translateY(${-progress * 100}vh)` : 'translateY(0)';
 }
 
-/**
- * Place a card along the lift: 0 is its resting place, 1 is clear of the top
- * of the viewport.
- *
- * A viewport's worth of travel clears any card the fit model builds. The
- * card's top edge rests at `(viewportH − cardH) / 2` and its lower edge at
- * `(viewportH + cardH) / 2`, and the ceiling holds cardH to 0.80 of the
- * viewport, so the lower edge rests at most 0.9 of the way down and one
- * viewport of travel carries it past the top. The card's own rotation and
- * offset ride along, so a lifted card is the same sheet at a different
- * height rather than a squared-up one.
- *
- * @param {HTMLElement} el
- * @param {number} progress - 0 at rest, 1 lifted clear
- * @returns {string} A transform string for the card's inline style
- */
-function buildLiftTransform(el, progress) {
-  return buildTransform(_readCardMessiness(el), _liftBase(progress));
-}
+// A viewport's worth of travel clears any card the fit model builds: the
+// card's top edge rests at (viewportH − cardH) / 2 and its lower edge at
+// (viewportH + cardH) / 2, and the ceiling holds cardH to 0.80 of the
+// viewport, so the lower edge rests at most 0.9 of the way down. The card's
+// own rotation and offset ride along, so a lifted card is the same sheet at a
+// different height rather than a squared-up one.
 
 /**
  * How far along the lift the current scroll position stands.
@@ -452,47 +439,57 @@ function _coveredCardLifts(stepIndex) {
 }
 
 /**
- * Where a card under the active one belongs.
+ * Write a card's position, unless it already holds it.
  *
- * In the fixed stack a covered card stays exactly where it was and the card
- * over it hides it. Under the fit model it stays only where a plate rises to
- * cover it, and has left through the top of the viewport otherwise. Every
- * path that parks a covered card — the settle, the reconciliation a jump
- * runs, the backstop a backward move keeps — reads the base here, so one
- * answer covers them all.
+ * The only writer of a card's transform outside an activation's own
+ * animation, and the reason the skip is safe: every base it is given comes
+ * from `cardBaseFor`, so two paths placing one card at one position produce
+ * the same string and the second recognises the first's work. A transform
+ * written over a transition already running towards it restarts that
+ * transition from wherever it has reached, which at the end of a move leaves
+ * the last of the travel running for another full duration.
  *
- * @param {number} stepIndex - The card's step
- * @returns {string} A base translate for buildTransform
+ * @param {HTMLElement} el
+ * @param {string} base - A base translate from cardBaseFor
  */
-function coveredCardBase(stepIndex) {
-  return _coveredCardLifts(stepIndex) ? 'translateY(-100vh)' : 'translateY(0)';
+function placeCard(el, base) {
+  if (!el) return;
+  const transform = buildTransform(_readCardMessiness(el), base);
+  if (el.style.transform !== transform) el.style.transform = transform;
 }
 
 /**
- * The lift's share of a settle: every covered card either clear of the top or
- * at rest under the plate that covers it, and the card being covered part of
- * the way to wherever it is going.
+ * Where a card belongs, for a scroll resting at `stepIndex + progress`.
  *
- * Registered on the engine's settle rather than written beside it, so the
- * rule reaches every path that states where the cards are — a scrub frame, a
- * scroll that stops of its own accord, a snap, a keyboard move, a jump, a
- * deep link — and a scrub that ends part-way up cannot leave a card above the
- * fold with nothing to bring it back. The settle has already placed the card
- * at `stepIndex` at rest; that card is the one travelling, so its write here
- * is the last word on the position.
+ * The one statement of the stack's geometry. Four cases and no others: a card
+ * above the pair in play waits a full viewport below; the arriving card is
+ * that viewport less the progress travelled; the card the position rests on is
+ * at rest, or part of the way out through the top where it is the one being
+ * covered; and a card under that is parked where a covered card belongs —
+ * still, where a plate rises to cover it, and clear of the top where none
+ * does.
  *
+ * Every path that writes a card's position asks here: the settle each frame,
+ * the reconciliation a jump runs, the backstop a backward move keeps, and the
+ * two halves of an activation. That is what makes them agree. They used to
+ * state the same four positions in their own terms, which is subtler than
+ * plain duplication — two paths writing one position as two different strings
+ * cannot recognise each other's work, so a redundant write could not be
+ * skipped and a settle repeating a position restarted the transition that was
+ * already carrying the card there.
+ *
+ * @param {number} cardIndex - The card being placed
  * @param {number} stepIndex - Step the position rests on; -1 is the intro
- * @param {number} progress - Fraction of the way to the next step
+ * @param {number} [progress] - Fraction of the way to the next step
+ * @returns {string} A base translate for buildTransform
  */
-function _settleLiftedCards(stepIndex, progress) {
-  for (let i = 0; i <= stepIndex; i++) {
-    const el = state.textCards[i] || state.titleCards[i];
-    if (!el) continue;
-
-    const lift = !_coveredCardLifts(i) ? 0 : (i === stepIndex ? progress : 1);
-    const transform = buildLiftTransform(el, lift);
-    if (el.style.transform !== transform) el.style.transform = transform;
+function cardBaseFor(cardIndex, stepIndex, progress = 0) {
+  if (cardIndex > stepIndex + 1) return 'translateY(100vh)';
+  if (cardIndex === stepIndex + 1) return `translateY(${(1 - progress) * 100}vh)`;
+  if (cardIndex === stepIndex) {
+    return _liftBase(_coveredCardLifts(cardIndex) ? progress : 0);
   }
+  return _liftBase(_coveredCardLifts(cardIndex) ? 1 : 0);
 }
 
 /**
@@ -963,7 +960,6 @@ export function initCardPool(storyData, config) {
     });
   }
 
-  if (isFitHeight()) onCardsSettle(_settleLiftedCards);
 
   applyCardMotionDuration(cardStack);
 }
@@ -1198,7 +1194,7 @@ export function reconcileStackForJump(targetIndex) {
     el.style.transition = 'none';
     el.style.transform = buildTransform(
       _readCardMessiness(el),
-      below ? coveredCardBase(i) : 'translateY(100vh)',
+      cardBaseFor(i, targetIndex),
     );
     moved.push(el);
   }
@@ -1233,8 +1229,9 @@ function _restoreBackwardTarget(cardEl) {
   if (cardEl.classList.contains('is-stacked') ||
       cardEl.classList.contains('is-active')) return;
 
-  const base = coveredCardBase(_cardStepIndex(cardEl));
-  _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), base));
+  const idx = _cardStepIndex(cardEl);
+  _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl),
+                                        cardBaseFor(idx, idx + 1)));
 }
 
 /**
@@ -1593,16 +1590,16 @@ export function settleCards(position) {
   const stepIndex = Math.floor(contentPos);
   const progress = contentPos - stepIndex;
 
-  const cardAt = (i) => (i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i]);
-  const place = (el, base) => {
-    if (!el) return;
-    const transform = buildTransform(_readCardMessiness(el), base);
-    if (el.style.transform !== transform) el.style.transform = transform;
-  };
-
-  place(cardAt(stepIndex), 'translateY(0)');
-  place(cardAt(stepIndex + 1), `translateY(${(1 - progress) * 100}vh)`);
-  place(cardAt(stepIndex + 2), 'translateY(100vh)');
+  // Every card the stack has, not only the pair in motion: a card below the
+  // active one is where a covered card belongs, and which position that is
+  // depends on whether a plate rises to cover it — so it is not always the
+  // place the card was left. Card 0 up to the one waiting below is the whole
+  // stack, and placing a card that is already where it belongs writes nothing.
+  for (let i = 0; i <= stepIndex + 2; i++) {
+    const el = i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i];
+    if (!el) continue;
+    placeCard(el, cardBaseFor(i, stepIndex, progress));
+  }
 
   _settlePlates(stepIndex, progress);
 
@@ -2121,23 +2118,17 @@ function _deactivatePreviousTextCard(newIndex, direction) {
   if (!prevCard || prevCard.stepIndex === newIndex) return;
 
   const el = prevCard.element;
-  const messiness = _readCardMessiness(el);
   el.classList.remove('is-active');
 
-  if (direction === 'backward') {
-    // Slide away below
-    el.style.transform = buildTransform(messiness, 'translateY(100vh)');
-    el.classList.remove('is-stacked');
-  } else {
-    // Forward: the card stays completely still where a plate rises to cover
-    // it, and leaves through the top where none does. The transform has to be
-    // written here rather than left to the stylesheet, because a card's
-    // transform is inline and a rule for it would lose the cascade.
-    el.classList.add('is-stacked');
-    if (_coveredCardLifts(prevCard.stepIndex)) {
-      el.style.transform = buildLiftTransform(el, 1);
-    }
-  }
+  // Backward the card is the one above the step being arrived at, and travels
+  // away below; forward it is the one under it, and stays where a plate rises
+  // to cover it or leaves through the top where none does. Both are the same
+  // question — where does this card belong now the position is at newIndex —
+  // so both ask the one rule rather than stating an answer of their own. The
+  // transform is written here rather than left to the stylesheet because a
+  // card's transform is inline and a rule for it would lose the cascade.
+  el.classList.toggle('is-stacked', direction !== 'backward');
+  placeCard(el, cardBaseFor(prevCard.stepIndex, newIndex));
 }
 
 /**
@@ -2183,11 +2174,9 @@ function _activateTextCard(cardEl) {
   // rest, and the next frame's setCardProgress carries it the rest of the
   // way. Resting it here instead would put it home for a frame and then lift
   // it again.
-  if (isScrubbing && _coveredCardLifts(_cardStepIndex(cardEl))) {
-    cardEl.style.transform = buildLiftTransform(cardEl, _liftProgress());
-  } else {
-    cardEl.style.transform = buildTransform(messiness, 'translateY(0)');
-  }
+  const idx = _cardStepIndex(cardEl);
+  cardEl.style.transform = buildTransform(
+    messiness, cardBaseFor(idx, idx, isScrubbing ? _liftProgress() : 0));
 
   // Write final rect to state.cardOverlayRect once the slide-up transition settles.
   // Two cases skip transitionend (it never fires when transition: none is set):

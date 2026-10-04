@@ -158,6 +158,13 @@ function initializeStory() {
       }
     };
 
+    // The handler is the only thing that puts the button in one mode or the
+    // other, and by the time it exists the story may already be on a step: a
+    // deep link arrives at its step before this point in the sequence. Read
+    // the state once here rather than waiting for a change that a reader who
+    // landed where they meant to may never make.
+    state.onStepChange(state.currentIndex);
+
     btnNav.addEventListener('click', (e) => {
       if (btnNav.classList.contains('is-start')) {
         e.preventDefault();

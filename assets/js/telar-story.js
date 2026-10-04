@@ -2426,9 +2426,6 @@
   function _liftBase(progress) {
     return progress ? `translateY(${-progress * 100}vh)` : "translateY(0)";
   }
-  function buildLiftTransform(el, progress) {
-    return buildTransform(_readCardMessiness(el), _liftBase(progress));
-  }
   function _liftProgress() {
     const p = state.scrollProgress;
     return Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0;
@@ -2440,17 +2437,18 @@
     if (getSceneIndex(stepIndex) === getSceneIndex(over)) return true;
     return _isTitleStep(over) && !!_plateForScene(getSceneIndex(stepIndex));
   }
-  function coveredCardBase(stepIndex) {
-    return _coveredCardLifts(stepIndex) ? "translateY(-100vh)" : "translateY(0)";
+  function placeCard(el, base) {
+    if (!el) return;
+    const transform = buildTransform(_readCardMessiness(el), base);
+    if (el.style.transform !== transform) el.style.transform = transform;
   }
-  function _settleLiftedCards(stepIndex, progress) {
-    for (let i = 0; i <= stepIndex; i++) {
-      const el = state.textCards[i] || state.titleCards[i];
-      if (!el) continue;
-      const lift = !_coveredCardLifts(i) ? 0 : i === stepIndex ? progress : 1;
-      const transform = buildLiftTransform(el, lift);
-      if (el.style.transform !== transform) el.style.transform = transform;
+  function cardBaseFor(cardIndex, stepIndex, progress = 0) {
+    if (cardIndex > stepIndex + 1) return "translateY(100vh)";
+    if (cardIndex === stepIndex + 1) return `translateY(${(1 - progress) * 100}vh)`;
+    if (cardIndex === stepIndex) {
+      return _liftBase(_coveredCardLifts(cardIndex) ? progress : 0);
     }
+    return _liftBase(_coveredCardLifts(cardIndex) ? 1 : 0);
   }
   function _cardStepIndex(el) {
     const i = parseInt(el.dataset.stepIndex, 10);
@@ -2683,7 +2681,6 @@
         _recomputeCardGeometry(window.innerWidth, window.innerHeight);
       });
     }
-    if (isFitHeight()) onCardsSettle(_settleLiftedCards);
     applyCardMotionDuration(cardStack);
   }
   function buildTextCardContent(step) {
@@ -2770,7 +2767,7 @@
       el.style.transition = "none";
       el.style.transform = buildTransform(
         _readCardMessiness(el),
-        below ? coveredCardBase(i) : "translateY(100vh)"
+        cardBaseFor(i, targetIndex)
       );
       moved.push(el);
     }
@@ -2783,8 +2780,11 @@
   function _restoreBackwardTarget(cardEl) {
     if (!cardEl) return;
     if (cardEl.classList.contains("is-stacked") || cardEl.classList.contains("is-active")) return;
-    const base = coveredCardBase(_cardStepIndex(cardEl));
-    _snapTransform(cardEl, buildTransform(_readCardMessiness(cardEl), base));
+    const idx = _cardStepIndex(cardEl);
+    _snapTransform(cardEl, buildTransform(
+      _readCardMessiness(cardEl),
+      cardBaseFor(idx, idx + 1)
+    ));
   }
   function _activateForward(index2, direction, card, registryEntry, step, objectId, prevObjectId, needsNewViewer) {
     if (needsNewViewer) {
@@ -2936,24 +2936,13 @@
     const contentPos = position - 1;
     const stepIndex = Math.floor(contentPos);
     const progress = contentPos - stepIndex;
-    const cardAt = (i) => i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i];
-    const place = (el, base) => {
-      if (!el) return;
-      const transform = buildTransform(_readCardMessiness(el), base);
-      if (el.style.transform !== transform) el.style.transform = transform;
-    };
-    place(cardAt(stepIndex), "translateY(0)");
-    place(cardAt(stepIndex + 1), `translateY(${(1 - progress) * 100}vh)`);
-    place(cardAt(stepIndex + 2), "translateY(100vh)");
+    for (let i = 0; i <= stepIndex + 2; i++) {
+      const el = i < 0 ? null : state.textCards?.[i] || state.titleCards?.[i];
+      if (!el) continue;
+      placeCard(el, cardBaseFor(i, stepIndex, progress));
+    }
     _settlePlates(stepIndex, progress);
     for (const hook of _settleHooks) hook(stepIndex, progress);
-  }
-  function onCardsSettle(hook) {
-    _settleHooks.push(hook);
-    return () => {
-      const at = _settleHooks.indexOf(hook);
-      if (at >= 0) _settleHooks.splice(at, 1);
-    };
   }
   function _applyFramingToViewer(viewerCard, x, y, zoom, snap2) {
     if (isNaN(x) || isNaN(y) || isNaN(zoom)) return;
@@ -3214,17 +3203,9 @@
     const prevCard = state.cardRegistry.find((c) => c.element.classList.contains("is-active"));
     if (!prevCard || prevCard.stepIndex === newIndex) return;
     const el = prevCard.element;
-    const messiness = _readCardMessiness(el);
     el.classList.remove("is-active");
-    if (direction === "backward") {
-      el.style.transform = buildTransform(messiness, "translateY(100vh)");
-      el.classList.remove("is-stacked");
-    } else {
-      el.classList.add("is-stacked");
-      if (_coveredCardLifts(prevCard.stepIndex)) {
-        el.style.transform = buildLiftTransform(el, 1);
-      }
-    }
+    el.classList.toggle("is-stacked", direction !== "backward");
+    placeCard(el, cardBaseFor(prevCard.stepIndex, newIndex));
   }
   function _writeCardOverlayRect(cardEl) {
     const hadRect = state.cardOverlayRect != null;
@@ -3237,11 +3218,11 @@
     cardEl.classList.add("is-active");
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const isScrubbing = document.querySelector(".card-stack")?.classList.contains("is-scrubbing");
-    if (isScrubbing && _coveredCardLifts(_cardStepIndex(cardEl))) {
-      cardEl.style.transform = buildLiftTransform(cardEl, _liftProgress());
-    } else {
-      cardEl.style.transform = buildTransform(messiness, "translateY(0)");
-    }
+    const idx = _cardStepIndex(cardEl);
+    cardEl.style.transform = buildTransform(
+      messiness,
+      cardBaseFor(idx, idx, isScrubbing ? _liftProgress() : 0)
+    );
     if (prefersReduced || isScrubbing) {
       _writeCardOverlayRect(cardEl);
       return;
@@ -5674,6 +5655,7 @@
           if (textEl) textEl.textContent = startText;
         }
       };
+      state.onStepChange(state.currentIndex);
       btnNav.addEventListener("click", (e) => {
         if (btnNav.classList.contains("is-start")) {
           e.preventDefault();
