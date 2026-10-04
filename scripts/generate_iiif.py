@@ -191,9 +191,26 @@ def find_image_for_object(object_id, source_dir):
         for case_ext in [ext, ext.upper()]:
             image_path = source_path / f"{object_id}{case_ext}"
             if image_path.exists():
-                return image_path
+                return _as_named_on_disk(image_path)
 
     return None
+
+
+def _as_named_on_disk(path):
+    """The same file, under the name the directory holds it by.
+
+    On a case-insensitive filesystem `calib.png` exists when the file is
+    `calib.PNG`, and the name printed would be one the file does not have,
+    and not the one the Linux build prints.
+    """
+    try:
+        entries = [entry.name for entry in path.parent.iterdir()]
+    except OSError:
+        return path
+    if path.name in entries:
+        return path
+    folded = [name for name in entries if name.lower() == path.name.lower()]
+    return path.with_name(folded[0]) if len(folded) == 1 else path
 
 def get_base_url_from_config():
     """

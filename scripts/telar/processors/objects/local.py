@@ -4,7 +4,7 @@ The disk-aware media-type variant that steers validation, the near-match
 suggester for a filename that does not quite line up, and the checks for a
 local image or audio file. Nothing here reaches the network.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import re
@@ -92,7 +92,10 @@ def _find_similar_image_filenames(object_id, images_dir):
         if similarity > 0.85:
             similar_files.append(file_path.name)
 
-    return similar_files
+    # By name, not in the order the directory lists them: that order is the
+    # filesystem's, so the same site would name its candidates in a different
+    # order on the author's machine and on the build.
+    return sorted(similar_files)
 
 
 def _validate_local_sources(df, warnings):
