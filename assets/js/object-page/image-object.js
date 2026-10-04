@@ -39,12 +39,13 @@ export function requestedPage(search) {
 
 /**
  * The address that names page `page0` of a `total`-page object: no `page`
- * parameter for the first page, `page=N` (1-indexed) for any other.
+ * parameter for the first page or for a single-page object, `page=N`
+ * (1-indexed) for any other page.
  *
  * Only `page` parameters are touched. The rest of the query is kept as
  * written rather than re-serialised, since a reader may have copied it from
  * somewhere that encodes differently; the hash is kept too. A single-page
- * object has no page to name, so its address comes back unchanged.
+ * object has no page to name, so a `page` parameter on its address is dropped.
  *
  * @param {string} href - The current absolute address.
  * @param {number} page0 - 0-indexed page shown.
@@ -52,14 +53,18 @@ export function requestedPage(search) {
  * @returns {string}
  */
 export function addressWithPage(href, page0, total) {
-  if (total <= 1) return href;
   const url = new URL(href);
-  const kept = url.search.replace(/^\?/, '').split('&').filter(function(piece) {
-    if (piece === '') return false;
-    const keys = Array.from(new URLSearchParams(piece).keys());
-    return keys[0] !== 'page';
+  const pieces = url.search.replace(/^\?/, '').split('&');
+  const isPage = function(piece) {
+    return piece !== '' && Array.from(new URLSearchParams(piece).keys())[0] === 'page';
+  };
+  const named = total > 1 && page0 > 0;
+  // An address with no page to drop or add is left exactly as written.
+  if (!named && !pieces.some(isPage)) return href;
+  const kept = pieces.filter(function(piece) {
+    return piece !== '' && !isPage(piece);
   });
-  if (page0 > 0) kept.push('page=' + (page0 + 1));
+  if (named) kept.push('page=' + (page0 + 1));
   url.search = kept.length ? '?' + kept.join('&') : '';
   return url.href;
 }
@@ -109,8 +114,8 @@ export async function initImageViewer(data, doc = document) {
   // Multi-page detection reads the wrapper's parsed page list, which
   // spares a second manifest fetch.
   const isMultiPage = wrapper.pages.length > 1;
+  writeAddress(wrapper.currentPage);
   if (isMultiPage) {
-    writeAddress(wrapper.currentPage);
     doc.getElementById('object-viewer').classList.add('multipage');
     const pageRows = doc.querySelectorAll('.coord-page-row');
     pageRows.forEach(function(el) {

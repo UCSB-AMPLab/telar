@@ -398,8 +398,19 @@ describe('addressWithPage', () => {
     expect(addressWithPage(base + '?page=abc&%70age=9&x=1', 1, 5)).toBe(base + '?x=1&page=2');
   });
 
-  it('leaves a single-page object\'s address alone', () => {
-    expect(addressWithPage(base + '?page=3', 0, 1)).toBe(base + '?page=3');
+  it('drops the page parameter from a single-page object\'s address', () => {
+    expect(addressWithPage(base + '?page=3', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?page=1', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?page=0', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?page=abc', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?lang=es&page=3#notes', 0, 1)).toBe(base + '?lang=es#notes');
+  });
+
+  it('leaves an address with no page parameter as it is', () => {
+    expect(addressWithPage(base + '?lang=es#notes', 0, 1)).toBe(base + '?lang=es#notes');
+    expect(addressWithPage(base, 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?lang=es&&q=a%20b+z#x', 0, 1)).toBe(base + '?lang=es&&q=a%20b+z#x');
+    expect(addressWithPage(base + '?lang=es&&q=a%20b+z#x', 0, 5)).toBe(base + '?lang=es&&q=a%20b+z#x');
   });
 });
 
@@ -475,12 +486,20 @@ describe('initImageViewer', () => {
       expect(window.history.length).toBe(entries);
     });
 
-    it('leaves a single-page object\'s address alone', async () => {
+    it.each([
+      ['?page=3', '/objects/leyes/'],
+      ['?page=1', '/objects/leyes/'],
+      ['?page=0', '/objects/leyes/'],
+      ['?page=abc', '/objects/leyes/'],
+      ['?lang=es&page=3#x', '/objects/leyes/?lang=es#x'],
+    ])('corrects a single-page object\'s address %s', async (search, expected) => {
       IiifViewer.pages = [{}];
-      at('?page=3');
+      at(search);
       await initImageViewer(data());
+      expect(address()).toBe(expected);
+      window.history.replaceState(null, '', '/objects/leyes/' + search);
       IiifViewer.last.options.onPageShown(0);
-      expect(address()).toBe('/objects/leyes/?page=3');
+      expect(address()).toBe(expected);
     });
   });
 

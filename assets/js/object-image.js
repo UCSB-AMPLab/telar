@@ -720,14 +720,17 @@
     return page >= 1 ? page - 1 : 0;
   }
   function addressWithPage(href, page0, total) {
-    if (total <= 1) return href;
     const url = new URL(href);
-    const kept = url.search.replace(/^\?/, "").split("&").filter(function(piece) {
-      if (piece === "") return false;
-      const keys = Array.from(new URLSearchParams(piece).keys());
-      return keys[0] !== "page";
+    const pieces = url.search.replace(/^\?/, "").split("&");
+    const isPage = function(piece) {
+      return piece !== "" && Array.from(new URLSearchParams(piece).keys())[0] === "page";
+    };
+    const named = total > 1 && page0 > 0;
+    if (!named && !pieces.some(isPage)) return href;
+    const kept = pieces.filter(function(piece) {
+      return piece !== "" && !isPage(piece);
     });
-    if (page0 > 0) kept.push("page=" + (page0 + 1));
+    if (named) kept.push("page=" + (page0 + 1));
     url.search = kept.length ? "?" + kept.join("&") : "";
     return url.href;
   }
@@ -757,8 +760,8 @@
       return;
     }
     const isMultiPage = wrapper.pages.length > 1;
+    writeAddress(wrapper.currentPage);
     if (isMultiPage) {
-      writeAddress(wrapper.currentPage);
       doc.getElementById("object-viewer").classList.add("multipage");
       const pageRows = doc.querySelectorAll(".coord-page-row");
       pageRows.forEach(function(el) {
