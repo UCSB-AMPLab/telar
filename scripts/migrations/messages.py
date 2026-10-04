@@ -343,6 +343,19 @@ MESSAGES = {
                                    'changing the rest of the file, so the file was left as it '
                                    'is. Delete that column by hand: until it is gone the next '
                                    'build stops.',
+        'v180_column_marked_note': 'Renamed the empty column `{}` in `{}` to `{}`, so the build '
+            'ignores it. Removing the column would have changed which '
+            'rows the build reads from that sheet.',
+        'v180_column_marked_in_sheet': 'Your site reads its content from a Google Sheet, and the'
+            ' next build reads the sheet again. In the sheet itself, '
+            'rename the column `{}` in the tab behind `{}` to `{}`, '
+            'or the build will stop on the same two columns.',
+        'v180_column_kept_for_header_row': 'Could not remove the empty column `{}` from `{}`: '
+            'without it, the build would no longer recognize the '
+            'second row of column names, the one in the other '
+            'language, and would publish it as content. Delete '
+            'that column and that row by hand; until the column '
+            'is gone, the next build stops.',
         'v180_reserved_column': '`{}` has a column named `{}`, a name Telar keeps for its own '
                                 'use. Rename that column, or the next build will stop.',
         'v180_sheet_unreadable': 'Could not read `{}` to check its columns: {}',
@@ -746,6 +759,22 @@ MESSAGES = {
         'v180_column_not_removed': 'No se pudo eliminar la columna vacía `{}` de `{}` sin '
             'cambiar nada más en el archivo, así que no se tocó. Bórrala a mano; si no, la '
             'próxima construcción se detendrá.',
+        'v180_column_marked_note': 'La columna vacía `{}` de `{}` ahora se llama `{}`, así que '
+            'la construcción la ignora. Eliminarla habría cambiado qué '
+            'filas lee la construcción en ese archivo.',
+        'v180_column_marked_in_sheet': 'El sitio toma el contenido de una hoja de cálculo de '
+            'Google Sheets, y la próxima construcción vuelve a '
+            'leerla. Cámbiale el nombre a la columna `{}` '
+            'directamente en la hoja, en la pestaña de la que sale '
+            '`{}`, para que se llame `{}`; si no, la construcción se '
+            'detendrá por las mismas dos columnas.',
+        'v180_column_kept_for_header_row': 'No se pudo eliminar la columna vacía `{}` de `{}`: '
+            'sin ella, la construcción dejaría de reconocer la '
+            'segunda fila de nombres de las columnas, la que está'
+            ' en el otro idioma, y la publicaría como contenido. '
+            'Borra a mano esa columna y esa fila; mientras la '
+            'columna siga ahí, la próxima construcción se '
+            'detendrá.',
         'v180_reserved_column': '`{}` tiene una columna llamada `{}`, un nombre que Telar reserva '
             'para su propio uso. Cámbiale el nombre a esa columna; si no, la '
             'próxima construcción se detendrá.',

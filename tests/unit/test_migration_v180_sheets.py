@@ -331,6 +331,106 @@ class TestTheScopingOfEachSheet:
         assert failed == [get_message('en', 'v180_columns_hold_values',
                                       'my-story.csv', '`note`, `Note`')]
 
+
+# ---------- The rows the build reads survive the repair ----------
+
+COMPOSITOR_CASE = 'note,Note,step,answer\n,#kept,1,Here.\n'
+
+
+def _published(tmp_path, name):
+    ok, refusals = _converts(tmp_path, name)
+    assert ok and refusals == []
+    import json
+    records = json.loads((tmp_path / 'out.json').read_text(encoding='utf-8'))
+    return [r for r in records if not r.get('_metadata')]
+
+
+class TestTheRowsTheBuildReads:
+    """Removing the first column moves the second cell of every row into
+    first place, where the build reads a `#` as the start of a comment row,
+    and can change which row it takes for a bilingual header row."""
+
+    def test_an_empty_first_column_is_marked_rather_than_removed(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': COMPOSITOR_CASE})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == '#note,Note,step,answer\n,#kept,1,Here.\n'
+        assert [r.description for r in records] == [get_message(
+            'en', 'v180_column_marked_note', 'note', 'story1.csv', '#note')]
+        assert records[0].status == ChangeStatus.APPLIED
+        steps = _published(site, 'story1.csv')
+        assert [(s['step'], s['Note']) for s in steps] == [(1, '#kept')]
+
+    def test_a_google_sheets_site_is_told_to_rename_the_column_in_the_sheet(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': COMPOSITOR_CASE},
+                     config='telar_language: "en"\ngoogle_sheets:\n  enabled: true\n')
+
+        records = _repair(site)
+
+        assert [(r.description, r.status) for r in records] == [
+            (get_message('en', 'v180_column_marked_note', 'note', 'story1.csv', '#note'),
+             ChangeStatus.APPLIED),
+            (get_message('en', 'v180_column_marked_in_sheet', 'note', 'story1.csv', '#note'),
+             ChangeStatus.FAILED),
+        ]
+
+    def test_the_marked_column_is_not_reported_as_both_empty(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': COMPOSITOR_CASE})
+
+        records = _repair(site)
+
+        assert not any('both were empty' in r.description for r in records)
+
+    def test_a_quoted_first_header_is_marked_byte_for_byte(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv':
+                                '﻿"note",Note,step,answer\r\n,#kept,1,"Here, now."\r\n'})
+
+        records = _repair(site)
+
+        assert _raw(site, 'story1.csv') == (
+            '﻿"#note",Note,step,answer\r\n,#kept,1,"Here, now."\r\n').encode('utf-8')
+        assert [r.description for r in records] == [get_message(
+            'en', 'v180_column_marked_note', 'note', 'story1.csv', '#note')]
+        assert [s['step'] for s in _published(site, 'story1.csv')] == [1]
+
+    def test_a_first_column_the_header_row_judgement_needs_is_not_removed(self, tmp_path):
+        """The second row is a bilingual header row on five names, four of
+        them known. Without the first column, or with it marked, it is
+        three of four and the build would publish it as a step."""
+        text = ('note,Note,step,answer,object,extra\n'
+                'pregunta,,paso,respuesta,objeto,libre\n'
+                ',x,1,Here.,map-1,e\n')
+        site = _site(tmp_path, {'story1.csv': text})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == text
+        assert [(r.description, r.status) for r in records] == [(get_message(
+            'en', 'v180_column_kept_for_header_row', 'note', 'story1.csv'), ChangeStatus.FAILED)]
+
+    def test_a_later_column_the_header_row_judgement_needs_is_not_removed(self, tmp_path):
+        text = ('step,answer,object,note,Note,extra\n'
+                'paso,respuesta,objeto,pregunta,,libre\n'
+                '1,Here.,map-1,,x,e\n')
+        site = _site(tmp_path, {'story1.csv': text})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == text
+        assert [(r.description, r.status) for r in records] == [(get_message(
+            'en', 'v180_column_kept_for_header_row', 'note', 'story1.csv'), ChangeStatus.FAILED)]
+
+    def test_a_later_column_is_still_removed(self, tmp_path):
+        site = _site(tmp_path, {'story1.csv': 'step,answer,note,Note\n1,Here.,,#kept\n'})
+
+        records = _repair(site)
+
+        assert _sheet(site, 'story1.csv') == 'step,answer,Note\n1,Here.,#kept\n'
+        assert [r.description for r in records] == [get_message(
+            'en', 'v180_column_dropped', 'note', 'story1.csv', 'Note')]
+        assert [s['step'] for s in _published(site, 'story1.csv')] == [1]
+
 # ---------- The file as it was written ----------
 
 class TestTheFileKeepsItsForm:

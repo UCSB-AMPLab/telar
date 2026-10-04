@@ -25,6 +25,16 @@ the Compositor's import:
   - more than one holds values: drop nothing, and report, since only the
     author can say which is meant.
 
+A removal may not change the rows the build reads as data. The build drops
+a row whose first cell starts with `#` as a comment, then drops the `#`
+columns, then judges whether the first row left is a bilingual header row,
+so removing a column, the first above all, can turn a step into a comment
+or change which row counts as a header. Each removal is checked against
+those rules, over the columns that survive it. An empty first column whose
+removal would change the rows is kept, with `#` put before its header, so
+the build ignores it after reading the comment rows; any other removal
+that would change them is not made, and reported.
+
 Each sheet is read with the scoping the build reads it with: the project
 and story sheets with the whole alias map, the objects sheet with the map
 scoped to the fields objects have, and the glossary with the whole map
@@ -112,15 +122,24 @@ class Sheet:
     def header(self) -> List[str]:
         return self.rows[0] if self.rows else []
 
-    def without_columns(self, indices) -> Optional[str]:
+    def edited(self, indices=(), mark_first=False) -> Optional[str]:
         """The file's text with the fields at *indices* gone from every
-        record, or None when it cannot be edited that safely."""
-        if self.records is None:
+        record, and with `#` put before the first header's text when
+        *mark_first* is set, or None when it cannot be edited that safely.
+
+        The mark goes inside the quotes of a quoted field, so `"note"`
+        becomes `"#note"` and `note` becomes `#note`; no other byte moves.
+        """
+        if self.records is None or (mark_first and (not self.records or 0 in indices)):
             return None
         doomed = set(indices)
+        records = [(list(fields), ending) for fields, ending in self.records]
+        if mark_first:
+            first = records[0][0][0]
+            records[0][0][0] = '"#' + first[1:] if first.startswith('"') else '#' + first
         body = ''.join(','.join(field for index, field in enumerate(fields)
                                 if index not in doomed) + ending
-                       for fields, ending in self.records)
+                       for fields, ending in records)
         return (_BOM if self.bom else '') + body
 
     def write(self, text: str) -> None:
@@ -240,13 +259,25 @@ def data_rows(sheet: Sheet, rules, sheet_aliases=None) -> List[List[str]]:
     """
     rows = [row for row in sheet.rows[1:]
             if not (row and row[0].strip().startswith('#'))]
-    if rows:
-        kept = [index for index, label in enumerate(sheet.labels)
-                if not label.startswith('#')]
-        first = [rows[0][index] if index < len(rows[0]) else '' for index in kept]
-        if rules.is_header_row(first, sheet_aliases=sheet_aliases):
-            rows = rows[1:]
+    if _header_row_skipped(sheet, rows, rules, sheet_aliases):
+        rows = rows[1:]
     return rows
+
+
+def _header_row_skipped(sheet: Sheet, rows, rules, sheet_aliases=None) -> bool:
+    """Whether the build drops the first of *rows*, the rows left once the
+    comment rows are gone, as a second, bilingual header row."""
+    if not rows:
+        return False
+    kept = [index for index, label in enumerate(sheet.labels) if not label.startswith('#')]
+    first = [rows[0][index] if index < len(rows[0]) else '' for index in kept]
+    return bool(rules.is_header_row(first, sheet_aliases=sheet_aliases))
+
+
+def _skips_header_row(sheet: Sheet, rules, sheet_aliases=None) -> bool:
+    rows = [row for row in sheet.rows[1:]
+            if not (row and row[0].strip().startswith('#'))]
+    return _header_row_skipped(sheet, rows, rules, sheet_aliases)
 
 
 def _holds_values(rows: List[List[str]], index: int) -> bool:
@@ -352,11 +383,82 @@ def _resolve(claim: str, indices: List[int], header, rows) -> Tuple[List[int], L
     return [keep], [index for index in indices if index != keep]
 
 
+def _seen(sheet: Sheet, rules, aliases, columns: List[int]) -> List[List[str]]:
+    """The cells of *columns* in each row the build treats as data."""
+    return [[_cell(row, index) for index in columns]
+            for row in data_rows(sheet, rules, aliases)]
+
+
+# Why an edit was refused: the file cannot be edited that safely; the
+# build would stop taking a row for the bilingual header row and publish
+# it; or the data rows would change some other way.
+UNSAFE, HEADER_ROW, ROWS_CHANGED = 'unsafe', 'header_row', 'rows_changed'
+
+
+def _try_edit(sheet: Sheet, rules, aliases, removed, mark) -> Tuple[Optional[str], Optional[str]]:
+    """(the edited text, None) when the build would read the same data rows
+    from it, over the columns that survive, as from *sheet*; otherwise
+    (None, why it was refused)."""
+    text = sheet.edited(removed, mark)
+    if text is None:
+        return None, UNSAFE
+    try:
+        after = Sheet(sheet.path, text)
+    except (csv.Error, ValueError):
+        return None, UNSAFE
+    if mark and after.header[:1] != ['#' + sheet.header[0]]:
+        return None, UNSAFE
+    kept = [index for index in range(len(sheet.header)) if index not in removed]
+    seen = [position for position in range(len(kept)) if not (mark and position == 0)]
+    before = _seen(sheet, rules, aliases, [kept[position] for position in seen])
+    if before == _seen(after, rules, aliases, seen):
+        return text, None
+    if _skips_header_row(sheet, rules, aliases) and not _skips_header_row(after, rules, aliases):
+        return None, HEADER_ROW
+    return None, ROWS_CHANGED
+
+
+def _plan_pass(sheet: Sheet, rules, aliases, groups):
+    """(removed, mark, accepted groups, refused (group, reason) pairs) for
+    one pass; a refused group carries the reason its last option failed.
+
+    Each group's removal is tried on top of those already accepted in the
+    pass. Where removing it would change the rows the build reads, and the
+    first column is among those it removes, the first column is kept and
+    its header marked with `#` instead: the build drops a `#` column after
+    it has read the comment rows, so an empty one changes nothing.
+    """
+    removed, mark, accepted, refused = set(), False, [], []
+    for group in groups:
+        dropped = set(group[2])
+        if not dropped:
+            continue
+        options = [(removed | dropped, mark)]
+        if 0 in dropped:
+            options.append(((removed | dropped) - {0}, True))
+        choice, reason = None, None
+        for option in options:
+            text, reason = _try_edit(sheet, rules, aliases, *option)
+            if text is not None:
+                choice = option
+                break
+        if choice is None:
+            refused.append((group, reason))
+        else:
+            removed, mark = choice
+            accepted.append(group)
+    return removed, mark, accepted, refused
+
+
 def _repair_sheet(repo_root, lang, name, scope, rules, on_sheets) -> List[ChangeRecord]:
     """Repeated until nothing changes, because a removal can create a
     collision: pandas labels a repeated header `note.1`, and the suffix goes
     when its twin is removed, so a column that claimed a name of its own
-    comes to claim the one its twin claimed."""
+    comes to claim the one its twin claimed.
+
+    No pass may change the rows the build reads as data, compared over the
+    columns that survive it; a removal that would is not made, and its
+    columns are reported as ones to delete by hand."""
     path = os.path.join(repo_root, SPREADSHEETS_DIR, name)
     try:
         sheet = Sheet(path)
@@ -365,50 +467,84 @@ def _repair_sheet(repo_root, lang, name, scope, rules, on_sheets) -> List[Change
                         status=ChangeStatus.FAILED)]
     records = _reserved_column_records(lang, name, sheet.header, rules)
     writable = _inside(repo_root, path)
+    aliases = scope.get('sheet_aliases')
+    origin = list(range(len(sheet.header)))
+    changes, successor = [], {}
     repaired = None
-    removed = []
     while True:
-        header = sheet.header
-        rows = data_rows(sheet, rules, scope.get('sheet_aliases'))
+        rows = data_rows(sheet, rules, aliases)
         claims = claimed_names(sheet.labels, rules, **scope)
-        groups = [(claim, *_resolve(claim, indices, header, rows))
+        groups = [(claim, *_resolve(claim, indices, sheet.header, rows))
                   for claim, indices in claims.items() if len(indices) > 1]
-        doomed = [index for _claim, _kept, dropped in groups for index in dropped]
-        text = sheet.without_columns(doomed) if doomed and writable else None
-        if text is None:
+        if writable:
+            removed, mark, accepted, refused = _plan_pass(sheet, rules, aliases, groups)
+        else:
+            removed, mark, accepted, refused = set(), False, [], [(g, UNSAFE) for g in groups if g[2]]
+        if not accepted:
             break
-        removed.extend((header[index], claim) for claim, _kept, dropped in groups
-                       for index in dropped)
-        repaired = text
-        sheet = Sheet(path, text)
+        for _claim, kept, dropped in accepted:
+            for index in dropped:
+                successor[origin[index]] = origin[kept[0]]
+                changes.append((sheet.header[index], index in removed, origin[kept[0]],
+                                rows, list(origin)))
+        repaired = sheet.edited(removed, mark)
+        sheet = Sheet(path, repaired)
+        origin = [column for index, column in enumerate(origin) if index not in removed]
     if repaired is not None:
         sheet.write(repaired)
-    # Every record describes the file as written, so a keeper is named only
-    # once no later pass can remove it.
-    for column, claim in removed:
-        records.extend(_removal_records(lang, name, column, claims[claim], header, rows,
-                                        on_sheets))
-    for _claim, kept, dropped in groups:
+    for change in changes:
+        records.extend(_change_records(lang, name, change, successor, sheet.header, origin,
+                                       on_sheets))
+    records.extend(_unrepaired_records(lang, name, sheet.header, groups, refused))
+    return records
+
+
+def _change_records(lang, name, change, successor, header, origin,
+                    on_sheets) -> List[ChangeRecord]:
+    """The records for one column removed or marked.
+
+    Whether the keeper holds values is judged on the rows of the pass that
+    made the change. The keeper named is the column the written file keeps:
+    a keeper a later pass removed is followed to the column kept in its
+    place, which holds the same data rows, since no pass changes them.
+    """
+    column, was_removed, keeper, rows, pass_origin = change
+    if not was_removed:
+        records = [_record(lang, 'v180_column_marked_note', column, name, '#' + column)]
+        if on_sheets:
+            records.append(_record(lang, 'v180_column_marked_in_sheet', column, name,
+                                   '#' + column, status=ChangeStatus.FAILED))
+        return records
+    while keeper in successor:
+        keeper = successor[keeper]
+    label = header[origin.index(keeper)]
+    if _holds_values(rows, pass_origin.index(keeper)):
+        records = [_record(lang, 'v180_column_dropped', column, name, label)]
+    else:
+        records = [_record(lang, 'v180_column_dropped_all_empty', column, name, label, label)]
+    if on_sheets:
+        records.append(_record(lang, 'v180_column_in_sheet', column, name,
+                               status=ChangeStatus.FAILED))
+    return records
+
+
+def _unrepaired_records(lang, name, header, groups, refused) -> List[ChangeRecord]:
+    """The collisions the final pass left: columns it could not remove, and
+    groups in which more than one column holds values."""
+    records = []
+    reasons = dict((id(group), reason) for group, reason in refused)
+    for group in groups:
+        _claim, kept, dropped = group
         if dropped:
-            records.extend(_record(lang, 'v180_column_not_removed', header[index], name,
-                                   status=ChangeStatus.FAILED) for index in dropped)
+            if id(group) in reasons:
+                key = ('v180_column_kept_for_header_row' if reasons[id(group)] == HEADER_ROW
+                       else 'v180_column_not_removed')
+                records.extend(_record(lang, key, header[index], name,
+                                       status=ChangeStatus.FAILED) for index in dropped)
         else:
             named = ', '.join(f'`{header[index]}`' for index in kept)
             records.append(_record(lang, 'v180_columns_hold_values', name, named,
                                    status=ChangeStatus.FAILED))
-    return records
-
-
-def _removal_records(lang, name, column, keepers, header, rows, on_sheets) -> List[ChangeRecord]:
-    holding = [index for index in keepers if _holds_values(rows, index)]
-    keeper = header[(holding or keepers)[0]]
-    if holding:
-        records = [_record(lang, 'v180_column_dropped', column, name, keeper)]
-    else:
-        records = [_record(lang, 'v180_column_dropped_all_empty', column, name, keeper, keeper)]
-    if on_sheets:
-        records.append(_record(lang, 'v180_column_in_sheet', column, name,
-                               status=ChangeStatus.FAILED))
     return records
 
 
