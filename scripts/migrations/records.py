@@ -194,6 +194,23 @@ def category_for_path(path: str) -> str:
 MANUAL_STEP_AUDIENCES = ('all', 'local', 'google-sheets', 'compositor')
 
 
+# What a manual step asks of its reader. The Compositor groups its
+# post-upgrade screen by this field, and a step it cannot place is shown
+# under a heading of its own, where the screen can no longer say that
+# nothing is required.
+#
+#   action   — something the upgrade left undone that the reader may need
+#              to do. A step that applies only in some cases ("if you
+#              customized the language packs") is still an action: the
+#              reader is the one who can tell.
+#   optional — an action that need not be done.
+#   note     — what changed, including how to use it.
+#
+# The question is independent of `audience`: a workflow recopy is `local`
+# and an `action`.
+MANUAL_STEP_KINDS = ('action', 'optional', 'note')
+
+
 # Shared name for the in-progress / failed state marker (see the module
 # docstring for the two roles it plays). Lives at the repo root.
 UPGRADE_STATE_FILE = "UPGRADE_STATE.json"

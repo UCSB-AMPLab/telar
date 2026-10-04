@@ -36,7 +36,7 @@ Language packs are framework-owned and fetched wholesale, per the established
 convention. A site that customised en.yml or es.yml will have those edits
 replaced and should re-apply them after upgrading (see the manual step).
 
-Version: v1.4.0
+Version: v1.8.0
 """
 
 import os
@@ -229,6 +229,7 @@ Your stories, objects, and configuration keep working without any content change
 
 One note: the upgrade refreshed the framework language packs (en.yml / es.yml). If you had customised either file, re-apply your changes — the new release adds six `object.viewer.*` keys (pagination labels and error messages for the IIIF viewer) that the updated packs already include.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -246,6 +247,7 @@ Las mejoras principales:
 
 Un detalle: la actualización reemplazó los paquetes de idioma de Telar (en.yml / es.yml). Si habías personalizado alguno de ellos, vuelve a aplicar tus cambios — esta versión agrega seis claves `object.viewer.*` (etiquetas de paginación y mensajes de error del visor IIIF) que los paquetes actualizados ya incluyen.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

@@ -82,7 +82,7 @@ established convention. A site that customised en.yml or es.yml will have
 those edits replaced and should re-apply them after upgrading (see the
 manual step).
 
-Version: v1.6.0
+Version: v1.8.0
 """
 
 import os
@@ -357,11 +357,13 @@ class Migration154to160(BaseMigration):
             {
                 'description': '''**Update `.github/workflows/build.yml` by hand (required if you use private stories).** v1.6.0 encrypts private stories in a new build step that GitHub does not allow this upgrade to add for you. Copy the current `build.yml` from the Telar repository over yours (open it on GitHub, use "Copy raw contents", replace the whole file, commit). Until you do, marking any story `private: yes` will fail your build on purpose rather than publish it unprotected. Details: https://telar.org/docs/setup/upgrading/#v160-upgrade-notes''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/#v160-upgrade-notes'
             },
             {
                 'description': '''**If you customized the language packs, re-apply your changes.** The upgrade refreshed the framework language packs (`en.yml` / `es.yml`). This release adds several keys — the private-story unlock messages (empty/incorrect key), the embed banner's site-name fallback, audio-player control labels, and widget/glossary strings, among others — which the updated packs already include.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -376,6 +378,7 @@ assets/js/telar-story.js.map linguist-generated
 
 Add these to your existing file if you'd like the same behaviour.''',
                 'audience': 'all',
+                'kind': 'optional',
                 'doc_url': 'https://telar.org/docs'
             })
         return steps
@@ -385,11 +388,13 @@ Add these to your existing file if you'd like the same behaviour.''',
             {
                 'description': '''**Actualiza `.github/workflows/build.yml` a mano (obligatorio si usas historias privadas).** v1.6.0 cifra las historias privadas en un nuevo paso de construcción que GitHub no permite que esta actualización agregue por ti. Copia el `build.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). Mientras no lo hagas, marcar cualquier historia con `private: yes` hará fallar tu construcción a propósito, en lugar de publicarla sin proteger. Detalles: https://telar.org/guia/configuracion/actualizacion/#notas-de-actualización-a-v160''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/#notas-de-actualización-a-v160'
             },
             {
                 'description': '''**Si personalizaste los paquetes de idioma, vuelve a aplicar tus cambios.** La actualización reemplazó los paquetes de idioma del marco (`en.yml` / `es.yml`). Esta versión agrega varias claves — los mensajes de desbloqueo de historias privadas (clave vacía/incorrecta), el nombre de respaldo del sitio en el banner de incrustado, las etiquetas de los controles del reproductor de audio y textos de widgets/glosario, entre otras — que los paquetes actualizados ya incluyen.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia'
             },
         ]
@@ -404,6 +409,7 @@ assets/js/telar-story.js.map linguist-generated
 
 Agrégalas a tu archivo existente si quieres el mismo comportamiento.''',
                 'audience': 'all',
+                'kind': 'optional',
                 'doc_url': 'https://telar.org/guia'
             })
         return steps

@@ -29,7 +29,7 @@ The version stamp (telar.version -> 1.5.1) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed fetch can
 never leave the site stamped as a version it is not running.
 
-Version: v1.5.1
+Version: v1.8.0
 """
 
 from typing import Dict, List
@@ -96,6 +96,7 @@ class Migration150to151(BaseMigration):
 - **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.
 - **If you work with your site locally:** just rebuild your site to use the updated glossary linking.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -108,6 +109,7 @@ class Migration150to151(BaseMigration):
 - **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.
 - **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los enlaces de glosario actualizados.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

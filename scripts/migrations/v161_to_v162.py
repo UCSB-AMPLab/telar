@@ -53,7 +53,7 @@ The version stamp (telar.version -> 1.6.2) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed step can
 never leave the site stamped as a version it is not running.
 
-Version: v1.6.2
+Version: v1.8.0
 """
 
 import os
@@ -176,16 +176,19 @@ class Migration161to162(BaseMigration):
             {
                 'description': '''**Update `.github/workflows/upgrade.yml` by hand (recommended, not urgent).** GitHub does not allow this upgrade to change workflow files, so this step is manual: copy the current `upgrade.yml` from the Telar repository over yours (open it on GitHub, use "Copy raw contents", replace the whole file, commit). Your current copy installs only some of the Python packages the upgrade needs; the repository's version installs them all. Not urgent: the upgrade tooling now installs its own dependencies as it runs, so future upgrades keep working even if you leave this for later.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
                 'description': '''**Update `.github/workflows/telar-tests.yml` by hand.** The same restriction applies: GitHub will not let the upgrade modify it for you. Copy the current `telar-tests.yml` from the Telar repository over yours (open it on GitHub, use "Copy raw contents", replace the whole file, commit). The updated workflow stops running Telar's internal framework tests on your site, which ends the emails about failed tests that had nothing to do with your content.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
                 'description': '''**No action needed.** This upgrade removed `.github/dependabot.yml` from your site (or the file was already gone). That file only opened automated dependency-update pull requests, a task the Telar release process now handles instead of each site separately. GitHub's security alerts keep working as before.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -195,16 +198,19 @@ class Migration161to162(BaseMigration):
             {
                 'description': '''**Actualiza `.github/workflows/upgrade.yml` a mano (recomendado, no urgente).** GitHub no permite que esta actualización modifique archivos de workflow, así que el paso se hace a mano: copia el `upgrade.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). Tu copia actual instala solo una parte de los paquetes de Python que la actualización necesita; la del repositorio los instala todos. No es urgente: la herramienta de actualización ya instala sus dependencias al ejecutarse, así que las próximas actualizaciones seguirán funcionando aunque dejes este paso para después.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
                 'description': '''**Actualiza `.github/workflows/telar-tests.yml` a mano.** La restricción es la misma: GitHub no permite que la actualización lo modifique por ti. Copia el `telar-tests.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). El workflow actualizado deja de ejecutar las pruebas internas de Telar en tu sitio, y con eso se acaban los correos sobre pruebas fallidas que no tienen nada que ver con tu contenido.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
                 'description': '''**No se requiere ninguna acción.** Esta actualización eliminó `.github/dependabot.yml` de tu sitio (o el archivo ya no existía). Ese archivo solo abría solicitudes automáticas para actualizar dependencias, y de esa tarea se encarga ahora el proceso de lanzamiento de Telar, no cada sitio por separado. Las alertas de seguridad de GitHub siguen funcionando igual.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

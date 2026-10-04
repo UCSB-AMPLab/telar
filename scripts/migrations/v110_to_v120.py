@@ -184,6 +184,7 @@ class Migration110to120(BaseMigration):
 
 - **Deep link fix**: Deep links to layer 2 panels (e.g. `#s3l2`) now correctly open layer 1 underneath, so all parent panels are visible.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -204,6 +205,7 @@ class Migration110to120(BaseMigration):
 
 - **Corrección de enlaces directos**: Los enlaces directos a paneles de nivel 2 (ej. `#s3l2`) ahora abren correctamente el nivel 1 debajo, de modo que todos los paneles superiores quedan visibles.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

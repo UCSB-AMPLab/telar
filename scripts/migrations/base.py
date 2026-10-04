@@ -72,7 +72,7 @@ from .messages import get_message
 # the engine and the tests, and an isinstance check sees one class.
 from .records import (  # noqa: F401
     ChangeStatus, FetchOutcome, STRUCTURAL_HTTP_CODES, FetchResult,
-    ChangeRecord, ChangeCategory, category_for_path, MANUAL_STEP_AUDIENCES,
+    ChangeRecord, ChangeCategory, category_for_path, MANUAL_STEP_AUDIENCES, MANUAL_STEP_KINDS,
     UPGRADE_STATE_FILE, apply_config_version, coerce_change, is_hard_failure,
 )
 
@@ -162,7 +162,7 @@ class BaseMigration(ABC):
         Get list of manual steps user must complete.
 
         Returns:
-            List of dicts with keys: 'description', 'audience',
+            List of dicts with keys: 'description', 'audience', 'kind',
             'doc_url' (optional).
 
         `audience` says who still has to do the step, and exists because the
@@ -174,6 +174,11 @@ class BaseMigration(ABC):
         the Compositor doing it for you?* It is not "who is this step about".
         A step whose prose already says "if you use GitHub Pages" is still
         `all`: every reader sees it and the prose sorts them out.
+
+        `kind` says what the step asks of its reader: `action`, `optional`
+        or `note` (see MANUAL_STEP_KINDS). It is required on the same terms:
+        the Compositor shows a step without one apart from the others, and
+        cannot tell its reader that nothing is left to do.
         """
         return []
 

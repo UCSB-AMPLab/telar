@@ -80,6 +80,7 @@ This patch updates `scripts/fetch_demo_content.py` so it tolerates v-prefixed `t
 
 If your `_config.yml` has a v-prefixed version string, you may leave it as-is; the script now handles both forms. If you prefer, you can also remove the leading `v` manually under the `telar:` section to keep the file consistent with current Telar conventions.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -94,6 +95,7 @@ Esta actualización corrige el script que descarga el contenido de demostración
 
 Si tu `_config.yml` tiene una versión con "v", puedes dejarla así: el script ahora reconoce las dos formas. Si prefieres dejar el archivo más consistente con el formato actual de Telar, también puedes quitar la "v" a mano en la sección `telar:`.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

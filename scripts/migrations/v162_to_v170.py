@@ -355,26 +355,31 @@ class Migration162to170(BaseMigration):
             {
                 'description': '''**Update `.github/workflows/build.yml` by hand (recommended).** GitHub does not let an automated upgrade change workflow files, so you need to do this manually: open the current `build.yml` in the Telar repository on GitHub, choose "Copy raw contents", paste it over your copy, and commit. The new workflow reads the Jekyll build log and stops the build when two files claim the same destination, instead of letting one of them win silently. That matters more than it sounds: on a site with protected stories, the page that silently goes missing can be the one a story's encrypted text lands on. The new workflow also pins current versions of the actions it uses.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
                 'description': '''**Update `.github/workflows/upgrade.yml` by hand (recommended, not urgent).** Same restriction: GitHub will not let the upgrade change this file for you. Open the current `upgrade.yml` in the Telar repository, choose "Copy raw contents", paste it over yours, and commit. The new workflow runs the upgrade engine directly from the verified tooling it downloads. Your current copy keeps working, because that tooling now starts with a launcher that fetches the newest release on its own, so this is housekeeping rather than a requirement.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
                 'description': '''**Update `.github/workflows/telar-tests.yml` by hand (optional).** Same restriction. Only the action versions changed in this release, so your site behaves the same either way. If you want every workflow current, open the current `telar-tests.yml` in the Telar repository, choose "Copy raw contents", paste it over yours, and commit.''',
                 'audience': 'local',
+                'kind': 'optional',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
                 'description': '''**If you work on your site locally, two things changed.** Telar now needs Ruby 3.2 or newer, and CI builds with 3.2.11. Install a Ruby of at least 3.2 before your next local build. And `scripts/upgrade.py` is now a launcher rather than the upgrade tool itself: run it and it downloads the newest release's verified upgrade tooling and runs that against your site, so your copy never falls behind again, however long it sits between upgrades.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/'
             },
             {
                 'description': '''**What changed for your content.** Carousel items can declare `width` and `height`, and the build then skips opening each image to measure it. Search on the objects index now matches whole words as well as the beginnings of words. Objects with a single page copy their coordinates without a page number. And the build now encrypts a protected story whose identifier contains an underscore at the page Jekyll actually produces for it.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -384,26 +389,31 @@ class Migration162to170(BaseMigration):
             {
                 'description': '''**Actualiza `.github/workflows/build.yml` a mano (recomendado).** GitHub no permite que esta actualización modifique archivos de workflow, así que este paso lo haces tú: copia el `build.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). El workflow nuevo lee el registro que Jekyll deja al construir el sitio y detiene la construcción cuando dos archivos apuntan al mismo destino, en vez de dejar que uno de los dos gane sin avisar. Eso importa más de lo que parece: la página que desaparece en silencio puede ser justo la que debía llevar el texto cifrado de una historia protegida. De paso, el workflow pone al día las acciones de GitHub que usa.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
                 'description': '''**Actualiza `.github/workflows/upgrade.yml` a mano (recomendado, no urgente).** La restricción es la misma: GitHub no permite que la actualización lo modifique por ti. Copia el `upgrade.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). El workflow nuevo descarga las herramientas verificadas y ejecuta directamente el motor de actualización que viene en ellas. Tu copia actual sigue sirviendo: esas herramientas ahora empiezan por un lanzador que busca por su cuenta el lanzamiento más reciente. Así que este paso es cuestión de orden, no un requisito.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
                 'description': '''**Actualiza `.github/workflows/telar-tests.yml` a mano (opcional).** Aquí rige la misma restricción. En este lanzamiento solo cambiaron las versiones de las acciones de GitHub, así que tu sitio funciona igual, lo hagas o no. Si prefieres tener todos los workflows al día, copia el `telar-tests.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio).''',
                 'audience': 'local',
+                'kind': 'optional',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
                 'description': '''**Si trabajas en el sitio desde tu computador, cambiaron dos cosas.** Telar ahora necesita Ruby 3.2 o una versión más nueva, y la construcción automática en GitHub usa la 3.2.11. Instala al menos la versión 3.2 antes de la próxima construcción local. Además, `scripts/upgrade.py` ya no es la herramienta de actualización, sino un lanzador: al ejecutarlo, descarga las herramientas verificadas del lanzamiento más reciente y con ellas actualiza el sitio. Así, tu copia de `scripts/upgrade.py` nunca vuelve a quedarse atrás, por mucho tiempo que pase entre una actualización y otra.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/'
             },
             {
                 'description': '''**Cambios que afectan tu contenido.** Ahora puedes indicar `width` y `height` en los elementos de un carrusel, y así la construcción no tiene que abrir cada imagen para medirla. En el índice de objetos, la búsqueda encuentra palabras completas, además de los comienzos de palabra. En los objetos de una sola página, las coordenadas que copias ya no traen número de página. Y si el identificador de una historia protegida lleva un guion bajo, la construcción ahora cifra el texto de la historia en la página que Jekyll genera realmente para ella.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

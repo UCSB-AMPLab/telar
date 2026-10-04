@@ -50,7 +50,7 @@ The version stamp (telar.version -> 1.5.3) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed fetch can
 never leave the site stamped as a version it is not running.
 
-Version: v1.5.3
+Version: v1.8.0
 """
 
 from typing import Dict, List
@@ -126,11 +126,13 @@ class Migration152to153(BaseMigration):
 - **If you use GitHub Pages:** your site picks up the translated chrome strings automatically the next time it builds.
 - **If you work with your site locally:** just rebuild your site to use them.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
             {
                 'description': '''**Optional — fully translated page titles.** This release also translates the browser-tab titles of the home, objects, and glossary pages through a new `title_key` field. New sites get it automatically. To enable it on your existing site, add `title_key: navigation.home` to the front matter of `index.md`, `title_key: navigation.objects` to `pages/objects.md`, and `title_key: navigation.glossary` to `pages/glossary.md`. Without this, only those three browser-tab titles stay in English; every other string, including the page headings, already follows your site language.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -143,11 +145,13 @@ class Migration152to153(BaseMigration):
 - **Si usas GitHub Pages:** tu sitio aplica los textos traducidos automáticamente la próxima vez que se construye.
 - **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usarlos.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
             {
                 'description': '''**Opcional — títulos de página totalmente traducidos.** Esta versión también traduce los títulos de la pestaña del navegador en las páginas de inicio, objetos y glosario mediante un nuevo campo `title_key`. Los sitios nuevos lo incluyen de forma automática. Para activarlo en tu sitio actual, agrega `title_key: navigation.home` al frontmatter de `index.md`, `title_key: navigation.objects` a `pages/objects.md` y `title_key: navigation.glossary` a `pages/glossary.md`. Sin esto, solo esos tres títulos de pestaña quedan en inglés; todo lo demás, incluidos los encabezados de las páginas, ya sigue el idioma de tu sitio.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

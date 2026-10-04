@@ -173,6 +173,7 @@ class Migration100to110(BaseMigration):
 
 - **Share panel**: The share panel now includes a "this view" tab that copies the current URL with the reader's exact position.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -193,6 +194,7 @@ class Migration100to110(BaseMigration):
 
 - **Panel de compartir**: El panel de compartir ahora incluye una pestaña "esta vista" que copia la URL actual con la posición exacta del lector.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

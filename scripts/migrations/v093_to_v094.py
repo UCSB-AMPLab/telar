@@ -78,6 +78,7 @@ class Migration093to094(BaseMigration):
 
 No action needed. The updated requirements.txt will be picked up automatically on the next build. If your site has PDF objects, trigger a rebuild to generate their IIIF tiles: go to your repository's Actions tab, select the "Build and Deploy" workflow, and click **Run workflow**.''',
                 'audience': 'all',
+                'kind': 'note',
             },
             {
                 'description': '''**If you work with your site locally:**
@@ -92,6 +93,7 @@ If your site has PDF objects and their IIIF tiles were not previously generated,
 
 (Replace YOUR_SITE_URL with your site's URL, e.g. https://yourusername.github.io/your-repo)''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]
 
@@ -103,6 +105,7 @@ If your site has PDF objects and their IIIF tiles were not previously generated,
 
 No se requiere ninguna acción. El archivo requirements.txt actualizado se aplicará automáticamente en la proxima construccion. Si el sitio tiene objetos PDF, inicia una reconstruccion para generar sus teselas IIIF: ve a la pestana Actions del repositorio, selecciona el flujo "Build and Deploy" y haz clic en **Run workflow**.''',
                 'audience': 'all',
+                'kind': 'note',
             },
             {
                 'description': '''**Si trabajas con tu sitio localmente:**
@@ -117,5 +120,6 @@ Si el sitio tiene objetos PDF y sus teselas IIIF no se generaron previamente, re
 
 (Reemplaza URL_DE_TU_SITIO con la URL del sitio, ej. https://tuusuario.github.io/tu-repositorio)''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]

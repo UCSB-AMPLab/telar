@@ -205,6 +205,7 @@ Bilingual manual steps shown after upgrade. These are informational — they don
       {
         "description": "Markdown text describing features and any manual actions",
         "audience": "all",
+        "kind": "note",
         "doc_url": "https://telar.org/docs"
       }
     ],
@@ -212,6 +213,7 @@ Bilingual manual steps shown after upgrade. These are informational — they don
       {
         "description": "Texto en markdown describiendo las novedades",
         "audience": "all",
+        "kind": "note",
         "doc_url": "https://telar.org/guia"
       }
     ]
@@ -225,6 +227,7 @@ Both `en` and `es` arrays are required, and the two must tag the same steps the 
 |-------|------|----------|-------------|
 | `description` | string | Yes | Markdown text (rendered in the compositor post-upgrade UI) |
 | `audience` | string | Yes | Who still has to perform the step: `all` or `local` |
+| `kind` | string | Yes | What the step asks of its reader: `action`, `optional` or `note` |
 | `doc_url` | string | No | Link to documentation |
 
 ### `audience`
@@ -243,6 +246,20 @@ The field is **required on every step**. A step that omits it is shown to everyo
 **Two axes, not one.** `local` and `compositor` are about the upgrade route; `google-sheets` is about how the site gets its content. A step declares one value, so pick the axis that decides whether the reader has to act.
 
 It is not "who is this step about". A step whose prose already says "if you use GitHub Pages" is still `all`: every reader sees it and the prose sorts them out. Tagging by subject rather than by who must act would start hiding steps from the people who have to perform them.
+
+### `kind`
+
+The Compositor's post-upgrade screen groups steps by this field: actions as a numbered list, optional steps below them, and notes folded away under "What changed in this upgrade". When no action or optional step is left, it says that no manual steps are required.
+
+| Value | Meaning |
+|-------|---------|
+| `action` | Something the upgrade left undone that the reader may need to do. A step that applies only in some cases ("If you customized the language packs, re-apply your changes") is still an action, because the reader is the one who can tell whether it applies. |
+| `optional` | An action that need not be done. |
+| `note` | What changed, including how to use it. |
+
+The field is **required on every step**, on the same terms as `audience`. A step without it, or with a value the Compositor does not know, is shown under a heading of its own, and while one is shown the screen cannot tell its reader that nothing is left to do. The Compositor classifies the steps of releases published before this field in a table of its own; a manifest's own `kind` always takes precedence over that table.
+
+`kind` and `audience` are independent. A workflow-file recopy is `local` and an `action`: the Compositor hides it, and a reader upgrading any other way has to do it.
 
 ## Example: v1.1.0 to v1.2.0
 
@@ -266,6 +283,7 @@ It is not "who is this step about". A step whose prose already says "if you use 
       {
         "description": "**New features available after upgrade:**\n\n- **Title card table of contents**: Add `show_sections: yes` to a story row in project.csv to display a navigable TOC on its title card, linking to each section card in the story.\n\n- **Section cards**: Unchanged from v1.1.0 — leave the object column empty for a step to create a section break.\n\n- **Ordinal numbers removed**: Story cards no longer display auto-generated numbers. The homepage uses the first letter of each story title instead.",
         "audience": "all",
+        "kind": "note",
         "doc_url": "https://telar.org/docs"
       }
     ],
@@ -273,6 +291,7 @@ It is not "who is this step about". A step whose prose already says "if you use 
       {
         "description": "**Nuevas funciones disponibles tras la actualización:**\n\n- **Tabla de contenidos en tarjeta de título**: Agrega `mostrar_secciones: sí` a una fila de historia en project.csv para mostrar una tabla de contenidos navegable en su tarjeta de título, con enlaces a cada tarjeta de sección en la historia.\n\n- **Tarjetas de sección**: Sin cambios respecto a v1.1.0 — deja vacía la columna de objeto en un paso para crear un salto de sección.\n\n- **Números ordinales eliminados**: Las tarjetas de historia ya no muestran números generados automáticamente. La página de inicio usa la primera letra del título de cada historia.",
         "audience": "all",
+        "kind": "note",
         "doc_url": "https://telar.org/guia"
       }
     ]
@@ -303,6 +322,7 @@ It is not "who is this step about". A step whose prose already says "if you use 
       {
         "description": "**New features available after upgrade:**\n\n- **Deep linking**: Story URLs now update as readers scroll. Copy and share a URL that points to a specific step, optionally with a panel open.\n\n- **Title cards**: Leave the object column empty for a step row to create a chapter heading card.\n\n- **Collection mode**: Add `collection_mode: true` to `_config.yml` for a collection-first homepage.\n\n- **Bibliography styling**: Wrap references in `:::bibliography` blocks for hanging-indent formatting.\n\n- **Share panel**: The share panel now includes a \"this view\" tab for position-aware sharing.",
         "audience": "all",
+        "kind": "note",
         "doc_url": "https://telar.org/docs"
       }
     ],
@@ -310,6 +330,7 @@ It is not "who is this step about". A step whose prose already says "if you use 
       {
         "description": "**Nuevas funciones disponibles tras la actualización:**\n\n- **Enlaces directos**: Las URLs de las historias se actualizan al desplazarse. Copia y comparte una URL que apunte a un paso específico.\n\n- **Tarjetas de título**: Deja vacía la columna de objeto en una fila de paso para crear una tarjeta de encabezado de capítulo.\n\n- **Modo colección**: Agrega `collection_mode: true` en `_config.yml` para una página de inicio que prioriza la colección.\n\n- **Estilo bibliográfico**: Envuelve las referencias en bloques `:::bibliography` para formato de sangría francesa.\n\n- **Panel de compartir**: El panel de compartir ahora incluye una pestaña \"esta vista\" para compartir la posición exacta.",
         "audience": "all",
+        "kind": "note",
         "doc_url": "https://telar.org/guia"
       }
     ]

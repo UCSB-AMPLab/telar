@@ -204,6 +204,7 @@ class Migration094to100(BaseMigration):
 
 Replace your `.github/workflows/build.yml` with the latest version from the Telar repository. The new workflow adds an audio processing step that runs conditionally when audio files are detected. Go to https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, click "Raw", copy the entire file, and replace the contents of `.github/workflows/build.yml` in your repository.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -226,6 +227,7 @@ sudo apt install ffmpeg audiowaveform  # Ubuntu
 
 Sites without audio objects do not need these tools.''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]
 
@@ -237,6 +239,7 @@ Sites without audio objects do not need these tools.''',
 
 Reemplaza tu `.github/workflows/build.yml` con la version mas reciente del repositorio de Telar. El nuevo flujo agrega un paso de procesamiento de audio que se ejecuta condicionalmente cuando se detectan archivos de audio. Ve a https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, haz clic en "Raw", copia todo el contenido del archivo y reemplaza el contenido de `.github/workflows/build.yml` en tu repositorio.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -259,5 +262,6 @@ sudo apt install ffmpeg audiowaveform  # Ubuntu
 
 Los sitios sin objetos de audio no necesitan estas herramientas.''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]

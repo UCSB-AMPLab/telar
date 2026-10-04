@@ -65,7 +65,7 @@ Language packs are framework-owned and fetched wholesale, per the established
 convention. A site that customised en.yml or es.yml will have those edits
 replaced and should re-apply them after upgrading (see the manual step).
 
-Version: v1.5.0
+Version: v1.8.0
 """
 
 from typing import Dict, List
@@ -248,11 +248,13 @@ To apply them, open each file on GitHub, click "Raw", copy the whole file, and r
 
 If you skip this, your site keeps building and deploying normally — these changes only harden your workflows.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/v1.5.0/.github/workflows'
             },
             {
                 'description': '''**If you customized the language packs, re-apply your changes.** The upgrade refreshed the framework language packs (`en.yml` / `es.yml`). This release adds the protected-story sharing warnings — the messages shown when a share link or embed code includes the access key — which the updated packs already include.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -272,11 +274,13 @@ Para aplicarlas, abre cada archivo en GitHub, haz clic en **Raw** y copia todo e
 
 Si te saltas este paso, tu sitio se sigue construyendo y publicando con normalidad; estos cambios solo refuerzan tus flujos de trabajo.''',
                 'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/tree/v1.5.0/.github/workflows'
             },
             {
                 'description': '''**Si personalizaste los paquetes de idioma, vuelve a aplicar tus cambios.** La actualización reemplazó los paquetes de idioma de Telar (`en.yml` / `es.yml`). Esta versión suma los avisos para compartir historias protegidas —los mensajes que aparecen cuando un enlace o un código de inserción lleva la clave de acceso—, que los paquetes actualizados ya incluyen.''',
                 'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

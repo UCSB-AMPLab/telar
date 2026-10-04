@@ -82,6 +82,7 @@ class Migration160to161(BaseMigration):
             {
                 'description': '''**No action needed.** v1.6.1 only fixes the upgrade tooling itself (a missing registration that made upgrades stop at v1.5.4 and report success, instead of continuing to v1.6.0); it does not change anything in your site.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -91,6 +92,7 @@ class Migration160to161(BaseMigration):
             {
                 'description': '''**No se requiere ninguna acción.** v1.6.1 solo corrige la propia herramienta de actualización (un registro que faltaba y hacía que las actualizaciones se detuvieran en v1.5.4 y reportaran éxito, en lugar de continuar hasta v1.6.0); no cambia nada en tu sitio.''',
                 'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

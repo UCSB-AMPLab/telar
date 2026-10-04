@@ -73,10 +73,12 @@ class Migration091to092(BaseMigration):
             {
                 'description': '''**Update `.github/workflows/telar-tests.yml` and `.github/workflows/build.yml` by hand.** GitHub does not let an automated upgrade change workflow files, so this step is yours: open each file in the Telar repository on GitHub, choose "Copy raw contents", paste it over your copy, and commit. The test workflow now runs only on the main Telar repositories, so on your own site it does nothing.''',
                 'audience': 'local',
+                'kind': 'action',
             },
             {
                 'description': '''**Regenerate your IIIF tiles if the site hosts its own images.** The `info.json` files written before this release carry the wrong sizes, which is what makes tiles fail to render in browsers on Windows. Run your site's build workflow, or run `python3 scripts/generate_iiif.py --base-url YOUR_SITE_URL` on your own machine.''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]
 
@@ -85,9 +87,11 @@ class Migration091to092(BaseMigration):
             {
                 'description': '''**Actualiza `.github/workflows/telar-tests.yml` y `.github/workflows/build.yml` a mano.** GitHub no permite que esta actualización modifique archivos de workflow, así que este paso lo haces tú: copia cada archivo actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). El workflow de pruebas ahora se ejecuta solo en los repositorios principales de Telar, así que en tu sitio no hace nada.''',
                 'audience': 'local',
+                'kind': 'action',
             },
             {
                 'description': '''**Regenera las teselas IIIF si el sitio aloja sus propias imágenes.** Los archivos `info.json` que se escribieron antes de este lanzamiento traen mal los tamaños, y por eso, en Windows, las teselas no se ven en el navegador. Ejecuta el workflow que construye el sitio o, desde tu computador, `python3 scripts/generate_iiif.py --base-url URL_DE_TU_SITIO`.''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]

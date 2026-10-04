@@ -103,6 +103,7 @@ class Migration092to093(BaseMigration):
 
 Your site will automatically regenerate IIIF tiles with the corrected info.json files when it rebuilds. To trigger a rebuild now, go to your repository's Actions tab, select the "Build and Deploy" workflow, and click **Run workflow**.''',
                 'audience': 'all',
+                'kind': 'note',
             },
             {
                 'description': '''**If you work with your site locally:**
@@ -113,6 +114,7 @@ If your site uses self-hosted images, regenerate IIIF tiles to fix the info.json
 
 (Replace YOUR_SITE_URL with your site's URL, e.g. https://yourusername.github.io/your-repo)''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]
 
@@ -124,6 +126,7 @@ If your site uses self-hosted images, regenerate IIIF tiles to fix the info.json
 
 El sitio regenerará automáticamente las teselas IIIF con los archivos info.json corregidos cuando se reconstruya. Para iniciar una reconstrucción ahora, ve a la pestaña Actions del repositorio, selecciona el flujo "Build and Deploy" y haz clic en **Run workflow**.''',
                 'audience': 'all',
+                'kind': 'note',
             },
             {
                 'description': '''**Si trabajas con tu sitio localmente:**
@@ -134,5 +137,6 @@ Si el sitio usa imágenes auto-alojadas, regenera las teselas IIIF para corregir
 
 (Reemplaza URL_DE_TU_SITIO con la URL del sitio, ej. https://tuusuario.github.io/tu-repositorio)''',
                 'audience': 'all',
+                'kind': 'action',
             },
         ]
