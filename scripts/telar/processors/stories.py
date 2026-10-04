@@ -58,6 +58,7 @@ Version: v1.8.0
 
 import html
 import math
+import numbers
 import re
 import json
 from collections import namedtuple
@@ -396,6 +397,23 @@ def _step_label(step):
     if isinstance(step, float) and step.is_integer():
         return str(int(step))
     return str(step)
+
+
+def _report_step(step):
+    """The step a report carries into the story JSON.
+
+    A report takes its step from the frame, as numpy gives it when read
+    with `df.at` (`int64`, which `json.dump` refuses, so the story was not
+    written) or as a float when the column has a blank or a fraction (`1.0`,
+    which the intro panel prints). A finite whole number becomes an int and
+    a finite fraction a float. Anything else numpy or the author can put in
+    the column -- `True`, `inf` -- is written as text, which `json.dump`
+    takes and which is still valid JSON.
+    """
+    if (isinstance(step, numbers.Real) and not isinstance(step, bool)
+            and math.isfinite(step)):
+        return int(step) if float(step).is_integer() else float(step)
+    return step if isinstance(step, str) else str(step)
 
 
 def _page_value(raw, step, warnings):
@@ -978,6 +996,9 @@ def process_story(df, christmas_tree=False, story_name=''):
     all_warnings.extend(glossary_warnings)
     all_warnings.extend(widget_warnings)
     all_warnings.extend(answer_warnings)
+    for report in all_warnings:
+        if 'step' in report:
+            report['step'] = _report_step(report['step'])
     df.attrs['viewer_warnings'] = all_warnings
 
     df.attrs['has_latex'] = _detect_latex(df)
