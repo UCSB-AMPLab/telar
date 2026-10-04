@@ -1020,27 +1020,44 @@
     }
     _applyFocalTarget(viewerCard, x, y, zoom, true);
   }
+  var PAN_ZOOM_SECONDS = 1.2;
+  var PAN_ZOOM_STIFFNESS = 0.8;
+  var _panZoomTuning = null;
+  function _panZoomSettings() {
+    if (_panZoomTuning) return _panZoomTuning;
+    _panZoomTuning = { seconds: PAN_ZOOM_SECONDS, stiffness: PAN_ZOOM_STIFFNESS };
+    try {
+      const raw = new URLSearchParams(window.location.search).get("panzoom");
+      if (raw) {
+        const [s, k] = raw.split(",").map(Number);
+        if (s >= 0.2 && s <= 20) _panZoomTuning.seconds = s;
+        if (k > 0 && k <= 10) _panZoomTuning.stiffness = k;
+      }
+    } catch {
+    }
+    return _panZoomTuning;
+  }
   function animateIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
       console.warn("animateIiifToPosition: viewer not ready for animation");
       return;
     }
     const osdViewer = viewerCard.osdViewer;
+    const { seconds, stiffness } = _panZoomSettings();
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     osdViewer.gestureSettingsMouse.clickToZoom = false;
     osdViewer.gestureSettingsTouch.clickToZoom = false;
     const originalAnimationTime = osdViewer.animationTime;
     const originalSpringStiffness = osdViewer.springStiffness;
-    osdViewer.animationTime = 4;
-    osdViewer.springStiffness = 0.8;
+    osdViewer.animationTime = seconds;
+    osdViewer.springStiffness = stiffness;
     _applyFocalTarget(viewerCard, x, y, zoom, prefersReduced);
     setTimeout(() => {
       osdViewer.animationTime = originalAnimationTime;
       osdViewer.springStiffness = originalSpringStiffness;
-    }, 4100);
+    }, seconds * 1e3 + 100);
   }
   function lerpIiifPosition(stepIndex, progress, stepsData) {
-    if (progress < 1e-3) return;
     const stepA = stepsData[stepIndex];
     const stepB = stepsData[stepIndex + 1];
     if (!stepA || !stepB) return;
@@ -1051,12 +1068,20 @@
     const xB = parseFloat(stepB.x), yB = parseFloat(stepB.y), zB = parseFloat(stepB.zoom);
     if (isNaN(xA) || isNaN(yA) || isNaN(zA)) return;
     if (isNaN(xB) || isNaN(yB) || isNaN(zB)) return;
-    const x = xA + (xB - xA) * progress;
-    const y = yA + (yB - yA) * progress;
-    const zoom = zA + (zB - zA) * progress;
+    const atRest = progress < 1e-3;
+    const x = atRest ? xA : xA + (xB - xA) * progress;
+    const y = atRest ? yA : yA + (yB - yA) * progress;
+    const zoom = atRest ? zA : zA + (zB - zA) * progress;
     const sceneIndex = state.stepToScene[stepIndex];
     const viewerCard = state.viewerCards.find((vc) => vc.sceneIndex === sceneIndex);
     if (!viewerCard || !viewerCard.isReady) return;
+    if (atRest) {
+      const settled = viewerCard.settledAt;
+      if (settled && settled.step === stepIndex && settled.x === x && settled.y === y && settled.zoom === zoom) return;
+      viewerCard.settledAt = { step: stepIndex, x, y, zoom };
+    } else {
+      viewerCard.settledAt = null;
+    }
     snapIiifToPosition(viewerCard, x, y, zoom);
   }
   function reSnapActiveViewer() {
@@ -5065,6 +5090,25 @@
       snapRemovers.push(snap.add(i * window.innerHeight));
     }
   }
+  var NAV_SECONDS = { keyboard: 1.2, button: 0.75 };
+  var _navTuning = null;
+  function navSeconds() {
+    if (_navTuning) return _navTuning;
+    _navTuning = { ...NAV_SECONDS };
+    try {
+      const raw = new URLSearchParams(window.location.search).get("nav");
+      if (raw) {
+        const [k, btn] = raw.split(",").map(Number);
+        if (k >= 0.1 && k <= 20) {
+          _navTuning.keyboard = k;
+          _navTuning.button = NAV_SECONDS.button * (k / NAV_SECONDS.keyboard);
+        }
+        if (btn >= 0.1 && btn <= 20) _navTuning.button = btn;
+      }
+    } catch {
+    }
+    return _navTuning;
+  }
   function advanceToStep(targetIndex) {
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
     const lenisInstance = state.lenis || lenis;
@@ -5072,7 +5116,7 @@
     endScrub();
     const targetPx = (targetIndex + 1) * window.innerHeight;
     lenisInstance.scrollTo(targetPx, {
-      duration: 0.5,
+      duration: navSeconds().button,
       easing: (t) => 1 - Math.pow(1 - t, 3)
       // ease-out cubic
     });
@@ -5113,7 +5157,7 @@
     keyboardNavInFlight = true;
     lenis.scrollTo(target * vh, {
       force: true,
-      duration: 0.8,
+      duration: navSeconds().keyboard,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {

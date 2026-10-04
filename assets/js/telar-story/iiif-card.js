@@ -495,13 +495,57 @@ export function snapIiifToPosition(viewerCard, x, y, zoom) {
   _applyFocalTarget(viewerCard, x, y, zoom, true);
 }
 
+// Seconds the viewer takes to pan and zoom, and the spring's approach to it.
+// This spring drives the viewer only where the per-frame interpolation does
+// not: across an object change, which is the one move the interpolation bails
+// out of. Everywhere else the scroll paces the viewer and this is written
+// over each frame. It matches the pace of a move for that reason — a scene
+// change is a move like any other, and a reader should not be able to tell
+// which of the two carried the image.
+// Restoring OSD's own values has to outlast the spring, so the restore is
+// derived from the duration in force rather than stated as a second number
+// that has to be kept in step with it by hand.
+const PAN_ZOOM_SECONDS = 1.2;
+const PAN_ZOOM_STIFFNESS = 0.8;
+
 /**
- * Animate a viewer plate to a position over 4 seconds.
+ * Read a tuning override for the pan and zoom from the query string.
+ *
+ * `?panzoom=6` gives a six-second travel, `?panzoom=6,0.5` a six-second
+ * travel on a gentler spring. A value outside the range leaves the default,
+ * so a mistyped switch cannot stall the viewer for a minute or snap it in a
+ * frame. Resolved once, and only for as long as the duration is being
+ * settled — it goes when the number does, the same standing as the
+ * card-height switch.
+ *
+ * @returns {{ seconds: number, stiffness: number }}
+ */
+let _panZoomTuning = null;
+function _panZoomSettings() {
+  if (_panZoomTuning) return _panZoomTuning;
+
+  _panZoomTuning = { seconds: PAN_ZOOM_SECONDS, stiffness: PAN_ZOOM_STIFFNESS };
+  try {
+    const raw = new URLSearchParams(window.location.search).get('panzoom');
+    if (raw) {
+      const [s, k] = raw.split(',').map(Number);
+      if (s >= 0.2 && s <= 20) _panZoomTuning.seconds = s;
+      if (k > 0 && k <= 10) _panZoomTuning.stiffness = k;
+    }
+  } catch {
+    // A URL we cannot read leaves the defaults standing.
+  }
+  return _panZoomTuning;
+}
+
+/**
+ * Animate a viewer plate to a position.
  *
  * Used when the user navigates via keyboard or button to a step with the
  * same object — the viewer pans and zooms smoothly to the new coordinates
  * using OSD's built-in spring animation. Animation time and spring stiffness
- * are temporarily increased from their defaults, then restored after 4.1 s.
+ * are temporarily raised from OSD's defaults and restored once the spring
+ * has settled.
  *
  * Click-to-zoom is disabled during the animation to prevent accidental zooms.
  *
@@ -520,6 +564,7 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
   }
 
   const osdViewer = viewerCard.osdViewer;
+  const { seconds, stiffness } = _panZoomSettings();
 
   // Reduced-motion users: bypass OSD spring animation; snap immediately.
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -530,8 +575,8 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
   const originalAnimationTime    = osdViewer.animationTime;
   const originalSpringStiffness  = osdViewer.springStiffness;
 
-  osdViewer.animationTime   = 4.0;
-  osdViewer.springStiffness = 0.8;
+  osdViewer.animationTime   = seconds;
+  osdViewer.springStiffness = stiffness;
 
   // Apply the recipe: immediate=true for reduced-motion, false for spring animation
   _applyFocalTarget(viewerCard, x, y, zoom, prefersReduced);
@@ -539,7 +584,7 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
   setTimeout(() => {
     osdViewer.animationTime   = originalAnimationTime;
     osdViewer.springStiffness = originalSpringStiffness;
-  }, 4100);
+  }, seconds * 1000 + 100);
 }
 
 // ── Per-frame IIIF interpolation ─────────────────────────────────────────────
@@ -565,8 +610,6 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
  *   same index space as stepIndex / state.stepToScene (i.e. state.stepsData).
  */
 export function lerpIiifPosition(stepIndex, progress, stepsData) {
-  if (progress < 0.001) return; // At exact integer, no interpolation needed
-
   const stepA = stepsData[stepIndex];
   const stepB = stepsData[stepIndex + 1];
   if (!stepA || !stepB) return;
@@ -581,15 +624,36 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   if (isNaN(xA) || isNaN(yA) || isNaN(zA)) return;
   if (isNaN(xB) || isNaN(yB) || isNaN(zB)) return;
 
-  const x    = xA + (xB - xA) * progress;
-  const y    = yA + (yB - yA) * progress;
-  const zoom = zA + (zB - zA) * progress;
+  // A whole step is a resting place, and the framing there is the author's
+  // own, stated rather than approached. The interpolation stops a fraction of
+  // a step short — the scroll settles and the last frame written is the one
+  // before the boundary — so a step reached this way would otherwise keep the
+  // framing of a position just outside it. That is invisible along most of a
+  // story, where a thousandth of the way between two steps is a thousandth of
+  // the framing, and glaring at a step composed as an overview, where the
+  // whole-object fit applies at zoom 1 and not a hair above it.
+  const atRest = progress < 0.001;
+  const x    = atRest ? xA : xA + (xB - xA) * progress;
+  const y    = atRest ? yA : yA + (yB - yA) * progress;
+  const zoom = atRest ? zA : zA + (zB - zA) * progress;
 
   // Find the active viewer card for this scene (not by objectId — repeated objects have
   // multiple scenes and objectId lookup would find the wrong one on backward nav).
   const sceneIndex = state.stepToScene[stepIndex];
   const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
   if (!viewerCard || !viewerCard.isReady) return;
+
+  // At rest the same framing is true on every frame, and a snap is a forced
+  // layout in OSD, so the resting write happens once per arrival rather than
+  // for as long as the reader stays on the step.
+  if (atRest) {
+    const settled = viewerCard.settledAt;
+    if (settled && settled.step === stepIndex &&
+        settled.x === x && settled.y === y && settled.zoom === zoom) return;
+    viewerCard.settledAt = { step: stepIndex, x, y, zoom };
+  } else {
+    viewerCard.settledAt = null;
+  }
 
   snapIiifToPosition(viewerCard, x, y, zoom);
 }
