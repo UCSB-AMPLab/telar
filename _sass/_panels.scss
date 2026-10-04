@@ -469,8 +469,11 @@
   font-weight: 400;
 }
 
-/* Narrow desktop — widen panels so stacked content isn't truncated */
-@media (min-width: 769px) and (max-width: 1200px) {
+/* Narrow desktop — widen panels so stacked content isn't truncated. The lower
+   bound is one pixel above the vertical-layout width: at and below that width,
+   and at any width in a window of vertical aspect, the vertical-layout rule
+   below sets every panel full width. */
+@media (min-width: $telar-vertical-min-width + 1px) and (max-width: 1200px) {
   #panel-layer1 {
     width: 80%;
     max-width: none;
