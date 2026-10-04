@@ -189,6 +189,22 @@ MESSAGES = {
                                       'generate_collections) failed. Run the data '
                                       'scripts by hand and try the upgrade again.',
         'record_migration_aborted': 'The {} \u2192 {} migration stopped: {}',
+        'config_note_section_vs_value': '{} is a section on this site and a '
+                                        'single value in the release \u2014 left '
+                                        'as the release has it',
+        'config_note_unwritable_value': '{} could not be written back as YAML '
+                                       '\u2014 left as the release has it',
+        'config_note_release_owns_list': "{} is a list the release owns; this "
+                                        "site's own is not carried across",
+        'config_note_unwritable_list_item': '{} holds something that could not '
+                                           'be written back as YAML \u2014 left '
+                                           'as the release has it',
+        'config_note_kept_list_entries': "Kept this site's own {} entries: {}",
+        'config_note_unwritable_not_carried': '{} could not be written back as '
+                                             'YAML and was not carried across',
+        'config_note_carried_into': 'Se llev\u00f3 {} al archivo nuevo, dentro de {}',
+        'config_note_carried_top_level': 'Carried {} across \u2014 the release '
+                                        'does not have it',
         'record_protected_unencryptable': (
             'This site has stories marked protected, and '
             '.github/workflows/build.yml does not run '
@@ -455,6 +471,27 @@ MESSAGES = {
                                       'esos dos scripts a mano y despu\u00e9s vuelve '
                                       'a intentar la actualizaci\u00f3n.',
         'record_migration_aborted': 'La migraci\u00f3n {} \u2192 {} se interrumpi\u00f3: {}',
+        'config_note_section_vs_value': '{} es una secci\u00f3n en este sitio y '
+                                        'un solo valor en esta versi\u00f3n de '
+                                        'Telar: qued\u00f3 como lo trae Telar',
+        'config_note_unwritable_value': 'El valor de {} en este sitio no se '
+                                        'pudo escribir en YAML: qued\u00f3 el '
+                                        'de esta versi\u00f3n de Telar',
+        'config_note_release_owns_list': '{} es una lista propia de Telar: la '
+                                         'de este sitio no se llev\u00f3 al '
+                                         'archivo nuevo',
+        'config_note_unwritable_list_item': '{} tiene en este sitio un elemento '
+                                            'que no se pudo escribir en YAML: '
+                                            'qued\u00f3 la lista de esta '
+                                            'versi\u00f3n de Telar',
+        'config_note_kept_list_entries': 'Se conservaron en {} las entradas '
+                                         'propias de este sitio: {}',
+        'config_note_unwritable_not_carried': '{} no se pudo escribir en YAML, '
+                                              'as\u00ed que no se llev\u00f3 al '
+                                              'archivo nuevo',
+        'config_note_carried_into': 'Carried {} across into {}',
+        'config_note_carried_top_level': 'Se llev\u00f3 {} al archivo nuevo: '
+                                         'esta versi\u00f3n de Telar no lo trae',
         'record_protected_unencryptable': (
             'Este sitio tiene historias marcadas como protegidas, y '
             '.github/workflows/build.yml no ejecuta '
@@ -510,7 +547,7 @@ MESSAGES = {
                                               'de lanzamiento de Telar y no cada sitio; las alertas de '
                                               'seguridad de GitHub no cambian.',
         'change_could_not_remove_superseded': 'No se pudo eliminar {}: {}. No es grave: bórralo a mano '
-                                              'cuando puedas. Ya nada lo carga, porque las plantillas y '
+                                              'cuando puedas. Ya nada lo carga, porque los layouts y '
                                               'los scripts que instaló esta actualización usan los '
                                               'archivos que lo reemplazaron.',
         'change_could_not_fetch_config': 'No se pudo descargar _config.yml',

@@ -994,9 +994,12 @@ def reinstate_configuration(migration: BaseMigration) -> List[ChangeRecord]:
     records = [ChangeRecord(
         description=get_message(migration._detect_language(), 'change_rewrote_config'),
         status=ChangeStatus.APPLIED, severity='soft')]
-    records.extend(ChangeRecord(description=note,
-                                status=ChangeStatus.APPLIED, severity='soft')
-                   for note in notes)
+    # config_merge has no site to ask, so it returns each note as a key and
+    # its arguments and the rendering happens here, where the language is.
+    records.extend(ChangeRecord(
+        description=get_message(migration._detect_language(), *note),
+        status=ChangeStatus.APPLIED, severity='soft')
+        for note in notes)
     return records
 
 

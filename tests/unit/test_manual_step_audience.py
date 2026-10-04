@@ -53,10 +53,9 @@ def _all_steps(repo_root):
 class TestEveryStepDeclaresItsAudience:
     """Read off live migration objects, not off the source text.
 
-    Two migrations build their steps in shapes a text scan misses — one
-    keyed with double quotes and a `title`, one interpolating module
-    constants. A regex sweep reported both as having no steps at all, so
-    the field is checked where the runner reads it.
+    One migration builds its steps by interpolating module constants, in a
+    shape a text scan misses: a regex sweep reported it as having no steps
+    at all. The field is checked where the runner reads it instead.
     """
 
     def test_no_step_ships_untagged(self, tmp_path, lang):
@@ -85,6 +84,47 @@ class TestEveryStepDeclaresItsAudience:
                 (name, step['audience']) for name, step in _all_steps(root))
 
         assert totals['en'] == totals['es']
+
+
+class TestEveryStepIsWrittenInTheSitesLanguage:
+    """A step exists to be acted on, so it has to be readable.
+
+    The summary as a whole has been bilingual since v0.9.4; the steps
+    inside it were left to each migration, and one module never gained the
+    branch. A site in Spanish finished its upgrade and was handed two
+    instructions in English, which is the half of the summary that asks
+    the reader to do something.
+
+    No assertion here can tell whether the Spanish is Spanish. What it can
+    see is a module that returns the same text whichever language it is
+    asked for, and from the outside that is exactly what English-only
+    looks like.
+    """
+
+    def _descriptions(self, tmp_path, lang):
+        directory = tmp_path / ('site-' + lang)
+        directory.mkdir()
+        pairs = {}
+        for name, step in _all_steps(_site(directory, lang)):
+            pairs.setdefault(name, []).append(step['description'])
+        return pairs
+
+    def test_no_migration_returns_the_same_steps_in_both_languages(self, tmp_path):
+        english = self._descriptions(tmp_path, 'en')
+        spanish = self._descriptions(tmp_path, 'es')
+
+        untranslated = sorted(name for name, steps in english.items()
+                              if spanish.get(name) == steps)
+
+        assert untranslated == []
+
+    def test_some_migration_has_steps_to_check(self, tmp_path):
+        """Guards the test above against a discovery that finds nothing.
+
+        An empty mapping satisfies "no migration is untranslated" without
+        any migration having been looked at.
+        """
+        assert len(self._descriptions(tmp_path, 'en')) >= 10
 
 
 class TestTheWorkflowRecopiesAreTheLocalOnes:

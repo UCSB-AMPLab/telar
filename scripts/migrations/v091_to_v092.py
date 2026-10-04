@@ -64,28 +64,29 @@ class Migration091to092(BaseMigration):
         return changes
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
-        """Manual steps for v0.9.2."""
+        lang = self._detect_language()
+        return self._get_manual_steps_es() if lang == 'es' else self._get_manual_steps_en()
+
+    def _get_manual_steps_en(self) -> List[Dict[str, str]]:
         return [
             {
-                "title": "Update workflow files",
-                "description": (
-                    "Copy .github/workflows/telar-tests.yml and "
-                    ".github/workflows/build.yml from the latest Telar "
-                    "release. Workflow files cannot be updated automatically "
-                    "by the migration script due to GitHub Actions token "
-                    "permissions. The test workflow now only runs on the "
-                    "main Telar repos, not on user sites."
-                ),
-                "audience": "local",
+                'description': '''**Update `.github/workflows/telar-tests.yml` and `.github/workflows/build.yml` by hand.** GitHub does not let an automated upgrade change workflow files, so this step is yours: open each file in the Telar repository on GitHub, choose "Copy raw contents", paste it over your copy, and commit. The test workflow now runs only on the main Telar repositories, so on your own site it does nothing.''',
+                'audience': 'local',
             },
             {
-                "title": "Regenerate IIIF tiles",
-                "description": (
-                    "If your site uses self-hosted images, regenerate tiles "
-                    "to fix the info.json sizes array. Run your site's build "
-                    "workflow or run generate_iiif.py locally. This fixes "
-                    "tile rendering issues on Windows browsers."
-                ),
-                "audience": "all",
+                'description': '''**Regenerate your IIIF tiles if the site hosts its own images.** The `info.json` files written before this release carry the wrong sizes, which is what makes tiles fail to render in browsers on Windows. Run your site's build workflow, or run `python3 scripts/generate_iiif.py --base-url YOUR_SITE_URL` on your own machine.''',
+                'audience': 'all',
+            },
+        ]
+
+    def _get_manual_steps_es(self) -> List[Dict[str, str]]:
+        return [
+            {
+                'description': '''**Actualiza `.github/workflows/telar-tests.yml` y `.github/workflows/build.yml` a mano.** GitHub no permite que esta actualización modifique archivos de workflow, así que este paso lo haces tú: copia cada archivo actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). El workflow de pruebas ahora se ejecuta solo en los repositorios principales de Telar, así que en tu sitio no hace nada.''',
+                'audience': 'local',
+            },
+            {
+                'description': '''**Regenera las teselas IIIF si el sitio aloja sus propias imágenes.** Los archivos `info.json` que se escribieron antes de este lanzamiento traen mal los tamaños, y por eso, en Windows, las teselas no se ven en el navegador. Ejecuta el workflow que construye el sitio o, desde tu computador, `python3 scripts/generate_iiif.py --base-url URL_DE_TU_SITIO`.''',
+                'audience': 'all',
             },
         ]
