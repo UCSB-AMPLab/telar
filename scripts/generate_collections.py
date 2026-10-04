@@ -334,7 +334,6 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         title = str(row.get('title', '')).strip()
         definition = str(row.get('definition', '')).strip()
         related_terms_raw = str(row.get('related_terms', '')).strip()
-        quoted_in_stories_raw = str(row.get('quoted_in_stories', '')).strip()
 
         if not term_id or not title:
             continue
@@ -347,28 +346,6 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         related_terms = []
         if related_terms_raw and related_terms_raw != 'nan':
             related_terms = [t.strip() for t in related_terms_raw.split('|') if t.strip()]
-
-        # Parse quoted_in_stories, pipe-separated like related_terms: the
-        # protected stories this term quotes on purpose. The glossary layout
-        # writes these ids into the rendered page and the encryptor's content
-        # gate reads them back from there, so an empty column means nothing is
-        # acknowledged and every overlap still fails the build.
-        #
-        # No 'nan' special case, unlike related_terms above: this sheet is read
-        # with keep_default_na=False, so an absent cell arrives as '' and the
-        # only way to see 'nan' here is an author who named a story that.
-        # Dropping it would also be inconsistent with 'nan|other', which keeps
-        # it.
-        #
-        # A list of plain strings and nothing else. The value grants a page
-        # permission to publish a protected story's prose, and a mapping or a
-        # nested list reaching the layout would be joined into something the
-        # gate has to guess at.
-        quoted_in_stories = []
-        if quoted_in_stories_raw:
-            quoted_in_stories = [str(s).strip() for s
-                                 in quoted_in_stories_raw.split('|')
-                                 if str(s).strip()]
 
         # Process definition: file reference or inline content
         # If definition looks like a filename (short, no spaces/newlines), try as file first
@@ -403,9 +380,6 @@ def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
         # term and the section renders empty.
         if related_terms:
             fields['related_terms'] = [_as_text(term) for term in related_terms]
-        if quoted_in_stories:
-            fields['quoted_in_stories'] = [_as_text(story)
-                                           for story in quoted_in_stories]
         if has_latex(processed):
             fields['has_latex'] = True
         fields['layout'] = 'glossary'
@@ -440,15 +414,15 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
             print(f"Warning: No frontmatter found in {source_file}")
             continue
 
-        # Verbatim, this field included. Normalising it means cutting its
-        # lines out of the author's text or reading their frontmatter and
-        # writing it back, and both decide what a file means: a cut is
-        # truncated by a blank line or a comment and hands the remainder to
-        # the key above it, and a rewrite unquotes a date the author
-        # quoted, which Ruby then reads as a Date. A term acknowledges a
-        # story by writing a YAML list of strings; anything else reaches
-        # the page as Liquid renders it, and the leak sweep refuses it
-        # there and names the term.
+        # Verbatim. Normalising it means cutting lines out of the author's
+        # text or reading their frontmatter and writing it back, and both
+        # decide what a file means: a cut is truncated by a blank line or a
+        # comment and hands the remainder to the key above it, and a
+        # rewrite unquotes a date the author quoted, which Ruby then reads
+        # as a Date. So a list-valued key such as `related_terms` reaches
+        # the page exactly as the author typed it, and has to be a YAML
+        # list: the layout iterates it, and Liquid walks a scalar string as
+        # one item, so `a,b` is looked up as a single id matching no term.
         frontmatter_text = match.group(1)
         body = match.group(2).strip()
 

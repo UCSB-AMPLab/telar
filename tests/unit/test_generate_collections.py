@@ -586,110 +586,6 @@ class TestStoryPageManifest:
         assert 'url' not in manifest['stories']['uno']
 
 
-class TestGlossaryAcknowledgementColumn:
-    """v1.8.0: `quoted_in_stories` reaches the generated glossary document.
-
-    The encryptor's content gate reads the acknowledgement off the document
-    Jekyll rendered the page from, so a column that stops at the CSV
-    acknowledges nothing and the overlap fails the build.
-    """
-
-    HEADER = 'term_id,title,definition,quoted_in_stories\n'
-
-    def _generate(self, tmp_path, rows, header=None):
-        from generate_collections import _generate_glossary_from_csv
-        csv_path = tmp_path / 'glossary.csv'
-        csv_path.write_text((header or self.HEADER) + rows, encoding='utf-8')
-        glossary_dir = tmp_path / '_glossary'
-        glossary_dir.mkdir()
-        _generate_glossary_from_csv(csv_path, glossary_dir, {})
-        return glossary_dir
-
-    def _frontmatter(self, path):
-        import yaml
-        text = path.read_text(encoding='utf-8')
-        return yaml.safe_load(text.split('---')[1])
-
-    def test_the_stories_are_a_list_split_on_pipes(self, tmp_path):
-        glossary_dir = self._generate(
-            tmp_path,
-            'encomienda,Encomienda,A grant of labour and tribute.,'
-            'hidden-chamber|other-story\n'
-        )
-
-        fields = self._frontmatter(glossary_dir / 'encomienda.md')
-        assert fields['quoted_in_stories'] == ['hidden-chamber', 'other-story']
-
-    def test_one_story_is_still_a_list(self, tmp_path):
-        """A scalar would be read a character at a time by anything iterating."""
-        glossary_dir = self._generate(
-            tmp_path,
-            'encomienda,Encomienda,A grant of labour and tribute.,hidden-chamber\n'
-        )
-
-        fields = self._frontmatter(glossary_dir / 'encomienda.md')
-        assert fields['quoted_in_stories'] == ['hidden-chamber']
-
-    def test_a_blank_column_acknowledges_nothing(self, tmp_path):
-        glossary_dir = self._generate(
-            tmp_path, 'encomienda,Encomienda,A grant of labour and tribute.,\n'
-        )
-
-        assert 'quoted_in_stories' not in self._frontmatter(
-            glossary_dir / 'encomienda.md')
-
-    def test_the_column_is_optional(self, tmp_path):
-        glossary_dir = self._generate(
-            tmp_path, 'encomienda,Encomienda,A grant of labour and tribute.\n',
-            header='term_id,title,definition\n'
-        )
-
-        assert 'quoted_in_stories' not in self._frontmatter(
-            glossary_dir / 'encomienda.md')
-
-    def test_a_story_named_nan_is_a_story(self, tmp_path):
-        """The sheet is read with keep_default_na=False.
-
-        An absent cell arrives as an empty string, so the only way to see
-        `nan` in this column is an author who named a story that — and
-        dropping it would disagree with `nan|other`, which keeps it.
-        """
-        glossary_dir = self._generate(
-            tmp_path,
-            'encomienda,Encomienda,A grant of labour and tribute.,nan\n'
-        )
-
-        fields = self._frontmatter(glossary_dir / 'encomienda.md')
-        assert fields['quoted_in_stories'] == ['nan']
-
-    def test_every_acknowledged_story_is_written_as_text(self, tmp_path):
-        """The field grants a page permission, so its shape is fixed.
-
-        A mapping or a nested list reaching the layout is joined into
-        something the gate has to guess at, and the safe guess is to grant
-        nothing — which is a build failure the author cannot read.
-        """
-        glossary_dir = self._generate(
-            tmp_path,
-            'encomienda,Encomienda,A grant of labour and tribute.,'
-            'hidden-chamber|other-story\n'
-        )
-
-        fields = self._frontmatter(glossary_dir / 'encomienda.md')
-        assert all(isinstance(story, str)
-                   for story in fields['quoted_in_stories'])
-
-    def test_the_spanish_header_carries_the_same_column(self, tmp_path):
-        glossary_dir = self._generate(
-            tmp_path,
-            'encomienda,Encomienda,A grant of labour and tribute.,hidden-chamber\n',
-            header='id_termino,titulo,definicion,citado_en_historias\n'
-        )
-
-        fields = self._frontmatter(glossary_dir / 'encomienda.md')
-        assert fields['quoted_in_stories'] == ['hidden-chamber']
-
-
 class TestTheGlossaryGeneratorSeesACaseFoldedCollision:
     """The generator lowercased its headers before the refusal ran.
 
@@ -763,17 +659,12 @@ class TestTheGlossaryGeneratorSeesACaseFoldedCollision:
         assert (glossary_dir / 'encomienda.md').exists()
 
 
-class TestLegacyMarkdownAcknowledgement:
-    """v1.8.0: a hand-written term's frontmatter passes through verbatim.
+class TestLegacyMarkdownFrontmatter:
+    """A hand-written term's frontmatter passes through verbatim.
 
-    A term acknowledges a story by writing `quoted_in_stories` as a YAML
-    list of strings. The generator does not repair another shape: cutting
-    the field's lines out of the author's text is truncated by a blank line
-    or a comment and hands the remainder to the key above it, and reading
-    the frontmatter and writing it back unquotes values the author quoted,
-    which the Ruby that renders the site reads as other types. Both decide
-    what the file means. The leak sweep refuses the shape on the rendered
-    page instead, grants nothing, and names the term.
+    The generator adds its layout line and touches nothing else. Reading
+    the frontmatter and writing it back would unquote values the author
+    quoted, which the Ruby that renders the site then reads as other types.
     """
 
     def _generate(self, tmp_path, frontmatter):
@@ -788,39 +679,11 @@ class TestLegacyMarkdownAcknowledgement:
         _generate_glossary_from_markdown(source, glossary_dir, {})
         return glossary_dir / 'encomienda.md'
 
-    def test_a_string_is_passed_through_and_refused_on_the_page(self,
-                                                                tmp_path,
-                                                                capsys):
-        """The whole route, from the author's file to the gate's refusal."""
-        import json
-        import sys
-        from html import escape
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                        '..', '..', 'scripts'))
-        from encrypt_protected_stories import (_acknowledged_stories,
-                                               _stated_tags)
-
+    def test_the_author_s_keys_survive_byte_for_byte(self, tmp_path):
         written = ('term_id: encomienda\n'
                    'catalogue: "2026-9-1"\n'
-                   'quoted_in_stories: hidden-chamber|other-story\n'
                    'title: Encomienda')
         page = self._generate(tmp_path, written)
 
-        # Byte for byte: the generator adds its layout line and nothing
-        # else touches what the author wrote.
         frontmatter = page.read_text(encoding='utf-8').split('---')[1]
         assert written in frontmatter
-
-        # Liquid renders that string as a string, and the sweep reads the
-        # tag off the page with the same parser the gate uses.
-        rendered = ('<html><head><meta name="telar-term-id" content="'
-                    + escape(json.dumps('encomienda'), quote=True)
-                    + '"><meta name="telar-quoted-in-stories" content="'
-                    + escape(json.dumps('hidden-chamber|other-story'),
-                             quote=True)
-                    + '"></head><body></body></html>')
-        stated = _stated_tags(rendered)
-
-        assert stated['telar-term-id'] == '"encomienda"'
-        assert _acknowledged_stories(
-            stated['telar-quoted-in-stories']) is None

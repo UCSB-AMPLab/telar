@@ -317,8 +317,6 @@ class TestTheAliasMapIsPinned:
         'definicion': 'definition',
         'términos_relacionados': 'related_terms',
         'terminos_relacionados': 'related_terms',
-        'citado_en_historias': 'quoted_in_stories',
-        'citada_en_historias': 'quoted_in_stories',
     }
 
     def test_the_map_is_exactly_this(self):

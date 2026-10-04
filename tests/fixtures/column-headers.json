@@ -198,14 +198,6 @@
       "canonical": "question"
     },
     {
-      "header": "citada_en_historias",
-      "canonical": "quoted_in_stories"
-    },
-    {
-      "header": "citado_en_historias",
-      "canonical": "quoted_in_stories"
-    },
-    {
       "header": "terminos_relacionados",
       "canonical": "related_terms"
     },

@@ -155,26 +155,6 @@ def get_protected_stories(project_data: list) -> set:
     return protected
 
 
-def get_all_stories(project_data: list) -> set:
-    """
-    Extract set of every story identifier in project.json, protected or not.
-
-    Names a story the site has; says nothing about whether it is protected.
-
-    Args:
-        project_data: List containing project data (with 'stories' key)
-
-    Returns:
-        Set of story identifiers
-    """
-    identifiers = set()
-    for story in _iter_stories(project_data):
-        identifier = story_identifier(story)
-        if identifier:
-            identifiers.add(identifier)
-    return identifiers
-
-
 def get_story_key_from_config(config: dict) -> str:
     """
     Extract story_key from _config.yml data.

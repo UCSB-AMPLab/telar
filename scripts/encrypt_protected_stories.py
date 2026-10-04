@@ -56,17 +56,8 @@ Gates (any failure aborts the build with exit code 1):
 - Content: distinctive plaintext substrings from each protected story's
   steps are grepped across the rendered site output; any hit fails the
   build. This catches template reads nobody has written yet. The sweep
-  skips _site/telar-content/ — the passthrough copy of the source
-  spreadsheets is served by design (story locking is a slight barrier for
-  drafts, not privacy, and the docs say so). A glossary term that quotes a
-  protected story on purpose names that story in its `quoted_in_stories`
-  column; the glossary layout writes the term's id and that list into the
-  page it renders, and this sweep reads them back out of _site, so only
-  that page stops failing on that story's sentinels. Read from the page
-  rather than from the record, because a record can only claim where a term
-  rendered, and every way that claim can be wrong grants the permission at
-  an address the author never wrote it. Every suppression is printed: one
-  nobody can see is a leak nobody judged.
+  skips _site/telar-content/ and _site/glossary/; see `sweep_files` for
+  what each exclusion rests on.
 
 Sentinels are derived from plain prose segments of questions, answers, and
 layer content (markdown/HTML markup and smart-punctuation candidates are
@@ -84,7 +75,6 @@ import os
 import re
 import shutil
 import sys
-from html.parser import HTMLParser
 from pathlib import Path
 
 import yaml
@@ -93,7 +83,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from telar.encryption import (  # noqa: E402
     encrypt_story,
-    get_all_stories,
     get_protected_stories,
     get_story_key_from_config,
 )
@@ -127,44 +116,6 @@ SWEEP_SUFFIXES = {'.html', '.js', '.json', '.xml', '.txt', '.csv', '.md', '.css'
 
 # Step fields that hold author prose worth deriving sentinels from.
 PROSE_FIELDS = ('question', 'answer', 'layer1_content', 'layer2_content')
-
-# The glossary column an author writes to say an overlap is deliberate, and
-# the meta tags the glossary layout writes it into. The acknowledgement is
-# read out of the rendered page, at the path the page rendered to, in the
-# build being swept: a record can only claim where a term rendered, and
-# every way that claim can be wrong — a symlinked page, an id that
-# slugifies to nothing, two ids sharing one slug, a document-level
-# permalink, a slug rule Ruby and Python read differently, a document
-# edited after the build — grants the permission somewhere the author never
-# wrote it.
-#
-# Both tags carry JSON, because a separator makes the shape of the value
-# invisible: a Liquid mapping rendered as text and a list holding `a|b`
-# both split into ids the author never wrote.
-ACKNOWLEDGEMENT_COLUMN = 'quoted_in_stories'
-TERM_ID_META = 'telar-term-id'
-ACKNOWLEDGEMENT_META = 'telar-quoted-in-stories'
-
-# Control characters cannot be part of a story id or a term id, and one in
-# either would break the line the gate prints about it. C1 as well as C0,
-# and the two Unicode separators: NEL and the line separator end a line
-# wherever the build output is read, and nothing between U+007F and U+009F
-# is a character an author types into a cell. Lone surrogates (U+D800-
-# U+DFFF) are included too: `json.loads` decodes an unpaired `\uD800`-style
-# escape into one rather than rejecting it, and a str carrying one can
-# never equal a real id and breaks whatever tries to print or encode it.
-CONTROL_CHARACTERS = re.compile(
-    '[\u0000-\u001f\u007f-\u009f\u2028\u2029\ud800-\udfff]')
-
-# The elements a document head may hold. Collection ends at the first start
-# tag that is not one of them, because a head is closed by the first thing
-# that cannot be in it whether or not the markup says so: browsers read
-# `<head><body>` and `<head><p>` that way, and a parser that waited for
-# `</head>` would go on reading body content as head content.
-HEAD_ELEMENTS = frozenset({
-    'meta', 'title', 'link', 'style', 'script', 'base', 'noscript',
-    'template',
-})
 
 # Sentinels must be long enough that a hit means "this story's prose is on
 # that page", not a stock phrase collision ('start, end, loop' appears in the
@@ -341,269 +292,6 @@ def find_protected_stories(data_dir):
         return get_protected_stories(json.load(f))
 
 
-def find_all_stories(data_dir):
-    """Return every story identifier in project.json, protected or not."""
-    project_path = Path(data_dir) / 'project.json'
-    if not project_path.exists():
-        return set()
-    with open(project_path, 'r', encoding='utf-8') as f:
-        return get_all_stories(json.load(f))
-
-
-class _StatedTags(HTMLParser):
-    """The acknowledgement tags a rendered page states in its head.
-
-    A real parser rather than a pattern over the markup. A pattern read a
-    tag written inside an HTML comment and one written inside a script's
-    string, took `content="a\'b"` as ending at the apostrophe, and missed
-    the orderings and spacings an emitter is free to choose. The parser
-    sees elements, hands back attributes already unescaped, treats script
-    and style content as text, and reports a comment as a comment.
-
-    Only inside `<head>`, and only where the head is still open. The
-    layout writes there, and a `<meta>` in the body is not conforming
-    markup — honouring one would attribute the decision to a spreadsheet
-    row that need not exist. A head ends at `</head>` or at the first start
-    tag that cannot appear in one, and never reopens: `<head><body>` and
-    `<head><p>` are body content by the time the meta is reached.
-
-    Nothing inside `<noscript>` or `<template>` counts either. Both hold
-    markup the document itself says is not in force — conditional in one
-    case, inert until a script clones it in the other — and an
-    acknowledgement is not something a page states only for some readers.
-    A template's contents do not end the head either, since they are not
-    in it.
-
-    Only the first head, and only a head that opens before any other
-    content. `<html><body><head>…` and a second `<head>` after the first
-    has closed are markup nobody rendered as a head, and reading either
-    would let a page state an acknowledgement from the body by writing the
-    word around it.
-    """
-
-    WANTED = (TERM_ID_META, ACKNOWLEDGEMENT_META)
-    BEFORE_HEAD = frozenset({'html', 'head'})
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.stated = {}
-        self._in_head = False
-        self._head_closed = False
-        self._noscript_depth = 0
-        self._template_depth = 0
-
-    def _close_head(self):
-        self._in_head = False
-        self._head_closed = True
-
-    def handle_starttag(self, tag, attrs):
-        # A template's contents are inert markup, so they neither state
-        # anything nor end the head around them: the boundary is read
-        # before any rule that acts on what is inside.
-        if tag == 'template':
-            self._template_depth += 1
-            return
-        if self._template_depth:
-            return
-        if tag == 'head':
-            self._in_head = not self._head_closed
-            return
-        if not self._in_head:
-            # Content before any head opens means this document's head is
-            # not where it claims to be; nothing later can be one.
-            if tag not in self.BEFORE_HEAD:
-                self._head_closed = True
-            return
-        if tag not in HEAD_ELEMENTS:
-            self._close_head()
-            return
-        if tag == 'noscript':
-            self._noscript_depth += 1
-            return
-        if tag != 'meta' or self._noscript_depth:
-            return
-        attributes = dict(attrs)
-        name = attributes.get('name')
-        if name in self.WANTED:
-            # The first wins, so a page stating a tag twice is read the
-            # same way every build.
-            self.stated.setdefault(name, attributes.get('content'))
-
-    def handle_endtag(self, tag):
-        if tag == 'template':
-            if self._template_depth:
-                self._template_depth -= 1
-            return
-        if self._template_depth:
-            return
-        if tag == 'head':
-            self._close_head()
-        elif tag == 'noscript' and self._noscript_depth:
-            self._noscript_depth -= 1
-
-
-def _stated_tags(markup):
-    """The two acknowledgement tags a page states, by name."""
-    parser = _StatedTags()
-    parser.feed(markup)
-    parser.close()
-    return parser.stated
-
-
-def _plain_text(value):
-    """True when a decoded value can be an id: text, filled, printable."""
-    return (isinstance(value, str) and value != ''
-            and CONTROL_CHARACTERS.search(value) is None)
-
-
-def _stated_term_id(content):
-    """The term id a page states, or None if it states no usable one."""
-    if content is None:
-        return None
-    try:
-        value = json.loads(content)
-    except ValueError:
-        return None
-    return value if _plain_text(value) else None
-
-
-def _acknowledged_stories(content):
-    """The story ids a page acknowledges, or None if it states no list.
-
-    A JSON list of plain ids and nothing else. A shape this cannot read is
-    not guessed at: the value decides whether a page may publish a
-    protected story's prose, and the safe reading of an unreadable one is
-    that it acknowledges nothing.
-
-    A tag written with no `content` at all states None, which is a shape
-    like any other rather than a reason to stop the build.
-    """
-    if content is None:
-        return None
-    try:
-        value = json.loads(content)
-    except ValueError:
-        return None
-    if not isinstance(value, list):
-        return None
-    if not all(_plain_text(story) for story in value):
-        return None
-    return set(value)
-
-
-def read_glossary_acknowledgements(site_dir):
-    """Map each rendered page that acknowledges an overlap to what it says.
-
-    Returns `{path: (term id, story ids)}`, keyed by the path exactly as the
-    content sweep names it, so the two compare with no normalisation between
-    them. One file has one path, so no two records can claim one page.
-
-    Read from the rendered page rather than from the record it came from.
-    A record can only say where a term was going to render; the page is
-    where it did.
-    """
-    acknowledgements = {}
-    for path in sweep_files(site_dir):
-        if path.suffix.lower() != '.html':
-            continue
-        if path.is_symlink():
-            # A link to a page is not the page the author wrote the
-            # acknowledgement on. The content sweep still reads it, so a
-            # protected passage reachable at a second path fails the build
-            # there — which is the honest answer for an address nobody
-            # acknowledged anything at.
-            continue
-        try:
-            markup = path.read_text(encoding='utf-8')
-        except (UnicodeDecodeError, OSError):
-            # Reported by the content sweep, which reads the same files.
-            continue
-        stated = _stated_tags(markup)
-        if TERM_ID_META not in stated:
-            continue
-        term_id = _stated_term_id(stated[TERM_ID_META])
-        if term_id is None:
-            print(f"  WARNING: {path} states a term id that is not plain "
-                  f"text ({stated[TERM_ID_META]!r}); it acknowledges "
-                  "nothing.")
-            continue
-        if ACKNOWLEDGEMENT_META not in stated:
-            acknowledgements[str(path)] = (term_id, set())
-            continue
-        stories = _acknowledged_stories(stated[ACKNOWLEDGEMENT_META])
-        if stories is None:
-            print(f"  WARNING: {path} states an acknowledgement that is not "
-                  f"a list of story ids ({stated[ACKNOWLEDGEMENT_META]!r}); "
-                  f"glossary.csv:{term_id}.{ACKNOWLEDGEMENT_COLUMN} "
-                  "acknowledges nothing.")
-            stories = set()
-        acknowledgements[str(path)] = (term_id, stories)
-    return acknowledgements
-
-
-def warn_unacknowledgeable_stories(acknowledgements, stories):
-    """Warn about an acknowledgement naming a story this site does not have.
-
-    Before the sweep asks whether any story is protected, so a site whose
-    stories are all open still hears about a typo.
-
-    A story that exists but is not protected says nothing: an author who
-    unprotects a story is not told the acknowledgement is stale, because
-    there is no longer anything to acknowledge.
-    """
-    for term_id, acknowledged in sorted(acknowledgements.values(),
-                                        key=lambda record: record[0]):
-        for story_id in sorted(acknowledged - stories):
-            print(f"  WARNING: glossary.csv:{term_id}."
-                  f"{ACKNOWLEDGEMENT_COLUMN} names {story_id!r}, which is "
-                  "not a story in this project.")
-
-
-def partition_acknowledged_hits(hits, acknowledgements):
-    """Split content-sweep hits into the failures and the acknowledged ones.
-
-    A hit is suppressed only where the page it landed on acknowledges that
-    story. Never the page alone: dropping a whole page would blind every
-    other story's check on it.
-    """
-    failures = []
-    suppressed = []
-    for path, story_id, sentinel in hits:
-        term_id, acknowledged = acknowledgements.get(path,
-                                                     (None, frozenset()))
-        if story_id in acknowledged:
-            suppressed.append((path, story_id, term_id))
-        else:
-            failures.append((path, story_id, sentinel))
-    return failures, suppressed
-
-
-def report_acknowledged_overlaps(suppressed):
-    """Print every passage the gate let through, and what let it through."""
-    if not suppressed:
-        return
-    print(f"  {len(suppressed)} acknowledged overlap(s) published on purpose:")
-    for path, story_id, term_id in suppressed:
-        print(f"    {path}: {story_id} — "
-              f"glossary.csv:{term_id}.{ACKNOWLEDGEMENT_COLUMN}")
-
-
-def _acknowledgement_exit(failures, acknowledgements):
-    """The third exit from a content-gate failure, or nothing to add.
-
-    Offered only for a hit on a glossary term page, since that is the
-    record carrying the column; an exit naming a page that has no way to
-    acknowledge anything would send the author to a column they cannot
-    write.
-    """
-    for path, story_id, _sentinel in failures:
-        record = acknowledgements.get(path)
-        if record is not None:
-            return (f" If the overlap is deliberate, list {story_id} under "
-                    f"{ACKNOWLEDGEMENT_COLUMN} on the {record[0]} term in "
-                    "glossary.csv.")
-    return ''
-
 
 def derive_sentinels(steps):
     """Extract plain prose segments that must never appear in rendered output.
@@ -700,8 +388,26 @@ def inject_envelope(story_page, envelope, identifier):
     story_page.write_text(new_html, encoding='utf-8')
 
 
-def sweep_files(site_dir, skip_top=('telar-content',)):
-    """Yield text files in the site output, skipping excluded top dirs."""
+def sweep_files(site_dir, skip_top=('telar-content', 'glossary')):
+    """Yield text files in the site output, skipping excluded top dirs.
+
+    `telar-content` is the passthrough copy of the source spreadsheets,
+    served by design: story locking is a barrier for drafts rather than
+    privacy, and the docs say so.
+
+    `glossary` is excluded because a definition is written by an author,
+    not assembled by a template. This gate exists to catch a surface nobody
+    thought of publishing a locked story's prose; a quotation an author
+    typed into a definition is a decision, and failing the build over it
+    leaves them rewording prose the site was always going to publish. An
+    author who wants the quotation locked has no answer here yet, which is
+    filed rather than built.
+
+    Both exclusions are by top-level directory, so a site that renames the
+    glossary permalink is swept rather than skipped. That direction is the
+    safe one: the cost is a build that fails where it need not, never a
+    passage published where nobody looked.
+    """
     site_dir = Path(site_dir)
     for path in site_dir.rglob('*'):
         if not path.is_file() or path.suffix.lower() not in SWEEP_SUFFIXES:
@@ -764,13 +470,6 @@ def process_site(site_dir, data_dir, config_path):
     data_dir = Path(data_dir)
 
     protected = find_protected_stories(data_dir)
-
-    # Read and checked before the question of whether anything is protected:
-    # an acknowledgement naming a story that does not exist is a typo whether
-    # or not this site has a protected story today, and a site that hears
-    # nothing about it learns of it only when it protects one.
-    acknowledgements = read_glossary_acknowledgements(site_dir)
-    warn_unacknowledgeable_stories(acknowledgements, find_all_stories(data_dir))
 
     if not protected:
         # A fragment page renders the steps in plaintext for this script to
@@ -835,10 +534,7 @@ def process_site(site_dir, data_dir, config_path):
     if problems:
         raise GateFailure("Shape check failed:\n  " + "\n  ".join(problems))
 
-    hits, suppressed = partition_acknowledged_hits(
-        content_sentinel_sweep(site_dir, sentinels_by_story), acknowledgements
-    )
-    report_acknowledged_overlaps(suppressed)
+    hits = content_sentinel_sweep(site_dir, sentinels_by_story)
     if hits:
         lines = [f"{path}: {story_id} plaintext ({sentinel!r})"
                  for path, story_id, sentinel in hits]
@@ -850,7 +546,6 @@ def process_site(site_dir, data_dir, config_path):
               "gate compares each protected story's longest plain-prose "
               "segments against every published file. Reword whichever copy "
               "should stay public, or remove the protection from that story."
-            + _acknowledgement_exit(hits, acknowledgements)
         )
 
     # The content gate only checks stories it could derive sentinels FROM.
