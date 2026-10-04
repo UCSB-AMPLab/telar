@@ -147,6 +147,7 @@ TEXTS_GROUP = (
     '  - telar-content/texts/\n'
 )
 ALL_FOUR = TESTS_GROUP + TEXTS_GROUP
+FLOW = 'tests/, pytest.ini, vitest.config.js, telar-content/texts/'
 
 
 def _config(tmp_path, text):
@@ -353,6 +354,75 @@ class TestExcludeEntries:
         added = [entry for entry in v180_sources.EXCLUDE_ENTRIES
                  if entry.rstrip('/') != config[0].rstrip('/')]
         assert records[0].description.startswith(f"Added {', '.join(added)} to")
+
+    @pytest.mark.parametrize('token', ['~', 'null', 'Null', 'NULL'])
+    @pytest.mark.parametrize('comment', ['', ' # ours'], ids=['bare', 'comment'])
+    def test_a_written_null_is_filled_like_a_bare_key(self, tmp_path, token, comment):
+        """Jekyll refuses an `exclude` that is not a list, so the token goes
+        and the entries go under the key, which keeps its comment."""
+        records = _config(tmp_path, f'exclude: {token}{comment}\ntitle: x\n')
+
+        assert _read(tmp_path, '_config.yml') == (
+            f'exclude:{comment}\n' + ALL_FOUR + 'title: x\n')
+        assert _excluded(tmp_path) == list(v180_sources.EXCLUDE_ENTRIES)
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
+
+    def test_a_tagged_null_is_refused(self, tmp_path):
+        text = 'exclude: !!null\ntitle: x\n'
+
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == text
+        assert [(r.status, r.severity) for r in records] == [
+            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+
+    def test_a_scalar_that_is_every_entry_is_still_rewritten(self, tmp_path, monkeypatch):
+        """No single value can be all four entries, so the phase is narrowed
+        to one; Jekyll refuses the scalar whatever it holds."""
+        monkeypatch.setattr(v180_sources, 'EXCLUDE_GROUPS', (
+            {'comment': ('# unused',), 'entries': ('tests/',), 'hard': False},))
+        monkeypatch.setattr(v180_sources, 'EXCLUDE_ENTRIES', ('tests/',))
+
+        records = _config(tmp_path, 'exclude: tests # ours\nother: 1\n')
+
+        assert _read(tmp_path, '_config.yml') == 'exclude: # ours\n  - tests\nother: 1\n'
+        assert _excluded(tmp_path) == ['tests']
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
+        again = v180_sources.add_exclude_entries(str(tmp_path), 'en')
+        assert _read(tmp_path, '_config.yml') == 'exclude: # ours\n  - tests\nother: 1\n'
+        assert 'already excludes' in again[0].description
+
+    def test_a_comment_under_a_continued_scalar_stays(self, tmp_path):
+        text = 'exclude: vendor\n  gems\n  # the gems we vendor\nother: 1\n'
+
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == (
+            'exclude:\n  - "vendor gems"\n' + ALL_FOUR + '  # the gems we vendor\nother: 1\n')
+        assert _excluded(tmp_path) == ['vendor gems'] + list(v180_sources.EXCLUDE_ENTRIES)
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
+
+    @pytest.mark.parametrize('text, written', [
+        ('exclude: [\n  a,\n  b  # the last one\n]\nother: 1\n',
+         f'exclude: [\n  a,\n  b,  # the last one\n  {FLOW}\n]\nother: 1\n'),
+        ('exclude: [\r\n  a,  # first\r\n]\r\n',
+         f'exclude: [\r\n  a,  # first\r\n  {FLOW}\r\n]\r\n'),
+        ('exclude: [\n  a,\n  # more to come\n]\n',
+         f'exclude: [\n  a,\n  # more to come\n  {FLOW}\n]\n'),
+        ('exclude: [ # none yet\n]\n', f'exclude: [ # none yet\n  {FLOW}\n]\n'),
+        ("exclude: [a, # don't ] stop\n  b]\n", f"exclude: [a, # don't ] stop\n  b, {FLOW}]\n"),
+    ], ids=['last-item-comment', 'crlf', 'comment-line', 'empty-with-comment',
+            'comment-with-quote-and-bracket'])
+    def test_a_flow_list_ending_in_a_comment(self, tmp_path, text, written):
+        """The entries go on a line of their own before a `]` on its own
+        line, never into the comment."""
+        before = yaml.safe_load(text)['exclude']
+
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == written
+        assert _excluded(tmp_path) == before + list(v180_sources.EXCLUDE_ENTRIES)
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
 
     def test_a_scalar_on_further_lines_that_is_not_a_string_fails(self, tmp_path):
         """Only a string can be written again double-quoted."""

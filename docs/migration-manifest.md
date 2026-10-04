@@ -207,16 +207,16 @@ Add values to a list in a YAML file, editing the text in place.
 What happens depends on how the key is written:
 
 - **A block list** (`exclude:` followed by `- item` lines) gets the missing values appended in place, at the list's own indentation.
-- **A flow list** (`exclude: [a, b]`) gets them inserted inside the brackets.
+- **A flow list** (`exclude: [a, b]`) gets them inserted inside the brackets. When the last item's line ends in a comment, they go on a line of their own before a `]` that has its own line, and the last item gains a comma before its comment; a comment inside the brackets never counts as the closing `]`.
 - **A missing key** is added as a block list holding the values.
-- **A scalar** (`exclude: vendor`) is rewritten as a block list with that value first, followed by the missing values. A value written on the key line keeps its text, quotes included, and a trailing comment stays on the key line; a string continued onto further lines is written double-quoted in their place, and a value on further lines that is not a string fails. A scalar equal to one of the values counts as present.
+- **A scalar** (`exclude: vendor`) is rewritten as a block list with that value first, followed by the missing values. A value written on the key line keeps its text, quotes included, and a trailing comment stays on the key line; a string continued onto further lines is written double-quoted in their place (a comment line under it stays in the file), and a value on further lines that is not a string fails. A scalar equal to one of the values counts as present, and a scalar is rewritten even when it already covers every value, since Jekyll refuses an `exclude:` that is not a list.
 - **A map** under the key is left alone, and the operation fails: the upgrade stops before committing and names the values to add.
 
 A value already in the list is skipped. Present means the same string after YAML parsing, with one trailing slash dropped from both sides and nothing else normalised: `tests/`, `"tests/"` and `tests` are the same value, while `"tests/ "` (a trailing space inside the quotes), `tests//` and `Tests/` are not.
 
 Three edge cases, handled the same way by the command-line upgrade:
 
-- A bare `exclude:` with no value parses as null. It counts as missing, and is filled as a block list.
+- A bare `exclude:` with no value parses as null. It counts as missing, and is filled as a block list. A null written out (`~`, `null`, `Null`, `NULL`) is filled the same way: the token is dropped, a trailing comment stays on the key line, and the values go under it. A tagged `!!null` fails.
 - A map under the key fails the operation, as above.
 - A file that does not parse as YAML stops the upgrade before anything is committed.
 

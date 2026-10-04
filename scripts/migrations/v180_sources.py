@@ -291,33 +291,95 @@ def _into_block(text: str, start: int, missing: List[str]) -> str:
     return ''.join(lines)
 
 
+def _is_comment_start(text: str, index: int) -> bool:
+    """Whether a comment starts at *index*: a `#` at a line's start or after
+    whitespace."""
+    return text[index] == '#' and (index == 0 or text[index - 1].isspace())
+
+
+def _comment_start(body: str) -> int:
+    """Where a comment starts on one line, outside quotes, or -1."""
+    quote = None
+    for index, char in enumerate(body):
+        if quote:
+            quote = None if char == quote else quote
+        elif char in '\'"':
+            quote = char
+        elif _is_comment_start(body, index):
+            return index
+    return -1
+
+
+def _line_end_from(text: str, index: int) -> int:
+    """The index of the line ending at or after *index*, or the text's length."""
+    found = re.compile(r'[\r\n]').search(text, index)
+    return found.start() if found else len(text)
+
+
+def _line_start_of(text: str, index: int) -> int:
+    return max(text.rfind('\n', 0, index), text.rfind('\r', 0, index)) + 1
+
+
 def _closing_bracket(text: str, opening: int) -> Optional[int]:
-    """The index of the `]` closing the flow sequence opened at *opening*."""
-    depth, quote = 0, None
-    for index in range(opening, len(text)):
+    """The index of the `]` closing the flow sequence opened at *opening*;
+    comments are skipped, so a quote or bracket in one does not count."""
+    depth, quote, index = 0, None, opening
+    while index < len(text):
         char = text[index]
         if quote:
             quote = None if char == quote else quote
         elif char in '\'"':
             quote = char
+        elif _is_comment_start(text, index):
+            index = _line_end_from(text, index)
+            continue
         elif char in '[{':
             depth += 1
         elif char in ']}':
             depth -= 1
             if depth == 0:
                 return index if char == ']' else None
+        index += 1
     return None
+
+
+def _before_own_line_bracket(text: str, bracket_line: int, missing: List[str]) -> str:
+    """*text* with *missing* on a line of their own before a `]` that has
+    its own line, where the last item's line ends in a comment. The last item
+    gains a comma before its comment, if it has none; the new line takes
+    that item's indentation."""
+    lines = text[:bracket_line].splitlines(keepends=True)
+    index = len(lines) - 1
+    while index > 0 and re.fullmatch(r'\s*(?:#.*)?', _body(lines[index])):
+        index -= 1
+    body = _body(lines[index])
+    cut = _comment_start(body)
+    code = (body if cut < 0 else body[:cut]).rstrip()
+    opens_list = code.endswith('[')
+    if not opens_list and not code.endswith(','):
+        lines[index] = code + ',' + lines[index][len(code):]
+    source = text[bracket_line:] if opens_list else body
+    lead = source[:len(source) - len(source.lstrip())] + ('  ' if opens_list else '')
+    return ''.join(lines) + lead + ', '.join(missing) + _newline_of(text) + text[bracket_line:]
 
 
 def _into_flow(text: str, start: int, missing: List[str]) -> Optional[str]:
     """*text* with *missing* inserted before the closing bracket of the flow
-    sequence on line *start*, after its last item."""
+    sequence on line *start*, after its last item. When the last item's
+    line ends in a comment they go on a line of their own, which needs the
+    `]` on its own line. The Compositor's `yaml_list_add` writes the same
+    bytes."""
     offset = sum(len(line) for line in text.splitlines(keepends=True)[:start])
     opening = text.index('[', offset)
     closing = _closing_bracket(text, opening)
     if closing is None:
         return None
     last = len(text[:closing].rstrip())
+    if _comment_start(text[_line_start_of(text, last):last]) >= 0:
+        bracket_line = _line_start_of(text, closing)
+        if text[bracket_line:closing].strip() == '' and bracket_line > opening:
+            return _before_own_line_bracket(text, bracket_line, missing)
+        return None
     inner = text[opening + 1:last].strip()
     lead = '' if not inner else (' ' if inner.endswith(',') else ', ')
     return text[:last] + lead + ', '.join(missing) + text[last:]
@@ -354,7 +416,8 @@ def _same_value(one, other) -> bool:
 
 def _continuation_count(lines: List[str], start: int) -> int:
     """How many lines after *start* continue it: indented ones, and blank
-    ones between them."""
+    or comment lines between them. Counting stops at the last indented line
+    that is not a comment, so a comment after the value stays in the file."""
     count = 0
     for index in range(start + 1, len(lines)):
         body = _body(lines[index])
@@ -362,7 +425,8 @@ def _continuation_count(lines: List[str], start: int) -> int:
             continue
         if not body[:1].isspace():
             break
-        count = index - start
+        if not body.strip().startswith('#'):
+            count = index - start
     return count
 
 
@@ -392,6 +456,26 @@ def _from_scalar(text: str, start: int, value, missing: List[str]) -> Optional[s
     return _into_block(''.join(lines), start, missing)
 
 
+# The plain scalars YAML reads as null; an empty value is one too.
+_NULL_TOKENS = frozenset(('', '~', 'null', 'Null', 'NULL'))
+
+
+def _from_null(text: str, start: int, rest: str, missing: List[str]) -> Optional[str]:
+    """*text* with *missing* as a block list under a key that holds null: a
+    bare key keeps its line, and a written null is dropped from it, its
+    comment kept. Any other null (a tagged one) is not rewritten. The
+    Compositor's `yaml_list_add` writes the same bytes."""
+    written, comment = _scalar_split(rest)
+    if written not in _NULL_TOKENS:
+        return None
+    if written:
+        lines = text.splitlines(keepends=True)
+        key = f'exclude: {comment}' if comment else 'exclude:'
+        lines[start] = key + _ending(lines[start])
+        text = ''.join(lines)
+    return _into_block(text, start, missing)
+
+
 def _new_exclude_key(text: str, missing: List[str]) -> str:
     newline = _newline_of(text)
     lines = _ended(text.splitlines(keepends=True), newline)
@@ -415,6 +499,8 @@ def _with_exclude_entries(text: str, value, missing: List[str]) -> Optional[str]
             return None
         if rest.startswith('['):
             updated = _into_flow(text, starts[-1], missing)
+        elif value is None:
+            updated = _from_null(text, starts[-1], rest, missing)
         elif not rest or rest.startswith('#'):
             updated = _into_block(text, starts[-1], missing)
         elif not isinstance(value, (list, dict)):
@@ -483,9 +569,10 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
 
     The same shapes as the Compositor's `yaml_list_add`: a block list gets
     the entries appended at its own indentation, a flow list gets them
-    inside its brackets, a missing key is added as a block list, a scalar
-    is rewritten as a block list with the value first, and a mapping is
-    left alone and fails. Present means present in the parsed list (a
+    inside its brackets, a missing key is added as a block list, a null
+    written out (`~`, `null`) is dropped and filled like a bare key, a
+    scalar is rewritten as a block list with the value first (even when it
+    is already every entry), and a mapping is left alone and fails. Present means present in the parsed list (a
     scalar reading as a list of itself), with or without a trailing slash,
     so an entry the owner added by hand is not added again and one
     elsewhere in the file does not count.
@@ -497,7 +584,10 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
     # if it is a mapping or list, so it is never one of the entries.
     present = {_normalise_entry(entry) for entry in listed if isinstance(entry, str)}
     missing = [entry for entry in EXCLUDE_ENTRIES if _normalise_entry(entry) not in present]
-    if not missing:
+    # Jekyll refuses an `exclude` that is not a list, so a single value is
+    # rewritten as one even when it is already every entry.
+    rewrite = value is not _ABSENT and value is not None and not isinstance(value, (list, dict))
+    if not missing and not rewrite:
         return [_record(lang, 'v180_exclude_present', ', '.join(EXCLUDE_ENTRIES),
                         category=ChangeCategory.CONFIGURATION)]
     shaped = not isinstance(value, dict)
@@ -505,7 +595,7 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
     if updated is None:
         return _exclude_failures(lang, missing)
     _write_text(path, updated)
-    return [_record(lang, 'v180_exclude_added', ', '.join(missing),
+    return [_record(lang, 'v180_exclude_added', ', '.join(missing or listed),
                     category=ChangeCategory.CONFIGURATION)]
 
 
