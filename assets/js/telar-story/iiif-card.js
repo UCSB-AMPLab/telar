@@ -48,6 +48,9 @@ import { authoringHomeZoom } from './authoring-frame.js';
 import { stepFraming } from './plates/framing.js';
 import { sideCardWidthPx } from './video-layout.js';
 import { moveSecondsNow } from './card-height.js';
+import {
+  holdClickToZoom, releaseClickToZoom, placementsCoincide, shownPlacement, easeOut,
+} from './camera-move.js';
 
 // ── Type definition ──────────────────────────────────────────────────────────
 
@@ -254,46 +257,6 @@ export function computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placemen
 
   return { focalImg, diameterImg, region, imageW, imageH };
 }
-
-/**
- * Apply the two-circle target to position a IIIF viewer plate (fitBounds form).
- *
- * Implements the two-circle model via a transient-zoom-free
- * OSD-unit conversion:
- *   - SCALE: s = max(s_tgt, s_fit) at zoom ≥ 2 — element px per image px, where
- *       s_tgt = min(region.w, region.h) / diameterImg  (radius match, Circle A→B)
- *       s_fit = min(region.w/imgW, region.h/imgH)      (Rule A: whole-image fit in
- *       the uncovered region). At an overview (zoom ≤ 1) s is s_fit scaled by the
- *       authored zoom: at 1 the whole object fits and is centred in the region,
- *       and below 1 the same object stands back from the frame by that fraction.
- *       Between 1 and 2, interpolate linearly from the whole-object fit at 1 to
- *       the detail scale at 2. This keeps scale continuous without changing
- *       either overview or zoom ≥ 2 framing.
- *     No OSD-zoom calibration (no `k`): fitBounds derives the zoom from the rect.
- *   - FOCAL: move the anchor to the uncovered-region centre, clamped to the
- *     keep-circle bound (_clampFocalPx) — keep scale, hold the anchor at least the
- *     circle's radius from every region edge. Does NOT rely on OSD's visibilityRatio.
- *     The anchor is the image centre at zoom ≤ 1 (an overview is centred whatever
- *     its x/y) and the authored focal point at every zoom above 1.
- *   - APPLY: build the image-px rectangle that fills the viewer at scale s with the
- *     anchor at the clamped position, then vp.fitBounds(rect, immediate). Because the
- *     target is a rectangle (not a delta off the live zoom), it is correct even on the
- *     animate path where the zoom is still springing — the fix for the mid-animation
- *     mis-scaling bug.
- *
- * Skip guards:
- *   - Title-card active: return false immediately (caller leaves viewer at home).
- *   - Full-object mode: state.cardOverlayRect is null → the null-rect
- *     path → _defaultCardBox gives a full-viewer region → focal centred in viewer.
- *     No dedicated full-object branch needed.
- *
- * @param {ViewerCard} viewerCard - The card to position.
- * @param {number} x    Authored focal-point x in [0, 1].
- * @param {number} y    Authored focal-point y in [0, 1].
- * @param {number} zoom Authored zoom multiplier (> 0).
- * @param {boolean} immediate - true = snap, false = OSD spring animation.
- * @returns {boolean} false if skipped (title-card or source dims unavailable), true otherwise.
- */
 
 // The smallest fraction of the whole-object fit an authored zoom can ask for.
 // A tenth of the frame is a long way back and still an object a reader can
@@ -645,6 +608,49 @@ function _applyPlacement(viewerCard, rect, placement, immediate) {
   vp.fitBounds(targetVp, immediate);
 }
 
+/**
+ * Apply the two-circle target to position a IIIF viewer plate (fitBounds form).
+ *
+ * Implements the two-circle model via a transient-zoom-free OSD-unit
+ * conversion. _livePlacement resolves the geometry and the skip guards,
+ * framePlacement computes the scale and the focal position, and _applyPlacement
+ * puts the result on the viewer:
+ *   - SCALE: s = max(s_tgt, s_fit) at zoom ≥ 2 — element px per image px, where
+ *       s_tgt = min(region.w, region.h) / diameterImg  (radius match, Circle A→B)
+ *       s_fit = min(region.w/imgW, region.h/imgH)      (Rule A: whole-image fit in
+ *       the uncovered region). At an overview (zoom ≤ 1) s is s_fit scaled by the
+ *       authored zoom: at 1 the whole object fits and is centred in the region,
+ *       and below 1 the same object stands back from the frame by that fraction.
+ *       Between 1 and 2, interpolate linearly from the whole-object fit at 1 to
+ *       the detail scale at 2. This keeps scale continuous without changing
+ *       either overview or zoom ≥ 2 framing.
+ *     No OSD-zoom calibration (no `k`): fitBounds derives the zoom from the rect.
+ *   - FOCAL: move the anchor to the uncovered-region centre, clamped to the
+ *     keep-circle bound (_clampFocalPx) — keep scale, hold the anchor at least the
+ *     circle's radius from every region edge. Does NOT rely on OSD's visibilityRatio.
+ *     The anchor is the image centre at zoom ≤ 1 (an overview is centred whatever
+ *     its x/y) and the authored focal point at every zoom above 1.
+ *   - APPLY (_applyPlacement): build the image-px rectangle that fills the viewer at
+ *     scale s with the anchor at the clamped position, then vp.fitBounds(rect,
+ *     immediate). The target is a rectangle, not a delta off the live zoom, so it
+ *     holds while the zoom is still springing on the animate path.
+ *
+ * Skip guards (in _livePlacement):
+ *   - Title-card active: return false immediately (caller leaves viewer at home).
+ *   - Source dims unavailable, or a framing computeFocalTarget refuses: return false.
+ *   - Full-object mode: state.cardOverlayRect is null → the null-rect
+ *     path → _defaultCardBox gives a full-viewer region → focal centred in viewer.
+ *     No dedicated full-object branch needed.
+ *
+ * @param {ViewerCard} viewerCard - The card to position.
+ * @param {number} x    Authored focal-point x in [0, 1].
+ * @param {number} y    Authored focal-point y in [0, 1].
+ * @param {number} zoom Authored zoom multiplier (> 0).
+ * @param {boolean} immediate - false lets OSD animate the viewport to the target
+ *   on its springs; true puts it there at once. Every engine path passes true.
+ * @returns {boolean} false if skipped (title-card, source dims unavailable, or a
+ *   framing computeFocalTarget refuses), true otherwise.
+ */
 function _applyFocalTarget(viewerCard, x, y, zoom, immediate) {
   const live = _livePlacement(viewerCard, x, y, zoom);
   if (!live) return false;
@@ -713,7 +719,7 @@ export function destroyIiifCard(viewerCard) {
  * Applies the two-circle target via _applyFocalTarget: the focal circle is
  * inscribed in the uncovered region (scale = max(scaleCircle, scaleFit)) and placed
  * at the clamped region centre by fitting the corresponding image-px rectangle with
- * vp.fitBounds. Rule A and the keep-circle clamp are enforced inside _applyFocalTarget.
+ * vp.fitBounds. Rule A and the keep-circle clamp are enforced in framePlacement.
  *
  * @param {ViewerCard} viewerCard - The card to position.
  * @param {number} x - Normalised horizontal position (0–1).
@@ -740,28 +746,14 @@ export function snapIiifToPosition(viewerCard, x, y, zoom) {
  * scroll engine writes every frame it drives the viewer), or the reader
  * pressing or pinching the image.
  *
+ * The move's hold on click-to-zoom ends with it, so a newer move that follows
+ * records the reader's own settings again, not the ones the older one wrote.
+ *
  * @param {ViewerCard} viewerCard
  */
 export function stopCameraMove(viewerCard) {
   viewerCard.cameraMove = (viewerCard.cameraMove || 0) + 1;
-}
-
-/** The ease-out cubic every move to a step runs on. */
-const _easeOut = (t) => 1 - (1 - t) ** 3;
-
-/**
- * The placement the viewer shows now, anchored at the image's top-left corner.
- *
- * @returns {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}
- */
-function _shownPlacement(viewerCard, rect) {
-  const vp = viewerCard.osdViewer.viewport;
-  const shown = vp.viewportToImageRectangle(vp.getBounds(true));
-  return {
-    s: rect.width / shown.width,
-    anchorImg: { x: shown.x, y: shown.y },
-    anchorPx: { x: 0, y: 0 },
-  };
+  releaseClickToZoom(viewerCard);
 }
 
 /**
@@ -779,8 +771,10 @@ function _shownPlacement(viewerCard, rect) {
  * the reader's drag, flick, pinch and double tap run on them.
  *
  * Under reduced motion the cards do not move, and the framing is written at
- * once. Click-to-zoom is turned off, so a tap on the image during the move
- * does not zoom it.
+ * once. A viewer already resting at the framing is written once and no frame
+ * follows. Click-to-zoom is turned off while the move runs, so a tap on the
+ * image during it does not zoom, and is restored to the viewer's own settings
+ * when the move ends or is stopped.
  *
  * @param {ViewerCard} viewerCard - The card to animate.
  * @param {number} x - Normalised horizontal position (0–1).
@@ -795,11 +789,11 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
 
   stopCameraMove(viewerCard);
   const token = viewerCard.cameraMove;
-  viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = false;
-  viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = false;
+  holdClickToZoom(viewerCard);
 
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     _applyFocalTarget(viewerCard, x, y, zoom, true);
+    releaseClickToZoom(viewerCard);
     return;
   }
 
@@ -809,12 +803,16 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
   const frame = (now) => {
     if (viewerCard.cameraMove !== token || !viewerCard.osdViewer) return;
     const live = _livePlacement(viewerCard, x, y, zoom);
-    if (!live) return;
-    if (start === null) [start, from] = [now, _shownPlacement(viewerCard, live.rect)];
-    const t = Math.min(1, (now - start) / ms);
-    const placement = t < 1 ? blendPlacements(from, live.placement, _easeOut(t)) : live.placement;
+    if (!live) return releaseClickToZoom(viewerCard);
+    const first = start === null;
+    if (first) [start, from] = [now, shownPlacement(viewerCard, live.rect)];
+    // A camera already at the framing has nowhere to travel.
+    const rests = first && placementsCoincide(from, live.placement, live.rect);
+    const t = rests ? 1 : Math.min(1, (now - start) / ms);
+    const placement = t < 1 ? blendPlacements(from, live.placement, easeOut(t)) : live.placement;
     _applyPlacement(viewerCard, live.rect, placement, true);
     if (t < 1) requestAnimationFrame(frame);
+    else releaseClickToZoom(viewerCard);
   };
   requestAnimationFrame(frame);
 }

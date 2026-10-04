@@ -172,6 +172,7 @@ FRAMEWORK_FILES = {
     'assets/js/telar-story/audio-card.js': 'Story engine: audio cards',
     'assets/js/telar-story/audio-layout.js': 'Story engine: audio layout',
     'assets/js/telar-story/authoring-frame.js': 'Story engine: the authoring frame',
+    'assets/js/telar-story/camera-move.js': 'Story engine: what a camera move holds while it runs, and when it has nothing to travel',
     'assets/js/telar-story/camera-travel.js': 'Story engine: how far a camera move travels',
     'assets/js/telar-story/card-fit.js': 'Story engine: side-card width and placement',
     'assets/js/telar-story/card-height.js': 'Story engine: card height and card motion',

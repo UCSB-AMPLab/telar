@@ -622,6 +622,45 @@
     return _seconds;
   }
 
+  // assets/js/telar-story/camera-move.js
+  function holdClickToZoom(viewerCard) {
+    const { gestureSettingsMouse: mouse, gestureSettingsTouch: touch } = viewerCard.osdViewer;
+    if (!viewerCard.heldClickToZoom) {
+      viewerCard.heldClickToZoom = { mouse: mouse.clickToZoom, touch: touch.clickToZoom };
+    }
+    mouse.clickToZoom = false;
+    touch.clickToZoom = false;
+  }
+  function releaseClickToZoom(viewerCard) {
+    const held = viewerCard.heldClickToZoom;
+    if (!held) return;
+    viewerCard.heldClickToZoom = null;
+    if (!viewerCard.osdViewer) return;
+    viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = held.mouse;
+    viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = held.touch;
+  }
+  var UNSEEN_PX = 0.5;
+  function placementsCoincide(a, b, container) {
+    const topLeft = (p) => ({
+      x: p.anchorPx.x - p.anchorImg.x * p.s,
+      y: p.anchorPx.y - p.anchorImg.y * p.s
+    });
+    const ca = topLeft(a);
+    const cb = topLeft(b);
+    const edge = Math.abs(a.s / b.s - 1);
+    return Math.abs(ca.x - cb.x) < UNSEEN_PX && Math.abs(ca.y - cb.y) < UNSEEN_PX && edge * container.width < UNSEEN_PX && edge * container.height < UNSEEN_PX;
+  }
+  var easeOut = (t) => 1 - (1 - t) ** 3;
+  function shownPlacement(viewerCard, rect) {
+    const vp = viewerCard.osdViewer.viewport;
+    const shown = vp.viewportToImageRectangle(vp.getBounds(true));
+    return {
+      s: rect.width / shown.width,
+      anchorImg: { x: shown.x, y: shown.y },
+      anchorPx: { x: 0, y: 0 }
+    };
+  }
+
   // assets/js/telar-story/iiif-card.js
   function _isSane(imageW, imageH, viewportW, viewportH, x, y, zoom) {
     const fin = (v) => typeof v === "number" && Number.isFinite(v);
@@ -815,16 +854,7 @@
   }
   function stopCameraMove(viewerCard) {
     viewerCard.cameraMove = (viewerCard.cameraMove || 0) + 1;
-  }
-  var _easeOut = (t) => 1 - (1 - t) ** 3;
-  function _shownPlacement(viewerCard, rect) {
-    const vp = viewerCard.osdViewer.viewport;
-    const shown = vp.viewportToImageRectangle(vp.getBounds(true));
-    return {
-      s: rect.width / shown.width,
-      anchorImg: { x: shown.x, y: shown.y },
-      anchorPx: { x: 0, y: 0 }
-    };
+    releaseClickToZoom(viewerCard);
   }
   function animateIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
@@ -833,10 +863,10 @@
     }
     stopCameraMove(viewerCard);
     const token = viewerCard.cameraMove;
-    viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = false;
-    viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = false;
+    holdClickToZoom(viewerCard);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       _applyFocalTarget(viewerCard, x, y, zoom, true);
+      releaseClickToZoom(viewerCard);
       return;
     }
     const ms = moveSecondsNow() * 1e3;
@@ -845,12 +875,15 @@
     const frame = (now) => {
       if (viewerCard.cameraMove !== token || !viewerCard.osdViewer) return;
       const live = _livePlacement(viewerCard, x, y, zoom);
-      if (!live) return;
-      if (start === null) [start, from] = [now, _shownPlacement(viewerCard, live.rect)];
-      const t = Math.min(1, (now - start) / ms);
-      const placement = t < 1 ? blendPlacements(from, live.placement, _easeOut(t)) : live.placement;
+      if (!live) return releaseClickToZoom(viewerCard);
+      const first = start === null;
+      if (first) [start, from] = [now, shownPlacement(viewerCard, live.rect)];
+      const rests = first && placementsCoincide(from, live.placement, live.rect);
+      const t = rests ? 1 : Math.min(1, (now - start) / ms);
+      const placement = t < 1 ? blendPlacements(from, live.placement, easeOut(t)) : live.placement;
       _applyPlacement(viewerCard, live.rect, placement, true);
       if (t < 1) requestAnimationFrame(frame);
+      else releaseClickToZoom(viewerCard);
     };
     requestAnimationFrame(frame);
   }
