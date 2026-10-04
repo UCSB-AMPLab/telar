@@ -520,29 +520,27 @@ class TestManualSteps:
         assert 'TEL-' not in joined
         assert all(ord(ch) < 0x2190 for ch in joined)
 
-    @pytest.mark.xfail(strict=True, reason='English pending the approved 1.8.0 CHANGELOG')
+    @pytest.mark.xfail(strict=True, reason='Pending the approved 1.8.0 CHANGELOG')
     def test_the_content_note_is_written(self):
         assert 'PENDING' not in _steps('en')[5]['description']
+        assert 'PENDIENTE' not in _steps('es')[5]['description']
 
-    @pytest.mark.xfail(strict=True, reason='Spanish pending review')
-    def test_the_spanish_is_written(self):
-        assert all('ES-PENDIENTE' not in s['description'] for s in _steps('es'))
+    def test_the_spanish_steps_are_written(self):
+        assert all('ES-PENDIENTE' not in s['description'] for s in _steps('es')[:5])
 
-    @pytest.mark.xfail(strict=True, reason='Spanish pending review')
     def test_spanish_uses_the_tu_imperative(self):
         joined = ' '.join(s['description'] for s in _steps('es'))
         assert 'Actualiza' in joined
         assert 'usted' not in joined.lower()
 
-    @pytest.mark.xfail(strict=True, reason='Spanish pending review')
     def test_the_spanish_records_are_written(self):
         pending = [k for k, v in MESSAGES['es'].items() if 'ES-PENDIENTE' in v]
         assert pending == []
 
-    def test_every_pending_spanish_record_is_one_of_this_migrations(self):
-        """The placeholder may not spread to a key this release did not add."""
-        pending = [k for k, v in MESSAGES['es'].items() if 'ES-PENDIENTE' in v]
-        assert pending and all(k.startswith('v180_') for k in pending)
+    def test_spanish_records_keep_the_english_placeholders(self):
+        mismatched = [k for k, v in MESSAGES['en'].items() if k.startswith('v180_')
+                      and v.count('{}') != MESSAGES['es'][k].count('{}')]
+        assert mismatched == []
 
 
 # ---------- Registration ----------

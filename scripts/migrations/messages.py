@@ -719,45 +719,107 @@ MESSAGES = {
                                      'La actualizaci\u00f3n se complet\u00f3; esa '
                                      'carpeta no se usa y puedes borrarla a mano.',
 
-        # v1.8.0 migration records. Spanish pending review.
-        'v180_removed_stale_manifest': 'ES-PENDIENTE',
-        'v180_page_line_updated': 'ES-PENDIENTE',
-        'v180_page_line_current': 'ES-PENDIENTE',
-        'v180_page_line_own_text': 'ES-PENDIENTE',
-        'v180_page_absent': 'ES-PENDIENTE',
-        'v180_column_dropped': 'ES-PENDIENTE',
-        'v180_column_dropped_all_empty': 'ES-PENDIENTE',
-        'v180_columns_hold_values': 'ES-PENDIENTE',
-        'v180_column_in_sheet': 'ES-PENDIENTE',
-        'v180_column_not_removed': 'ES-PENDIENTE',
-        'v180_reserved_column': 'ES-PENDIENTE',
-        'v180_sheet_unreadable': 'ES-PENDIENTE',
-        'v180_sheets_unchecked': 'ES-PENDIENTE',
-        'v180_sheets_clean': 'ES-PENDIENTE',
-        'v180_exclude_added': 'ES-PENDIENTE',
-        'v180_exclude_present': 'ES-PENDIENTE',
-        'v180_exclude_texts_failed': 'ES-PENDIENTE',
-        'v180_exclude_others_failed': 'ES-PENDIENTE',
-        'v180_page_keys_removed': 'ES-PENDIENTE',
-        'v180_page_key_kept': 'ES-PENDIENTE',
-        'v180_page_source_refused': 'ES-PENDIENTE',
-        'v180_file_unreadable': 'ES-PENDIENTE',
-        'v180_pages_clean': 'ES-PENDIENTE',
-        'v180_related_terms_listed': 'ES-PENDIENTE',
-        'v180_related_terms_refused': 'ES-PENDIENTE',
-        'v180_glossary_clean': 'ES-PENDIENTE',
-        'v180_answer_over_limit': 'ES-PENDIENTE',
-        'v180_answer_content_removed': 'ES-PENDIENTE',
-        'v180_answer_kind_media': 'ES-PENDIENTE',
-        'v180_answer_kind_widgets': 'ES-PENDIENTE',
-        'v180_answer_kind_footnotes': 'ES-PENDIENTE',
-        'v180_answer_kind_markup': 'ES-PENDIENTE',
-        'v180_answers_from_local_copies': 'ES-PENDIENTE',
-        'v180_answers_unchecked': 'ES-PENDIENTE',
-        'v180_answers_clean': 'ES-PENDIENTE',
-        'v180_engine_removed': 'ES-PENDIENTE',
-        'v180_engine_kept': 'ES-PENDIENTE',
-        'v180_engine_not_removed': 'ES-PENDIENTE',
+        # v1.8.0 migration records.
+        'v180_removed_stale_manifest': 'Se eliminó migration.json, un archivo que dejó la '
+            'actualización a la versión 1.5.4 y que Jekyll publicaba '
+            'como una página más del sitio',
+        'v180_page_line_updated': 'Se actualizó {}: el contenido predeterminado ahora viene de `{}`',
+        'v180_page_line_current': '{} ya tiene la línea de la versión 1.8.0',
+        'v180_page_line_own_text': '{} tiene un texto propio en lugar de la línea predeterminada, '
+            'así que quedó como estaba. Si quieres el contenido '
+            'predeterminado, la línea que debes usar ahora es `{}`',
+        'v180_page_absent': 'Este sitio no tiene {}, así que no había nada que actualizar',
+        'v180_column_dropped': 'Se eliminó la columna vacía `{}` de `{}`; tus valores están en '
+            '`{}`.',
+        'v180_column_dropped_all_empty': 'Se eliminó la columna vacía `{}` de `{}`: significa lo '
+            'mismo que `{}`, las dos estaban vacías y se conservó '
+            '`{}`.',
+        'v180_columns_hold_values': '`{}` tiene columnas que significan lo mismo y cada una tiene '
+            'valores: {}. Telar no puede escoger entre ellas, así que la '
+            'próxima construcción se detendrá. Deja una, pasa a ella los '
+            'valores que necesites y borra las demás.',
+        'v180_column_in_sheet': 'El sitio toma el contenido de una hoja de cálculo de Google '
+            'Sheets, y la próxima construcción vuelve a leerla. Borra la '
+            'columna `{}` directamente en la hoja, en la pestaña de la que '
+            'sale `{}`; si no, la construcción se detendrá por las mismas dos '
+            'columnas.',
+        'v180_column_not_removed': 'No se pudo eliminar la columna vacía `{}` de `{}` sin '
+            'cambiar nada más en el archivo, así que no se tocó. Bórrala a mano; si no, la '
+            'próxima construcción se detendrá.',
+        'v180_reserved_column': '`{}` tiene una columna llamada `{}`, un nombre que Telar reserva '
+            'para su propio uso. Cámbiale el nombre a esa columna; si no, la '
+            'próxima construcción se detendrá.',
+        'v180_sheet_unreadable': 'No se pudo leer `{}` para revisar las columnas: {}',
+        'v180_sheets_unchecked': 'No se pudo comprobar si alguna hoja de cálculo tiene dos '
+            'columnas que significan lo mismo: la actualización no logró '
+            'cargar las reglas que la construcción aplica a las columnas '
+            '({}). Si las hay, la próxima construcción se detendrá y dirá '
+            'cuáles son.',
+        'v180_sheets_clean': 'Ninguna hoja de cálculo tiene dos columnas que signifiquen lo mismo',
+        'v180_exclude_added': 'Se agregaron a la lista `exclude:` de _config.yml estas entradas: '
+            '{}. Así Jekyll no las publica como páginas del sitio',
+        'v180_exclude_present': '_config.yml ya excluye {}',
+        'v180_exclude_texts_failed': 'Esta actualización no pudo agregar `telar-content/texts/` a '
+            'la lista `exclude:` de _config.yml: `exclude:` tiene un solo'
+            ' valor o un conjunto de claves y valores en vez de una '
+            'lista, o no se pudo leer el archivo. Convierte `exclude:` a '
+            'mano en una lista que incluya `- telar-content/texts/` y '
+            'vuelve a ejecutar la actualización. Sin esa entrada, Jekyll '
+            'publica una copia sin procesar de los archivos de cada '
+            'página, historia y entrada del glosario, y si una página '
+            'fija su propia dirección, la construcción se detiene.',
+        'v180_exclude_others_failed': 'Esta actualización no pudo agregar {} a la lista `exclude:`'
+            ' de _config.yml. Agrega esas entradas a mano debajo de '
+            '`exclude:`: corresponden a las pruebas propias de Telar, y '
+            'sin ellas Jekyll publica esas pruebas junto con el sitio.',
+        'v180_page_keys_removed': 'Se quitó {} de {}: la construcción asigna por su cuenta el '
+            'layout y la dirección de cada página',
+        'v180_page_key_kept': '{} define `{}: {}`, un valor que la construcción ignora. La página '
+            'se publica en {}.',
+        'v180_page_source_refused': 'Se dejó {} como estaba: quitar {} habría cambiado la manera '
+            'en que se lee el resto del frontmatter. La construcción '
+            'ignora las dos claves, así que la página se publica bien de '
+            'todos modos.',
+        'v180_file_unreadable': 'No se pudo actualizar {}: {}',
+        'v180_pages_clean': 'Ningún archivo de página define su propio layout ni su propia '
+            'dirección',
+        'v180_related_terms_listed': 'Se reescribió `related_terms` en {} como una lista, para que'
+            ' la página enlace cada término relacionado',
+        'v180_related_terms_refused': 'Se dejó `related_terms` en {} como estaba, porque está '
+            'escrito de una forma que esta actualización no sabe '
+            'reescribir. Escríbelo como una lista, por ejemplo '
+            '`related_terms: ["term-one", "term-two"]`; si no, la página'
+            ' no enlazará esos términos.',
+        'v180_glossary_clean': 'No hubo que reescribir `related_terms` en ninguna entrada del '
+            'glosario',
+        'v180_answer_over_limit': 'Historia `{}`, paso {}: la respuesta tiene {} palabras y la '
+            'construcción la recorta a {}. Acórtala para que no se pierda el'
+            ' final.',
+        'v180_answer_content_removed': 'Historia `{}`, paso {}: la respuesta solo muestra texto, '
+            'así que la construcción le quita {}. Si quieres conservar '
+            'ese contenido, pásalo a un panel.',
+        'v180_answer_kind_media': 'las imágenes y los elementos multimedia',
+        'v180_answer_kind_widgets': 'los widgets',
+        'v180_answer_kind_footnotes': 'las notas al pie',
+        'v180_answer_kind_markup': 'el formato de las listas, los títulos y las citas, además de '
+            'las tablas, los bloques de código y las líneas divisorias',
+        'v180_answers_from_local_copies': 'Las respuestas se revisaron en las copias locales de '
+            'las hojas de cálculo. El sitio toma el contenido de una'
+            ' hoja de cálculo de Google Sheets, y la próxima '
+            'construcción vuelve a leerla, así que haz los cambios '
+            'directamente en esa hoja.',
+        'v180_answers_unchecked': 'No se pudieron revisar las respuestas de las historias: la '
+            'actualización no logró cargar las reglas que la construcción '
+            'aplica a las respuestas ({}). La próxima construcción indicará '
+            'cada respuesta que recorte.',
+        'v180_answers_clean': 'La construcción no recorta ninguna respuesta de las historias ni '
+            'les quita contenido',
+        'v180_engine_removed': 'Se eliminó {}: la actualización se ejecuta con las herramientas '
+            'verificadas que descarga `scripts/upgrade.py`',
+        'v180_engine_kept': 'Se conservó {}: no es una copia publicada por Telar, así que '
+            'puede ser tuya. La actualización no lo usa; bórralo si nada tuyo depende de él.',
+        'v180_engine_not_removed': 'No se pudo eliminar {}: {}. La actualización se completó; ese '
+            'archivo no se usa y puedes borrarlo a mano.',
     }
 }
 

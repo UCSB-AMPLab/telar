@@ -525,15 +525,15 @@ class Migration170to180(BaseMigration):
 
     def _get_manual_steps_es(self) -> List[Dict[str, str]]:
         return [
-            {'description': _ES_PENDING, 'audience': 'local', 'kind': 'action',
+            {'description': '''**Actualiza `.github/workflows/build.yml` a mano (recomendado).** GitHub no permite que una actualización automática modifique archivos de workflow, así que este paso lo haces tú: copia el `build.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). Antes de decidir que no hace falta volver a generar las imágenes de los objetos, el workflow nuevo comprueba que la copia guardada de esas imágenes todavía exista. GitHub borra esa copia después de siete días sin uso, así que, hasta ahora, un sitio que pasaba una semana sin cambios podía publicar una corrección de texto sin ninguna imagen, en una construcción que además informaba que todo había salido bien. También construye el sitio con Node 22 e instala solo las herramientas que la construcción necesita.''', 'audience': 'local', 'kind': 'action',
              'doc_url': _GUIA},
-            {'description': _ES_PENDING, 'audience': 'local', 'kind': 'optional',
+            {'description': '''**Actualiza `.github/workflows/upgrade.yml` (opcional).** Tu copia actual sigue funcionando. La nueva lee la versión del sitio de la misma forma que la actualización, así que el *issue* de la actualización y el resumen siempre indican la misma versión de partida.''', 'audience': 'local', 'kind': 'optional',
              'doc_url': _GUIA},
-            {'description': _ES_PENDING, 'audience': 'local', 'kind': 'optional',
+            {'description': '''**`.github/workflows/telar-tests.yml` ejecuta las pruebas del propio Telar, no las de tu sitio (opcional).** Puedes copiar la versión actual desde el repositorio de Telar, o borrarlo junto con `tests/`, `pytest.ini` y `vitest.config.js`: ninguno de esos archivos interviene en lo que el sitio construye o publica.''', 'audience': 'local', 'kind': 'optional',
              'doc_url': _GUIA},
-            {'description': _ES_PENDING, 'audience': 'all', 'kind': 'action',
+            {'description': '''**Si llevas tus historias en una hoja de cálculo, revisa la columna que marca una historia como privada.** Telar aceptaba `privada` y `protegida`, pero no `privado` ni `protegido`, y una historia marcada con una de estas dos últimas quedaba publicada a la vista de todo el mundo, sin ningún aviso, porque la construcción nunca llegó a reconocerla como protegida. Desde este lanzamiento funcionan las cuatro formas. Si en tu hoja usaste alguna de las formas masculinas, da por hecho que esas historias estuvieron públicas hasta ahora y decide qué hacer al respecto: la próxima construcción las cifra, pero no puede deshacer lo que ya se publicó.''', 'audience': 'all', 'kind': 'action',
              'doc_url': 'https://telar.org/guia/funciones/historias-privadas/'},
-            {'description': _ES_PENDING, 'audience': 'google-sheets', 'kind': 'action',
+            {'description': '''**Si tu sitio lee una hoja de cálculo de Google Sheets, revisa si el resumen de la actualización indica alguna columna que haya que borrar.** Telar ahora detiene la construcción cuando dos columnas significan lo mismo, como `medium` y `object_type`. La actualización ya corrigió la copia local, pero la construcción vuelve a leer la hoja, así que borra la columna que indica el resumen directamente en la hoja de cálculo.''', 'audience': 'google-sheets', 'kind': 'action',
              'doc_url': 'https://telar.org/guia/tus-datos/google-sheets/'},
             {'description': _ES_PENDING, 'audience': 'all', 'kind': 'note',
              'doc_url': 'https://telar.org/guia'},
