@@ -15,6 +15,7 @@ Version: v1.8.0
 """
 
 import os
+import random
 import sys
 
 import pytest
@@ -496,6 +497,397 @@ class TestExcludeEntries:
 
         assert _read(tmp_path, '_config.yml') == text
         assert records[0].severity == 'hard'
+
+
+# ---------- The top-level key where Jekyll's reader finds it ----------
+
+BOM = '\ufeff'
+
+
+def _first(text):
+    """The first document of *text*, the one Jekyll reads."""
+    return next(iter(yaml.safe_load_all(text)))
+
+
+def _indented(block, by='  '):
+    return ''.join(by + line for line in block.splitlines(keepends=True))
+
+
+# Input, and the bytes the upgrade writes. A BOM, a `---` line and an
+# indented top-level mapping are all read by Jekyll as the same keys, so
+# `exclude:` is found after the first two and at the mapping's own
+# indentation, and the BOM, line endings and every other line stay.
+READER_CASES = [
+    ('bom-scalar', BOM + 'exclude: vendor\n', BOM + 'exclude:\n  - vendor\n' + ALL_FOUR),
+    ('bom-null', BOM + 'exclude: null\n', BOM + 'exclude:\n' + ALL_FOUR),
+    ('bom-crlf', BOM + 'exclude: vendor\r\ntitle: x\r\n',
+     BOM + 'exclude:\r\n  - vendor\r\n' + ALL_FOUR.replace('\n', '\r\n') + 'title: x\r\n'),
+    ('bom-comment-first', BOM + '# My site\nexclude: vendor\n',
+     BOM + '# My site\nexclude:\n  - vendor\n' + ALL_FOUR),
+    ('bom-block', BOM + 'exclude:\n  - vendor\n', BOM + 'exclude:\n  - vendor\n' + ALL_FOUR),
+    ('bom-flow', BOM + 'exclude: [vendor]\n', BOM + f'exclude: [vendor, {FLOW}]\n'),
+    ('indented-scalar', '  exclude: vendor\n',
+     '  exclude:\n    - vendor\n' + _indented(ALL_FOUR)),
+    ('indented-scalar-comment', '  title: x\n  exclude: vendor # gems\n  other: 1\n',
+     '  title: x\n  exclude: # gems\n    - vendor\n' + _indented(ALL_FOUR) + '  other: 1\n'),
+    ('indented-null', '  exclude: ~\n  other: 1\n',
+     '  exclude:\n' + _indented(ALL_FOUR) + '  other: 1\n'),
+    ('indented-bare', '  exclude:\n  other: 1\n',
+     '  exclude:\n' + _indented(ALL_FOUR) + '  other: 1\n'),
+    ('indented-block', '  title: x\n  exclude:\n    - vendor\n  other: 1\n',
+     '  title: x\n  exclude:\n    - vendor\n' + _indented(ALL_FOUR) + '  other: 1\n'),
+    ('indented-block-at-key', '  exclude:\n  - vendor\n  other: 1\n',
+     '  exclude:\n  - vendor\n' + ALL_FOUR + '  other: 1\n'),
+    ('indented-flow', '  exclude: [vendor] # built\n  other: 1\n',
+     f'  exclude: [vendor, {FLOW}] # built\n  other: 1\n'),
+    ('indented-continued', '  exclude: two\n    lines\n  other: 1\n',
+     '  exclude:\n    - "two lines"\n' + _indented(ALL_FOUR) + '  other: 1\n'),
+    ('indented-bom-crlf', BOM + '  exclude: vendor\r\n  other: 1\r\n',
+     BOM + '  exclude:\r\n    - vendor\r\n' + _indented(ALL_FOUR).replace('\n', '\r\n')
+     + '  other: 1\r\n'),
+    ('nested-only', 'sass:\n  exclude: vendor\ntitle: x\n',
+     'sass:\n  exclude: vendor\ntitle: x\n\nexclude:\n' + ALL_FOUR),
+    ('nested-after', 'exclude: vendor\nsass:\n  exclude: x\n',
+     'exclude:\n  - vendor\n' + ALL_FOUR + 'sass:\n  exclude: x\n'),
+    ('indented-nested-before', '  sass:\n    exclude: x\n  exclude: vendor\n',
+     '  sass:\n    exclude: x\n  exclude:\n    - vendor\n' + _indented(ALL_FOUR)),
+    ('indented-nested-after', '  exclude: [a]\n  sass:\n    exclude: x\n',
+     f'  exclude: [a, {FLOW}]\n  sass:\n    exclude: x\n'),
+    ('document-start', '---\nexclude: vendor\n', '---\nexclude:\n  - vendor\n' + ALL_FOUR),
+    ('document-start-indented', '---\n  exclude: vendor\n',
+     '---\n  exclude:\n    - vendor\n' + _indented(ALL_FOUR)),
+    ('bom-document-start', BOM + '--- # site\nexclude: vendor\n',
+     BOM + '--- # site\nexclude:\n  - vendor\n' + ALL_FOUR),
+    ('indented-absent', '  title: x\n', '  title: x\n\n  exclude:\n' + _indented(ALL_FOUR)),
+    ('indented-absent-no-final-newline', '  title: x',
+     '  title: x\n\n  exclude:\n' + _indented(ALL_FOUR)),
+    ('indented-absent-bom', BOM + '  title: x\n',
+     BOM + '  title: x\n\n  exclude:\n' + _indented(ALL_FOUR)),
+    ('indented-absent-document-start', '---\n    title: x\n',
+     '---\n    title: x\n\n    exclude:\n' + _indented(ALL_FOUR, '    ')),
+    ('indented-absent-crlf', '  title: x\r\n  other: 1\r\n',
+     '  title: x\r\n  other: 1\r\n\r\n  exclude:\r\n'
+     + _indented(ALL_FOUR).replace('\n', '\r\n')),
+    ('indented-absent-nested', '  sass:\n    exclude: vendor\n  title: x\n',
+     '  sass:\n    exclude: vendor\n  title: x\n\n  exclude:\n' + _indented(ALL_FOUR)),
+    ('double-quoted-key-flow', '"exclude": [vendor]\n', f'"exclude": [vendor, {FLOW}]\n'),
+    ('single-quoted-key-spaced', "'exclude' : vendor\n",
+     "'exclude' :\n  - vendor\n" + ALL_FOUR),
+    ('spaced-key-block', 'exclude  :\n  - a\ntitle: x\n',
+     'exclude  :\n  - a\n' + ALL_FOUR + 'title: x\n'),
+    ('double-quoted-key-null', '"exclude": ~ # none\n', '"exclude": # none\n' + ALL_FOUR),
+    ('indented-quoted-key-continued', BOM + '  title: x\n  "exclude" : two\n    lines\n',
+     BOM + '  title: x\n  "exclude" :\n    - "two lines"\n' + _indented(ALL_FOUR)),
+    ('quoted-key-comment', "'exclude' : vendor # gems\n",
+     "'exclude' : # gems\n  - vendor\n" + ALL_FOUR),
+    ('escaped-key-block', '"exclu\\x64e":\n  - vendor\n',
+     '"exclu\\x64e":\n  - vendor\n' + ALL_FOUR),
+    ('escaped-key-scalar', '"\\x65xclude" : vendor # gems\n',
+     '"\\x65xclude" : # gems\n  - vendor\n' + ALL_FOUR),
+    ('escaped-key-flow', '  "excl\\u0075de": [vendor]\n', f'  "excl\\u0075de": [vendor, {FLOW}]\n'),
+    ('escaped-key-null', '"exclud\\x65": null\ntitle: x\n',
+     '"exclud\\x65":\n' + ALL_FOUR + 'title: x\n'),
+    # A quoted key that does not read as `exclude` after the one that does:
+    # `''` in single quotes is one quote, and a colon inside quotes is text.
+    ('single-quoted-key-doubled-quote', "exclude: vendor\n'exclude''': [a]\n",
+     "exclude:\n  - vendor\n" + ALL_FOUR + "'exclude''': [a]\n"),
+    ('quoted-other-key-with-colon', 'exclude: [a]\n"exclude: no": [b]\n',
+     f'exclude: [a, {FLOW}]\n"exclude: no": [b]\n'),
+    ('escaped-other-key', 'exclude: [a]\n"exclude\\x21": [b]\n',
+     f'exclude: [a, {FLOW}]\n"exclude\\x21": [b]\n'),
+    ('document-end', 'title: x\n...\n', 'title: x\n\nexclude:\n' + ALL_FOUR + '...\n'),
+    ('document-end-comment-after', 'title: x\n... # end\n# after\n',
+     'title: x\n\nexclude:\n' + ALL_FOUR + '... # end\n# after\n'),
+    ('document-end-indented-crlf', '  title: x\r\n...\r\n',
+     '  title: x\r\n\r\n  exclude:\r\n' + _indented(ALL_FOUR).replace('\n', '\r\n')
+     + '...\r\n'),
+    ('document-end-list', 'exclude: [a]\n...\n', f'exclude: [a, {FLOW}]\n...\n'),
+    ('multi-document-flow', '---\nexclude: [vendor]\n---\ntitle: x\n',
+     f'---\nexclude: [vendor, {FLOW}]\n---\ntitle: x\n'),
+    ('multi-document-scalar', '---\nexclude: vendor\n---\nexclude: other\n',
+     '---\nexclude:\n  - vendor\n' + ALL_FOUR + '---\nexclude: other\n'),
+    ('multi-document-absent', 'title: x\n...\n---\nexclude: y\n',
+     'title: x\n\nexclude:\n' + ALL_FOUR + '...\n---\nexclude: y\n'),
+    ('multi-document-absent-no-end', BOM + 'title: x\n--- # two\nexclude: y\n',
+     BOM + 'title: x\n\nexclude:\n' + ALL_FOUR + '--- # two\nexclude: y\n'),
+]
+
+# Inputs that fail as they do without a BOM or indentation: the file stays
+# as it is and the texts entry's failure is hard.
+READER_FAILURES = [
+    ('bom-tagged-null', BOM + 'exclude: !!null\n'),
+    ('bom-map', BOM + 'exclude:\n  vendor: true\n'),
+    ('indented-tagged-null', '  exclude: !!null\n  other: 1\n'),
+    ('indented-map', '  exclude:\n    vendor: true\n  other: 1\n'),
+    ('indented-flow-map', '  exclude: {vendor: true}\n'),
+    # A top-level flow mapping has no line a key can be added on.
+    ('flow-mapping-absent', '{title: x}\n'),
+    # PyYAML refuses a tab after the colon, which Jekyll's reader allows.
+    ('tab-after-colon', 'exclude:\tvendor\n'),
+]
+
+
+class TestExcludeWhereJekyllReadsIt:
+
+    @pytest.mark.parametrize('text, written', [case[1:] for case in READER_CASES],
+                             ids=[case[0] for case in READER_CASES])
+    def test_the_key_is_found_and_only_it_changes(self, tmp_path, text, written):
+        before = _first(text)
+
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == written
+        after = _first(written)
+        assert after['exclude'] == v180_sources._as_list(
+            before.get('exclude')) + list(v180_sources.EXCLUDE_ENTRIES)
+        assert v180_sources._without_exclude(after) == v180_sources._without_exclude(before)
+        assert [r.status for r in records] == [ChangeStatus.APPLIED]
+        again = v180_sources.add_exclude_entries(str(tmp_path), 'en')
+        assert _read(tmp_path, '_config.yml') == written
+        assert 'already excludes' in again[0].description
+
+    @pytest.mark.parametrize('text', [case[1] for case in READER_FAILURES],
+                             ids=[case[0] for case in READER_FAILURES])
+    def test_the_other_shapes_still_fail(self, tmp_path, text):
+        records = _config(tmp_path, text)
+
+        assert _read(tmp_path, '_config.yml') == text
+        assert [(r.status, r.severity) for r in records] == [
+            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+
+
+# ---------- Jekyll reads the rewritten file ----------
+
+# Jekyll's own reader, one JSON path per line in, one result per line out:
+# the mapping as `read_config_file` loads it (SafeYAML, BOM-aware), and the
+# error `Jekyll.configuration` raises when it refuses the file, or null.
+JEKYLL_READ = '''
+require "jekyll"
+require "json"
+Jekyll.logger.log_level = :error
+STDIN.each_line do |line|
+  path = JSON.parse(line)
+  begin
+    raw = Jekyll::Configuration.new.read_config_file(path)
+  rescue StandardError => e
+    puts JSON.generate({"config" => nil, "error" => "#{e.class}: #{e.message}"})
+    next
+  end
+  begin
+    Jekyll.configuration("source" => File.dirname(path), "config" => path, "quiet" => true)
+    error = nil
+  rescue StandardError => e
+    error = "#{e.class}: #{e.message}"
+  end
+  puts JSON.generate({"config" => raw, "error" => error})
+end
+'''
+
+
+def _bundle_env():
+    env = dict(os.environ, BUNDLE_GEMFILE=os.path.join(REPO_ROOT, 'Gemfile'))
+    env.pop('BUNDLE_PATH', None)
+    return env
+
+
+def jekyll_read(paths):
+    """What Jekyll reads from each file in *paths*, as `{'config', 'error'}`;
+    skips the calling test when `bundle exec` cannot run Jekyll."""
+    import json
+    import shutil
+    import subprocess
+    if shutil.which('bundle') is None:
+        pytest.skip('bundle is not on PATH')
+    result = subprocess.run(
+        ['bundle', 'exec', 'ruby', '-e', JEKYLL_READ],
+        input=''.join(json.dumps(str(path)) + '\n' for path in paths),
+        capture_output=True, text=True, cwd=REPO_ROOT, env=_bundle_env(), timeout=300)
+    if result.returncode != 0 and 'cannot load such file' in result.stderr:
+        pytest.skip('bundle exec cannot load Jekyll with this Ruby')
+    assert result.returncode == 0, result.stderr[-2000:]
+    read = [json.loads(line) for line in result.stdout.splitlines()]
+    assert len(read) == len(paths)
+    return read
+
+
+def _written_sites(tmp_path, texts):
+    """Each text as a site's `_config.yml`, the upgrade's step run on it:
+    (input path, output path, records) per text."""
+    sites = []
+    for index, text in enumerate(texts):
+        site = tmp_path / f'site{index}'
+        original = _write(site, 'original.yml', text)
+        _write(site, '_config.yml', text)
+        records = v180_sources.add_exclude_entries(str(site), 'en')
+        sites.append((original, site / '_config.yml', records))
+    return sites
+
+
+class TestJekyllReadsTheRewrite:
+
+    def test_each_rewrite_is_an_array_jekyll_accepts(self, tmp_path):
+        sites = _written_sites(tmp_path, [case[1] for case in READER_CASES])
+
+        read = jekyll_read([path for site in sites for path in site[:2]])
+
+        for (name, text, _), before, after in zip(READER_CASES, read[0::2], read[1::2]):
+            assert after['error'] is None, (name, after)
+            exclude = after['config']['exclude']
+            assert isinstance(exclude, list), name
+            assert exclude == v180_sources._as_list(
+                before['config'].get('exclude')) + list(v180_sources.EXCLUDE_ENTRIES), name
+            assert v180_sources._without_exclude(after['config']) == \
+                v180_sources._without_exclude(before['config']), name
+
+    def test_jekyll_refused_the_scalars_and_nulls_before(self, tmp_path):
+        """The inputs are the ones the issue is about: Jekyll reads the same
+        top-level key and refuses what it holds."""
+        refused = [case for case in READER_CASES
+                   if not isinstance(_first(case[1]).get('exclude', []), list)]
+        sites = _written_sites(tmp_path, [case[1] for case in refused])
+
+        read = jekyll_read([site[0] for site in sites])
+
+        assert len(refused) >= 8
+        for (name, _, _), before in zip(refused, read):
+            assert "'exclude' should be set as an array" in (before['error'] or ''), name
+
+    def test_random_configs(self, tmp_path):
+        """Each seeded config is either rewritten to a list Jekyll accepts,
+        holding what it held and the four entries with every other key as it
+        was, or left byte for byte and failed, and only for a shape that
+        fails however it is written."""
+        configs = random_configs(400)
+        sites = _written_sites(tmp_path, [text for _, _, text, _ in configs])
+
+        read = jekyll_read([path for site in sites for path in site[:2]])
+
+        wrong = []
+        for (form, k, text, tail), site, before, after in zip(configs, sites, read[0::2],
+                                                              read[1::2]):
+            outcome = random_config_outcome(form, k, text, tail, site, before, after)
+            if outcome not in ('rewritten', 'present', 'failed'):
+                wrong.append((form, text, outcome))
+        assert wrong == []
+
+
+# The value `exclude:` holds in a seeded config: a name, and its lines at
+# key indentation *k*, the first of them following `exclude:`.
+EXCLUDE_FORMS = {
+    'absent': None,
+    'bare': lambda k: [''],
+    'null': lambda k: [' ~'],
+    'null-word': lambda k: [' null # none yet'],
+    'NULL': lambda k: [' NULL'],
+    'tagged-null': lambda k: [' !!null'],
+    'plain': lambda k: [' vendor'],
+    'plain-comment': lambda k: [' vendor  # gems'],
+    'single-quoted': lambda k: [" 'vendor'"],
+    'double-quoted-hash': lambda k: [' "a #b" # note'],
+    'entry': lambda k: [' telar-content/texts'],
+    'number': lambda k: [' 3'],
+    'continued': lambda k: [' two', k + '  lines'],
+    'folded': lambda k: [' >', k + '  vendor'],
+    'block': lambda k: ['', k + '  - Gemfile', k + '  # vendored', k + '  - "vendor"'],
+    'block-at-key': lambda k: ['', k + '- Gemfile', k + '- vendor'],
+    'block-all': lambda k: ['', k + '  - tests/', k + '  - pytest.ini',
+                            k + '  - vitest.config.js', k + '  - telar-content/texts/'],
+    'flow': lambda k: [' [Gemfile, "vendor"]'],
+    'flow-comment': lambda k: [' [Gemfile] # built'],
+    'flow-empty': lambda k: [' []'],
+    'flow-lines': lambda k: [' [', k + '  Gemfile,', k + '  vendor  # last', k + ']'],
+    'map': lambda k: ['', k + '  vendor: true'],
+    'flow-map': lambda k: [' {vendor: true}'],
+}
+
+# The shapes that fail wherever the key is: a tagged null and a mapping are
+# not rewritten.
+FAILING_FORMS = ('tagged-null', 'map', 'flow-map')
+
+
+def random_configs(count, seed=603):
+    """(exclude form, indentation, text, what follows the first document)
+    mixing a BOM, CRLF, a `---` line, a leading comment, the mapping's
+    indentation, the key's spelling, a nested `exclude:`, other keys, a
+    missing final newline, and a document end or second document after
+    each form."""
+    rng = random.Random(seed)
+    forms = sorted(EXCLUDE_FORMS)
+    configs = []
+    for _ in range(count):
+        form = rng.choice(forms)
+        k = rng.choice(['', '', '  ', '    '])
+        lines = []
+        if rng.random() < 0.3:
+            lines.append(rng.choice(['---', '--- # site', '---  ']))
+        if rng.random() < 0.3:
+            lines.append(rng.choice(['# My site', '  # indented comment']))
+        if rng.random() < 0.5:
+            lines.append(k + 'title: "x: y" # a title')
+        if rng.random() < 0.4:
+            lines += [k + 'sass:', k + '  exclude: nested']
+        if EXCLUDE_FORMS[form] is not None:
+            value = EXCLUDE_FORMS[form](k)
+            spelling = rng.choice(['exclude', 'exclude', '"exclude"', "'exclude'",
+                                   'exclude ', "'exclude'  ", '"exclu\\x64e"'])
+            lines += [k + spelling + ':' + value[0]] + value[1:]
+        if rng.random() < 0.5:
+            lines += ['', k + 'other: 1']
+        if rng.random() < 0.3:
+            lines.append(k + '# the end')
+        newline = '\r\n' if rng.random() < 0.3 else '\n'
+        text = newline.join(lines)
+        tail = ''
+        # A `---` after nothing but comments starts the first document rather
+        # than a second one.
+        content = any(line.strip() and not line.strip().startswith(('#', '---'))
+                      for line in lines)
+        if content and rng.random() < 0.3:
+            tail = newline.join(rng.choice([['...'], ['... # end', '# after'],
+                                            ['---', 'exclude: other'],
+                                            ['--- # two', 'title: y']])) + newline
+        if tail or rng.random() < 0.8:
+            text += newline
+        if rng.random() < 0.3:
+            text = BOM + text
+        configs.append((form, k, text + tail, tail))
+    return configs
+
+
+def random_config_outcome(form, k, text, tail, site, before, after):
+    """'rewritten', 'present' or 'failed' when *site* is right for *form*;
+    otherwise a description of what is wrong."""
+    original, path, records = site
+    written = path.read_bytes().decode('utf-8')
+    if 'already excludes' in records[0].description:
+        if written != text or after['error'] is not None:
+            return f'present, but written or refused: {after}'
+        return 'present'
+    if [r.status for r in records] == [ChangeStatus.APPLIED]:
+        if after['error'] is not None or not isinstance(after['config'].get('exclude'), list):
+            return f'Jekyll refuses the rewrite: {after}'
+        wanted = v180_sources._as_list(before['config'].get('exclude'))
+        present = {v180_sources._normalise_entry(e) for e in wanted if isinstance(e, str)}
+        wanted = wanted + [e for e in v180_sources.EXCLUDE_ENTRIES
+                           if v180_sources._normalise_entry(e) not in present]
+        if after['config']['exclude'] != wanted:
+            return f"exclude reads {after['config']['exclude']!r}"
+        if v180_sources._without_exclude(after['config']) != \
+                v180_sources._without_exclude(before['config']):
+            return 'another key changed'
+        if written.startswith(BOM) != text.startswith(BOM):
+            return 'the BOM changed'
+        bare = written.replace('\r\n', '') if '\r\n' in text else written
+        if '\r' in bare or ('\r\n' in text and '\n' in bare):
+            return 'the line endings changed'
+        if not written.endswith(tail):
+            return 'what follows the first document changed'
+        return 'applied without a change' if written == text else 'rewritten'
+    if written != text:
+        return 'failed but wrote the file'
+    if form in FAILING_FORMS:
+        return 'failed'
+    return f'failed: {[r.description for r in records]}'
 
 
 # ---------- Page sources ----------

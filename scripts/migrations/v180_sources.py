@@ -231,9 +231,89 @@ EXCLUDE_GROUPS = (
 
 EXCLUDE_ENTRIES = tuple(entry for group in EXCLUDE_GROUPS for entry in group['entries'])
 
-_EXCLUDE_LINE = re.compile(r'exclude:(?P<rest>.*)$')
+_BOM = '\ufeff'
+# A key that may be `exclude`: plain, or a quoted scalar, with spaces
+# allowed before the colon. A quoted one is `exclude` only when it reads as
+# that once its escapes are decoded, which `_is_exclude` decides. A quote
+# inside a quoted key, escaped or doubled, decodes to a quote, so such a key
+# is never `exclude` and the pattern need not span one.
+_EXCLUDE_KEY = r"""(?P<key>exclude|"[^"]*"|'[^']*')[ \t]*:"""
+_EXCLUDE_LINE = re.compile(_EXCLUDE_KEY + r'(?P<rest>.*)$')
+_KEY_HEAD = re.compile(f'(?P<lead>{_BOM}?[ \\t]*){_EXCLUDE_KEY}')
+# A line that starts or ends a document.
+_DOCUMENT_MARKER = re.compile(r'(?:---|\.\.\.)(?:[ \t].*)?$')
 _CONFIG = '_config.yml'
 _ABSENT = object()
+
+
+def _first_document(text: str) -> Tuple[str, str]:
+    """*text* split where its first document ends, the only one Jekyll
+    reads: at a `...` line, or at a `---` line after content or after
+    another `---`. The second part is empty for a file of one document."""
+    started = content = False
+    offset = 0
+    for index, line in enumerate(text.splitlines(keepends=True)):
+        body = _body(line)
+        if index == 0 and body.startswith(_BOM):
+            body = body[1:]
+        stripped = body.strip()
+        if _DOCUMENT_MARKER.match(body):
+            if body.startswith('...') or content or started:
+                return text[:offset], text[offset:]
+            started = True
+            content = bool(body[3:].strip()) and not body[3:].strip().startswith('#')
+        elif stripped and not stripped.startswith('#') and not body.startswith('%'):
+            content = True
+        offset += len(line)
+    return text, ''
+
+
+def _document_indent(lines: List[str]) -> Optional[str]:
+    """The indentation of the top-level keys: that of the first line holding
+    content, after a BOM, or None for a file with none. Blank lines,
+    comments, directives and a `---` line hold none."""
+    for index, line in enumerate(lines):
+        body = _body(line)
+        if index == 0 and body.startswith(_BOM):
+            body = body[1:]
+        stripped = body.strip()
+        if (not stripped or stripped.startswith('#') or body.startswith('%')
+                or re.fullmatch(r'---(?:\s+#.*)?\s*', body)):
+            continue
+        return body[:len(body) - len(body.lstrip())]
+    return None
+
+
+def _key_line_rest(line: str, index: int, indent: str) -> Optional[str]:
+    """What follows `exclude:` on *line* when it opens the top-level key at
+    *indent*, the file's first line allowed a BOM before it, or None."""
+    body = _body(line)
+    if index == 0 and body.startswith(_BOM):
+        body = body[1:]
+    if not body.startswith(indent):
+        return None
+    match = _EXCLUDE_LINE.match(body[len(indent):])
+    return match.group('rest') if match and _is_exclude(match.group('key')) else None
+
+
+def _is_exclude(key: str) -> bool:
+    """Whether *key*, as written, reads as `exclude`."""
+    if key == 'exclude':
+        return True
+    try:
+        return yaml.safe_load(key) == 'exclude'
+    except yaml.YAMLError:
+        return False
+
+
+def _key_head(line: str) -> str:
+    """A key line up to and including its colon, as written: any BOM,
+    the indentation, the key and the spaces before the colon."""
+    return _KEY_HEAD.match(line).group(0)
+
+
+def _key_indent(line: str) -> str:
+    return _KEY_HEAD.match(line).group('lead').lstrip(_BOM)
 
 
 def _normalise_entry(value):
@@ -247,7 +327,8 @@ def _normalise_entry(value):
 
 def _block_insertion(lines: List[str], start: int) -> Tuple[int, str]:
     """Where to append to the block list opened at *start*, and the
-    indentation its items use (two spaces for a list with no items)."""
+    indentation its items use (two spaces past the key for a list with no
+    items)."""
     insert_at, indent = start + 1, None
     for index in range(start + 1, len(lines)):
         body = _body(lines[index])
@@ -261,7 +342,7 @@ def _block_insertion(lines: List[str], start: int) -> Tuple[int, str]:
             insert_at = index + 1
         else:
             break
-    return insert_at, ('  ' if indent is None else indent)
+    return insert_at, (_key_indent(lines[start]) + '  ' if indent is None else indent)
 
 
 def _exclude_lines(missing: List[str], indent: str, newline: str) -> List[str]:
@@ -415,15 +496,16 @@ def _same_value(one, other) -> bool:
 
 
 def _continuation_count(lines: List[str], start: int) -> int:
-    """How many lines after *start* continue it: indented ones, and blank
-    or comment lines between them. Counting stops at the last indented line
-    that is not a comment, so a comment after the value stays in the file."""
-    count = 0
+    """How many lines after *start* continue it: ones indented past its key,
+    and blank or comment lines between them. Counting stops at the last such
+    line that is not a comment, so a comment after the value stays in the
+    file."""
+    count, key = 0, len(_key_indent(lines[start]))
     for index in range(start + 1, len(lines)):
         body = _body(lines[index])
         if not body.strip():
             continue
-        if not body[:1].isspace():
+        if len(body) - len(body.lstrip()) <= key:
             break
         if not body.strip().startswith('#'):
             count = index - start
@@ -440,7 +522,8 @@ def _from_scalar(text: str, start: int, value, missing: List[str]) -> Optional[s
     same bytes."""
     lines, newline = text.splitlines(keepends=True), _newline_of(text)
     ending = _ending(lines[start]) or newline
-    rest = _EXCLUDE_LINE.match(_body(lines[start])).group('rest').strip()
+    head, indent = _key_head(lines[start]), _key_indent(lines[start])
+    rest = _body(lines[start])[len(head):].strip()
     written, comment = _scalar_split(rest)
     try:
         alone = yaml.safe_load(f'exclude: {rest}')
@@ -451,8 +534,8 @@ def _from_scalar(text: str, start: int, value, missing: List[str]) -> Optional[s
         return None
     item = written if alone else json.dumps(value, ensure_ascii=False)
     replaced = 1 if alone else 1 + _continuation_count(lines, start)
-    key = f'exclude: {comment}' if comment else 'exclude:'
-    lines[start:start + replaced] = [f'{key}{ending}', f'  - {item}{ending}']
+    key = f'{head} {comment}' if comment else head
+    lines[start:start + replaced] = [f'{key}{ending}', f'{indent}  - {item}{ending}']
     return _into_block(''.join(lines), start, missing)
 
 
@@ -470,18 +553,23 @@ def _from_null(text: str, start: int, rest: str, missing: List[str]) -> Optional
         return None
     if written:
         lines = text.splitlines(keepends=True)
-        key = f'exclude: {comment}' if comment else 'exclude:'
-        lines[start] = key + _ending(lines[start])
+        head = _key_head(lines[start])
+        lines[start] = (f'{head} {comment}' if comment else head) + _ending(lines[start])
         text = ''.join(lines)
     return _into_block(text, start, missing)
 
 
 def _new_exclude_key(text: str, missing: List[str]) -> str:
+    """*text* with an `exclude:` key holding *missing* after its last line,
+    at the indentation of the other top-level keys, its items two spaces
+    past it."""
     newline = _newline_of(text)
     lines = _ended(text.splitlines(keepends=True), newline)
+    indent = _document_indent(lines) or ''
     if lines:
         lines.append(newline)
-    return ''.join(lines + [f'exclude:{newline}'] + _exclude_lines(missing, '  ', newline))
+    return ''.join(lines + [f'{indent}exclude:{newline}']
+                   + _exclude_lines(missing, indent + '  ', newline))
 
 
 def _with_exclude_entries(text: str, value, missing: List[str]) -> Optional[str]:
@@ -491,12 +579,13 @@ def _with_exclude_entries(text: str, value, missing: List[str]) -> Optional[str]
         updated = _new_exclude_key(text, missing)
     else:
         lines = text.splitlines(keepends=True)
-        starts = [index for index, line in enumerate(lines)
-                  if _EXCLUDE_LINE.match(_body(line))]
-        rest = _EXCLUDE_LINE.match(_body(lines[starts[-1]])).group('rest').strip() \
-            if starts else None
-        if rest is None:
+        indent = _document_indent(lines)
+        rests = [(index, _key_line_rest(line, index, indent))
+                 for index, line in enumerate(lines)] if indent is not None else []
+        starts = [index for index, rest in rests if rest is not None]
+        if not starts:
             return None
+        rest = rests[starts[-1]][1].strip()
         if rest.startswith('['):
             updated = _into_flow(text, starts[-1], missing)
         elif value is None:
@@ -547,7 +636,7 @@ def _read_config(path: str):
     read as a mapping. An absent key reads as _ABSENT."""
     try:
         text = _read_text(path)
-        config = yaml.safe_load(text)
+        config = yaml.safe_load(_first_document(text)[0])
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return None, None
     if config is None:
@@ -576,6 +665,13 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
     scalar reading as a list of itself), with or without a trailing slash,
     so an entry the owner added by hand is not added again and one
     elsewhere in the file does not count.
+
+    The key edited is the top-level one wherever Jekyll reads it: after a
+    BOM or a `---` line, and at the indentation of a mapping that is
+    indented as a whole, plain or quoted, with or without spaces before its
+    colon, which the key line keeps. A key nested under another is not it.
+    Only the first document is read and edited, as Jekyll reads only that
+    one; a missing key goes at its end, before any `...` or `---`.
     """
     path = os.path.join(repo_root, _CONFIG)
     text, value = _read_config(path)
@@ -591,10 +687,12 @@ def add_exclude_entries(repo_root: str, lang: str) -> List[ChangeRecord]:
         return [_record(lang, 'v180_exclude_present', ', '.join(EXCLUDE_ENTRIES),
                         category=ChangeCategory.CONFIGURATION)]
     shaped = not isinstance(value, dict)
-    updated = _with_exclude_entries(text, value, missing) if text is not None and shaped else None
+    first, rest = _first_document(text) if text is not None else (None, '')
+    updated = _with_exclude_entries(first, value, missing) if first is not None and shaped \
+        else None
     if updated is None:
         return _exclude_failures(lang, missing)
-    _write_text(path, updated)
+    _write_text(path, updated + rest)
     return [_record(lang, 'v180_exclude_added', ', '.join(missing or listed),
                     category=ChangeCategory.CONFIGURATION)]
 

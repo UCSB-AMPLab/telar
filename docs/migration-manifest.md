@@ -214,10 +214,11 @@ What happens depends on how the key is written:
 
 A value already in the list is skipped. Present means the same string after YAML parsing, with one trailing slash dropped from both sides and nothing else normalised: `tests/`, `"tests/"` and `tests` are the same value, while `"tests/ "` (a trailing space inside the quotes), `tests//` and `Tests/` are not.
 
-Three edge cases, handled the same way by the command-line upgrade:
+Four edge cases, handled the same way by the command-line upgrade:
 
 - A bare `exclude:` with no value parses as null. It counts as missing, and is filled as a block list. A null written out (`~`, `null`, `Null`, `NULL`) is filled the same way: the token is dropped, a trailing comment stays on the key line, and the values go under it. A tagged `!!null` fails.
 - A map under the key fails the operation, as above.
+- The key is the top-level one wherever Jekyll's YAML reader finds it: after a byte-order mark or a `---` line, and at the mapping's own indentation when the whole mapping is indented, written plain or quoted (`exclude`, `"exclude"`, `'exclude'`), with or without spaces before the colon. The key line keeps the byte-order mark, the indentation and the key as written, and values under a key with no items yet go two spaces past it. A key of the same name nested under another is not it. Only the first document in the file is read and edited, as Jekyll reads only that one. A missing key is added at the end of that document, before a `...` or `---` line that ends it, at the indentation of the other top-level keys, with its values two spaces past it.
 - A file that does not parse as YAML stops the upgrade before anything is committed.
 
 The runner edits the text in place and never re-serialises the YAML, so every comment, key order and blank line in the file survives.
