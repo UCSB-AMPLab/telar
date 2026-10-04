@@ -4,8 +4,9 @@ Where the Code Is in Author Text
 Text inside code is shown as written: markdown syntax, maths delimiters and
 glossary syntax there are not read. The passes that transform author text
 need to know where that code is: the glossary link pass, the answer pass
-that prepares maths for kramdown, and the answer word limit, which does not
-cut inside code. This module is the one reading of it they use.
+that prepares maths and pipes for kramdown, and the answer word limit,
+which does not cut inside code. This module is the one reading of it they
+use.
 
 In an answer, which is markdown that kramdown renders, code is a backtick
 span read as kramdown reads one: a run of N backticks opens it and the next

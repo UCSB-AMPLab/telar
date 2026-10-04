@@ -13,9 +13,10 @@
 {%- endcomment -%}
 {% for step in include.steps %}
   {% unless step._metadata %}
-    {%- comment -%}An answer whose maths kramdown would misread comes with
-    `answer_kramdown`, the same answer with each formula as `$$…$$`; `answer`
-    itself stays as the build read it, for the cards that show it as text.{%- endcomment -%}
+    {%- comment -%}An answer whose maths or pipes kramdown would misread comes
+    with `answer_kramdown`, the same answer with each formula as `$$…$$` and
+    each pipe escaped for its place; `answer` itself stays as the build read
+    it, for the cards that show it as text.{%- endcomment -%}
     {% assign step_answer_source = step.answer_kramdown | default: step.answer %}
     {% include story-step.html
       step_number=step.step

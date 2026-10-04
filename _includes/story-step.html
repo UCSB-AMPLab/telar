@@ -19,81 +19,14 @@
   trigger is injected later by JavaScript, inside the open Layer 1 panel.
 -->
 
+{%- comment -%}The answer arrives ready for kramdown: where it holds maths or a pipe, the
+build passes `answer_kramdown` (story-steps.html), with each formula as `$$…$$` and each
+pipe escaped for where it stands, since kramdown reads a line holding a `|` as a table
+row. The code spans and maths that decide it are read as kramdown reads them.{%- endcomment -%}
+{%- assign step_answer = include.answer -%}
 {%- comment -%}Resolve the language pack locally: include scope does not reliably inherit
 the parent layout's `lang` assign, so the button label and warning strings below need it
 here. English fallback keeps the strings populated if the language is unset.{%- endcomment -%}
-{%- comment -%}The answer is prose, but kramdown reads any line holding a `|` as a table
-row. So a pipe in prose reaches markdownify as `&#124;`, and an author's `\|` becomes the
-same entity, so it still prints a bare pipe. kramdown prints the content of a code span and
-of `$$…$$` maths literally, so an entity there would reach the reader as text: in a code
-span the pipe stays, and in maths it becomes `\vert `, which KaTeX draws as the same glyph,
-while `\|` (TeX's double bar) stays as written. A code span opens at a run of N backticks
-and closes at the next run of exactly N; a run with no closing match is literal. Maths
-opens at a `$$` and closes at the next `$$` outside a code span; a `$$` with no closing
-match is literal. `\vert` is undefined in text mode, so `\text{a|b}` inside maths fails to
-render. `split` drops trailing empty strings, so a sentinel character is appended before
-it and sliced off after. The story data is left as written: the Compositor mirrors it
-byte for byte. An answer without a pipe goes to markdownify unchanged.{%- endcomment -%}
-{%- if include.answer contains '|' -%}
-  {%- assign step_answer_parts = include.answer | append: '.' | split: '`' -%}
-  {%- assign step_answer_runs = ',' -%}
-  {%- assign step_answer_run = 0 -%}
-  {%- for step_answer_part in step_answer_parts offset: 1 -%}
-    {%- assign step_answer_run = step_answer_run | plus: 1 -%}
-    {%- if step_answer_part != '' -%}
-      {%- assign step_answer_runs = step_answer_runs | append: step_answer_run | append: ',' -%}
-      {%- assign step_answer_run = 0 -%}
-    {%- endif -%}
-  {%- endfor -%}
-  {%- assign step_answer_text = '' -%}
-  {%- assign step_answer_open = 0 -%}
-  {%- assign step_answer_run = 0 -%}
-  {%- for step_answer_part in step_answer_parts -%}
-    {%- unless forloop.first -%}
-      {%- assign step_answer_run = step_answer_run | plus: 1 -%}
-      {%- if step_answer_part == '' -%}{%- continue -%}{%- endif -%}
-      {%- assign step_answer_tag = ',' | append: step_answer_run | append: ',' -%}
-      {%- assign step_answer_runs = step_answer_runs | replace_first: step_answer_tag, ',' -%}
-      {%- if step_answer_open == 0 -%}
-        {%- if step_answer_runs contains step_answer_tag -%}{%- assign step_answer_open = step_answer_run -%}{%- endif -%}
-      {%- elsif step_answer_open == step_answer_run -%}
-        {%- assign step_answer_open = 0 -%}
-      {%- endif -%}
-      {%- for step_answer_i in (1..step_answer_run) -%}{%- assign step_answer_text = step_answer_text | append: '`' -%}{%- endfor -%}
-      {%- assign step_answer_run = 0 -%}
-    {%- endunless -%}
-    {%- if step_answer_open != 0 -%}
-      {%- assign step_answer_text = step_answer_text | append: step_answer_part -%}
-      {%- continue -%}
-    {%- endif -%}
-    {%- assign step_answer_pieces = step_answer_part | append: '.' | split: '$$' -%}
-    {%- for step_answer_piece in step_answer_pieces -%}
-      {%- unless forloop.first -%}{%- assign step_answer_text = step_answer_text | append: '$$' -%}{%- endunless -%}
-      {%- assign step_answer_odd = forloop.index0 | modulo: 2 -%}
-      {%- if step_answer_odd == 1 and forloop.last == false -%}
-        {%- assign step_answer_bars = step_answer_piece | append: '.' | split: '\|' -%}
-        {%- assign step_answer_maths = '' -%}
-        {%- for step_answer_bar in step_answer_bars -%}
-          {%- unless forloop.first -%}{%- assign step_answer_maths = step_answer_maths | append: '\|' -%}{%- endunless -%}
-          {%- assign step_answer_vert = step_answer_bar | replace: '|', '\vert ' -%}
-          {%- assign step_answer_maths = step_answer_maths | append: step_answer_vert -%}
-        {%- endfor -%}
-        {%- assign step_answer_size = step_answer_maths | size | minus: 1 -%}
-        {%- assign step_answer_maths = step_answer_maths | slice: 0, step_answer_size -%}
-        {%- assign step_answer_text = step_answer_text | append: step_answer_maths -%}
-      {%- else -%}
-        {%- assign step_answer_prose = step_answer_piece | replace: '\|', '&#124;' | replace: '|', '&#124;' -%}
-        {%- assign step_answer_text = step_answer_text | append: step_answer_prose -%}
-      {%- endif -%}
-    {%- endfor -%}
-    {%- assign step_answer_size = step_answer_text | size | minus: 1 -%}
-    {%- assign step_answer_text = step_answer_text | slice: 0, step_answer_size -%}
-  {%- endfor -%}
-  {%- assign step_answer_size = step_answer_text | size | minus: 1 -%}
-  {%- assign step_answer = step_answer_text | slice: 0, step_answer_size -%}
-{%- else -%}
-  {%- assign step_answer = include.answer -%}
-{%- endif -%}
 {% if site.telar_language and site.data.languages[site.telar_language] %}
   {% assign lang = site.data.languages[site.telar_language] %}
 {% else %}

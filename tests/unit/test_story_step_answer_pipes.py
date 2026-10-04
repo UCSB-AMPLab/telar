@@ -4,15 +4,19 @@ Unit Tests for Pipes in a Story Step's Answer
 A step's answer is prose, run through `markdownify` in story-step.html.
 kramdown reads any line holding a `|` as a table row, header separator or
 not, so a pipe in prose, in a link's text, in inline LaTeX or in a glossary
-link's display text turns the line into a table. The include hands kramdown
-each pipe in prose as `&#124;`. kramdown prints the content of a code span and
-of `$$…$$` maths literally, so an entity there would reach the reader as text:
-a pipe inside a code span is left as written, and one inside maths becomes
-`\\vert `, which KaTeX draws as the same glyph.
+link's display text turns the line into a table. The build hands kramdown
+each pipe in prose as `&#124;`, in `answer_kramdown` (story-steps.html passes
+it in place of the answer). kramdown prints the content of a code span and of
+`$$…$$` maths literally, so an entity there would reach the reader as text: a
+pipe inside a code span is left as written, and one inside maths becomes
+`\\vert `, which KaTeX draws as the same glyph. Code and maths are found as
+kramdown finds them, which is not CommonMark's rule: a span opened by one
+backtick closes at the next backtick even in a run of two, and a lone
+backtick between spaces opens nothing.
 
-The story data and the answer string are not touched: the Compositor mirrors
-them byte for byte. So these tests build a small Jekyll site from the real
-include and language catalogues and read the HTML each answer renders to.
+So these tests put each answer through the build's pass
+(`_prepare_answer_maths`), then build a small Jekyll site from the real
+include and language catalogues, and read the HTML each answer renders to.
 
 Jekyll needs the Ruby the Gemfile asks for. Where `bundle exec jekyll` cannot
 run against it, the tests are skipped and say so; run them with that Ruby on
@@ -29,11 +33,16 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / 'scripts'))
+
+from telar.processors.stories import _prepare_answer_maths
 
 
 def _jekyll_env():
@@ -85,7 +94,18 @@ ANSWERS = {
     'maths_in_code_span': 'Type `$$a|b$$` then x | y',
     'maths_unpaired': 'Costs $$ x | y here',
     'maths_and_prose_pipe': 'If x | y then $$|x| \\le |y|$$ holds',
+    'closing_run_longer': 'Type `a|b`` then x | y',
+    'lone_backtick_then_span': 'Say ` x | y `a` here',
 }
+
+
+def _as_the_build_passes_it(answer):
+    """What story-steps.html hands the include: `answer_kramdown` where the
+    build wrote one, else the answer."""
+    frame = _prepare_answer_maths(pd.DataFrame({'answer': [answer]}))
+    if 'answer_kramdown' in frame.columns and frame.at[0, 'answer_kramdown']:
+        return frame.at[0, 'answer_kramdown']
+    return answer
 
 
 @pytest.fixture(scope='module')
@@ -100,16 +120,19 @@ def rendered(tmp_path_factory):
     shutil.copytree(REPO / '_data' / 'languages', site / '_data' / 'languages')
     names = list(ANSWERS)
     (site / '_data' / 'answers.json').write_text(
-        json.dumps([ANSWERS[n] for n in names]), encoding='utf-8')
+        json.dumps([_as_the_build_passes_it(ANSWERS[n]) for n in names]),
+        encoding='utf-8')
     (site / '_config.yml').write_text('telar_language: en\n', encoding='utf-8')
     (site / 'steps.html').write_text(
         '---\n---\n'
         '{% for a in site.data.answers %}'
         '{% include story-step.html step_number=forloop.index answer=a %}'
         '{% endfor %}', encoding='utf-8')
+    (site / '_data' / 'raw.json').write_text(
+        json.dumps([ANSWERS[n] for n in names]), encoding='utf-8')
     (site / 'plain.html').write_text(
         '---\n---\n'
-        '{% for a in site.data.answers %}'
+        '{% for a in site.data.raw %}'
         '<section data-n="{{ forloop.index }}">{{ a | markdownify }}</section>'
         '{% endfor %}', encoding='utf-8')
 
@@ -160,6 +183,10 @@ class TestAPipeOutsideCode:
     def test_after_an_unmatched_backtick_stays_prose(self, rendered):
         assert _answer(rendered, 'unmatched_backtick') == '<p>It`s x | y here</p>'
 
+    def test_after_a_lone_backtick_is_prose_not_a_table(self, rendered):
+        assert _answer(rendered, 'lone_backtick_then_span') == (
+            f'<p>Say ` x | y {CODE}a</code> here</p>')
+
     def test_is_never_a_table(self, rendered):
         for name, (html, _plain) in rendered.items():
             assert '<table' not in html, name
@@ -182,6 +209,10 @@ class TestAPipeInsideCode:
     def test_in_a_double_backtick_span_before_prose(self, rendered):
         assert _answer(rendered, 'double_backtick_span') == (
             f'<p>Type {CODE}a`|b</code> then x | y</p>')
+
+    def test_in_a_span_whose_closing_run_is_longer(self, rendered):
+        assert _answer(rendered, 'closing_run_longer') == (
+            f'<p>Type {CODE}a|b</code>` then x | y</p>')
 
     def test_in_a_fenced_block(self, rendered):
         html = _answer(rendered, 'fenced_code')

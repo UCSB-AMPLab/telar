@@ -69,7 +69,7 @@ import pandas as pd
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
 from telar.markdown import read_markdown_file, process_inline_content
-from telar.code_spans import code_regions, code_spans
+from telar.code_spans import code_and_maths, code_regions, code_spans
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
@@ -773,19 +773,50 @@ def _answer_maths_for_kramdown(text):
     return ''.join(out)
 
 
-def _prepare_answer_maths(df):
-    """Add `answer_kramdown` where an answer's maths needs rewriting.
+def _maths_pipes(maths):
+    """A `$$…$$` span with each `|` as `\\vert `, which KaTeX draws as the
+    same glyph; TeX's double bar `\\|` stays."""
+    return '\\|'.join(part.replace('|', '\\vert ') for part in maths.split('\\|'))
 
-    `answer` stays the build's reading of the cell: title cards and the
-    card fallback show it as text, and the Compositor mirrors it. Only
-    story-step.html renders the rewritten form. The column is added only to
-    a story where some answer changes, so a story without maths publishes
-    the same data as before.
+
+def _answer_pipes_for_kramdown(text):
+    """*text* with every pipe kramdown would read as a table cell escaped.
+
+    kramdown reads a line holding a `|` as a table row. So a pipe in prose,
+    and an author's `\\|`, becomes `&#124;`, which prints a bare pipe. Code
+    and `$$…$$` are printed as written, so an entity there would reach the
+    reader as text: a pipe in code is left alone, and one in maths becomes
+    `\\vert `. Code and maths are found as kramdown finds them
+    (`telar.code_spans`).
+    """
+    if '|' not in text:
+        return text
+    out = []
+    pos = 0
+    for kind, start, end in code_and_maths(text):
+        out.append(text[pos:start].replace('\\|', '&#124;').replace('|', '&#124;'))
+        out.append(text[start:end] if kind == 'code' else _maths_pipes(text[start:end]))
+        pos = end
+    out.append(text[pos:].replace('\\|', '&#124;').replace('|', '&#124;'))
+    return ''.join(out)
+
+
+def _prepare_answer_maths(df):
+    """Add `answer_kramdown` where an answer needs rewriting for kramdown.
+
+    Two rewrites, in order: each formula as `$$…$$`, then each pipe
+    escaped for its place (prose, code or maths). `answer` stays the
+    build's reading of the cell: title cards and the card fallback show it
+    as text, and the Compositor mirrors it. Only story-step.html renders the
+    rewritten form. The column is added only to a story where some answer
+    changes, so a story without maths or pipes publishes the same data as
+    before.
     """
     if 'answer' not in df.columns:
         return df
     answers = [value if isinstance(value, str) else '' for value in df['answer']]
-    rewritten = [_answer_maths_for_kramdown(answer) for answer in answers]
+    rewritten = [_answer_pipes_for_kramdown(_answer_maths_for_kramdown(answer))
+                 for answer in answers]
     if rewritten != answers:
         df['answer_kramdown'] = [new if new != answer else ''
                                  for new, answer in zip(rewritten, answers)]
