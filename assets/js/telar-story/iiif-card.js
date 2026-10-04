@@ -42,7 +42,7 @@
  */
 
 import { state } from './state.js';
-import { onViewportResize, onLayoutChange, isLandscapeSideCard } from './layout-mode.js';
+import { onLayoutChange, isLandscapeSideCard } from './layout-mode.js';
 import { authoringHomeZoom } from './authoring-frame.js';
 import { stepFraming } from './plates/framing.js';
 import { sideCardWidthPx } from './video-layout.js';
@@ -926,8 +926,8 @@ function _travel(viewerCard, a, b, t) {
  * compensation runs again with the current (post-resize) cardOverlayRect
  * and viewport dimensions.
  *
- * Called by the onViewportResize and onLayoutChange subscribers below, and by
- * card-pool.js when the active card's overlay rect is measured for the first
+ * Called by the onLayoutChange subscriber below, by card-pool.js after its resize
+ * pass, and by card-pool.js when the active card's overlay rect is measured for the first
  * time (until then the focal target works from the CSS-derived default box).
  */
 export function reSnapActiveViewer() {
@@ -958,16 +958,11 @@ export function reSnapActiveViewer() {
 
 // Subscribe to layout-mode events (no new ad-hoc resize listeners).
 //
-// onViewportResize: 100ms-debounced, fires on desktop resize + orientationchange.
-// Re-snaps the active viewer so the compensation is recalculated with the new
-// viewport dimensions and (if card-pool has already recomputed) the updated
-// state.cardOverlayRect.
-onViewportResize(() => {
-  reSnapActiveViewer();
-});
-
+// onViewportResize is not subscribed here: the re-snap must follow the card's
+// resize, and card-pool.js's resize pass refreshes state.cardOverlayRect and
+// calls reSnapActiveViewer after writing the card geometry.
+//
 // onLayoutChange: fires on horizontal↔vertical mode flip, BEFORE onViewportResize.
-// main.js's onLayoutChange handler updates state.cardOverlayRect first.
 // Wrap the re-snap in requestAnimationFrame so CSS reflows before we read the rect,
 // guaranteeing the post-reflow geometry.
 onLayoutChange(() => {

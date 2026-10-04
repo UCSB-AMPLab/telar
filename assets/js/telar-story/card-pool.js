@@ -996,8 +996,14 @@ export function initCardPool(storyData, config) {
 
   // Layout-mode events keep card geometry live; the content watch below
   // observes each card's content, never the viewport.
+  // The resize pass is the one writer of the active card's rect and the one
+  // caller of the re-snap on this path: the card is measured after its own
+  // geometry is written, then the viewer is framed against that rect.
   const stopResize = onViewportResize(({ viewport }) => {
     _recomputeCardGeometry(viewport.w, viewport.h);
+    const activeCard = document.querySelector('.text-card.is-active');
+    state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
+    reSnapActiveViewer();
   });
   const stopLayout = onLayoutChange(({ viewport }) => {
     _recomputeCardGeometry(viewport.w, viewport.h);

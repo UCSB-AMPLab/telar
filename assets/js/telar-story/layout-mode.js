@@ -29,8 +29,10 @@
  *                                     immediately (no debounce — discrete event)
  *
  * Dispatch order on a mode-flipping event is onLayoutChange first so that
- * mode-flip handlers settle branching state (e.g. layoutMode) before
- * geometry handlers re-read viewport dimensions.
+ * mode-flip handlers settle branching state before geometry handlers re-read
+ * viewport dimensions. state.layoutMode is the exception: this module writes
+ * it before the first onLayoutChange subscriber runs, so no subscriber sees
+ * the previous mode.
  *
  * First-call semantics: getLayoutMode() initialises the listener exactly once
  * (via _initOnce()) and returns a synchronous answer. onLayoutChange does NOT
@@ -106,6 +108,9 @@ function _dispatchLayoutChange() {
   const prev = _cachedMode;
   _cachedMode = next;
   if (prev !== null && prev !== next) {
+    // state.layoutMode is current before any subscriber runs, whatever order
+    // the subscribers registered in: card geometry and media arrangement read it.
+    state.layoutMode = next;
     const viewport = { w: window.innerWidth, h: window.innerHeight };
     for (const cb of layoutChangeSubs) {
       try { cb({ from: prev, to: next, viewport, isEmbed: state.isEmbed }); }

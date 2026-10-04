@@ -150,6 +150,7 @@
     const prev = _cachedMode;
     _cachedMode = next;
     if (prev !== null && prev !== next) {
+      state.layoutMode = next;
       const viewport = { w: window.innerWidth, h: window.innerHeight };
       for (const cb of layoutChangeSubs) {
         try {
@@ -887,9 +888,6 @@
     const { x, y, zoom } = stepFraming(step);
     snapIiifToPosition(viewerCard, x, y, zoom);
   }
-  onViewportResize(() => {
-    reSnapActiveViewer();
-  });
   onLayoutChange(() => {
     requestAnimationFrame(() => {
       const activeCard = document.querySelector(".text-card.is-active");
@@ -3600,6 +3598,9 @@
     _preloadFirstScenePlate(steps);
     const stopResize = onViewportResize(({ viewport }) => {
       _recomputeCardGeometry(viewport.w, viewport.h);
+      const activeCard = document.querySelector(".text-card.is-active");
+      state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
+      reSnapActiveViewer();
     });
     const stopLayout = onLayoutChange(({ viewport }) => {
       _recomputeCardGeometry(viewport.w, viewport.h);
@@ -6815,8 +6816,7 @@
     initCardPool(window.storyData, cardConfig);
     state.isEmbed = window.telarEmbed?.enabled || false;
     state.layoutMode = getLayoutMode();
-    onLayoutChange(({ to }) => {
-      state.layoutMode = to;
+    onLayoutChange(() => {
       const activeCard = document.querySelector(".text-card.is-active");
       state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
     });

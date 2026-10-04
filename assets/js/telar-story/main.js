@@ -101,9 +101,9 @@ function initializeStory() {
   state.isEmbed = window.telarEmbed?.enabled || false;
   state.layoutMode = getLayoutMode();   // single source of truth — reads CSS vars via layout-mode.js
 
-  // Refresh state.layoutMode + state.cardOverlayRect on every layout flip. Activation-time rect write lives in card-pool.js.
-  onLayoutChange(({ to }) => {
-    state.layoutMode = to;
+  // Refresh state.cardOverlayRect on every layout flip (layout-mode.js has
+  // already updated state.layoutMode). Activation-time rect write lives in card-pool.js.
+  onLayoutChange(() => {
     const activeCard = document.querySelector('.text-card.is-active');
     state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
   });

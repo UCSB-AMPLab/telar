@@ -252,6 +252,22 @@ describe('onLayoutChange — mode flip dispatch', () => {
     expect(typeof call.isEmbed).toBe('boolean');
   });
 
+  it('state.layoutMode already holds the new mode when the first subscriber runs', async () => {
+    const { getLayoutMode, onLayoutChange } = await import('../../assets/js/telar-story/layout-mode.js');
+    const { state } = await import('../../assets/js/telar-story/state.js');
+    state.layoutMode = getLayoutMode();
+    expect(state.layoutMode).toBe('horizontal');
+
+    let seen;
+    onLayoutChange(({ to }) => { seen = { to, layoutMode: state.layoutMode }; });
+
+    setViewport(800, 900);
+    fakeMql.matches = true;
+    for (const cb of fakeMql._changeListeners) cb({});
+
+    expect(seen).toEqual({ to: 'vertical', layoutMode: 'vertical' });
+  });
+
   it('does NOT fire on the initial call / initial subscription (fires-on-change-only)', async () => {
     const { getLayoutMode, onLayoutChange } = await import('../../assets/js/telar-story/layout-mode.js');
     const handler = vi.fn();
