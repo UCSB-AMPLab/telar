@@ -935,8 +935,6 @@ function _preloadFirstScenePlate(steps) {
 
 /** Removes the last init's resize, layout and content subscriptions. */
 let _stopGeometryWatch = null;
-/** Counts inits, so a font wait from an earlier one can tell it is stale. */
-let _geometryGeneration = 0;
 
 function _teardownGeometryWatch() {
   _stopGeometryWatch?.();
@@ -962,7 +960,6 @@ export function initCardPool(storyData, config) {
   // call's are removed first so a second init leaves one geometry pass per
   // trigger.
   _teardownGeometryWatch();
-  const generation = ++_geometryGeneration;
 
   const steps = (storyData?.steps || []).filter(s => !s._metadata);
 
@@ -1012,21 +1009,6 @@ export function initCardPool(storyData, config) {
   // built with content above, so offsetHeight is measurable.
   _recomputeCardGeometry(window.innerWidth, window.innerHeight);
 
-  // A card sized to its content is centred by a height read at init time,
-  // and at init time the web fonts may still be loading: the content is laid
-  // out in the fallback face, measures taller, and the card settles that much
-  // below the centre of the viewport, with nothing but a resize to correct it.
-  // The measurement the centring uses has to be the one the reader sees, so
-  // the geometry is taken again once the fonts are in. Unconditionally: the
-  // desktop side card is one card sized to its content and the landscape-phone
-  // side card is another, and which of them a page has is not settled at init
-  // time — a rotation between the two is a layout change away.
-  if (document.fonts?.ready) {
-    document.fonts.ready.then(() => {
-      if (generation !== _geometryGeneration) return;
-      _recomputeCardGeometry(window.innerWidth, window.innerHeight);
-    });
-  }
   const stopWatch = watchCardContent(Object.values(state.textCards), (changed) => {
     _recomputeCardGeometry(window.innerWidth, window.innerHeight, changed);
   });

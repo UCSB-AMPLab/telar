@@ -3578,7 +3578,6 @@
     _evictBeyondPoolCap(0);
   }
   var _stopGeometryWatch = null;
-  var _geometryGeneration = 0;
   function _teardownGeometryWatch() {
     _stopGeometryWatch?.();
     _stopGeometryWatch = null;
@@ -3587,7 +3586,6 @@
     const cardStack = document.querySelector(".card-stack");
     if (!cardStack) return;
     _teardownGeometryWatch();
-    const generation = ++_geometryGeneration;
     const steps = (storyData?.steps || []).filter((s) => !s._metadata);
     _stepsData = steps;
     state.stepsData = steps;
@@ -3607,12 +3605,6 @@
       _recomputeCardGeometry(viewport.w, viewport.h);
     });
     _recomputeCardGeometry(window.innerWidth, window.innerHeight);
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        if (generation !== _geometryGeneration) return;
-        _recomputeCardGeometry(window.innerWidth, window.innerHeight);
-      });
-    }
     const stopWatch = watchCardContent(Object.values(state.textCards), (changed) => {
       _recomputeCardGeometry(window.innerWidth, window.innerHeight, changed);
     });
