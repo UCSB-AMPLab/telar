@@ -451,7 +451,7 @@ class _Scan:
     def backslash(self, i):
         if i in self.dropped:
             return i + 1
-        return self.mark(self.escape_end(i), False)
+        return self.mark(self.escape_end(i, self.raw()), False)
 
     def backticks(self, i):
         end, span = self.code_end(i)
@@ -482,7 +482,7 @@ class _Scan:
             if match:
                 self.close_element(i, match.end())
                 return self.mark(match.end(), True)
-        kind, end, match = self.markup(i, limit)
+        kind, end, match = self.markup(i, limit, self.raw())
         if kind == 'cdata' and not self.raw():
             self.regions.append(('cdata', i, end))
         if kind == 'open':
@@ -540,7 +540,11 @@ class _Scan:
             return end, False
         return close + run, True
 
-    def escape_end(self, i):
+    def escape_end(self, i, raw):
+        """Past the backslash at *i*. `\\<<` is a typographic symbol in span
+        text, not an escaped `<`."""
+        if self.text.startswith('\\<<', i) and not raw:
+            return i + 3
         match = _ESCAPE.match(self.text, i)
         return match.end() if match else i + 1
 
@@ -552,11 +556,15 @@ class _Scan:
         close = self.find_close('$$', i + 2, self.limit(i))
         return (i + 2, 'stray') if close == -1 else (close + 2, 'maths')
 
-    def markup(self, i, limit):
+    def markup(self, i, limit, raw):
         """What the `<` at *i* begins, as span HTML: (kind, end, match),
         the kind being 'comment' or 'tag' (an element with no body),
-        'open' (an element whose content follows), 'cdata' or 'text'."""
+        'open' (an element whose content follows), 'cdata' or 'text'. In
+        span text, `<<` is a typographic symbol, so no tag starts at either
+        `<` of it."""
         text = self.text
+        if text.startswith('<<', i, limit) and not raw:
+            return 'text', i + 2, None
         for opening, closing, kind in (('<!--', '-->', 'comment'), ('<![CDATA[', ']]>', 'cdata')):
             if text.startswith(opening, i):
                 close = self.find_close(closing, i + len(opening), limit)
@@ -830,7 +838,7 @@ class _Scan:
         if char == '`':
             return self.advance(frame, *self.code_end(i))
         if char == '\\':
-            return self.advance(frame, i + 1 if i in self.dropped else self.escape_end(i), False)
+            return self.advance(frame, i + 1 if i in self.dropped else self.escape_end(i, frame.raw), False)
         if char == '$':
             end, kind = self.maths_end(i)
             return self.advance(frame, end, kind == 'maths')
@@ -840,7 +848,7 @@ class _Scan:
         return self.markup_token(frame, i)
 
     def markup_token(self, frame, i):
-        kind, end, match = self.markup(i, frame.limit)
+        kind, end, match = self.markup(i, frame.limit, frame.raw)
         if kind != 'open':
             return self.advance(frame, end, kind in ('comment', 'tag'))
         name, known = _tag_name(match)
