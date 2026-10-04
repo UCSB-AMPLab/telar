@@ -453,11 +453,15 @@ describe('computeTileUrls — tile source shape, level choice and grid', () => {
     expect(INFO.tiles[0].scaleFactors).toContain(scaleFactor);
   });
 
-  it('caps the grid at nine tiles when no level the service lists is coarse enough', () => {
+  it('holds the count to the viewer\'s size in tiles when the level drawn has more cells', () => {
+    // Scale factor 1 is the only level. Zoom 1 shows all 40000 px in 900, so
+    // OpenSeadragon's walk would take 79 × 79 cells of 11.5 viewer px each. The
+    // bound is (ceil(1440 / 256) + 1) × (ceil(900 / 256) + 1) = 7 × 5, a tile
+    // being at least 512 × 0.5 viewer px on screen.
     const INFO = { width: 40000, height: 40000, tiles: [{ width: 512, scaleFactors: [1] }] };
     const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 1);
 
-    expect(urls).toHaveLength(9);
+    expect(urls).toHaveLength(35);
   });
 
   it('clips the last tile of a row to the image bound', () => {
@@ -471,6 +475,103 @@ describe('computeTileUrls — tile source shape, level choice and grid', () => {
       expect(rh).toBeGreaterThan(0);
       expect(rx + rw).toBeLessThanOrEqual(INFO.width);
       expect(ry + rh).toBeLessThanOrEqual(INFO.height);
+    }
+  });
+});
+
+// ── The level the viewer draws, and every cell of it the region meets ───────
+//
+// Expected URLs are worked by hand from OpenSeadragon 6.0.2 (the vendored
+// build), not from the code under test. TiledImage._getLevelsInterval draws the
+// finest level L with ratio(L) >= 0.5, ratio(L) = density × s × 2^(max − L), s
+// being viewer px per image px; scale factor 2^(max − L). TiledImage._visitTiles
+// walks getTileAtPoint(top-left) .. getTileAtPoint(bottom-right) inclusive, a
+// point on a grid line belonging to the tile that starts there. Here max = 3
+// (scale factors up to 8), density 1 (jsdom), 512-px tiles.
+
+describe('computeTileUrls — the level the viewer draws and the cells it meets', () => {
+  const BASE_URL = 'https://example.org/iiif/objects/test';
+  const INFO = { width: 4000, height: 4000, tiles: [{ width: 512, scaleFactors: [1, 2, 4, 8] }] };
+  const tail = (url) => url.replace(BASE_URL + '/', '');
+  const tile = (x, y) => `${x},${y},512,512/512,/0/default.jpg`;
+
+  beforeEach(() => {
+    state.activeTitleCardIndex = null;
+    state.layoutMode = 'horizontal';
+    state.cardOverlayRect = { x: 43, y: 0, width: 533, height: 900 };
+    Object.defineProperty(window, 'innerWidth',  { value: 1440, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 900,  configurable: true, writable: true });
+  });
+
+  it('issues every cell of the level the viewer settles on, however many', () => {
+    // Zoom 4: the box is x 894.35..2473.85, y 1506.41..2493.59, so the 1440 px
+    // viewer shows it at s = 1440 / 1579.5 = 0.9117. ratio(0) = 0.9117 × 8 =
+    // 7.29; floor(log2(7.29 / 0.5)) = 3, capped at 3: scale factor 1. Columns
+    // floor(894.35/512) = 1 to floor(2473.85/512) = 4, rows floor(1506.41/512)
+    // = 2 to floor(2493.59/512) = 4: twelve cells.
+    const region = prefetchRegion(4000, 4000, 0.5, 0.5, 4);
+    expect(region.left).toBeCloseTo(894.35, 2);
+    expect(region.right).toBeCloseTo(2473.85, 2);
+
+    const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 4).map(tail);
+    const want = [];
+    for (const x of [512, 1024, 1536, 2048]) for (const y of [1024, 1536, 2048]) want.push(tile(x, y));
+    expect(urls.sort()).toEqual(want.sort());
+  });
+
+  it('keeps the level the viewer draws when the region is small', () => {
+    // Zoom 8: x 1447.18..2236.93, y 1753.20..2246.80; s = 1440 / 789.75 = 1.823;
+    // ratio(0) = 14.6, floor(log2(29.2)) = 4, capped at 3: scale factor 1.
+    // Columns 2..4, rows 3..4.
+    const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 8).map(tail);
+    const want = [];
+    for (const x of [1024, 1536, 2048]) for (const y of [1536, 2048]) want.push(tile(x, y));
+    expect(urls.sort()).toEqual(want.sort());
+  });
+
+  it('takes a coarser level only where the viewer does', () => {
+    // Zoom 1: the whole image in 900 px, s = 0.225. ratio(0) = 1.8;
+    // floor(log2(3.6)) = 1: level 1, scale factor 4 (tile 2048). Both axes
+    // meet cells 0 and 1.
+    const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 1).map(tail);
+    expect(urls.sort()).toEqual([
+      '0,0,2048,2048/512,/0/default.jpg',
+      '0,2048,2048,1952/512,/0/default.jpg',
+      '2048,0,1952,2048/488,/0/default.jpg',
+      '2048,2048,1952,1952/488,/0/default.jpg',
+    ].sort());
+  });
+
+  it('takes the cell that starts on a grid line the region ends on', () => {
+    // Zoom 39.4875: the box is x 1888..2048, y 1950..2050 (s = 9); the right
+    // edge lies on the line at 2048 = 4 × 512. ratio(0) = 72: scale factor 1.
+    // getTileAtPoint(2048) is cell 4, so columns 3 and 4; rows 3 (1950) and 4
+    // (2050).
+    const region = prefetchRegion(4000, 4000, 0.5, 0.5, 39.4875);
+    expect(region).toEqual({ left: 1888, top: 1950, right: 2048, bottom: 2050 });
+
+    const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 39.4875).map(tail);
+    expect(urls.sort()).toEqual([tile(1536, 1536), tile(1536, 2048), tile(2048, 1536), tile(2048, 2048)].sort());
+  });
+
+  it('reads scale factors as a set, whatever order they are listed in', () => {
+    const shuffled = { ...INFO, tiles: [{ width: 512, scaleFactors: [8, 2, 1, 4] }] };
+    for (const zoom of [1, 4, 8, 39.4875]) {
+      expect(computeTileUrls(BASE_URL, shuffled, 0.5, 0.5, zoom))
+        .toEqual(computeTileUrls(BASE_URL, INFO, 0.5, 0.5, zoom));
+    }
+  });
+
+  it('counts the display\'s pixel density in the ratio, as the viewer does', () => {
+    // Density 2 doubles ratio(0): zoom 1 gives 3.6, floor(log2(7.2)) = 2: level
+    // 2, scale factor 2 (tile 1024). The image is 4 cells across.
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true, writable: true });
+    try {
+      const urls = computeTileUrls(BASE_URL, INFO, 0.5, 0.5, 1).map(tail);
+      expect(urls).toHaveLength(16);
+      expect(urls).toContain('0,0,1024,1024/512,/0/default.jpg');
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true, writable: true });
     }
   });
 });
@@ -573,9 +674,15 @@ describe('computeTileUrls — tile names', () => {
   });
 
   it('names a level smaller than one tile as the whole image at that size', () => {
-    const v3 = { ...V3, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [4] }] };
+    // A 350 × 200 window with no card shows the image at s = 350 / 1600 =
+    // 0.21875: ratio(0) = 0.21875 × 4 = 0.875, floor(log2(1.75)) = 0, the
+    // coarsest level, scale factor 4.
+    state.cardOverlayRect = null;
+    Object.defineProperty(window, 'innerWidth',  { value: 350, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true, writable: true });
+    const v3 = { ...V3, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [1, 2, 4] }] };
     expect(computeTileUrls(BASE_URL, v3, 0.5, 0.5, 1).map(tail)).toEqual(['full/400,225/0/default.jpg']);
-    const v2 = { ...V2, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [4] }] };
+    const v2 = { ...V2, width: 1600, height: 900, tiles: [{ width: 512, scaleFactors: [1, 2, 4] }] };
     expect(computeTileUrls(BASE_URL, v2, 0.5, 0.5, 1).map(tail)).toEqual(['full/400,/0/default.jpg']);
   });
 

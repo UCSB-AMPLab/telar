@@ -80,6 +80,7 @@ import {
   reSnapActiveViewer,
   _deriveCardPlacement,
   visibleImageRegion,
+  framePlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
 import { isFitHeight, applyCardMotionDuration } from './card-height.js';
@@ -2197,12 +2198,14 @@ function _tileUrl(baseUrl, { imageW, imageH, tileSize, version }, tile, scaleFac
 }
 
 /**
- * The image-pixel box a step's framing puts on screen.
+ * The image-pixel box a step's framing puts on screen, and the scale it is
+ * shown at.
  *
  * Where the framing can be computed, the box is what the viewer shows at rest:
  * visibleImageRegion is the rectangle the viewer is fitted to, cut to the
- * image. A step it cannot answer for falls back to the authored point and a
- * viewport-relative estimate, clamped to the image bounds.
+ * image, and the scale is the placement's own (viewer px per image px). A step
+ * it cannot answer for falls back to the authored point and a viewport-relative
+ * estimate, clamped to the image bounds, at the scale that estimate assumes.
  *
  * @param {number} imageW
  * @param {number} imageH
@@ -2211,84 +2214,158 @@ function _tileUrl(baseUrl, { imageW, imageH, tileSize, version }, tile, scaleFac
  * @param {number} zoom - OSD zoom multiplier
  * @param {{ width: number, height: number }} [container] - The viewer's size,
  *   the window's where not given.
- * @returns {{ left: number, top: number, right: number, bottom: number }}
+ * @returns {{ region: { left: number, top: number, right: number, bottom: number },
+ *   scale: number }}
  */
-function _prefetchRegion(imageW, imageH, x, y, zoom, container) {
+function _prefetchFraming(imageW, imageH, x, y, zoom, container) {
   // Derive cardBox and placementMode via the canonical helper in iiif-card.js.
   const vpW = window.innerWidth;
   const vpH = window.innerHeight;
   const r = state.cardOverlayRect;
   const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
   const placementMode = _deriveCardPlacement(cardBox, vpW, vpH);
+  const viewer = container || { width: vpW, height: vpH };
 
   const target = computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
-  const shown = target &&
-    visibleImageRegion(target, zoom, container || { width: vpW, height: vpH });
-  if (shown) return shown;
+  const shown = target && visibleImageRegion(target, zoom, viewer);
+  if (shown) return { region: shown, scale: framePlacement(target, zoom, viewer).s };
 
   // Raw authored (x, y) with a viewport-relative size estimate
   const centreX = x * imageW;
   const centreY = y * imageH;
-  const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
-  const halfW = (vpW * pixelsPerViewportPx) / 2;
-  const halfH = (vpH * pixelsPerViewportPx) / 2;
+  const scale = zoom * (vpW / imageW);
+  const halfW = vpW / scale / 2;
+  const halfH = vpH / scale / 2;
 
   return {
-    left:   Math.max(0, centreX - halfW),
-    top:    Math.max(0, centreY - halfH),
-    right:  Math.min(imageW, centreX + halfW),
-    bottom: Math.min(imageH, centreY + halfH),
+    region: {
+      left:   Math.max(0, centreX - halfW),
+      top:    Math.max(0, centreY - halfH),
+      right:  Math.min(imageW, centreX + halfW),
+      bottom: Math.min(imageH, centreY + halfH),
+    },
+    scale,
   };
 }
 
 /**
- * The coarsest level that covers a region in nine tiles or fewer.
+ * The image-pixel box a step's framing puts on screen (see _prefetchFraming).
  *
- * A higher scale factor is a lower-resolution level and so fewer tiles. The
- * first factor the service lists is the floor: a region needing more than
- * nine tiles at every level takes it anyway, and the grid walk caps what is
- * issued.
+ * @param {number} imageW
+ * @param {number} imageH
+ * @param {number} x - Normalised centre X (0-1)
+ * @param {number} y - Normalised centre Y (0-1)
+ * @param {number} zoom - OSD zoom multiplier
+ * @param {{ width: number, height: number }} [container]
+ * @returns {{ left: number, top: number, right: number, bottom: number }}
+ */
+function _prefetchRegion(imageW, imageH, x, y, zoom, container) {
+  return _prefetchFraming(imageW, imageH, x, y, zoom, container).region;
+}
+
+/**
+ * The finest level OpenSeadragon draws is the one whose pixels it shows at no
+ * less than this many screen pixels each (its minPixelRatio, left at the
+ * default by the viewer).
+ */
+const OSD_MIN_PIXEL_RATIO = 0.5;
+
+/**
+ * The scale factor OpenSeadragon draws a tiled IIIF source at once the viewer
+ * has settled.
+ *
+ * Levels are powers of two: the finest is the log2 of the largest scale
+ * factor (rounded), and level L has scale factor 2^(max - L). The drawn level
+ * is the finest whose pixels are shown at OSD_MIN_PIXEL_RATIO or more screen
+ * pixels each, the display's pixel density included:
+ * TiledImage._getLevelsInterval takes |floor(log2(ratio at level 0 /
+ * minPixelRatio))|, capped at the finest level. The ratio at level L is
+ * density x scale x 2^(max - L), scale being viewer px per image px. Scale
+ * factors are a set, so only the largest is read. The level is the viewer's
+ * whether or not the service lists its scale factor.
  *
  * @param {number[]} scaleFactors - Scale factors the service advertises
- * @param {number} tileSize - Tile width in image pixels at scale factor 1
- * @param {{ left: number, top: number, right: number, bottom: number }} region
+ * @param {number} scale - Viewer px per image px at the settled framing
  * @returns {number}
  */
-function _prefetchScaleFactor(scaleFactors, tileSize, region) {
-  let scaleFactor = scaleFactors[0] || 1;
-  for (const sf of scaleFactors) {
-    const effectiveTile = tileSize * sf;
-    const tilesX = Math.ceil((region.right - region.left) / effectiveTile);
-    const tilesY = Math.ceil((region.bottom - region.top) / effectiveTile);
-    if (tilesX * tilesY <= 9) {
-      scaleFactor = sf;
-      break;
-    }
-  }
-  return scaleFactor;
+function _drawnScaleFactor(scaleFactors, scale) {
+  const maxLevel = Math.round(Math.log(Math.max(...scaleFactors, 1)) * Math.LOG2E);
+  const density = Math.max(window.devicePixelRatio || 1, 1);
+  const ratioAtLevel0 = density * scale * Math.pow(2, maxLevel);
+  const level = Math.min(
+    Math.abs(maxLevel),
+    Math.abs(Math.floor(Math.log(ratioAtLevel0 / OSD_MIN_PIXEL_RATIO) / Math.log(2))),
+  );
+  return Math.pow(2, maxLevel - level);
+}
+
+/**
+ * The cells of a level's tile grid OpenSeadragon walks for a region.
+ *
+ * Its walk runs from the cell holding the region's top-left corner to the cell
+ * holding its bottom-right, both ends inclusive, so an edge that lies exactly
+ * on a grid line also takes the cell that starts there. A corner at or past
+ * the image's far edge takes the last cell.
+ *
+ * @param {{ left: number, top: number, right: number, bottom: number }} region
+ * @param {number} effectiveTile - Tile width in image pixels at this level
+ * @param {number} imageW
+ * @param {number} imageH
+ * @returns {{ x0: number, x1: number, y0: number, y1: number }} Inclusive-start,
+ *   exclusive-end indices
+ */
+function _cellRange(region, effectiveTile, imageW, imageH) {
+  const columns = Math.ceil(imageW / effectiveTile);
+  const rows = Math.ceil(imageH / effectiveTile);
+  return {
+    x0: Math.min(Math.floor(region.left / effectiveTile), columns - 1),
+    x1: Math.min(Math.floor(region.right / effectiveTile), columns - 1) + 1,
+    y0: Math.min(Math.floor(region.top / effectiveTile), rows - 1),
+    y1: Math.min(Math.floor(region.bottom / effectiveTile), rows - 1) + 1,
+  };
+}
+
+/**
+ * The most cells one scene prefetches.
+ *
+ * The level OpenSeadragon draws shows each of its pixels at no less than
+ * OSD_MIN_PIXEL_RATIO screen pixels, so a tile spans at least half its width
+ * in viewer px (less the pixel density) and the viewer holds at most
+ * ceil(size / that) tiles along an axis, plus one for the grid line it
+ * straddles. The bound only bites where the framing is degenerate.
+ *
+ * @param {number} tileSize - Tile width in level pixels
+ * @param {{ width: number, height: number }} viewer
+ * @returns {number}
+ */
+function _cellBound(tileSize, viewer) {
+  const density = Math.max(window.devicePixelRatio || 1, 1);
+  const smallestTile = (tileSize * OSD_MIN_PIXEL_RATIO) / density;
+  return (Math.ceil(viewer.width / smallestTile) + 1) * (Math.ceil(viewer.height / smallestTile) + 1);
 }
 
 /**
  * The static tile URLs covering a region at one level.
  *
- * Tiles sit on the level's own grid, so the walk starts at the tile holding
+ * Tiles sit on the level's own grid, so the walk starts at the cell holding
  * the region's edge rather than at the edge itself. A tile the image bound
- * clips to nothing is skipped, and nine is the ceiling on what one scene
- * prefetches.
+ * clips to nothing is skipped, and the count is held to `limit`.
  *
  * @param {string} baseUrl - Image service base URL
  * @param {{ left: number, top: number, right: number, bottom: number }} region
  * @param {{ imageW: number, imageH: number, tileSize: number, version: number }} shape
  * @param {number} scaleFactor
+ * @param {number} limit - Most tiles to issue
  * @returns {string[]} Array of tile URLs
  */
-function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
+function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor, limit) {
   const { imageW, imageH, tileSize } = shape;
   const effectiveTile = tileSize * scaleFactor;
+  const { x0, x1, y0, y1 } = _cellRange(region, effectiveTile, imageW, imageH);
   const urls = [];
 
-  for (let tx = Math.floor(region.left / effectiveTile); tx * effectiveTile < region.right; tx++) {
-    for (let ty = Math.floor(region.top / effectiveTile); ty * effectiveTile < region.bottom; ty++) {
+  for (let tx = x0; tx < x1; tx++) {
+    for (let ty = y0; ty < y1; ty++) {
       const rx = tx * effectiveTile;
       const ry = ty * effectiveTile;
       const rw = Math.min(effectiveTile, imageW - rx);
@@ -2297,7 +2374,7 @@ function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
 
       urls.push(_tileUrl(baseUrl, shape, { x: rx, y: ry, w: rw, h: rh }, scaleFactor));
 
-      if (urls.length >= 9) return urls; // Cap at 9 tiles
+      if (urls.length >= limit) return urls;
     }
   }
 
@@ -2308,8 +2385,9 @@ function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
  * IIIF Image API Level 0 tile URLs for the region a step frames.
  *
  * Four questions in order: what the image service advertises, which box of
- * image pixels the step puts on screen, the coarsest level that covers that
- * box in nine tiles, and which tiles of that level those are.
+ * image pixels the step puts on screen and at what scale, the level
+ * OpenSeadragon draws at that scale, and which tiles of that level the box
+ * meets.
  *
  * @param {string} baseUrl - Image service base URL (e.g. origin + /iiif/objects/leviathan)
  * @param {Object} info - Parsed info.json
@@ -2322,10 +2400,11 @@ function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
  */
 function _computeTileUrls(baseUrl, info, x, y, zoom, container) {
   const shape = _tileSourceShape(info);
-  const region = _prefetchRegion(shape.imageW, shape.imageH, x, y, zoom, container);
-  const scaleFactor = _prefetchScaleFactor(shape.scaleFactors, shape.tileSize, region);
+  const viewer = container || { width: window.innerWidth, height: window.innerHeight };
+  const { region, scale } = _prefetchFraming(shape.imageW, shape.imageH, x, y, zoom, viewer);
+  const scaleFactor = _drawnScaleFactor(shape.scaleFactors, scale);
 
-  return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor);
+  return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor, _cellBound(shape.tileSize, viewer));
 }
 
 // Exported for unit testing under an alias without underscore (matches the

@@ -3904,62 +3904,81 @@
     }
     return `${baseUrl}/${region}/${size}/0/default.jpg`;
   }
-  function _prefetchRegion(imageW, imageH, x, y, zoom, container) {
+  function _prefetchFraming(imageW, imageH, x, y, zoom, container) {
     const vpW = window.innerWidth;
     const vpH = window.innerHeight;
     const r = state.cardOverlayRect;
     const cardBox = r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null;
     const placementMode = _deriveCardPlacement(cardBox, vpW, vpH);
+    const viewer = container || { width: vpW, height: vpH };
     const target = computeFocalTarget(x, y, zoom, imageW, imageH, cardBox, placementMode);
-    const shown = target && visibleImageRegion(target, zoom, container || { width: vpW, height: vpH });
-    if (shown) return shown;
+    const shown = target && visibleImageRegion(target, zoom, viewer);
+    if (shown) return { region: shown, scale: framePlacement(target, zoom, viewer).s };
     const centreX = x * imageW;
     const centreY = y * imageH;
-    const pixelsPerViewportPx = 1 / (zoom * (vpW / imageW));
-    const halfW = vpW * pixelsPerViewportPx / 2;
-    const halfH = vpH * pixelsPerViewportPx / 2;
+    const scale = zoom * (vpW / imageW);
+    const halfW = vpW / scale / 2;
+    const halfH = vpH / scale / 2;
     return {
-      left: Math.max(0, centreX - halfW),
-      top: Math.max(0, centreY - halfH),
-      right: Math.min(imageW, centreX + halfW),
-      bottom: Math.min(imageH, centreY + halfH)
+      region: {
+        left: Math.max(0, centreX - halfW),
+        top: Math.max(0, centreY - halfH),
+        right: Math.min(imageW, centreX + halfW),
+        bottom: Math.min(imageH, centreY + halfH)
+      },
+      scale
     };
   }
-  function _prefetchScaleFactor(scaleFactors, tileSize, region) {
-    let scaleFactor = scaleFactors[0] || 1;
-    for (const sf of scaleFactors) {
-      const effectiveTile = tileSize * sf;
-      const tilesX = Math.ceil((region.right - region.left) / effectiveTile);
-      const tilesY = Math.ceil((region.bottom - region.top) / effectiveTile);
-      if (tilesX * tilesY <= 9) {
-        scaleFactor = sf;
-        break;
-      }
-    }
-    return scaleFactor;
+  var OSD_MIN_PIXEL_RATIO = 0.5;
+  function _drawnScaleFactor(scaleFactors, scale) {
+    const maxLevel = Math.round(Math.log(Math.max(...scaleFactors, 1)) * Math.LOG2E);
+    const density = Math.max(window.devicePixelRatio || 1, 1);
+    const ratioAtLevel0 = density * scale * Math.pow(2, maxLevel);
+    const level = Math.min(
+      Math.abs(maxLevel),
+      Math.abs(Math.floor(Math.log(ratioAtLevel0 / OSD_MIN_PIXEL_RATIO) / Math.log(2)))
+    );
+    return Math.pow(2, maxLevel - level);
   }
-  function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor) {
+  function _cellRange(region, effectiveTile, imageW, imageH) {
+    const columns = Math.ceil(imageW / effectiveTile);
+    const rows = Math.ceil(imageH / effectiveTile);
+    return {
+      x0: Math.min(Math.floor(region.left / effectiveTile), columns - 1),
+      x1: Math.min(Math.floor(region.right / effectiveTile), columns - 1) + 1,
+      y0: Math.min(Math.floor(region.top / effectiveTile), rows - 1),
+      y1: Math.min(Math.floor(region.bottom / effectiveTile), rows - 1) + 1
+    };
+  }
+  function _cellBound(tileSize, viewer) {
+    const density = Math.max(window.devicePixelRatio || 1, 1);
+    const smallestTile = tileSize * OSD_MIN_PIXEL_RATIO / density;
+    return (Math.ceil(viewer.width / smallestTile) + 1) * (Math.ceil(viewer.height / smallestTile) + 1);
+  }
+  function _tileUrlsForRegion(baseUrl, region, shape, scaleFactor, limit) {
     const { imageW, imageH, tileSize } = shape;
     const effectiveTile = tileSize * scaleFactor;
+    const { x0, x1, y0, y1 } = _cellRange(region, effectiveTile, imageW, imageH);
     const urls = [];
-    for (let tx = Math.floor(region.left / effectiveTile); tx * effectiveTile < region.right; tx++) {
-      for (let ty = Math.floor(region.top / effectiveTile); ty * effectiveTile < region.bottom; ty++) {
+    for (let tx = x0; tx < x1; tx++) {
+      for (let ty = y0; ty < y1; ty++) {
         const rx = tx * effectiveTile;
         const ry = ty * effectiveTile;
         const rw = Math.min(effectiveTile, imageW - rx);
         const rh = Math.min(effectiveTile, imageH - ry);
         if (rw <= 0 || rh <= 0) continue;
         urls.push(_tileUrl(baseUrl, shape, { x: rx, y: ry, w: rw, h: rh }, scaleFactor));
-        if (urls.length >= 9) return urls;
+        if (urls.length >= limit) return urls;
       }
     }
     return urls;
   }
   function _computeTileUrls(baseUrl, info, x, y, zoom, container) {
     const shape = _tileSourceShape(info);
-    const region = _prefetchRegion(shape.imageW, shape.imageH, x, y, zoom, container);
-    const scaleFactor = _prefetchScaleFactor(shape.scaleFactors, shape.tileSize, region);
-    return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor);
+    const viewer = container || { width: window.innerWidth, height: window.innerHeight };
+    const { region, scale } = _prefetchFraming(shape.imageW, shape.imageH, x, y, zoom, viewer);
+    const scaleFactor = _drawnScaleFactor(shape.scaleFactors, scale);
+    return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor, _cellBound(shape.tileSize, viewer));
   }
 
   // node_modules/lenis/dist/lenis.mjs
