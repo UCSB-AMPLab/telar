@@ -26,6 +26,7 @@ vi.mock('../../assets/js/telar-story/state.js', () => ({
     panelStack: [],
     viewerPlates: {},
   },
+  moveSeconds: () => 1.2,
 }));
 vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
   activateCard: vi.fn(),

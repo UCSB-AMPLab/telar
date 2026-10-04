@@ -108,7 +108,7 @@
     scrollProgress: 0,
     /** Whether a snap animation is currently in flight. */
     isSnapping: false,
-    /** Set true during scroll-driven activateCard calls so card-pool skips the 4s OSD animation. */
+    /** Set true during scroll-driven activateCard calls, so the plate does not animate the camera the scroll is placing. */
     scrollDriven: false,
     /** Lenis instance reference — used by panels.js to stop/start scroll. */
     lenis: null,

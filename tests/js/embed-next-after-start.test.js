@@ -19,6 +19,8 @@ vi.mock('../../assets/js/telar-story/card-pool.js', async () => ({
 }));
 vi.mock('../../assets/js/telar-story/iiif-card.js',
   async () => (await import('./scroll-engine-harness.js')).iiifCardModule);
+vi.mock('../../assets/js/telar-story/camera-travel.js',
+  async () => (await import('./scroll-engine-harness.js')).cameraTravelModule);
 vi.mock('../../assets/js/telar-story/viewer.js',
   async () => (await import('./scroll-engine-harness.js')).viewerModule);
 

@@ -23,8 +23,9 @@
  *
  *   Per-frame interpolation — `lerpIiifPosition()` is called every frame by
  *   the scroll engine's rAF loop. For step pairs that share the same object,
- *   it linearly interpolates x/y/zoom between the two steps based on scroll
- *   progress and applies the result via snapIiifToPosition (immediate=true).
+ *   it interpolates x/y evenly and zoom by equal ratios between the two steps
+ *   based on scroll progress and applies the result via snapIiifToPosition
+ *   (immediate=true).
  *   A pair either side of zoom 1 is blended between the two steps' settled
  *   placements instead, because an overview and a detail place different
  *   image points at the region centre.
@@ -46,6 +47,7 @@ import { onLayoutChange, isLandscapeSideCard } from './layout-mode.js';
 import { authoringHomeZoom } from './authoring-frame.js';
 import { stepFraming } from './plates/framing.js';
 import { sideCardWidthPx } from './video-layout.js';
+import { moveSecondsNow } from './card-height.js';
 
 // ── Type definition ──────────────────────────────────────────────────────────
 
@@ -552,12 +554,17 @@ export function visibleImageRegion(target, zoom, container) {
 /**
  * A placement part of the way from one settled placement to another (pure).
  *
- * The scale and the image's top-left corner on screen each move in a straight
- * line, so t = 0 and t = 1 are the two placements exactly and every frame
- * between is continuous in t whatever the two steps' zooms. The conditions
- * that matter on screen — the image covering the region on an axis, or lying
- * inside it — are linear in the corner and the scale, so a condition both
- * placements meet is met on every frame between them.
+ * Every frame lies on the straight segment between the two placements in
+ * (scale, top-left corner) space, so t = 0 and t = 1 are the two placements
+ * exactly and every frame between is continuous in t whatever the two steps'
+ * zooms. The conditions that matter on screen — the image covering the region
+ * on an axis, or lying inside it — are linear in the corner and the scale, so
+ * a condition both placements meet is met on every frame between them.
+ *
+ * The segment is travelled at an even rate in log scale: the scale changes by
+ * equal ratios over equal parts of t, and the corner moves with it. Travelled
+ * evenly in scale instead, a zoom-in by a ratio r does most of its zooming at
+ * the start, and the ease-out the move runs on piles more on top of that.
  *
  * @param {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}} from
  * @param {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}} to
@@ -572,9 +579,11 @@ export function blendPlacements(from, to, t) {
   });
   const a = corner(from);
   const b = corner(to);
-  const mix = (u, v) => u + (v - u) * t;
+  const s = t >= 1 ? to.s : from.s * (to.s / from.s) ** t;
+  const along = from.s === to.s ? t : (s - from.s) / (to.s - from.s);
+  const mix = (u, v) => u + (v - u) * along;
   return {
-    s: mix(from.s, to.s),
+    s,
     anchorImg: { x: 0, y: 0 },
     anchorPx: { x: mix(a.x, b.x), y: mix(a.y, b.y) },
   };
@@ -586,9 +595,10 @@ export function blendPlacements(from, to, t) {
  * viewer is to be left where it is (no source size yet, a title card active,
  * or a framing that computeFocalTarget refuses).
  *
- * @returns {{rect: DOMRect, placement: {s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}|null}
+ * @returns {{rect: DOMRect, region: {x:number,y:number,w:number,h:number},
+ *   placement: {s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}|null}
  */
-function _livePlacement(viewerCard, x, y, zoom) {
+export function _livePlacement(viewerCard, x, y, zoom) {
   // Source dims required; leave viewer at home if unavailable
   const source = viewerCard.osdViewer.world.getItemAt(0)?.source;
   if (!source?.width || !source?.height) return null;
@@ -607,7 +617,7 @@ function _livePlacement(viewerCard, x, y, zoom) {
 
   // Container rect from the wrapper's container element (IiifViewer.containerEl)
   const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
-  return { rect, placement: framePlacement(target, zoom, rect) };
+  return { rect, region: target.region, placement: framePlacement(target, zoom, rect) };
 }
 
 /**
@@ -709,72 +719,68 @@ export function destroyIiifCard(viewerCard) {
  * @param {number} x - Normalised horizontal position (0–1).
  * @param {number} y - Normalised vertical position (0–1).
  * @param {number} zoom - Zoom multiplier relative to home zoom.
+ * @returns {boolean} Whether the framing reached the viewer: false while a
+ *   title card is active, before the source size is known, or for a framing
+ *   computeFocalTarget refuses.
  */
 export function snapIiifToPosition(viewerCard, x, y, zoom) {
   if (!viewerCard || !viewerCard.osdViewer) {
     console.warn('snapIiifToPosition: viewer not ready for snap');
-    return;
+    return false;
   }
-  // Apply the recipe with immediate=true (snap, no OSD spring)
-  _applyFocalTarget(viewerCard, x, y, zoom, true);
+  // A snap takes the viewer from any move animating it.
+  stopCameraMove(viewerCard);
+  return _applyFocalTarget(viewerCard, x, y, zoom, true);
 }
 
-// Seconds the viewer takes to pan and zoom, and the spring's approach to it.
-// This spring drives the viewer only where the per-frame interpolation does
-// not: across an object change, which is the one move the interpolation bails
-// out of. Everywhere else the scroll paces the viewer and this is written
-// over each frame. It matches the pace of a move for that reason — a scene
-// change is a move like any other, and a reader should not be able to tell
-// which of the two carried the image.
-// Restoring OSD's own values has to outlast the spring, so the restore is
-// derived from the duration in force rather than stated as a second number
-// that has to be kept in step with it by hand.
-const PAN_ZOOM_SECONDS = 1.2;
-const PAN_ZOOM_STIFFNESS = 0.8;
-
 /**
- * Read a tuning override for the pan and zoom from the query string.
+ * Stop the camera move a viewer is animating, if it is animating one.
  *
- * `?panzoom=6` gives a six-second travel, `?panzoom=6,0.5` a six-second
- * travel on a gentler spring. A value outside the range leaves the default,
- * so a mistyped switch cannot stall the viewer for a minute or snap it in a
- * frame. Resolved once, and only for as long as the duration is being
- * settled — it goes when the number does, the same standing as the
- * card-motion switch.
+ * Called when anything else takes the viewer: a newer move, a snap (which the
+ * scroll engine writes every frame it drives the viewer), or the reader
+ * pressing or pinching the image.
  *
- * @returns {{ seconds: number, stiffness: number }}
+ * @param {ViewerCard} viewerCard
  */
-let _panZoomTuning = null;
-function _panZoomSettings() {
-  if (_panZoomTuning) return _panZoomTuning;
+export function stopCameraMove(viewerCard) {
+  viewerCard.cameraMove = (viewerCard.cameraMove || 0) + 1;
+}
 
-  _panZoomTuning = { seconds: PAN_ZOOM_SECONDS, stiffness: PAN_ZOOM_STIFFNESS };
-  try {
-    const raw = new URLSearchParams(window.location.search).get('panzoom');
-    if (raw) {
-      const [s, k] = raw.split(',').map(Number);
-      if (s >= 0.2 && s <= 20) _panZoomTuning.seconds = s;
-      if (k > 0 && k <= 10) _panZoomTuning.stiffness = k;
-    }
-  } catch {
-    // A URL we cannot read leaves the defaults standing.
-  }
-  return _panZoomTuning;
+/** The ease-out cubic every move to a step runs on. */
+const _easeOut = (t) => 1 - (1 - t) ** 3;
+
+/**
+ * The placement the viewer shows now, anchored at the image's top-left corner.
+ *
+ * @returns {{s:number, anchorImg:{x:number,y:number}, anchorPx:{x:number,y:number}}}
+ */
+function _shownPlacement(viewerCard, rect) {
+  const vp = viewerCard.osdViewer.viewport;
+  const shown = vp.viewportToImageRectangle(vp.getBounds(true));
+  return {
+    s: rect.width / shown.width,
+    anchorImg: { x: shown.x, y: shown.y },
+    anchorPx: { x: 0, y: 0 },
+  };
 }
 
 /**
- * Animate a viewer plate to a position.
+ * Move a viewer to a framing over the duration of the move under way.
  *
- * Used when the user navigates via keyboard or button to a step with the
- * same object — the viewer pans and zooms smoothly to the new coordinates
- * using OSD's built-in spring animation. Animation time and spring stiffness
- * are temporarily raised from OSD's defaults and restored once the spring
- * has settled.
+ * For a move no scroll paces: a button on a phone, and the activation that
+ * follows a contents jump. Each frame is the shown placement blended towards
+ * the framing's live placement, on the interpolation and the ease-out the
+ * scroll's moves use, written at once; the live placement is read every frame,
+ * as the scroll's is, so a card that settles mid-move is followed. The
+ * duration is the cards' (card-height.js), so the camera and the card land
+ * together.
  *
- * Click-to-zoom is disabled during the animation to prevent accidental zooms.
+ * OpenSeadragon's springs are not used and their settings are not touched:
+ * the reader's drag, flick, pinch and double tap run on them.
  *
- * Applies the validated two-circle OSD recipe via _applyFocalTarget.
- * Reduced-motion: passes immediate=true to bypass OSD spring (snap immediately).
+ * Under reduced motion the cards do not move, and the framing is written at
+ * once. Click-to-zoom is turned off, so a tap on the image during the move
+ * does not zoom it.
  *
  * @param {ViewerCard} viewerCard - The card to animate.
  * @param {number} x - Normalised horizontal position (0–1).
@@ -787,28 +793,30 @@ export function animateIiifToPosition(viewerCard, x, y, zoom) {
     return;
   }
 
-  const osdViewer = viewerCard.osdViewer;
-  const { seconds, stiffness } = _panZoomSettings();
+  stopCameraMove(viewerCard);
+  const token = viewerCard.cameraMove;
+  viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = false;
+  viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = false;
 
-  // Reduced-motion users: bypass OSD spring animation; snap immediately.
-  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    _applyFocalTarget(viewerCard, x, y, zoom, true);
+    return;
+  }
 
-  osdViewer.gestureSettingsMouse.clickToZoom = false;
-  osdViewer.gestureSettingsTouch.clickToZoom = false;
-
-  const originalAnimationTime    = osdViewer.animationTime;
-  const originalSpringStiffness  = osdViewer.springStiffness;
-
-  osdViewer.animationTime   = seconds;
-  osdViewer.springStiffness = stiffness;
-
-  // Apply the recipe: immediate=true for reduced-motion, false for spring animation
-  _applyFocalTarget(viewerCard, x, y, zoom, prefersReduced);
-
-  setTimeout(() => {
-    osdViewer.animationTime   = originalAnimationTime;
-    osdViewer.springStiffness = originalSpringStiffness;
-  }, seconds * 1000 + 100);
+  const ms = moveSecondsNow() * 1000;
+  let from = null;
+  let start = null;
+  const frame = (now) => {
+    if (viewerCard.cameraMove !== token || !viewerCard.osdViewer) return;
+    const live = _livePlacement(viewerCard, x, y, zoom);
+    if (!live) return;
+    if (start === null) [start, from] = [now, _shownPlacement(viewerCard, live.rect)];
+    const t = Math.min(1, (now - start) / ms);
+    const placement = t < 1 ? blendPlacements(from, live.placement, _easeOut(t)) : live.placement;
+    _applyPlacement(viewerCard, live.rect, placement, true);
+    if (t < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }
 
 // ── Per-frame IIIF interpolation ─────────────────────────────────────────────
@@ -825,7 +833,7 @@ function _objectOf(step) {
  * steps with a cell that is not a number is not interpolated at all, and the
  * viewer keeps the framing the step's own activation gave it.
  */
-function _authoredFraming(step) {
+export function _authoredFraming(step) {
   const x = parseFloat(step.x), y = parseFloat(step.y), zoom = parseFloat(step.zoom);
   if (isNaN(x) || isNaN(y) || isNaN(zoom)) return null;
   return { x, y, zoom };
@@ -841,18 +849,18 @@ function _restsAt(settled, stepIndex, x, y, zoom) {
  * Interpolate IIIF viewer position between two steps based on scroll progress.
  *
  * Called every frame by the scroll engine's rAF loop. For step pairs that
- * share the same object, linearly interpolates x/y/zoom between step A and
- * step B based on the fractional scroll progress (0.0 = at step A, 1.0 =
+ * share the same object, interpolates x/y evenly and zoom by equal ratios
+ * between step A and step B based on the fractional scroll progress (0.0 = at step A, 1.0 =
  * at step B). Applies the interpolated position via snapIiifToPosition
  * with immediate=true, so OSD does not add its own spring animation on top
  * of the per-frame updates. Where one step is at zoom 1 or below and the
  * other above it, the frame is the two settled placements blended
  * (blendPlacements), applied the same way.
  *
- * Different-object pairs are skipped entirely (the viewer freezes at
- * its last position while the new plate slides in on top). Progress values
- * below 0.001 are also skipped — at exact integer positions the viewer is
- * already at the correct coordinates and does not need interpolation.
+ * Different-object pairs are not interpolated (the viewer freezes at its
+ * last position while the new plate slides in on top). Progress below 0.001
+ * is a rest on step A, which states A's authored framing once per arrival,
+ * whether or not a step on the same object follows it.
  *
  * @param {number} stepIndex - Current step index (floor of scroll position).
  * @param {number} progress - Fractional progress 0.0–1.0 toward next step.
@@ -861,14 +869,7 @@ function _restsAt(settled, stepIndex, x, y, zoom) {
  */
 export function lerpIiifPosition(stepIndex, progress, stepsData) {
   const stepA = stepsData[stepIndex];
-  const stepB = stepsData[stepIndex + 1];
-  if (!stepA || !stepB) return;
-
-  if (_objectOf(stepA) !== _objectOf(stepB)) return; // different object, freeze
-
-  const a = _authoredFraming(stepA);
-  const b = _authoredFraming(stepB);
-  if (!a || !b) return;
+  if (!stepA) return;
 
   // A whole step is a resting place, and the framing there is the author's
   // own, stated rather than approached. The interpolation stops a fraction of
@@ -877,6 +878,17 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // framing of a position just outside it. Stating the authored endpoint
   // exactly is what a reader resting on a step is owed.
   const atRest = progress < 0.001;
+
+  // A scene's last step has nothing on its object to travel towards, and is a
+  // resting place all the same: it is read against itself, so at rest it is
+  // stated and between steps nothing moves (a different object freezes).
+  const stepB = stepsData[stepIndex + 1];
+  const travels = Boolean(stepB) && _objectOf(stepA) === _objectOf(stepB);
+  if (!travels && !atRest) return;
+
+  const a = _authoredFraming(stepA);
+  const b = travels ? _authoredFraming(stepB) : a;
+  if (!a || !b) return;
 
   // Keyed by scene, not by objectId: an object appearing in several scenes has
   // a plate for each, and an objectId lookup finds the wrong one on backward
@@ -890,8 +902,11 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
   // for as long as the reader stays on the step.
   if (atRest) {
     if (_restsAt(viewerCard.settledAt, stepIndex, a.x, a.y, a.zoom)) return;
-    viewerCard.settledAt = { step: stepIndex, ...a };
-    snapIiifToPosition(viewerCard, a.x, a.y, a.zoom);
+    // Settled only once the framing has reached the viewer: a write a title
+    // card refuses is made again on the next frame at rest.
+    if (snapIiifToPosition(viewerCard, a.x, a.y, a.zoom)) {
+      viewerCard.settledAt = { step: stepIndex, ...a };
+    }
     return;
   }
 
@@ -902,7 +917,8 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
 /**
  * Put a viewer part of the way from one step's framing to the next.
  *
- * Either side of zoom 1 the two steps place different image points (the
+ * The zoom changes by equal ratios over equal parts of the way, as it does in
+ * blendPlacements, and the position moves evenly. Either side of zoom 1 the two steps place different image points (the
  * centre and the focal point), so the frame is the two settled placements
  * blended rather than a placement of the blended x/y/zoom.
  */
@@ -912,7 +928,7 @@ function _travel(viewerCard, a, b, t) {
     return;
   }
   const along = (from, to) => from + (to - from) * t;
-  snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), along(a.zoom, b.zoom));
+  snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
 }
 
 // ── Recompute on resize / layout change ──────────────────────────────────────

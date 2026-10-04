@@ -84,6 +84,11 @@ export const cardPoolModule = {
   reconcilePlatesForJump: vi.fn(),
 };
 
+export const cameraTravelModule = {
+  stepTravel: vi.fn(() => 0),
+  travelBetween: vi.fn(() => 0),
+};
+
 export const iiifCardModule = {
   lerpIiifPosition: vi.fn(),
   snapIiifToPosition: vi.fn(),

@@ -45,7 +45,9 @@
  * @version v1.8.0
  */
 
-import { state, MOBILE_NAV_COOLDOWN } from './state.js';
+import { state, MOBILE_NAV_COOLDOWN, moveSeconds } from './state.js';
+import { setMoveSeconds } from './card-height.js';
+import { travelBetween } from './camera-travel.js';
 import { activateCard, releaseTitleCardsForIntro } from './card-pool.js';
 import { advanceToStep, buttonHeading, keyboardNav } from './scroll-engine.js';
 import { writeHash, navigateToIntro, navigateToStep } from './deep-link.js';
@@ -373,6 +375,8 @@ function _restoreMobileIntro() {
   state.mobileNavigationCooldown = true;
   setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
 
+  // The intro carries no camera travel: the move takes the base.
+  setMoveSeconds(moveSeconds(0));
   _showIntroCard();
   _sendFirstTextCardOffScreen();
   _sendPlateOffScreen(state.viewerPlates?.[0]);
@@ -395,6 +399,7 @@ function _dismissMobileIntro() {
   setTimeout(() => { state.mobileNavigationCooldown = false; }, MOBILE_NAV_COOLDOWN);
 
   state.mobileInIntro = false;
+  setMoveSeconds(moveSeconds(0));
 
   // Hide intro card
   const intro = document.querySelector('.story-intro');
@@ -475,6 +480,7 @@ function goToMobileStep(newIndex) {
   }, MOBILE_NAV_COOLDOWN);
 
   const direction = newIndex > state.currentMobileStep ? 'forward' : 'backward';
+  const travel = travelBetween(state.currentMobileStep, newIndex);
 
   // Swap step visibility
   state.steps[state.currentMobileStep].classList.remove('mobile-active');
@@ -484,7 +490,9 @@ function goToMobileStep(newIndex) {
   updateMobileButtonStates();
 
   // No scroll engine, so no per-frame writer: this path moves the card itself
-  // and is the only thing that can state where the reader now is.
+  // and is the only thing that can state where the reader now is. The card
+  // and the camera move over the duration the camera travel asks for.
+  setMoveSeconds(moveSeconds(travel));
   activateCard(newIndex, direction);
   updateViewerInfo(newIndex);
   recordButtonStep(newIndex);

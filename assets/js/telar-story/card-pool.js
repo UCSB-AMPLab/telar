@@ -71,7 +71,7 @@
  * @version v1.8.0
  */
 
-import { state } from './state.js';
+import { state, moveSeconds } from './state.js';
 import { detectCardType } from './card-type.js';
 import { updateObjectCredits } from './viewer.js';
 import { getBasePath, escapeHtml } from './utils.js';
@@ -83,7 +83,7 @@ import {
   framePlacement,
 } from './iiif-card.js';
 import { onViewportResize, onLayoutChange, getLayoutMode, isLandscapeSideCard } from './layout-mode.js';
-import { applyCardMotionDuration } from './card-height.js';
+import { setMoveSeconds } from './card-height.js';
 import { isFullObjectMode } from './text-card.js';
 import { arrangeMediaScene, measureTopBand } from './media-arrangement.js';
 import {
@@ -1020,7 +1020,7 @@ export function initCardPool(storyData, config) {
   });
   _stopGeometryWatch = () => { stopResize(); stopLayout(); stopWatch(); };
 
-  applyCardMotionDuration(cardStack);
+  setMoveSeconds(moveSeconds(0), cardStack);
 }
 
 /**
@@ -1922,7 +1922,9 @@ function _activateTextCard(cardEl) {
     if (ev.target !== cardEl || ev.propertyName !== 'transform') return;
     cardEl.removeEventListener('transitionend', onSettled);
     cardEl._settleHandler = null;
-    _writeCardOverlayRect(cardEl);
+    // A card that has left since is not the one the region is uncovered
+    // around, and the camera reads this rect on every frame.
+    if (cardEl.classList.contains('is-active')) _writeCardOverlayRect(cardEl);
   };
   cardEl._settleHandler = onSettled;
   cardEl.addEventListener('transitionend', onSettled);

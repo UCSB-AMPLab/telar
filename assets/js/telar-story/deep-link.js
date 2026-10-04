@@ -25,7 +25,8 @@
  * @version v1.8.0
  */
 
-import { state } from './state.js';
+import { state, moveSeconds } from './state.js';
+import { setMoveSeconds } from './card-height.js';
 import { activateCard, reconcileStackForJump, reconcilePlatesForJump } from './card-pool.js';
 import { goToStep, jumpButtonsTo, putButtonsOnIntro, updateViewerInfo } from './navigation.js';
 import { closeAllPanels, closePanel, openPanel } from './panels.js';
@@ -191,6 +192,8 @@ function _writeHashFragment(glossaryN) {
 export function navigateToIntro() {
   _cancelDeepLinkTimers();
   closeAllPanels();
+  // A jump carries no camera travel: the cards move over the base.
+  setMoveSeconds(moveSeconds(0));
 
   // Hide all active viewer plates
   for (const plate of Object.values(state.viewerPlates)) {
@@ -236,6 +239,7 @@ export function navigateToStep(stepNumber) {
 
   _cancelDeepLinkTimers();
   closeAllPanels();
+  setMoveSeconds(moveSeconds(0));
 
   // Close every plate but the target's before jumping, or one the reader
   // walked onto earlier is still open behind the step they land on.
@@ -311,6 +315,7 @@ export function applyDeepLinkOnLoad() {
  * @param {number} targetIndex - 0-based step index, already in range.
  */
 function _jumpToIndex(targetIndex) {
+  setMoveSeconds(moveSeconds(0));
   if (state.lenis) {
     const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });

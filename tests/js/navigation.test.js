@@ -82,6 +82,11 @@ vi.mock('../../assets/js/telar-story/scroll-engine.js', () => ({
   getScrollEngineState: vi.fn(),
 }));
 
+vi.mock('../../assets/js/telar-story/camera-travel.js', () => ({
+  stepTravel: vi.fn(() => 0),
+  travelBetween: vi.fn(() => 1.97),
+}));
+
 vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
   lerpIiifPosition: vi.fn(),
   snapIiifToPosition: vi.fn(),
@@ -99,7 +104,7 @@ import {
   goToStep,
   initializeButtonNavigation,
 } from '../../assets/js/telar-story/navigation.js';
-import { state } from '../../assets/js/telar-story/state.js';
+import { state, moveSeconds } from '../../assets/js/telar-story/state.js';
 import { IiifPlate } from '../../assets/js/telar-story/plates/iiif-plate.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -374,6 +379,23 @@ function useButtonSteps(currentMobileStep) {
   state.currentMobileStep = currentMobileStep;
   state.currentIndex = currentMobileStep;
 }
+
+describe('a button move on a phone', () => {
+  it('hands the cards the duration the camera travel asks for, before the card moves', () => {
+    useButtonSteps(0);
+    const stack = document.createElement('div');
+    stack.className = 'card-stack';
+    document.body.appendChild(stack);
+    let atActivation = null;
+    mocks.mockActivateCard.mockImplementationOnce(() => {
+      atActivation = stack.style.getPropertyValue('--card-motion-duration');
+    });
+
+    pressKey('ArrowDown');
+
+    expect(atActivation).toBe(`${moveSeconds(1.97)}s`);
+  });
+});
 
 describe('step keys when lenis is null', () => {
   it('ArrowDown makes the next button\'s move', () => {

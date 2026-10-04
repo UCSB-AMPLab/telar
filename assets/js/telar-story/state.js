@@ -30,49 +30,48 @@
 /** Minimum time (ms) between mobile/embed button taps. */
 export const MOBILE_NAV_COOLDOWN = 400;
 
-// Seconds a programmatic move to a step takes. This one number is the pace of
-// the whole move: Lenis carries the scroll over it, the per-frame interpolation
-// follows the scroll and so the viewer pans and zooms over it too, and the card
-// slide is written to match. The keyboard is given longer than a button because
-// a reader holding an arrow key is reading as they go, where a reader who has
-// clicked a section has already chosen where to be.
-//
-// It lives here rather than beside the scroll because two modules that cannot
-// import one another both need it: scroll-engine.js paces the move by it, and
-// card-height.js hands it to the stylesheet as the clock the cards and plates
-// move on.
-const NAV_SECONDS = { keyboard: 1.2, button: 0.75 };
+// How long a move to a step takes, from how far it moves the camera. Travel is
+// measured in units of S (iiif-card.js, placementTravel): a 2× zoom is about
+// 0.5. A move runs 1.33 s per unit, never under the base, which is the pace
+// of a move the camera barely takes part in, and never over the ceiling,
+// past which a reader is waiting on the image rather than watching it.
+const MOVE = { base: 1.2, perUnit: 1.33, ceiling: 3 };
 
 /**
- * Read a tuning override for the pace of a programmatic move.
- *
- * `?nav=1.6` gives the keyboard that many seconds and scales the button move
- * by the same factor, so the two keep their relation. `?nav=1.6,0.9` sets them
- * independently. A value outside the range leaves the defaults, so a mistyped
- * switch cannot strand the reader mid-move. Resolved once, and only for as
- * long as the pace is being settled.
- *
- * @returns {{ keyboard: number, button: number }}
+ * The pace `?nav=base,perUnit,ceiling` asks for, field by field, with a value
+ * out of range leaving that field's default. `?nav=1.2,0` gives every move the
+ * base whatever it travels, for comparing the two. Read again only when the
+ * query string changes.
  */
-let _navTuning = null;
-export function navSeconds() {
-  if (_navTuning) return _navTuning;
-
-  _navTuning = { ...NAV_SECONDS };
+let _moveTuning = null;
+let _moveSearch = null;
+function _moveTuningNow() {
+  const search = typeof window === 'undefined' ? '' : window.location.search;
+  if (_moveTuning && search === _moveSearch) return _moveTuning;
+  _moveSearch = search;
+  _moveTuning = { ...MOVE };
   try {
-    const raw = new URLSearchParams(window.location.search).get('nav');
-    if (raw) {
-      const [k, btn] = raw.split(',').map(Number);
-      if (k >= 0.1 && k <= 20) {
-        _navTuning.keyboard = k;
-        _navTuning.button = NAV_SECONDS.button * (k / NAV_SECONDS.keyboard);
-      }
-      if (btn >= 0.1 && btn <= 20) _navTuning.button = btn;
-    }
+    const raw = new URLSearchParams(search).get('nav');
+    const [base, perUnit, ceiling] = (raw || '').split(',').map(Number);
+    if (base >= 0.1 && base <= 20) _moveTuning.base = base;
+    if (perUnit >= 0 && perUnit <= 20) _moveTuning.perUnit = perUnit;
+    if (ceiling >= 0.1 && ceiling <= 20) _moveTuning.ceiling = ceiling;
   } catch {
     // A URL we cannot read leaves the defaults standing.
   }
-  return _navTuning;
+  return _moveTuning;
+}
+
+/**
+ * Seconds a move takes for the camera travel it carries. The scroll, the
+ * camera, the cards and the plates all move over this one duration.
+ *
+ * @param {number} travel - Camera travel in units of S; 0 for none
+ * @returns {number}
+ */
+export function moveSeconds(travel) {
+  const { base, perUnit, ceiling } = _moveTuningNow();
+  return Math.max(base, Math.min(ceiling, perUnit * (travel || 0)));
 }
 
 // ── Mutable state ────────────────────────────────────────────────────────────
@@ -96,7 +95,7 @@ export const state = {
   scrollProgress: 0,
   /** Whether a snap animation is currently in flight. */
   isSnapping: false,
-  /** Set true during scroll-driven activateCard calls so card-pool skips the 4s OSD animation. */
+  /** Set true during scroll-driven activateCard calls, so the plate does not animate the camera the scroll is placing. */
   scrollDriven: false,
   /** Lenis instance reference — used by panels.js to stop/start scroll. */
   lenis: null,

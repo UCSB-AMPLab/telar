@@ -2,24 +2,27 @@
 (() => {
   // assets/js/telar-story/state.js
   var MOBILE_NAV_COOLDOWN = 400;
-  var NAV_SECONDS = { keyboard: 1.2, button: 0.75 };
-  var _navTuning = null;
-  function navSeconds() {
-    if (_navTuning) return _navTuning;
-    _navTuning = { ...NAV_SECONDS };
+  var MOVE = { base: 1.2, perUnit: 1.33, ceiling: 3 };
+  var _moveTuning = null;
+  var _moveSearch = null;
+  function _moveTuningNow() {
+    const search = typeof window === "undefined" ? "" : window.location.search;
+    if (_moveTuning && search === _moveSearch) return _moveTuning;
+    _moveSearch = search;
+    _moveTuning = { ...MOVE };
     try {
-      const raw = new URLSearchParams(window.location.search).get("nav");
-      if (raw) {
-        const [k, btn] = raw.split(",").map(Number);
-        if (k >= 0.1 && k <= 20) {
-          _navTuning.keyboard = k;
-          _navTuning.button = NAV_SECONDS.button * (k / NAV_SECONDS.keyboard);
-        }
-        if (btn >= 0.1 && btn <= 20) _navTuning.button = btn;
-      }
+      const raw = new URLSearchParams(search).get("nav");
+      const [base, perUnit, ceiling] = (raw || "").split(",").map(Number);
+      if (base >= 0.1 && base <= 20) _moveTuning.base = base;
+      if (perUnit >= 0 && perUnit <= 20) _moveTuning.perUnit = perUnit;
+      if (ceiling >= 0.1 && ceiling <= 20) _moveTuning.ceiling = ceiling;
     } catch {
     }
-    return _navTuning;
+    return _moveTuning;
+  }
+  function moveSeconds(travel) {
+    const { base, perUnit, ceiling } = _moveTuningNow();
+    return Math.max(base, Math.min(ceiling, perUnit * (travel || 0)));
   }
   var state = {
     // ── Navigation ───────────────────────────────────────────────────────────
@@ -34,7 +37,7 @@
     scrollProgress: 0,
     /** Whether a snap animation is currently in flight. */
     isSnapping: false,
-    /** Set true during scroll-driven activateCard calls so card-pool skips the 4s OSD animation. */
+    /** Set true during scroll-driven activateCard calls, so the plate does not animate the camera the scroll is placing. */
     scrollDriven: false,
     /** Lenis instance reference — used by panels.js to stop/start scroll. */
     lenis: null,
@@ -609,6 +612,16 @@
     return `https://drive.google.com/file/d/${fileId}/preview`;
   }
 
+  // assets/js/telar-story/card-height.js
+  var _seconds = moveSeconds(0);
+  function setMoveSeconds(seconds, cardStack = document.querySelector(".card-stack")) {
+    _seconds = seconds;
+    cardStack?.style.setProperty("--card-motion-duration", `${seconds}s`);
+  }
+  function moveSecondsNow() {
+    return _seconds;
+  }
+
   // assets/js/telar-story/iiif-card.js
   function _isSane(imageW, imageH, viewportW, viewportH, x, y, zoom) {
     const fin = (v) => typeof v === "number" && Number.isFinite(v);
@@ -751,9 +764,11 @@
     });
     const a = corner(from);
     const b = corner(to);
-    const mix = (u, v) => u + (v - u) * t;
+    const s = t >= 1 ? to.s : from.s * (to.s / from.s) ** t;
+    const along = from.s === to.s ? t : (s - from.s) / (to.s - from.s);
+    const mix = (u, v) => u + (v - u) * along;
     return {
-      s: mix(from.s, to.s),
+      s,
       anchorImg: { x: 0, y: 0 },
       anchorPx: { x: mix(a.x, b.x), y: mix(a.y, b.y) }
     };
@@ -768,7 +783,7 @@
     const target = computeFocalTarget(x, y, zoom, source.width, source.height, cardBox, placementMode);
     if (!target) return null;
     const rect = viewerCard.osdWrapper.containerEl.getBoundingClientRect();
-    return { rect, placement: framePlacement(target, zoom, rect) };
+    return { rect, region: target.region, placement: framePlacement(target, zoom, rect) };
   }
   function _applyPlacement(viewerCard, rect, placement, immediate) {
     const vp = viewerCard.osdViewer.viewport;
@@ -793,46 +808,51 @@
   function snapIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
       console.warn("snapIiifToPosition: viewer not ready for snap");
-      return;
+      return false;
     }
-    _applyFocalTarget(viewerCard, x, y, zoom, true);
+    stopCameraMove(viewerCard);
+    return _applyFocalTarget(viewerCard, x, y, zoom, true);
   }
-  var PAN_ZOOM_SECONDS = 1.2;
-  var PAN_ZOOM_STIFFNESS = 0.8;
-  var _panZoomTuning = null;
-  function _panZoomSettings() {
-    if (_panZoomTuning) return _panZoomTuning;
-    _panZoomTuning = { seconds: PAN_ZOOM_SECONDS, stiffness: PAN_ZOOM_STIFFNESS };
-    try {
-      const raw = new URLSearchParams(window.location.search).get("panzoom");
-      if (raw) {
-        const [s, k] = raw.split(",").map(Number);
-        if (s >= 0.2 && s <= 20) _panZoomTuning.seconds = s;
-        if (k > 0 && k <= 10) _panZoomTuning.stiffness = k;
-      }
-    } catch {
-    }
-    return _panZoomTuning;
+  function stopCameraMove(viewerCard) {
+    viewerCard.cameraMove = (viewerCard.cameraMove || 0) + 1;
+  }
+  var _easeOut = (t) => 1 - (1 - t) ** 3;
+  function _shownPlacement(viewerCard, rect) {
+    const vp = viewerCard.osdViewer.viewport;
+    const shown = vp.viewportToImageRectangle(vp.getBounds(true));
+    return {
+      s: rect.width / shown.width,
+      anchorImg: { x: shown.x, y: shown.y },
+      anchorPx: { x: 0, y: 0 }
+    };
   }
   function animateIiifToPosition(viewerCard, x, y, zoom) {
     if (!viewerCard || !viewerCard.osdViewer) {
       console.warn("animateIiifToPosition: viewer not ready for animation");
       return;
     }
-    const osdViewer = viewerCard.osdViewer;
-    const { seconds, stiffness } = _panZoomSettings();
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    osdViewer.gestureSettingsMouse.clickToZoom = false;
-    osdViewer.gestureSettingsTouch.clickToZoom = false;
-    const originalAnimationTime = osdViewer.animationTime;
-    const originalSpringStiffness = osdViewer.springStiffness;
-    osdViewer.animationTime = seconds;
-    osdViewer.springStiffness = stiffness;
-    _applyFocalTarget(viewerCard, x, y, zoom, prefersReduced);
-    setTimeout(() => {
-      osdViewer.animationTime = originalAnimationTime;
-      osdViewer.springStiffness = originalSpringStiffness;
-    }, seconds * 1e3 + 100);
+    stopCameraMove(viewerCard);
+    const token = viewerCard.cameraMove;
+    viewerCard.osdViewer.gestureSettingsMouse.clickToZoom = false;
+    viewerCard.osdViewer.gestureSettingsTouch.clickToZoom = false;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      _applyFocalTarget(viewerCard, x, y, zoom, true);
+      return;
+    }
+    const ms = moveSecondsNow() * 1e3;
+    let from = null;
+    let start = null;
+    const frame = (now) => {
+      if (viewerCard.cameraMove !== token || !viewerCard.osdViewer) return;
+      const live = _livePlacement(viewerCard, x, y, zoom);
+      if (!live) return;
+      if (start === null) [start, from] = [now, _shownPlacement(viewerCard, live.rect)];
+      const t = Math.min(1, (now - start) / ms);
+      const placement = t < 1 ? blendPlacements(from, live.placement, _easeOut(t)) : live.placement;
+      _applyPlacement(viewerCard, live.rect, placement, true);
+      if (t < 1) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
   }
   function _objectOf(step) {
     return step.object || step.objectId || "";
@@ -847,19 +867,21 @@
   }
   function lerpIiifPosition(stepIndex, progress, stepsData) {
     const stepA = stepsData[stepIndex];
-    const stepB = stepsData[stepIndex + 1];
-    if (!stepA || !stepB) return;
-    if (_objectOf(stepA) !== _objectOf(stepB)) return;
-    const a = _authoredFraming(stepA);
-    const b = _authoredFraming(stepB);
-    if (!a || !b) return;
+    if (!stepA) return;
     const atRest = progress < 1e-3;
+    const stepB = stepsData[stepIndex + 1];
+    const travels = Boolean(stepB) && _objectOf(stepA) === _objectOf(stepB);
+    if (!travels && !atRest) return;
+    const a = _authoredFraming(stepA);
+    const b = travels ? _authoredFraming(stepB) : a;
+    if (!a || !b) return;
     const viewerCard = state.viewerPlates[state.stepToScene[stepIndex]];
     if (!viewerCard || !viewerCard.isReady) return;
     if (atRest) {
       if (_restsAt(viewerCard.settledAt, stepIndex, a.x, a.y, a.zoom)) return;
-      viewerCard.settledAt = { step: stepIndex, ...a };
-      snapIiifToPosition(viewerCard, a.x, a.y, a.zoom);
+      if (snapIiifToPosition(viewerCard, a.x, a.y, a.zoom)) {
+        viewerCard.settledAt = { step: stepIndex, ...a };
+      }
       return;
     }
     viewerCard.settledAt = null;
@@ -871,7 +893,7 @@
       return;
     }
     const along = (from, to) => from + (to - from) * t;
-    snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), along(a.zoom, b.zoom));
+    snapIiifToPosition(viewerCard, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
   }
   function reSnapActiveViewer() {
     const viewerCard = Object.values(state.viewerPlates).find(
@@ -895,35 +917,6 @@
       reSnapActiveViewer();
     });
   });
-
-  // assets/js/telar-story/card-height.js
-  var _motion = void 0;
-  var MOTION_MIN = 0.1;
-  var MOTION_MAX = 20;
-  function _params() {
-    if (typeof window === "undefined") return null;
-    try {
-      return new URLSearchParams(window.location.search);
-    } catch {
-      return null;
-    }
-  }
-  function _readMotion() {
-    const params = _params();
-    if (!params || !params.has("cardmotion")) return null;
-    const seconds = parseFloat(params.get("cardmotion"));
-    if (!Number.isFinite(seconds)) return null;
-    if (seconds < MOTION_MIN || seconds > MOTION_MAX) return null;
-    return seconds;
-  }
-  function cardMotionSeconds() {
-    if (_motion === void 0) _motion = _readMotion();
-    return _motion === null ? navSeconds().keyboard : _motion;
-  }
-  function applyCardMotionDuration(cardStack) {
-    if (!cardStack) return;
-    cardStack.style.setProperty("--card-motion-duration", `${cardMotionSeconds()}s`);
-  }
 
   // assets/js/telar-story/text-card.js
   function isFullObjectMode(stepData) {
@@ -3075,6 +3068,7 @@
     }
     /** Free the viewer and its GPU memory; the plate element stays in the DOM. */
     unload() {
+      stopCameraMove(this);
       if (this.osdWrapper && typeof this.osdWrapper.destroy === "function") {
         this.osdWrapper.destroy();
       }
@@ -3194,6 +3188,9 @@
         this.isReady = true;
         delete plateEl.dataset.loading;
         osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
+        const stop = () => stopCameraMove(this);
+        osdWrapper.viewer.addHandler("canvas-press", stop);
+        osdWrapper.viewer.addHandler("canvas-pinch", stop);
         if (!this.pendingZoom) return;
         const pz = this.pendingZoom;
         if (pz.snap) {
@@ -3614,7 +3611,7 @@
       stopLayout();
       stopWatch();
     };
-    applyCardMotionDuration(cardStack);
+    setMoveSeconds(moveSeconds(0), cardStack);
   }
   function buildTextCardContent(step) {
     const question = escapeHtml(step.question || "");
@@ -3953,7 +3950,7 @@
       if (ev.target !== cardEl || ev.propertyName !== "transform") return;
       cardEl.removeEventListener("transitionend", onSettled);
       cardEl._settleHandler = null;
-      _writeCardOverlayRect(cardEl);
+      if (cardEl.classList.contains("is-active")) _writeCardOverlayRect(cardEl);
     };
     cardEl._settleHandler = onSettled;
     cardEl.addEventListener("transitionend", onSettled);
@@ -4162,6 +4159,47 @@
     const { region, scale } = _prefetchFraming(shape.imageW, shape.imageH, x, y, zoom, viewer);
     const scaleFactor = _drawnScaleFactor(shape.scaleFactors, scale);
     return _tileUrlsForRegion(baseUrl, region, shape, scaleFactor, _cellBound(shape.tileSize, viewer));
+  }
+
+  // assets/js/telar-story/camera-travel.js
+  var RHO = Math.SQRT2;
+  function _camera({ s, anchorImg, anchorPx }, region) {
+    return {
+      u: {
+        x: anchorImg.x + (region.x + region.w / 2 - anchorPx.x) / s,
+        y: anchorImg.y + (region.y + region.h / 2 - anchorPx.y) / s
+      },
+      w: region.w / s
+    };
+  }
+  function placementTravel(from, to, region) {
+    if (!(region.w > 0 && region.h > 0 && from.s > 0 && to.s > 0)) return 0;
+    const a = _camera(from, region);
+    const b = _camera(to, region);
+    const pan = RHO * RHO * Math.hypot(b.u.x - a.u.x, b.u.y - a.u.y);
+    return Math.acosh(1 + (pan * pan + (b.w - a.w) ** 2) / (2 * a.w * b.w)) / RHO;
+  }
+  function stepTravel(stepIndex) {
+    const steps = state.stepsData || [];
+    const scene = state.stepToScene[stepIndex];
+    if (scene === void 0 || scene !== state.stepToScene[stepIndex + 1]) return 0;
+    const a = steps[stepIndex] && _authoredFraming(steps[stepIndex]);
+    const b = steps[stepIndex + 1] && _authoredFraming(steps[stepIndex + 1]);
+    const plate = state.viewerPlates[scene];
+    if (!a || !b || !plate?.isReady || !plate.osdViewer) return 0;
+    const from = _livePlacement(plate, a.x, a.y, a.zoom);
+    const to = _livePlacement(plate, b.x, b.y, b.zoom);
+    return from && to ? placementTravel(from.placement, to.placement, from.region) : 0;
+  }
+  function travelBetween(from, to) {
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return 0;
+    let total = 0;
+    for (let i = Math.floor(lo); i < hi; i++) {
+      total += (Math.min(hi, i + 1) - Math.max(lo, i)) * stepTravel(i);
+    }
+    return total;
   }
 
   // node_modules/lenis/dist/lenis.mjs
@@ -5802,6 +5840,7 @@
   function navigateToIntro() {
     _cancelDeepLinkTimers();
     closeAllPanels();
+    setMoveSeconds(moveSeconds(0));
     for (const plate of Object.values(state.viewerPlates)) {
       plate.container.classList.remove("is-active");
     }
@@ -5824,6 +5863,7 @@
     if (targetIndex < 0 || targetIndex >= state.steps.length) return;
     _cancelDeepLinkTimers();
     closeAllPanels();
+    setMoveSeconds(moveSeconds(0));
     reconcilePlatesForJump(targetIndex);
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
@@ -5850,6 +5890,7 @@
     _scheduleLayerOpen(parsed, targetIndex, 100);
   }
   function _jumpToIndex(targetIndex) {
+    setMoveSeconds(moveSeconds(0));
     if (state.lenis) {
       const targetPx = (targetIndex + 1) * (state.scrollStepPx || window.innerHeight);
       state.lenis.scrollTo(targetPx, { immediate: true, force: true });
@@ -5968,6 +6009,20 @@
     const delay = _openDelayAfterClose();
     navigateToStep(targetIndex + 1);
     _scheduleLayerOpen(parsed, targetIndex, delay);
+  }
+
+  // assets/js/telar-story/move-plan.js
+  function timeMove(from, to) {
+    const seconds = moveSeconds(travelBetween(from - 1, to - 1));
+    setMoveSeconds(seconds);
+    return seconds;
+  }
+  function keyboardTarget(direction, inFlight, position) {
+    const step = direction === "forward" ? 1 : -1;
+    if (inFlight !== null) return inFlight + step;
+    const rounded = Math.round(position);
+    if (Math.abs(position - rounded) < 0.01) return rounded + step;
+    return direction === "forward" ? Math.ceil(position) : Math.floor(position);
   }
 
   // assets/js/telar-story/story-input.js
@@ -6119,7 +6174,7 @@
         writeHash();
         lenis.stop();
         landedAt = performance.now();
-        dwellTimer = setTimeout(_endDwell, navSeconds().keyboard * 1e3);
+        dwellTimer = setTimeout(_endDwell, moveSecondsNow() * 1e3);
       }
     });
     registerSnapPoints(totalPositions);
@@ -6133,6 +6188,7 @@
         keyboardNavInFlight = false;
         navToken = 0;
         buttonMoveToken = 0;
+        setMoveSeconds(moveSeconds(0));
       }
       armScrubEnd();
     });
@@ -6189,8 +6245,9 @@
     const nearest = target;
     const token = beginNav();
     _recordMoveTarget(token, nearest);
+    const seconds = timeMove(position, nearest);
     lenis.scrollTo(nearest * _stepPx(), {
-      duration: navSeconds().button,
+      duration: seconds,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
@@ -6264,11 +6321,12 @@
     keyboardNavInFlight = false;
     navTarget = null;
     _recordMoveTarget(token, targetIndex + 1);
+    const seconds = timeMove(lenisInstance.animatedScroll / _stepPx(), targetIndex + 1);
     endScrub({ carry: false });
     const targetPx = (targetIndex + 1) * _stepPx();
     _endMoveHeldAt(lenisInstance, targetPx);
     lenisInstance.scrollTo(targetPx, {
-      duration: navSeconds().button,
+      duration: seconds,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
@@ -6318,13 +6376,6 @@
       if (!state.isPanelOpen) lenis.start();
     }
   }
-  function _keyboardTarget(direction, inFlight, position) {
-    const step = direction === "forward" ? 1 : -1;
-    if (inFlight !== null) return inFlight + step;
-    const rounded = Math.round(position);
-    if (Math.abs(position - rounded) < 0.01) return rounded + step;
-    return direction === "forward" ? Math.ceil(position) : Math.floor(position);
-  }
   function _activateKeyboardTarget(target, direction) {
     const targetStep = target - 1;
     if (targetStep >= 0 && targetStep !== state.currentIndex) {
@@ -6360,13 +6411,14 @@
     const position = lenis.animatedScroll / vh;
     const isExact = Math.abs(position - Math.round(position)) < 0.01;
     const rounded = Math.round(position);
-    const target = _clampPosition(_keyboardTarget(direction, inFlight, position));
+    const target = _clampPosition(keyboardTarget(direction, inFlight, position));
     if (inFlight === null && target === rounded && isExact) {
       endNav(token);
       return;
     }
     navTarget = target;
     _recordMoveTarget(token, target);
+    const seconds = timeMove(position, target);
     settleCards(target);
     snap.currentSnapIndex = target;
     _activateKeyboardTarget(target, direction);
@@ -6374,7 +6426,7 @@
     _endMoveHeldAt(lenis, target * vh);
     lenis.scrollTo(target * vh, {
       force: true,
-      duration: navSeconds().keyboard,
+      duration: seconds,
       easing: (t) => 1 - Math.pow(1 - t, 3),
       // ease-out cubic
       onComplete: () => {
@@ -6569,6 +6621,7 @@
     setTimeout(() => {
       state.mobileNavigationCooldown = false;
     }, MOBILE_NAV_COOLDOWN);
+    setMoveSeconds(moveSeconds(0));
     _showIntroCard();
     _sendFirstTextCardOffScreen();
     _sendPlateOffScreen(state.viewerPlates?.[0]);
@@ -6585,6 +6638,7 @@
       state.mobileNavigationCooldown = false;
     }, MOBILE_NAV_COOLDOWN);
     state.mobileInIntro = false;
+    setMoveSeconds(moveSeconds(0));
     const intro = document.querySelector(".story-intro");
     if (intro) {
       intro.style.transition = "transform var(--card-motion-duration) var(--card-motion-easing)";
@@ -6626,10 +6680,12 @@
       state.mobileNavigationCooldown = false;
     }, MOBILE_NAV_COOLDOWN);
     const direction = newIndex > state.currentMobileStep ? "forward" : "backward";
+    const travel = travelBetween(state.currentMobileStep, newIndex);
     state.steps[state.currentMobileStep].classList.remove("mobile-active");
     state.steps[newIndex].classList.add("mobile-active");
     state.currentMobileStep = newIndex;
     updateMobileButtonStates();
+    setMoveSeconds(moveSeconds(travel));
     activateCard(newIndex, direction);
     updateViewerInfo(newIndex);
     recordButtonStep(newIndex);

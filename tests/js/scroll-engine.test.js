@@ -23,6 +23,8 @@ vi.mock('../../assets/js/telar-story/card-pool.js',
   async () => (await import('./scroll-engine-harness.js')).cardPoolModule);
 vi.mock('../../assets/js/telar-story/iiif-card.js',
   async () => (await import('./scroll-engine-harness.js')).iiifCardModule);
+vi.mock('../../assets/js/telar-story/camera-travel.js',
+  async () => (await import('./scroll-engine-harness.js')).cameraTravelModule);
 vi.mock('../../assets/js/telar-story/navigation.js',
   async () => (await import('./scroll-engine-harness.js')).navigationModule);
 vi.mock('../../assets/js/telar-story/viewer.js',
@@ -32,7 +34,8 @@ vi.mock('../../assets/js/telar-story/viewer.js',
 
 import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav, jumpScrollTo, isMoveInFlight } from '../../assets/js/telar-story/scroll-engine.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
-import { state } from '../../assets/js/telar-story/state.js';
+import { travelBetween } from '../../assets/js/telar-story/camera-travel.js';
+import { state, moveSeconds } from '../../assets/js/telar-story/state.js';
 import {
   mocks, engineStory, stubEngineGlobals, readerTakesOver, wheelEvent, scrollFrame, resetState,
   modelLenis, landMove, restAt, readerScrollsTo,
@@ -176,6 +179,12 @@ describe('advanceToStep', () => {
       3 * window.innerHeight,
       expect.objectContaining({ duration: expect.any(Number) })
     );
+  });
+
+  it('takes the base for a move the camera barely travels', () => {
+    travelBetween.mockReturnValueOnce(0.3);
+    advanceToStep(2);
+    expect(state.lenis.scrollTo.mock.calls[0][1].duration).toBe(1.2);
   });
 
   it('calls lenis.scrollTo with an ease-out cubic easing function', () => {
@@ -504,6 +513,84 @@ describe('keyboardNav — a press while a move is in flight', () => {
     lenis.animatedScroll = 2.4 * window.innerHeight;
     keyboardNav('forward');
     expect(lastTarget()).toBe(3);   // completes the step the reader stopped in
+  });
+});
+
+// ── One duration per move ─────────────────────────────────────────────────────
+//
+// A move takes as long as its camera travel asks for, and the scroll, the
+// camera and the cards all move over that one duration. The cards read it from
+// the card stack, so it is written there before the move starts any card
+// transition.
+
+describe('keyboardNav — the duration of a move', () => {
+  let durationAtSettle;
+
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    durationAtSettle = [];
+    mocks.mockSettleCards.mockImplementation(() => {
+      durationAtSettle.push(document.querySelector('.card-stack')
+        .style.getPropertyValue('--card-motion-duration'));
+    });
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mocks.mockSettleCards.mockReset();
+    travelBetween.mockReset();
+    travelBetween.mockReturnValue(0);
+  });
+
+  const lastDuration = () => mocks.lenisScrollTo.mock.calls.at(-1)[1].duration;
+
+  it('gives the scroll the duration the travel asks for', () => {
+    travelBetween.mockReturnValue(1.97);
+    keyboardNav('forward');
+    expect(lastDuration()).toBeCloseTo(moveSeconds(1.97), 9);
+    expect(lastDuration()).toBeCloseTo(2.62, 2);
+  });
+
+  it('hands the cards the same duration before they move', () => {
+    travelBetween.mockReturnValue(1.97);
+    keyboardNav('forward');
+    expect(durationAtSettle.at(-1)).toBe(`${moveSeconds(1.97)}s`);
+  });
+
+  it('times a second press by the travel still ahead of it', () => {
+    travelBetween.mockImplementation((from, to) => Math.abs(to - from) * 1.5);
+    keyboardNav('forward');
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.98 * window.innerHeight;
+    keyboardNav('forward');
+
+    expect(travelBetween).toHaveBeenLastCalledWith(expect.closeTo(-0.02, 9), 1);
+    expect(lastDuration()).toBeCloseTo(moveSeconds(1.53), 9);
+    expect(durationAtSettle.at(-1)).toBe(`${moveSeconds(1.53)}s`);
+  });
+
+  it('holds the post-snap dwell for the base, whatever the move before it took', () => {
+    vi.useFakeTimers();
+    try {
+      travelBetween.mockReturnValue(1.97);
+      keyboardNav('forward');
+      readerTakesOver(wheelEvent());
+      const { lenis } = getScrollEngineState();
+      lenis.stop = vi.fn();
+      lenis.start = vi.fn();
+      mocks.snapConstructorArgs.at(-1).opts.onSnapComplete();
+      vi.advanceTimersByTime(1199);
+      expect(lenis.start).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(lenis.start).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

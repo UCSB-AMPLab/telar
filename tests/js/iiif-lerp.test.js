@@ -18,9 +18,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { state } from '../../assets/js/telar-story/state.js';
-import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
-import { makePlate, FAKE_CONTAINER } from './iiif-plate-helpers.js';
+import { state, moveSeconds } from '../../assets/js/telar-story/state.js';
+import {
+  lerpIiifPosition, computeFocalTarget, _deriveCardPlacement,
+  animateIiifToPosition, snapIiifToPosition, stopCameraMove,
+} from '../../assets/js/telar-story/iiif-card.js';
+import { placementTravel } from '../../assets/js/telar-story/camera-travel.js';
+import { setMoveSeconds } from '../../assets/js/telar-story/card-height.js';
+import { makePlate, FAKE_CONTAINER, FAKE_IMAGE } from './iiif-plate-helpers.js';
 
 let fitBounds;
 
@@ -118,26 +123,80 @@ describe('lerpIiifPosition — between an overview and a detail', () => {
     return framedImage();
   }
 
-  it('moves the image by under a pixel per thousandth of the scroll, whichever way', () => {
+  /** The last frame as a placement anchored at the image's top-left corner. */
+  function framedPlacement() {
+    const rect = fitBounds.mock.calls.at(-1)[0];
+    return {
+      s: FAKE_CONTAINER.width / rect.width,
+      anchorImg: { x: rect.x, y: rect.y },
+      anchorPx: { x: 0, y: 0 },
+    };
+  }
+
+  /** The reader's uncovered region, as the viewer computes it for these steps. */
+  function readerRegion() {
+    const mode = _deriveCardPlacement(null, window.innerWidth, window.innerHeight);
+    return computeFocalTarget(0.2, 0.3, 0.8, FAKE_IMAGE.width, FAKE_IMAGE.height, null, mode).region;
+  }
+
+  // The move runs over its own duration on an ease-out cubic, so the frames a
+  // reader sees are the travel sampled at 60 fps on that curve. At the speed
+  // limit (1.33 s per unit of travel) the mean is 0.75 S/s and the cubic's
+  // peak three times that, 0.0375 S a frame; 0.05 S leaves a third over it,
+  // because log zoom is not the geodesic and is not exactly the eased mean.
+  // Placing the blended x/y/zoom jumped 119 px in one frame here, 0.27 S.
+  // Above the ceiling a frame is S/60 or more, so the pair is one under it.
+  it('advances the camera under 0.05 of its travel in any frame at 60 fps, whichever way', () => {
+    const region = readerRegion();
     for (const steps of [stepsData, [...stepsData].reverse()]) {
-      let prev = frameAt(0, 0, steps);
+      const framedAt = (t) => { frameAt(0, t, steps); return framedPlacement(); };
+      const travel = placementTravel(framedAt(0), framedAt(1), region);
+      expect(moveSeconds(travel)).toBeLessThan(3);
+      const frames = Math.ceil(60 * moveSeconds(travel));
+      let prev = framedAt(0);
       let worst = 0;
-      for (let i = 1; i <= 1000; i++) {
-        const cur = i < 1000 ? frameAt(0, i / 1000, steps) : frameAt(0, 0, [steps[1], steps[1]]);
-        worst = Math.max(worst, Math.hypot(cur.x - prev.x, cur.y - prev.y));
+      for (let k = 1; k <= frames; k++) {
+        const cur = framedAt(1 - (1 - k / frames) ** 3);
+        worst = Math.max(worst, placementTravel(prev, cur, region));
         prev = cur;
       }
-      expect(worst).toBeLessThan(1);
+      expect(worst / travel).toBeLessThan(0.05);
     }
   });
 
+  // The last thousandth of the scroll either side moves the camera by less
+  // than one 60 fps frame of the move may, so a step is arrived at, not
+  // jumped to.
   it('arrives at each step on the framing the step settles on', () => {
-    const settledA = frameAt(0, 0);
-    const settledB = frameAt(0, 0, [stepsData[1], stepsData[1]]);
-    const nearA = frameAt(0, 0.001);
-    const nearB = frameAt(0, 0.999);
-    expect(Math.hypot(nearA.x - settledA.x, nearA.y - settledA.y)).toBeLessThan(1);
-    expect(Math.hypot(nearB.x - settledB.x, nearB.y - settledB.y)).toBeLessThan(1);
+    const region = readerRegion();
+    const framedWith = (t, steps) => { frameAt(0, t, steps); return framedPlacement(); };
+    const settledA = framedWith(0);
+    const settledB = framedWith(0, [stepsData[1], stepsData[1]]);
+    const travel = placementTravel(settledA, settledB, region);
+    expect(placementTravel(framedWith(0.001), settledA, region) / travel).toBeLessThan(0.05);
+    expect(placementTravel(framedWith(0.999), settledB, region) / travel).toBeLessThan(0.05);
+  });
+});
+
+// ── Zoom on one side of 1 ───────────────────────────────────────────────────
+
+describe('lerpIiifPosition — zooming between two details', () => {
+  // Zoom changes by equal ratios over equal parts of the move, so a zoom from
+  // 2 to 8 is at 4 half way, not at 5: a linear zoom does most of a zoom-in in
+  // the first part of the move.
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
+  });
+
+  const width = () => fitBounds.mock.calls.at(-1)[0].width;
+
+  it('frames zoom 4 half way from zoom 2 to zoom 8', () => {
+    lerpIiifPosition(0, 0.5, [makeStep('fig1', 0.4, 0.4, 2), makeStep('fig1', 0.6, 0.6, 8)]);
+    const halfWay = width();
+    state.viewerPlates[0].settledAt = null;
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.5, 0.5, 4)]);
+    expect(halfWay).toBeCloseTo(width(), 6);
   });
 });
 
@@ -184,6 +243,35 @@ describe('lerpIiifPosition — at rest on a step', () => {
     expect(fitBounds).toHaveBeenCalledTimes(1);
   });
 
+  // A scene's last step is a resting place like any other. Without the write a
+  // contents jump to it springs from the framing the reader left, and an
+  // immediate move to it under reduced motion leaves that framing standing.
+  it('states the authored framing on the last step of the story', () => {
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(state.viewerPlates[0].settledAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
+  });
+
+  it('states the authored framing on the last step before another object', () => {
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig2', 0.8, 0.8, 3)]);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(state.viewerPlates[0].settledAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
+  });
+
+  // A title card still active at the arrival refuses the write. The step is
+  // not settled until a write has reached the viewer, so the next frame at
+  // rest makes it.
+  it('writes on the next frame when the first write at rest is refused', () => {
+    state.activeTitleCardIndex = 0;
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).not.toHaveBeenCalled();
+    expect(state.viewerPlates[0].settledAt).toBeNull();
+
+    state.activeTitleCardIndex = null;
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+  });
+
   it('writes again when the reader comes back to the step', () => {
     lerpIiifPosition(0, 0, stepsData);
     lerpIiifPosition(0, 0.5, stepsData);   // moved off: the record is cleared
@@ -210,10 +298,9 @@ describe('lerpIiifPosition — what it declines to move', () => {
     expect(fitBounds).not.toHaveBeenCalled();
   });
 
-  it('does nothing on the last step, which has nothing to travel towards', () => {
-    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+  it('moves nothing past the last step, which has nothing to travel towards', () => {
+    lerpIiifPosition(0, 0.5, [makeStep('fig1', 0.2, 0.2, 3)]);
     expect(fitBounds).not.toHaveBeenCalled();
-    expect(state.viewerPlates[0].settledAt).toBeNull();
   });
 
   // The viewer staying put is defended twice: here, and again in
@@ -281,5 +368,158 @@ describe('lerpIiifPosition — a story that returns to an object', () => {
 
     expect(fitBounds).toHaveBeenCalledTimes(1);      // the scene-2 plate
     expect(firstFitBounds).not.toHaveBeenCalled();   // not the scene-0 one
+  });
+});
+
+// ── A move with no scroll to pace it ─────────────────────────────────────────
+//
+// On a phone, and on a contents jump's second activation, nothing scrolls, so
+// the camera is moved by an animation of its own: the same interpolation and
+// easing as the scroll's, over the duration of the move the cards are making.
+// OpenSeadragon's springs are left alone, because the reader's own gestures
+// on the image run on them.
+
+describe('animateIiifToPosition — the camera moved without a scroll', () => {
+  let frames;
+  let plate;
+
+  /** Run the frame the animation asked for, at `ms`. */
+  function runFrame(ms) {
+    const queued = frames;
+    frames = [];
+    queued.forEach((cb) => cb(ms));
+  }
+
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', (cb) => { frames.push(cb); return frames.length; });
+    plate = makePlate('fig1', 0, { fitBounds });
+    plate.osdViewer.animationTime = 0.4;
+    plate.osdViewer.springStiffness = 6.5;
+    plate.osdViewer.gestureSettingsMouse = {};
+    plate.osdViewer.gestureSettingsTouch = {};
+    plate.osdViewer.viewport.getBounds = () => ({ x: 0, y: 0, width: 1200, height: 960 });
+    plate.osdViewer.viewport.viewportToImageRectangle = (rect) => rect;
+    setMoveSeconds(2);
+  });
+
+  afterEach(() => setMoveSeconds(1.2));
+
+  /** The rectangle a snap to this framing asks for. */
+  function snapRect(x, y, zoom) {
+    const other = makePlate('fig1', 0, { fitBounds: vi.fn() });
+    snapIiifToPosition(other, x, y, zoom);
+    return other.osdViewer.viewport.fitBounds.mock.calls[0][0];
+  }
+
+  it('writes every frame at once and lands on the framing at the duration of the move', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(1000);
+    runFrame(1500);
+    runFrame(2999);
+    expect(frames.length).toBe(1);
+    runFrame(3000);
+
+    expect(fitBounds.mock.calls.length).toBe(4);
+    expect(fitBounds.mock.calls.every(([, immediate]) => immediate === true)).toBe(true);
+    const last = fitBounds.mock.calls.at(-1)[0];
+    const want = snapRect(0.3, 0.4, 3);
+    for (const k of ['x', 'y', 'width', 'height']) expect(last[k]).toBeCloseTo(want[k], 6);
+    expect(frames.length).toBe(0);
+  });
+
+  it('leaves the viewer\'s spring settings as they are', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    runFrame(2000);
+    expect(plate.osdViewer.animationTime).toBe(0.4);
+    expect(plate.osdViewer.springStiffness).toBe(6.5);
+  });
+
+  it('stops a move when a newer one starts', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    const older = frames;
+    frames = [];
+    animateIiifToPosition(plate, 0.6, 0.6, 2);
+    const newer = frames;
+    fitBounds.mockClear();
+    older.forEach((cb) => cb(500));
+    expect(fitBounds).not.toHaveBeenCalled();
+    frames = newer;
+    runFrame(500);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when the reader takes the image, and when the scroll writes it', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    stopCameraMove(plate);
+    fitBounds.mockClear();
+    runFrame(500);
+    expect(fitBounds).not.toHaveBeenCalled();
+
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    snapIiifToPosition(plate, 0.5, 0.5, 1);
+    fitBounds.mockClear();
+    runFrame(500);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+});
+
+// ── Reduced motion ───────────────────────────────────────────────────────────
+//
+// Under reduced motion the cards do not slide (their transitions are none) and
+// Lenis makes every programmatic scroll immediate, so the camera follows: it
+// is written at once, wherever it is written from.
+
+describe('animateIiifToPosition — under reduced motion', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query === '(prefers-reduced-motion: reduce)', media: query,
+      addEventListener() {}, removeEventListener() {},
+    }));
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('writes the framing at once, with no frames to follow', () => {
+    const plate = makePlate('fig1', 0, { fitBounds });
+    plate.osdViewer.gestureSettingsMouse = {};
+    plate.osdViewer.gestureSettingsTouch = {};
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(fitBounds.mock.calls[0][1]).toBe(true);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+  });
+});
+
+// ── A viewer the plate lets go of ────────────────────────────────────────────
+
+describe('animateIiifToPosition — across an unload', () => {
+  it('writes nothing to the viewer that replaces the one it was moving', () => {
+    const frames = [];
+    vi.stubGlobal('requestAnimationFrame', (cb) => { frames.push(cb); return frames.length; });
+    const plate = makePlate('fig1', 0, { fitBounds });
+    plate.osdViewer.gestureSettingsMouse = {};
+    plate.osdViewer.gestureSettingsTouch = {};
+    plate.osdViewer.viewport.getBounds = () => ({ x: 0, y: 0, width: 1200, height: 960 });
+    plate.osdViewer.viewport.viewportToImageRectangle = (rect) => rect;
+    plate.container.innerHTML = '';
+
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    plate.unload();
+
+    // The same plate is loaded again before the old move's frame runs.
+    const replacement = vi.fn();
+    const again = makePlate('fig1', 0, { fitBounds: replacement });
+    Object.assign(plate, { isReady: true, osdWrapper: again.osdWrapper, osdViewer: again.osdViewer });
+    plate.osdViewer.viewport.getBounds = () => ({ x: 0, y: 0, width: 1200, height: 960 });
+    plate.osdViewer.viewport.viewportToImageRectangle = (rect) => rect;
+
+    frames.forEach((cb) => cb(0));
+    expect(replacement).not.toHaveBeenCalled();
   });
 });

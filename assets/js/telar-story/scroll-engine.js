@@ -41,13 +41,15 @@
 
 import Lenis from 'lenis';
 import Snap from 'lenis/snap';
-import { state, navSeconds } from './state.js';
+import { state, moveSeconds } from './state.js';
+import { setMoveSeconds, moveSecondsNow } from './card-height.js';
 import { onViewportResize } from './layout-mode.js';
 import { activateCard, setCardProgress, settleCards } from './card-pool.js';
 import { writeHash } from './deep-link.js';
 import { followEngine, goToStep, updateViewerInfo, initKeyboardNavigation } from './navigation.js';
 import { initializeLoadingShimmer } from './viewer.js';
 import { lerpIiifPosition } from './iiif-card.js';
+import { timeMove, keyboardTarget } from './move-plan.js';
 import { isInsidePanel, isStoryInput } from './story-input.js';
 
 // ── Module-level references ───────────────────────────────────────────────────
@@ -302,11 +304,11 @@ export function initScrollEngine(stepCount) {
       writeHash();
       lenis.stop();
       // The dwell holds the scroll still while the cards finish arriving, so
-      // it is the pace of a move rather than a number of its own: a dwell
-      // shorter than the motion hands the reader back a scroll that can be
-      // pushed while the stack is still settling into the step behind it.
+      // it is the duration of the move rather than a number of its own: a
+      // dwell shorter than the motion hands the reader back a scroll that can
+      // be pushed while the stack is still settling into the step behind it.
       landedAt = performance.now();
-      dwellTimer = setTimeout(_endDwell, navSeconds().keyboard * 1000);
+      dwellTimer = setTimeout(_endDwell, moveSecondsNow() * 1000);
     },
   });
 
@@ -341,6 +343,9 @@ export function initScrollEngine(stepCount) {
       // gesture's carry and every carry after it until another move took one.
       navToken = 0;
       buttonMoveToken = 0;
+      // The reader's scroll paces the camera itself, so what is left to time
+      // is the cards' last settle and the dwell after a snap: the base.
+      setMoveSeconds(moveSeconds(0));
     }
     armScrubEnd();
   });
@@ -466,8 +471,9 @@ function carryToNearestStep(position) {
 
   const token = beginNav();
   _recordMoveTarget(token, nearest);
+  const seconds = timeMove(position, nearest);
   lenis.scrollTo(nearest * _stepPx(), {
-    duration: navSeconds().button,
+    duration: seconds,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
       _stateLanding(token, nearest);
@@ -611,13 +617,14 @@ export function advanceToStep(targetIndex) {
   keyboardNavInFlight = false;
   navTarget = null;
   _recordMoveTarget(token, targetIndex + 1);
+  const seconds = timeMove(lenisInstance.animatedScroll / _stepPx(), targetIndex + 1);
   endScrub({ carry: false });
 
   // +1 to account for intro at position 0
   const targetPx = (targetIndex + 1) * _stepPx();
   _endMoveHeldAt(lenisInstance, targetPx);
   lenisInstance.scrollTo(targetPx, {
-    duration: navSeconds().button,
+    duration: seconds,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
       _stateLanding(token, targetIndex + 1);
@@ -720,27 +727,6 @@ function _clearDwell() {
 }
 
 /**
- * The scroll position a key press moves to, before clamping.
- *
- * A move of the keyboard's own is stepped from where it is going, not from
- * where it has reached. Anything else — a scroll at rest, or one the reader
- * left part way — is read from the position, which is the only account of it
- * there is: a position on a step moves a whole step, and one between steps
- * moves to the next step in the direction of the press.
- *
- * @param {'forward'|'backward'} direction
- * @param {number|null} inFlight - The target of the keyboard move under way, if any.
- * @param {number} position - The scroll position, in viewports.
- */
-function _keyboardTarget(direction, inFlight, position) {
-  const step = direction === 'forward' ? 1 : -1;
-  if (inFlight !== null) return inFlight + step;
-  const rounded = Math.round(position);
-  if (Math.abs(position - rounded) < 0.01) return rounded + step;
-  return direction === 'forward' ? Math.ceil(position) : Math.floor(position);
-}
-
-/**
  * Show the card a key press is moving to, before the scroll gets there.
  *
  * The target is a scroll position (intro=0, step0=1, step1=2…), so its step
@@ -765,8 +751,8 @@ function _activateKeyboardTarget(target, direction) {
  * embed the previous/next buttons, which show only where the engine is.
  * -1 restores the intro.
  *
- * The card is marked scroll-driven so activateCard skips the OSD spring
- * animation: lerpIiifPosition has already placed the viewer frame by frame.
+ * The card is marked scroll-driven so activateCard does not animate the
+ * camera: lerpIiifPosition places the viewer frame by frame.
  *
  * @param {number} stepIndex - Step index, or -1 for the intro.
  * @param {'forward'|'backward'} direction
@@ -798,10 +784,10 @@ function _enterStep(stepIndex, direction) {
  * isLocked is true).  Uses lenis.scrollTo with force:true so it works
  * even during dwell or mid-snap animation.
  *
- * The 0.3s animated scroll drives lerpIiifPosition every frame for
- * smooth IIIF pan.  activateCard fires at the integer boundary with
- * scrollDriven=true so it skips the redundant 4s OSD spring animation
- * (the lerp already positioned the viewer correctly).
+ * The animated scroll drives lerpIiifPosition every frame for the IIIF
+ * pan and zoom, over the duration the camera travel asks for (timeMove).
+ * activateCard runs with scrollDriven=true so the plate does not move the
+ * viewer a second time (the lerp already positions it).
  *
  * @param {'forward'|'backward'} direction
  */
@@ -844,7 +830,7 @@ export function keyboardNav(direction) {
   const isExact = Math.abs(position - Math.round(position)) < 0.01;
   const rounded = Math.round(position);
 
-  const target = _clampPosition(_keyboardTarget(direction, inFlight, position));
+  const target = _clampPosition(keyboardTarget(direction, inFlight, position));
   if (inFlight === null && target === rounded && isExact) {
     endNav(token);   // nothing to move; the scroll is the reader's again
     return;
@@ -853,6 +839,10 @@ export function keyboardNav(direction) {
   // Where the next press steps from, for as long as this move owns the token.
   navTarget = target;
   _recordMoveTarget(token, target);
+
+  // Timed from where the scroll is, so a press during a move is given the
+  // travel still ahead of it: the rest of the step in flight and the next.
+  const seconds = timeMove(position, target);
 
   // State the target before the scroll starts for it: the keyboard knows its
   // landing, so the cards can slide to it on their own transitions over the
@@ -877,7 +867,7 @@ export function keyboardNav(direction) {
   _endMoveHeldAt(lenis, target * vh);
   lenis.scrollTo(target * vh, {
     force: true,
-    duration: navSeconds().keyboard,
+    duration: seconds,
     easing: (t) => 1 - Math.pow(1 - t, 3),  // ease-out cubic
     onComplete: () => {
       // Only the move still current may stand itself down. Lenis calls this

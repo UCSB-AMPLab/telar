@@ -32,6 +32,8 @@ import {
   computeFocalTarget, framePlacement, blendPlacements, _clampFocalPx, overviewPullFraction,
   OVERVIEW_MIN_FRACTION,
 } from '../../assets/js/telar-story/iiif-card.js';
+import { placementTravel } from '../../assets/js/telar-story/camera-travel.js';
+import { moveSeconds } from '../../assets/js/telar-story/state.js';
 
 // ── Viewport helpers ───────────────────────────────────────────────────────────
 
@@ -833,10 +835,18 @@ describe('blendPlacements — the frames between two settled placements', () => 
     }
   });
 
+  it('changes the scale by equal ratios, so half way is the geometric mean', () => {
+    const a = placeImage(DESKTOP, 1000, 2000, 0.2, 0.3, 0.8);
+    const b = placeImage(DESKTOP, 1000, 2000, 0.32, 0.38, 3.2);
+    expect(blendPlacements(a, b, 0.5).s).toBeCloseTo(Math.sqrt(a.s * b.s), 9);
+  });
+
   it('moves the image continuously between an overview and a detail', () => {
     // Placing the blended x/y/zoom instead jumps where the zoom crosses 1, by
     // the focal's offset at the fit scale; the ArrowDown trace on motion-check
-    // showed 119 px in one frame there.
+    // showed 119 px in one frame there. Measured as the reader sees it: no
+    // 60 fps frame of the eased move, over the move's own duration, advances
+    // the camera more than 0.05 of the whole travel (see iiif-lerp.test.js).
     const pairs = [
       [[0.2, 0.3, 0.8], [0.32, 0.38, 3.2]],
       [[0.2836, 0.3035, 1], [0.2836, 0.3035, 1.678]],
@@ -845,14 +855,17 @@ describe('blendPlacements — the frames between two settled placements', () => 
     for (const [A, B] of pairs) {
       const a = placeImage(DESKTOP, 1000, 2000, ...A);
       const b = placeImage(DESKTOP, 1000, 2000, ...B);
-      let prev = imageCorner(a);
+      const region = computeFocalTarget(...A, 1000, 2000, DESKTOP.box, DESKTOP.mode).region;
+      const travel = placementTravel(a, b, region);
+      const frames = Math.ceil(60 * moveSeconds(travel));
+      let prev = a;
       let worst = 0;
-      for (let i = 1; i <= 1000; i++) {
-        const c = imageCorner(blendPlacements(a, b, i / 1000));
-        worst = Math.max(worst, Math.hypot(c.x - prev.x, c.y - prev.y));
-        prev = c;
+      for (let k = 1; k <= frames; k++) {
+        const cur = blendPlacements(a, b, 1 - (1 - k / frames) ** 3);
+        worst = Math.max(worst, placementTravel(prev, cur, region));
+        prev = cur;
       }
-      expect(worst, `${JSON.stringify(A)} → ${JSON.stringify(B)}`).toBeLessThan(1);
+      expect(worst / travel, `${JSON.stringify(A)} → ${JSON.stringify(B)}`).toBeLessThan(0.05);
     }
   });
 });

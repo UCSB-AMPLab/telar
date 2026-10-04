@@ -15,6 +15,8 @@ vi.mock('../../assets/js/telar-story/card-pool.js',
   async () => (await import('./scroll-engine-harness.js')).cardPoolModule);
 vi.mock('../../assets/js/telar-story/iiif-card.js',
   async () => (await import('./scroll-engine-harness.js')).iiifCardModule);
+vi.mock('../../assets/js/telar-story/camera-travel.js',
+  async () => (await import('./scroll-engine-harness.js')).cameraTravelModule);
 vi.mock('../../assets/js/telar-story/navigation.js',
   async () => (await import('./scroll-engine-harness.js')).navigationModule);
 vi.mock('../../assets/js/telar-story/viewer.js',
@@ -164,7 +166,9 @@ describe('a wheel gesture on the real Lenis and Snap', () => {
     expect(state.lenis.isStopped).toBe(true);
     keyboardNav('forward');
     play(tail.filter(([t]) => t >= 3850).map(([t, d]) => [t - 3850, d]));
-    while (now - t0 < 3850 + 1300) frames(16);
+    // The tail's next input takes the scroll from the key's move and the carry
+    // finishes it; each runs the base, 1.2 s, so it lands within 1.8 s.
+    while (now - t0 < 3850 + 1800) frames(16);
     expect(state.lenis.animatedScroll / H).toBe(5);
     frames(6000);
     expect(state.lenis.animatedScroll / H).toBe(5);

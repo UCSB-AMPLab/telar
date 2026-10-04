@@ -63,18 +63,14 @@
   //     transition for a card or a plate below reads this property instead of
   //     restating the figure. The figure here is only what stands until the
   //     card pool writes over it at init with the pace of a move to a step,
-  //     which is the same movement measured at the scroll; `?cardmotion=0.9`
-  //     is a tuning switch for the release cycle, for a card duration
-  //     deliberately out of step with the move.
+  //     which is the same movement measured at the scroll.
   // ES: El deslizamiento de una tarjeta, el ascenso de una tarjeta cubierta y
   //     el recorrido de una placa son un mismo movimiento visto desde tres
   //     puntos, así que duran lo mismo. Todas las transiciones de tarjeta o de
   //     placa que vienen más abajo leen esta propiedad en vez de repetir la
   //     cifra. La cifra que está aquí solo rige hasta que el card pool la
   //     sobrescribe al arrancar con el ritmo de un desplazamiento a un paso,
-  //     que es ese mismo movimiento medido en el scroll; `?cardmotion=0.9` es
-  //     un control de ajuste para este ciclo de versiones, para una duración
-  //     de tarjeta que se aparte del desplazamiento a propósito.
+  //     que es ese mismo movimiento medido en el scroll.
   --card-motion-duration: 0.5s;
 
   // EN: The same movement also runs on one curve, for the same reason it runs
@@ -1020,7 +1016,7 @@
     max-height: $telar-card-mobile-max-height;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    transition: transform calc(var(--card-motion-duration) * 0.8) var(--card-motion-easing);  // slightly faster than the desktop card
+    transition: transform var(--card-motion-duration) var(--card-motion-easing);  // one duration with the camera: its rect is read when the slide ends
   }
 
   // dvh override for mobile text card — same structure as story-container above.

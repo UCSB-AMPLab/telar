@@ -5,11 +5,11 @@
  * This is a contract test, not a logic test — it catches accidental
  * deletions or renames of state keys that would break dependent modules.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
-import { describe, it, expect } from 'vitest';
-import { state, MOBILE_NAV_COOLDOWN } from '../../assets/js/telar-story/state.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { state, MOBILE_NAV_COOLDOWN, moveSeconds } from '../../assets/js/telar-story/state.js';
 
 describe('state', () => {
   it('has expected initial structure and constants', () => {
@@ -85,5 +85,41 @@ describe('state', () => {
     // two disagreeing is what it cost.
     expect(state.viewerCards).toBeUndefined();
     expect(state.viewerCardCounter).toBeUndefined();
+  });
+});
+
+// One duration per move, set by how far the camera travels: 1.33 s per unit of
+// travel, never under the 1.2 s base and never over the 3 s ceiling.
+describe('moveSeconds', () => {
+  afterEach(() => history.replaceState(null, '', '/'));
+
+  it('gives a short move the base', () => {
+    expect(moveSeconds(0)).toBe(1.2);
+    expect(moveSeconds(0.3)).toBe(1.2);
+  });
+
+  it('gives a long move 1.33 s per unit of travel', () => {
+    expect(moveSeconds(1.97)).toBeCloseTo(2.62, 2);
+  });
+
+  it('holds the longest move at the ceiling', () => {
+    expect(moveSeconds(5)).toBe(3);
+  });
+
+  it('takes the base, the rate and the ceiling from ?nav=', () => {
+    history.replaceState(null, '', '/?nav=1,2,4');
+    expect(moveSeconds(0.2)).toBe(1);
+    expect(moveSeconds(1.5)).toBe(3);
+    expect(moveSeconds(5)).toBe(4);
+  });
+
+  it('gives every move the base when ?nav= sets the rate to 0', () => {
+    history.replaceState(null, '', '/?nav=1.2,0');
+    expect(moveSeconds(5)).toBe(1.2);
+  });
+
+  it('keeps the defaults for a value out of range', () => {
+    history.replaceState(null, '', '/?nav=99,-1,0');
+    expect(moveSeconds(1.97)).toBeCloseTo(2.62, 2);
   });
 });

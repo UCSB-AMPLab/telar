@@ -22,7 +22,7 @@ import { Plate } from './base-plate.js';
 import { state } from '../state.js';
 import { IiifViewer } from '../iiif-viewer.js';
 import { getManifestUrl } from '../viewer.js';
-import { snapIiifToPosition, animateIiifToPosition } from '../iiif-card.js';
+import { snapIiifToPosition, animateIiifToPosition, stopCameraMove } from '../iiif-card.js';
 import { FULL_OBJECT_FRAMING, stepFraming } from './framing.js';
 
 /** Unique ids for the div OSD mounts into, one per viewer ever built. */
@@ -74,6 +74,8 @@ export class IiifPlate extends Plate {
 
   /** Free the viewer and its GPU memory; the plate element stays in the DOM. */
   unload() {
+    // A move animating the viewer being freed would write to the next one.
+    stopCameraMove(this);
     if (this.osdWrapper && typeof this.osdWrapper.destroy === 'function') {
       this.osdWrapper.destroy();
     }
@@ -217,6 +219,12 @@ export class IiifPlate extends Plate {
       // the line here documents the Telar invariant (wheel events belong to
       // Lenis, not OSD) at the call site too.
       osdWrapper.viewer.gestureSettingsMouse.scrollToZoom = false;
+
+      // The reader taking the image stops a move animating it, so the two
+      // never write the viewer at once.
+      const stop = () => stopCameraMove(this);
+      osdWrapper.viewer.addHandler('canvas-press', stop);
+      osdWrapper.viewer.addHandler('canvas-pinch', stop);
 
       if (!this.pendingZoom) return;
 
