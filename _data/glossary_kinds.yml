@@ -24,6 +24,9 @@
 #   section_heading  language key of the heading over the kind's entries on
 #                    the glossary page; the page shows headings unless every
 #                    entry is of the default kind
+#   icon             the icon of the kind's glossary callout, one of those in
+#                    _includes/widgets/glossary.html; a site's own kind has
+#                    none and gets the exclamation mark
 #   intro            language key of the glossary page's introduction when the
 #                    site has entries of this kind; the page uses
 #                    pages.glossary_intro otherwise. One kind has one.
@@ -33,11 +36,13 @@
 - id: term
   default: true
   values: [term, término, key term, palabra clave]
+  icon: bookmark
   panel_label: panels.glossary_kind_term
   section_heading: glossary.section_terms
 
 - id: source
   values: [source, fuente, primary source, fuente primaria]
+  icon: document
   panel_label: panels.glossary_kind_source
   section_heading: glossary.section_sources
   intro: pages.glossary_intro_with_sources
@@ -52,11 +57,13 @@
            instituciones, colectivo, colectivos, comunidad, comunidades,
            familia, familias, entidad corporativa, entidades corporativas,
            agente, agentes]
+  icon: person
   panel_label: panels.glossary_kind_entity
   section_heading: glossary.section_entities
 
 - id: place
   values: [place, places, site, sites, territory, territories,
            lugar, lugares, sitio, sitios, territorio, territorios]
+  icon: pin
   panel_label: panels.glossary_kind_place
   section_heading: glossary.section_places

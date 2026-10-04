@@ -201,13 +201,34 @@ def _is_blank(value):
     return value is None or value != value or not str(value).strip()
 
 
-def resolve_kind(value, where=None):
+# A markdown entry's kind, under its English or Spanish key. Its value may be
+# quoted, as any front-matter scalar may.
+_KIND_LINE = re.compile(r'^(?:kind|tipo)[ \t]*:[ \t]*["\']?(.*?)["\']?[ \t]*$',
+                        re.MULTILINE | re.IGNORECASE)
+
+
+def front_matter_kind(frontmatter_text):
+    """The kind a markdown entry's front matter gives, as written, or ''."""
+    match = _KIND_LINE.search(frontmatter_text)
+    return match.group(1) if match else ''
+
+
+def kind_icon(kind_id):
+    """The name of a kind's callout icon, or None: a site kind has none."""
+    for kind in all_kinds():
+        if kind['id'] == kind_id:
+            return kind.get('icon')
+    return None
+
+
+def resolve_kind(value, where=None, warn=True):
     """The kind id an author's value names.
 
     Args:
         value: What the author wrote, or None / NaN / '' for nothing.
         where: Which entry the value belongs to, for the warning, e.g.
             "glossary entry 'carta'".
+        warn: False where another pass over the same entry already warns.
 
     Returns:
         str: The id of a core kind or of a site kind.
@@ -217,6 +238,8 @@ def resolve_kind(value, where=None):
     kind = _values().get(_fold(value))
     if kind is not None:
         return kind
+    if not warn:
+        return default_kind()
 
     accepted = ', '.join(kind['id'] for kind in all_kinds())
     subject = f"{where} has" if where else "A glossary entry has"

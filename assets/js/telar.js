@@ -30,6 +30,10 @@
  * outside click on any page, while clicks on panels, glossary links and triggers are
  * left alone so they can do their own work.
  *
+ * A glossary callout (the :::glossary widget) is a `.glossary-inline-link` too,
+ * so it opens the panel through the same handler; its title is read from its
+ * `.glossary-callout-title`.
+ *
  * Glossary clicks are wired with a single delegated document listener
  * (`initializeGlossaryDelegation`), so any glossary link works no matter when it
  * enters the DOM — including story cards the viewer builds and clones at runtime,
@@ -249,7 +253,10 @@ function glossaryTermSlug(termId) {
 function handleGlossaryLinkClick(e, link) {
   e.preventDefault();
   const termId = link.dataset.termId;
-  const termTitle = link.textContent.trim();
+  // A glossary callout carries its kind's label beside the title; the panel
+  // is headed by the title alone.
+  const titleElement = link.querySelector('.glossary-callout-title');
+  const termTitle = (titleElement || link).textContent.trim();
   const isDemo = link.dataset.demo === 'true';
 
   // Use the pre-computed URL from the data attribute if available

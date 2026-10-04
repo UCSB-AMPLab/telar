@@ -41,6 +41,14 @@ visible error indicator with a warning emoji, and a warning is appended
 to the `warnings_list` so it appears in the build output and in the
 story's intro panel.
 
+A glossary callout (`:::glossary` in `telar/widgets.py`) reaches this pass
+as a slot, and `process_glossary_links()` resolves its entry the way it
+resolves `[[entry]]`: the same case-insensitive lookup, and for an entry the
+glossary lacks the same warning and the same error marker. A resolved one is
+drawn from `_includes/widgets/glossary.html` with the entry's kind, which the
+loaders keep beside each title in `GlossaryTerms.kinds`. The callout carries
+the inline link's class and data attributes, so the browser treats it as one.
+
 Term matching is case-insensitive: an author's `[[Term]]` resolves against
 the stored key regardless of casing, and the rendered `data-term-id` is the
 stored key.
@@ -53,9 +61,22 @@ import re
 from pathlib import Path
 import pandas as pd
 from telar.config import get_lang_string
-from telar.widgets import site_base_url
+from telar.widgets import render_widget_html, site_base_url
+from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
+                                  kind_text, resolve_kind)
 from telar.story_pages import jekyll_slug
 from telar.csv_utils import ColumnCollisionError, ReservedColumnError
+
+
+class GlossaryTerms(dict):
+    """A glossary's term ids mapped to their titles, with each entry's kind
+    id in `kinds`, which a glossary callout shows. An entry missing from
+    `kinds` is of the default kind, so a plain dict works where no callout
+    is drawn."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.kinds = {}
 
 
 def load_glossary_from_csv(csv_path):
@@ -66,9 +87,9 @@ def load_glossary_from_csv(csv_path):
         csv_path: Path to glossary.csv
 
     Returns:
-        dict: Dictionary mapping term_id to term title
+        GlossaryTerms: term_id to term title, with each entry's kind
     """
-    glossary_terms = {}
+    glossary_terms = GlossaryTerms()
 
     try:
         # Every column here is text the author typed. Left to infer, pandas
@@ -103,6 +124,9 @@ def load_glossary_from_csv(csv_path):
 
             if term_id and title:
                 glossary_terms[term_id] = title
+                # The page generator reads the same cell and warns about it.
+                glossary_terms.kinds[term_id] = resolve_kind(
+                    row.get('kind', ''), warn=False)
 
     except (ColumnCollisionError, ReservedColumnError) as e:
         # The page generator reads this same file and fails the build on
@@ -127,9 +151,9 @@ def load_glossary_from_markdown(glossary_dir):
         glossary_dir: Path to telar-content/texts/glossary/
 
     Returns:
-        dict: Dictionary mapping term_id to term title
+        GlossaryTerms: term_id to term title, with each entry's kind
     """
-    glossary_terms = {}
+    glossary_terms = GlossaryTerms()
 
     try:
         for glossary_file in glossary_dir.glob('*.md'):
@@ -151,6 +175,8 @@ def load_glossary_from_markdown(glossary_dir):
                     term_id = term_id_match.group(1)
                     title = title_match.group(1)
                     glossary_terms[term_id] = title
+                    glossary_terms.kinds[term_id] = resolve_kind(
+                        front_matter_kind(frontmatter_text), warn=False)
 
     except Exception as e:
         print(f"  ⚠️ Could not load glossary markdown files: {e}")
@@ -214,7 +240,9 @@ def glossary_term_url(term_id, base_url=None):
 # (so it can never itself contain a closing </a> / </span>), which keeps this safe.
 _GLOSSARY_MARKUP_RE = re.compile(
     r'<a\b[^>]*\bclass="glossary-inline-link"[^>]*>(.*?)</a>'
-    r'|<span\b[^>]*\bclass="glossary-link-error"[^>]*>(.*?)</span>',
+    r'|<span\b[^>]*\bclass="glossary-link-error"[^>]*>(.*?)</span>'
+    r'|<a\b[^>]*\bclass="glossary-inline-link glossary-callout[^"]*"[^>]*>.*?'
+    r'<span class="glossary-callout-title">(.*?)</span>.*?</a>',
     re.DOTALL,
 )
 
@@ -227,8 +255,8 @@ def strip_glossary_links(text):
     rendered at runtime by a path that HTML-escapes the step answer and has no
     glossary panel, so that markup would surface as escaped tag-text instead of a
     link. For those stories we drop the wrapper and keep the visible text: a
-    resolved link becomes its title, an unresolved term becomes its `⚠️ [[term]]`
-    indicator text. The captured inner text is HTML-unescaped so that the runtime's
+    resolved link becomes its title, a glossary callout the entry's title, and an
+    unresolved term its `⚠️ [[term]]` indicator text. The captured inner text is HTML-unescaped so that the runtime's
     own escaping pass produces correctly-escaped output (no double-escaping).
 
     Args:
@@ -241,10 +269,57 @@ def strip_glossary_links(text):
         return text
 
     def unwrap(match):
-        inner = match.group(1) if match.group(1) is not None else match.group(2)
+        inner = next(group for group in match.groups() if group is not None)
         return html.unescape(inner)
 
     return _GLOSSARY_MARKUP_RE.sub(unwrap, text)
+
+
+# The slot `parse_glossary_widget()` leaves for a glossary callout.
+_CALLOUT_SLOT_RE = re.compile(
+    r'<div class="glossary-callout-slot" data-entry="([^"]*)"'
+    r' data-align="(right|left)"></div>')
+
+
+def _missing_entry(raw_term_id, shown, warnings_list, step_num, layer_name):
+    """The warning and the page marker for an entry the glossary lacks."""
+    if warnings_list is not None:
+        warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=raw_term_id)
+        warnings_list.append({
+            'step': step_num,
+            'type': 'glossary',
+            'term_id': raw_term_id,
+            'layer': layer_name,
+            'message': warning_msg
+        })
+    return f'<span class="glossary-link-error" data-term-id="{html.escape(raw_term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(html.unescape(shown))}]]</span>'
+
+
+def _glossary_callout(match, glossary_terms, lower_map, warnings_list,
+                      step_num, layer_name, base_url):
+    """The callout a slot stands for, or the missing-entry marker.
+
+    A callout names its entry as [[entry]] does, and a missing or unknown
+    one is reported and marked as [[entry]] is.
+    """
+    raw_term_id = html.unescape(match.group(1)).strip()
+    term_id = lower_map.get(raw_term_id.lower())
+    if term_id is None:
+        return _missing_entry(raw_term_id, raw_term_id, warnings_list,
+                              step_num, layer_name)
+    kind = getattr(glossary_terms, 'kinds', {}).get(term_id, default_kind())
+    rendered = render_widget_html('glossary', {
+        'term_id': term_id,
+        'term_url': glossary_term_url(term_id, base_url),
+        'demo': term_id.startswith('demo-'),
+        'kind': kind,
+        'icon': kind_icon(kind),
+        'label': kind_text(kind, 'label'),
+        # Decoded as a link's display text is; the template escapes it.
+        'title': html.unescape(glossary_terms[term_id]),
+        'align': match.group(2),
+    }, 'glossary-callout')
+    return ' '.join(line.strip() for line in rendered.splitlines() if line.strip())
 
 
 def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=None, layer_name=None,
@@ -264,7 +339,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     Returns:
         str: Text with glossary links transformed to HTML
     """
-    if not text or not glossary_terms:
+    if not text or not (glossary_terms or _CALLOUT_SLOT_RE.search(text)):
         return text
 
     # Build a case-insensitive lookup that resolves an author's [[term]] (any
@@ -276,7 +351,7 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
     # objects_lower_map pattern in stories.py.
     # If two keys differ only by case, the last one wins — acceptable because the
     # glossary page system would already collide on such keys.
-    glossary_lower_map = {key.lower(): key for key in glossary_terms}
+    glossary_lower_map = {key.lower(): key for key in (glossary_terms or {})}
 
     # Pattern: [[display|term]] or [[term]] with flexible spacing
     # Captures: (optional_display) | (term_id)
@@ -319,16 +394,8 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
                     f'{html.escape(html.unescape(display_text))}</a>')
         else:
             # Invalid term - create error indicator (author's original casing preserved)
-            if warnings_list is not None:
-                warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=raw_term_id)
-                warnings_list.append({
-                    'step': step_num,
-                    'type': 'glossary',
-                    'term_id': raw_term_id,
-                    'layer': layer_name,
-                    'message': warning_msg
-                })
-            return f'<span class="glossary-link-error" data-term-id="{html.escape(raw_term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(html.unescape(match.group(1)))}]]</span>'
+            return _missing_entry(raw_term_id, match.group(1), warnings_list,
+                                  step_num, layer_name)
 
     # Text is linked, a tag never: [[term]] inside an attribute (an image's
     # alt text) stays literal, or the link it made would end the attribute.
@@ -342,4 +409,11 @@ def process_glossary_links(text, glossary_terms, warnings_list=None, step_num=No
             return match.group(0)
         return replace_glossary_link(match)
 
-    return re.sub(pattern, link_outside_tags, text)
+    if glossary_terms:
+        text = re.sub(pattern, link_outside_tags, text)
+    # After the links: the marker an unknown callout leaves reads as
+    # [[entry]], which the link pass would report a second time.
+    return _CALLOUT_SLOT_RE.sub(
+        lambda match: _glossary_callout(match, glossary_terms, glossary_lower_map,
+                                        warnings_list, step_num, layer_name, base_url),
+        text)

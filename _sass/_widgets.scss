@@ -2,8 +2,9 @@
  * Widgets
  *
  * Interactive content components that appear inside panels: carousels (image
- * slideshows with captions), tabs (tabbed content sections), and accordions
- * (collapsible content sections). Each widget type has its own styling plus
+ * slideshows with captions), tabs (tabbed content sections), accordions
+ * (collapsible content sections), and glossary callouts (a box linking a
+ * glossary entry). Each widget type has its own styling plus
  * panel-specific colour variants.
  *
  * Telar's panel system uses a colour inversion pattern: widgets inside panels
@@ -436,6 +437,127 @@
   .telar-widget-accordion .accordion-body {
     padding: 1rem;
     font-size: 0.95rem;
+  }
+}
+
+/* Glossary callout: a box linking a glossary entry, floated in the text so
+   the text wraps around it. It is a .glossary-inline-link too, so these rules
+   are written to outrank that one's and the panels' general link rule. */
+a.glossary-callout.glossary-inline-link {
+  float: right;
+  clear: right;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  width: auto;
+  max-width: 290px;
+  margin: 0.35rem 0 0.9rem 1.4rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  background: var(--color-panel-glossary-bg);
+  color: var(--color-on-panel-glossary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  font-size: 1rem;
+  line-height: 1.3;
+  text-align: left;
+  text-decoration: none;
+}
+
+a.glossary-callout.glossary-callout--left {
+  float: left;
+  clear: left;
+  margin: 0.35rem 1.4rem 0.9rem 0;
+}
+
+.offcanvas-body a.glossary-callout:not([href^="#_ftn"]) {
+  color: var(--color-on-panel-glossary);
+  text-decoration: none;
+}
+
+a.glossary-callout.glossary-inline-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .offcanvas-body a.glossary-callout:not([href^="#_ftn"]):hover,
+  a.glossary-callout.glossary-inline-link:hover {
+    color: var(--color-on-panel-glossary);
+    text-decoration: none;
+    opacity: 0.9;
+  }
+}
+
+.glossary-callout-icon {
+  flex: none;
+  width: 1.45rem;
+  height: 1.45rem;
+  margin-top: 0.1rem;
+  color: var(--color-accent);
+}
+
+.glossary-callout-text {
+  display: block;
+  min-width: 0;
+}
+
+.glossary-callout-kind {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.glossary-callout-title {
+  display: block;
+  font-family: var(--font-headings);
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.glossary-callout-arrow {
+  flex: none;
+  align-self: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+/* In a panel the box sits at the edge of the text column, not of the panel:
+   the column is each panel's paragraph width in _panels.scss. */
+.offcanvas-body { --glossary-callout-column: 650px; }
+#panel-layer2 .offcanvas-body { --glossary-callout-column: 600px; }
+#panel-glossary .offcanvas-body { --glossary-callout-column: 550px; }
+
+.offcanvas-body a.glossary-callout--right {
+  margin-right: max(0px, calc((100% - var(--glossary-callout-column)) / 2));
+}
+
+.offcanvas-body a.glossary-callout--left {
+  margin-left: max(0px, calc((100% - var(--glossary-callout-column)) / 2));
+}
+
+/* The text that holds a callout closes below it. */
+.offcanvas-body > [id$="-content"]::after,
+.glossary-content::after,
+.page-content::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+@media (max-width: 575.98px) {
+  /* Too narrow to wrap text beside a 290px box: full width, in the flow. */
+  a.glossary-callout.glossary-inline-link,
+  a.glossary-callout.glossary-callout--left,
+  .offcanvas-body a.glossary-callout.glossary-callout--right,
+  .offcanvas-body a.glossary-callout.glossary-callout--left {
+    float: none;
+    max-width: none;
+    width: 100%;
+    margin: 1rem 0;
   }
 }
 

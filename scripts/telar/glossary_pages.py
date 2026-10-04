@@ -22,13 +22,7 @@ from telar.core import find_csv_with_fallback
 from telar.latex import convert_markdown, has_latex
 from telar.frontmatter import FRONTMATTER_PATTERN, _as_text, _frontmatter_block
 from telar.story_pages import jekyll_slug
-from telar.glossary_kinds import resolve_kind, write_site_kinds
-
-
-# A markdown entry's kind, under its English or Spanish key. Its value may be
-# quoted, as any front-matter scalar may.
-_KIND_LINE = re.compile(r'^(?:kind|tipo)[ \t]*:[ \t]*["\']?(.*?)["\']?[ \t]*$',
-                        re.MULTILINE | re.IGNORECASE)
+from telar.glossary_kinds import front_matter_kind, resolve_kind, write_site_kinds
 
 
 def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
@@ -190,9 +184,8 @@ def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
 
         # Written as a key of its own after the author's front matter, which
         # is copied verbatim and may spell the kind in either language.
-        kind_match = _KIND_LINE.search(frontmatter_text)
         glossary_kind = resolve_kind(
-            kind_match.group(1) if kind_match else '',
+            front_matter_kind(frontmatter_text),
             where=f"Glossary entry '{term_id}' ({source_file.name})")
 
         # Process body through the same pipeline as pages

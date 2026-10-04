@@ -2,8 +2,8 @@
 Widget Parsing and Rendering
 
 This module deals with Telar's widget system, which lets authors embed
-interactive components — carousels, tabbed panels, accordions, and
-bibliographies — inside story panel content using a fenced-block syntax borrowed from
+interactive components — carousels, tabbed panels, accordions,
+bibliographies and glossary callouts — inside story panel content using a fenced-block syntax borrowed from
 markdown's code fence pattern: `:::widget_type ... :::`.
 
 Like image processing, widget parsing runs before the markdown library
@@ -43,6 +43,13 @@ The module-level `_widget_counter` integer generates unique IDs for each
 widget instance within a build, ensuring that multiple widgets on the
 same page don't collide.
 
+- `parse_glossary_widget()` reads `entry:` and `align:`. The callout it
+  stands for needs the glossary, which this step does not have, so it
+  writes a slot (`glossary-callout-slot`) that `process_glossary_links()`
+  in `telar/glossary.py` fills once the text is HTML. Every path that runs
+  widgets runs that pass after them, and it resolves the entry exactly as
+  it resolves `[[entry]]`, warning and marking an unknown entry the same way.
+
 `parse_key_value_block()` is a simple helper that extracts `key: value`
 pairs from a text block, used by the carousel parser.
 
@@ -55,6 +62,7 @@ Version: v1.8.0
 
 import html
 import re
+import unicodedata
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -528,6 +536,53 @@ def parse_bibliography_widget(content, file_path, warnings_list, widget_id=None)
     return {'entries': entries}
 
 
+# What `align:` accepts, folded to lower case and without accents. Right
+# is the default.
+GLOSSARY_CALLOUT_ALIGN = {
+    'right': 'right', 'derecha': 'right',
+    'left': 'left', 'izquierda': 'left',
+}
+
+
+def parse_glossary_widget(content, file_path, warnings_list, widget_id=None):
+    """Parse a glossary callout into the slot the glossary pass fills.
+
+    Expected format:
+    :::glossary
+    entry: term_id
+    align: left
+    :::
+
+    `entry` is resolved later, by `process_glossary_links()`; a missing one
+    reaches it as an empty id and is reported as a missing entry is.
+    `align` is `right` (the default) or `left`, `derecha` or `izquierda`;
+    any other value is reported and falls back to right.
+
+    Returns:
+        str: The slot, as a block of HTML on its own lines.
+    """
+    data = parse_key_value_block(content)
+    entry = data.get('entry', '').strip()
+    raw_align = data.get('align', '').strip()
+    align = 'right'
+    if raw_align:
+        folded = ''.join(ch for ch in unicodedata.normalize('NFKD', raw_align)
+                         if not unicodedata.combining(ch)).casefold()
+        align = GLOSSARY_CALLOUT_ALIGN.get(folded)
+        if align is None:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'glossary',
+                'message': (f"Glossary callout for '{entry}' has align "
+                            f"'{raw_align}', which is not right or left, so "
+                            f"it is placed on the right")
+            })
+            align = 'right'
+    return ('\n\n<div class="glossary-callout-slot"'
+            f' data-entry="{html.escape(entry, quote=True)}"'
+            f' data-align="{align}"></div>\n\n')
+
+
 def render_widget_html(widget_type, widget_data, widget_id):
     """
     Render widget HTML using Jinja2 template.
@@ -603,7 +658,8 @@ def process_widgets(text, file_path, warnings_list):
             'carousel': parse_carousel_widget,
             'tabs': parse_tabs_widget,
             'accordion': parse_accordion_widget,
-            'bibliography': parse_bibliography_widget
+            'bibliography': parse_bibliography_widget,
+            'glossary': parse_glossary_widget,
         }
 
         if widget_type not in widget_parsers:
@@ -620,6 +676,9 @@ def process_widgets(text, file_path, warnings_list):
 
         # Parse widget content
         parser = widget_parsers[widget_type]
+        if widget_type == 'glossary':
+            # A slot, rendered by the glossary pass rather than here.
+            return parser(content, file_path, warnings_list)
         if widget_type == 'carousel':
             widget_data = parser(content, file_path, warnings_list)
         else:

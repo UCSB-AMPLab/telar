@@ -1,0 +1,34 @@
+{#
+  Glossary Callout Widget
+
+  A second way to link a glossary entry: a box showing the kind's icon, the
+  kind's label and the entry's title, which opens the same glossary panel an
+  inline [[term]] link opens. It carries the inline link's class and data
+  attributes, so telar.js opens it through the same handler and the story
+  counts it among the panel's glossary links for deep links.
+
+  Rendered by scripts/telar/glossary.py once the entry is resolved, with:
+  term_id, term_url, demo (a demo bundle entry), kind (the kind id), icon (the
+  kind's icon name, or none for a site's own kind), label (the kind's label in
+  the site's language), title (the entry's title) and align (right or left).
+  The build joins the lines, so the box reaches the page as one line of HTML.
+
+  Icons are inline SVG on a 24-unit grid, stroked in the text colour, which the
+  stylesheet sets to the accent colour. A kind without an icon of its own, a
+  site's kind, gets the exclamation mark.
+#}
+{%- set icons = {
+  'document': '<path d="M6.5 2.75h7.25l4 4V21.25H6.5z"/><path d="M13.75 2.75v4h4"/><path d="M9.25 12.25h5.5M9.25 15.75h5.5"/>',
+  'bookmark': '<path d="M6.75 3.25h10.5v17.5L12 16.75l-5.25 4z"/>',
+  'person': '<circle cx="12" cy="8" r="3.75"/><path d="M4.75 20.5c.6-3.9 3.6-6 7.25-6s6.65 2.1 7.25 6"/>',
+  'pin': '<path d="M12 21.25s-6.25-6-6.25-11a6.25 6.25 0 0 1 12.5 0c0 5-6.25 11-6.25 11z"/><circle cx="12" cy="10.25" r="2.25"/>',
+  'alert': '<circle cx="12" cy="12" r="8.75"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.5" r=".6" fill="currentColor"/>',
+} -%}
+<a href="#" class="glossary-inline-link glossary-callout glossary-callout--{{ align }}" data-term-id="{{ term_id }}" data-term-url="{{ term_url }}" data-glossary-kind="{{ kind }}"{% if demo %} data-demo="true"{% endif %}>
+<svg class="glossary-callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ icons.get(icon, icons['alert']) | safe }}</svg>
+<span class="glossary-callout-text">
+<span class="glossary-callout-kind">{{ label }}</span>
+<span class="glossary-callout-title">{{ title }}</span>
+</span>
+<svg class="glossary-callout-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5.5l6.5 6.5L9 18.5"/></svg>
+</a>
