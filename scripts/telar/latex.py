@@ -32,9 +32,6 @@ import markdown
 
 from telar.config import get_lang_string
 
-# Display math: $$...$$
-_DISPLAY_MATH = re.compile(r'\$\$.+?\$\$', re.DOTALL)
-
 # Inline math: $...$ with heuristics
 # - No space after opening $
 # - No space before closing $
@@ -70,7 +67,7 @@ def has_latex(text):
         return False
 
     # Fast checks first (no heuristics needed)
-    if _DISPLAY_MATH.search(text):
+    if _DISPLAY_MATH_SPAN(text, first=True):
         return True
     if _BEGIN_ENV.search(text):
         return True
@@ -90,15 +87,54 @@ def has_latex(text):
     return False
 
 
-# Patterns for extracting LaTeX blocks to protect from markdown processing.
-# Order matters: longer/greedy patterns first to avoid partial matches.
+def _delimited(opening, closes, gap=0):
+    """A finder for the span that opens with *opening* and runs through the
+    first of each of *closes* in turn, at least *gap* characters in, as the
+    lazy pattern `opening.*?close…` matches: every such span in a text, as
+    `finditer` finds them, or with *first* only whether there is one.
+
+    Each close is searched for once. With none after an opening there is
+    none after any later opening either, where the pattern would search the
+    rest of the text again from each one."""
+    def spans(text, first=False):
+        found = []
+        pos = 0
+        while True:
+            start = text.find(opening, pos)
+            if start == -1:
+                return found
+            end = start + len(opening) + gap
+            for close in closes:
+                end = text.find(close, end)
+                if end == -1:
+                    return found
+                end += len(close)
+            found.append((start, end))
+            if first:
+                return found
+            pos = end
+    return spans
+
+
+def _pattern(pattern):
+    """A finder for the spans *pattern* matches."""
+    def spans(text, first=False):
+        return [match.span() for match in pattern.finditer(text)]
+    return spans
+
+
+_DISPLAY_MATH_SPAN = _delimited('$$', ['$$'], gap=1)
+
+# LaTeX blocks to protect from markdown processing, each as a finder of
+# its spans. Order matters: longer/greedy patterns first to avoid partial
+# matches.
 _PROTECT_PATTERNS = [
-    re.compile(r'\$\$.+?\$\$', re.DOTALL),           # $$...$$
-    re.compile(r'\\begin\{.*?\}.*?\\end\{.*?\}', re.DOTALL),  # \begin{...}...\end{...}
-    re.compile(r'\\\[.*?\\\]', re.DOTALL),            # \[...\]
-    re.compile(r'\\\(.*?\\\)', re.DOTALL),            # \(...\)
-    re.compile(r'\\ce\{[^}]*\}'),                     # \ce{...}
-    _INLINE_MATH,                                      # $...$
+    _DISPLAY_MATH_SPAN,                                    # $$...$$
+    _delimited('\\begin{', ['}', '\\end{', '}']),         # \begin{...}...\end{...}
+    _delimited('\\[', ['\\]']),                           # \[...\]
+    _delimited('\\(', ['\\)']),                           # \(...\)
+    _delimited('\\ce{', ['}']),                            # \ce{...}
+    _pattern(_INLINE_MATH),                                # $...$
 ]
 
 
@@ -118,9 +154,7 @@ def latex_spans(text):
     if not text:
         return []
 
-    return [(match.start(), match.end())
-            for pattern in _PROTECT_PATTERNS
-            for match in pattern.finditer(text)]
+    return [span for spans in _PROTECT_PATTERNS for span in spans(text)]
 
 
 def protect_latex(text):
@@ -135,30 +169,38 @@ def protect_latex(text):
 
     replacements = {}
 
-    def _make_placeholder(match):
+    def _make_placeholder(block):
         # A later pattern can match text that already holds an earlier
         # pattern's placeholder: `$\ce{H2O}$`, or `$x $$y$$ z$`. Each value
         # is kept as the author's text, so one restore pass returns every
         # placeholder and none survives inside another.
-        original = restore_latex(match.group(0), replacements)
+        original = restore_latex(block, replacements)
         # Use a hash-based placeholder unlikely to appear in content
         key = f"TLATEX{hashlib.md5(original.encode()).hexdigest()[:12]}END"
         replacements[key] = original
         return key
 
-    for pattern in _PROTECT_PATTERNS:
-        text = pattern.sub(_make_placeholder, text)
+    for spans in _PROTECT_PATTERNS:
+        out = []
+        pos = 0
+        for start, end in spans(text):
+            out.append(text[pos:start] + _make_placeholder(text[start:end]))
+            pos = end
+        text = ''.join(out) + text[pos:]
 
     return text, replacements
 
 
+# A placeholder protect_latex writes.
+_PLACEHOLDER = re.compile(r'TLATEX[0-9a-f]{12}END')
+
+
 def restore_latex(html, replacements):
-    """Restore LaTeX blocks from placeholders after markdown processing."""
+    """Restore LaTeX blocks from placeholders after markdown processing, in
+    one pass over *html* whatever the number of blocks."""
     if not replacements:
         return html
-    for placeholder, original in replacements.items():
-        html = html.replace(placeholder, original)
-    return html
+    return _PLACEHOLDER.sub(lambda match: replacements.get(match.group(0), match.group(0)), html)
 
 
 # An HTML start or end tag, with quoted attribute values read whole so a

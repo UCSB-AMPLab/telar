@@ -56,7 +56,9 @@ the intro panel's error display can be visually tested.
 Version: v1.8.0
 """
 
+import bisect
 import html
+import itertools
 import math
 import numbers
 import re
@@ -225,11 +227,84 @@ _ANSWER_KIND_KEYS = {
 # question of what maths looks like, and code spans from telar.code_spans,
 # which reads them as the template does. A footnote reference is absent
 # because the prose rules have already taken it out.
-_ANSWER_ATOMIC = [
-    re.compile(r'\[\[[^\]]*\]\]'),        # glossary reference
-    re.compile(r'\[[^\]]*\]\([^)]*\)'),   # markdown link
-    re.compile(r'<[^>]+>'),               # inline HTML tag
-]
+#
+# Each is read as the pattern after it matches with `finditer`, finding
+# each close once in a sorted list of where that character stands: the
+# pattern searches the rest of the text again from every opening that has
+# no close.
+#   glossary reference  \[\[[^\]]*\]\]
+#   markdown link       \[[^\]]*\]\([^)]*\)
+#   inline HTML tag     <[^>]+>
+
+
+class _Closes:
+    """Where each closing character stands in a text, and the first of
+    one at or after a position, or -1. Each reader asks about later and
+    later positions, so a cursor moves forward instead of searching; it
+    goes back only when a reader starts again from the beginning."""
+
+    def __init__(self, text):
+        self.at = {char: [m.start() for m in re.finditer(re.escape(char), text)]
+                   for char in ']>)'}
+        self.cursor = dict.fromkeys(self.at, 0)
+
+    def after(self, char, pos):
+        positions = self.at[char]
+        index = self.cursor[char]
+        if index and positions[index - 1] >= pos:
+            index = bisect.bisect_left(positions, pos)
+        while index < len(positions) and positions[index] < pos:
+            index += 1
+        self.cursor[char] = index
+        return positions[index] if index < len(positions) else -1
+
+
+def _glossary_references(text, closes):
+    spans, pos = [], 0
+    while (start := text.find('[[', pos)) != -1:
+        close = closes.after(']', start + 2)
+        if close == -1:
+            break
+        if text.startswith(']]', close):
+            spans.append((start, close + 2))
+            pos = close + 2
+        else:
+            pos = start + 1
+    return spans
+
+
+def _markdown_links(text, closes):
+    spans, pos = [], 0
+    while (start := text.find('[', pos)) != -1:
+        close = closes.after(']', start + 1)
+        if close == -1:
+            break
+        paren = closes.after(')', close + 2) if text.startswith('(', close + 1) else None
+        if paren == -1:
+            break
+        if paren is None:
+            pos = start + 1
+        else:
+            spans.append((start, paren + 1))
+            pos = paren + 1
+    return spans
+
+
+def _html_tags(text, closes):
+    spans, pos = [], 0
+    while (start := text.find('<', pos)) != -1:
+        close = closes.after('>', start + 1)
+        if close == -1:
+            break
+        if close == start + 1:
+            pos = start + 1
+        else:
+            spans.append((start, close + 1))
+            pos = close + 1
+    return spans
+
+
+_ANSWER_ATOMIC = (_glossary_references, _markdown_links, _html_tags)
 
 # The token that ends a cut answer. One character, so the count of words
 # before it stays the count this module reports.
@@ -266,9 +341,8 @@ def _reduce_answer_to_prose(text):
 
 def _answer_atomic_spans(text):
     """Every span in *text* a cut must fall outside of."""
-    spans = [(match.start(), match.end())
-             for pattern in _ANSWER_ATOMIC
-             for match in pattern.finditer(text)]
+    closes = _Closes(text)
+    spans = [span for markup in _ANSWER_ATOMIC for span in markup(text, closes)]
     spans.extend(latex_spans(text))
     spans.extend(code_spans(text))
     return spans
@@ -291,15 +365,19 @@ def _cut_answer(text, limit):
     if len(boundaries) <= limit:
         return text
 
-    spans = _answer_atomic_spans(text)
+    # The spans by start, and the furthest any of the first k reaches: the
+    # first whose reach passes the cut is the earliest span over it.
+    spans = sorted(_answer_atomic_spans(text))
+    starts = [start for start, _ in spans]
+    reach = list(itertools.accumulate((end for _, end in spans), max))
     cut = boundaries[limit - 1]
     while True:
-        straddled = [start for start, end in spans if start < cut < end]
-        if not straddled:
+        first = bisect.bisect_right(reach, cut)
+        if first >= len(spans) or starts[first] >= cut:
             break
-        cut = min(straddled)
-        earlier = [end for end in boundaries if end <= cut]
-        cut = earlier[-1] if earlier else 0
+        cut = starts[first]
+        earlier = bisect.bisect_right(boundaries, cut)
+        cut = boundaries[earlier - 1] if earlier else 0
 
     return text[:cut] + _ANSWER_ELLIPSIS
 
