@@ -189,6 +189,8 @@ objects:
   # Etiquetas de tipo de medio en las miniaturas (lectores de pantalla)
   media_video: "Video"
   media_audio: "Audio"
+  no_results: "Ningún objeto coincide con la búsqueda o los filtros"
+  no_options: "No hay opciones"
 
 # Sistema de paneles
 panels:
@@ -405,6 +407,7 @@ share:
   embed_key_warning: "Este código incluye la clave de acceso, así que cualquiera que lo copie podrá abrir la historia. Úsalo solo en sitios de confianza."
   protected_story_warning: "Esta historia está protegida. Las personas que la reciban necesitarán la clave para verla."
   protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
+  copy_manually: "Copia el texto a mano"
 
   # Claves heredadas (mantenidas por compatibilidad)
 

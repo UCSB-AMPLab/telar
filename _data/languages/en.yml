@@ -188,6 +188,8 @@ objects:
   # Media-type labels on thumbnail placeholders (screen readers)
   media_video: "Video"
   media_audio: "Audio"
+  no_results: "No objects match your search or filters"
+  no_options: "No options available"
 
 # Panels system
 panels:
@@ -403,6 +405,7 @@ share:
   embed_key_warning: "This embed code includes the access key, so anyone who copies it can open the story. Only embed it on sites you trust."
   protected_story_warning: "This story is protected. Recipients will need the key to view it."
   protected_embed_warning: "This story is protected. The embed will show a lock screen until viewers enter the key."
+  copy_manually: "Please manually copy the text"
 
   # Legacy keys (kept for compatibility)
 

@@ -54,6 +54,8 @@ export function createSharePanel({
 
   // DOM elements
   const sharePanel = doc.getElementById('panel-share');
+  // What to say where the browser cannot copy, in the site's language.
+  const copyManually = sharePanel?.dataset.copyManually || 'Please manually copy the text';
 
   // Check if we're on a story page or homepage
   const isStoryPage = doc.body.classList.contains('story-page') ||
@@ -632,7 +634,7 @@ export function createSharePanel({
     // calling writeText would throw synchronously — before the .catch below
     // could handle it. Guard that case explicitly.
     if (!navigatorRef.clipboard || typeof navigatorRef.clipboard.writeText !== 'function') {
-      alertFn('Please manually copy the text');
+      alertFn(copyManually);
       return;
     }
 
@@ -640,7 +642,7 @@ export function createSharePanel({
       showSuccessFeedback(triggerButton);
     }).catch(err => {
       console.error('[Telar Share] Failed to copy:', err);
-      alertFn('Please manually copy the text');
+      alertFn(copyManually);
     });
   }
 

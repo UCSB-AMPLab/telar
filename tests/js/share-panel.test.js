@@ -535,4 +535,14 @@ describe('copying without a working clipboard', () => {
       '[Telar Share] Failed to copy:', expect.any(Error));
     expect(icon('share-copy-link-btn').outerHTML).not.toBe(CHECK_ICON);
   });
+  it('says it in the language the include wrote on the panel', async () => {
+    el('panel-share').dataset.copyManually = 'Copia el texto a mano';
+    removeClipboard();
+    await runScript();
+    openPanel();
+
+    el('share-copy-link-btn').click();
+
+    expect(alerts).toEqual(['Copia el texto a mano']);
+  });
 });

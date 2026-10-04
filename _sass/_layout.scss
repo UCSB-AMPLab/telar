@@ -519,6 +519,15 @@
   margin-bottom: 1rem;
 }
 
+// Shown in place of the grid when the search and filters match nothing.
+.objects-no-results {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: #666;
+  padding: 2rem 0;
+  text-align: center;
+}
+
 /* Active filters area */
 .objects-active-filters {
   display: flex;

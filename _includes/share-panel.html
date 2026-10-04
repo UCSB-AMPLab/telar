@@ -29,7 +29,7 @@ the language pack here (English fallback) for the translated labels and help tex
 {%- else %}
   {%- assign lang = site.data.languages['en'] %}
 {%- endif %}
-<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true">
+<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true" data-copy-manually="{{ lang.share.copy_manually | escape }}">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header share-panel-header">

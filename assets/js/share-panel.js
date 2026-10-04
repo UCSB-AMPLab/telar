@@ -29,6 +29,7 @@
     let storyKey = null;
     let includeKey = false;
     const sharePanel = doc.getElementById("panel-share");
+    const copyManually = sharePanel?.dataset.copyManually || "Please manually copy the text";
     const isStoryPage = doc.body.classList.contains("story-page") || doc.querySelector(".story-layout") !== null || win.location.pathname.includes("/stories/");
     function init() {
       if (!sharePanel) return;
@@ -378,14 +379,14 @@
     function copyToClipboard(text, triggerButton) {
       if (!text) return;
       if (!navigatorRef.clipboard || typeof navigatorRef.clipboard.writeText !== "function") {
-        alertFn("Please manually copy the text");
+        alertFn(copyManually);
         return;
       }
       navigatorRef.clipboard.writeText(text).then(() => {
         showSuccessFeedback(triggerButton);
       }).catch((err) => {
         console.error("[Telar Share] Failed to copy:", err);
-        alertFn("Please manually copy the text");
+        alertFn(copyManually);
       });
     }
     function showSuccessFeedback(triggerButton) {

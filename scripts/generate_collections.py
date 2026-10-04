@@ -126,7 +126,12 @@ def _object_flags(obj, is_demo):
     return flags
 
 
-def _audio_file_details(object_id):
+# The decimal mark a site's language writes. A file size is written into the
+# page as text, so it is formatted here rather than by the reader's browser.
+DECIMAL_MARK = {'es': ','}
+
+
+def _audio_file_details(object_id, decimal_mark='.'):
     """Size and format from the first matching file on disk.
 
     The first match wins: on a case-insensitive filesystem `.mp3` and `.MP3`
@@ -140,7 +145,7 @@ def _audio_file_details(object_id):
         if size_bytes < 1024 * 1024:
             size_str = f'{size_bytes / 1024:.0f} KB'
         else:
-            size_str = f'{size_bytes / (1024 * 1024):.1f} MB'
+            size_str = f'{size_bytes / (1024 * 1024):.1f} MB'.replace('.', decimal_mark)
         return {'audio_filesize': size_str,
                 'audio_format': ext.lstrip('.').upper()}
     return {}
@@ -210,7 +215,7 @@ def _frontmatter_block(fields):
                      width=10 ** 6)
 
 
-def _object_page(obj):
+def _object_page(obj, decimal_mark='.'):
     """One object's markdown, frontmatter and body."""
     object_id = obj['object_id']
     source_url = obj.get('source_url', '') or ''
@@ -224,7 +229,7 @@ def _object_page(obj):
     fields.update(_object_flags(obj, obj.get('_demo', False)))
 
     if media_type == 'Audio':
-        fields.update(_audio_file_details(object_id))
+        fields.update(_audio_file_details(object_id, decimal_mark))
 
     fields.update(_extra_metadata(obj))
 
@@ -251,7 +256,7 @@ def _reset_objects_dir():
     return objects_dir
 
 
-def generate_objects():
+def generate_objects(telar_language='en'):
     """Generate object markdown files from objects.json"""
     if not Path('_data/objects.json').exists():
         print("No objects.json found — skipping object generation")
@@ -269,7 +274,7 @@ def generate_objects():
 
         filepath = objects_dir / f"{object_id}.md"
         with open(filepath, 'w') as f:
-            f.write(_object_page(obj))
+            f.write(_object_page(obj, DECIMAL_MARK.get(telar_language, '.')))
 
         demo_label = " [DEMO]" if obj.get('_demo', False) else ""
         print(f"✓ Generated {filepath}{demo_label}")
@@ -1030,7 +1035,7 @@ def main():
     elif skip_objects_flag:
         print("Skipping objects (--skip-objects)")
     else:
-        generate_objects()
+        generate_objects(telar_language=telar_language)
     print()
 
     # Always generate glossary
