@@ -18,4 +18,4 @@ permalink: /glossary/
   y escríbelo aquí en markdown.
 -->
 
-{{ lang.pages.glossary_intro }}
+{{ lang.pages.glossary_intro | default: site.data.languages.en.pages.glossary_intro }}

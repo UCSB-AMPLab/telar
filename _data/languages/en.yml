@@ -455,3 +455,4 @@ upgrade:
 # linked names (brace-free so they are safe inside a Liquid default: argument).
 footer:
   built_with: "Built with __TELAR__ __VERSION__, a project of __NEOGRANADINA__ and __AMPL__."
+  theme_by: "Theme by __CREATOR__."

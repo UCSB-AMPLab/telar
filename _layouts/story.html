@@ -122,10 +122,15 @@
     y la interfaz de error de iiif-viewer.js). Sigue el patrón de window.telarLang.
   */
   window.telarViewerLang = {
-    prev_page: "{{ lang.object.viewer.prev_page }}",
-    next_page: "{{ lang.object.viewer.next_page }}",
-    page_input_label: "{{ lang.object.viewer.page_input_label }}",
-    page_input_aria: "{{ lang.object.viewer.page_input_aria }}",
+    {%- comment -%}jsonify rather than quoting: a key a custom language pack omits
+    renders as an empty string inside quotes, and the viewer's `??` fallbacks do not
+    catch an empty string — the label simply goes blank. jsonify emits null, which
+    they do catch, which is why the two below have always fallen back and these
+    four did not.{%- endcomment -%}
+    prev_page: {{ lang.object.viewer.prev_page | jsonify }},
+    next_page: {{ lang.object.viewer.next_page | jsonify }},
+    page_input_label: {{ lang.object.viewer.page_input_label | jsonify }},
+    page_input_aria: {{ lang.object.viewer.page_input_aria | jsonify }},
     image_unavailable_title: {{ lang.object.viewer.image_unavailable_title | jsonify }},
     image_unavailable_detail: {{ lang.object.viewer.image_unavailable_detail | jsonify }}
   };
