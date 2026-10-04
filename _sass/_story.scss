@@ -10,7 +10,7 @@
  * Preserved: mobile navigation buttons, btn-home, story unlock overlay,
  * embed-mode styles, and height-based responsive tiers.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 @use 'responsive' as *;
@@ -493,7 +493,7 @@
   .panel-trigger {
     padding: 0.5rem 1.25rem;
     background: var(--color-button-bg);
-    color: var(--color-button-text);
+    color: var(--color-on-button);
     font-weight: 600;
     border-radius: 20px;
     font-size: 0.85rem;
@@ -645,23 +645,23 @@
 
   .intro-floating-card {
     .intro-title {
-      color: var(--color-panel-layer2-text);
+      color: var(--color-on-panel-layer2);
     }
 
     .intro-subtitle,
     .intro-byline,
     .intro-description {
-      color: var(--color-panel-layer2-text);
+      color: var(--color-on-panel-layer2);
       opacity: 0.85;
     }
 
     .intro-demo-label {
-      color: var(--color-panel-layer2-text);
+      color: var(--color-on-panel-layer2);
       opacity: 0.7;
     }
 
     .intro-hint {
-      color: var(--color-panel-layer2-text);
+      color: var(--color-on-panel-layer2);
       opacity: 0.5;
     }
   }
@@ -677,7 +677,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.15em;
-    color: var(--color-panel-layer2-text);
+    color: var(--color-on-panel-layer2);
     opacity: 0.5;
     margin-bottom: 0.75rem;
   }
@@ -693,7 +693,7 @@
   }
 
   .intro-toc-link {
-    color: var(--color-panel-layer2-text);
+    color: var(--color-on-panel-layer2);
     text-decoration: none;
     font-family: var(--font-headings);
     font-size: 1.05rem;
@@ -1270,7 +1270,7 @@
   border-radius: 50px;
   cursor: pointer;
   background: var(--color-button-bg);
-  color: var(--color-button-text);
+  color: var(--color-on-button);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   @media (hover: hover) and (pointer: fine) {

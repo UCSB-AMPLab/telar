@@ -13,8 +13,12 @@
  * corners if it overflows. The pagination + error UI rules at the
  * bottom of the file style the wrapper's injected DOM directly.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
+
+// Viewer chrome is component styling: no partial outside this file sets these
+// selectors, and telar-overrides stays available above it if one ever must win.
+@layer telar-components {
 
 /* Viewer Containers */
 #viewer-container {
@@ -254,3 +258,5 @@
     line-height: 1.4;
   }
 }
+
+} // end @layer telar-components

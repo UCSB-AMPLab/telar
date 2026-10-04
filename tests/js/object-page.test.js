@@ -69,7 +69,7 @@ beforeEach(() => {
     configurable: true,
     value: { writeText: (text) => { clipboard.push(text); return Promise.resolve(); } },
   });
-  window.telarObjectTheme = { applyPanelContrastClass: vi.fn(), deriveThemeColors: vi.fn() };
+  window.telarObjectTheme = { deriveThemeColors: vi.fn() };
   vi.useFakeTimers();
 });
 
@@ -141,7 +141,6 @@ describe('clip panel', () => {
     expect(document.getElementById('clipPickerButton').style.display).toBe('none');
     document.getElementById('clipPanel').dispatchEvent(new Event('hide.bs.collapse'));
     expect(document.getElementById('clipPickerButton').style.display).toBe('block');
-    expect(window.telarObjectTheme.applyPanelContrastClass).toHaveBeenCalledWith(document.querySelector('.clip-panel'));
   });
 
   it('copies the clip as CSV and as tab-separated text', async () => {

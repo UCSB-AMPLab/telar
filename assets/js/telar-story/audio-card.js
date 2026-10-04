@@ -41,7 +41,7 @@
  * slower but still functional. Audio load errors inject a .telar-alert
  * notification into the card area.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -157,6 +157,11 @@ export function formatElapsedTime(seconds) {
  * inputs, same outputs. Object pages do not load the telar-story.js bundle,
  * so they carry their own copy; if you change this derivation, change that
  * one too.
+ *
+ * barHex is --color-button-text, not the derived --color-on-button: the bars
+ * are drawn on the accent darkened to 70%, not on the button background, so
+ * the colour derived to be legible on the button ground does not apply here.
+ * On santa-barbara that would put the navy #003660 on a dark teal plate.
  *
  * @param {string} accentHex - CSS hex colour for --color-link, e.g. '#883C36'
  * @param {string} [barHex='#ffffff'] - CSS hex colour for --color-button-text

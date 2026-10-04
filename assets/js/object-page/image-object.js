@@ -20,10 +20,6 @@ export function manifestUrlFor(data) {
 }
 
 export async function initImageViewer(data, doc = document) {
-  // Coordinate panel theme colouring — object-theme.js picks coord-light /
-  // coord-dark from the theme button background's luminance
-  window.telarObjectTheme.applyPanelContrastClass(doc.querySelector('.coordinate-panel'));
-
   const manifestUrl = manifestUrlFor(data);
   if (!manifestUrl) {
     console.error('No IIIF source specified');

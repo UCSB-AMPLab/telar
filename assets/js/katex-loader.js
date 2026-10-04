@@ -37,7 +37,15 @@
  * beforehand with the Liquid-dependent has_latex flag plus the CDN/delimiter
  * config.
  *
- * @version v1.6.0
+ * The stylesheet arrives as an @import inside a <style>, not as a <link>,
+ * because a <link rel="stylesheet"> is unlayered and an unlayered declaration
+ * outranks every layered one whatever the order or specificity. Linked that
+ * way, KaTeX's own .katex font-size and .katex-display margin beat
+ * _sass/_latex.scss, which sits in @layer telar-components. @import ...
+ * layer() is the only way to put a remote stylesheet in a layer; there is no
+ * layer attribute for <link>. _includes/katex.html does the same.
+ *
+ * @version v1.8.0
  */
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -62,11 +70,10 @@ document.addEventListener("DOMContentLoaded", function() {
           return;
         }
 
-        // Load KaTeX CSS
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = config.cssUrl;
-        document.head.appendChild(link);
+        // Load KaTeX CSS into the third-party layer (see the note above).
+        var css = document.createElement('style');
+        css.textContent = '@import url("' + config.cssUrl + '") layer(third-party);';
+        document.head.appendChild(css);
 
         // Load KaTeX scripts sequentially
         var scripts = config.urls;

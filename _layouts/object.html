@@ -43,6 +43,30 @@ layout: default
 {% comment %}Detect media type from frontmatter (injected by generate_collections.py){% endcomment %}
 {% assign object_media_type = page.media_type | default: 'Image' %}
 
+{%- comment -%}
+  Which way the author panels' ground runs. The panels sit on the theme's
+  button background, and their translucent wells and close icon differ on a
+  dark ground from a light one. That is decided once, at build time, by
+  scripts/telar/theme_colours.py: `light.button` is true when the colour it
+  derived to sit on that background is a light colour, which is the same as
+  saying the background is dark. The panels' own text colour is not decided
+  here at all — it is --color-on-button, the same property the button beside
+  them uses, so the two cannot disagree.
+
+  Falls back to trama's, and then to the dark ground four of the five shipped
+  themes have, which is what the panel looked like before any of this.
+{%- endcomment -%}
+{%- assign theme_colours = site.data['telar-build']['theme-colours'] -%}
+{%- assign theme_light = theme_colours.themes[site.telar_theme].light -%}
+{%- unless theme_light -%}
+  {%- assign theme_light = theme_colours.themes.trama.light -%}
+{%- endunless -%}
+{%- if theme_light.button == false -%}
+  {%- assign panel_ground = 'coord-light' -%}
+{%- else -%}
+  {%- assign panel_ground = 'coord-dark' -%}
+{%- endif -%}
+
 
 <div class="container my-5">
   <div class="row">
@@ -78,7 +102,7 @@ layout: default
 
           <!-- Collapsible Coordinate Panel -->
           <div class="collapse" id="coordinatePanel">
-            <div class="card coordinate-panel">
+            <div class="card coordinate-panel {{ panel_ground }}">
               <div class="card-body coordinate-panel-body">
                 <!-- Close Button -->
                 <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#coordinatePanel"></button>
@@ -173,7 +197,7 @@ layout: default
           </div>
 
           <div class="collapse" id="clipPanel">
-            <div class="card clip-panel coordinate-panel">
+            <div class="card clip-panel coordinate-panel {{ panel_ground }}">
               <div class="card-body clip-panel-body coordinate-panel-body">
                 <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#clipPanel"></button>
 
@@ -239,7 +263,7 @@ layout: default
         </div>
 
         <div class="collapse" id="clipPanel">
-          <div class="card clip-panel coordinate-panel">
+          <div class="card clip-panel coordinate-panel {{ panel_ground }}">
             <div class="card-body clip-panel-body coordinate-panel-body">
               <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#clipPanel"></button>
 

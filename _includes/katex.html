@@ -13,11 +13,20 @@
   not data, so it stays hand-written here and in katex-loader.js — the two
   copies are identical; keep them in sync if the policy changes.
 
-  Version: v1.6.0
+  The stylesheet is pulled in by an @import inside a <style>, not by a
+  <link>, because a <link rel="stylesheet"> is unlayered and an unlayered
+  declaration outranks every layered one whatever the order or specificity.
+  Linked that way, KaTeX's own .katex font-size and .katex-display margin
+  beat _sass/_latex.scss, which sits in @layer telar-components. @import
+  ... layer() is the only way to put a remote stylesheet in a layer; there
+  is no layer attribute for <link>. Bootstrap is loaded the same way in
+  _layouts/default.html and _layouts/story.html.
+
+  Version: v1.8.0
 -->
 
-<!-- KaTeX CSS -->
-<link rel="stylesheet" href="{{ site.data.katex.css }}">
+<!-- KaTeX CSS — into the third-party layer so Telar's rules win by layer order -->
+<style>@import url("{{ site.data.katex.css }}") layer(third-party);</style>
 
 <!-- KaTeX JS -->
 <script defer src="{{ site.data.katex.js }}"></script>

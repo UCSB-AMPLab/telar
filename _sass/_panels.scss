@@ -9,7 +9,7 @@
  * and content elements that appear inside panels: footnotes, blockquotes,
  * hyperlinks, images, and glossary inline links.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 @use 'responsive' as *;
@@ -27,7 +27,7 @@
   display: inline-block;
   padding: 0.5rem 1.25rem;
   background: var(--color-button-bg);
-  color: var(--color-button-text);
+  color: var(--color-on-button);
   text-decoration: none;
   cursor: pointer;
   font-weight: 600;
@@ -42,7 +42,7 @@
 @media (hover: hover) and (pointer: fine) {
   .panel-trigger:hover {
     background: var(--color-button-bg);
-    color: var(--color-button-text);
+    color: var(--color-on-button);
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     opacity: 0.9;
@@ -67,14 +67,14 @@
 
 #panel-layer1 .offcanvas-body {
   background: var(--color-panel-layer1-bg);
-  color: var(--color-panel-layer1-text);
+  color: var(--color-on-panel-layer1);
   padding: 2rem;
   font-size: 1.05rem;
   line-height: 1.8;
 }
 
 #panel-layer1 .offcanvas-title {
-  color: var(--color-panel-layer1-text);
+  color: var(--color-on-panel-layer1);
   font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 600;
@@ -98,14 +98,14 @@
 
 #panel-layer2 .offcanvas-body {
   background: var(--color-panel-layer2-bg);
-  color: var(--color-panel-layer2-text);
+  color: var(--color-on-panel-layer2);
   padding: 2rem;
   font-size: 1.05rem;
   line-height: 1.8;
 }
 
 #panel-layer2 .offcanvas-title {
-  color: var(--color-panel-layer2-text);
+  color: var(--color-on-panel-layer2);
   font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 600;
@@ -114,7 +114,7 @@
 #panel-layer2 .offcanvas-body h2,
 #panel-layer2 .offcanvas-body h3,
 #panel-layer2 .offcanvas-body h4 {
-  color: var(--color-panel-layer2-text);
+  color: var(--color-on-panel-layer2);
 }
 
 /* Panel text max-width for readability (centered, images/widgets span full width) */
@@ -235,14 +235,14 @@
 
 #panel-glossary .offcanvas-body {
   background: var(--color-panel-glossary-bg);
-  color: var(--color-panel-glossary-text);
+  color: var(--color-on-panel-glossary);
   padding: 2rem;
   font-size: 1.05rem;
   line-height: 1.8;
 }
 
 #panel-glossary .offcanvas-title {
-  color: var(--color-panel-glossary-text);
+  color: var(--color-on-panel-glossary);
   font-family: var(--font-headings);
   font-size: 2rem;
   font-weight: 600;
@@ -288,7 +288,7 @@
 /* Glossary Inline Links (in story panel content) */
 .glossary-inline-link {
   background-color: var(--color-panel-glossary-bg);
-  color: var(--color-panel-glossary-text);
+  color: var(--color-on-panel-glossary);
   padding: 0.02em 0.4em; /* Minimal vertical padding for very snug fit */
   border-radius: 6px; /* Increased for more rounded corners */
   text-decoration: none;
@@ -301,7 +301,7 @@
   .glossary-inline-link:hover {
     opacity: 0.85;
     text-decoration: none;
-    color: var(--color-panel-glossary-text);
+    color: var(--color-on-panel-glossary);
   }
 }
 
@@ -402,7 +402,7 @@
 #panel-layer2 .offcanvas-body blockquote {
   border-left-color: var(--color-panel-layer1-bg);
   background: color-mix(in srgb, var(--color-panel-layer1-bg) 10%, transparent);
-  color: var(--color-panel-layer2-text);
+  color: var(--color-on-panel-layer2);
 }
 
 /* Blockquote paragraph spacing */

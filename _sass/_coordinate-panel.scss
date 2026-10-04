@@ -2,15 +2,29 @@
  * Coordinate Panel
  *
  * Styles for the coordinate finder tool on object pages. The panel background
- * uses the theme's button colour (--color-button-bg) and a JS luminance check
- * adds .coord-dark or .coord-light to adapt text and field colours.
+ * uses the theme's button colour (--color-button-bg), and its text is
+ * --color-on-button, the colour the build derived to sit on that background —
+ * the same property the button beside the panel uses, so the two cannot
+ * disagree about the same ground.
  *
- * @version v1.4.0
+ * .coord-dark and .coord-light say which way the ground runs, for the things
+ * that are not a text colour: the translucent wells, and the close icon,
+ * which is a dark SVG that has to be inverted on a dark ground. The class is
+ * written into the markup by _layouts/object.html from the build's own
+ * `light.button`, so it reports that one decision rather than taking a
+ * second one in the browser.
+ *
+ * @version v1.8.0
  */
+
+// Component styling for the object-page coordinate tool; nothing outside this
+// partial sets these selectors, so it belongs with the other components.
+@layer telar-components {
 
 /* Panel container */
 .coordinate-panel {
   background-color: var(--color-button-bg);
+  color: var(--color-on-button);
   border-radius: 0;
   position: relative;
 }
@@ -36,6 +50,13 @@
 .coordinate-panel-instructions p {
   line-height: 1.6;
   margin-bottom: 0.5rem;
+}
+
+/* Bootstrap gives a heading and a `code` their own colours, so the two that
+   sit inside the panel have to be told the panel's. */
+.coordinate-panel-heading,
+.coord-field code {
+  color: var(--color-on-button);
 }
 
 .coordinate-panel-heading {
@@ -80,6 +101,7 @@
 }
 
 .coord-copy-btn {
+  color: color-mix(in srgb, var(--color-on-button) 70%, transparent);
   position: absolute;
   top: 50%;
   right: 0.25rem;
@@ -90,10 +112,16 @@
   background: transparent;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .coord-copy-btn:hover {
+    color: var(--color-on-button);
+  }
+}
+
 /* "Identify coordinates" button — sits outside the panel, uses theme colour directly */
 .btn-developer {
   background: var(--color-button-bg);
-  color: var(--color-button-text);
+  color: var(--color-on-button);
   border: 1px solid var(--color-button-bg);
   font-weight: 600;
   transition: all 0.2s ease;
@@ -113,6 +141,7 @@
 
 /* Copy all buttons */
 .btn-copy {
+  color: var(--color-on-button);
   font-weight: 600;
   transition: all 0.2s ease;
 }
@@ -124,17 +153,9 @@
 }
 
 /* -------------------------------------------------------
- * Dark background variant (luminance <= 0.179)
- * Light text, semi-transparent overlays
+ * A dark ground: the close icon is inverted, and the wells
+ * and the copy button are veiled in white
  * ------------------------------------------------------- */
-.coord-dark {
-  color: #fff;
-
-  .coordinate-panel-heading {
-    color: #fff;
-  }
-}
-
 .coord-dark .coordinate-panel-close {
   filter: invert(1);
 }
@@ -144,23 +165,8 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-.coord-dark .coord-field code {
-  color: #fff;
-}
-
-.coord-dark .coord-copy-btn {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .coord-dark .coord-copy-btn:hover {
-    color: #fff;
-  }
-}
-
 .coord-dark .btn-copy {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
@@ -173,39 +179,16 @@
 }
 
 /* -------------------------------------------------------
- * Light background variant (luminance > 0.179)
- * Dark text, semi-transparent overlays
+ * A light ground: the icon stands as it is, and the veils
+ * are black
  * ------------------------------------------------------- */
-.coord-light {
-  color: #2c3e50;
-
-  .coordinate-panel-heading {
-    color: #2c3e50;
-  }
-}
-
 .coord-light .coord-field {
   background-color: rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
-.coord-light .coord-field code {
-  color: #2c3e50;
-}
-
-.coord-light .coord-copy-btn {
-  color: rgba(0, 0, 0, 0.5);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .coord-light .coord-copy-btn:hover {
-    color: #2c3e50;
-  }
-}
-
 .coord-light .btn-copy {
   background: rgba(0, 0, 0, 0.08);
-  color: #2c3e50;
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
@@ -216,3 +199,5 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 }
+
+} // end @layer telar-components

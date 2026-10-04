@@ -25,6 +25,10 @@ It creates four types of collection files:
   telar-content/texts/pages/, processed through the widget and glossary
   pipeline.
 
+It also derives the theme on-colours (telar/theme_colours.py) into
+_data/telar-build/, which the stylesheet reads. That step belongs to the
+themes, not to any collection, so it runs whatever the feature flags skip.
+
 The script respects development feature flags (skip_stories,
 skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
@@ -51,6 +55,7 @@ from telar.core import find_csv_with_fallback
 from telar.csv_utils import OBJECT_FIELDS
 from telar.latex import convert_markdown, has_latex
 from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
+from telar import theme_colours
 from telar.story_pages import (
     ManifestError, build_manifest, remove_manifest, stories_permalink,
     write_manifest,
@@ -472,6 +477,20 @@ layout: glossary{latex_flag}
             f.write(output_content)
 
         print(f"✓ Generated {filepath}")
+
+
+def generate_theme_colours():
+    """Derive a legible text colour for every theme background.
+
+    Writes _data/telar-build/theme-colours.json, which assets/css/telar.scss
+    emits as the --color-on-* custom properties. A site with no _data/themes/
+    gets no file: the stylesheet's own fallbacks render it as before.
+    """
+    written = theme_colours.generate('_data')
+    if written is None:
+        print("Skipping theme colors (no _data/themes/)")
+        return
+    print(f"✓ Generated {written}")
 
 
 def generate_glossary():
@@ -995,6 +1014,13 @@ def main():
 
     # Always generate glossary
     generate_glossary()
+    print()
+
+    # Always derive theme on-colours: the stylesheet reads them whichever
+    # collections a flag suppresses, and a site can switch themes in
+    # _config.yml without a content change, so every theme file is covered
+    # rather than the active one.
+    generate_theme_colours()
     print()
 
     # Generate stories (skip and clean up if skip_stories or skip_collections)

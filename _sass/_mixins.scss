@@ -15,7 +15,7 @@
  * (same pattern as tabs) and the light-glass-button mixin shared between
  * the share button and the back-to-home button.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 /* Tabs panel colour inversion
@@ -26,7 +26,7 @@
  * tab headers, active states, and tab content areas.
  *
  * $bg-var:   CSS custom property name for the background, e.g. --color-panel-layer2-bg
- * $text-var: CSS custom property name for the text, e.g. --color-panel-layer2-text
+ * $text-var: CSS custom property name for the text, e.g. --color-on-panel-layer2
  */
 @mixin widget-tabs-panel-colours($bg-var, $text-var) {
   .telar-widget-tabs {

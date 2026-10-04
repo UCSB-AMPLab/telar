@@ -657,7 +657,6 @@
     return null;
   }
   async function initImageViewer(data2, doc = document) {
-    window.telarObjectTheme.applyPanelContrastClass(doc.querySelector(".coordinate-panel"));
     const manifestUrl = manifestUrlFor(data2);
     if (!manifestUrl) {
       console.error("No IIIF source specified");
@@ -1057,7 +1056,6 @@
         clipButton.style.display = "block";
       });
     }
-    window.telarObjectTheme.applyPanelContrastClass(doc.querySelector(".clip-panel"));
   }
   function initClipCopyButtons(copiedLang, doc = document) {
     function copyClipText(text, btnId) {
