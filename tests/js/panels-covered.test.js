@@ -16,6 +16,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { state } from '../../assets/js/telar-story/state.js';
 import {
   initializePanels,
+  openPanel,
   closeTopPanel,
   closeAllPanels,
 } from '../../assets/js/telar-story/panels.js';
@@ -232,6 +233,64 @@ describe('the glossary panel on the panel stack', () => {
     expect(state.panelStack).toEqual([]);
     expect(state.isPanelOpen).toBe(false);
     expect(state.scrollLockActive).toBe(false);
+  });
+});
+
+// ── Glossary links in a layer and the URL fragment ───────────────────────────
+
+describe('a glossary link in a layer', () => {
+  // The markup scripts/telar/glossary.py writes for a resolved term and for an
+  // unresolved one.
+  const LAYER2 = '<p>A <a href="#" class="glossary-inline-link" data-term-id="panel">Panel</a>, '
+    + '<span class="glossary-link-error" data-term-id="nope">[[nope]]</span> and a '
+    + '<a href="#" class="glossary-inline-link" data-term-id="layer">layer</a>.</p>';
+
+  const links = () => [...document.querySelectorAll('#panel-layer2-content .glossary-inline-link')];
+
+  beforeAll(() => {
+    window.telarLang = { goDeeper: 'Go deeper' };
+    window.storyData = {
+      steps: [{ step: '7', layer1_title: 'L1', layer1_text: '<p>one</p>',
+        layer2_title: 'L2', layer2_text: LAYER2 }],
+    };
+    // telar.js fetches the term's page as the panel shows; the page never arrives here.
+    window.fetch = () => new Promise(() => {});
+  });
+
+  beforeEach(() => {
+    openPanel('layer1', '7');
+    openPanel('layer2', '7');
+    finishTransitions();
+  });
+
+  it('is numbered in document order, and an unresolved term is not', () => {
+    expect(links().map((a) => a.dataset.deepLinkN)).toEqual(['1', '2']);
+    expect(document.querySelector('#panel-layer2-content .glossary-link-error').dataset.deepLinkN)
+      .toBeUndefined();
+  });
+
+  it('writes g{n} into the fragment when clicked', () => {
+    links()[1].click();
+    finishTransitions();
+    expect(offcanvas('glossary').shown).toBe(true);
+    expect(window.location.hash).toBe('#s7l2g2');
+  });
+
+  it('leaves the fragment naming the layer once the glossary panel closes', () => {
+    links()[0].click();
+    finishTransitions();
+    expect(window.location.hash).toBe('#s7l2g1');
+    offcanvas('glossary').hide();
+    finishTransitions();
+    expect(window.location.hash).toBe('#s7l2');
+  });
+
+  it('leaves the fragment naming the layer when the story closes the glossary panel', () => {
+    links()[0].click();
+    finishTransitions();
+    expect(window.location.hash).toBe('#s7l2g1');
+    closeTopPanel();
+    expect(window.location.hash).toBe('#s7l2');
   });
 });
 

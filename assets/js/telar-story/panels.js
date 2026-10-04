@@ -13,7 +13,9 @@
  * - Glossary: A panel that can open from any context when the user clicks a
  *   glossary link in story or panel content. telar.js opens it, not
  *   openPanel(); it joins the stack here when it shows, so that it is the
- *   topmost panel the keys close. It never adds a layer to the URL fragment.
+ *   topmost panel the keys close. It never adds a layer to the URL fragment;
+ *   a glossary link in a layer adds g{n}, its running number in that layer,
+ *   which leaves the fragment when the glossary panel closes.
  *
  * The panel stack tracks which panels are open and in what order. Closing
  * always removes the topmost panel. The user can close panels with the back
@@ -158,8 +160,10 @@ export function openPanel(panelType, contentId) {
     const contentElement = document.getElementById(`${panelId}-content`);
     contentElement.innerHTML = content.html;
 
-    // Assign deep-link running numbers to glossary links
-    const glossaryLinks = contentElement.querySelectorAll('.glossary-link');
+    // Assign deep-link running numbers to glossary links. The class is the one
+    // scripts/telar/glossary.py writes for a resolved term; an unresolved term
+    // is a span that opens nothing, so it takes no number.
+    const glossaryLinks = contentElement.querySelectorAll('.glossary-inline-link');
     glossaryLinks.forEach((el, i) => {
       el.dataset.deepLinkN = i + 1;
     });

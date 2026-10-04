@@ -5017,7 +5017,7 @@
       }
       const contentElement = document.getElementById(`${panelId}-content`);
       contentElement.innerHTML = content.html;
-      const glossaryLinks = contentElement.querySelectorAll(".glossary-link");
+      const glossaryLinks = contentElement.querySelectorAll(".glossary-inline-link");
       glossaryLinks.forEach((el, i) => {
         el.dataset.deepLinkN = i + 1;
       });
