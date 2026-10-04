@@ -35,20 +35,24 @@ beforeAll(async () => {
 });
 
 describe('katex-loader: what is rendered once KaTeX has loaded', () => {
-  it('renders the step pool and the text cards built from it, not title cards', async () => {
-    // The page as it stands when a story was started before KaTeX arrived:
-    // the hidden step pool, a text card built from it, and a title card,
-    // whose text is plain.
+  it('renders the step pool, the text cards built from it and the panels, not title cards', async () => {
+    // The page as it stands when a story was started, and a panel opened,
+    // before KaTeX arrived: the hidden step pool, a text card built from it,
+    // a title card, whose text is plain, and the three panels.
     document.body.innerHTML = `
       <div class="step-data"><div class="story-step" id="pool">$x$</div></div>
       <div class="card-stack">
         <div class="text-card" id="text-card">$x$</div>
         <div class="title-card" id="title-card">$y$</div>
-      </div>`;
+      </div>
+      <div id="panel-layer1-content">$x$</div>
+      <div id="panel-layer2-content">$x$</div>
+      <div id="panel-glossary-content">$x$</div>`;
 
     document.dispatchEvent(new Event('DOMContentLoaded'));
     await vi.waitFor(() => expect(typeof window.telarRenderLatex).toBe('function'));
 
-    expect(rendered.map((el) => el.id).sort()).toEqual(['pool', 'text-card']);
+    expect(rendered.map((el) => el.id).sort()).toEqual([
+      'panel-glossary-content', 'panel-layer1-content', 'panel-layer2-content', 'pool', 'text-card']);
   });
 });

@@ -18,10 +18,14 @@
  * Protected-story path — this loader does not wait for the unlock event. It
  * loads KaTeX (or not) based on page.has_latex alone, in parallel with the
  * user entering their key. Once the CDN scripts resolve, window.telarRenderLatex
- * is published and every step and text card on the page is rendered. The unlock
- * renders the injected step markup itself when KaTeX is already there, before
- * the cards are cloned from it; when KaTeX arrives later, the cards exist and
- * this loader renders them with the step pool.
+ * is published and every step, text card and panel on the page is rendered. The
+ * unlock renders the injected step markup itself when KaTeX is already there,
+ * before the cards are cloned from it; when KaTeX arrives later, the cards exist
+ * and this loader renders them with the step pool. A panel opened before KaTeX
+ * arrives, by a deep link at load or at unlock, is rendered then too.
+ *
+ * A CDN script that fails to load ends the loading: the formulas stay as the
+ * author wrote them, which is readable, and the console says why.
  *
  * CDN URLs, version pin, and the delimiter list come from _data/katex.yml,
  * the single source shared with _includes/katex.html (used by the default
@@ -97,9 +101,12 @@ document.addEventListener("DOMContentLoaded", function() {
             // step pool, and the text cards the story has already built from
             // it. Text cards are built once, when the story starts, which for
             // a protected story is the moment it is unlocked; KaTeX arriving
-            // after that reaches them here or not at all. Title cards are
-            // plain text and are left alone.
-            document.querySelectorAll('.story-step, .text-card').forEach(function(el) {
+            // after that reaches them here or not at all. The panels too: one
+            // opened before now rendered nothing. Title cards are plain text
+            // and are left alone.
+            var rendered = '.story-step, .text-card, #panel-layer1-content, #panel-layer2-content, ' +
+              '#panel-glossary-content';
+            document.querySelectorAll(rendered).forEach(function(el) {
               window.telarRenderLatex(el);
             });
             return;
@@ -107,6 +114,9 @@ document.addEventListener("DOMContentLoaded", function() {
           var s = document.createElement('script');
           s.src = scripts[i];
           s.onload = function() { loadNext(i + 1); };
+          s.onerror = function() {
+            console.warn('Telar: KaTeX could not be loaded (' + scripts[i] + ') — formulas are shown as written.');
+          };
           document.head.appendChild(s);
         }
         loadNext(0);
