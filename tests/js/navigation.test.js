@@ -293,6 +293,72 @@ describe('Space', () => {
   });
 });
 
+// ── Space on a focused control ───────────────────────────────────────────────
+
+describe('Space on a focused control', () => {
+  /** Dispatch Space from an element, as a focused control does. */
+  function pressSpaceOn(el, extras = {}) {
+    if (!el.isConnected) document.body.appendChild(el);
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true, ...extras });
+    el.dispatchEvent(event);
+    (el.closest('button') || el).remove();
+    return event;
+  }
+
+  const controls = {
+    button: () => document.createElement('button'),
+    summary: () => document.createElement('summary'),
+    'role=button': () => {
+      const el = document.createElement('div');
+      el.setAttribute('role', 'button');
+      return el;
+    },
+    input: () => document.createElement('input'),
+    select: () => document.createElement('select'),
+    textarea: () => document.createElement('textarea'),
+    contenteditable: () => {
+      const el = document.createElement('div');
+      el.setAttribute('contenteditable', 'true');
+      return el;
+    },
+    'child of a button': () => {
+      const button = document.createElement('button');
+      const span = document.createElement('span');
+      button.appendChild(span);
+      document.body.appendChild(button);
+      return span;
+    },
+  };
+
+  for (const [name, make] of Object.entries(controls)) {
+    it(`leaves Space to the browser on a ${name}`, () => {
+      const event = pressSpaceOn(make());
+      expect(event.defaultPrevented).toBe(false);
+      expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
+    });
+  }
+
+  it('leaves Shift+Space to the browser on a button', () => {
+    const event = pressSpaceOn(document.createElement('button'), { shiftKey: true });
+    expect(event.defaultPrevented).toBe(false);
+    expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
+  });
+
+  // Space on a link scrolls the page in a browser rather than following it,
+  // so in a story it moves a step, as it does from the page.
+  it('moves the story on Space from a link', () => {
+    const event = pressSpaceOn(Object.assign(document.createElement('a'), { href: '#x' }));
+    expect(event.defaultPrevented).toBe(true);
+    expect(mocks.mockKeyboardNav).toHaveBeenCalledWith('forward');
+  });
+
+  it('still moves the story on Space from a non-control element', () => {
+    const event = pressSpaceOn(document.createElement('div'));
+    expect(event.defaultPrevented).toBe(true);
+    expect(mocks.mockKeyboardNav).toHaveBeenCalledWith('forward');
+  });
+});
+
 // ── Fallback when snap is null ────────────────────────────────────────────────
 
 /** Steps as elements, as button navigation moves a class between them. */

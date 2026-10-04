@@ -6270,7 +6270,13 @@
     e.preventDefault();
     _navigateStep(direction);
   }
+  var SPACE_CONTROLS = 'button, summary, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])';
+  function _isSpaceControl(e) {
+    const target = e.target;
+    return !!(target && target.closest && target.closest(SPACE_CONTROLS));
+  }
   function _spaceKey(e) {
+    if (_isSpaceControl(e)) return;
     e.preventDefault();
     if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
     _navigateStep(e.shiftKey ? "backward" : "forward");

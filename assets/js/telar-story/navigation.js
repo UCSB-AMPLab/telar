@@ -556,14 +556,37 @@ function _stepKey(e, direction) {
 }
 
 /**
+ * Selector for elements that act on Space themselves. A link is not one:
+ * Space on a link scrolls the page, which in a story is a step.
+ *
+ * @type {string}
+ */
+const SPACE_CONTROLS =
+  'button, summary, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])';
+
+/**
+ * Whether the key event came from a control that Space activates.
+ *
+ * @param {KeyboardEvent} e
+ * @returns {boolean}
+ */
+function _isSpaceControl(e) {
+  const target = e.target;
+  return !!(target && target.closest && target.closest(SPACE_CONTROLS));
+}
+
+/**
  * Page through the story, or through the open panel instead.
  *
  * Space carries the page's own scrolling, so it is cancelled in both states.
- * Shift reverses it.
+ * Shift reverses it. On a focused control the key belongs to the control and
+ * is left to the browser, uncancelled, with no step moved.
  *
  * @param {KeyboardEvent} e
  */
 function _spaceKey(e) {
+  if (_isSpaceControl(e)) return;
+
   e.preventDefault();
   if (_panelTookScroll(e.shiftKey ? -100 : 100)) return;
 
