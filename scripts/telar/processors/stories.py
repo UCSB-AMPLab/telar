@@ -74,6 +74,7 @@ from telar.markdown import read_markdown_file, process_inline_content
 from telar.code_spans import (answer_regions, code_elements, code_spans, overlaps, raw_regions,
                               stray_dollars, unread_regions)
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
+from telar.kramdown_blocks import escaped_dollar_openings
 from telar.latex import _HTML_TAG, _LATEX_CHARS, has_latex, latex_spans
 from telar.media_type import AUDIO_EXTENSIONS
 
@@ -1204,18 +1205,52 @@ _ANSWER_MATHS = (
 )
 
 
-def _escape_stray_dollars(text):
+def _escape_stray_dollars(text, openings=()):
     """*text* with each `$$` kramdown prints as it is written `\\$\\$`, which
     it still prints as `$$` but which cannot pair with a formula written as
     `$$…$$` after it in the same paragraph. A backslash kramdown drops
-    before one goes with it."""
-    out = []
-    pos = 0
-    for start, end in stray_dollars(text):
-        out.append(text[pos:start] + '\\$\\$')
+    before one goes with it. Each of *openings*, the backslash of a `\\$$`
+    opening a block, is written the same way; where a third dollar
+    follows, only its `\\$` is rewritten, as the entity `&#36;`, since the
+    second dollar and the third make a `$$` of their own. Also returned:
+    the offset of each dollar written, none of which opens or closes a
+    formula, as none of the dollars they stand for does.
+
+    Next to a quote the escape changes: kramdown's smart quotes read a
+    quote after a dollar as closing and after an escape as opening, and a
+    quote before a `$$` as closing, as before an escape, but as opening
+    before an entity. So before a quote a `$$` is written `&#36;$`, and
+    `\\$$` when a quote comes before it as well: the dollar before the
+    quote stays plain, and the first one written is a punctuation mark.
+    Neither is read as maths, since kramdown's inline maths starts at the
+    dollar after the escape, which is followed by the quote, and only a
+    block's start reads the raw `$$`, which a quote before it is not.
+    """
+    edits = sorted(stray_dollars(text)
+                   + [(backslash, backslash + (2 if text.startswith('$', backslash + 3) else 3))
+                      for backslash in openings])
+    out, dollars, pos, length = [], [], 0, 0
+    for start, end in edits:
+        written = _escaped_dollars(text, start, end)
+        length += start - pos
+        out += [text[pos:start], written]
+        dollars += [length + index for index, char in enumerate(written) if char == '$']
+        length += len(written)
         pos = end
     out.append(text[pos:])
-    return ''.join(out)
+    return ''.join(out), dollars
+
+
+_QUOTES = ('"', "'")
+
+
+def _escaped_dollars(text, start, end):
+    """How `_escape_stray_dollars` writes the dollars from *start* to *end*."""
+    if text[start:end] == '\\$':
+        return '&#36;'
+    if not text.startswith(_QUOTES, end):
+        return '\\$\\$'
+    return '\\$$' if text.startswith(_QUOTES, start - 1) and start else '&#36;$'
 
 
 def _answer_maths_for_kramdown(text):
@@ -1229,11 +1264,27 @@ def _answer_maths_for_kramdown(text):
     $...$ with no LaTeX character, which is currency; and a span holding
     another dollar, which is one formula inside another and has no single
     reading.
+
+    A `\\$$` opening a block that kramdown reads as an escaped dollar and
+    then a dollar is escaped too wherever anything else changes, as
+    `_escape_stray_dollars` writes it: a `$$` written after it could end
+    kramdown's block maths start there, which then drops the backslash and
+    opens a formula. No block maths start reads the escaped form.
     """
-    text = _escape_stray_dollars(text)
+    prepared = _formulas_for_kramdown(text)
+    openings = escaped_dollar_openings(text) if prepared != text else ()
+    return _formulas_for_kramdown(text, openings) if openings else prepared
+
+
+def _formulas_for_kramdown(text, openings=()):
+    """*text* with each stray `$$` and each of *openings* escaped, and each
+    formula written as kramdown's `$$…$$`, as `_answer_maths_for_kramdown`
+    describes."""
+    text, dollars = _escape_stray_dollars(text, openings)
     guarded = overlaps(raw_regions(text) + code_elements(text)
                        + [(m.start(), m.end()) for m in _HTML_TAG.finditer(text)]
-                       + [(start, end) for _, start, end in unread_regions(text)])
+                       + [(start, end) for _, start, end in unread_regions(text)]
+                       + [(dollar, dollar + 1) for dollar in dollars])
     # Each pattern's next match from the current position, searched again
     # only once the position passes it, so a long answer is scanned once
     # per pattern rather than once per formula.

@@ -345,6 +345,30 @@ FORMS = [
     '<hr>- > # h `a\nb` c',
     '<!-- c -->> - a\n\n    `b` c',
     '<div>x</div>- - -\n`a`',
+    # A line opening with one to three spaces and then a tab, which no
+    # block parser takes: a text of its own, joined only to another such.
+    'a\n\n  \t`x\ny` z',
+    'a\n\n  \t`x\n \t y` z',
+    'a\n\n \t`x\n{: .c}\n \ty` z',
+    'a\n\n \tb\n- `x\n \ty`',
+    '> a\n>\n>  \t`x\n> y`',
+    # A comment after spaces, which is not block HTML.
+    'a\n\n   <!---->    $$x$$',
+    'a\n\n <!-- `x` --> `y`',
+    # `\$$` opening a paragraph, the first `$$` after it not ending its
+    # line, ahead of a stray `$$` and a lone `$`.
+    'a\n\n\\$$    `<div>\na\\$$$$\n',
+    # A stray `$$` next to a quote, whose smart quote reads the character
+    # beside it.
+    "a$$'i",
+    'a$$"i',
+    'a>["$$"',
+    'a "$$" z',
+    "a ['$$' z",
+    "x $a^2$$' z",
+    "a$$'x^2$ z",
+    'a"$$ z',
+    "a\n\n\\$$'i $$",
 ]
 
 # Forms the reader does not model, pinned as it reads them and as kramdown
@@ -571,7 +595,8 @@ CONTAINER_ANSWERS = _container_answers(400)
 @pytest.fixture(scope='module')
 def kramdown(tmp_path_factory):
     """Each answer, and each as the build prepares it, rendered."""
-    answers = ANSWERS + CONTAINER_ANSWERS + [_prepared(answer) for answer in ANSWERS]
+    answers = ANSWERS + CONTAINER_ANSWERS + [_prepared(answer)
+                                             for answer in ANSWERS + CONTAINER_ANSWERS]
     site = tmp_path_factory.mktemp('kramdown')
     (site / '_config.yml').write_text(
         (REPO / '_config.yml').read_text(encoding='utf-8'), encoding='utf-8')
@@ -656,10 +681,11 @@ def test_random_answers_maths(kramdown):
 
 def test_the_build_changes_nothing_on_the_page(kramdown):
     """Of answers that hold no formula to rewrite and no pipe, the only
-    change the build makes is escaping a stray `$$`, which must print what
-    the answer as written prints. A pipe makes a table row of the answer as
-    written, and `\\[` or `\\(` can open a formula."""
-    changed = [(answer, _prepared(answer)) for answer in ANSWERS
+    changes the build makes are escaping a stray `$$` and, with it, writing
+    a `\\$$` that opens a block as an escaped dollar, both of which must
+    print what the answer as written prints. A pipe makes a table row of
+    the answer as written, and `\\[` or `\\(` can open a formula."""
+    changed = [(answer, _prepared(answer)) for answer in ANSWERS + CONTAINER_ANSWERS
                if not re.search(r'\||\\[\[(]', answer) and _prepared(answer) != answer]
     assert changed
     disagreements = [(answer, kramdown[answer], kramdown[prepared])

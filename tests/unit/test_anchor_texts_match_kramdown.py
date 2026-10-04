@@ -79,6 +79,9 @@ FORMS = [
     '<div><script><a>@ @</div>\n\n@',
     '<script><a>@</script> @\n\n@',
     '<div><script/><a>@</a></div>\n\n@',
+    # An `<a>` whose closing tags kramdown writes inside a `script`, where a
+    # browser reads them as text and closes the `<a>` at the end.
+    '@\n\n<div><span>?><a><?p </span>[@\n\n<script>-->?><a href="b">@',
 ]
 
 PIECES = ['<a>', '<a href="b">', '</a>', '<A HREF=b>', '</A>', '<a-b>', '</a-b>', '<a/>', '<a',
@@ -103,7 +106,9 @@ ANSWERS = [_marked(form) for form in FORMS + _random_answers(600)]
 
 
 class _Inside(HTMLParser):
-    """The stretches of rendered HTML inside an `<a>` element, at any depth."""
+    """The stretches of rendered HTML inside an `<a>` element, at any depth.
+    An `<a>` still open at the end, its closing tag read as text (inside a
+    `script` element, say), runs to the end, where a browser closes it."""
 
     def __init__(self, rendered):
         super().__init__(convert_charrefs=False)
@@ -111,6 +116,8 @@ class _Inside(HTMLParser):
         self.depth, self.start, self.stretches = 0, None, []
         self.feed(rendered)
         self.close()
+        if self.depth:
+            self.stretches.append((self.start, len(rendered)))
 
     def at(self):
         line, column = self.getpos()

@@ -118,12 +118,6 @@ _EXTENSION_STOP = re.compile(r'\{:/([A-Za-z0-9_][A-Za-z0-9_-]*)?\}')
 _EXTENSIONS = frozenset({'comment', 'nomarkdown', 'options'})
 # The elements whose content kramdown's block HTML reading takes as text.
 _RAW_TEXT = frozenset({'script', 'style'})
-# A paragraph opening with `\$$` (after up to three spaces) whose first
-# `$$` after that is followed only by whitespace to the end of its line:
-# kramdown's block maths start, which drops the backslash and leaves the
-# rest to the paragraph.
-_ESCAPED_BLOCK_MATHS = re.compile(r' {0,3}(\\)\$\$')
-_LINE_END = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
 
 # The content stops at the next opening of the same element, so an element
 # that is never closed does not make the search rescan the rest of the text.
@@ -233,24 +227,13 @@ class _Scan:
         # where an element opened at a position ends.
         self.closes, self.element_ends = {}, {}
         self.index = _Index(text)
-        self.dropped = self.dropped_backslashes(blocks.boundary_starts)
+        self.dropped = blocks.opening_backslashes()[0]
         # Where each stretch's text starts, leading spaces off, as kramdown
         # reads it.
         self.block_starts = {0} | {_INDENT.match(text, start).end() for start, _ in blocks.units}
         self.readers = {'[': self.bracket, '!': self.bang, ']': self.close_bracket,
                         '{': self.brace, '`': self.backticks, '<': self.html,
                         '\\': self.backslash, '$': self.dollars}
-
-    def dropped_backslashes(self, starts):
-        """Every backslash kramdown drops from a block's opening `\\$$`."""
-        text = self.text
-        dropped = set()
-        for start in starts:
-            match = _ESCAPED_BLOCK_MATHS.match(text, start)
-            close = text.find('$$', match.end()) if match else -1
-            if close != -1 and _LINE_END.match(text, close + 2):
-                dropped.add(match.start(1))
-        return dropped
 
     def in_block(self, i):
         """The end of the stretch kramdown reads no spans in holding *i*, or

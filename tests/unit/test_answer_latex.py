@@ -108,6 +108,60 @@ class TestWhatIsNotMathsIsLeftAsWritten:
                 == 'See [$$x^2$$](https://x.test) here')
 
 
+class TestAStrayDollarPairNextToAQuote:
+    """A stray `$$` is escaped so that no formula pairs with it, and the
+    escape leaves a quote beside it read as it was: closing after a plain
+    dollar, and closing before a backslash or a dollar."""
+
+    @pytest.mark.parametrize('written, expected', [
+        ('a$$ z', 'a\\$\\$ z'),
+        ("a$$'i", "a&#36;$'i"),
+        ('a$$"i', 'a&#36;$"i'),
+        ('a"$$ z', 'a"\\$\\$ z'),
+        ('a "$$" z', 'a "\\$$" z'),
+        ("a ['$$' z", "a ['\\$$' z"),
+    ], ids=['no-quote', 'single-after', 'double-after', 'before', 'both', 'both-single'])
+    def test_escaped(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+    @pytest.mark.parametrize('written, expected', [
+        ("x $a^2$$' z", "x $a^2&#36;$' z"),
+        ("a$$'x^2$ z", "a&#36;$'x^2$ z"),
+    ], ids=['closes', 'opens'])
+    def test_the_dollar_left_plain_is_in_no_formula(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+    def test_a_formula_after_it_is_still_rewritten(self):
+        assert _answer_maths_for_kramdown("a $$'b $x^2$") == "a &#36;$'b $$x^2$$"
+
+
+class TestAnEscapedDollarOpeningABlockStaysOne:
+    """kramdown reads `\\$$` opening a block as an escaped dollar unless the
+    first `$$` after it ends its line. A `$$` the build writes must not
+    become that one, so the opening is rewritten wherever anything else is."""
+
+    @pytest.mark.parametrize('written, expected', [
+        ('a\n\n\\$$ a \\(\nx^2\\)', 'a\n\n\\$\\$ a $$\nx^2$$'),
+        ('a\n\n\\$$    `<div>\na\\$$$$\n', 'a\n\n\\$\\$    `<div>\na\\$\\$\\$$\n'),
+        ('a\n\n\\$$$ \\(\nx^2\\)', 'a\n\n&#36;\\$\\$ $$\nx^2$$'),
+    ], ids=['formula-after', 'stray-after', 'third-dollar'])
+    def test_rewritten(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+    @pytest.mark.parametrize('written, expected', [
+        ("a\n\n\\$$'i \\(x\\)", "a\n\n&#36;$'i $$x$$"),
+    ], ids=['quote-after'])
+    def test_rewritten_before_a_quote(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+    @pytest.mark.parametrize('written, expected', [
+        ('\\$$5 and more', '\\$$5 and more'),
+        ('a\n\n\\$$x$$\n\n\\(y\\)', 'a\n\n\\$$x$$\n\n$$y$$'),
+    ], ids=['nothing-else-changes', 'block-maths-start'])
+    def test_left_as_written(self, written, expected):
+        assert _answer_maths_for_kramdown(written) == expected
+
+
 class TestAStrayDoubleDollar:
     """A `$$` with no close in its paragraph is printed as it is. Once a
     formula after it is written `$$…$$`, kramdown would pair the two and read

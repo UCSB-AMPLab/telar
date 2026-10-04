@@ -15,7 +15,10 @@ the end of the text, as parse_raw_html reads it. An indented or fenced
 code block, `$$…$$` opening a block after a blank line and followed by
 one, an IAL or EOB line, and a link definition line are read for no spans.
 A link definition does not end a paragraph, so it is read only at a
-block's start; its id applies to the whole text.
+block's start; its id applies to the whole text. A line that opens with
+one to three spaces and then a tab opens no block: kramdown adds it as a
+text of its own, read for spans, to which only another such line is
+joined.
 
 A quote or a list item holds blocks, as kramdown reads it: its lines,
 without the marks kramdown strips from them (a quote's mark from each, a
@@ -153,6 +156,13 @@ _BLOCK_BOUNDARY = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)|\^[ \t\r\f\v]*(?:\n|\Z)'
 # A line opening with a tag, open or closing, of an element that is not a
 # span element: it ends an indented code block.
 _HTML_LINE = re.compile(rf' {{0,3}}</?(?>(?!(?:{_LAZY_SPAN})\b){_NAME})')
+# `\$$` opening a block (after up to three spaces), and the end of a line.
+_ESCAPED_BLOCK_MATHS = re.compile(r' {0,3}(\\)\$\$')
+_LINE_END = re.compile(r'[ \t\r\f\v]*(?:\n|\Z)')
+# A line no block parser of kramdown's takes: one to three spaces, then a
+# tab. kramdown's paragraph needs a character other than a space or a tab
+# after up to three spaces, and its indented code block four spaces or a tab.
+_UNPARSED_LINE = re.compile(r' {1,3}\t')
 
 # A quote and a list item hold blocks: kramdown takes their lines, strips
 # their marks, and reads what is left as a text of its own. A quote's mark
@@ -241,6 +251,8 @@ class _Blocks:
         # kramdown reads, and where each of its characters is in this one.
         self.containers = []
         self.item_blank = False
+        # The end of the last line read by `unparsed_line`.
+        self.unparsed_end = None
         pos = 0
         while pos is not None and pos < len(text):
             pos = self.block(pos)
@@ -264,7 +276,7 @@ class _Blocks:
             return blank.end() if blank.end() > pos else None
         for reader in (self.code_block, self.fenced, self.quote, self.list_item,
                        self.marker_line, self.block_html, self.block_maths,
-                       self.link_definition):
+                       self.link_definition, self.unparsed_line):
             end = reader(pos)
             if end is not None:
                 # An EOB line is a boundary; an IAL line leaves it as it was,
@@ -421,6 +433,22 @@ class _Blocks:
         self.definition_lines += [_placed(origin, start, end)
                                   for start, end in inner.definition_lines]
 
+    def opening_backslashes(self):
+        """The backslash of each `\\$$` opening a block after a boundary, as
+        two sets. Where the first `$$` after it is followed only by
+        whitespace to the end of its line, kramdown's block maths start
+        drops the backslash and leaves the rest to the paragraph; elsewhere
+        it keeps it, and `\\$` is an escaped dollar."""
+        text = self.text
+        dropped, kept = set(), set()
+        for start in self.boundary_starts:
+            match = _ESCAPED_BLOCK_MATHS.match(text, start)
+            if match:
+                close = text.find('$$', match.end())
+                ends_line = close != -1 and _LINE_END.match(text, close + 2)
+                (dropped if ends_line else kept).add(match.start(1))
+        return dropped, kept
+
     def marker_line(self, pos):
         """An EOB or IAL line, which prints nothing."""
         match = _EOB_LINE.match(self.text, pos) or _IAL_LINE.match(self.text, pos)
@@ -435,7 +463,9 @@ class _Blocks:
         text = self.text
         tag = _LEAD.match(text, pos).end()
         if text.startswith('<!--', tag):
-            return self.block_comment(pos, tag)
+            # A comment is block HTML only at the line's start: kramdown
+            # looks for one there, with no spaces before it.
+            return self.block_comment(pos, tag) if tag == pos else None
         match = _OPEN_TAG.match(text, tag)
         if not match or match.group(1).lower() in _SPAN_ELEMENTS:
             return None
@@ -485,6 +515,19 @@ class _Blocks:
         self.definition_lines.append((pos, definition[1]))
         self.skip(pos, definition[1])
         return definition[1]
+
+    def unparsed_line(self, pos):
+        """A line no block parser takes, which kramdown adds as text of its
+        own (parse_blocks' fallback): read for spans to the line's end, and
+        joined to such a line just before it, as one text."""
+        if not _UNPARSED_LINE.match(self.text, pos):
+            return None
+        end = self.line_end(pos)
+        if self.units and self.units[-1][1] == pos - 1 and self.unparsed_end == pos - 1:
+            pos = self.units.pop()[0]
+        self.units.append((pos, end))
+        self.unparsed_end = end
+        return end + 1 if end < len(self.text) else None
 
     def paragraph(self, pos):
         """A paragraph, heading or definition, read for spans to the line
@@ -708,6 +751,12 @@ class _FenceCloses:
                     return False
             start = end
         return False
+
+
+def escaped_dollar_openings(text):
+    """The backslash of each `\\$$` opening a block in *text* that kramdown
+    reads as an escaped dollar, as offsets."""
+    return _Blocks(text).opening_backslashes()[1]
 
 
 def _link_definition(text, pos):
