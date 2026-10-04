@@ -110,22 +110,9 @@ body.embed-mode {
     width: 100%;
   }
 
-  /* Show mobile navigation buttons in embed mode (even on desktop viewports) */
-  /* Positioned over narrative panel, horizontally centered, with dynamic bottom spacing */
-  .mobile-nav {
-    position: fixed;
-    left: 20%;
-    /* The base placement in _story.scss pins `right`; with both edges set, the fixed
-       box stretches across the viewport and translateX(-50%) throws it
-       off-screen. Intrinsic width keeps it centred over the narrative column. */
-    right: auto;
-    bottom: max(8%, 1.5rem);
-    transform: translateX(-50%);
-    z-index: 9900;
-    display: flex;
-    flex-direction: row;
-    gap: 0.75rem;
-  }
+  /* The previous/next buttons use the placement in _story.scss: a column at the
+     right edge, centred vertically, clear of the side card and of the banner at
+     the top left. They show in embed mode on desktop-sized viewports too. */
 
   .mobile-nav button {
     width: 66px;
@@ -274,16 +261,20 @@ body.embed-mode {
   }
 }
 
-/* Mobile-sized embeds: revert to mobile positioning (right side, vertically stacked) */
-/* This media query is at root level to ensure proper source order over desktop embed rules */
-/* Boundary matches the canonical vertical-layout breakpoint (_responsive.scss $telar-vertical-min-width) */
-@media (max-width: $telar-vertical-min-width) {
+/* Vertical layout: the text card is a bottom card, and the centred column of
+   buttons would cross it. They sit at the right edge over the image, just above
+   the card's tallest height (its max-height plus its bottom offset). */
+/* This block is at root level to ensure proper source order over the desktop embed rules */
+@include vertical-layout {
   body.embed-mode .mobile-nav {
-    right: 1rem;
-    left: auto;
-    bottom: 50%;
-    transform: translateY(50%);
-    flex-direction: column;
+    bottom: calc(#{$telar-card-mobile-bottom} + #{$telar-card-mobile-max-height} + 0.75rem);
+    transform: none;
+  }
+
+  @supports (height: 100dvh) {
+    body.embed-mode .mobile-nav {
+      bottom: calc(#{$telar-card-mobile-bottom} + 40dvh + 0.75rem);
+    }
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -298,6 +289,45 @@ body.embed-mode {
     body.embed-mode .mobile-nav .mobile-prev:hover:not(:disabled),
     body.embed-mode .mobile-nav .mobile-next:hover:not(:disabled) {
       transform: scale(1.05);
+    }
+  }
+}
+
+/* A window 480px tall or less has a side card at any width (_story.scss), so the
+   column returns to the right edge, centred, as beside any side card. This comes
+   after the vertical-layout block so it wins at equal specificity.
+   The banner is fixed at the top left and can reach the right edge of a narrow
+   window. Its height depends on the language and the window width, so embed.js
+   sets `embed-banner-shown` on the body and `--telar-embed-banner-bottom` (its
+   measured bottom edge) while it is in the page. The column starts no higher than
+   that edge plus a gap. A column is 102px tall at these heights (two 45px buttons
+   and a 0.75rem gap). Where the full banner and the column do not both fit in the
+   window, embed.js gives the banner `is-compact` (below) so it shows one line, and
+   the column starts below that. The clamp keeps the column inside the window in any case, and past
+   the point where even the compact banner leaves no room, the buttons form a row
+   at the right edge, as low as the window allows. Once the banner is dismissed,
+   the column is centred again. The sizes here (the 102px column, the 45px row, the
+   0.75rem gap, the 0.5rem margin and the 229px and 480px heights) are the ones
+   embed.js uses to decide when the banner is compact. */
+@media (max-height: $telar-card-landscape-max-height) {
+  body.embed-mode .mobile-nav {
+    bottom: 50%;
+    transform: translateY(50%);
+  }
+
+  body.embed-mode.embed-banner-shown .mobile-nav {
+    top: min(
+      max(calc(50% - 45px - 0.375rem), calc(var(--telar-embed-banner-bottom, 7rem) + 0.75rem)),
+      calc(100% - 102px - 0.5rem)
+    );
+    bottom: auto;
+    transform: none;
+  }
+
+  @media (max-height: 229px) {
+    body.embed-mode.embed-banner-shown .mobile-nav {
+      flex-direction: row;
+      top: min(calc(var(--telar-embed-banner-bottom, 7rem) + 0.75rem), calc(100% - 45px - 0.5rem));
     }
   }
 }
@@ -322,6 +352,39 @@ body.embed-mode {
   max-width: min(380px, calc(100% - 40px));
   line-height: 1.5;
   backdrop-filter: blur(2px);
+
+  /* One line: the text is cut with an ellipsis, and the link and the close button
+     keep their size. */
+  &.is-compact {
+    top: 8px;
+    left: 8px;
+    padding: 8px 12px;
+    align-items: center;
+    max-width: min(380px, calc(100% - 16px));
+
+    .telar-embed-banner-text {
+      display: flex;
+      align-items: baseline;
+      gap: 0.35em;
+      flex: 0 1 auto;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .telar-embed-banner-message {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .telar-embed-banner-link {
+      flex-shrink: 0;
+    }
+
+    .telar-embed-banner-close {
+      margin-top: 0;
+    }
+  }
 
   &-text {
     color: #6c757d;
