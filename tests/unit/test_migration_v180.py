@@ -521,7 +521,6 @@ class TestManualSteps:
         assert 'TEL-' not in joined
         assert all(ord(ch) < 0x2190 for ch in joined)
 
-    @pytest.mark.xfail(strict=True, reason='Pending the approved 1.8.0 CHANGELOG')
     def test_the_content_note_is_written(self):
         assert 'PENDING' not in _steps('en')[5]['description']
         assert 'PENDIENTE' not in _steps('es')[5]['description']

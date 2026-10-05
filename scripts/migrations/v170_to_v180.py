@@ -285,11 +285,6 @@ _ENGINE_SCRIPTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 _DOCS = 'https://telar.org/docs/setup/upgrading/'
 _GUIA = 'https://telar.org/guia/configuracion/actualizacion/'
 
-# Spanish is drafted and reviewed separately; this placeholder marks every
-# Spanish field until it is, and the tests detect it.
-_ES_PENDING = 'ES-PENDIENTE'
-
-
 def _running_engine_files() -> set:
     """Every file, resolved, the running engine was started or loaded from."""
     paths = [sys.argv[0]] if sys.argv and sys.argv[0] else []
@@ -527,9 +522,7 @@ class Migration170to180(BaseMigration):
                 'doc_url': 'https://telar.org/docs/your-data/google-sheets/',
             },
             {
-                # Condensed from the approved public CHANGELOG, which does
-                # not exist yet; the tests detect this placeholder.
-                'description': 'EN-PENDING: condensed from the approved 1.8.0 CHANGELOG',
+                'description': '''**What changed for your content.** Each step's answer now has to fit its text card: up to 18 lines and five paragraphs, roughly 150 words in a single paragraph. The build cuts a longer answer, and removes widgets, images, tables, code and footnotes from answers; the upgrade summary lists the answers it will shorten, so you can move that text into a layer panel. A `zoom` below 1 now zooms out, so a step that uses one shows more of the object than before. Spreadsheet cells are read as you typed them: `NA`, `N/A`, `null` and `None` are text, and `007` and `7` are different object IDs. Glossary entries can now take a kind in an optional `kind` column, and the `:::glossary` widget places an entry beside the text as a callout. SVG, HEIC, GIF and BMP images can be objects.''',
                 'audience': 'all',
                 'kind': 'note',
                 'doc_url': 'https://telar.org/docs',
@@ -548,6 +541,6 @@ class Migration170to180(BaseMigration):
              'doc_url': 'https://telar.org/guia/funciones/historias-privadas/'},
             {'description': '''**Si tu sitio lee una hoja de cálculo de Google Sheets, revisa si el resumen de la actualización indica alguna columna que haya que borrar.** Telar ahora detiene la construcción cuando dos columnas significan lo mismo, como `medium` y `object_type`. La actualización ya corrigió la copia local, pero la construcción vuelve a leer la hoja, así que borra la columna que indica el resumen directamente en la hoja de cálculo.''', 'audience': 'google-sheets', 'kind': 'action',
              'doc_url': 'https://telar.org/guia/tus-datos/google-sheets/'},
-            {'description': _ES_PENDING, 'audience': 'all', 'kind': 'note',
+            {'description': '''**Cambios que afectan tu contenido.** La respuesta de cada paso ahora tiene que caber en su tarjeta de texto: hasta 18 líneas y cinco párrafos, unas 150 palabras en un solo párrafo. La construcción recorta las respuestas más largas y quita de cualquier respuesta los widgets, las imágenes, las tablas, el código y las notas al pie; el resumen de la actualización enumera las respuestas que la construcción va a recortar, para que alcances a pasar ese texto a un panel. Un `zoom` menor que 1 ahora aleja la imagen, así que un paso que lo use muestra más del objeto que antes. Las celdas de la hoja de cálculo se leen tal como las escribiste: `NA`, `N/A`, `null` y `None` son texto, y `007` y `7` son identificadores de objeto distintos. Ahora puedes indicar el tipo de cada entrada del glosario en la columna opcional `tipo`, y el widget `:::glossary` pone una entrada en un recuadro al lado del texto. Las imágenes SVG, HEIC, GIF y BMP ahora también sirven como objetos.''', 'audience': 'all', 'kind': 'note',
              'doc_url': 'https://telar.org/guia'},
         ]
