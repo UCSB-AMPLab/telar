@@ -216,14 +216,16 @@ jobs:
           # Strip YAML frontmatter from UPGRADE_SUMMARY.md (remove everything between first --- and second ---)
           SUMMARY_CONTENT=$(sed '/^---$/,/^---$/d' UPGRADE_SUMMARY.md)
 
-          # Extract automated changes and manual steps counts from the summary
-          AUTOMATED_CHANGES=$(grep -o '\*\*Automated changes:\*\* [0-9]\+' UPGRADE_SUMMARY.md | sed 's/.*\*\* \([0-9]\+\)/\1/')
-          MANUAL_STEPS=$(grep -o '\*\*Manual steps:\*\* [0-9]\+' UPGRADE_SUMMARY.md | sed 's/.*\*\* \([0-9]\+\)/\1/')
+          # Extract automated changes and manual steps counts from the summary.
+          # The summary is written in the site's language, so each label is
+          # matched in English and in Spanish.
+          AUTOMATED_CHANGES=$(grep -oE '\*\*(Automated changes|Cambios automatizados):\*\* [0-9]+' UPGRADE_SUMMARY.md | grep -oE '[0-9]+$')
+          MANUAL_STEPS=$(grep -oE '\*\*(Manual steps|Pasos manuales):\*\* [0-9]+' UPGRADE_SUMMARY.md | grep -oE '[0-9]+$')
 
           # Extract manual steps from UPGRADE_SUMMARY.md (if any)
           # Keep interior blank lines so multi-paragraph manual steps render as
           # separate paragraphs in the GitHub issue (do not strip /^$/).
-          MANUAL_STEPS_TEXT=$(sed -n '/## Manual Steps Required/,/## Resources/p' UPGRADE_SUMMARY.md | sed '1d;$d' | sed '/^Please complete these after merging:/d')
+          MANUAL_STEPS_TEXT=$(sed -n -E '/^## (Manual Steps Required|Pasos manuales necesarios)$/,/^## (Resources|Recursos)$/p' UPGRADE_SUMMARY.md | sed '1d;$d' | sed -E '/^(Please complete these steps:|Por favor completa estos pasos:)$/d')
 
           # Set language-specific strings
           if [ "$SITE_LANG" = "es" ]; then
