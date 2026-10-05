@@ -467,8 +467,8 @@ class TestMigrationMetadata:
         assert TAG == 'v1.8.0'
         assert Migration170to180('/tmp').check_applicable() is True
 
-    @pytest.mark.xfail(Migration170to180.release_date is None, strict=True,
-                       reason='release_date is filled from the v1.8.0 tag at Phase 4')
+    @pytest.mark.xfail(Migration170to180.release_date is None or not _tag_exists(), strict=True,
+                       reason='v1.8.0 is tagged after its release candidate is rehearsed')
     def test_the_release_date_is_the_tags(self):
         dated = _git('log', '-1', '--format=%cs', TAG).stdout.strip()
         assert Migration170to180.release_date == dated

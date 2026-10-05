@@ -87,6 +87,7 @@ from . import v180_sheets, v180_sources
 FRAMEWORK_FILES = {
     # Root documents and dependency manifests.
     'README.md': 'Project README for v1.8.0',
+    'CHANGELOG.md': 'Release history through v1.8.0',
     'requirements.txt': 'Python dependencies, with pandas bounded to the release the sheet repair was checked against',
     'package.json': 'Build scripts for the three object-page bundles, and the dependencies',
     'package-lock.json': 'Lockfile matching package.json — always ships with it',
@@ -305,8 +306,7 @@ class Migration170to180(BaseMigration):
 
     from_version = "1.7.0"
     to_version = "1.8.0"
-    # None: the engine stamps the date it runs and says so.
-    release_date = None
+    release_date = "2026-10-04"
     description = ("v1.8.0 framework files, removal of the single object-page bundle and "
                    "the stale migration.json, colliding-column repair, the exclude entries, "
                    "and the page, glossary and step-answer checks")
