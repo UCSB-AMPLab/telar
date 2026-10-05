@@ -113,7 +113,9 @@ export function createObjectsFilter({
    */
   function cacheElements() {
     elements = {
+      layout: doc.querySelector('.objects-layout'),
       grid: doc.querySelector('.collection-grid'),
+      noResults: doc.getElementById('objects-no-results'),
       items: doc.querySelectorAll('.collection-item'),
       visibleCount: doc.getElementById('objects-visible-count'),
       searchInput: doc.getElementById('objects-search-input'),
@@ -151,7 +153,10 @@ export function createObjectsFilter({
       // Add options
       const entries = Object.entries(facets);
       if (entries.length === 0) {
-        optionsContainer.innerHTML = '<span class="objects-filter-empty">No options available</span>';
+        const empty = doc.createElement('span');
+        empty.className = 'objects-filter-empty';
+        empty.textContent = elements.layout.dataset.noOptions;
+        optionsContainer.replaceChildren(empty);
         return;
       }
 
@@ -391,6 +396,9 @@ export function createObjectsFilter({
     }
     if (elements.visibleCount) {
       elements.visibleCount.textContent = count;
+    }
+    if (elements.noResults) {
+      elements.noResults.hidden = count !== 0;
     }
   }
 

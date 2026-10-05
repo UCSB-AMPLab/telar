@@ -19,7 +19,7 @@ code instead of duplicating it.
 None of these functions are meant to be run directly. They are
 imported by the two entry-point scripts.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import json
@@ -85,7 +85,7 @@ def check_dependencies():
 
     # Check for optional PDF support
     try:
-        import fitz
+        import pymupdf  # noqa: F401  (probed for availability, not used here)
     except ImportError:
         print("⚠️  PyMuPDF not installed - PDF files will not be supported")
         print("   To enable PDF support: pip install PyMuPDF")
@@ -187,6 +187,49 @@ def _print_conversion_message(file_ext, has_exif_orientation, needs_conversion):
         print(f"  ⚠️  Converting PNG to JPEG for IIIF processing")
 
 
+# An SVG names shapes, not pixels, so the tiler has to choose a resolution on
+# the author's behalf. The longest side is rendered to this many pixels: enough
+# for deep zoom to have detail to show, and well inside the 10,000px ceiling
+# process_pdf.py uses to stop a pathological document exhausting memory.
+SVG_TARGET_LONG_SIDE_PX = 4000
+
+
+def _rasterise_svg(svg_path):
+    """Render an SVG to an RGB image at the tiler's target resolution.
+
+    MuPDF reads the viewBox, so an SVG declaring no width and height renders at
+    its authored proportions rather than the 300x150 a browser falls back to.
+    Rendering without an alpha channel composites onto white, which is what the
+    rest of the pipeline does with transparency.
+
+    Args:
+        svg_path: Path to the source SVG
+
+    Returns:
+        PIL.Image in RGB mode, or None if the file gave nothing to render.
+    """
+    from PIL import Image
+    import pymupdf
+
+    try:
+        with pymupdf.open(svg_path) as doc:
+            if doc.page_count < 1:
+                print(f"  ⚠️  {svg_path.name}: SVG holds no page to render")
+                return None
+            page = doc[0]
+            long_side = max(page.rect.width, page.rect.height)
+            if long_side <= 0:
+                print(f"  ⚠️  {svg_path.name}: SVG declares no usable dimensions")
+                return None
+
+            scale = SVG_TARGET_LONG_SIDE_PX / long_side
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+            return Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
+    except Exception as e:
+        print(f"  ⚠️  Error rasterising {svg_path.name}: {e}")
+        return None
+
+
 def _save_to_temp_jpeg(converted_img):
     """Write an image to a temporary JPEG the caller owns.
 
@@ -236,6 +279,16 @@ def preprocess_image(image_path):
 
     processed_path = image_path
     temp_path = None
+
+    # SVG has no raster to open: it is rendered rather than converted, and the
+    # result goes through the same temp-JPEG handoff as every other format.
+    if image_path.suffix.lower() == '.svg':
+        rasterised = _rasterise_svg(image_path)
+        if rasterised is None:
+            return processed_path, None
+        print(f"  ⚠️  Rasterising SVG at {SVG_TARGET_LONG_SIDE_PX}px for IIIF processing")
+        temp_path = _save_to_temp_jpeg(rasterised)
+        return (Path(temp_path) if temp_path else processed_path), temp_path
 
     try:
         img = Image.open(image_path)

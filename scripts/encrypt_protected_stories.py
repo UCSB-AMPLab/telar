@@ -56,9 +56,8 @@ Gates (any failure aborts the build with exit code 1):
 - Content: distinctive plaintext substrings from each protected story's
   steps are grepped across the rendered site output; any hit fails the
   build. This catches template reads nobody has written yet. The sweep
-  skips _site/telar-content/ — the passthrough copy of the source
-  spreadsheets is served by design (story locking is a slight barrier for
-  drafts, not privacy, and the docs say so).
+  skips _site/telar-content/ and _site/glossary/; see `sweep_files` for
+  what each exclusion rests on.
 
 Sentinels are derived from plain prose segments of questions, answers, and
 layer content (markdown/HTML markup and smart-punctuation candidates are
@@ -67,7 +66,7 @@ metadata like the byline is deliberately not used: bylines recur across a
 site's open and protected stories, and a shared byline must not fail the
 build.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import argparse
@@ -101,6 +100,13 @@ STUB_TOKEN = '__TELAR_PENDING__'
 
 # The stub assignment emitted by story.html for protected pages. The regex
 # targets the whole assignment so the swap leaves valid JS behind.
+# The page's own claim about which story it is, written by story.html from
+# the generated document's frontmatter. `jsonify` emits a JSON string, so
+# the captured group parses as JSON rather than being unquoted by hand.
+TELAR_STORY_ID_PATTERN = re.compile(
+    r'window\.telarStoryId\s*=\s*("(?:[^"\\]|\\.)*")\s*;'
+)
+
 STUB_PATTERN = re.compile(
     r'window\.storyData\s*=\s*\{[^;]*?' + STUB_TOKEN + r'[^;]*?\};'
 )
@@ -145,10 +151,13 @@ class GateFailure(Exception):
     """A verification gate failed; the build must not publish."""
 
 
-def load_story_key(config_path):
+def load_config(config_path):
     with open(config_path, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    return get_story_key_from_config(config)
+        return yaml.safe_load(f) or {}
+
+
+def load_story_key(config_path):
+    return get_story_key_from_config(load_config(config_path))
 
 
 def load_page_manifest(data_dir):
@@ -283,6 +292,7 @@ def find_protected_stories(data_dir):
         return get_protected_stories(json.load(f))
 
 
+
 def derive_sentinels(steps):
     """Extract plain prose segments that must never appear in rendered output.
 
@@ -296,7 +306,7 @@ def derive_sentinels(steps):
             continue
         for field in PROSE_FIELDS:
             text = step.get(field) or ''
-            # Tags are stripped from EVERY prose field, not just answers
+            # Tags are stripped from every prose field, not just answers
             # (answers arrive as rendered HTML; the others may carry inline
             # markup too): markup vocabulary — class names, URLs — lives on
             # every page and must never become a sentinel.
@@ -329,9 +339,42 @@ def extract_fragment_html(fragment_page):
     return html[start + len(FRAGMENT_START):end].strip()
 
 
-def inject_envelope(story_page, envelope):
-    """Replace the stub storyData assignment with the real envelope."""
+def inject_envelope(story_page, envelope, identifier):
+    """Replace the stub storyData assignment with the real envelope.
+
+    The page is required to name the story it is before anything is written
+    into it. The manifest says where a story renders and is checked for
+    shape, but nothing established that it came from this build: two
+    identifiers swapped inside an otherwise valid manifest would send each
+    story's envelope to the other's page, both stubs consumed and no
+    conflict raised.
+
+    `window.telarStoryId` is the binding, and it costs no path resolution —
+    the layout writes it from the generated page's own frontmatter, and the
+    browser passes it as the envelope's additional authenticated data, so a
+    page holding the wrong envelope cannot decrypt in any case. Catching it
+    here turns a site that ships two unopenable stories into a build that
+    stops.
+    """
     html = story_page.read_text(encoding='utf-8')
+
+    declared = TELAR_STORY_ID_PATTERN.search(html)
+    if declared is None:
+        raise GateFailure(
+            f"{story_page}: the page does not declare which story it is. "
+            "A protected story page sets window.telarStoryId; without it "
+            "nothing binds this envelope to this page. Regenerate with "
+            "generate_collections.py and rebuild."
+        )
+    page_identifier = json.loads(declared.group(1))
+    if page_identifier != identifier:
+        raise GateFailure(
+            f"{identifier}: the manifest sends this story's envelope to "
+            f"{story_page}, but that page is {page_identifier!r}. The "
+            "manifest does not match the pages this build produced — "
+            "regenerate it with generate_collections.py and rebuild."
+        )
+
     replacement_json = json.dumps(envelope, ensure_ascii=False)
     new_html, count = STUB_PATTERN.subn(
         lambda _m: f'window.storyData = {replacement_json};', html, count=1
@@ -345,8 +388,25 @@ def inject_envelope(story_page, envelope):
     story_page.write_text(new_html, encoding='utf-8')
 
 
-def sweep_files(site_dir, skip_top=('telar-content',)):
-    """Yield text files in the site output, skipping excluded top dirs."""
+def sweep_files(site_dir, skip_top=('telar-content', 'glossary')):
+    """Yield text files in the site output, skipping excluded top dirs.
+
+    `telar-content` is the passthrough copy of the source spreadsheets,
+    served by design: story locking is a barrier for drafts rather than
+    privacy, and the docs say so.
+
+    `glossary` is excluded because a definition is written by an author,
+    not assembled by a template. This gate exists to catch a surface nobody
+    thought of publishing a locked story's prose; a quotation an author
+    typed into a definition is a decision, and failing the build over it
+    leaves them rewording prose the site was always going to publish. An
+    author who wants the quotation locked has no answer here.
+
+    Both exclusions are by top-level directory, so a site that renames the
+    glossary permalink is swept rather than skipped. That direction is the
+    safe one: the cost is a build that fails where it need not, never a
+    passage published where nobody looked.
+    """
     site_dir = Path(site_dir)
     for path in site_dir.rglob('*'):
         if not path.is_file() or path.suffix.lower() not in SWEEP_SUFFIXES:
@@ -409,6 +469,7 @@ def process_site(site_dir, data_dir, config_path):
     data_dir = Path(data_dir)
 
     protected = find_protected_stories(data_dir)
+
     if not protected:
         # A fragment page renders the steps in plaintext for this script to
         # consume and delete. If one is in the output while no story claims
@@ -457,7 +518,7 @@ def process_site(site_dir, data_dir, config_path):
         envelope = encrypt_story(
             {'steps': steps, 'html': fragment_html}, story_key, aad=identifier
         )
-        inject_envelope(story_page, envelope)
+        inject_envelope(story_page, envelope, identifier)
 
         shutil.rmtree(site_dir / FRAGMENT_URL_PREFIX / identifier)
         sentinels_by_story[identifier] = derive_sentinels(steps)

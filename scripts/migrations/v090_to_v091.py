@@ -9,7 +9,7 @@ This is a backward-compatible patch release that adds:
 No structural changes required — framework files are updated automatically.
 No _config.yml changes, no file renames, no CSV schema changes.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -21,6 +21,7 @@ class Migration090to091(BaseMigration):
 
     from_version = "0.9.0-beta"
     to_version = "0.9.1-beta"
+    release_date = "2026-03-05"  # tag v0.9.1-beta
     _TARGET_TAG = "v0.9.1-beta"  # pin framework fetches to the release tag
     description = "LaTeX math rendering (KaTeX), case-insensitive extension fix"
 
@@ -42,10 +43,9 @@ class Migration090to091(BaseMigration):
 
         # Phase 3: Update version
         print("  Phase 3: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("0.9.1-beta", today):
-            changes.append(f"Updated _config.yml: version 0.9.1-beta ({today})")
+        stamped = self.release_date
+        if self._update_config_version("0.9.1-beta", stamped):
+            changes.append(f"Updated _config.yml: version 0.9.1-beta ({stamped})")
 
         return changes
 
@@ -60,13 +60,8 @@ class Migration090to091(BaseMigration):
             'tests/unit/test_latex_detection.py': 'LaTeX detection unit tests',
         }
 
-        for file_path, description in new_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Added {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            new_files, "Added {path} - {description}"))
 
         return changes
 
@@ -92,13 +87,8 @@ class Migration090to091(BaseMigration):
             'CHANGELOG.md': 'Added v0.9.1-beta changelog entry',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}"))
 
         return changes
 

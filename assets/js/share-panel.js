@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). */
+/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
 (() => {
   // assets/js/share-panel/warnings.js
   function warningState(currentStoryProtected, storyKey, includeKey, currentStoryUrl) {
@@ -16,6 +16,13 @@
     }
   }
 
+  // assets/js/objects-filter/escape.js
+  function escapeHtml(text, doc = document) {
+    const div = doc.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
   // assets/js/share-panel/main.js
   function createSharePanel({
     doc = document,
@@ -29,6 +36,7 @@
     let storyKey = null;
     let includeKey = false;
     const sharePanel = doc.getElementById("panel-share");
+    const copyManually = sharePanel?.dataset.copyManually;
     const isStoryPage = doc.body.classList.contains("story-page") || doc.querySelector(".story-layout") !== null || win.location.pathname.includes("/stories/");
     function init() {
       if (!sharePanel) return;
@@ -289,11 +297,6 @@
         updateEmbedCode();
       }
     }
-    function escapeAttr(text) {
-      const div = doc.createElement("div");
-      div.textContent = text == null ? "" : String(text);
-      return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    }
     function generateEmbedCode() {
       if (!currentStoryUrl) {
         return "";
@@ -305,7 +308,7 @@
       const widthAttr = normalizeDimension(width);
       const heightAttr = normalizeDimension(height);
       const embedUrl = addEmbedParameter(currentStoryUrl);
-      const storyTitle = escapeAttr(getStoryTitle());
+      const storyTitle = escapeHtml(getStoryTitle(), doc);
       const iframeCode = `<iframe src="${embedUrl}"
   width="${widthAttr}" height="${heightAttr}" title="${storyTitle}"
   frameborder="0">
@@ -378,17 +381,24 @@
     function copyToClipboard(text, triggerButton) {
       if (!text) return;
       if (!navigatorRef.clipboard || typeof navigatorRef.clipboard.writeText !== "function") {
-        alertFn("Please manually copy the text");
+        alertFn(copyManually);
         return;
       }
       navigatorRef.clipboard.writeText(text).then(() => {
         showSuccessFeedback(triggerButton);
       }).catch((err) => {
         console.error("[Telar Share] Failed to copy:", err);
-        alertFn("Please manually copy the text");
+        alertFn(copyManually);
       });
     }
     function showSuccessFeedback(triggerButton) {
+      const status = doc.getElementById("share-copy-status");
+      if (status) {
+        status.textContent = status.dataset.copied;
+        setTimeout(() => {
+          status.textContent = "";
+        }, 2e3);
+      }
       const btnIcon = triggerButton.querySelector(".icon");
       if (btnIcon) {
         const originalSvg = btnIcon.outerHTML;

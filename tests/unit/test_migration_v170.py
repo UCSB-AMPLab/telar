@@ -15,24 +15,25 @@ it removes a Python module that a package has replaced. These tests guard:
   - the launcher: `scripts/upgrade.py` is delivered, and the file in this
     repository carries the marker the engine looks for, so a site that
     receives it is recognised as a launcher site;
-  - that every delivered path exists in the working tree, so a typo cannot
-    ship as a fetch failure on somebody's site;
+  - that every delivered path exists at the tag the migration fetches from,
+    so a typo cannot ship as a fetch failure on somebody's site;
   - fail-closed ordering: a failed framework record skips both later phases;
   - the deletions: idempotent, recorded, soft on OSError;
   - the `.gitignore` entry: added once, not duplicated on a second run;
   - metadata and bilingual manual steps;
-  - registration: discovery finds it, it ends the chain, and the chain walks
-    unbroken from its first entry to LATEST_VERSION.
+  - registration: discovery finds it, the hop out of 1.7.0 follows it, and
+    the chain walks unbroken from its first entry to LATEST_VERSION.
 
 Network-dependent framework fetches are not exercised here — those are
 covered by the upgrade.py integration tests.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import errno
 import os
 import pathlib
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
@@ -41,6 +42,7 @@ from migrations.v162_to_v170 import (
     FRAMEWORK_FILES, GITIGNORE_ENTRIES, GITIGNORE_SECTION_COMMENT,
     REMOVED_FILES, Migration162to170,
 )
+from migrations.v170_to_v180 import Migration170to180
 from migrations.base import ChangeRecord, ChangeStatus
 
 import telar_upgrade as upgrade
@@ -163,11 +165,38 @@ class TestFrameworkFilesDeliverySet:
         assert LAUNCHER_MARKER in source
         assert upgrade.LAUNCHER_MARKER == LAUNCHER_MARKER
 
-    def test_every_delivered_path_exists_in_this_repository(self):
-        """A path that is not in the tree is a 404 on somebody's site, and a
-        404 is a HARD failure that stops the whole upgrade."""
-        missing = [p for p in sorted(FRAMEWORK_FILES) if not (REPO_ROOT / p).is_file()]
-        assert missing == [], f"delivered paths absent from the repository: {missing}"
+    def test_every_delivered_path_exists_at_the_tag_it_is_fetched_from(self):
+        """A path that is not there is a 404 on somebody's site, and a 404 is a
+        HARD failure that stops the whole upgrade.
+
+        Against the tag, not the working tree. The fetch is pinned to
+        `_TARGET_TAG` so a re-run after a failure gets byte-identical content,
+        which means the tree this repository happens to hold today has no
+        bearing on what a site receives. Checking the tree instead passed for
+        as long as nothing was renamed after v1.7.0 and then failed on a change
+        that could not affect any site: v1.8.0 split `object-page.js` into one
+        bundle per media type, and the v1.7.0 migration still correctly
+        delivers the file v1.7.0 shipped.
+        """
+        tag = Migration162to170._TARGET_TAG
+        missing = []
+        for path in sorted(FRAMEWORK_FILES):
+            probe = subprocess.run(
+                ['git', '-C', str(REPO_ROOT), 'cat-file', '-e', f'{tag}:{path}'],
+                capture_output=True)
+            if probe.returncode != 0:
+                missing.append(path)
+        assert missing == [], f"delivered paths absent at {tag}: {missing}"
+
+    def test_the_tag_this_is_checked_against_is_in_the_repository(self):
+        """Without the tag every path reads as absent, or every path as present
+        depending on how the probe fails — either way the check above stops
+        being about anything."""
+        tag = Migration162to170._TARGET_TAG
+        probe = subprocess.run(
+            ['git', '-C', str(REPO_ROOT), 'rev-parse', '--verify', f'{tag}^{{commit}}'],
+            capture_output=True)
+        assert probe.returncode == 0, f'{tag} is not a tag in this repository'
 
     def test_descriptions_are_nonempty(self):
         for path, desc in FRAMEWORK_FILES.items():
@@ -437,11 +466,15 @@ class TestRegistrationCompleteness:
     def test_discovery_finds_it(self):
         assert Migration162to170 in discover_migrations()
 
-    def test_is_last_in_migrations_list(self):
-        assert upgrade.MIGRATIONS[-1] is Migration162to170
+    def test_the_next_hop_follows_it(self):
+        """This migration sits in the chain with the hop out of 1.7.0 straight
+        after it, and nothing in between for a site to fall into."""
+        chain = list(upgrade.MIGRATIONS)
 
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == Migration162to170.to_version == '1.7.0'
+        assert chain[chain.index(Migration162to170) + 1] is Migration170to180
+
+    def test_its_target_is_the_next_hops_entry(self):
+        assert Migration162to170.to_version == Migration170to180.from_version == '1.7.0'
 
     def test_full_chain_resolves_to_latest_version(self):
         """Walking every migration's from_version -> to_version link from the

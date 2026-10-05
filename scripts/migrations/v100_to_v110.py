@@ -16,7 +16,7 @@ Linking, Layers & Collections release:
 ~25 framework files fetched from GitHub, 2 language files fetched,
 1 config value added (collection_mode), version bumped.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -29,6 +29,7 @@ class Migration100to110(BaseMigration):
 
     from_version = "1.0.0-beta"
     to_version = "1.1.0"
+    release_date = "2026-04-13"  # tag v1.1.0
     _TARGET_TAG = "v1.1.0"  # pin framework fetches to the release tag
     description = "Deep linking, title cards, collection mode, bibliography styling, panel fixes"
 
@@ -54,10 +55,9 @@ class Migration100to110(BaseMigration):
 
         # Phase 4: Update version
         print("  Phase 4: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.1.0", today):
-            changes.append(f"Updated _config.yml: version 1.1.0 ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.1.0", stamped):
+            changes.append(f"Updated _config.yml: version 1.1.0 ({stamped})")
 
         return changes
 
@@ -100,13 +100,8 @@ class Migration100to110(BaseMigration):
             'tests/unit/test_bibliography_widget.py': 'Bibliography widget tests (new)',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}"))
 
         return changes
 
@@ -119,13 +114,8 @@ class Migration100to110(BaseMigration):
             '_data/languages/es.yml': 'Spanish strings (collection_mode_heading added)',
         }
 
-        for file_path, description in language_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            language_files, "Updated {path} - {description}"))
 
         return changes
 
@@ -181,6 +171,8 @@ class Migration100to110(BaseMigration):
 - **Bibliography styling**: To format references with hanging indent in panel content, wrap them in a `:::bibliography` block in your markdown file.
 
 - **Share panel**: The share panel now includes a "this view" tab that copies the current URL with the reader's exact position.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -200,6 +192,8 @@ class Migration100to110(BaseMigration):
 - **Estilo bibliográfico**: Para dar formato de sangría francesa a las referencias en el contenido de los paneles, envuélvelas en un bloque `:::bibliography` en el archivo markdown.
 
 - **Panel de compartir**: El panel de compartir ahora incluye una pestaña "esta vista" que copia la URL actual con la posición exacta del lector.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

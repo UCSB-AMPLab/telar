@@ -4,9 +4,10 @@ Unit Tests for generate_collections.py
 Tests focus on the media_type detection logic, source_url injection
 for video objects, (v1.3.0) sister-file localization in generate_pages(),
 and (v1.7.0) the story page manifest that tells the post-build encryption
-step where each story rendered.
+step where each story rendered, and (v1.8.0) the glossary acknowledgement
+column the encryptor's content gate reads back off the generated document.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import sys
@@ -166,6 +167,17 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
                 results[md_file.name] = md_file.read_text()
         return results
 
+    @staticmethod
+    def _media_type(content):
+        """The parsed value, not the bytes that carry it.
+
+        A serialiser quotes only what needs quoting, so asserting on
+        `media_type: "Image"` tested the quoting style rather than the
+        value — and would fail on a correct change to how it is written.
+        """
+        import yaml
+        return yaml.safe_load(content.split('---')[1])['media_type']
+
     def test_image_object_has_media_type_image(self, tmp_path):
         """IIIF/image object gets media_type: \"Image\" in frontmatter."""
         objects_data = [
@@ -173,7 +185,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
         ]
         files = self._run_generate_objects(tmp_path, objects_data)
         content = files.get('img-obj.md', '')
-        assert 'media_type: "Image"' in content
+        assert self._media_type(content) == 'Image'
 
     def test_youtube_object_has_media_type_video(self, tmp_path):
         """YouTube object gets media_type: \"Video\" in frontmatter."""
@@ -182,7 +194,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
         ]
         files = self._run_generate_objects(tmp_path, objects_data)
         content = files.get('vid-obj.md', '')
-        assert 'media_type: "Video"' in content
+        assert self._media_type(content) == 'Video'
 
     def test_audio_object_has_media_type_audio(self, tmp_path):
         """Object with .mp3 file gets media_type: \"Audio\" in frontmatter."""
@@ -196,7 +208,7 @@ class TestGenerateObjectsMediaTypeInFrontmatter:
         ]
         files = self._run_generate_objects(tmp_path, objects_data)
         content = files.get('aud-obj.md', '')
-        assert 'media_type: "Audio"' in content
+        assert self._media_type(content) == 'Audio'
 
     def test_audio_object_has_source_url(self, tmp_path):
         """Video object gets source_url in frontmatter for sidebar rendering."""
@@ -572,3 +584,106 @@ class TestStoryPageManifest:
         manifest = self._manifest(data_dir)
         assert manifest['stories_permalink'] == '/relatos/:name/'
         assert 'url' not in manifest['stories']['uno']
+
+
+class TestTheGlossaryGeneratorSeesACaseFoldedCollision:
+    """The generator lowercased its headers before the refusal ran.
+
+    Folding the headers first left `Note` and `note` as one label twice
+    over, which the refusal could not tell from a single column, and the
+    page was written from whichever of the two pandas handed back. It reads
+    the author's headers as they were written, like every other sheet, and
+    the refusal folds the spellings itself.
+    """
+
+    def _generate(self, tmp_path, header, rows):
+        from generate_collections import _generate_glossary_from_csv
+        csv_path = tmp_path / 'glossary.csv'
+        csv_path.write_text(header + rows, encoding='utf-8')
+        glossary_dir = tmp_path / '_glossary'
+        glossary_dir.mkdir()
+        _generate_glossary_from_csv(csv_path, glossary_dir, {})
+        return glossary_dir
+
+    def test_two_spellings_of_one_header_are_refused(self, tmp_path):
+        from telar.csv_utils import ColumnCollisionError
+
+        with pytest.raises(ColumnCollisionError):
+            self._generate(
+                tmp_path,
+                'term_id,title,definition,Note,note\n',
+                'encomienda,Encomienda,A grant of labour.,a,b\n')
+
+    def test_an_alias_beside_the_canonical_name_is_refused(self, tmp_path):
+        from telar.csv_utils import ColumnCollisionError
+
+        with pytest.raises(ColumnCollisionError):
+            self._generate(
+                tmp_path,
+                'term_id,title,definition,protected,Protegido\n',
+                'encomienda,Encomienda,A grant of labour.,yes,\n')
+
+    def test_an_ordinary_sheet_still_generates(self, tmp_path):
+        glossary_dir = self._generate(
+            tmp_path,
+            'term_id,title,definition,Note\n',
+            'encomienda,Encomienda,A grant of labour.,a\n')
+
+        assert (glossary_dir / 'encomienda.md').exists()
+
+    @pytest.mark.parametrize('header', [
+        'Term_ID,Title,Definition\n',
+        'TERM_ID,TITLE,DEFINITION\n',
+        ' term_id , title , definition \n',
+    ])
+    def test_a_capitalised_canonical_header_still_generates(self, tmp_path,
+                                                            header):
+        """A hand-edited sheet that built before still builds.
+
+        `Term_ID` is not an alias, so the bilingual map leaves it alone; it
+        is the fold that made it findable. The fold stays, after the
+        refusal rather than before it, so an existing site is not refused
+        at upgrade over the casing of its own headers.
+        """
+        glossary_dir = self._generate(
+            tmp_path, header, 'encomienda,Encomienda,A grant of labour.\n')
+
+        assert (glossary_dir / 'encomienda.md').exists()
+
+    def test_a_capitalised_alias_still_normalises(self, tmp_path):
+        glossary_dir = self._generate(
+            tmp_path,
+            'ID_Termino,Titulo,Definicion\n',
+            'encomienda,Encomienda,Una merced de trabajo.\n')
+
+        assert (glossary_dir / 'encomienda.md').exists()
+
+
+class TestLegacyMarkdownFrontmatter:
+    """A hand-written term's frontmatter passes through verbatim.
+
+    The generator adds its layout line and touches nothing else. Reading
+    the frontmatter and writing it back would unquote values the author
+    quoted, which the Ruby that renders the site then reads as other types.
+    """
+
+    def _generate(self, tmp_path, frontmatter):
+        from generate_collections import _generate_glossary_from_markdown
+        source = tmp_path / 'source'
+        source.mkdir()
+        (source / 'encomienda.md').write_text(
+            f"---\n{frontmatter}\n---\n\nA grant of labour.\n",
+            encoding='utf-8')
+        glossary_dir = tmp_path / '_glossary'
+        glossary_dir.mkdir()
+        _generate_glossary_from_markdown(source, glossary_dir, {})
+        return glossary_dir / 'encomienda.md'
+
+    def test_the_author_s_keys_survive_byte_for_byte(self, tmp_path):
+        written = ('term_id: encomienda\n'
+                   'catalogue: "2026-9-1"\n'
+                   'title: Encomienda')
+        page = self._generate(tmp_path, written)
+
+        frontmatter = page.read_text(encoding='utf-8').split('---')[1]
+        assert written in frontmatter

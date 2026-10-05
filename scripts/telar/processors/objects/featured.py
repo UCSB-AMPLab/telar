@@ -1,6 +1,6 @@
 """Choosing which objects the homepage samples.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import hashlib
@@ -46,7 +46,9 @@ def _select_featured_objects(df):
     if not show_sample:
         return df
 
-    # Check for explicitly featured objects (case-insensitive yes/true/si)
+    # Check for explicitly featured objects (case-insensitive yes/true/si).
+    # The cell is matched as the author typed it: the reader pins this
+    # column to text so `1` is never a number that stringifies to "1.0".
     featured_values = {'yes', 'true', 'si', 'sí', '1'}
     if 'featured' in df.columns:
         featured_mask = df['featured'].astype(str).str.lower().str.strip().isin(featured_values)
@@ -66,16 +68,22 @@ def _select_featured_objects(df):
         print("  [INFO] No valid objects available for homepage sample")
         return df
 
-    # Select up to featured_count objects. Seed a local RNG from the sorted
-    # object IDs so the homepage sample is reproducible across builds of
-    # unchanged content (authors who want a fixed set use the `featured` flag).
-    # Use a stable hash (sha256) rather than the built-in hash(), which is
-    # salted per-process (PYTHONHASHSEED) and would not be reproducible.
+    # Select up to featured_count objects. Both the seed and the population
+    # are the object IDs in sorted order, so the sample depends on which
+    # objects the site has and not on their order in the sheet, which means
+    # nothing (authors who want a fixed set use the `featured` flag). Rows
+    # sharing an ID keep their sheet order among themselves. Use a stable
+    # hash (sha256) rather than the built-in hash(), which is salted
+    # per-process (PYTHONHASHSEED) and would not be reproducible.
     sample_size = min(featured_count, len(valid_objects))
-    seed_key = '\n'.join(sorted(str(i) for i in valid_objects.index)).encode('utf-8')
+    ids = valid_objects['object_id'].astype(str) if 'object_id' in valid_objects.columns \
+        else valid_objects.index.astype(str)
+    population = sorted(zip(ids, range(len(ids))))
+    seed_key = '\n'.join(object_id for object_id, _ in population).encode('utf-8')
     seed = int.from_bytes(hashlib.sha256(seed_key).digest()[:8], 'big')
     rng = random.Random(seed)
-    sample_indices = rng.sample(list(valid_objects.index), sample_size)
+    chosen = rng.sample(population, sample_size)
+    sample_indices = [valid_objects.index[position] for _, position in chosen]
 
     df.loc[sample_indices, 'is_featured_sample'] = True
     print(f"  [INFO] Randomly selected {sample_size} object(s) for homepage sample")

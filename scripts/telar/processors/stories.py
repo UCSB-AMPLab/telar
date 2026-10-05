@@ -23,18 +23,26 @@ from one story CSV and performs several passes over the data:
    references are loaded by `read_markdown_file()` from the markdown
    module; inline text is processed by `process_inline_content()`. Both
    paths run through the same pipeline: widgets first, then images, then
-   markdown-to-HTML conversion. After HTML conversion, glossary links
-   (`[[term_id]]` syntax) are resolved by `process_glossary_links()`. The
-   step's `answer` prose is glossary-processed too (the `question` is a
-   heading and is left alone), so `[[term]]` works in the main story text,
-   not only in layer panels.
+   markdown-to-HTML conversion, during which glossary links (`[[term_id]]`
+   syntax) are resolved by `process_glossary_links()`.
 
-3. **Coordinate defaults** — empty `x`, `y`, and `zoom` cells get default
+3. **Answers** -- the step's `answer` is rendered to the HTML the story
+   publishes, by `render_answer()`: it renders as panels do, is made prose
+   (widgets, media, tables, code blocks, rules and footnotes come out;
+   headings, quotes and lists become paragraphs), gets glossary links, and
+   is held to the budget in `telar.answer_budget`, the length that fits the
+   side card without scrolling. An answer over it is cut, and `answer_long`
+   says whether the answer is set in the smaller type. The `question` is a
+   heading and is left as written.
+
+4. **Coordinates** — empty `x`, `y`, and `zoom` cells get default
    values (0.5, 0.5, 1) so the viewer always has a valid starting
-   position.
+   position. A comma decimal (`0,5`) is read as the number it is. Any
+   other cell that is not a number is reported and left as typed.
 
-4. **Warning aggregation** — all warnings (missing objects, missing
-   markdown files, broken glossary links, widget errors) are collected
+5. **Warning aggregation** — all warnings (missing objects, missing
+   markdown files, broken glossary links, widget errors, answers held to
+   the limits, coordinates that are not numbers) are collected
    into a `viewer_warnings` list stored in `df.attrs`, which the core
    module later injects into the JSON output for display in the story's
    intro panel.
@@ -43,18 +51,24 @@ In Christmas Tree Mode, `process_story()` appends additional fake
 warnings covering every warning type (viewer, panel, glossary) so that
 the intro panel's error display can be visually tested.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
+import html
+import math
+import numbers
 import re
 import json
 from pathlib import Path
+from typing import NamedTuple
 
 import pandas as pd
 
+from telar.answer_budget import (ANSWER_BUDGET, MAX_PARAGRAPHS, Measure, cut_to_budget,
+                                 html_tokens, measure_answer, small_type, within_budget)
 from telar.config import get_lang_string
 from telar.glossary import load_glossary_terms, process_glossary_links
-from telar.markdown import read_markdown_file, process_inline_content
+from telar.markdown import process_inline_content, read_markdown_file, render_markdown
 from telar.csv_utils import IMAGE_EXTENSIONS, build_stem_index
 from telar.latex import has_latex
 from telar.media_type import AUDIO_EXTENSIONS
@@ -65,6 +79,271 @@ def _warn(msg, warnings):
     print(f"  [WARN] {msg}")
     warnings.append(msg)
 
+
+
+ANSWER_MEDIA = 'media'
+ANSWER_WIDGETS = 'widgets'
+ANSWER_FOOTNOTES = 'footnotes'
+ANSWER_MARKUP = 'markup'
+
+# The order warnings are reported in, one per answer per kind.
+ANSWER_KINDS = (ANSWER_MEDIA, ANSWER_WIDGETS, ANSWER_FOOTNOTES, ANSWER_MARKUP)
+
+# What each kind is called in the message catalogue.
+_ANSWER_KIND_KEYS = {
+    ANSWER_MEDIA: 'answer_image_dropped',
+    ANSWER_WIDGETS: 'answer_widget_dropped',
+    ANSWER_FOOTNOTES: 'answer_footnotes_dropped',
+    ANSWER_MARKUP: 'answer_markup_flattened',
+}
+
+
+def _line_starts(text):
+    """The index at which each line of *text* begins."""
+    starts = [0]
+    pos = text.find('\n')
+    while pos != -1:
+        starts.append(pos + 1)
+        pos = text.find('\n', pos + 1)
+    return starts
+
+
+
+_WIDGET_OPEN = re.compile(r'[ \t]*:::[A-Za-z0-9_]+[ \t]*\n')
+_WIDGET_CLOSE = re.compile(r'[ \t]*:::[ \t]*(?=\n|\Z)')
+
+
+def _remove_widget_blocks(text):
+    """*text* without its widget blocks, and how many were removed.
+
+    An opening is a line of optional blanks, `:::`, a name of letters,
+    digits and underscores, and optional blanks. The block ends after the
+    first later line that is `:::` alone between optional blanks, and one
+    optional newline. An opening with no such line after it opens nothing.
+    Reading resumes on the first line start after the block.
+    """
+    starts = _line_starts(text)
+    total = len(starts)
+    # next_close[i] is the first line from i on that is `:::` alone.
+    next_close = [total] * (total + 1)
+    for i in range(total - 1, -1, -1):
+        next_close[i] = i if _WIDGET_CLOSE.match(text, starts[i]) \
+            else next_close[i + 1]
+
+    pieces = []
+    kept = 0
+    removed = 0
+    i = 0
+    while i < total - 1:
+        if _WIDGET_OPEN.match(text, starts[i]) and next_close[i + 1] < total:
+            j = next_close[i + 1]
+            end = _WIDGET_CLOSE.match(text, starts[j]).end()
+            if text[end:end + 1] == '\n':
+                end += 1
+            pieces.append(text[kept:starts[i]])
+            kept = end
+            removed += 1
+            i = j + 1
+        else:
+            i += 1
+    pieces.append(text[kept:])
+    return ''.join(pieces), removed
+
+
+# Elements a step's answer loses with everything inside them, by the kind
+# each is reported as. A void element among them has nothing inside.
+_ANSWER_DROPPED = {
+    'img': ANSWER_MEDIA, 'iframe': ANSWER_MEDIA, 'video': ANSWER_MEDIA,
+    'audio': ANSWER_MEDIA, 'embed': ANSWER_MEDIA, 'object': ANSWER_MEDIA,
+    'table': ANSWER_MARKUP, 'pre': ANSWER_MARKUP, 'hr': ANSWER_MARKUP,
+}
+_ANSWER_HEADINGS = frozenset(f'h{level}' for level in range(1, 7))
+_ANSWER_UNWRAPPED = frozenset({'blockquote', 'ul', 'ol'})
+# The two pieces the footnotes extension writes: a reference's `<sup>` and
+# the notes' `<div>`.
+_FOOTNOTE_PART = re.compile(r'<(?:sup\b[^>]*\bid="fnref|div\b[^>]*\bclass="footnote")')
+_EMPTY_PARAGRAPH = re.compile(r'<p\b[^>]*>\s*</p>\n?')
+
+
+class _AnswerProse:
+    """A step's rendered answer as prose: `html`, and the `kinds` of thing
+    that came out of it.
+
+    Media, tables, code blocks, horizontal rules and footnotes are removed
+    with what is inside them. A heading becomes a paragraph, a quote and a
+    list lose their container, and each list item becomes a paragraph, so
+    their words stay. A paragraph left empty is removed. Everything else --
+    emphasis, links, code spans, line breaks, raw inline HTML -- is kept as
+    rendered.
+    """
+
+    def __init__(self, rendered):
+        self.out, self.kinds = [], set()
+        self._dropping = None
+        self._items = []
+        for token in html_tokens(rendered):
+            self._take(token)
+        self.html = _EMPTY_PARAGRAPH.sub('', ''.join(self.out))
+
+    def _take(self, token):
+        if self._dropping:
+            self._skip(token)
+        elif self._drops(token):
+            return
+        elif token.name in _ANSWER_HEADINGS:
+            self.kinds.add(ANSWER_MARKUP)
+            self._end_item()
+            self.out.append('<p>' if token.kind == 'start' else '</p>')
+        elif token.name in _ANSWER_UNWRAPPED:
+            self.kinds.add(ANSWER_MARKUP)
+            self._end_item()
+        elif token.name == 'li':
+            self._list_item(token)
+        else:
+            if token.name == 'p' and token.kind == 'start':
+                self._end_item()
+            self.out.append(token.raw)
+
+    def _drops(self, token):
+        """Whether *token* opens or is something the answer loses."""
+        if token.kind not in ('start', 'void', 'end'):
+            return False
+        kind = _ANSWER_DROPPED.get(token.name)
+        if kind is None and token.kind == 'start' and _FOOTNOTE_PART.match(token.raw):
+            kind = ANSWER_FOOTNOTES
+        if kind is None:
+            return False
+        self.kinds.add(kind)
+        if token.kind == 'start':
+            self._dropping = [token.name, 1]
+        return True
+
+    def _skip(self, token):
+        name, depth = self._dropping
+        if token.name != name:
+            return
+        depth += 1 if token.kind == 'start' else -1 if token.kind == 'end' else 0
+        self._dropping = [name, depth] if depth else None
+
+    def _list_item(self, token):
+        self.kinds.add(ANSWER_MARKUP)
+        if token.kind == 'start':
+            self._end_item()
+            self.out.append('<p>')
+            self._items.append(True)
+        elif self._items and self._items.pop():
+            self.out.append('</p>')
+
+    def _end_item(self):
+        """Close the paragraph a list item opened, before a block inside it."""
+        if self._items and self._items[-1]:
+            self.out.append('</p>')
+            self._items[-1] = False
+
+
+class RenderedAnswer(NamedTuple):
+    """A step's answer as the build publishes it (`render_answer`).
+
+    `html` is the published answer. `kinds` names what came out of it, in
+    ANSWER_KINDS order. `measure` is the answer's words, paragraphs and
+    lines before any cut (`telar.answer_budget`), `cut` says whether it
+    was over ANSWER_BUDGET and so cut, and `long` whether the published
+    answer is set in the smaller type.
+    """
+    html: str
+    kinds: list
+    measure: Measure
+    cut: bool
+    long: bool
+
+
+def render_answer(text, glossary_terms=None, glossary_warnings=None, step=None,
+                  source='answer'):
+    """A step's answer, as written, rendered to the HTML the build publishes.
+
+    Widget blocks are removed from the text. The rest renders as every
+    piece of author markdown does (`render_markdown`), and then, while its
+    maths is still held out of the HTML: it is made prose (`_AnswerProse`),
+    `[[term]]` becomes a glossary link as in a panel, and an answer over
+    ANSWER_BUDGET is cut (`telar.answer_budget`). The cut runs last, so it
+    counts the words a reader sees and never splits a glossary link.
+
+    Args:
+        text: The answer as the author wrote it.
+        glossary_terms: The glossary's term ids and titles, or None.
+        glossary_warnings: A list for glossary reports, or None.
+        step: The step, for glossary reports.
+        source: What a warning about unclosed HTML calls the answer.
+
+    Returns:
+        RenderedAnswer
+    """
+    text = str(text).replace('\r\n', '\n').replace('\r', '\n').strip()
+    text, widgets = _remove_widget_blocks(text)
+    found = {}
+
+    def to_prose(rendered):
+        prose = _AnswerProse(rendered)
+        linked = process_glossary_links(prose.html, glossary_terms,
+                                        glossary_warnings, step, None)
+        found['kinds'], found['measure'] = prose.kinds, measure_answer(linked)
+        return cut_to_budget(linked)
+
+    published = render_markdown(text, source, post_process=to_prose)
+    kinds = found['kinds'] | ({ANSWER_WIDGETS} if widgets else set())
+    return RenderedAnswer(published, [kind for kind in ANSWER_KINDS if kind in kinds],
+                          found['measure'], not within_budget(found['measure']),
+                          small_type(measure_answer(published)))
+
+
+def _render_answers(df, story_name, glossary_terms, glossary_warnings, warnings,
+                    answer_warnings):
+    """Every step's answer rendered to the HTML published in its `answer`.
+
+    What `render_answer` took out of an answer is reported once per kind,
+    and an answer over the budget is reported with its count, naming the
+    story and step: the build speaks where it has changed the author's
+    words and stays quiet where it has not.
+    """
+    if 'answer' not in df.columns:
+        return df
+
+    df['answer_long'] = False
+    story = story_name or 'unknown'
+    for idx, row in df.iterrows():
+        raw = str(row['answer'])
+        if not raw.strip():
+            continue
+        step = row.get('step', 'unknown')
+        label = _step_label(step)
+        rendered = render_answer(raw, glossary_terms, glossary_warnings, step,
+                                 source=f'the answer to step {label} of {story}')
+        for kind in rendered.kinds:
+            _report_answer(_ANSWER_KIND_KEYS[kind], step, answer_warnings, warnings,
+                           story=story, step_label=label)
+        if rendered.cut:
+            counted = rendered.measure
+            _report_answer('answer_over_hard_limit', step, answer_warnings, warnings,
+                           story=story, step_label=label, lines=counted.lines,
+                           limit=ANSWER_BUDGET, max_paragraphs=MAX_PARAGRAPHS,
+                           paragraphs=counted.paragraphs)
+        df.at[idx, 'answer'] = rendered.html
+        df.at[idx, 'answer_long'] = rendered.long
+    return df
+
+
+def _report_answer(key, step, answer_warnings, warnings, step_label, **fields):
+    """One localised report, to the build log and to the intro panel.
+
+    The message is a whole sentence naming its own story and step, because
+    the build log prints it with no context around it. It travels as a
+    `panel` warning, the type the intro panel renders unprefixed.
+    """
+    message = get_lang_string('errors.object_warnings.' + key,
+                              step=step_label, **fields)
+    _warn(message, warnings)
+    answer_warnings.append({'step': step, 'type': 'panel',
+                            'message': message})
 
 
 def _normalise_frame(df):
@@ -87,28 +366,75 @@ def _normalise_frame(df):
     return df
 
 
+def _step_label(step):
+    """The step as its author wrote it, not as pandas typed it.
+
+    pandas reads step numbers as floats when the column has a blank, so a
+    whole-number float is shown as an integer. Only the label is normalised; the offending value is quoted exactly as
+    it was read, because that is the author's own data.
+    """
+    if isinstance(step, float) and step.is_integer():
+        return str(int(step))
+    return str(step)
+
+
+def _report_step(step):
+    """The step a report carries into the story JSON.
+
+    A report takes its step from the frame, as numpy gives it when read
+    with `df.at` (`int64`, which `json.dump` refuses, so the story was not
+    written) or as a float when the column has a blank or a fraction (`1.0`,
+    which the intro panel prints). A finite whole number becomes an int and
+    a finite fraction a float. Anything else numpy or the author can put in
+    the column -- `True`, `inf` -- is written as text, which `json.dump`
+    takes and which is still valid JSON.
+    """
+    if (isinstance(step, numbers.Real) and not isinstance(step, bool)
+            and math.isfinite(step)):
+        return int(step) if float(step).is_integer() else float(step)
+    return step if isinstance(step, str) else str(step)
+
+
+def _page_value(raw, step, warnings):
+    """One cell as a page number, or '' with a warning.
+
+    float() runs first because a spreadsheet writes a whole number as
+    3.0. OverflowError is caught because int(float('Infinity')) raises it
+    and it is a sibling of ValueError rather than a subclass.
+    """
+    if not pd.notna(raw) or not str(raw).strip():
+        return ''
+
+    try:
+        page = int(float(str(raw).strip()))
+        if page < 1:
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
+        _warn(f"Story step {_step_label(step)}: invalid page value "
+              f"'{raw}' (must be positive integer)", warnings)
+        return ''
+
+    return page
+
+
 def _validate_page_column(df, warnings):
     """A page number is an integer or it is nothing.
 
     A step that names a page the story does not have would render
     nowhere, so an unusable value is cleared and said out loud rather
     than carried into the JSON.
+
+    The column is assigned whole. pandas gives a column a dtype from what
+    it read and refuses a value of another type into it, so per-cell
+    assignment fails on a text column holding page numbers and on a numeric
+    column holding a blank. Assigning the whole column replaces its dtype.
     """
-    # Validate and normalize page column
-    if 'page' in df.columns:
-        for idx, row in df.iterrows():
-            page_val = row.get('page', '')
-            step_num = row.get('step', 'unknown')
-            if pd.notna(page_val) and str(page_val).strip():
-                try:
-                    page_int = int(float(str(page_val).strip()))
-                    if page_int < 1:
-                        raise ValueError
-                    df.at[idx, 'page'] = page_int
-                except (ValueError, TypeError):
-                    msg = f"Story step {step_num}: invalid page value '{page_val}' (must be positive integer)"
-                    _warn(msg, warnings)
-                    df.at[idx, 'page'] = ''
+    if 'page' not in df.columns:
+        return df
+
+    df['page'] = [_page_value(row['page'], row.get('step', 'unknown'),
+                              warnings)
+                  for _, row in df.iterrows()]
     return df
 
 
@@ -128,7 +454,6 @@ def _load_objects_data():
     try:
         with open(objects_json_path, 'r', encoding='utf-8') as f:
             objects_list = json.load(f)
-            # Create lookup dictionary by object_id
             return {obj['object_id']: obj for obj in objects_list}
     except Exception as e:
         print(f"  [WARN] Could not load objects.json for validation: {e}")
@@ -236,7 +561,7 @@ def _validate_object_references(df, objects_data, warnings):
     return df
 
 
-def _layer_content_for(cell_value, widget_warnings):
+def _layer_content_for(cell_value, widget_warnings, post_process=None):
     """One layer cell as content, from a file or from the cell itself.
 
     A value ending in `.md` names a file; anything else is prose typed
@@ -258,12 +583,19 @@ def _layer_content_for(cell_value, widget_warnings):
         else:
             # Try to load as markdown file
             file_path = f"stories/{cell_value}"
-            content_data = read_markdown_file(file_path, widget_warnings)
+            content_data = read_markdown_file(file_path, widget_warnings, post_process)
 
     # If not a file reference or file not found, treat as inline content
     if content_data is None:
-        content_data = process_inline_content(cell_value, widget_warnings)
+        content_data = process_inline_content(cell_value, widget_warnings, post_process)
     return content_data
+
+def _glossary_linker(glossary_terms, glossary_warnings, step_num, layer):
+    """The pass that makes a panel's glossary links, given its rendered
+    HTML while the maths is still held out of it."""
+    return lambda rendered: process_glossary_links(
+        rendered, glossary_terms, glossary_warnings, step_num, layer)
+
 
 def _process_content_columns(df, glossary_terms, glossary_warnings, widget_warnings):
     """Turn every layer column into HTML, from a file or from the cell.
@@ -301,47 +633,16 @@ def _process_content_columns(df, glossary_terms, glossary_warnings, widget_warni
                     step_num = row.get('step', 'unknown')
 
                     content_data = _layer_content_for(
-                        cell_value, widget_warnings)
+                        cell_value, widget_warnings,
+                        _glossary_linker(glossary_terms, glossary_warnings,
+                                         step_num, base_name))
 
                     if content_data:
                         df.at[idx, title_col] = content_data['title']
-                        # Apply glossary link transformation to content
-                        content_with_glossary = process_glossary_links(
-                            content_data['content'],
-                            glossary_terms,
-                            glossary_warnings,
-                            step_num,
-                            base_name
-                        )
-                        df.at[idx, text_col] = content_with_glossary
+                        df.at[idx, text_col] = content_data['content']
 
             # Drop the _content/_file column: it is not part of the JSON output
             df = df.drop(columns=[col])
-    return df
-
-
-def _resolve_answer_glossary(df, glossary_terms, glossary_warnings):
-    """Resolve [[term]] in the step's answer prose.
-
-    The answer only. The question is the step's heading, and an inline
-    link does not belong in one, so [[term]] there is left literal. The
-    answer is still markdown at this point -- Liquid renders it later --
-    so the transform runs on the markdown string, and the anchor it
-    injects passes through markdownify unchanged.
-    """
-    # None because this is step prose, not a layer panel.
-    if 'answer' in df.columns:
-        for idx, row in df.iterrows():
-            cell_value = row['answer']
-            if cell_value and str(cell_value).strip():
-                step_num = row.get('step', 'unknown')
-                df.at[idx, 'answer'] = process_glossary_links(
-                    str(cell_value),
-                    glossary_terms,
-                    glossary_warnings,
-                    step_num,
-                    None
-                )
     return df
 
 
@@ -351,10 +652,51 @@ def _apply_coordinate_defaults(df):
     coordinate_defaults = {'x': '0.5', 'y': '0.5', 'zoom': '1'}
     for col, default in coordinate_defaults.items():
         if col in df.columns:
-            # Convert to string first to handle NaN values
+            # Blank cells are '' by now. A typed `nan` is text like `NA`,
+            # and is reported by the coordinate check, not defaulted.
             df[col] = df[col].astype(str)
-            # Set defaults for empty or 'nan' values
-            df.loc[df[col].isin(['', 'nan']), col] = default
+            df.loc[df[col] == '', col] = default
+    return df
+
+
+# A decimal typed with a comma, the way a Spanish-speaking author writes one:
+# `0,5` or `-1,25`. One comma between digits, nothing else.
+_COMMA_DECIMAL = re.compile(r'^\s*(-?\d+),(\d+)\s*$')
+
+
+def _check_coordinates(df, story_name, warnings, coordinate_warnings):
+    """Read a comma decimal as a number, and report a cell that is neither.
+
+    Runs after the defaults, so every blank already holds one and what is
+    left is what the author typed. A comma decimal says a number plainly,
+    so it is rewritten with a point and nothing is reported. Anything else
+    that does not read as a finite number is reported and left as typed:
+    rewriting it would make the page look right while the sheet stayed
+    wrong, and the viewer's own fallback keeps the step usable meanwhile.
+    """
+    story = story_name or 'unknown'
+    for col in ('x', 'y', 'zoom'):
+        if col not in df.columns:
+            continue
+        for idx, raw in df[col].items():
+            value = str(raw)
+            comma = _COMMA_DECIMAL.match(value)
+            if comma:
+                df.at[idx, col] = f'{comma.group(1)}.{comma.group(2)}'
+                continue
+            try:
+                if math.isfinite(float(value)):
+                    continue
+            except ValueError:
+                pass
+            step = df.at[idx, 'step'] if 'step' in df.columns else 'unknown'
+            message = get_lang_string(
+                'errors.object_warnings.coordinate_not_a_number',
+                column=col, step=_step_label(step), story=story,
+                value=html.escape(value.strip()).replace('`', "'"))
+            _warn(message, warnings)
+            coordinate_warnings.append({'step': step, 'type': 'panel',
+                                        'message': message})
     return df
 
 
@@ -437,12 +779,16 @@ def _add_christmas_tree_warnings(df, all_warnings):
     Appended rather than substituted: the point is to see them beside
     whatever the story really produced.
     """
-    # Inject test warnings for various error types
+    # Every message here is one the build really emits, because the point of
+    # this mode is to look at the warnings as an author would see them. A
+    # message written only for the demonstration shows something no story can
+    # produce, and is a string nothing else keeps honest.
     fake_warnings = [
         {
             'step': 1,
             'type': 'viewer',
-            'message': get_lang_string('errors.object_warnings.missing_object_id')
+            'message': get_lang_string('errors.object_warnings.object_not_found',
+                                       object_id='an-object-not-in-objects-csv')
         },
         {
             'step': 2,
@@ -460,7 +806,7 @@ def _add_christmas_tree_warnings(df, all_warnings):
     df.attrs['viewer_warnings'] = all_warnings + fake_warnings
     print("\U0001f384 Christmas Tree Mode: Injected test warnings into story")
 
-def process_story(df, christmas_tree=False):
+def process_story(df, christmas_tree=False, story_name=''):
     """
     Process story CSV with panel content (file references or inline text).
 
@@ -471,6 +817,10 @@ def process_story(df, christmas_tree=False):
     Args:
         df: pandas DataFrame from story CSV
         christmas_tree: If True, inject fake warnings for testing
+        story_name: The story's name, for warnings that have to say which
+            story they are about. A DataFrame carries no such name, so the
+            caller supplies it; a caller that has none gets warnings that
+            say 'unknown', which is the step column's own fallback.
 
     Returns:
         pandas DataFrame with processed content and aggregated warnings
@@ -483,18 +833,27 @@ def process_story(df, christmas_tree=False):
     glossary_terms = load_glossary_terms()
     glossary_warnings = []
     widget_warnings = []
+    answer_warnings = []
 
     df = _normalise_frame(df)
     df = _validate_page_column(df, warnings)
     df = _validate_object_references(df, _load_objects_data(), warnings)
     df = _process_content_columns(df, glossary_terms, glossary_warnings,
                                   widget_warnings)
-    df = _resolve_answer_glossary(df, glossary_terms, glossary_warnings)
+    df = _render_answers(df, story_name, glossary_terms, glossary_warnings,
+                         warnings, answer_warnings)
     df = _apply_coordinate_defaults(df)
+    coordinate_warnings = []
+    df = _check_coordinates(df, story_name, warnings, coordinate_warnings)
 
     all_warnings = _collect_step_warnings(df)
+    all_warnings.extend(coordinate_warnings)
     all_warnings.extend(glossary_warnings)
     all_warnings.extend(widget_warnings)
+    all_warnings.extend(answer_warnings)
+    for report in all_warnings:
+        if 'step' in report:
+            report['step'] = _report_step(report['step'])
     df.attrs['viewer_warnings'] = all_warnings
 
     df.attrs['has_latex'] = _detect_latex(df)

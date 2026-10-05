@@ -10,7 +10,7 @@ Demo Content Fetch Tolerance patch:
 1 framework file fetched from GitHub, version bumped, no content
 transforms, no manual steps required for users (the fix is automatic).
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -22,6 +22,7 @@ class Migration120to121(BaseMigration):
 
     from_version = "1.2.0"
     to_version = "1.2.1"
+    release_date = "2026-05-08"  # tag v1.2.1
     _TARGET_TAG = "v1.2.1"  # pin framework fetches to the release tag
     description = "Demo content fetch tolerates v-prefixed telar.version values"
 
@@ -39,10 +40,9 @@ class Migration120to121(BaseMigration):
 
         # Phase 2: Update version
         print("  Phase 2: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.2.1", today):
-            changes.append(f"Updated _config.yml: version 1.2.1 ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.2.1", stamped):
+            changes.append(f"Updated _config.yml: version 1.2.1 ({stamped})")
 
         return changes
 
@@ -56,13 +56,8 @@ class Migration120to121(BaseMigration):
             'CHANGELOG.md': 'CHANGELOG (v1.2.1 release notes)',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}"))
 
         return changes
 
@@ -83,6 +78,8 @@ class Migration120to121(BaseMigration):
 This patch updates `scripts/fetch_demo_content.py` so it tolerates v-prefixed `telar.version` values in `_config.yml` (for example `version: "v1.2.0"` instead of `version: "1.2.0"`). An earlier version of the Telar Compositor's upgrade flow wrote v-prefixed strings into some sites, which caused the demo content fetcher to silently fail and build sites with no demo content. The fix is in the framework file you just received from this upgrade — no further steps are needed on your end.
 
 If your `_config.yml` has a v-prefixed version string, you may leave it as-is; the script now handles both forms. If you prefer, you can also remove the leading `v` manually under the `telar:` section to keep the file consistent with current Telar conventions.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -96,6 +93,8 @@ If your `_config.yml` has a v-prefixed version string, you may leave it as-is; t
 Esta actualización corrige el script que descarga el contenido de demostración (`scripts/fetch_demo_content.py`) para que ahora acepte valores de `telar.version` en `_config.yml` que empiecen con "v" (por ejemplo, `version: "v1.2.0"` en vez de `version: "1.2.0"`). Una versión anterior del flujo de actualización del Compositor de Telar escribía estos valores con "v" en algunos sitios, y eso hacía que la descarga del contenido de demostración fallara sin avisar — así que esos sitios se construían sin contenido de demostración. La corrección ya está en el archivo de framework que recibiste con esta actualización; no tienes que hacer nada más.
 
 Si tu `_config.yml` tiene una versión con "v", puedes dejarla así: el script ahora reconoce las dos formas. Si prefieres dejar el archivo más consistente con el formato actual de Telar, también puedes quitar la "v" a mano en la sección `telar:`.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

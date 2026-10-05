@@ -8,8 +8,12 @@ This directory mixes hand-maintained source, one build artifact, and one vendore
 |---|---|
 | `telar-story.js` | The story viewer, bundled by esbuild from the ES modules in `telar-story/`. Carries a `GENERATED FILE` banner and is marked `linguist-generated` in `.gitattributes`. Any edit made here is lost on the next build. |
 | `telar-story.js.map` | Source map for the bundle, for browser devtools. |
-| `object-page.js` | The object page, bundled by esbuild from the ES modules in `object-page/`. Same banner, same `.gitattributes` entry, same rule. |
-| `object-page.js.map` | Source map for the object-page bundle. |
+| `object-audio.js` | The audio object page, bundled by esbuild from `object-page/audio-entry.js`. Same banner, same `.gitattributes` entry, same rule. |
+| `object-audio.js.map` | Source map for the audio object-page bundle. |
+| `object-image.js` | The image object page, bundled by esbuild from `object-page/image-entry.js`. Same banner, same `.gitattributes` entry, same rule. |
+| `object-image.js.map` | Source map for the image object-page bundle. |
+| `object-video.js` | The video object page, bundled by esbuild from `object-page/video-entry.js`. Same banner, same `.gitattributes` entry, same rule. |
+| `object-video.js.map` | Source map for the video object-page bundle. |
 | `home-page.js` | The home page's card thumbnails, bundled by esbuild from `iiif-thumbnails/home.js`. Same banner, same `.gitattributes` entry, same rule. |
 | `home-page.js.map` | Source map for the home-page bundle. |
 | `objects-index-page.js` | The objects index's card thumbnails, bundled by esbuild from `iiif-thumbnails/objects-index.js`. Same banner, same `.gitattributes` entry, same rule. |
@@ -37,7 +41,7 @@ ES modules, one responsibility each, bundled into `telar-story.js`. Loaded only 
 
 ## Source — the object page (`object-page/`)
 
-ES modules bundled into `object-page.js`, loaded only by the object layout. `main.js` reads the JSON block the layout writes (`#telar-object-data`: media type, object id, source URLs, base URL and the language strings) and dispatches on the media type: `image-object.js` (the IIIF viewer, imported from `telar-story/iiif-viewer.js`, and the coordinate panel), `video-object.js` (embed, clip picker, copy-embed button), `audio-object.js` (waveform player and clip region), with `clip-panel.js` and `copy-feedback.js` shared between them. The three helpers the layout still loads as classic scripts — `object-theme.js`, `video-embed.js`, `wavesurfer-loader.js` — publish the globals these modules call.
+ES modules bundled into one file per media type — `object-image.js`, `object-video.js`, `object-audio.js` — of which the object layout loads exactly one, so an audio page never downloads the IIIF viewer. Each type's `<type>-entry.js` is the esbuild entry point; `boot.js` is what they share and reads the JSON block the layout writes (`#telar-object-data`: media type, object id, source URLs, base URL, the audio file's URL and the language strings). The dispatch on media type is the layout's, not the bundle's: `image-object.js` (the IIIF viewer, imported from `telar-story/iiif-viewer.js`, and the coordinate panel), `video-object.js` (embed, clip picker, copy-embed button), `audio-object.js` (waveform player and clip region, loading the URL the layout resolved from `_data/audio_objects.json`), with `clip-panel.js` and `copy-feedback.js` shared between them. The three helpers the layout loads as classic scripts for their media type — `object-theme.js` and `wavesurfer-loader.js` on audio pages, `video-embed.js` on video pages — publish the globals these modules call.
 
 ## Source — the index pages' thumbnails (`iiif-thumbnails/`)
 

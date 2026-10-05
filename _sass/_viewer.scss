@@ -13,8 +13,12 @@
  * corners if it overflows. The pagination + error UI rules at the
  * bottom of the file style the wrapper's injected DOM directly.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
+
+// Viewer chrome is component styling: no partial outside this file sets these
+// selectors, and telar-overrides stays available above it if one ever must win.
+@layer telar-components {
 
 /* Viewer Containers */
 #viewer-container {
@@ -28,10 +32,22 @@
   position: relative;
 }
 
-/* Image object page: 1:1 square, white weave background, inset shadow */
+/* Image object page: the authoring aspect, white weave background, inset shadow.
+ *
+ * The shape is not decoration. An author reads x/y/zoom off this pane and
+ * pastes them into a spreadsheet, and the zoom is a multiple of the fit in
+ * *this* pane, while a story replays it against a frame of the authoring
+ * aspect (AUTHORING_ASPECT in telar-story/authoring-frame.js). The two agree
+ * for every image only when this pane has that aspect, so 1.053 here is that
+ * constant, and tests/js/authoring-aspect-css.test.js fails if they differ.
+ *
+ * The width is capped, not the height: with `width: 100%` a height cap alone
+ * clamps on a short window while the width does not, and the pane's shape
+ * moves with the window. Capping the width by the same measure keeps the
+ * shape and shrinks the pane instead. */
 #object-viewer.viewer-image {
-  aspect-ratio: 1 / 1;
-  max-height: 80vh;
+  aspect-ratio: 1.053;
+  max-width: min(100%, calc(80vh * 1.053));
   overflow: hidden;
   background: #fff url('../img/background-gris.svg') repeat;
   background-size: 20px auto;
@@ -254,3 +270,5 @@
     line-height: 1.4;
   }
 }
+
+} // end @layer telar-components

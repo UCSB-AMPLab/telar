@@ -15,6 +15,9 @@ the language pack here (English fallback) for the translatable credit line below
 {% else %}
   {% assign lang = site.data.languages['en'] %}
 {% endif %}
+{%- comment -%}The theme is resolved here for the same reason: the layout's assign does not
+reach an include, and the credit below names whoever made the theme in use.{%- endcomment -%}
+{% assign theme = site.data.themes[site.telar_theme] %}
 <footer class="site-footer mt-5 py-4 bg-light">
   <div class="container">
     <div class="row">
@@ -30,6 +33,13 @@ the language pack here (English fallback) for the translatable credit line below
         {% capture footer_ampl %}<a href="https://ampl.clair.ucsb.edu" class="footer-link">AMPL</a>{% endcapture %}
         <p class="mb-0 text-muted">
           {{ lang.footer.built_with | default: "Built with __TELAR__ __VERSION__, a project of __NEOGRANADINA__ and __AMPL__." | replace: "__TELAR__", footer_telar | replace: "__VERSION__", footer_version | replace: "__NEOGRANADINA__", footer_neogranadina | replace: "__AMPL__", footer_ampl }}
+          {%- comment -%}A theme that names its maker says so, linked when the theme gives a URL.
+          Built as a token like the names above, so the credit follows the language rather than
+          assuming English word order.{%- endcomment -%}
+          {%- if theme.creator -%}
+            {% capture footer_theme_creator %}{% if theme.creator_url %}<a href="{{ theme.creator_url }}" target="_blank" class="footer-link">{{ theme.creator }}</a>{% else %}{{ theme.creator }}{% endif %}{% endcapture %}
+            <br>{{ lang.footer.theme_by | default: "Theme by __CREATOR__." | replace: "__CREATOR__", footer_theme_creator }}
+          {%- endif -%}
         </p>
       </div>
     </div>

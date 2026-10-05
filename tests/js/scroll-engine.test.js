@@ -9,126 +9,37 @@
  *   - advanceToStep: guard for out-of-range indices
  *   - initScrollEngine: Lenis constructor options, snap configuration
  *
- * @version v1.5.0
+ * @version v1.8.0
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ── Hoisted mocks ─────────────────────────────────────────────────────────────
-// vi.hoisted() runs before vi.mock() factories, ensuring all variables are
-// initialized before the factory closures capture them.
+// ── Mocks ─────────────────────────────────────────────────────────────────────
+// Each factory imports the harness, so the engine and this suite share its spies.
 
-const mocks = vi.hoisted(() => {
-  // Lenis instance methods
-  const lenisOn = vi.fn();
-  const lenisRaf = vi.fn();
-  const lenisScrollTo = vi.fn();
-  const lenisResize = vi.fn();
-
-  // Snap instance methods
-  const snapAdd = vi.fn(() => vi.fn()); // returns a remover function
-  const snapRemove = vi.fn();
-  const snapResize = vi.fn();
-
-  // Track constructor calls
-  const lenisConstructorArgs = [];
-  const snapConstructorArgs = [];
-
-  // Lenis constructor — must be a regular function to work with `new`
-  function MockLenis(opts) {
-    lenisConstructorArgs.push(opts);
-    this.on = lenisOn;
-    this.raf = lenisRaf;
-    this.scrollTo = lenisScrollTo;
-    this.resize = lenisResize;
-    this.animatedScroll = 0;
-  }
-
-  // Snap constructor — must be a regular function to work with `new`
-  function MockSnap(lenis, opts) {
-    snapConstructorArgs.push({ lenis, opts });
-    this.add = snapAdd;
-    this.remove = snapRemove;
-    this.resize = snapResize;
-    this.next = vi.fn();
-    this.previous = vi.fn();
-  }
-
-  const mockActivateCard = vi.fn();
-  const mockGoToStep = vi.fn();
-  const mockInitKeyboardNavigation = vi.fn();
-  const mockInitializeLoadingShimmer = vi.fn();
-
-  return {
-    MockLenis,
-    MockSnap,
-    lenisOn,
-    lenisScrollTo,
-    lenisResize,
-    snapAdd,
-    snapRemove,
-    lenisConstructorArgs,
-    snapConstructorArgs,
-    mockActivateCard,
-    mockGoToStep,
-    mockInitKeyboardNavigation,
-    mockInitializeLoadingShimmer,
-  };
-});
-
-vi.mock('lenis', () => ({ default: mocks.MockLenis }));
-vi.mock('lenis/snap', () => ({ default: mocks.MockSnap }));
-
-vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
-  activateCard: mocks.mockActivateCard,
-  setCardProgress: vi.fn(),
-}));
-
-vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
-  lerpIiifPosition: vi.fn(),
-  snapIiifToPosition: vi.fn(),
-  animateIiifToPosition: vi.fn(),
-  createIiifCard: vi.fn(),
-  getOrCreateIiifCard: vi.fn(),
-  activateIiifCard: vi.fn(),
-  deactivateIiifCard: vi.fn(),
-  destroyIiifCard: vi.fn(),
-}));
-
-vi.mock('../../assets/js/telar-story/navigation.js', () => ({
-  goToStep: mocks.mockGoToStep,
-  initKeyboardNavigation: mocks.mockInitKeyboardNavigation,
-  updateViewerInfo: vi.fn(),
-}));
-
-vi.mock('../../assets/js/telar-story/viewer.js', () => ({
-  initializeLoadingShimmer: mocks.mockInitializeLoadingShimmer,
-  buildObjectsIndex: vi.fn(),
-  prefetchStoryManifests: vi.fn(),
-  initializeCredits: vi.fn(),
-  getManifestUrl: vi.fn(),
-  updateObjectCredits: vi.fn(),
-  showViewerSkeletonState: vi.fn(),
-}));
+vi.mock('lenis', async () => (await import('./scroll-engine-harness.js')).lenisModule);
+vi.mock('lenis/snap', async () => (await import('./scroll-engine-harness.js')).snapModule);
+vi.mock('../../assets/js/telar-story/card-pool.js',
+  async () => (await import('./scroll-engine-harness.js')).cardPoolModule);
+vi.mock('../../assets/js/telar-story/iiif-card.js',
+  async () => (await import('./scroll-engine-harness.js')).iiifCardModule);
+vi.mock('../../assets/js/telar-story/camera-travel.js',
+  async () => (await import('./scroll-engine-harness.js')).cameraTravelModule);
+vi.mock('../../assets/js/telar-story/navigation.js',
+  async () => (await import('./scroll-engine-harness.js')).navigationModule);
+vi.mock('../../assets/js/telar-story/viewer.js',
+  async () => (await import('./scroll-engine-harness.js')).viewerModule);
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
-import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState } from '../../assets/js/telar-story/scroll-engine.js';
+import { updateScrollPosition, advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav, jumpScrollTo, isMoveInFlight } from '../../assets/js/telar-story/scroll-engine.js';
 import { lerpIiifPosition } from '../../assets/js/telar-story/iiif-card.js';
-import { state } from '../../assets/js/telar-story/state.js';
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function resetState(overrides = {}) {
-  state.steps = Array.from({ length: 5 }, (_, i) => ({ index: i }));
-  state.currentIndex = -1;
-  state.scrollPosition = 0;
-  state.scrollProgress = 0;
-  state.isSnapping = false;
-  state.lenis = null;
-  state.snap = null;
-  Object.assign(state, overrides);
-}
+import { travelBetween } from '../../assets/js/telar-story/camera-travel.js';
+import { state, moveSeconds } from '../../assets/js/telar-story/state.js';
+import {
+  mocks, engineStory, stubEngineGlobals, readerTakesOver, wheelEvent, scrollFrame, resetState,
+  modelLenis, landMove, restAt, readerScrollsTo,
+} from './scroll-engine-harness.js';
 
 // ── updateScrollPosition: position model ──────────────────────────────────────
 
@@ -236,9 +147,22 @@ describe('advanceToStep', () => {
     state.lenis = mockLenis;
   });
 
-  it('does nothing if targetIndex < 0', () => {
-    advanceToStep(-1);
+  it('does nothing if targetIndex < -1', () => {
+    advanceToStep(-2);
     expect(state.lenis.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('takes -1 to the intro, at the top of the surface', () => {
+    advanceToStep(-1);
+    expect(state.lenis.scrollTo).toHaveBeenCalledWith(0, expect.any(Object));
+  });
+
+  it('writes the fragment for the step it lands on', () => {
+    history.replaceState(null, '', '/telar/stories/s/#s1');
+    advanceToStep(2);
+    state.currentIndex = 2;          // the scroll's own frames state the step
+    state.lenis.scrollTo.mock.calls[0][1].onComplete();
+    expect(location.hash).toBe('#s3');
   });
 
   it('does nothing if targetIndex >= steps.length', () => {
@@ -249,10 +173,18 @@ describe('advanceToStep', () => {
   it('calls lenis.scrollTo with correct pixel target (+1 for intro offset)', () => {
     advanceToStep(2);
     // targetPx = (targetIndex + 1) * vh to account for intro at position 0
+    // The pace of the move is tuned as one number for every programmatic
+    // path, so this pins the target and leaves the duration to the pace.
     expect(state.lenis.scrollTo).toHaveBeenCalledWith(
       3 * window.innerHeight,
-      expect.objectContaining({ duration: 0.5 })
+      expect.objectContaining({ duration: expect.any(Number) })
     );
+  });
+
+  it('takes the base for a move the camera barely travels', () => {
+    travelBetween.mockReturnValueOnce(0.3);
+    advanceToStep(2);
+    expect(state.lenis.scrollTo.mock.calls[0][1].duration).toBe(1.2);
   });
 
   it('calls lenis.scrollTo with an ease-out cubic easing function', () => {
@@ -282,14 +214,7 @@ describe('getScrollEngineState', () => {
 
 describe('initScrollEngine', () => {
   beforeEach(() => {
-    document.body.innerHTML = `
-      <div class="scroll-surface"></div>
-      <div class="card-stack">
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-        <div class="story-step"></div>
-      </div>
-    `;
+    engineStory(3);
     // Clear constructor arg tracking arrays
     mocks.lenisConstructorArgs.length = 0;
     mocks.snapConstructorArgs.length = 0;
@@ -392,5 +317,651 @@ describe('initScrollEngine', () => {
     const regular = document.createElement('div');
     document.body.appendChild(regular);
     expect(opts.prevent(regular)).toBe(false);
+  });
+});
+
+// ── keyboardNav: the way back to the intro ────────────────────────────────────
+//
+// Position 0 is the intro; the keyboard's backward target from step 0 is
+// therefore position 0, which carries no card to activate. The intro zone in
+// updateScrollPosition cannot cover for it: keyboardNavInFlight suppresses that
+// path for the whole scroll animation. So the keyboard has to run the intro
+// restore itself, through the one call the scroll and button paths both make.
+
+describe('keyboardNav — arriving at the intro', () => {
+  beforeEach(() => {
+    engineStory(3);
+    mocks.mockGoToStep.mockClear();
+    mocks.mockActivateCard.mockClear();
+    mocks.lenisScrollTo.mockClear();
+    resetState({ currentIndex: 0 });
+
+    stubEngineGlobals();
+
+    initScrollEngine(3);
+    state.currentIndex = 0;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Park the engine's Lenis at a scroll position, in whole viewport heights. */
+  function parkAt(position) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = position * window.innerHeight;
+  }
+
+  it('restores the intro when the target is position 0', () => {
+    parkAt(1); // step 0
+    keyboardNav('backward');
+    expect(mocks.mockGoToStep).toHaveBeenCalledWith(-1, 'backward');
+  });
+
+  it('scrolls to the top of the surface on the same press', () => {
+    parkAt(1);
+    keyboardNav('backward');
+    expect(mocks.lenisScrollTo).toHaveBeenCalledWith(0, expect.objectContaining({ force: true }));
+  });
+
+  it('activates the step rather than the intro when the target is a step', () => {
+    parkAt(2); // step 1
+    state.currentIndex = 1;
+    keyboardNav('backward');
+    expect(mocks.mockActivateCard).toHaveBeenCalledWith(0, 'backward');
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+
+  it('does not restore the intro a second time once it is the current position', () => {
+    parkAt(0);
+    state.currentIndex = -1;
+    keyboardNav('backward');
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+});
+
+// ── keyboardNav: a press arriving while a move is still travelling ────────────
+//
+// The move takes 1.2 s, so a reader moving at any ordinary pace presses again
+// before it lands. The position mid-move is one the engine is driving towards
+// a landing it already chose, so reading it as a place the reader left the
+// scroll makes the press re-issue the move already running — the reader presses
+// and nothing happens, and waiting does not recover it. A press therefore steps
+// from the landing while the keyboard owns the move, and from the position
+// whenever the scroll is the reader's.
+//
+// Lenis calls onComplete through the scrollTo mock's own caller, so a move
+// started here stays in flight for the rest of the test, which is the state
+// these cases are about.
+
+describe('keyboardNav — a press while a move is in flight', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    mocks.mockGoToStep.mockClear();
+    resetState({ currentIndex: -1 });
+
+    stubEngineGlobals();
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Where the last scroll the engine asked for was going, in viewports. */
+  function lastTarget() {
+    const calls = mocks.lenisScrollTo.mock.calls;
+    return calls.length ? calls[calls.length - 1][0] / window.innerHeight : null;
+  }
+
+  /** Park Lenis part way through a move, as it is when a second press lands. */
+  function partWayTo(position) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = (position - 0.02) * window.innerHeight;
+  }
+
+  it('ends a post-snap dwell, so the scroll is the reader\'s again at once', () => {
+    vi.useFakeTimers();
+    try {
+      const { lenis } = getScrollEngineState();
+      lenis.stop = vi.fn();
+      lenis.start = vi.fn();
+      // The dwell a snap leaves behind: Lenis stopped, a timer to restart it.
+      mocks.snapConstructorArgs.at(-1).opts.onSnapComplete();
+      expect(lenis.stop).toHaveBeenCalledTimes(1);
+
+      keyboardNav('forward');
+      expect(lenis.start).toHaveBeenCalledTimes(1);
+
+      // The dwell's own restart is cancelled, not left to fire later, and it
+      // is over: the next press finds no dwell to end.
+      vi.advanceTimersByTime(10_000);
+      keyboardNav('forward');
+      expect(lenis.start).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('takes the second press to the step after the one in flight', () => {
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(1);
+
+    partWayTo(1);
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(2);
+  });
+
+  it('counts every press of a burst', () => {
+    for (let i = 0; i < 4; i++) {
+      keyboardNav('forward');
+      partWayTo(i + 1);
+    }
+    expect(lastTarget()).toBe(4);
+  });
+
+  it('activates each step the burst passes, so none is skipped', () => {
+    for (let i = 0; i < 4; i++) {
+      keyboardNav('forward');
+      partWayTo(i + 1);
+    }
+    const activated = mocks.mockActivateCard.mock.calls.map(([index]) => index);
+    expect(activated).toEqual([0, 1, 2, 3]);
+  });
+
+  it('turns a burst around from its landing, not from the scroll behind it', () => {
+    // Pressed fast enough that the scroll is still most of three steps behind
+    // the landing, which is where the two readings part company: back from the
+    // landing is step 2, back from the position is the intro.
+    keyboardNav('forward');
+    keyboardNav('forward');
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(3);
+
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.4 * window.innerHeight;
+    keyboardNav('backward');
+    expect(lastTarget()).toBe(2);
+  });
+
+  it('leaves the move running when the press cannot go further', () => {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 4 * window.innerHeight;
+    keyboardNav('forward');          // to position 5, the last
+    expect(lastTarget()).toBe(5);
+
+    partWayTo(5);
+    const before = mocks.lenisScrollTo.mock.calls.length;
+    keyboardNav('forward');
+    expect(mocks.lenisScrollTo.mock.calls.length).toBe(before);
+  });
+
+  it('reads the position again once the scroll is the reader\'s', () => {
+    keyboardNav('forward');
+    partWayTo(1);
+
+    // The reader's own input takes the scroll, so the landing the keyboard
+    // chose is no longer an account of where the story is going.
+    const onVirtualScroll = mocks.lenisOn.mock.calls
+      .find(([event]) => event === 'virtual-scroll')[1];
+    onVirtualScroll();
+
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 2.4 * window.innerHeight;
+    keyboardNav('forward');
+    expect(lastTarget()).toBe(3);   // completes the step the reader stopped in
+  });
+});
+
+// ── One duration per move ─────────────────────────────────────────────────────
+//
+// A move takes as long as its camera travel asks for, and the scroll, the
+// camera and the cards all move over that one duration. The cards read it from
+// the card stack, so it is written there before the move starts any card
+// transition.
+
+describe('keyboardNav — the duration of a move', () => {
+  let durationAtSettle;
+
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    durationAtSettle = [];
+    mocks.mockSettleCards.mockImplementation(() => {
+      durationAtSettle.push(document.querySelector('.card-stack')
+        .style.getPropertyValue('--card-motion-duration'));
+    });
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mocks.mockSettleCards.mockReset();
+    travelBetween.mockReset();
+    travelBetween.mockReturnValue(0);
+  });
+
+  const lastDuration = () => mocks.lenisScrollTo.mock.calls.at(-1)[1].duration;
+
+  it('gives the scroll the duration the travel asks for', () => {
+    travelBetween.mockReturnValue(1.97);
+    keyboardNav('forward');
+    expect(lastDuration()).toBeCloseTo(moveSeconds(1.97), 9);
+    expect(lastDuration()).toBeCloseTo(2.62, 2);
+  });
+
+  it('hands the cards the same duration before they move', () => {
+    travelBetween.mockReturnValue(1.97);
+    keyboardNav('forward');
+    expect(durationAtSettle.at(-1)).toBe(`${moveSeconds(1.97)}s`);
+  });
+
+  it('times a second press by the travel still ahead of it', () => {
+    travelBetween.mockImplementation((from, to) => Math.abs(to - from) * 1.5);
+    keyboardNav('forward');
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.98 * window.innerHeight;
+    keyboardNav('forward');
+
+    expect(travelBetween).toHaveBeenLastCalledWith(expect.closeTo(-0.02, 9), 1);
+    expect(lastDuration()).toBeCloseTo(moveSeconds(1.53), 9);
+    expect(durationAtSettle.at(-1)).toBe(`${moveSeconds(1.53)}s`);
+  });
+
+  it('holds the post-snap dwell for the base, whatever the move before it took', () => {
+    vi.useFakeTimers();
+    try {
+      travelBetween.mockReturnValue(1.97);
+      keyboardNav('forward');
+      readerTakesOver(wheelEvent());
+      const { lenis } = getScrollEngineState();
+      lenis.stop = vi.fn();
+      lenis.start = vi.fn();
+      mocks.snapConstructorArgs.at(-1).opts.onSnapComplete();
+      vi.advanceTimersByTime(1199);
+      expect(lenis.start).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(lenis.start).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ── The reader taking the scroll back from a move in flight ───────────────────
+//
+// A keyboard move raises three guards for as long as it travels: the cards are
+// activated by the move rather than by the scroll, the intro is not settled,
+// and the scrub does not close. All three come down in the move's onComplete,
+// which is the only place they can come down from — and Lenis never calls it
+// when raw input arrives mid-move. `onVirtualScroll` either stops the running
+// animation outright (`animate.stop()`, which calls neither callback) or
+// replaces it with the reader's own `scrollTo`, and a superseded animation's
+// onComplete is gone with it.
+//
+// So the engine stands the move down where the takeover is seen, or the guards
+// stay up for the rest of the reader's session: cards that never change with
+// the scroll, an intro that never settles, and a gesture that stops wherever
+// its last frame left it.
+
+describe('a move the reader interrupts with the scroll', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    mocks.mockSettleCards.mockClear();
+    mocks.mockGoToStep.mockClear();
+    resetState({ currentIndex: -1 });
+
+    stubEngineGlobals();
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+
+
+
+  it('gives the cards back to the scroll', () => {
+    keyboardNav('forward');                 // travelling towards position 1
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.98 * window.innerHeight;
+
+    readerTakesOver();
+    mocks.mockActivateCard.mockClear();
+    scrollFrame(3);                         // the reader, two steps further on
+
+    expect(mocks.mockActivateCard).toHaveBeenCalled();
+  });
+
+  it('settles the cards when the reader scrolls back into the intro', () => {
+    keyboardNav('forward');
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 0.98 * window.innerHeight;
+
+    readerTakesOver();
+    mocks.mockSettleCards.mockClear();
+    scrollFrame(0.4);
+
+    expect(mocks.mockSettleCards).toHaveBeenCalled();
+  });
+
+  it('leaves the move running when Lenis passes the input by', () => {
+    // Lenis emits virtual-scroll before it decides. A ctrl-wheel is a zoom,
+    // which it passes by at lenis.mjs:586 — the keyboard's animation is still
+    // travelling, and the reader asked for step 1.
+    keyboardNav('forward');
+    readerTakesOver(wheelEvent({ event: { ctrlKey: true, composedPath: () => [] } }));
+    mocks.mockGoToStep.mockClear();
+    scrollFrame(0.5);                       // still short of the step
+
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+
+  it('leaves the move running for a tap, which carries no scroll at all', () => {
+    keyboardNav('forward');
+    readerTakesOver(wheelEvent({ deltaX: 0, deltaY: 0 }));
+    mocks.mockGoToStep.mockClear();
+    scrollFrame(0.5);
+
+    expect(mocks.mockGoToStep).not.toHaveBeenCalled();
+  });
+
+  it('stands the move down for a wheel, which Lenis does act on', () => {
+    // The control for the two above: the same frame, the same position, and
+    // the only difference is input Lenis takes the scroll with.
+    keyboardNav('forward');
+    readerTakesOver(wheelEvent());
+    mocks.mockGoToStep.mockClear();
+    scrollFrame(0.5);
+
+    expect(mocks.mockGoToStep).toHaveBeenCalled();
+  });
+
+  it('closes the scrub on every gesture after the one that took over', () => {
+    vi.useFakeTimers();
+    keyboardNav('forward');
+    // Resting on the step the move was going to, so the settle below has
+    // nothing to carry and starts no move of its own — this case is about the
+    // move the reader interrupted, and a carry would supply a token for the
+    // right reason and hide whether the interrupted one let go of its own.
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = 1 * window.innerHeight;
+
+    readerTakesOver();
+    vi.advanceTimersByTime(150);            // the gesture's own settle
+    mocks.mockSettleCards.mockClear();
+
+    // A later gesture, tracked frame by frame. Every frame re-arms the settle,
+    // so a scroll that drifts to a stop is settled where it actually stops.
+    scrollFrame(2.2);
+    scrollFrame(2.6);
+    vi.advanceTimersByTime(150);
+
+    expect(mocks.mockSettleCards).toHaveBeenCalled();
+  });
+});
+
+// ── A carry the reader takes over ────────────────────────────────────────────
+//
+// A gesture that stops between steps is carried to the step it was heading
+// for, and the carry holds a token while it travels so that nothing starts a
+// second move on the same scroll. When the reader's wheel takes the scroll
+// before the carry lands, Lenis replaces the carry with the reader's scroll
+// and never calls its completion, so the takeover is where the carry ends: a
+// token kept past it would refuse the carry of every gesture after it, until
+// some other move took a token, and leave the reader between steps.
+
+describe('a carry the reader takes over', () => {
+  beforeEach(() => {
+    engineStory(5);
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    // A gesture comes to rest between steps 1 and 2, and is carried on.
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    restAt(1);
+    restAt(1.4);
+    vi.advanceTimersByTime(150);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('carries the gesture that took over, once it comes to rest', () => {
+    expect(state.lenis.inFlight?.px, 'the first gesture is being carried').toBe(2 * window.innerHeight);
+
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    readerScrollsTo(2.6);
+    vi.advanceTimersByTime(150);
+
+    expect(state.lenis.inFlight?.px, 'the second gesture is carried too').toBe(3 * window.innerHeight);
+    landMove();
+    expect(state.scrollPosition).toBe(3);
+    expect(state.currentIndex).toBe(2);
+  });
+
+  it('starts no second carry for input Lenis passes by', () => {
+    const scrollTos = state.lenis.scrollTo.mock.calls.length;
+
+    readerTakesOver(wheelEvent({ event: { ctrlKey: true, composedPath: () => [] } }));
+    vi.advanceTimersByTime(150);
+
+    expect(state.lenis.scrollTo.mock.calls.length).toBe(scrollTos);
+    expect(state.lenis.inFlight?.px).toBe(2 * window.innerHeight);
+  });
+});
+
+// ── A jump during a snap ─────────────────────────────────────────────────────
+//
+// A jump (Back to Start, a contents link, a fragment change) cancels the snap
+// without Snap's completion, so the snap's own in-flight flag is cleared by the
+// jump, or the engine reads a move in flight for good and refuses every carry.
+
+describe('a jump while a snap is in flight', () => {
+  beforeEach(() => {
+    engineStory(5);
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves no move in flight, and the next gesture is carried', () => {
+    state.isSnapping = true;
+    expect(isMoveInFlight()).toBe(true);
+
+    jumpScrollTo(3 * window.innerHeight);
+    expect(state.isSnapping).toBe(false);
+    expect(isMoveInFlight()).toBe(false);
+
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    restAt(3);
+    restAt(3.4);
+    vi.advanceTimersByTime(150);
+    expect(state.lenis.inFlight?.px, 'the gesture is carried to the next step').toBe(4 * window.innerHeight);
+  });
+});
+
+// ── A resize keeps the reader on their step ──────────────────────────────────
+
+describe('a window that changes height', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    resetState({ currentIndex: -1 });
+
+    vi.useFakeTimers();
+    vi.stubGlobal('innerHeight', 900);
+    stubEngineGlobals();
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** One frame of Lenis's output, at `px` pixels down the surface. */
+  function scrollFrameAt(px) {
+    const { lenis } = getScrollEngineState();
+    lenis.animatedScroll = px;
+    mocks.lenisOn.mock.calls.findLast(([event]) => event === 'scroll')[1](lenis);
+  }
+
+  /** Change the window's height and let the resize settle. */
+  function resizeTo(height) {
+    vi.stubGlobal('innerHeight', height);
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+  }
+
+  /** The immediate jump the relayout made, if any. */
+  const relayoutJump = (spy = mocks.lenisScrollTo) => spy.mock.calls.find(
+    ([, opts]) => opts?.immediate === true && opts?.force === true);
+
+  it('puts the scroll at the same step in the new height', () => {
+    scrollFrameAt(4 * 900);                 // step index 3
+    expect(state.currentIndex).toBe(3);
+    mocks.mockActivateCard.mockClear();
+
+    resizeTo(720);
+
+    expect(relayoutJump()?.[0]).toBe(4 * 720);
+    expect(state.currentIndex).toBe(3);
+    expect(mocks.mockActivateCard).not.toHaveBeenCalled();
+    expect(document.querySelector('.scroll-surface').style.height).toBe(`${6 * 720}px`);
+  });
+
+  it('reads nothing from a frame reported before the layout catches up', () => {
+    // The browser clamps the offset to the resized window, and Lenis reports
+    // the clamp, before the debounced relayout has run.
+    scrollFrameAt(5 * 900);                 // the last step
+    mocks.mockActivateCard.mockClear();
+    vi.stubGlobal('innerHeight', 1000);
+    scrollFrameAt(5 * 900 - 100);
+
+    expect(state.scrollPosition).toBe(5);
+    expect(mocks.mockActivateCard).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+    expect(relayoutJump()?.[0]).toBe(5 * 1000);
+    expect(state.currentIndex).toBe(4);
+  });
+
+  it('lands a keyboard move under way where it was going, and stands it down', () => {
+    scrollFrameAt(2 * 900);                 // step index 1
+    keyboardNav('forward');                 // towards position 3
+    const { lenis } = getScrollEngineState();
+    lenis.isScrolling = 'smooth';           // the move is travelling
+    lenis.animatedScroll = 2.3 * 900;
+    mocks.lenisScrollTo.mockClear();
+
+    resizeTo(720);
+
+    expect(relayoutJump()?.[0]).toBe(3 * 720);
+    expect(state.currentIndex).toBe(2);
+
+    // Stood down: the move's completion will never run, so nothing may still
+    // hold the cards for it. The reader's next scroll moves the story.
+    lenis.isScrolling = false;
+    mocks.mockActivateCard.mockClear();
+    scrollFrameAt(4 * 720);
+    expect(mocks.mockActivateCard).toHaveBeenCalled();
+    expect(state.currentIndex).toBe(3);
+  });
+
+  it('keeps a keyboard move that lands before the relayout on its landing step', () => {
+    scrollFrameAt(2 * 900);                 // step index 1
+    keyboardNav('forward');                 // towards position 3
+    const { lenis } = getScrollEngineState();
+    const move = mocks.lenisScrollTo.mock.calls.findLast(([, opts]) => opts?.onComplete);
+    mocks.lenisScrollTo.mockClear();
+
+    // The window changes; the debounce has not fired, so frames are ignored.
+    vi.stubGlobal('innerHeight', 720);
+    window.dispatchEvent(new Event('resize'));
+    lenis.isScrolling = false;
+    lenis.animatedScroll = 3 * 900;
+    move[1].onComplete();                   // the move lands during the debounce
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump()?.[0]).toBe(3 * 720);
+    expect(state.scrollPosition).toBe(3);
+    expect(state.currentIndex).toBe(2);
+    expect(window.location.hash).toBe('#s3');
+  });
+
+  it('keeps a carry that lands before the relayout on the step it carried to', () => {
+    const lenis = modelLenis();
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    restAt(1);
+    restAt(1.4);
+    vi.advanceTimersByTime(150);            // the gesture rests; the carry heads for 2
+    expect(lenis.inFlight?.px).toBe(2 * 900);
+
+    vi.stubGlobal('innerHeight', 720);
+    window.dispatchEvent(new Event('resize'));
+    landMove();                             // the carry lands during the debounce
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump(lenis.scrollTo)?.[0]).toBe(2 * 720);
+    expect(state.scrollPosition).toBe(2);
+    expect(state.currentIndex).toBe(1);
+    expect(window.location.hash).toBe('#s2');
+  });
+
+  it('keeps a snap that lands against a clamped offset on the step it was heading for', () => {
+    const lenis = modelLenis();
+    const { snap } = getScrollEngineState();
+    const { opts } = mocks.snapConstructorArgs.at(-1);
+    restAt(4);
+    opts.onSnapStart();
+    snap.currentSnapIndex = 5;              // heading for the last position
+
+    // The window grows before the snap lands: the browser clamps the offset
+    // to the larger window and the surface is still laid out for 900.
+    vi.stubGlobal('innerHeight', 1000);
+    window.dispatchEvent(new Event('resize'));
+    lenis.animatedScroll = 6 * 900 - 1000;
+    opts.onSnapComplete();
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump(lenis.scrollTo)?.[0]).toBe(5 * 1000);
+    expect(state.scrollPosition).toBe(5);
+    expect(state.currentIndex).toBe(4);
+  });
+
+  it('leaves the scroll alone when only the width changes', () => {
+    scrollFrameAt(4 * 900);
+    mocks.lenisScrollTo.mockClear();
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+
+    expect(relayoutJump()).toBeUndefined();
+    expect(state.currentIndex).toBe(3);
   });
 });

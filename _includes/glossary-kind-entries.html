@@ -1,0 +1,6 @@
+{%- comment -%}
+  The glossary entries of one kind, assigned to `glossary_kind_entries`.
+  Pass the kind (see glossary-kinds.html) as `kind`. The build writes a
+  kind id into every entry's page as `glossary_kind`.
+{%- endcomment -%}
+{%- assign glossary_kind_entries = site.glossary | where: "glossary_kind", include.kind.id -%}

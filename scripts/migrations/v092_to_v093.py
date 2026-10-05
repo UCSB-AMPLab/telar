@@ -16,7 +16,7 @@ Bug fix release:
 No _config.yml changes beyond version bump. No CSV schema changes.
 No new dependencies.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -28,6 +28,7 @@ class Migration092to093(BaseMigration):
 
     from_version = "0.9.2-beta"
     to_version = "0.9.3-beta"
+    release_date = "2026-03-14"  # tag v0.9.3-beta
     _TARGET_TAG = "v0.9.3-beta"  # pin framework fetches to the release tag
     description = "IIIF tile fixes, coordinate panel restyle, multi-page page switching"
 
@@ -45,10 +46,9 @@ class Migration092to093(BaseMigration):
 
         # Phase 2: Update version
         print("  Phase 2: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("0.9.3-beta", today):
-            changes.append(f"Updated _config.yml: version 0.9.3-beta ({today})")
+        stamped = self.release_date
+        if self._update_config_version("0.9.3-beta", stamped):
+            changes.append(f"Updated _config.yml: version 0.9.3-beta ({stamped})")
 
         return changes
 
@@ -81,13 +81,8 @@ class Migration092to093(BaseMigration):
             'CHANGELOG.md': 'Added v0.9.3-beta changelog entry',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}"))
 
         return changes
 
@@ -106,6 +101,8 @@ class Migration092to093(BaseMigration):
                 'description': '''**If you use GitHub Pages:**
 
 Your site will automatically regenerate IIIF tiles with the corrected info.json files when it rebuilds. To trigger a rebuild now, go to your repository's Actions tab, select the "Build and Deploy" workflow, and click **Run workflow**.''',
+                'audience': 'all',
+                'kind': 'note',
             },
             {
                 'description': '''**If you work with your site locally:**
@@ -115,6 +112,8 @@ If your site uses self-hosted images, regenerate IIIF tiles to fix the info.json
 `python3 scripts/generate_iiif.py --base-url YOUR_SITE_URL`
 
 (Replace YOUR_SITE_URL with your site's URL, e.g. https://yourusername.github.io/your-repo)''',
+                'audience': 'all',
+                'kind': 'action',
             },
         ]
 
@@ -125,6 +124,8 @@ If your site uses self-hosted images, regenerate IIIF tiles to fix the info.json
                 'description': '''**Si usas GitHub Pages:**
 
 El sitio regenerará automáticamente las teselas IIIF con los archivos info.json corregidos cuando se reconstruya. Para iniciar una reconstrucción ahora, ve a la pestaña Actions del repositorio, selecciona el flujo "Build and Deploy" y haz clic en **Run workflow**.''',
+                'audience': 'all',
+                'kind': 'note',
             },
             {
                 'description': '''**Si trabajas con tu sitio localmente:**
@@ -134,5 +135,7 @@ Si el sitio usa imágenes auto-alojadas, regenera las teselas IIIF para corregir
 `python3 scripts/generate_iiif.py --base-url URL_DE_TU_SITIO`
 
 (Reemplaza URL_DE_TU_SITIO con la URL del sitio, ej. https://tuusuario.github.io/tu-repositorio)''',
+                'audience': 'all',
+                'kind': 'action',
             },
         ]

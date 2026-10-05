@@ -29,8 +29,8 @@
  * so the shimmer state stays visible longer and does not flash.
  *
  * Loading shimmer — `initializeLoadingShimmer()` shows a skeleton pulse
- * on the viewer container while viewers initialise. It polls the viewer
- * card array until enough cards report isReady, then removes the shimmer.
+ * on the viewer container while viewers initialise. It polls the plates
+ * until enough report isReady, then removes the shimmer.
  * Stories with fewer unique objects than the loading threshold skip the
  * shimmer entirely.
  *
@@ -221,7 +221,7 @@ function adjustThresholdsForConnection() {
  *
  * Counts the unique objects in the story. If the count meets or exceeds
  * the loading threshold (adjusted by connection speed), shows a skeleton
- * pulse on the viewer container and polls state.viewerCards until enough
+ * pulse on the viewer container and polls the image plates until enough
  * report isReady. Stories below the threshold skip the shimmer entirely —
  * their single viewer loads fast enough that a pulse would just flash.
  */
@@ -234,7 +234,8 @@ export function initializeLoadingShimmer() {
     showViewerSkeletonState();
 
     const checkReadyViewers = () => {
-      const readyCount = state.viewerCards.filter(v => v.isReady).length;
+      const readyCount = Object.values(state.viewerPlates)
+        .filter(plate => plate.isReady).length;
       const targetReady = Math.min(state.config.minReadyViewers, uniqueViewers);
 
       if (readyCount >= targetReady) {

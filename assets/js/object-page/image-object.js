@@ -6,7 +6,7 @@
  * bundled so the page loads one script. OpenSeadragon is a vendored classic
  * script the layout loads first; the wrapper reads it from `window`.
  *
- * Version: v1.7.0
+ * Version: v1.8.0
  */
 
 import { IiifViewer, normalizedViewportPosition } from '../telar-story/iiif-viewer.js';
@@ -19,15 +19,72 @@ export function manifestUrlFor(data) {
   return null;
 }
 
-export async function initImageViewer(data, doc = document) {
-  // Coordinate panel theme colouring — object-theme.js picks coord-light /
-  // coord-dark from the theme button background's luminance
-  window.telarObjectTheme.applyPanelContrastClass(doc.querySelector('.coordinate-panel'));
+/**
+ * The 0-indexed page an object page address asks for with `?page=N`.
+ *
+ * N is 1-indexed, like a story step's `page` column, and must be a whole
+ * number of one or more digits once `URLSearchParams` has decoded it; the
+ * first `page` parameter counts. Anything else asks for the first page.
+ * A number past the last page is left for the viewer to clamp.
+ *
+ * @param {string} search - The address's query string, `?` included or not.
+ * @returns {number}
+ */
+export function requestedPage(search) {
+  const value = new URLSearchParams(search).get('page');
+  if (value === null || !/^[0-9]+$/.test(value)) return 0;
+  const page = parseInt(value, 10);
+  return page >= 1 ? page - 1 : 0;
+}
 
+/**
+ * The address that names page `page0` of a `total`-page object: no `page`
+ * parameter for the first page or for a single-page object, `page=N`
+ * (1-indexed) for any other page.
+ *
+ * Only `page` parameters are touched. The rest of the query is kept as
+ * written rather than re-serialised, since a reader may have copied it from
+ * somewhere that encodes differently; the hash is kept too. A single-page
+ * object has no page to name, so a `page` parameter on its address is dropped.
+ *
+ * @param {string} href - The current absolute address.
+ * @param {number} page0 - 0-indexed page shown.
+ * @param {number} total - Pages in the object.
+ * @returns {string}
+ */
+export function addressWithPage(href, page0, total) {
+  const url = new URL(href);
+  const pieces = url.search.replace(/^\?/, '').split('&');
+  const isPage = function(piece) {
+    return piece !== '' && Array.from(new URLSearchParams(piece).keys())[0] === 'page';
+  };
+  const named = total > 1 && page0 > 0;
+  // An address with no page to drop or add is left exactly as written.
+  if (!named && !pieces.some(isPage)) return href;
+  const kept = pieces.filter(function(piece) {
+    return piece !== '' && !isPage(piece);
+  });
+  if (named) kept.push('page=' + (page0 + 1));
+  url.search = kept.length ? '?' + kept.join('&') : '';
+  return url.href;
+}
+
+export async function initImageViewer(data, doc = document) {
   const manifestUrl = manifestUrlFor(data);
   if (!manifestUrl) {
     console.error('No IIIF source specified');
     return;
+  }
+
+  // `?page=N` in the address opens that page, and the address follows the
+  // page shown so a reader can copy a link to it. replaceState keeps the
+  // back button free of one entry per page turned. The address is written
+  // from onPageShown, once a page's image has opened, so a page that fails
+  // to open leaves the address on the page last shown.
+  const win = doc.defaultView || window;
+  function writeAddress(page0) {
+    const next = addressWithPage(win.location.href, page0, wrapper.pages.length);
+    if (next !== win.location.href) win.history.replaceState(win.history.state, '', next);
   }
 
   // Initialise the IIIF wrapper. showChrome:true gives multi-page
@@ -40,8 +97,10 @@ export async function initImageViewer(data, doc = document) {
   const wrapper = new IiifViewer({
     container: '#object-viewer',
     manifestUrl: manifestUrl,
+    startPage: requestedPage(win.location.search),
     showChrome: true,
     allowZoomGestures: true,
+    onPageShown: writeAddress,
   });
 
   // Wait for the wrapper to initialise (manifest fetch + parse + OSD spin-up).
@@ -55,6 +114,7 @@ export async function initImageViewer(data, doc = document) {
   // Multi-page detection reads the wrapper's parsed page list, which
   // spares a second manifest fetch.
   const isMultiPage = wrapper.pages.length > 1;
+  writeAddress(wrapper.currentPage);
   if (isMultiPage) {
     doc.getElementById('object-viewer').classList.add('multipage');
     const pageRows = doc.querySelectorAll('.coord-page-row');

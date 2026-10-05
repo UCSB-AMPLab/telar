@@ -82,12 +82,13 @@ established convention. A site that customised en.yml or es.yml will have
 those edits replaced and should re-apply them after upgrading (see the
 manual step).
 
-Version: v1.6.0
+Version: v1.8.0
 """
 
 import os
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -228,6 +229,7 @@ class Migration154to160(BaseMigration):
 
     from_version = "1.5.4"
     to_version = "1.6.0"
+    release_date = "2026-07-10"  # tag v1.6.0
     description = "Code Health release — signposting/cleanup, post-build protected-story encryption, IIIF fallback tile backend"
 
     # Pin framework-file fetches to the v1.6.0 release tag/branch, not the
@@ -293,10 +295,8 @@ class Migration154to160(BaseMigration):
         if self._file_exists(GITATTRIBUTES_PATH):
             self._gitattributes_skipped = True
             return [ChangeRecord(
-                description=(
-                    f"Skipped {GITATTRIBUTES_PATH} (already exists) — "
-                    "see the manual step to merge the new linguist-generated markers"
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_gitattributes_skipped', GITATTRIBUTES_PATH),
                 status=ChangeStatus.APPLIED,
                 severity="soft",
             )]
@@ -304,18 +304,20 @@ class Migration154to160(BaseMigration):
         self._gitattributes_skipped = False
         content = self._fetch_from_github(GITATTRIBUTES_PATH, branch=self._TARGET_TAG)
         if content is None:
+            # Worded around the phrase `coerce_change` reads as a hard
+            # failure. This record is soft on purpose, and the phrase is what
+            # classifies a record that ever reaches that helper as text.
             return [ChangeRecord(
-                description=(
-                    f"Could not fetch {GITATTRIBUTES_PATH} from GitHub. "
-                    "Non-fatal — add it manually if you want the generated-bundle markers."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_gitattributes_absent', GITATTRIBUTES_PATH),
                 status=ChangeStatus.FAILED,
                 severity="soft",
             )]
 
         self._write_file(GITATTRIBUTES_PATH, content)
         return [ChangeRecord(
-            description=f"Added {GITATTRIBUTES_PATH} — marks the generated story bundle as linguist-generated",
+            description=get_message(self._detect_language(), 'change_gitattributes_added',
+                                    GITATTRIBUTES_PATH),
             status=ChangeStatus.APPLIED,
             severity="soft",
         )]
@@ -331,12 +333,13 @@ class Migration154to160(BaseMigration):
             if self._file_exists(rel_path):
                 os.remove(os.path.join(self.repo_root, rel_path))
                 changes.append(ChangeRecord(
-                    description=f"Removed dead file {rel_path}",
+                    description=get_message(self._detect_language(), 'change_removed_dead_file',
+                                        rel_path),
                     status=ChangeStatus.APPLIED, severity="soft",
                 ))
         if not changes:
             return [ChangeRecord(
-                description="No dead files to remove",
+                description=get_message(self._detect_language(), 'change_no_dead_files'),
                 status=ChangeStatus.APPLIED, severity="soft",
             )]
         return changes
@@ -353,10 +356,14 @@ class Migration154to160(BaseMigration):
         steps = [
             {
                 'description': '''**Update `.github/workflows/build.yml` by hand (required if you use private stories).** v1.6.0 encrypts private stories in a new build step that GitHub does not allow this upgrade to add for you. Copy the current `build.yml` from the Telar repository over yours (open it on GitHub, use "Copy raw contents", replace the whole file, commit). Until you do, marking any story `private: yes` will fail your build on purpose rather than publish it unprotected. Details: https://telar.org/docs/setup/upgrading/#v160-upgrade-notes''',
+                'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs/setup/upgrading/#v160-upgrade-notes'
             },
             {
                 'description': '''**If you customized the language packs, re-apply your changes.** The upgrade refreshed the framework language packs (`en.yml` / `es.yml`). This release adds several keys — the private-story unlock messages (empty/incorrect key), the embed banner's site-name fallback, audio-player control labels, and widget/glossary strings, among others — which the updated packs already include.''',
+                'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -370,6 +377,8 @@ assets/js/telar-story.js.map linguist-generated
 ```
 
 Add these to your existing file if you'd like the same behaviour.''',
+                'audience': 'all',
+                'kind': 'optional',
                 'doc_url': 'https://telar.org/docs'
             })
         return steps
@@ -378,10 +387,14 @@ Add these to your existing file if you'd like the same behaviour.''',
         steps = [
             {
                 'description': '''**Actualiza `.github/workflows/build.yml` a mano (obligatorio si usas historias privadas).** v1.6.0 cifra las historias privadas en un nuevo paso de construcción que GitHub no permite que esta actualización agregue por ti. Copia el `build.yml` actual del repositorio de Telar sobre el tuyo (ábrelo en GitHub, usa «Copy raw contents», reemplaza el archivo completo y confirma el cambio). Mientras no lo hagas, marcar cualquier historia con `private: yes` hará fallar tu construcción a propósito, en lugar de publicarla sin proteger. Detalles: https://telar.org/guia/configuracion/actualizacion/#notas-de-actualización-a-v160''',
+                'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia/configuracion/actualizacion/#notas-de-actualización-a-v160'
             },
             {
                 'description': '''**Si personalizaste los paquetes de idioma, vuelve a aplicar tus cambios.** La actualización reemplazó los paquetes de idioma del marco (`en.yml` / `es.yml`). Esta versión agrega varias claves — los mensajes de desbloqueo de historias privadas (clave vacía/incorrecta), el nombre de respaldo del sitio en el banner de incrustado, las etiquetas de los controles del reproductor de audio y textos de widgets/glosario, entre otras — que los paquetes actualizados ya incluyen.''',
+                'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia'
             },
         ]
@@ -395,6 +408,8 @@ assets/js/telar-story.js.map linguist-generated
 ```
 
 Agrégalas a tu archivo existente si quieres el mismo comportamiento.''',
+                'audience': 'all',
+                'kind': 'optional',
                 'doc_url': 'https://telar.org/guia'
             })
         return steps

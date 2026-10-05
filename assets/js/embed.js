@@ -20,15 +20,43 @@
  * `{site_name}` placeholder via a function replacement, so any `$`-sequences in the
  * name are inserted literally. The full-site URL is derived from the current location
  * by stripping everything from `/stories/` onward, falling back to the bare origin.
+ * The banner sits over the story's side card, which keeps clear of it, so the window
+ * is sent `telar:embed-banner` when the banner is added and again when it is removed.
+ *
+ * Banner clearance — while the banner shows, `body` carries `embed-banner-shown` and the
+ * custom property `--telar-embed-banner-bottom` (px) holds the banner's measured bottom
+ * edge, kept current by a ResizeObserver on the banner and a window resize listener.
+ * The stylesheet places the previous/next column below that edge; the banner's height varies with the language and the window width, so no fixed
+ * offset tracks it. Both go when the banner is dismissed.
+ *
+ * Compact banner — in a window too short for the full banner and the button column
+ * below it, the banner takes the `is-compact` class and shows one line (the stylesheet
+ * cuts the text; the link and the close button stay). The decision uses the banner's
+ * full height, measured with the class off, so the compact state never feeds back into
+ * it; it is taken again whenever the banner or the window changes size. While compact,
+ * the published edge is the compact banner's bottom.
+ *
+ * Its thresholds are those of the column placement in `_embed.scss`.
  *
  * The whole file is an IIFE so none of this leaks into the global scope beyond the
  * single `window.telarEmbed` flag.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 (function() {
   'use strict';
+
+  // Stops the banner measurement; set while the banner shows
+  let stopTracking = null;
+
+  // Sizes of the button column's placement in _embed.scss: it applies in windows up
+  // to 480px tall, is a 102px column above 229px and a 45px row from there down; the
+  // gap below the banner is 0.75rem and the margin at the bottom of the window 0.5rem.
+  const COLUMN_MAX_WINDOW_HEIGHT = 480;
+  const ROW_MAX_WINDOW_HEIGHT = 229;
+  const COLUMN_HEIGHT = 102;
+  const ROW_HEIGHT = 45;
 
   // Parse URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -86,7 +114,7 @@
     banner.innerHTML = `
       <span class="telar-embed-banner-text">
         <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-        <span>${bannerText}</span>
+        <span class="telar-embed-banner-message">${bannerText}</span>
         <a href="${fullSiteUrl}" class="telar-embed-banner-link" target="_blank" rel="noopener noreferrer">${embedStrings.link}</a>
       </span>
       <button class="telar-embed-banner-close" aria-label="Close" title="Close">
@@ -96,6 +124,10 @@
 
     // Insert at top of body
     document.body.insertBefore(banner, document.body.firstChild);
+    // Measured first: the side card refits on the event, against the banner's
+    // final height, compact or not.
+    trackBannerBottom(banner);
+    window.dispatchEvent(new CustomEvent('telar:embed-banner'));
 
     // Handle dismiss
     const closeButton = banner.querySelector('.telar-embed-banner-close');
@@ -104,12 +136,59 @@
         e.preventDefault();
         e.stopPropagation();
         banner.remove();
+        releaseBannerBottom();
+        window.dispatchEvent(new CustomEvent('telar:embed-banner'));
         console.log('[Telar Embed] Banner dismissed');
       });
       console.log('[Telar Embed] Banner created with close button');
     } else {
       console.error('[Telar Embed] Close button not found');
     }
+  }
+
+  /**
+   * Publish the banner's bottom edge for the stylesheet and keep it current, and
+   * make the banner compact where it and the button column do not both fit.
+   */
+  function trackBannerBottom(banner) {
+    const body = document.body;
+    const message = banner.querySelector('.telar-embed-banner-message');
+    const update = function() {
+      banner.classList.remove('is-compact');
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const windowHeight = window.innerHeight;
+      const buttons = windowHeight <= ROW_MAX_WINDOW_HEIGHT ? ROW_HEIGHT : COLUMN_HEIGHT;
+      const needed = banner.getBoundingClientRect().bottom + 0.75 * rem + buttons + 0.5 * rem;
+      const compact = windowHeight <= COLUMN_MAX_WINDOW_HEIGHT && needed > windowHeight;
+      banner.classList.toggle('is-compact', compact);
+      if (compact) message.title = message.textContent.trim();
+      else message.removeAttribute('title');
+      body.style.setProperty('--telar-embed-banner-bottom',
+        Math.ceil(banner.getBoundingClientRect().bottom) + 'px');
+    };
+    update();
+    body.classList.add('embed-banner-shown');
+
+    // The window's height alone can change the decision, and it does not resize the banner.
+    window.addEventListener('resize', update);
+    // Deferred a frame: the update resizes the banner it observes, and a size
+    // change delivered in the same frame is reported as a ResizeObserver loop.
+    const observer = new ResizeObserver(function() { requestAnimationFrame(update); });
+    observer.observe(banner);
+    stopTracking = function() {
+      window.removeEventListener('resize', update);
+      observer.disconnect();
+    };
+  }
+
+  /**
+   * Remove the class and the property, and stop measuring.
+   */
+  function releaseBannerBottom() {
+    if (stopTracking) stopTracking();
+    stopTracking = null;
+    document.body.classList.remove('embed-banner-shown');
+    document.body.style.removeProperty('--telar-embed-banner-bottom');
   }
 
   /**

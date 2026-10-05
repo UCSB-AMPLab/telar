@@ -27,6 +27,17 @@ collection_interface:
   show_sample_on_homepage: true # Set to true to show a sample of objects on homepage
   featured_count: 4 # Number of objects to show on homepage (default 4)
 
+# Glossary Kinds (optional)
+# A glossary entry is a key term, a primary source, a person or entity, or a
+# place. Add kinds of your own here; write each label and heading in your
+# site's language. Entries of a kind name it in the glossary's kind column.
+# glossary:
+#   kinds:
+#     - id: species
+#       label: Species        # above the entry's title in the glossary panel
+#       heading: Species      # over the kind's entries on the glossary page
+#       values: [species, taxon]   # optional; the id is always accepted
+
 # Story Protection (optional)
 # Stories with protected=yes in project.csv will be encrypted.
 # Viewers need this key to unlock protected stories.
@@ -86,6 +97,17 @@ exclude:
   - README.md
   - docs/
   - scripts/
+  # Telar's own test suite and the configuration that runs it. Nothing on a
+  # site links to any of it, and a fixture is content written to be wrong in
+  # a particular way — published, it is indistinguishable from the site's own.
+  - tests/
+  - pytest.ini
+  - vitest.config.js
+  # Page, story and glossary sources. The build reads them and generates the
+  # published pages from them; Jekyll rendering them as well puts a raw,
+  # unprocessed copy of every one at a second URL, and a source that declares
+  # its own permalink lands on top of the page generated from it.
+  - telar-content/texts/
 
 # Defaults
 defaults:
@@ -116,8 +138,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "1.7.0"
-  release_date: "2026-09-09"
+  version: "1.8.0"
+  release_date: "2026-10-04"
 
 # Plugins
 plugins:

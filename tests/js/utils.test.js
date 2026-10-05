@@ -5,7 +5,7 @@
  * getBasePath and fixImageUrls need jsdom for window.location and
  * document.createElement.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -107,6 +107,23 @@ describe('fixImageUrls', () => {
     const div = document.createElement('div');
     div.innerHTML = result;
     expect(div.querySelector('img').getAttribute('src')).toBe('/assets/img/photo.jpg');
+  });
+
+  it('leaves a src that already carries the base path as it is', () => {
+    // The build writes a bare file name as <baseurl>/telar-content/objects/…,
+    // and a carousel slide as <baseurl>/assets/images/….
+    const html = '<img src="/telar/telar-content/objects/a.jpg"><img src="/telar/assets/images/b.jpg">';
+    const div = document.createElement('div');
+    div.innerHTML = fixImageUrls(html, '/telar');
+    const imgs = div.querySelectorAll('img');
+    expect(imgs[0].getAttribute('src')).toBe('/telar/telar-content/objects/a.jpg');
+    expect(imgs[1].getAttribute('src')).toBe('/telar/assets/images/b.jpg');
+  });
+
+  it('prefixes a path that only begins with the base path\'s letters', () => {
+    const div = document.createElement('div');
+    div.innerHTML = fixImageUrls('<img src="/telar-content/objects/a.jpg">', '/telar');
+    expect(div.querySelector('img').getAttribute('src')).toBe('/telar/telar-content/objects/a.jpg');
   });
 
   it('handles HTML with no images', () => {

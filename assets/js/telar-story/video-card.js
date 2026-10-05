@@ -7,12 +7,15 @@
  * Video cards follow the same DOM-at-init, visibility-via-transforms
  * pattern as IIIF cards but use iframe embeds instead of IIIF viewers.
  *
- * Layout — when a video step activates, the module calculates the optimal
- * arrangement by comparing how many pixels the video would occupy in a
- * side-by-side layout (video left, text right) versus a stacked layout
- * (video top, text below). Whichever arrangement gives the video more
- * screen area wins. On mobile viewports the layout is always stacked,
- * since side-by-side is too narrow to be useful.
+ * Layout — the player is placed by video-layout.js's arithmetic. On a
+ * horizontal layout it goes beside the side text card, or above the card when
+ * media-arrangement.js has placed the scene's cards below the player and
+ * written so on the plate; on a vertical layout it is stacked above the
+ * bottom card. card-pool.js re-places the players through `layoutVideoPlate`
+ * after every geometry pass, since the arrangement depends on the cards'
+ * heights and those are measured there. When a player learns its video's
+ * aspect, the plate is sent `telar:media-aspect`, because the arrangement is
+ * compared at that aspect.
  *
  * Player pool — at most three video players exist at once (the current
  * card, plus one or two preloaded ahead). When a fourth is needed, the
@@ -37,17 +40,17 @@
  * Google Drive embeds have no player API, so they receive no clip control
  * or autoplay detection.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
-import { onViewportResize } from './layout-mode.js';
+import { readBelow, readTopBand } from './media-arrangement.js';
 
-// ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
-const _cs = getComputedStyle(document.documentElement);
-const videoPadFactor    = parseFloat(_cs.getPropertyValue('--telar-video-pad-factor').trim())    || 0.025;
-const videoStackMaxH    = parseFloat(_cs.getPropertyValue('--telar-video-stack-max-h').trim())   || 0.58;
-const videoCardFracSide = parseFloat(_cs.getPropertyValue('--telar-video-card-frac-side').trim()) || 0.35;
+// Layout and embed arithmetic, in video-layout.js.
+import {
+  computeVideoLayout, computeVideoLetterboxRegion,
+  buildYouTubeEmbedConfig, buildGDriveEmbedUrl,
+} from './video-layout.js';
 
 // ── Module-level player pool ──────────────────────────────────────────────────
 
@@ -101,7 +104,7 @@ export function loadYouTubeAPI() {
  * blocked). The maxresdefault thumbnail is the only signal that reflects the
  * real source aspect — but it 404s for old/low-res uploads, and the smaller
  * thumbnails are letterbox-padded (hqdefault/default to 4:3) or cropped
- * (mqdefault to 16:9), so they cannot be trusted. We therefore probe ONLY
+ * (mqdefault to 16:9), so they cannot be trusted. We therefore probe only
  * maxresdefault via an Image (no CORS issue for naturalWidth/Height) and
  * resolve null when it is missing, leaving the caller to fall back to a dark
  * letterbox frame.
@@ -150,198 +153,6 @@ export function loadVimeoAPI() {
   });
 
   return window._vimeoApiPromise;
-}
-
-// ── Pure functions (unit-tested) ──────────────────────────────────────────────
-
-/**
- * Compute the optimal video + card layout for the given viewport dimensions
- * and video aspect ratio.
- *
- * Algorithm:
- *   Two candidates are computed:
- *   - Side-by-side: card left (35% of W), video right in remaining space.
- *   - Stacked: video top (max 58% of H), card below.
- *   The candidate that gives the video more rendered pixels wins.
- *   Mobile override: W < --telar-vertical-min-width always returns stacked.
- *
- * @param {number} W - Viewport width in px
- * @param {number} H - Viewport height in px
- * @param {number} aspectRatio - Video width / height (e.g. 16/9)
- * @returns {{ mode: 'side-by-side'|'stacked', video: {left,top,width,height}, card: {left,top,width,height}, padding: number }}
- */
-export function computeVideoLayout(W, H, aspectRatio) {
-  // Layout mode is determined by state.layoutMode (set by layout-mode.js at boot and on
-  // every resize/orientationchange). On vertical layouts, always use stacked.
-  if (state.layoutMode === 'vertical') {
-    return _computeStackedLayout(W, H, aspectRatio);
-  }
-
-  const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-
-  // ── Side-by-side candidate ──
-  const cardFracSide = videoCardFracSide;
-  const sideCardW = Math.round(W * cardFracSide);
-  const sideVideoMaxW = W - sideCardW - pad * 3;
-  const sideVideoMaxH = H - pad * 2;
-  let sideVidW = sideVideoMaxW;
-  let sideVidH = sideVidW / aspectRatio;
-  if (sideVidH > sideVideoMaxH) {
-    sideVidH = sideVideoMaxH;
-    sideVidW = sideVidH * aspectRatio;
-  }
-  const sideVideoArea = sideVidW * sideVidH;
-
-  // ── Stacked candidate ──
-  const stackVideoMaxW = W - pad * 2;
-  const stackVideoMaxH = H * videoStackMaxH;
-  let stackVidW = stackVideoMaxW;
-  let stackVidH = stackVidW / aspectRatio;
-  if (stackVidH > stackVideoMaxH) {
-    stackVidH = stackVideoMaxH;
-    stackVidW = stackVidH * aspectRatio;
-  }
-  const stackVideoArea = stackVidW * stackVidH;
-
-  if (sideVideoArea >= stackVideoArea) {
-    return _buildSideBySideResult(W, H, pad, sideCardW, sideVidW, sideVidH);
-  } else {
-    return _buildStackedResult(W, H, pad, stackVidW, stackVidH);
-  }
-}
-
-/** Build side-by-side layout result object. */
-function _buildSideBySideResult(W, H, pad, sideCardW, sideVidW, sideVidH) {
-  const vidW = Math.round(sideVidW);
-  const vidH = Math.round(sideVidH);
-  const vidLeft = sideCardW + pad * 2;
-  const vidTop = Math.round((H - vidH) / 2);
-  const cardW = sideCardW;
-  const cardH = Math.round(H - pad * 2);
-  const cardLeft = pad;
-  const cardTop = pad;
-  const cardPad = cardW > 300 ? 24 : cardW > 200 ? 16 : 10;
-
-  return {
-    mode: 'side-by-side',
-    video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
-    card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
-    padding: cardPad,
-  };
-}
-
-/** Build stacked layout result object. */
-function _buildStackedResult(W, H, pad, stackVidW, stackVidH) {
-  const vidW = Math.round(stackVidW);
-  const vidH = Math.round(stackVidH);
-  const vidLeft = Math.round((W - vidW) / 2);
-  const vidTop = pad;
-  const cardTop = vidTop + vidH + pad;
-  const cardH = Math.max(60, H - cardTop - pad);
-  const cardW = Math.round(W - pad * 2);
-  const cardLeft = pad;
-  const cardPad = cardH > 200 ? 22 : cardH > 120 ? 14 : 8;
-
-  return {
-    mode: 'stacked',
-    video: { left: vidLeft, top: vidTop, width: vidW, height: vidH },
-    card: { left: cardLeft, top: cardTop, width: cardW, height: cardH },
-    padding: cardPad,
-  };
-}
-
-/**
- * Compute the iframe region for a video whose true aspect ratio is unknown
- * (old YouTube videos with no maxres thumbnail; all Google Drive embeds, which
- * expose no dimensions API). Rather than guess an aspect and letterbox inside a
- * mis-shaped box, we fill the whole available region and let the provider's own
- * player letterbox the video centred on its black background — a cohesive dark
- * "cinematic frame" instead of a small mis-proportioned box. Mirrors
- * computeVideoLayout's mode choice but returns the un-fitted bounding region.
- *
- * @param {number} W - Viewport width in px
- * @param {number} H - Viewport height in px
- * @returns {{ left: number, top: number, width: number, height: number }}
- */
-export function computeVideoLetterboxRegion(W, H) {
-  const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-  if (state.layoutMode === 'vertical') {
-    return {
-      left: pad,
-      top: pad,
-      width: Math.round(W - pad * 2),
-      height: Math.round(H * videoStackMaxH),
-    };
-  }
-  const cardW = Math.round(W * videoCardFracSide);
-  return {
-    left: cardW + pad * 2,
-    top: pad,
-    width: Math.round(W - cardW - pad * 3),
-    height: Math.round(H - pad * 2),
-  };
-}
-
-/** Compute stacked layout for mobile. */
-function _computeStackedLayout(W, H, aspectRatio) {
-  const pad = Math.max(8, Math.round(Math.min(W, H) * videoPadFactor));
-  const stackVideoMaxW = W - pad * 2;
-  const stackVideoMaxH = H * videoStackMaxH;
-  let stackVidW = stackVideoMaxW;
-  let stackVidH = stackVidW / aspectRatio;
-  if (stackVidH > stackVideoMaxH) {
-    stackVidH = stackVideoMaxH;
-    stackVidW = stackVidH * aspectRatio;
-  }
-  return _buildStackedResult(W, H, pad, stackVidW, stackVidH);
-}
-
-/**
- * Build the YouTube playerVars config object.
- *
- * @param {string} videoId - YouTube video ID
- * @param {number} clipStart - Start time in seconds (0 = no restriction)
- * @param {number} clipEnd - End time in seconds (0 = no restriction, unused in playerVars)
- * @param {boolean} loop - Whether the clip should loop
- * @returns {{ videoId: string, playerVars: Object }}
- */
-export function buildYouTubeEmbedConfig(videoId, clipStart, clipEnd, loop) {
-  return {
-    videoId,
-    playerVars: {
-      start: clipStart || 0,
-      autoplay: 0,
-      mute: 0,
-      // loop/playlist omitted — segment looping handled by rAF polling
-      // (YouTube loop playerVar loops the whole video, not the clip)
-      controls: 1,
-      rel: 0,
-      modestbranding: 1,
-    },
-  };
-}
-
-/**
- * Build the Google Drive embed preview URL for a file ID.
- *
- * @param {string} fileId - Google Drive file ID
- * @returns {string} Preview URL
- */
-export function buildGDriveEmbedUrl(fileId) {
-  return `https://drive.google.com/file/d/${fileId}/preview`;
-}
-
-/**
- * Format a time in seconds as 'M:SS' for the progress ring display.
- *
- * @param {number} seconds - Time in seconds (may be fractional, will be floored)
- * @returns {string} Formatted time, e.g. '0:42', '1:07'
- */
-export function formatClipTime(seconds) {
-  const total = Math.floor(seconds);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -452,6 +263,8 @@ export function createVideoPlayer(plateEl, cardType, videoId, options = {}) {
 export function destroyVideoPlayer(wrapper) {
   if (!wrapper) return;
 
+  wrapper._destroyed = true;
+
   try {
     if (wrapper.type === 'youtube' && wrapper.player) {
       if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
@@ -472,12 +285,6 @@ export function destroyVideoPlayer(wrapper) {
   if (idx !== -1) _videoPlayers.splice(idx, 1);
 }
 
-/**
- * Activate a video card plate: position it using auto-layout and reveal it.
- *
- * @param {HTMLElement} plateEl - The video plate element
- * @param {number} sceneIndex - Scene index (used for layout and z-index)
- */
 /**
  * Show the frosted glass pill play overlay on a video plate.
  *
@@ -531,6 +338,12 @@ function _showVideoPlayOverlay(plateEl) {
 /** @public Exposed so card-pool.js can call it from the onAutoplayBlocked callback. */
 export { _showVideoPlayOverlay as showVideoPlayOverlay };
 
+/**
+ * Activate a video card plate: position it using auto-layout and reveal it.
+ *
+ * @param {HTMLElement} plateEl - The video plate element
+ * @param {number} sceneIndex - Scene index (used for layout and z-index)
+ */
 export function activateVideoCard(plateEl, sceneIndex) {
   // Bring plate into view
   plateEl.style.transform = 'translateY(0)';
@@ -569,7 +382,7 @@ export function activateVideoCard(plateEl, sceneIndex) {
  */
 export function deactivateVideoCard(plateEl) {
   plateEl.classList.remove('is-active');
-  // NOTE: does NOT touch transform — caller decides positioning
+  // Leaves the transform alone — the caller decides positioning
   // (forward nav: plate stays put, covered by incoming plate;
   //  backward nav: caller sets translateY(100%) to slide it away)
 
@@ -655,13 +468,14 @@ function _createYouTubePlayer(plateEl, videoId, opts) {
   // maxres thumbnail is missing (old videos), fall back to the dark letterbox
   // frame. Async; re-applies the layout once it resolves.
   detectYouTubeAspect(videoId).then((aspect) => {
+    if (wrapper._destroyed) return;
     if (aspect) {
       plateEl.dataset.aspectRatio = String(aspect);
       delete plateEl.dataset.videoLetterbox;
     } else {
       plateEl.dataset.videoLetterbox = 'true';
     }
-    _applyVideoLayout(plateEl);
+    _aspectLearned(plateEl);
   });
 
   const wrapper = {
@@ -675,10 +489,16 @@ function _createYouTubePlayer(plateEl, videoId, opts) {
     _rafId: null,
     _autoplayTimeout: null,
     _playReceived: false,
+    _destroyed: false,
     destroy() { destroyVideoPlayer(this); },
   };
 
   loadYouTubeAPI().then(() => {
+    // The pool may have evicted this wrapper while the API was loading. Build
+    // the player anyway and it answers to nothing: every control path runs
+    // through _getWrapperForPlate, which no longer finds it, so the video
+    // cannot be paused when the reader leaves the step.
+    if (wrapper._destroyed) return;
     const cfg = buildYouTubeEmbedConfig(videoId, clipStart, clipEnd, loop);
 
     wrapper.player = new window.YT.Player(container, {
@@ -776,11 +596,15 @@ function _createVimeoPlayer(plateEl, videoId, opts) {
     clipStart,
     clipEnd,
     loop,
+    _destroyed: false,
     destroy() { destroyVideoPlayer(this); },
   };
 
   // Load Vimeo API from CDN on demand, then create the player
   loadVimeoAPI().then(() => {
+    // Evicted while the CDN load was in flight — see the note in
+    // _createYouTubePlayer.
+    if (wrapper._destroyed) return;
     // For unlisted videos, pass the full player URL (contains the privacy
     // hash as ?h= parameter). For public videos, pass the numeric ID.
     const playerOpts = {
@@ -808,7 +632,7 @@ function _createVimeoPlayer(plateEl, videoId, opts) {
       ]).then(([w, h]) => {
         if (w && h) {
           plateEl.dataset.aspectRatio = String(w / h);
-          _applyVideoLayout(plateEl);
+          _aspectLearned(plateEl);
         }
       });
     }).then(() => {
@@ -872,6 +696,7 @@ function _createGDriveEmbed(plateEl, videoId, sceneIndex) {
     element: plateEl,
     player: null,
     sceneIndex,
+    _destroyed: false,
     destroy() { destroyVideoPlayer(this); },
   };
 }
@@ -899,24 +724,47 @@ function _enforcePoolLimit(currentScene) {
 }
 
 /**
+ * Tear down a wrapper's player the way its provider needs.
+ *
+ * YouTube also has a polling frame and an autoplay check to cancel; Google
+ * Drive has no player API, so its iframe is removed. May throw, which the
+ * caller catches.
+ */
+function _destroyProviderPlayer(wrapper) {
+  if (wrapper.type === 'youtube' && wrapper.player) {
+    if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
+    if (wrapper._autoplayTimeout) clearTimeout(wrapper._autoplayTimeout);
+    wrapper.player.destroy();
+  } else if (wrapper.type === 'vimeo' && wrapper.player) {
+    wrapper.player.destroy();
+  } else if (wrapper.type === 'google-drive') {
+    const iframe = wrapper.element.querySelector('iframe.video-iframe');
+    if (iframe) iframe.remove();
+  }
+}
+
+/**
  * Evict a player without removing it from the _videoPlayers array
  * (used during pool enforcement where the splice already handles removal).
  */
 function _evictPlayer(wrapper) {
+  // Raised before the teardown, so a build still in flight bails instead of
+  // finishing into a plate this wrapper no longer speaks for.
+  wrapper._destroyed = true;
+
   try {
-    if (wrapper.type === 'youtube' && wrapper.player) {
-      if (wrapper._rafId) cancelAnimationFrame(wrapper._rafId);
-      if (wrapper._autoplayTimeout) clearTimeout(wrapper._autoplayTimeout);
-      wrapper.player.destroy();
-    } else if (wrapper.type === 'vimeo' && wrapper.player) {
-      wrapper.player.destroy();
-    } else if (wrapper.type === 'google-drive') {
-      const iframe = wrapper.element.querySelector('iframe.video-iframe');
-      if (iframe) iframe.remove();
-    }
+    _destroyProviderPlayer(wrapper);
   } catch (e) {
     console.warn('_evictPlayer: error during evict', e);
   }
+
+  // Leave the plate empty, so re-entering the scene builds one player rather
+  // than appending a second container beside the first. What each provider's
+  // teardown removes differs — YouTube's destroy() takes the iframe carrying
+  // the class, Vimeo's leaves the container div that holds it — so the plate
+  // is cleared here rather than relied on above. IiifPlate.unload keeps the
+  // same contract for .viewer-instance.
+  wrapper.element?.querySelector('.video-iframe')?.remove();
 }
 
 /**
@@ -930,10 +778,28 @@ function _getWrapperForPlate(plateEl) {
 }
 
 /**
- * Apply the auto-layout algorithm to a video plate.
- * Positions the video iframe within the plate. (The text card is positioned by
- * card-pool.js / CSS, not here — `computeVideoLayout`'s `card`/`padding` slots
- * are intentionally unused by this function.)
+ * Whether this plate still has a player in the pool.
+ *
+ * Counterpart of audio-card.js's `hasAudioPlayer`, and for the same reason:
+ * the pool is capped, and eviction destroys the provider's player while
+ * leaving the `.video-iframe` container in place, so a caller testing the DOM
+ * sees a container and declines to rebuild a plate that holds nothing.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {boolean}
+ */
+export function hasVideoPlayer(plateEl) {
+  const wrapper = _getWrapperForPlate(plateEl);
+  return Boolean(wrapper) && !wrapper._destroyed;
+}
+
+/**
+ * Place a video plate's player for its scene's arrangement.
+ *
+ * Positions the video iframe within the plate. The text card is positioned by
+ * card-pool.js / media-arrangement.js and the stylesheet, not here —
+ * `computeVideoLayout`'s `card`/`padding` slots are intentionally unused by
+ * this function.
  *
  * @param {HTMLElement} plateEl - The video plate element
  */
@@ -943,13 +809,15 @@ function _applyVideoLayout(plateEl) {
 
   const videoEl = plateEl.querySelector('.video-iframe');
   if (!videoEl) return;
+  const below = readBelow(plateEl);
+  const topBand = readTopBand(plateEl);
 
   // Unknown-aspect path: when the true aspect ratio could not be determined
   // (old YouTube videos without a maxres thumbnail; all Google Drive embeds),
   // fill the whole available region on a dark frame and let the provider's
   // player letterbox the video itself, instead of guessing an aspect ratio.
   if (plateEl.dataset.videoLetterbox === 'true') {
-    const region = computeVideoLetterboxRegion(W, H);
+    const region = computeVideoLetterboxRegion(W, H, below, topBand);
     videoEl.classList.add('video-iframe--letterbox');
     videoEl.style.position = 'absolute';
     videoEl.style.left = `${region.left}px`;
@@ -964,7 +832,7 @@ function _applyVideoLayout(plateEl) {
   // succeeded). Default 16:9 only as a last resort.
   videoEl.classList.remove('video-iframe--letterbox');
   const aspectRatio = parseFloat(plateEl.dataset.aspectRatio) || 16 / 9;
-  const layout = computeVideoLayout(W, H, aspectRatio);
+  const layout = computeVideoLayout(W, H, aspectRatio, below, topBand);
   videoEl.style.position = 'absolute';
   videoEl.style.left = `${layout.video.left}px`;
   videoEl.style.top = `${layout.video.top}px`;
@@ -972,13 +840,14 @@ function _applyVideoLayout(plateEl) {
   videoEl.style.height = `${layout.video.height}px`;
 }
 
-// ── Viewport-resize subscription ─────────────────────────────────────────────
+/**
+ * Re-place a plate's player once its video's aspect is known, and tell the
+ * card stack, which compares the arrangement at that aspect.
+ */
+function _aspectLearned(plateEl) {
+  _applyVideoLayout(plateEl);
+  plateEl.dispatchEvent(new CustomEvent('telar:media-aspect'));
+}
 
-onViewportResize(() => {
-  // Recompute layout for all active video plates
-  for (const wrapper of _videoPlayers) {
-    if (wrapper.element && wrapper.element.classList.contains('is-active')) {
-      _applyVideoLayout(wrapper.element);
-    }
-  }
-});
+/** @public card-pool.js re-places the players through this after a geometry pass. */
+export { _applyVideoLayout as layoutVideoPlate };

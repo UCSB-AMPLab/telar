@@ -32,11 +32,12 @@ The version stamp (telar.version -> 1.5.4) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed step can never
 leave the site stamped as a version it is not running.
 
-Version: v1.5.4
+Version: v1.8.0
 """
 
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord
 
 
@@ -45,6 +46,7 @@ class Migration153to154(BaseMigration):
 
     from_version = "1.5.3"
     to_version = "1.5.4"
+    release_date = "2026-06-29"  # tag v1.5.4
     description = "Add a GitHub Pages concurrency group to the build workflow; no content changes"
 
     def check_applicable(self) -> bool:
@@ -58,12 +60,8 @@ class Migration153to154(BaseMigration):
         # upgrade.py stamp the version once the chain completes.
         return [
             ChangeRecord(
-                description=(
-                    "Build workflow concurrency group: add the `concurrency` block to "
-                    ".github/workflows/build.yml by hand (or recopy the file). The "
-                    "in-Actions upgrade cannot modify workflow files; the Telar "
-                    "Compositor applies it automatically. See the manual step below."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_concurrency_by_hand'),
             ),
         ]
 
@@ -79,6 +77,8 @@ class Migration153to154(BaseMigration):
         return [
             {
                 'description': '''**If you use the Telar Compositor: no action needed.** The Compositor updates your build workflow automatically when it upgrades your site.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
             {
@@ -91,6 +91,8 @@ concurrency:
 ```
 
 Until you do, your site keeps building and deploying correctly — you may just get an occasional spurious "build failed" email when two builds start at the same time.''',
+                'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -99,6 +101,8 @@ Until you do, your site keeps building and deploying correctly — you may just 
         return [
             {
                 'description': '''**Si usas el Compositor de Telar: no tienes que hacer nada.** El Compositor actualiza por ti el flujo de trabajo de construcción cuando actualiza tu sitio.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
             {
@@ -111,6 +115,8 @@ concurrency:
 ```
 
 Mientras tanto, tu sitio se sigue construyendo y publicando sin problemas; solo podrías recibir de vez en cuando un correo de «build failed» que no corresponde a una falla real, cuando dos ejecuciones empiezan al mismo tiempo.''',
+                'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

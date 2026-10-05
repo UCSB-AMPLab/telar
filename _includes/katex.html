@@ -6,18 +6,28 @@
 
   CDN URLs, version pin, and the delimiter list are read from _data/katex.yml,
   the single source shared with assets/js/katex-loader.js (the lazy loader
-  story pages use, via window.telarKatexConfig set in _layouts/story.html).
+  story pages and the glossary panel use, via window.telarKatexConfig set in
+  _includes/katex-loader.html).
   To bump the KaTeX version, edit _data/katex.yml only.
 
   The trust callback below (which \href URL schemes are permitted) is logic,
   not data, so it stays hand-written here and in katex-loader.js — the two
   copies are identical; keep them in sync if the policy changes.
 
-  Version: v1.6.0
+  The stylesheet is pulled in by an @import inside a <style>, not by a
+  <link>, because a <link rel="stylesheet"> is unlayered and an unlayered
+  declaration outranks every layered one whatever the order or specificity.
+  Linked that way, KaTeX's own .katex font-size and .katex-display margin
+  beat _sass/_latex.scss, which sits in @layer telar-components. @import
+  ... layer() is the only way to put a remote stylesheet in a layer; there
+  is no layer attribute for <link>. Bootstrap is loaded the same way in
+  _layouts/default.html and _layouts/story.html.
+
+  Version: v1.8.0
 -->
 
-<!-- KaTeX CSS -->
-<link rel="stylesheet" href="{{ site.data.katex.css }}">
+<!-- KaTeX CSS — into the third-party layer so Telar's rules win by layer order -->
+<style>@import url("{{ site.data.katex.css }}") layer(third-party);</style>
 
 <!-- KaTeX JS -->
 <script defer src="{{ site.data.katex.js }}"></script>
@@ -30,6 +40,13 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {
+    // A CDN script that failed to load leaves the formulas as the author
+    // wrote them, which is readable; say why rather than throw.
+    if (typeof renderMathInElement !== 'function') {
+      console.warn('Telar: KaTeX could not be loaded — formulas are shown as written.');
+      return;
+    }
+
     // Render all LaTeX on page load
     var katexDelimiters = {{ site.data.katex.delimiters | jsonify }};
 

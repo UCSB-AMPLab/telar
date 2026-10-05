@@ -185,6 +185,49 @@ describe('a facet with no values', () => {
     expect(options('subjects')).toEqual([]);
     expect(optionLabels('medium').map((o) => o.label)).toEqual(['oil on canvas']);
   });
+
+  it('says it in the language the layout wrote on the page', async () => {
+    const records = [FIGUEROA, NEWFIELDS, VIDEO];
+    renderPage(records);
+    document.querySelector('.objects-layout').dataset.noOptions = 'No hay opciones';
+    setBaseUrlMeta(BASEURL);
+    stubFetch({ [DATA_URL]: searchData(records) });
+    await runScript();
+
+    expect(sectionEl('subjects').querySelector('.objects-filter-empty').textContent)
+      .toBe('No hay opciones');
+  });
+});
+
+describe('a search that matches nothing', () => {
+  beforeEach(async () => {
+    renderPage(RECORDS);
+    const note = document.createElement('p');
+    note.id = 'objects-no-results';
+    note.hidden = true;
+    note.textContent = 'No objects match your search';
+    document.querySelector('.collection-grid').after(note);
+    setBaseUrlMeta(BASEURL);
+    stubFetch({ [DATA_URL]: searchData(RECORDS) });
+    await runScript();
+    vi.useFakeTimers();
+  });
+
+  it('keeps the note hidden while anything is shown', () => {
+    expect(el('objects-no-results').hidden).toBe(true);
+  });
+
+  it('shows the note when nothing matches, and hides it again when something does', () => {
+    search('zzzzqqqq');
+    vi.advanceTimersByTime(250);
+    expect(count()).toBe('0');
+    expect(el('objects-no-results').hidden).toBe(false);
+
+    search('');
+    vi.advanceTimersByTime(250);
+    expect(count()).toBe(String(RECORDS.length));
+    expect(el('objects-no-results').hidden).toBe(true);
+  });
 });
 
 describe('filtering by facet', () => {

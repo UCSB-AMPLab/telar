@@ -1,0 +1,19 @@
+{%- comment -%}
+File size and format are written into the object's front matter by
+generate_collections.py from the file on disk. Duration is filled in by the
+player once it has read the audio.
+{%- endcomment -%}
+        <dl class="row mt-3 border-top pt-3">
+          {% if page.audio_format %}
+          <dt class="col-sm-4">{{ lang.object.metadata.format | default: "Format" }}</dt>
+          <dd class="col-sm-8">{{ page.audio_format }}</dd>
+          {% endif %}
+
+          {% if page.audio_filesize %}
+          <dt class="col-sm-4">{{ lang.object.metadata.file_size | default: "File size" }}</dt>
+          <dd class="col-sm-8">{{ page.audio_filesize }}</dd>
+          {% endif %}
+
+          <dt class="col-sm-4">{{ lang.object.metadata.duration | default: "Duration" }}</dt>
+          <dd class="col-sm-8"><span id="audio-duration-display">--:--</span></dd>
+        </dl>

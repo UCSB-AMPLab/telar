@@ -19,7 +19,7 @@ MAJOR.MINOR.PATCH with the -beta suffix preserved, since "0.9.4-beta" and
 passed through unchanged, never repaired — repair guesses at intent and can
 silently name a different real version.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import os
@@ -122,10 +122,30 @@ class TestGrammarRejects:
         # because $ matches before a final newline. Only fullmatch rejects it.
         assert upgrade._canonical_version('1.6.2\n') is None
 
-    def test_leading_zero_component_rejected(self):
-        # A \d+ component would accept this and canonicalise it to itself —
-        # an "accepted" string that can never match a chain literal.
-        assert upgrade._canonical_version('01.6.2') is None
+    @pytest.mark.parametrize('value', ['01.6.2', '1.06.2', '1.6.02'])
+    def test_leading_zero_component_rejected(self, value):
+        # A [0-9]+ component would accept these and canonicalise them to
+        # themselves — an "accepted" string that can never match a chain
+        # literal. All three positions, because a mutant that loosens only
+        # the minor or the patch survives a test that checks the major.
+        assert upgrade._canonical_version(value) is None
+
+    @pytest.mark.parametrize('value', [
+        '١.٦.٢', '1.٦.2', '１.６.２', '1.６.2',      # a whole component
+        '1٠.6.2', '1.1٠.2', '1.6.2٣', '1.6.1２',    # only the digits after the first
+    ])
+    def test_digits_outside_ascii_rejected(self, value):
+        # The components are [0-9], not \d: Python's \d matches every Unicode
+        # decimal digit, so Arabic-Indic and full-width numerals would be
+        # accepted and canonicalised to themselves. They match no chain
+        # literal, so the site would be told its version is unsupported
+        # rather than that its version is unreadable.
+        #
+        # Both halves of each component are covered. The leading digit and
+        # the ones after it are written as separate character classes, so a
+        # change that loosens only the tail passes anything testing a
+        # single-digit component.
+        assert upgrade._canonical_version(value) is None
 
     @pytest.mark.parametrize('value', ['1.6.2 ', ' 1.6.2', '1.6.2\t', '0.2.0-beta '])
     def test_whitespace_padding_rejected(self, value):
@@ -297,14 +317,14 @@ class TestGetMigrationPathBoundary:
         ])
         monkeypatch.setattr(upgrade, 'LATEST_VERSION', '1.1.0')
 
-    def test_canonical_beta_seed_chains(self, patched_chain):
-        path = upgrade.get_migration_path('0.9.4-beta', '/tmp')
+    def test_canonical_beta_seed_chains(self, patched_chain, tmp_path):
+        path = upgrade.get_migration_path('0.9.4-beta', str(tmp_path))
         assert [m.to_version for m in path] == ['1.0.0-beta', '1.1.0']
 
-    def test_prefixed_seed_finds_no_path(self, patched_chain, capsys):
+    def test_prefixed_seed_finds_no_path(self, patched_chain, capsys, tmp_path):
         # Deliberate: get_migration_path receives an already-canonical string in
         # production because detect_current_version canonicalises at ingestion.
         # A second normalisation here would make two sources of truth.
-        path = upgrade.get_migration_path('v0.9.4-beta', '/tmp')
+        path = upgrade.get_migration_path('v0.9.4-beta', str(tmp_path))
         assert path == []
         assert 'stops at v0.9.4-beta' in capsys.readouterr().out

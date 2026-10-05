@@ -1,6 +1,6 @@
 # Telar
 
-![Version](https://img.shields.io/badge/version-1.7.0-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-1.8.0-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **[Versión en español abajo](#español)** | **[English version](#telar)**
 
@@ -12,7 +12,7 @@ A minimal-computing framework that weaves together IIIF images, audio, video, an
 
 ---
 
-> **⚠️ Beta Release - v1.7.0**
+> **⚠️ Beta Release - v1.8.0**
 > This is a beta release for testing and feedback. For detailed documentation, visit **[telar.org/docs](https://telar.org/docs)**.
 
 > **Warning:** If upgrading from v0.3.4 or earlier, see the [Upgrading Telar Guide](https://telar.org/docs/2-workflows/3-upgrading/) for instructions.
@@ -134,7 +134,7 @@ It is based on [Paisajes Coloniales](https://paisajescoloniales.com/), and inspi
 
 # Español
 
-![Versión](https://img.shields.io/badge/versi%C3%B3n-1.7.0-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
+![Versión](https://img.shields.io/badge/versi%C3%B3n-1.8.0-orange) ![Licencia](https://img.shields.io/badge/licencia-MIT-blue)
 
 **[Versión en español](#español)** | **[English version above](#telar)**
 
@@ -146,7 +146,7 @@ Un marco de computación mínima que entreteje imágenes IIIF, audio, video y te
 
 ---
 
-> **⚠️ Versión Beta - v1.7.0**
+> **⚠️ Versión Beta - v1.8.0**
 > Esta es una versión beta para pruebas y retroalimentación. Para documentación detallada, visita **[telar.org/guia](https://telar.org/guia)**.
 
 > **Advertencia:** Si estás actualizando desde v0.3.4 o anterior, consulta la [Guía de Actualización de Telar](https://telar.org/guia/flujos-de-trabajo/actualizacion/) para obtener instrucciones.
@@ -173,7 +173,7 @@ Agradecemos el apoyo del [Caribbean Digital Scholarship Collective](https://cdsc
 - **Interfaz multilingüe**: Soporte completo de interfaz para inglés y español
 - **Galería de objetos**: Cuadrícula navegable con filtro por tipo (Imagen/Video/Audio), miniaturas por tipo de medio y páginas de detalle con selectores de clips
 - **Accesibilidad**: Texto alternativo en todos los tipos de medio con cadena de respaldo automática
-- **Telar Compositor**: Herramienta web complementaria para gestionar objetos — sube imágenes, agrega metadatos y envía los cambios directamente al repositorio. Actualmente en desarrollo; ya se puede utilizar
+- **Compositor de Telar**: Herramienta web complementaria para gestionar objetos — sube imágenes, agrega metadatos y envía los cambios directamente al repositorio. Actualmente en desarrollo; ya se puede utilizar
 - **Computación mínima**: Texto plano, generación estática, alojamiento sin dependencias externas en GitHub Pages
 
 ---
@@ -213,9 +213,9 @@ Planifica tu estructura narrativa antes de construir. Esboza tus historias, iden
 
 ---
 
-## Telar Compositor
+## Compositor de Telar
 
-[Telar Compositor](https://compositor.telar.org) es una herramienta web complementaria que simplifica la gestión de objetos. En lugar de subir imágenes y editar archivos CSV a mano, el Compositor permite agregar objetos al sitio mediante una interfaz visual: se encarga de subir las imágenes, registrar los metadatos y enviar los cambios directamente al repositorio de GitHub.
+El [Compositor de Telar](https://compositor.telar.org) es una herramienta web complementaria que simplifica la gestión de objetos. En lugar de subir imágenes y editar archivos CSV a mano, el Compositor permite agregar objetos al sitio mediante una interfaz visual: se encarga de subir las imágenes, registrar los metadatos y enviar los cambios directamente al repositorio de GitHub.
 
 El Compositor está en desarrollo activo y ya se puede utilizar. Visita **[compositor.telar.org](https://compositor.telar.org)** para comenzar.
 

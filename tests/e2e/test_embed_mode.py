@@ -109,16 +109,21 @@ class TestEmbedModeNavigation:
 
         # Click next button
         next_btn.click()
-        page.wait_for_timeout(700)  # Nav cooldown is 400ms
+        expect(page.locator("#step-counter")).to_contain_text("Step 1 /")
 
         # The first tap dismisses the intro into step 1 — never further
         first_step = read_step_counter(page)
         assert first_step == 1
         expect(page.locator(".card-stack .text-card.is-active")).to_be_visible()
 
-        # A second click advances by exactly one step
+        # BUTTON_NAV_COOLDOWN is 400 ms and a tap inside it is dropped on
+        # purpose, so the second tap waits it out. What follows is waited for by
+        # its result rather than by a duration: the counter says where the
+        # reader is, so it changes when the move lands, not when the button is
+        # pressed, and no fixed wait can be right for both.
+        page.wait_for_timeout(500)
         next_btn.click()
-        page.wait_for_timeout(700)
+        expect(page.locator("#step-counter")).to_contain_text("Step 2 /")
         assert read_step_counter(page) == first_step + 1
 
     def test_nav_buttons_on_screen_in_wide_embed(self, page, base_url):
@@ -214,11 +219,14 @@ class TestEmbedModeIframe:
         next_btn = frame.locator(".mobile-next")
         expect(next_btn).to_be_visible()
         next_btn.click()
-        page.wait_for_timeout(700)
 
-        # Counter appears with a step number and an active card shows
-        assert read_step_counter(frame) is not None
-        expect(frame.locator(".card-stack .text-card.is-active")).to_be_visible()
+        # The counter says where the reader is, so it changes when the move
+        # through the scroll engine lands, not when the button is pressed: it
+        # is waited for by its result rather than by a duration.
+        expect(frame.locator("#step-counter")).to_have_text(
+            re.compile(r"Step 1 / \d+"), timeout=2000)
+        assert read_step_counter(frame) == 1
+        expect(frame.locator(".card-stack .text-card.is-active")).to_be_visible(timeout=2000)
 
 
 class TestEmbedModeWithoutParam:

@@ -1,0 +1,27 @@
+{%- comment -%}
+The manifest an image is served from, with a copy button: the one piece of an
+image object's metadata a person needs to paste somewhere else.
+{%- endcomment -%}
+          {% assign external_source = page.source_url | default: page.iiif_manifest %}
+          {% if external_source and external_source != "" %}
+          <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
+          <dd class="col-sm-8">
+            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+              <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ external_source }}</code>
+              <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ external_source }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.coordinates.copy_manifest_tooltip | default: "Copy manifest URL" }}">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+              </button>
+            </div>
+          </dd>
+          {% elsif page.object_id %}
+          <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
+          <dd class="col-sm-8">
+            {% assign manifest_url = site.url | append: site.baseurl | append: '/iiif/objects/' | append: page.object_id | append: '/manifest.json' %}
+            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+              <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ manifest_url }}</code>
+              <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.coordinates.copy_manifest_tooltip | default: "Copy manifest URL" }}">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+              </button>
+            </div>
+          </dd>
+          {% endif %}

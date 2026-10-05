@@ -48,6 +48,7 @@
   // form keeps the two definitions safe to coexist. Story-only keys (unlock)
   // live in story.html.
   window.telarLang = Object.assign(window.telarLang || {}, {
+    learnMore: "{{ lang.buttons.learn_more }}",
     goDeeper: "{{ lang.buttons.go_deeper }}",
     stepNumber: "{{ lang.story.step_number }}",
     demoPanelBadge: "{{ lang.demo.panel_badge }}",
@@ -66,7 +67,9 @@
   navigation.objects) so the browser-tab title follows the site language, reusing the
   same nav labels. The English `title:` front matter stays as a fallback when the key
   is absent, so the title is never empty. Resolved here because the lang pack is only in
-  scope in this outermost layout. {%- endcomment -%}
+  scope in this outermost layout. Only navigation.* keys are read: the rest of the
+  language file is the framework's own, and generate_collections.py warns about a
+  page naming anything else. {%- endcomment -%}
   {% assign page_title = page.title %}
   {% if page.title_key %}
     {%- comment -%} Liquid can't index a hash with an array element (lang[parts[0]]), so
@@ -74,7 +77,7 @@
     {% assign title_key_parts = page.title_key | split: "." %}
     {% assign title_key_section = title_key_parts[0] %}
     {% assign title_key_leaf = title_key_parts[1] %}
-    {% assign localized_title = lang[title_key_section][title_key_leaf] %}
+    {% if title_key_section == 'navigation' %}{% assign localized_title = lang.navigation[title_key_leaf] %}{% endif %}
     {% if localized_title and localized_title != "" %}{% assign page_title = localized_title %}{% endif %}
   {% endif %}
   <title>{% if page_title %}{{ page_title }} | {% endif %}{{ site.title }}</title>
@@ -106,6 +109,7 @@
   jekyll-seo-tag would otherwise add a second, English <title>. og:title/twitter:title still come
   from seo-tag (bound to static page.title) and remain a known untranslated surface. {%- endcomment -%}
   {% seo title=false %}
+
 </head>
 <body>
   {% include header.html %}
@@ -124,6 +128,9 @@
 
   <!-- Bootstrap 5 JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- KaTeX, loaded when the glossary panel fetches a term that holds maths -->
+  {% include katex-loader.html %}
 
   <!-- Custom JS -->
   <script src="{{ '/assets/js/telar.js' | relative_url }}"></script>

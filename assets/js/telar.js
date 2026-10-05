@@ -18,16 +18,42 @@
  * loaded fragment. Re-opening an already-open panel waits for it to finish hiding
  * before loading the new term, so the swap reads as a clean transition.
  *
+ * Kind label — the line above the entry's title names its kind ("Key term",
+ * "Primary source"). The entry's own page carries that label on its
+ * `.glossary-content`, written by the build from _data/glossary_kinds.yml, so
+ * the panel reads the label from the page it fetched, whichever link opened
+ * it. The label is hidden while the entry loads, so it never shows the kind
+ * of the entry shown before; a page without one gets the default kind's
+ * label, which panels.html writes on the label element.
+ *
  * Click-outside-to-close — registered globally so the glossary panel dismisses on an
  * outside click on any page, while clicks on panels, glossary links and triggers are
  * left alone so they can do their own work.
+ *
+ * A glossary callout (the :::glossary widget) is a `.glossary-inline-link` too,
+ * so it opens the panel through the same handler; its title is read from its
+ * `.glossary-callout-title`.
  *
  * Glossary clicks are wired with a single delegated document listener
  * (`initializeGlossaryDelegation`), so any glossary link works no matter when it
  * enters the DOM — including story cards the viewer builds and clones at runtime,
  * whose cloned nodes would lose a per-element handler.
  *
- * @version v1.6.0
+ * Covered content — what an open panel covers is inert: a layer panel under the
+ * panel over it, and the page's <main> under the glossary panel. The panels stack
+ * in a fixed order (layer 1, layer 2, glossary: nothing opens a lower panel over
+ * a higher one), so the topmost open panel is the last open one in that order.
+ * The state is recomputed from Bootstrap's show, hide and hidden events, which
+ * every way of opening or closing a panel fires, so no close path can leave
+ * content inert.
+ *
+ * Keys outside stories — on a page with no story, Left arrow and Escape close an
+ * open glossary panel and are otherwise left to the page. On a story page the
+ * story's own keyboard handler closes the topmost panel, glossary included.
+ *
+ * The covered-content and key functions are exposed on `window.TelarPanels`.
+ *
+ * @version v1.8.0
  */
 
 // Wait for DOM to be ready
@@ -44,7 +70,110 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initialize click-outside-to-close for glossary panels (works on all pages)
   initializeClickOutsideClose();
+
+  initializeCoveredContent();
+  initializeGlossaryKeys();
 });
+
+// ── Covered content ──────────────────────────────────────────────────────────
+
+/** The panels, lowest first. */
+const PANEL_ORDER = ['layer1', 'layer2', 'glossary'];
+
+/**
+ * Whether a panel is open or on its way in, and not on its way out.
+ *
+ * @param {Element} panel
+ * @returns {boolean}
+ */
+function isPanelOpen(panel) {
+  const cls = panel.classList;
+  return (cls.contains('show') || cls.contains('showing')) && !cls.contains('hiding');
+}
+
+/**
+ * The open panels, lowest first.
+ *
+ * A panel whose show or hide event is being handled has not yet changed its
+ * classes, so it is named explicitly.
+ *
+ * @param {Element|null} opening - A panel about to open.
+ * @param {Element|null} closing - A panel about to close.
+ * @returns {Element[]}
+ */
+function openPanelsInOrder(opening, closing) {
+  return PANEL_ORDER
+    .map((type) => document.getElementById(`panel-${type}`))
+    .filter((panel) => panel && panel !== closing && (panel === opening || isPanelOpen(panel)));
+}
+
+/**
+ * Make inert what the open panels cover, and nothing else.
+ *
+ * Every open panel below the topmost is inert, and so is the page's <main>
+ * while the glossary panel is open.
+ *
+ * @param {Element|null} [opening=null] - A panel about to open.
+ * @param {Element|null} [closing=null] - A panel about to close.
+ */
+function syncCoveredContent(opening = null, closing = null) {
+  const open = openPanelsInOrder(opening, closing);
+  const top = open[open.length - 1];
+  PANEL_ORDER.forEach((type) => {
+    const panel = document.getElementById(`panel-${type}`);
+    if (panel) panel.toggleAttribute('inert', open.includes(panel) && panel !== top);
+  });
+  const main = document.querySelector('main');
+  if (main) main.toggleAttribute('inert', open.some((panel) => panel.id === 'panel-glossary'));
+}
+
+/**
+ * Recompute covered content whenever a Telar panel opens or closes.
+ *
+ * Bootstrap's offcanvas events bubble, so one document listener per event
+ * hears every panel. The share panel is an offcanvas too, and is left out.
+ */
+function initializeCoveredContent() {
+  const isTelarPanel = (e) => e.target.matches('[data-telar-panel]') && !e.defaultPrevented;
+  document.addEventListener('show.bs.offcanvas', (e) => {
+    if (isTelarPanel(e)) syncCoveredContent(e.target, null);
+  });
+  document.addEventListener('hide.bs.offcanvas', (e) => {
+    if (isTelarPanel(e)) syncCoveredContent(null, e.target);
+  });
+  document.addEventListener('hidden.bs.offcanvas', (e) => {
+    if (isTelarPanel(e)) syncCoveredContent();
+  });
+}
+
+// ── Keys outside stories ─────────────────────────────────────────────────────
+
+/**
+ * Close an open glossary panel on Left arrow or Escape.
+ *
+ * The key is cancelled only when there is a panel to close.
+ *
+ * @param {KeyboardEvent} e
+ */
+function closeGlossaryOnKey(e) {
+  if (e.key !== 'ArrowLeft' && e.key !== 'Escape') return;
+  const panel = document.getElementById('panel-glossary');
+  if (!panel || !isPanelOpen(panel)) return;
+
+  e.preventDefault();
+  bootstrap.Offcanvas.getInstance(panel)?.hide();
+}
+
+/**
+ * Wire the glossary keys on pages with no story; a story page's own handler
+ * closes the topmost panel there.
+ */
+function initializeGlossaryKeys() {
+  if (document.body.classList.contains('story-page')) return;
+  document.addEventListener('keydown', closeGlossaryOnKey);
+}
+
+window.TelarPanels = { syncCoveredContent, closeGlossaryOnKey };
 
 /**
  * Initialize click-outside-to-close behavior for glossary panels
@@ -58,8 +187,9 @@ function initializeClickOutsideClose() {
     // Check if glossary panel is open
     if (!glossaryPanel.classList.contains('show')) return;
 
-    // Don't close if clicking inside any panel
-    if (e.target.closest('.offcanvas')) return;
+    // Don't close if clicking inside any panel, or on Share or inside its
+    // dialog, which opens over an open panel and leaves it open
+    if (e.target.closest('.offcanvas, .modal, .share-button')) return;
 
     // Don't close if clicking on glossary links or triggers
     if (e.target.closest('.glossary-term-link')) return;
@@ -96,31 +226,21 @@ function initializeGlossaryDelegation() {
 /**
  * Handle a glossary link click.
  *
- * Opens the glossary panel with the term content fetched from the term's URL.
- * Constructs the URL dynamically to properly handle baseurl configuration.
+ * Opens the glossary panel with the term content fetched from the term's URL,
+ * which every link the build writes carries in data-term-url.
  *
  * @param {Event} e - Click event
  * @param {Element} link - The glossary link element (resolved via event delegation)
  */
 function handleGlossaryLinkClick(e, link) {
   e.preventDefault();
-  const termId = link.dataset.termId;
-  const termTitle = link.textContent.trim();
+  // A glossary callout carries its kind's label beside the title; the panel
+  // is headed by the title alone.
+  const titleElement = link.querySelector('.glossary-callout-title');
+  const termTitle = (titleElement || link).textContent.trim();
   const isDemo = link.dataset.demo === 'true';
 
-  // Use the pre-computed URL from the data attribute if available
-  let termUrl = link.dataset.termUrl;
-  if (!termUrl) {
-    // Fallback: construct URL (for inline links that may not have data-term-url)
-    const pathParts = window.location.pathname.split('/').filter(p => p);
-    let basePath = '';
-    if (pathParts.length >= 2) {
-      basePath = '/' + pathParts.slice(0, -2).join('/');
-    }
-    termUrl = basePath + '/glossary/' + encodeURIComponent(termId) + '/';
-  }
-
-  openGlossaryPanel(termUrl, termTitle, isDemo);
+  openGlossaryPanel(link.dataset.termUrl, termTitle, isDemo);
 }
 
 /**
@@ -173,6 +293,9 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
     titleElement.appendChild(badge);
   }
 
+  const kindLabel = panel.querySelector('.glossary-term-prefix');
+  if (kindLabel) kindLabel.style.visibility = 'hidden';
+
   // Show loading state
   contentElement.innerHTML = '<p class="text-muted">Loading...</p>';
 
@@ -199,11 +322,15 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
       const glossaryContent = doc.querySelector('.glossary-content');
 
       if (glossaryContent) {
+        showKindLabel(kindLabel, glossaryContent.dataset.glossaryKindLabel);
         contentElement.innerHTML = glossaryContent.innerHTML;
 
-        // Re-render LaTeX in fetched glossary content
+        // Render the term's maths. A page whose own content holds none has
+        // not loaded KaTeX; the loader renders this panel once it arrives.
         if (window.telarRenderLatex) {
           window.telarRenderLatex(contentElement);
+        } else if (glossaryContent.hasAttribute('data-has-latex') && window.telarLoadKatex) {
+          window.telarLoadKatex();
         }
       } else {
         throw new Error('Glossary content not found');
@@ -211,8 +338,23 @@ function loadAndShowGlossaryTerm(panel, titleElement, contentElement, termUrl, t
     })
     .catch(error => {
       console.error('Error loading glossary term:', error);
+      showKindLabel(kindLabel, null);
       contentElement.innerHTML = '<div class="alert alert-danger">Failed to load glossary term. Please try again.</div>';
     });
+}
+
+/**
+ * Show the glossary panel's kind label, or the default kind's when the
+ * entry's page names none. The colon is the template's, as in panels.html.
+ *
+ * @param {Element|null} kindLabel - The panel's `.glossary-term-prefix`
+ * @param {string|null|undefined} label - The label the entry's page carries
+ */
+function showKindLabel(kindLabel, label) {
+  if (!kindLabel) return;
+  const text = label || kindLabel.dataset.defaultLabel;
+  if (text) kindLabel.textContent = text + ':';
+  kindLabel.style.visibility = '';
 }
 
 /**

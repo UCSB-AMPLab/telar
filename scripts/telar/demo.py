@@ -36,18 +36,30 @@ Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
 `subjects`, `featured`, and `source`. Both formats are supported — new fields
 are populated when present, old fields are ignored gracefully.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
+import contextlib
+import io
 import json
 from pathlib import Path
 
-import markdown as md_lib
 import pandas as pd
 
 from telar.images import process_images
+from telar.markdown import render_markdown
 from telar.widgets import process_widgets
-from telar.glossary import process_glossary_links
+from telar.glossary import (GlossaryTerms, place_demo_terms,
+                            process_glossary_links)
+from telar.glossary_kinds import resolve_kind
+from telar.media_type import detect_media_type
+from telar.processors.stories import _detect_latex, render_answer
+
+# Fields a bundle object or step may carry, copied only when it has a value:
+# the step template emits an attribute for any value Liquid finds, and to
+# Liquid an empty string is a value.
+_DEMO_OBJECT_OPTIONAL = ('alt_text',)
+_DEMO_STEP_OPTIONAL = ('alt_text', 'page', 'clip_start', 'clip_end', 'loop')
 
 
 def load_demo_bundle():
@@ -182,8 +194,19 @@ def _merge_demo_objects(bundle, data_dir):
                         'source': obj_data.get('source', obj_data.get('location', '')),
                         'credit': obj_data.get('credit', ''),
                         'thumbnail': obj_data.get('thumbnail', ''),
+                        # The gallery's Medium/Genre facet reads `medium`,
+                        # which bundles before it was named call object_type.
+                        'medium': obj_data.get('medium') or obj_data.get('object_type', ''),
                         '_demo': True
                     }
+                    for key in _DEMO_OBJECT_OPTIONAL:
+                        if obj_data.get(key) not in (None, ''):
+                            demo_obj[key] = obj_data[key]
+                    # Classified as a site's own objects are, from the source
+                    # URL, so objects.json and the object page agree; the
+                    # bundle's media_type is not read.
+                    demo_obj['media_type'] = detect_media_type(
+                        demo_obj['source_url'], obj_id)
                     user_objects.append(demo_obj)
                     demo_count += 1
 
@@ -212,11 +235,7 @@ def _write_demo_stories(bundle, data_dir):
                 # Convert demo story format to match user format
                 steps = []
 
-                # Build glossary terms dict from bundle for link processing
-                glossary_terms = {}
-                if bundle.get('glossary'):
-                    for term_id, term_data in bundle['glossary'].items():
-                        glossary_terms[term_id] = term_data.get('term', term_id)
+                glossary_terms = _demo_link_terms(bundle)
 
                 for step in story_data.get('steps', []):
                     step_data = {
@@ -230,10 +249,18 @@ def _write_demo_stories(bundle, data_dir):
                         '_demo': True
                     }
 
+                    for key in _DEMO_STEP_OPTIONAL:
+                        if step.get(key) not in (None, ''):
+                            step_data[key] = str(step[key])
+
                     # Process layers
                     _add_demo_layers(step_data, step, story_id, glossary_terms)
 
                     steps.append(step_data)
+
+                _process_demo_answers(steps, story_id, glossary_terms)
+                if _detect_latex(pd.DataFrame(steps).fillna('')):
+                    steps.insert(0, {'_metadata': True, 'has_latex': True})
 
                 with open(story_path, 'w', encoding='utf-8') as f:
                     json.dump(steps, f, indent=2, ensure_ascii=False)
@@ -242,6 +269,54 @@ def _write_demo_stories(bundle, data_dir):
 
             except Exception as e:
                 print(f"  [WARN] Could not create demo story {story_id}: {e}")
+
+
+def _demo_link_terms(bundle):
+    """The link map a demo story resolves [[term]] against: the bundle's
+    glossary and the site's published pages together. Which demo terms
+    have pages, and what a skipped demo id links to, is `place_demo_terms`'
+    decision, the one the glossary pages are written from.
+    """
+    # Imported here: glossary_pages loads the package this module is part of.
+    from telar.glossary_pages import site_glossary_pages
+    with contextlib.redirect_stdout(io.StringIO()):
+        pages = site_glossary_pages()
+
+    glossary = {term_id: term_data
+                for term_id, term_data in (bundle.get('glossary') or {}).items() if term_id}
+    placements = place_demo_terms(pages, list(glossary))
+
+    terms = GlossaryTerms()
+    for placement in placements:
+        if placement.written:
+            term_data = glossary[placement.term_id]
+            title = term_data.get('term', placement.term_id)
+            kind = resolve_kind(term_data.get('kind', ''), warn=False)
+        elif placement.owner_is_site:
+            title, kind = pages[placement.owner]
+        else:
+            owner_data = glossary[placement.owner]
+            title = owner_data.get('term', placement.owner)
+            kind = resolve_kind(owner_data.get('kind', ''), warn=False)
+        terms[placement.term_id], terms.kinds[placement.term_id] = title, kind
+    for term_id, (title, kind) in pages.items():
+        terms[term_id], terms.kinds[term_id] = title, kind
+    return terms
+
+
+def _process_demo_answers(steps, story_id, glossary_terms):
+    """Render a demo story's answers as a site's own answers are rendered
+    (`render_answer`): prose only, glossary links, and the budget.
+
+    What the rendering reports is discarded: the demo bundle's text is not
+    something a site's author can change.
+    """
+    with contextlib.redirect_stdout(io.StringIO()):
+        for step in steps:
+            answer = step.get('answer') or ''
+            if answer.strip():
+                step['answer'] = render_answer(answer, glossary_terms,
+                                               source=f'demo-{story_id}').html
 
 
 def _add_demo_layers(step_data, step, story_id, glossary_terms):
@@ -271,17 +346,18 @@ def _add_demo_layers(step_data, step, story_id, glossary_terms):
                 # Initialize warnings list for widget processing
                 widget_warnings = []
 
-                # Process widgets BEFORE markdown conversion
+                # Process widgets before markdown conversion
                 content = process_widgets(content, f'demo-{story_id}', widget_warnings)
 
-                # Process images (sizes and captions) BEFORE markdown conversion
+                # Process images (sizes and captions) before markdown conversion
                 content = process_images(content)
 
-                # Convert markdown to HTML
-                content = md_lib.markdown(content, extensions=['extra', 'nl2br'])
-
-                # Process glossary links AFTER markdown conversion
-                content = process_glossary_links(content, glossary_terms)
+                # Convert markdown to HTML, making glossary links in the
+                # rendered HTML while its maths is held out
+                content = render_markdown(
+                    content, f'demo-{story_id}',
+                    post_process=lambda rendered: process_glossary_links(
+                        rendered, glossary_terms))
 
             step_data[f'{layer_key}_text'] = content
             step_data[f'{layer_key}_demo'] = True  # All demo bundle layers are demo content
@@ -298,12 +374,22 @@ def _write_demo_glossary(bundle):
     if bundle.get('glossary'):
         glossary_data = []
         for term_id, term_data in bundle['glossary'].items():
-            glossary_data.append({
+            entry = {
                 'term_id': term_id,
                 'title': term_data.get('term', term_id),
                 'content': term_data.get('content', ''),
                 '_demo': True
-            })
+            }
+            # A bundle term without one is a key term, which is what the
+            # page generator makes of an entry with no kind.
+            if term_data.get('kind'):
+                entry['kind'] = term_data['kind']
+            related = term_data.get('related_terms')
+            if isinstance(related, str):
+                related = [term.strip() for term in related.split('|')]
+            if related:
+                entry['related_terms'] = [str(term) for term in related if str(term).strip()]
+            glossary_data.append(entry)
 
         glossary_json_path = Path('_data/demo-glossary.json')
         with open(glossary_json_path, 'w', encoding='utf-8') as f:

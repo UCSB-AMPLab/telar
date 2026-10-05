@@ -19,6 +19,12 @@
  * start, and mute/unmute. An elapsed time display sits alongside them.
  * All icons are inline Lucide SVGs.
  *
+ * Layout — beside the side text card the waveform is the stylesheet's; when
+ * media-arrangement.js has placed the scene's cards below it, the waveform
+ * spans the width above them, placed by `placeAudioBelow`. card-pool.js
+ * re-places the waveforms through `layoutAudioPlate` after every geometry
+ * pass, since the arrangement depends on the cards' measured heights.
+ *
  * Player pool — at most three WaveSurfer instances exist at once. When a
  * fourth is needed, the player farthest by scene distance is destroyed.
  * All players share a single AudioContext (module-level singleton) to
@@ -41,12 +47,12 @@
  * slower but still functional. Audio load errors inject a .telar-alert
  * notification into the card area.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
-import { onViewportResize } from './layout-mode.js';
 import { getBasePath } from './utils.js';
+import { placeAudioBelow } from './media-arrangement.js';
 
 // ── CSS custom property reads (SSOT — sourced from _sass/_responsive.scss :root) ──
 const _cs = getComputedStyle(document.documentElement);
@@ -60,6 +66,16 @@ function _audioHeightFraction() {
   return (state.layoutMode === 'vertical' || state.isEmbed)
     ? audioHeightMobile
     : audioHeightResize;
+}
+
+/**
+ * A plate's waveform height in px, having placed it for its scene's
+ * arrangement: below the player's geometry when media-arrangement.js says
+ * so, else its layout's fraction of the window.
+ */
+function _placeAudio(plateEl) {
+  const belowHeight = placeAudioBelow(plateEl);
+  return belowHeight ?? Math.round(window.innerHeight * _audioHeightFraction());
 }
 
 // ── Module-level player pool ──────────────────────────────────────────────────
@@ -89,7 +105,7 @@ let _sharedAudioContext = null;
  * Vendored instead of CDN-loaded for the minimal-computing reasons in
  * `assets/vendor/README.md` (no CDN single-point-of-failure, version pinning).
  *
- * MUST agree with telarLoadWaveSurfer in assets/js/wavesurfer-loader.js — same
+ * Must agree with telarLoadWaveSurfer in assets/js/wavesurfer-loader.js — same
  * vendored bundles, same load-once-and-cache strategy. Object pages cannot
  * import this ES module, so that file carries its own classic-script copy
  * (window.telarLoadWaveSurfer, base path passed in rather than read via
@@ -153,10 +169,15 @@ export function formatElapsedTime(seconds) {
  * Bar colours derive from the button text colour so they adapt to any
  * theme (dark themes get light bars, light themes get dark bars).
  *
- * MUST agree with deriveThemeColors in assets/js/object-theme.js — same
+ * Must agree with deriveThemeColors in assets/js/object-theme.js — same
  * inputs, same outputs. Object pages do not load the telar-story.js bundle,
  * so they carry their own copy; if you change this derivation, change that
  * one too.
+ *
+ * barHex is --color-button-text, not the derived --color-on-button: the bars
+ * are drawn on the accent darkened to 70%, not on the button background, so
+ * the colour derived to be legible on the button ground does not apply here.
+ * On santa-barbara that would put the navy #003660 on a dark teal plate.
  *
  * @param {string} accentHex - CSS hex colour for --color-link, e.g. '#883C36'
  * @param {string} [barHex='#ffffff'] - CSS hex colour for --color-button-text
@@ -259,6 +280,28 @@ export function getSharedAudioContext() {
 // ── Player lifecycle ──────────────────────────────────────────────────────────
 
 /**
+ * The plate's one waveform container, made if it is not there yet.
+ *
+ * Decorative and display-only: the bars are a picture of the sound, not a
+ * control, so the container is hidden from assistive technology and takes no
+ * pointer events. Its layout is the stylesheet's, which the mobile query
+ * overrides.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {HTMLElement}
+ */
+function _ensureWaveformContainer(plateEl) {
+  const existing = plateEl.querySelector(".waveform-container");
+  if (existing) return existing;
+
+  const container = document.createElement("div");
+  container.className = "waveform-container";
+  container.setAttribute("aria-hidden", "true");
+  plateEl.appendChild(container);
+  return container;
+}
+
+/**
  * Create a WaveSurfer audio player inside the given plate element.
  *
  * Loads the vendored WaveSurfer bundle on demand (first call), fetches
@@ -318,6 +361,16 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
   _audioPlayers.push(wrapper);
   _enforceAudioPoolLimit(sceneIndex);
 
+  // Both callers in card-pool.js decide whether a plate needs a player by
+  // asking whether it already holds this container, so it has to exist by the
+  // time this function returns rather than when the load below resolves. A
+  // guard that tests what its own build creates later cannot turn a second
+  // caller away: preload and activation arrive within milliseconds of each
+  // other when a reader crosses several steps at once, both read an empty
+  // plate, and each WaveSurfer appends its own node into whichever container
+  // the first of them eventually made.
+  const waveContainer = _ensureWaveformContainer(plateEl);
+
   loadWaveSurferAPI()
     .then(() => {
       // The wrapper may have been evicted/destroyed while the vendored-bundle
@@ -345,17 +398,6 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
         plateEl.style.background = `${colors.backgroundColor} ${patternUri} repeat`;
         plateEl.style.backgroundSize = "20px auto";
 
-        // Create waveform container (display-only)
-        let waveContainer = plateEl.querySelector(".waveform-container");
-        if (!waveContainer) {
-          waveContainer = document.createElement("div");
-          waveContainer.className = "waveform-container";
-          // Layout handled by CSS class — mobile media query overrides position
-          // Set aria-hidden — decorative, not interactive
-          waveContainer.setAttribute("aria-hidden", "true");
-          plateEl.appendChild(waveContainer);
-        }
-
         // Create Regions plugin instance
         const regionsPlugin = window.WaveSurfer.Regions.create();
 
@@ -370,7 +412,7 @@ export function createAudioPlayer(plateEl, audioUrl, peaksUrl, options = {}) {
           barWidth: 4,
           barGap: 5,
           barRadius: 5,
-          height: Math.round(window.innerHeight * _audioHeightFraction()),
+          height: _placeAudio(plateEl),
           interact: false,
           normalize: true,
           backend: "WebAudio",
@@ -604,7 +646,7 @@ export function activateAudioCard(plateEl, sceneIndex) {
 
   // Re-render waveform to match current viewport
   try {
-    wrapper.ws.setOptions({ height: Math.round(window.innerHeight * _audioHeightFraction()) });
+    wrapper.ws.setOptions({ height: _placeAudio(plateEl) });
   } catch (e) {
     // ws may still be initialising — ignore
   }
@@ -638,7 +680,7 @@ export function activateAudioCard(plateEl, sceneIndex) {
 /**
  * Deactivate an audio card plate: pause with crossfade and remove active class.
  *
- * Does NOT touch transform — caller decides positioning (same as video-card.js).
+ * Does not touch transform — the caller decides positioning (same as video-card.js).
  *
  * @param {HTMLElement} plateEl - The audio plate element
  * @param {number} [fadeMs=300] - Crossfade duration in milliseconds */
@@ -708,21 +750,32 @@ export function destroyAudioPlayer(wrapper) {
   const idx = _audioPlayers.indexOf(wrapper);
   if (idx !== -1) _audioPlayers.splice(idx, 1);
 
-  // Clean up DOM elements injected by this module
-  const plateEl = wrapper.element;
-  if (plateEl) {
-    [
-      ".waveform-container",
-      ".audio-controls",
-      ".audio-elapsed",
-      ".audio-play-overlay",
-      ".audio-clip-end-overlay",
-      ".telar-alert",
-    ].forEach((sel) => {
-      const el = plateEl.querySelector(sel);
-      if (el) el.remove();
-    });
-  }
+  _clearPlate(wrapper.element);
+}
+
+/** Everything this module appends to a plate, so both teardowns clear the same set. */
+const _INJECTED_SELECTORS = [
+  ".waveform-container",
+  ".audio-controls",
+  ".audio-elapsed",
+  ".audio-play-overlay",
+  ".audio-clip-end-overlay",
+  ".telar-alert",
+];
+
+/**
+ * Take this module's nodes back out of a plate.
+ *
+ * Both teardowns owe this. An evicted plate that keeps its waveform container
+ * is one the card stack reads as still holding a player, so the scene is never
+ * rebuilt; and if it were, `_ensureWaveformContainer` would hand the new player
+ * the container the dead one left.
+ *
+ * @param {HTMLElement|null} plateEl
+ */
+function _clearPlate(plateEl) {
+  if (!plateEl) return;
+  _INJECTED_SELECTORS.forEach((sel) => plateEl.querySelector(sel)?.remove());
 }
 
 /**
@@ -862,6 +915,8 @@ function _evictAudioPlayer(wrapper) {
   } catch (e) {
     console.warn("_evictAudioPlayer: error during evict", e);
   }
+
+  _clearPlate(wrapper.element);
 }
 
 /**
@@ -872,6 +927,28 @@ function _evictAudioPlayer(wrapper) {
  */
 function _getAudioWrapperForPlate(plateEl) {
   return _audioPlayers.find((w) => w.element === plateEl) || null;
+}
+
+/**
+ * Whether this plate still has a player in the pool.
+ *
+ * The question a caller asks before building one, and the pool is the only
+ * place that can answer it. A plate's DOM is not: the pool is capped, and
+ * eviction destroys the WaveSurfer instance while leaving every node this
+ * module injected, so `.waveform-container` outlives the player it was built
+ * for. A caller testing the DOM sees a container and declines to rebuild.
+ *
+ * True while a build is still in flight, because the wrapper is pooled before
+ * the file loads. Two callers arriving within milliseconds of each other is
+ * the ordinary case when a reader crosses several steps at once, and the
+ * second must be turned away.
+ *
+ * @param {HTMLElement} plateEl
+ * @returns {boolean}
+ */
+export function hasAudioPlayer(plateEl) {
+  const wrapper = _getAudioWrapperForPlate(plateEl);
+  return Boolean(wrapper) && !wrapper._destroyed;
 }
 
 /**
@@ -902,21 +979,15 @@ function _injectAudioError(plateEl) {
   plateEl.appendChild(alertEl);
 }
 
-// ── Viewport-resize subscription ─────────────────────────────────────────────
-
-onViewportResize(({ viewport }) => {
-  const newHeight = Math.round(viewport.h * _audioHeightFraction());
-  for (const wrapper of _audioPlayers) {
-    if (
-      wrapper.element &&
-      wrapper.element.classList.contains("is-active") &&
-      wrapper.ws
-    ) {
-      try {
-        wrapper.ws.setOptions({ height: newHeight });
-      } catch (e) {
-        // Ignore resize errors
-      }
-    }
-  }
-});
+/**
+ * Re-place a plate's waveform after a geometry pass; card-pool.js calls it,
+ * since the arrangement depends on the cards' heights, measured there.
+ *
+ * @param {HTMLElement} plateEl
+ */
+export function layoutAudioPlate(plateEl) {
+  const height = _placeAudio(plateEl);
+  const wrapper = _getAudioWrapperForPlate(plateEl);
+  if (!wrapper || !wrapper.ws) return;
+  wrapper.ws.setOptions({ height });
+}

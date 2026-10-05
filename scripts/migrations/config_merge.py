@@ -43,7 +43,7 @@ Three rules decide each key:
 - A key the site has that the release does not is carried across whole,
   with whatever comment the site wrote above it.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import re
@@ -335,9 +335,17 @@ def _as_written(raw: Optional[Entry], value: Any) -> Optional[str]:
     return _emitted(value)
 
 
+# A note this module cannot write, because it has no site to ask what
+# language that site is in. The first element is a message key and the rest
+# are its arguments, so the caller renders it beside every other line of the
+# summary instead of splicing English into a Spanish one.
+Note = Tuple[str, ...]
+
+
 def _write_release_keys(lines: List[str], template_entries: List[Entry],
                         values: Dict[Tuple[str, ...], Any],
-                        raw_by_path: Dict[Tuple[str, ...], Entry]) -> List[str]:
+                        raw_by_path: Dict[Tuple[str, ...], Entry]
+                        ) -> List[Note]:
     """Rules one and two, in place: each key the release names takes the
     site's value, the framework's default, or nothing of the demo site's.
 
@@ -354,13 +362,11 @@ def _write_release_keys(lines: List[str], template_entries: List[Entry],
         if entry.path in values:
             held = values[entry.path]
             if isinstance(held, (dict, list)):
-                notes.append(f'{named} is a section on this site and a single '
-                             'value in the release — left as the release has it')
+                notes.append(('config_note_section_vs_value', named))
                 continue
             replacement = _as_written(raw_by_path.get(entry.path), held)
             if replacement is None:
-                notes.append(f'{named} could not be written back as YAML — '
-                             'left as the release has it')
+                notes.append(('config_note_unwritable_value', named))
                 continue
         elif entry.path in NEUTRAL_VALUES:
             replacement = NEUTRAL_VALUES[entry.path]
@@ -377,7 +383,7 @@ def _write_release_keys(lines: List[str], template_entries: List[Entry],
 
 def _extend_lists(lines: List[str], template_entries: List[Entry],
                   values: Dict[Tuple[str, ...], Any],
-                  ) -> Tuple[Dict[int, List[str]], List[str]]:
+                  ) -> Tuple[Dict[int, List[str]], List[Note]]:
     """The lists a site may extend keep the release's entries and gain the
     site's; the rest stay the release's.
 
@@ -395,8 +401,7 @@ def _extend_lists(lines: List[str], template_entries: List[Entry],
 
         named = ".".join(entry.path)
         if entry.path not in EXTENSIBLE_LISTS:
-            notes.append(f'{named} is a list the release owns; this site'
-                         "'s own is not carried across")
+            notes.append(('config_note_release_owns_list', named))
             continue
 
         release_list = _flatten_template_list(lines, entry)
@@ -405,14 +410,13 @@ def _extend_lists(lines: List[str], template_entries: List[Entry],
             continue
         emitted = [_emitted(item) for item in added]
         if any(text is None for text in emitted):
-            notes.append(f'{named} holds something that could not be written '
-                         'back as YAML — left as the release has it')
+            notes.append(('config_note_unwritable_list_item', named))
             continue
         indent = ' ' * entry.indent
         insertions.setdefault(_parent_end(lines, entry), []).extend(
             f'{indent}  - {text}' for text in emitted)
-        notes.append(f'Kept this site\'s own {named} entries: '
-                     + ', '.join(str(item) for item in added))
+        notes.append(('config_note_kept_list_entries', named,
+                      ', '.join(str(item) for item in added)))
     return insertions, notes
 
 
@@ -420,7 +424,8 @@ def _carry_unknown_keys(lines: List[str],
                         values: Dict[Tuple[str, ...], Any],
                         template_paths: set,
                         template_by_path: Dict[Tuple[str, ...], Entry],
-                        ) -> Tuple[Dict[int, List[str]], List[str], List[str]]:
+                        ) -> Tuple[Dict[int, List[str]], List[str],
+                                   List[Note]]:
     """Rule three: keys the site has and the release does not.
 
     Returns the insertions to make, the block to append at the end, and the
@@ -447,8 +452,8 @@ def _carry_unknown_keys(lines: List[str],
     for path in carried:
         emitted = _emitted({path[-1]: values[path]})
         if emitted is None:
-            notes.append(f'{".".join(path)} could not be written back as '
-                         'YAML and was not carried across')
+            notes.append(('config_note_unwritable_not_carried',
+                          ".".join(path)))
             continue
         block = [emitted[1:-1].strip() if emitted.startswith('{')
                  else emitted]
@@ -458,16 +463,16 @@ def _carry_unknown_keys(lines: List[str],
             indent = ' ' * (parent.indent + 2)
             insertions.setdefault(_parent_end(lines, parent), []).extend(
                 f'{indent}{line}' for line in block)
-            notes.append(f'Carried {".".join(path)} across into '
-                         f'{".".join(parent_path)}')
+            notes.append(('config_note_carried_into', ".".join(path),
+                          ".".join(parent_path)))
         else:
             trailing.extend(block)
-            notes.append(f'Carried {".".join(path)} across — the release does '
-                         'not have it')
+            notes.append(('config_note_carried_top_level',
+                          ".".join(path)))
     return insertions, trailing, notes
 
 
-def merge(template: str, site: str) -> Tuple[str, List[str]]:
+def merge(template: str, site: str) -> Tuple[str, List[Note]]:
     """Write a site's settings into the release's configuration file.
 
     Returns the merged text and a description of what was carried across

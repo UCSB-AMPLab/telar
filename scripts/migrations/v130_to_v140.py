@@ -36,12 +36,13 @@ Language packs are framework-owned and fetched wholesale, per the established
 convention. A site that customised en.yml or es.yml will have those edits
 replaced and should re-apply them after upgrading (see the manual step).
 
-Version: v1.4.0
+Version: v1.8.0
 """
 
 import os
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -116,6 +117,7 @@ class Migration130to140(BaseMigration):
 
     from_version = "1.3.0"
     to_version = "1.4.0"
+    release_date = "2026-05-26"  # tag v1.4.0
     description = "Responsive system overhaul and custom IIIF viewer (Tify removed); runtime-only"
 
     # Pin framework-file fetches to the v1.4.0 release tag, not the moving
@@ -195,12 +197,13 @@ class Migration130to140(BaseMigration):
             if self._file_exists(rel_path):
                 os.remove(os.path.join(self.repo_root, rel_path))
                 changes.append(ChangeRecord(
-                    description=f"Removed stale bundle file {rel_path}",
+                    description=get_message(self._detect_language(), 'change_removed_stale_bundle',
+                                            rel_path),
                     status=ChangeStatus.APPLIED, severity="soft",
                 ))
         if not changes:
             return [ChangeRecord(
-                description="No stale bundle files to remove",
+                description=get_message(self._detect_language(), 'change_no_stale_bundles'),
                 status=ChangeStatus.APPLIED, severity="soft",
             )]
         return changes
@@ -225,6 +228,8 @@ Your stories, objects, and configuration keep working without any content change
 - **iOS Safari stability** — the URL-bar layout jump is fixed and notch safe-area clearance is added.
 
 One note: the upgrade refreshed the framework language packs (en.yml / es.yml). If you had customised either file, re-apply your changes — the new release adds six `object.viewer.*` keys (pagination labels and error messages for the IIIF viewer) that the updated packs already include.''',
+                'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -241,6 +246,8 @@ Las mejoras principales:
 - **Estabilidad en iOS Safari** — se corrigió el salto del diseño que causaba la barra de direcciones del navegador y se añadió espacio para la muesca de la pantalla.
 
 Un detalle: la actualización reemplazó los paquetes de idioma de Telar (en.yml / es.yml). Si habías personalizado alguno de ellos, vuelve a aplicar tus cambios — esta versión agrega seis claves `object.viewer.*` (etiquetas de paginación y mensajes de error del visor IIIF) que los paquetes actualizados ya incluyen.''',
+                'audience': 'all',
+                'kind': 'action',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

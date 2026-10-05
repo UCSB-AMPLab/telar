@@ -11,7 +11,7 @@ Story Structure & UX release:
 ~20 framework files fetched from GitHub, 2 language files fetched,
 1 CSV column added (show_sections), version bumped.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -26,6 +26,7 @@ class Migration110to120(BaseMigration):
 
     from_version = "1.1.0"
     to_version = "1.2.0"
+    release_date = "2026-04-16"  # tag v1.2.0
     _TARGET_TAG = "v1.2.0"  # pin framework fetches to the release tag
     description = "Section card TOC, ordinal removal, Back to Start button, deep link fixes"
 
@@ -51,10 +52,9 @@ class Migration110to120(BaseMigration):
 
         # Phase 4: Update version
         print("  Phase 4: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.2.0", today):
-            changes.append(f"Updated _config.yml: version 1.2.0 ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.2.0", stamped):
+            changes.append(f"Updated _config.yml: version 1.2.0 ({stamped})")
 
         return changes
 
@@ -85,13 +85,8 @@ class Migration110to120(BaseMigration):
             'CHANGELOG.md': 'CHANGELOG (v1.2.0 release notes)',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}"))
 
         return changes
 
@@ -104,13 +99,8 @@ class Migration110to120(BaseMigration):
             '_data/languages/es.yml': 'Spanish strings (sections_heading, back_to_start added)',
         }
 
-        for file_path, description in language_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            language_files, "Updated {path} - {description}"))
 
         return changes
 
@@ -192,6 +182,8 @@ class Migration110to120(BaseMigration):
 - **Ordinal numbers removed**: Story cards no longer display auto-generated numbers on the homepage, story pages, or object pages. The homepage placeholder shows the first letter of each story title instead.
 
 - **Deep link fix**: Deep links to layer 2 panels (e.g. `#s3l2`) now correctly open layer 1 underneath, so all parent panels are visible.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -211,6 +203,8 @@ class Migration110to120(BaseMigration):
 - **Números ordinales eliminados**: Las tarjetas de historia ya no muestran números generados automáticamente en la página principal, las páginas de historia ni las páginas de objeto. El marcador de posición en la página principal muestra la primera letra del título de cada historia.
 
 - **Corrección de enlaces directos**: Los enlaces directos a paneles de nivel 2 (ej. `#s3l2`) ahora abren correctamente el nivel 1 debajo, de modo que todos los paneles superiores quedan visibles.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

@@ -1,0 +1,498 @@
+/**
+ * Tests for the scroll engine and the previous/next buttons beside it.
+ *
+ * In an embed the engine moves the story for every input, the buttons
+ * included, and hands each step it enters to the buttons. These drive the
+ * engine with the harness's mocked Lenis and read what it tells the buttons,
+ * where a button move is heading, and what a refused or interrupted move
+ * leaves behind.
+ *
+ * @version v1.8.0
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// ── Mocks ─────────────────────────────────────────────────────────────────────
+// Each factory imports the harness, so the engine and this suite share its spies.
+
+vi.mock('lenis', async () => (await import('./scroll-engine-harness.js')).lenisModule);
+vi.mock('lenis/snap', async () => (await import('./scroll-engine-harness.js')).snapModule);
+vi.mock('../../assets/js/telar-story/card-pool.js',
+  async () => (await import('./scroll-engine-harness.js')).cardPoolModule);
+vi.mock('../../assets/js/telar-story/iiif-card.js',
+  async () => (await import('./scroll-engine-harness.js')).iiifCardModule);
+vi.mock('../../assets/js/telar-story/camera-travel.js',
+  async () => (await import('./scroll-engine-harness.js')).cameraTravelModule);
+vi.mock('../../assets/js/telar-story/navigation.js',
+  async () => (await import('./scroll-engine-harness.js')).navigationModule);
+vi.mock('../../assets/js/telar-story/viewer.js',
+  async () => (await import('./scroll-engine-harness.js')).viewerModule);
+
+// ── Imports (after mocks) ─────────────────────────────────────────────────────
+
+import { advanceToStep, initScrollEngine, getScrollEngineState, keyboardNav } from '../../assets/js/telar-story/scroll-engine.js';
+import * as engine from '../../assets/js/telar-story/scroll-engine.js';
+import { navigateToIntro, navigateToStep } from '../../assets/js/telar-story/deep-link.js';
+import { initializePanels, openPanel } from '../../assets/js/telar-story/panels.js';
+import { state } from '../../assets/js/telar-story/state.js';
+import { FakeOffcanvas, finishTransitions, resetOffcanvas } from './fake-offcanvas.js';
+import {
+  mocks, engineStory, stubEngineGlobals, readerTakesOver, wheelEvent, scrollFrame, resetState,
+  modelLenis, landMove, restAt,
+} from './scroll-engine-harness.js';
+
+// ── The buttons beside the engine (embed mode) ───────────────────────────────
+//
+// Every step the engine puts the story on is handed to the buttons, whatever
+// moved it, the buttons' own moves included: they show where the reader is.
+
+describe('the engine tells the buttons where the story is', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockClear();
+    mocks.mockFollowEngine.mockClear();
+    mocks.mockGoToStep.mockClear();
+    resetState({ currentIndex: -1 });
+
+    stubEngineGlobals();
+
+    initScrollEngine(5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('a button move states the step on landing, not at the tap', () => {
+    // The counter and the active card say where the reader is, and a tap
+    // leaving the intro reaches step 1 only when the scroll lands on it.
+    state.lenis = getScrollEngineState().lenis;
+    mocks.mockUpdateViewerInfo.mockClear();
+    mocks.mockActivateCard.mockClear();
+    advanceToStep(0);
+    scrollFrame(0.5);
+    scrollFrame(0.99);
+    expect(mocks.mockUpdateViewerInfo).not.toHaveBeenCalled();
+    expect(mocks.mockActivateCard).not.toHaveBeenCalled();
+    expect(state.currentIndex).toBe(-1);
+
+    scrollFrame(1);
+    expect(mocks.mockUpdateViewerInfo).toHaveBeenLastCalledWith(0);
+    expect(mocks.mockActivateCard).toHaveBeenLastCalledWith(0, 'forward');
+    expect(state.currentIndex).toBe(0);
+  });
+
+  it('on a step the scroll reaches: a deep link, a contents link or the wheel', () => {
+    scrollFrame(3);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(2);
+  });
+
+  it('on the intro the scroll returns to', () => {
+    scrollFrame(3);
+    scrollFrame(0.6);
+    expect(mocks.mockGoToStep).toHaveBeenCalledWith(-1, 'backward');
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(-1);
+  });
+
+  it('on the step a key press is going to', () => {
+    keyboardNav('forward');
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(0);
+  });
+
+  it('on the intro a key press is going to', () => {
+    scrollFrame(1);
+    mocks.mockFollowEngine.mockClear();
+    keyboardNav('backward');
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(-1);
+  });
+
+  it('on each step a button move crosses, and not before', () => {
+    scrollFrame(2);                         // step 1
+    mocks.mockFollowEngine.mockClear();
+    state.lenis = getScrollEngineState().lenis;
+    advanceToStep(3);                       // two taps, heading for step 3
+    expect(mocks.mockFollowEngine).not.toHaveBeenCalled();
+    scrollFrame(3);                         // passing step 2
+    scrollFrame(4);                         // landing on step 3
+    expect(mocks.mockFollowEngine.mock.calls).toEqual([[2], [3]]);
+  });
+
+  it('again once the reader takes the scroll from a button move', () => {
+    state.lenis = getScrollEngineState().lenis;
+    advanceToStep(3);
+    readerTakesOver(wheelEvent());
+    scrollFrame(2);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(1);
+  });
+});
+
+// ── A button move the engine cannot make, or does not finish ─────────────────
+//
+// The buttons show where the engine is, never where a tap hoped to take it, so
+// a move that is refused or cut short leaves nothing behind for them to be
+// wrong about, and every path that ends a move stands its token down.
+
+describe('a button move refused or cut short', () => {
+  const vh = () => window.innerHeight;
+
+  beforeEach(() => {
+    engineStory(5);
+    mocks.lenisScrollTo.mockReset();
+    mocks.mockFollowEngine.mockClear();
+    mocks.mockGoToStep.mockClear();
+    resetState({ currentIndex: -1, viewerPlates: {} });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    initScrollEngine(5);
+    state.lenis = getScrollEngineState().lenis;
+    // An immediate jump emits its scroll frame at once, as Lenis does.
+    mocks.lenisScrollTo.mockImplementation((px, opts = {}) => {
+      if (opts.immediate) scrollFrame(px / vh());
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Land on a step by the wheel, and let the snap start its dwell. */
+  function snapOnto(position) {
+    scrollFrame(position);
+    mocks.snapConstructorArgs.at(-1).opts.onSnapComplete();
+  }
+
+  it('a tap during the post-snap dwell ends the dwell and moves', () => {
+    snapOnto(2);                                  // step 1, scroll stopped
+    const { lenis } = getScrollEngineState();
+    expect(lenis.isStopped).toBe(true);
+    let stoppedWhenAsked = null;
+    mocks.lenisScrollTo.mockImplementation(() => { stoppedWhenAsked = lenis.isStopped; });
+
+    const moved = advanceToStep(2);
+    expect(stoppedWhenAsked, 'Lenis refuses a scrollTo while stopped').toBe(false);
+    expect(mocks.lenisScrollTo).toHaveBeenCalledWith(3 * vh(), expect.any(Object));
+    expect(moved).toBe(true);
+  });
+
+  it('a tap while a panel opened during the dwell is refused', () => {
+    snapOnto(2);                                  // step 1, scroll stopped
+    state.isPanelOpen = true;                     // a panel opens over it
+    const moved = advanceToStep(2);
+    expect(mocks.lenisScrollTo).not.toHaveBeenCalled();
+    expect(getScrollEngineState().lenis.isStopped).toBe(true);
+    expect(moved).toBe(false);
+  });
+
+  it('a tap while a panel holds the scroll is refused and leaves nothing in flight', () => {
+    scrollFrame(2);
+    const { lenis } = getScrollEngineState();
+    lenis.stop();                                 // a panel, not a dwell
+    const moved = advanceToStep(2);
+    expect(mocks.lenisScrollTo).not.toHaveBeenCalled();
+    expect(moved).toBe(false);
+    expect(engine.buttonHeading()).toBe(1);
+  });
+
+  it('a later tap goes on from where a button move is heading', () => {
+    scrollFrame(2);
+    advanceToStep(2);
+    expect(engine.buttonHeading()).toBe(2);
+  });
+
+  it('Back to Start before a button move lands, then a contents link, puts the buttons on the step', () => {
+    advanceToStep(0);                             // next from the intro, in flight
+    navigateToIntro();
+    expect(engine.buttonHeading(), 'next after Back to Start leaves for step 1').toBe(-1);
+    mocks.mockFollowEngine.mockClear();
+    navigateToStep(3);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(2);
+    expect(engine.buttonHeading()).toBe(2);
+  });
+
+  it('Back to Start jumps the scroll through Lenis, which the page\'s smooth scrolling cannot delay', () => {
+    // A scrollTop write is animated under the page's scroll-behavior: smooth,
+    // and WebKit can leave it unfinished, with the story on the intro and the
+    // scroll still on the step. Lenis writes with behavior: instant.
+    scrollFrame(3);
+    navigateToIntro();
+    expect(mocks.lenisScrollTo).toHaveBeenCalledWith(0, expect.objectContaining({ immediate: true, force: true }));
+    expect(state.currentIndex).toBe(-1);
+    expect(state.scrollPosition).toBe(0);
+  });
+
+  it('a tap during a key press\'s move takes over from it, and the steps it crosses are entered', () => {
+    keyboardNav('forward');                       // heading for step 0
+    expect(engine.buttonHeading()).toBe(0);
+    advanceToStep(1);
+    mocks.mockFollowEngine.mockClear();
+    scrollFrame(2);
+    expect(state.currentIndex).toBe(1);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(1);
+  });
+
+  it('a contents link during a button move stands the move down', () => {
+    scrollFrame(2);
+    advanceToStep(2);                             // heading for step 2
+    navigateToStep(5);
+    expect(state.currentIndex).toBe(4);
+    expect(engine.buttonHeading()).toBe(4);
+  });
+
+  it('the wheel taking over a button move before it crosses lets the gesture be carried', () => {
+    advanceToStep(0);
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    scrollFrame(0.2);
+    scrollFrame(0.4);
+    mocks.lenisScrollTo.mockClear();
+    vi.advanceTimersByTime(150);                  // the gesture's settle
+    expect(mocks.lenisScrollTo).toHaveBeenCalledWith(1 * vh(), expect.any(Object));
+  });
+
+  it('the wheel taking over a button move leaves the buttons on the engine\'s step', () => {
+    advanceToStep(0);
+    readerTakesOver(wheelEvent({ deltaY: 120 }));
+    scrollFrame(0.4);
+    expect(engine.buttonHeading()).toBe(-1);
+  });
+
+  it('a resize that lands a button move stands it down', () => {
+    scrollFrame(2);
+    advanceToStep(2);
+    getScrollEngineState().lenis.isScrolling = 'smooth';
+    vi.stubGlobal('innerHeight', 700);
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(100);
+    expect(state.currentIndex).toBe(2);           // landed where the tap was going
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(2);
+    getScrollEngineState().lenis.isScrolling = false;
+    expect(engine.buttonHeading()).toBe(2);
+    expect(advanceToStep(3)).toBe(true);
+    expect(engine.buttonHeading()).toBe(3);
+  });
+});
+
+// ── A button move that lands while a resize is pending ───────────────────────
+//
+// The scroll handler reads no frame between the window's resize and the
+// relayout, so a move that lands in that interval reaches the buttons and the
+// URL only through the relayout. Card, counter and fragment have to agree
+// once it has run.
+
+describe('a button move that lands before the relayout', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.mockFollowEngine.mockClear();
+    mocks.lenisScrollTo.mockClear();
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    vi.stubGlobal('innerHeight', 900);
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    restAt(2);                                    // on step 1
+    window.location.hash = '#s2';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves the card, the buttons and the fragment on the step it reached', () => {
+    expect(advanceToStep(2)).toBe(true);          // towards position 3
+    vi.stubGlobal('innerHeight', 720);
+    window.dispatchEvent(new Event('resize'));
+    landMove();
+    vi.advanceTimersByTime(100);
+
+    expect(state.scrollPosition).toBe(3);
+    expect(state.currentIndex).toBe(2);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(2);
+    expect(window.location.hash).toBe('#s3');
+  });
+});
+
+// ── A move to the offset Lenis already holds as its target ───────────────────
+//
+// Lenis skips a scrollTo to its current target and calls the completion at
+// once, without stopping a move in flight. Before a programmatic move's first
+// frame its target is still the offset it left, so a tap or a link back there
+// would report success while the earlier move ran on to its own landing.
+
+describe('a move back to where a move in flight left from', () => {
+  beforeEach(() => {
+    engineStory(5);
+    mocks.mockFollowEngine.mockClear();
+    resetState({ currentIndex: -1 });
+    stubEngineGlobals();
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    restAt(2);                                    // on step 1
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('a tap back from a key press before its first frame lands where the tap asked', () => {
+    keyboardNav('forward');                       // the story and buttons on step 2
+    expect(state.currentIndex).toBe(2);
+    expect(advanceToStep(engine.buttonHeading() - 1)).toBe(true);
+    landMove();
+    expect(state.currentIndex).toBe(1);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(1);
+    expect(getScrollEngineState().lenis.animatedScroll).toBe(2 * window.innerHeight);
+  });
+
+  it('a contents link to the step a key press is leaving lands on it', () => {
+    keyboardNav('forward');
+    navigateToStep(2);                            // step index 1, at the offset left from
+    landMove();
+    expect(state.currentIndex).toBe(1);
+    expect(mocks.mockFollowEngine).toHaveBeenLastCalledWith(1);
+  });
+
+  it('Up before a Down\'s first frame leaves the story on the step it was on', () => {
+    keyboardNav('forward');                       // heading for step 2
+    keyboardNav('backward');                      // back to the offset left from
+    landMove();
+    expect(state.currentIndex).toBe(1);
+    expect(getScrollEngineState().lenis.animatedScroll).toBe(2 * window.innerHeight);
+  });
+
+  it('Down after that pair moves one step on', () => {
+    keyboardNav('forward');
+    keyboardNav('backward');
+    landMove();
+    keyboardNav('forward');
+    landMove();
+    expect(state.currentIndex).toBe(2);
+    expect(getScrollEngineState().lenis.animatedScroll).toBe(3 * window.innerHeight);
+  });
+
+  it('a tap to a new offset during a key press still replaces its move', () => {
+    keyboardNav('forward');
+    advanceToStep(3);
+    landMove();
+    expect(state.currentIndex).toBe(3);
+  });
+});
+
+// ── Back to Start or a contents link over an open panel ──────────────────────
+//
+// An open panel stops the engine, and the story does not move under it. Back
+// to Start and a contents link close the panels first, as their own back
+// buttons would, and only then move the story; the engine stays stopped until
+// the last panel has gone, and runs again once it has.
+
+describe('Back to Start or a contents link with a panel open', () => {
+  const PANELS = ['layer1', 'layer2', 'glossary'].map((t) => `
+    <div class="offcanvas" id="panel-${t}" data-telar-panel="${t}">
+      <h1 id="panel-${t}-title"></h1><div id="panel-${t}-content"></div>
+    </div>`).join('');
+
+  const panelEl = (t) => document.getElementById(`panel-${t}`);
+  let frames;
+
+  /** Run the animation frames requested since the last call. */
+  const runFrames = () => frames.splice(0).forEach((cb) => cb(0));
+
+  /** The panel stack's depth each time the story's scroll is moved. */
+  function stackAtEachScroll() {
+    const lenis = state.lenis;
+    const scrollTo = lenis.scrollTo;
+    const seen = [];
+    lenis.scrollTo = vi.fn((...args) => {
+      seen.push(state.panelStack.length);
+      return scrollTo(...args);
+    });
+    return seen;
+  }
+
+  beforeEach(() => {
+    engineStory(5);
+    document.body.insertAdjacentHTML('beforeend', PANELS);
+    window.bootstrap = { Offcanvas: FakeOffcanvas };
+    resetOffcanvas();
+    window.telarLang = {};
+    window.storyData = {
+      steps: Array.from({ length: 5 }, (_, i) => ({
+        step: String(i + 1),
+        ...(i === 2 ? { layer1_text: '<p>One</p>', layer2_text: '<p>Two</p>' } : {}),
+      })),
+    };
+    history.replaceState(null, '', '/telar/stories/s/');
+    mocks.mockFollowEngine.mockClear();
+    resetState({
+      currentIndex: -1, viewerPlates: {}, panelStack: [], isPanelOpen: false, scrollLockActive: false,
+    });
+    stubEngineGlobals();
+    vi.useFakeTimers();
+    // After the fake timers, which bring a requestAnimationFrame of their own.
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', vi.fn((cb) => { frames.push(cb); }));
+    initScrollEngine(5);
+    state.lenis = modelLenis();
+    initializePanels();
+    restAt(3);                                    // on step 3
+    openPanel('layer1', '3');
+    finishTransitions();
+    runFrames();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('Back to Start closes the panel, then puts the story on the intro', () => {
+    const seen = stackAtEachScroll();
+    navigateToIntro();
+    expect(seen, 'no panel is open when the scroll moves').toEqual([0]);
+    expect(panelEl('layer1').classList.contains('hiding')).toBe(true);
+    expect(state.currentIndex).toBe(-1);
+    expect(location.hash).toBe('');
+  });
+
+  it('a contents link closes the panel, then puts the story on its step', () => {
+    const seen = stackAtEachScroll();
+    navigateToStep(5);
+    expect(seen, 'no panel is open when the scroll moves').toEqual([0]);
+    expect(panelEl('layer1').classList.contains('hiding')).toBe(true);
+    expect(state.currentIndex).toBe(4);
+    expect(location.hash).toBe('#s5');
+  });
+
+  it('Back to Start closes layer 2 and the layer 1 under it', () => {
+    openPanel('layer2', '3');
+    finishTransitions();
+    const seen = stackAtEachScroll();
+    navigateToIntro();
+    expect(seen).toEqual([0]);
+    expect(panelEl('layer1').classList.contains('hiding')).toBe(true);
+    expect(panelEl('layer2').classList.contains('hiding')).toBe(true);
+  });
+
+  for (const [control, go] of [
+    ['Back to Start', () => navigateToIntro()],
+    ['a contents link', () => navigateToStep(5)],
+  ]) {
+    it(`after ${control} the engine stays stopped until the panel has gone, and runs once it has`, () => {
+      const lenis = state.lenis;
+      expect(lenis.isStopped).toBe(true);
+      go();
+      runFrames();
+      expect(state.isPanelOpen).toBe(true);
+      expect(lenis.isStopped, 'stopped while the panel is still closing').toBe(true);
+
+      finishTransitions();
+      expect(state.isPanelOpen).toBe(false);
+      expect(lenis.isStopped, 'running once the panel has gone').toBe(false);
+      vi.advanceTimersByTime(400);
+      runFrames();
+      expect(lenis.isStopped).toBe(false);
+    });
+  }
+});

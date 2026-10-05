@@ -16,9 +16,6 @@ export function initClipPanelToggle(doc = document) {
     clipPanel.addEventListener('show.bs.collapse', function() { clipButton.style.display = 'none'; });
     clipPanel.addEventListener('hide.bs.collapse', function() { clipButton.style.display = 'block'; });
   }
-
-  // Theme colouring for clip panel (same as coordinate panel)
-  window.telarObjectTheme.applyPanelContrastClass(doc.querySelector('.clip-panel'));
 }
 
 export function initClipCopyButtons(copiedLang, doc = document) {

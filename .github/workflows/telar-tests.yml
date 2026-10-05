@@ -11,7 +11,7 @@ name: Test Telar Scripts
 # On pull request to main, all test suites run automatically. When triggered
 # manually via workflow_dispatch, you can choose which suites to run.
 #
-# Version: v1.7.0
+# Version: v1.8.0
 
 on:
   pull_request:
@@ -44,11 +44,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Some tests read files at a release tag (the shipped components README,
+      # the v1.7.0 delivery set). The tags live on the public repository.
+      - name: Fetch the release tags
+        run: git fetch --tags --force https://github.com/UCSB-AMPLab/telar.git
 
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -68,10 +75,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # 22: jsdom 30 needs ^22.22.2 and its undici >=22.19.0, and Node 20 is
+      # past end of life. Every engine range in package-lock.json accepts it.
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install dependencies
         run: npm ci

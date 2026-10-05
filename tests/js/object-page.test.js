@@ -7,7 +7,7 @@
  * wiring with a stubbed wrapper. A browser smoke covers the rest against a
  * served build.
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -18,7 +18,8 @@ vi.mock('../../assets/js/telar-story/iiif-viewer.js', () => {
       IiifViewer.last = this;
       this.options = options;
       this.pages = IiifViewer.pages;
-      this.currentPage = 0;
+      // The real wrapper clamps startPage to the manifest's pages.
+      this.currentPage = Math.max(0, Math.min(options.startPage ?? 0, this.pages.length - 1));
       this.viewer = {
         handlers: {},
         addHandler(name, fn) { this.handlers[name] = fn; },
@@ -36,12 +37,12 @@ vi.mock('../../assets/js/telar-story/iiif-viewer.js', () => {
   };
 });
 
-import { readObjectData, publishLanguageGlobals, initObjectPage } from '../../assets/js/object-page/main.js';
+import { readObjectData, publishLanguageGlobals, onObjectPage } from '../../assets/js/object-page/boot.js';
 import { copyWithFeedback, CHECK_ICON } from '../../assets/js/object-page/copy-feedback.js';
 import { initClipPanelToggle, initClipCopyButtons } from '../../assets/js/object-page/clip-panel.js';
 import { videoProvider, initVideoEmbed, initClipPicker, initCopyEmbedUrl } from '../../assets/js/object-page/video-object.js';
-import { formatTime, findAudioUrl, controlsMarkup } from '../../assets/js/object-page/audio-object.js';
-import { manifestUrlFor, initImageViewer, initCoordinatePanel } from '../../assets/js/object-page/image-object.js';
+import { formatTime, controlsMarkup, initAudioPlayer } from '../../assets/js/object-page/audio-object.js';
+import { manifestUrlFor, requestedPage, addressWithPage, initImageViewer, initCoordinatePanel } from '../../assets/js/object-page/image-object.js';
 import { IiifViewer } from '../../assets/js/telar-story/iiif-viewer.js';
 
 const LANG = {
@@ -69,7 +70,7 @@ beforeEach(() => {
     configurable: true,
     value: { writeText: (text) => { clipboard.push(text); return Promise.resolve(); } },
   });
-  window.telarObjectTheme = { applyPanelContrastClass: vi.fn(), deriveThemeColors: vi.fn() };
+  window.telarObjectTheme = { deriveThemeColors: vi.fn() };
   vi.useFakeTimers();
 });
 
@@ -85,8 +86,8 @@ const flush = () => Promise.resolve().then(() => Promise.resolve());
 // ── The data block ──────────────────────────────────────────────────────────
 
 describe('readObjectData', () => {
-  it('is null on a page with no data block', () => {
-    expect(readObjectData()).toBeNull();
+  it('throws on a page with no data block', () => {
+    expect(() => readObjectData()).toThrow(TypeError);
   });
 
   it('parses the block the layout writes', () => {
@@ -141,7 +142,6 @@ describe('clip panel', () => {
     expect(document.getElementById('clipPickerButton').style.display).toBe('none');
     document.getElementById('clipPanel').dispatchEvent(new Event('hide.bs.collapse'));
     expect(document.getElementById('clipPickerButton').style.display).toBe('block');
-    expect(window.telarObjectTheme.applyPanelContrastClass).toHaveBeenCalledWith(document.querySelector('.clip-panel'));
   });
 
   it('copies the clip as CSV and as tab-separated text', async () => {
@@ -268,15 +268,66 @@ describe('audio helpers', () => {
     expect(formatTime(141.596)).toBe('2:21');
   });
 
-  it('tries the extensions in order and takes the first the server answers for', async () => {
+  it('says so and asks the network for nothing when the build named no file', async () => {
+    document.body.innerHTML = '<div id="object-viewer"></div>';
     const asked = [];
-    const fetchFn = async (url) => { asked.push(url); return { ok: url.endsWith('.ogg') }; };
-    expect(await findAudioUrl('/telar', 'cusb', fetchFn)).toBe('/telar/telar-content/objects/cusb.ogg');
-    expect(asked).toEqual(['/telar/telar-content/objects/cusb.mp3', '/telar/telar-content/objects/cusb.ogg']);
+    const realFetch = global.fetch;
+    global.fetch = async (url) => { asked.push(url); return { ok: false }; };
+    try {
+      await initAudioPlayer(data({ mediaType: 'Audio', audioUrl: '' }));
+    } finally {
+      global.fetch = realFetch;
+    }
+    expect(document.getElementById('object-viewer').textContent)
+      .toContain('Audio file not available.');
+    expect(asked).toEqual([]);
   });
 
-  it('is null when nothing answers, and a failed request is not an answer', async () => {
-    expect(await findAudioUrl('/t', 'x', async () => { throw new Error('offline'); })).toBeNull();
+  describe('peaks', () => {
+    // Stands in for WaveSurfer: records the options it was created with and
+    // answers every call the player makes with something that accepts more.
+    const inert = () => new Proxy(function () {}, {
+      get: (_t, key) => (key === 'then' ? undefined : inert()),
+      apply: () => inert(),
+    });
+    let created;
+    let asked;
+    let realFetch;
+
+    beforeEach(() => {
+      document.body.innerHTML = '<div id="object-viewer"></div>';
+      created = null;
+      asked = [];
+      realFetch = global.fetch;
+      global.fetch = async (url) => {
+        asked.push(url);
+        return { ok: true, json: async () => ({ peaks: [0.1, 0.5] }) };
+      };
+      window.telarLoadWaveSurfer = async () => {};
+      window.telarObjectTheme = { deriveThemeColors: () => ({}) };
+      window.WaveSurfer = { create: (opts) => { created = opts; return inert(); }, Regions: inert() };
+    });
+
+    afterEach(() => {
+      global.fetch = realFetch;
+      delete window.telarLoadWaveSurfer;
+      delete window.telarObjectTheme;
+      delete window.WaveSurfer;
+      delete window._objectPageWaveSurfer;
+    });
+
+    it('asks for nothing when the build has no peaks file, and lets WaveSurfer decode', async () => {
+      await initAudioPlayer(data({ mediaType: 'Audio', audioUrl: '/t/a.mp3', peaksUrl: '' }));
+      expect(asked).toEqual([]);
+      expect(created.url).toBe('/t/a.mp3');
+      expect(created.peaks).toBeUndefined();
+    });
+
+    it('fetches the peaks file the build named and hands its peaks to WaveSurfer', async () => {
+      await initAudioPlayer(data({ mediaType: 'Audio', audioUrl: '/t/a.mp3', peaksUrl: '/t/assets/audio/peaks/a.json' }));
+      expect(asked).toEqual(['/t/assets/audio/peaks/a.json']);
+      expect(created.peaks).toEqual([0.1, 0.5]);
+    });
   });
 
   it('renders the three controls with their labels', () => {
@@ -300,6 +351,66 @@ describe('manifestUrlFor', () => {
   });
   it('is null with neither', () => {
     expect(manifestUrlFor(data({ objectId: null }))).toBeNull();
+  });
+});
+
+describe('requestedPage', () => {
+  it.each([
+    ['?page=3', 2],
+    ['?page=1', 0],
+    ['', 0],
+    ['?other=4', 0],
+    ['?page=', 0],
+    ['?page=0', 0],
+    ['?page=-2', 0],
+    ['?page=2.5', 0],
+    ['?page=3abc', 0],
+    ['?page=abc', 0],
+    ['?page=%33', 2],
+    ['?page=03', 2],
+    ['?page=+3', 0],
+    ['?page=4&page=7', 3],
+    ['page=5', 4],
+  ])('%s asks for page index %i', (search, page0) => {
+    expect(requestedPage(search)).toBe(page0);
+  });
+});
+
+describe('addressWithPage', () => {
+  const base = 'https://example.org/telar/objects/leyes/';
+
+  it('names pages after the first with a 1-indexed page parameter', () => {
+    expect(addressWithPage(base, 2, 5)).toBe(base + '?page=3');
+  });
+
+  it('drops the page parameter for the first page', () => {
+    expect(addressWithPage(base + '?page=3', 0, 5)).toBe(base);
+  });
+
+  it('keeps other parameters as written, and the hash', () => {
+    expect(addressWithPage(base + '?lang=es&q=a%20b&page=2#notes', 3, 5))
+      .toBe(base + '?lang=es&q=a%20b&page=4#notes');
+    expect(addressWithPage(base + '?page=2&lang=es#notes', 0, 5))
+      .toBe(base + '?lang=es#notes');
+  });
+
+  it('replaces every page parameter, however it is encoded', () => {
+    expect(addressWithPage(base + '?page=abc&%70age=9&x=1', 1, 5)).toBe(base + '?x=1&page=2');
+  });
+
+  it('drops the page parameter from a single-page object\'s address', () => {
+    expect(addressWithPage(base + '?page=3', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?page=1', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?page=0', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?page=abc', 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?lang=es&page=3#notes', 0, 1)).toBe(base + '?lang=es#notes');
+  });
+
+  it('leaves an address with no page parameter as it is', () => {
+    expect(addressWithPage(base + '?lang=es#notes', 0, 1)).toBe(base + '?lang=es#notes');
+    expect(addressWithPage(base, 0, 1)).toBe(base);
+    expect(addressWithPage(base + '?lang=es&&q=a%20b+z#x', 0, 1)).toBe(base + '?lang=es&&q=a%20b+z#x');
+    expect(addressWithPage(base + '?lang=es&&q=a%20b+z#x', 0, 5)).toBe(base + '?lang=es&&q=a%20b+z#x');
   });
 });
 
@@ -329,6 +440,67 @@ describe('initImageViewer', () => {
     expect(document.querySelector('.coord-page-row').style.display).toBe('flex');
     expect(document.querySelector('.coord-instructions-multi').style.display).toBe('block');
     expect(document.getElementById('coord-page').textContent).toBe('1');
+  });
+
+  describe('the page in the address', () => {
+    const start = window.location.href;
+    afterEach(() => { window.history.replaceState(null, '', start); });
+
+    const at = (search) => window.history.replaceState(null, '', '/objects/leyes/' + search);
+    const address = () => window.location.pathname + window.location.search + window.location.hash;
+
+    it('opens the page the address asks for, clamped by the wrapper', async () => {
+      IiifViewer.pages = [{}, {}, {}, {}];
+      at('?page=3');
+      await initImageViewer(data());
+      expect(IiifViewer.last.options.startPage).toBe(2);
+      expect(document.getElementById('coord-page').textContent).toBe('3');
+      expect(address()).toBe('/objects/leyes/?page=3');
+
+      at('?page=99');
+      await initImageViewer(data());
+      expect(document.getElementById('coord-page').textContent).toBe('4');
+      expect(address()).toBe('/objects/leyes/?page=4');
+    });
+
+    it('rewrites a malformed value to the page shown', async () => {
+      IiifViewer.pages = [{}, {}, {}];
+      at('?page=abc&lang=es#x');
+      await initImageViewer(data());
+      expect(IiifViewer.last.options.startPage).toBe(0);
+      expect(address()).toBe('/objects/leyes/?lang=es#x');
+    });
+
+    it('follows each page shown, without adding history entries', async () => {
+      IiifViewer.pages = [{}, {}, {}];
+      at('');
+      const entries = window.history.length;
+      await initImageViewer(data());
+      const wrapper = IiifViewer.last;
+      wrapper.currentPage = 1;
+      wrapper.options.onPageShown(1);
+      expect(address()).toBe('/objects/leyes/?page=2');
+      wrapper.currentPage = 0;
+      wrapper.options.onPageShown(0);
+      expect(address()).toBe('/objects/leyes/');
+      expect(window.history.length).toBe(entries);
+    });
+
+    it.each([
+      ['?page=3', '/objects/leyes/'],
+      ['?page=1', '/objects/leyes/'],
+      ['?page=0', '/objects/leyes/'],
+      ['?page=abc', '/objects/leyes/'],
+      ['?lang=es&page=3#x', '/objects/leyes/?lang=es#x'],
+    ])('corrects a single-page object\'s address %s', async (search, expected) => {
+      IiifViewer.pages = [{}];
+      at(search);
+      await initImageViewer(data());
+      expect(address()).toBe(expected);
+      window.history.replaceState(null, '', '/objects/leyes/' + search);
+      IiifViewer.last.options.onPageShown(0);
+      expect(address()).toBe(expected);
+    });
   });
 
   it('logs and stops when the wrapper fails to initialise', async () => {
@@ -400,23 +572,25 @@ describe('initCoordinatePanel', () => {
   });
 });
 
-// ── Dispatch ────────────────────────────────────────────────────────────────
+// ── Boot ────────────────────────────────────────────────────────────────────
 
-describe('initObjectPage', () => {
-  it('wires an audio page: the player and the clip panel, and no viewer', async () => {
-    document.body.innerHTML = '<div id="object-viewer"></div><div id="clipPanel" class="clip-panel"></div><div id="clipPickerButton"></div>';
-    vi.stubGlobal('fetch', async () => ({ ok: false }));
-    IiifViewer.last = null;
-    initObjectPage(data({ mediaType: 'Audio' }));
-    await flush(); await flush(); await flush(); await flush();
-    expect(document.getElementById('object-viewer').textContent).toContain('Audio file not available.');
-    expect(IiifViewer.last).toBeNull();
-    vi.unstubAllGlobals();
+// Which type gets wired is the layout's decision now, not this module's: it
+// loads one bundle per media type, so a page carries only its own entry. What
+// is left here is the part every entry shares.
+describe('onObjectPage', () => {
+  it('runs the entry with the page data', () => {
+    document.body.innerHTML =
+      '<script id="telar-object-data" type="application/json">{"mediaType":"Audio","objectId":"a"}</script>';
+    const seen = [];
+    onObjectPage((d) => seen.push(d));
+    expect(seen).toEqual([{ mediaType: 'Audio', objectId: 'a' }]);
   });
 
-  it('wires nothing for a media type it does not know', () => {
-    document.body.innerHTML = '<div id="object-viewer">untouched</div>';
-    initObjectPage(data({ mediaType: '3D' }));
-    expect(document.getElementById('object-viewer').textContent).toBe('untouched');
+  it('does nothing when the block is there but unreadable', () => {
+    document.body.innerHTML =
+      '<script id="telar-object-data" type="application/json">{nope</script>';
+    const seen = [];
+    onObjectPage((d) => seen.push(d));
+    expect(seen).toEqual([]);
   });
 });

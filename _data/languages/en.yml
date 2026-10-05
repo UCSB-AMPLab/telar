@@ -4,9 +4,9 @@
 
 # Navigation
 navigation:
+  stories: "Stories"
   home: "Home"
   objects: "Objects"
-  stories: "Stories"
   glossary: "Glossary"
   about: "About"
 
@@ -18,13 +18,9 @@ buttons:
   back_to_collection: "← Back to Collection"
   back_to_glossary: "← Back to Glossary"
   learn_more: "Learn more"
-  read_more: "Read More"
   view_objects: "View all objects"
-  copy: "Copy"
-  copied: "Copied!"
   close: "Close"
   identify_coordinates: "Identify coordinates"
-  copy_coordinates: "Copy x,y,zoom"
   go_deeper: "Go deeper"
 
 # Generic loading placeholder (object thumbnails and other async content)
@@ -42,16 +38,25 @@ object:
     credit: "Credit"
     iiif_manifest: "IIIF Manifest"
     appears_in_stories: "Appears in Stories"
+    format: "Format"
+    file_size: "File size"
+    duration: "Duration"
+    provider: "Provider"
+    source: "Source"
+    view_on_provider: "View on"
+    embed_url: "Embed URL"
+
+  # Messages shown in the object viewer when its media cannot be shown
+  errors:
+    audio_not_found: "Audio file not available."
+    embed_unavailable: "This video could not be loaded."
+    open_on_drive: "Open it on Google Drive."
 
   # Credits badge (viewer overlay)
   credit_prefix: "Credit:"
 
   # Viewer controls
   viewer:
-    fullscreen: "Fullscreen"
-    exit_fullscreen: "Exit fullscreen"
-    thumbnails: "Thumbnails"
-    page: "Page"
     # Pagination chrome for multi-page IIIF objects
     prev_page: "Previous page"
     next_page: "Next page"
@@ -65,9 +70,6 @@ object:
   coordinates:
     heading: "Instructions"
     page_label: "Page"
-    x_label: "X"
-    y_label: "Y"
-    zoom_label: "Zoom"
     copy_page_tooltip: "Copy page number"
     instructions_p1: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling."
     instructions_p2: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once."
@@ -108,7 +110,6 @@ object:
   video_frame_title: "Video: __TITLE__"
 
   # Object thumbnails
-  no_image: "No image"
 
 # Demo content labels
 demo:
@@ -148,6 +149,7 @@ pages:
   objects_intro_sample_collection: "There are {count} objects in the collection. Have a look at {sample} of them below."
   collection_mode_heading: "Explore the collection"
   glossary_intro: "Key terms and concepts used in these stories."
+  glossary_intro_with_sources: "Key terms and primary sources used in these stories."
 
 # Default content for the homepage welcome (rendered by index.md via markdownify)
 index_page:
@@ -176,8 +178,6 @@ objects:
   search_placeholder: "Search objects..."
   clear_search: "Clear search"
   filter_by: "Filter by:"
-  loading_filters: "Loading filters..."
-  no_results: "No objects match your search"
   type: "Type"
   medium: "Medium/Genre"
   creator: "Creator"
@@ -189,17 +189,37 @@ objects:
   # Media-type labels on thumbnail placeholders (screen readers)
   media_video: "Video"
   media_audio: "Audio"
+  no_results: "No objects match your search or filters"
+  no_options: "No options available"
 
 # Panels system
 panels:
   default_title: "Panel Title"
-  glossary_term_prefix: "Key term"
+  # The label above an entry's title in the glossary panel, by the
+  # entry's kind. The kinds are defined in _data/glossary_kinds.yml.
+  glossary_kind_term: "Key term"
+  glossary_kind_source: "Primary source"
+  glossary_kind_entity: "Person or entity"
+  glossary_kind_place: "Place"
   glossary_term_title: "Glossary Term"
+
+# Footnote backlinks. The tooltip on the arrow that returns a reader to
+# where the note was cited. %d is the note's number and is interpolated by
+# Python Markdown, not by Telar: a string without exactly one %d is
+# discarded silently and the library's own English default comes back.
+footnotes:
+  backlink_title: "Jump back to footnote %d in the text"
 
 # Glossary term pages
 glossary:
   related_terms: "Related Terms"
   appears_in: "Appears in"
+  # Headings on the glossary page, one per kind of entry.
+  # The kinds are defined in _data/glossary_kinds.yml.
+  section_terms: "Key terms"
+  section_sources: "Primary sources"
+  section_entities: "People and entities"
+  section_places: "Places"
 
 # Widgets (carousel controls; resolved by widgets.py at build)
 widgets:
@@ -211,7 +231,7 @@ widgets:
 empty_states:
   no_stories: "No stories available yet. Add stories to your spreadsheet or create CSV files in <code>telar-content/spreadsheets/</code>."
   no_objects: "No objects in the collection yet. Add objects to your spreadsheet or to <code>telar-content/spreadsheets/objects.csv</code>."
-  no_glossary: "No glossary terms available yet. Add glossary files to <code>telar-content/texts/glossary/</code>."
+  no_glossary: "There are no glossary entries yet. Add them to your glossary spreadsheet, or as files in <code>telar-content/texts/glossary/</code>."
   thumbnail_load_error: "Failed to load"
 
 # Error messages and warnings (user-facing)
@@ -220,7 +240,6 @@ errors:
   image_viewer_unavailable: "⚠️ Image Viewer Unavailable"
   image_viewer_unavailable_alt: "⚠️ Image viewer unavailable"
   check_objects_csv: "Please check <code>telar-content/spreadsheets/objects.csv</code> to ensure the object exists and has a valid IIIF manifest URL."
-  failed_to_load: "Failed to load"
   no_image: "No image"
 
   # Panel image errors (shown in-panel by JS)
@@ -264,7 +283,6 @@ errors:
     local_alternative: "Alternatively, if your site settings are wrong, update <code>_config.yml</code> first, then regenerate:"
     local_fix_check_config: "Check that <code>url</code> and <code>baseurl</code> in <code>_config.yml</code> are correct for production"
     local_fix_run_with_note: "Run: <code>python3 scripts/generate_iiif.py</code> (it will use your updated settings)"
-    local_regenerate_note: "(it will use your updated settings)"
 
   # Google Sheets configuration errors
   google_sheets:
@@ -301,8 +319,6 @@ errors:
     iiif_503: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 503). Error 503 means \"Service Unavailable\": the IIIF server is temporarily unavailable, possibly due to maintenance or being overloaded. This is not a problem with your configuration. Try rebuilding your site later - the server should come back online."
     iiif_502: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error 502). Error 502 means \"Bad Gateway\": there's a problem with the IIIF server's infrastructure. This is not a problem with your configuration - the institution's server is having connectivity issues. Try rebuilding your site later to see if the issue has been resolved."
     iiif_error_generic: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be accessed (error {{ code }})"
-    iiif_unreachable: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be reached"
-    iiif_slow: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet is slow to respond. The image server may be experiencing high load or network delays. The manifest should still work when viewers access your site."
     iiif_validation_failed: "the IIIF manifest URL you specified in your configuration CSV or Google Sheet could not be validated"
 
     # Short error labels (for warning lists)
@@ -314,8 +330,6 @@ errors:
     short_503: "Error 503: server temporarily unavailable (try again later)"
     short_502: "Error 502: server connectivity issue (try again later)"
     short_error_generic: "Error {{ code }}: could not be accessed"
-    short_network_error: "Network error: could not be reached"
-    short_slow: "Slow response: server may be experiencing delays"
     short_validation_error: "Validation error: could not be validated"
 
     # Image source errors
@@ -337,20 +351,27 @@ errors:
     # Content file errors
     content_missing_label: "Content Missing"
     content_file_missing: "Content file missing: <code>{{ file_ref }}</code><br>Please add this file to <code>telar-content/texts/stories/</code> or remove the reference from the CSV."
-    layer_file_missing_named: "the file for the layer {{ layer_num }} panel, <code>{{ filename }}</code>, was not found"
     layer_file_missing: "the file for the layer {{ layer_num }} panel was not found"
 
     # Glossary link errors
-    glossary_term_not_found: "the term '<strong>{{ term_id }}</strong>' does not exist in your glossary. Check that it matches the <code>term_id</code> of an entry in your glossary spreadsheet or in <code>telar-content/texts/glossary/</code>."
-    short_glossary_not_found: "Missing glossary term: {{ term_id }}"
-    glossary_load_error: "Failed to load glossary term. Please try again."
+    glossary_term_not_found: "the entry '<strong>{{ term_id }}</strong>' does not exist in your glossary. Check that it matches the <code>term_id</code> of a row in your glossary spreadsheet or of a file in <code>telar-content/texts/glossary/</code>."
+    glossary_term_in_link_text: "the entry '<strong>{{ term_id }}</strong>' is inside the text of a link, so it is shown as ordinary text and does not open the glossary. Move it outside the link so it opens the glossary."
+
+    # Step answer limits
+    answer_image_dropped: "An image or embed in the answer to step {{ step }} of `{{ story }}` was removed. A step's answer is plain prose: put the image in a layer panel, or make it the step's object."
+    answer_widget_dropped: "A step's answer is plain prose, so the widgets (blocks that start with `:::`) in the answer to step {{ step }} of `{{ story }}` came out. Move them into a layer panel."
+    answer_over_hard_limit: "The answer to step {{ step }} of `{{ story }}` is too long to fit on the story's card. An answer may have up to {{ max_paragraphs }} paragraphs and {{ limit }} lines, counting 53 characters to a line and two lines for each paragraph after the first. This one has {{ lines }} lines. It was cut to fit, so the text past the cut does not appear in the story. Shorten the answer, or move the detail into a layer panel."
+    answer_footnotes_dropped: "A step's answer is plain prose, so the footnotes in the answer to step {{ step }} of `{{ story }}` came out, references and definitions alike. Move the note into a layer panel, or fold what it says into the sentence."
+    answer_markup_flattened: "A step's answer is plain prose, so markup in the answer to step {{ step }} of `{{ story }}` was flattened: lists, headings and quotes kept their words and lost their marks, and tables, code blocks and horizontal rules came out altogether. Move that material into a layer panel, where it renders as written."
+
+    # Step coordinates
+    coordinate_not_a_number: "The `{{ column }}` value in step {{ step }} of `{{ story }}` is `{{ value }}`, which is not a number, so the viewer cannot use it to frame the object. Type a number, or leave the cell empty to use the default."
 
 # Share and embed functionality
 share:
   button: "Share"
   title: "Share"
   copy: "COPY"
-  copied: "Copied!"
 
   # Pill-style tabs
   tab_this_story: "this story"
@@ -398,25 +419,8 @@ share:
   embed_key_warning: "This embed code includes the access key, so anyone who copies it can open the story. Only embed it on sites you trust."
   protected_story_warning: "This story is protected. Recipients will need the key to view it."
   protected_embed_warning: "This story is protected. The embed will show a lock screen until viewers enter the key."
-
-  # Legacy keys (kept for compatibility)
-  title_site: "Share This Site"
-  tab_link: "Share Links"
-  tab_embed: "Embed Code"
-  copy_link: "Copy Link"
-  copy_embed: "Copy Embed Code"
-  embed_presets: "Dimension Presets"
-  select_story: "Select a story"
-  share_a_story: "Share a story"
-  select_option: "Select Story"
-  embed_preview: "Embed Code Preview"
-  share_story_heading: "Share This Story"
-  share_site_heading: "Share This Site"
-  help_story_link_homepage: "Copy a direct link to a story to share by email, social media, or messaging apps."
-  help_embed_intro_stories: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
-  help_embed_intro_homepage: "Many websites and platforms, such as <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/en/HTML_block\" target=\"_blank\">Moodle</a>, and <a href=\"https://wordpress.org/documentation/article/wordpress-editor/#custom-html-block\" target=\"_blank\">WordPress</a> allow you to insert (embed) a version of another site inside a page or post. Telar supports this, allowing you to embed individual stories into other sites. To do so please select a story and specify a size (using a preset or entering custom dimensions), then copy the code and paste it into your site."
-  help_dimensions: "Enter dimensions as pixels (e.g. 800) or percentages (e.g. 100%)."
-  help_embed: "Copy this code and paste it into your website, LMS, or blog post to embed this story."
+  copy_manually: "Please manually copy the text"
+  copied: "Copied to the clipboard"
 
 # Protected stories unlock screen
 unlock:
@@ -442,3 +446,4 @@ upgrade:
 # linked names (brace-free so they are safe inside a Liquid default: argument).
 footer:
   built_with: "Built with __TELAR__ __VERSION__, a project of __NEOGRANADINA__ and __AMPL__."
+  theme_by: "Theme by __CREATOR__."

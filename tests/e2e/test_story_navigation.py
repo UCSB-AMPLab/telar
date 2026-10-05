@@ -43,6 +43,18 @@ def read_step_counter(page):
     return int(match.group(1)) if match else None
 
 
+def step_to(page, key, number):
+    """Press *key* and wait for the story to say it is on step *number*.
+
+    Waiting for the counter rather than for a fixed span of time. A move to a
+    step is paced by `NAV_SECONDS.keyboard` and has been retuned twice; a test
+    that sleeps for a figure of its own restates that pace without saying so,
+    and passes or fails on which side of it the figure has ended up.
+    """
+    page.keyboard.press(key)
+    expect(page.locator("#step-counter")).to_contain_text(f"Step {number} /")
+
+
 class TestStoryLoad:
     """Tests for initial story loading."""
 
@@ -109,16 +121,11 @@ class TestKeyboardNavigation:
         page.wait_for_timeout(1000)
 
         # Advance to step 2
-        page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(900)
-        page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(900)
-        expect(page.locator("#step-counter")).to_contain_text("Step 2 /")
+        step_to(page, "ArrowDown", 1)
+        step_to(page, "ArrowDown", 2)
 
         # Go back one step
-        page.keyboard.press("ArrowUp")
-        page.wait_for_timeout(900)
-        expect(page.locator("#step-counter")).to_contain_text("Step 1 /")
+        step_to(page, "ArrowUp", 1)
 
     def test_arrow_right_opens_panel(self, page, base_url):
         """Should open the layer 1 panel on ArrowRight when the step has panel content."""
@@ -127,11 +134,8 @@ class TestKeyboardNavigation:
         page.wait_for_timeout(1000)
 
         # Step 2 of the demo story carries layer 1 content
-        page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(900)
-        page.keyboard.press("ArrowDown")
-        page.wait_for_timeout(900)
-        expect(page.locator("#step-counter")).to_contain_text("Step 2 /")
+        step_to(page, "ArrowDown", 1)
+        step_to(page, "ArrowDown", 2)
 
         page.keyboard.press("ArrowRight")
         expect(page.locator("#panel-layer1.show")).to_be_visible(timeout=3000)

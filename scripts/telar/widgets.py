@@ -2,8 +2,8 @@
 Widget Parsing and Rendering
 
 This module deals with Telar's widget system, which lets authors embed
-interactive components — carousels, tabbed panels, accordions, and
-bibliographies — inside story panel content using a fenced-block syntax borrowed from
+interactive components — carousels, tabbed panels, accordions,
+bibliographies and glossary callouts — inside story panel content using a fenced-block syntax borrowed from
 markdown's code fence pattern: `:::widget_type ... :::`.
 
 Like image processing, widget parsing runs before the markdown library
@@ -16,14 +16,22 @@ Each widget type has its own parser:
 
 - `parse_carousel_widget()` expects `key: value` blocks separated by `---`,
   where each block defines one slide (image, alt, caption, credit). It
-  validates that images exist using `validate_image_path()` from the images
-  module, and calls `get_image_dimensions()` to calculate aspect ratios.
+  warns when a slide's image is not in the site, and calls
+  `get_image_dimensions()` to calculate aspect ratios.
   The maximum aspect ratio across all slides determines the carousel's
   CSS size class (compact, default, tall, or portrait). It also resolves
   each slide's final `src`: absolute http(s) URLs pass through unchanged,
-  while bare filenames are joined to the literal `{{ site.baseurl }}` Liquid
-  token (processed later by Jekyll) plus `/assets/images/`. The carousel
-  template only ever renders `item.src` — it carries no URL logic of its own.
+  while a file in the site is found by `locate_image()` (a path with a
+  folder in it from the site root, a bare file name in `assets/images/` and
+  then `telar-content/objects/`) and joined to the site's configured
+  `baseurl`. The carousel template only ever renders `item.src` — it
+  carries no URL logic of its own.
+
+  The base URL is read here rather than left as a Liquid token because a
+  widget in a story reaches the browser through `story.html`'s `jsonify`,
+  which serialises strings without resolving Liquid inside them, while a
+  widget in a page is rendered by Jekyll. Resolving in Python gives both
+  paths the same URL.
 
 - `parse_tabs_widget()` and `parse_accordion_widget()` both use
   `parse_markdown_sections()` to split content on `## ` headers into
@@ -34,6 +42,13 @@ The module-level `_widget_counter` integer generates unique IDs for each
 widget instance within a build, ensuring that multiple widgets on the
 same page don't collide.
 
+- `parse_glossary_widget()` reads `entry:` and `align:`. The callout it
+  stands for needs the glossary, which this step does not have, so it
+  writes a slot (`glossary-callout-slot`) that `process_glossary_links()`
+  in `telar/glossary.py` fills once the text is HTML. Every path that runs
+  widgets runs that pass after them, and it resolves the entry exactly as
+  it resolves `[[entry]]`, warning and marking an unknown entry the same way.
+
 `parse_key_value_block()` is a simple helper that extracts `key: value`
 pairs from a text block, used by the carousel parser.
 
@@ -41,17 +56,20 @@ pairs from a text block, used by the carousel parser.
 and renders it with the parsed widget data. If the template fails, it
 returns an error `<div>` instead of crashing the build.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import html
 import re
-import markdown
+import unicodedata
 from html.parser import HTMLParser
 from pathlib import Path
+
+import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from telar.config import get_lang_string
-from telar.images import validate_image_path, get_image_dimensions
+from telar.images import BARE_IMAGE_FOLDERS, get_image_dimensions, locate_image
+from telar.latex import convert_markdown
 
 
 # Widget instance counter for unique IDs within a build
@@ -121,6 +139,16 @@ def sanitize_caption_html(rendered_html):
     return parser.get_html()
 
 
+def _caption_html(rendered_html):
+    """Unwrap a one-paragraph caption and sanitise what is left.
+
+    Runs as `convert_markdown`'s post-processing step, so it sees LaTeX as
+    a placeholder rather than as a formula the sanitiser would re-parse.
+    """
+    stripped = re.sub(r'^<p>(.*)</p>$', r'\1', rendered_html.strip())
+    return sanitize_caption_html(stripped)
+
+
 def get_widget_id():
     """Generate unique widget ID for this build"""
     global _widget_counter
@@ -165,7 +193,53 @@ def declared_dimensions(item):
     return width, height
 
 
-def parse_carousel_widget(content, file_path, warnings_list):
+# The site's own prefix, for turning an author's bare filename into a path a
+# browser can fetch. Read from _config.yml rather than emitted as a Liquid
+# token (see the module docstring).
+_BASE_URL_UNSET = object()
+_cached_base_url = _BASE_URL_UNSET
+
+
+def site_base_url():
+    """The site's baseurl, as configured, with no trailing slash.
+
+    Empty string for a site served at a domain root, which is a valid answer
+    and not a missing one — hence the sentinel rather than a falsy check.
+    """
+    global _cached_base_url
+    if _cached_base_url is _BASE_URL_UNSET:
+        _cached_base_url = _read_base_url_from_config()
+    return _cached_base_url
+
+
+def _read_base_url_from_config():
+    config_path = Path('_config.yml')
+    if not config_path.exists():
+        return ''
+    try:
+        with open(config_path, 'r', encoding='utf-8') as handle:
+            config = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError):
+        return ''
+    return str(config.get('baseurl') or '').rstrip('/')
+
+
+def reset_base_url_cache():
+    """Forget the cached baseurl. For tests, and for a build that rewrites
+    _config.yml mid-run."""
+    global _cached_base_url
+    _cached_base_url = _BASE_URL_UNSET
+
+
+def _missing_image_message(image, site_path):
+    if '/' in image:
+        return f'Carousel image not found: {image} (expected at {site_path})'
+    folders = ' or '.join(f'{folder}/' for folder in BARE_IMAGE_FOLDERS)
+    return (f'Carousel image not found: {image} (looked in {folders}; '
+            f'the slide points at {site_path})')
+
+
+def parse_carousel_widget(content, file_path, warnings_list, base_url=None):
     """
     Parse carousel widget content.
 
@@ -189,6 +263,9 @@ def parse_carousel_widget(content, file_path, warnings_list):
     Returns:
         dict: Parsed carousel data with 'items' list and 'size_class'
     """
+    if base_url is None:
+        base_url = site_base_url()
+
     items = []
     blocks = content.split('---')
 
@@ -208,23 +285,23 @@ def parse_carousel_widget(content, file_path, warnings_list):
             })
             continue
 
-        # Validate image exists
-        image_exists, full_path = validate_image_path(data['image'], file_path)
-        if not image_exists:
-            warnings_list.append({
-                'type': 'widget',
-                'widget_type': 'carousel',
-                'message': f'Carousel image not found: {data["image"]} (expected at {full_path})'
-            })
-
-        # Resolve the final image src here rather than in the template:
-        # absolute http(s) URLs are used as given; bare filenames are joined
-        # to the literal "{{ site.baseurl }}" Liquid token, which Jekyll
-        # resolves at site-build time (see render_widget_html's base_url).
-        if data['image'].startswith('http://') or data['image'].startswith('https://'):
-            data['src'] = data['image']
+        # Resolve the final image src here rather than in the template.
+        # Absolute http(s) URLs are used as given; a file in the site is
+        # joined to the site's configured baseurl, so the value that reaches
+        # the browser is a path it can fetch by whichever route the widget
+        # travelled.
+        image = data['image']
+        if image.startswith('http://') or image.startswith('https://'):
+            data['src'] = image
         else:
-            data['src'] = '{{ site.baseurl }}/assets/images/' + data['image']
+            site_path, found = locate_image(image, base_url)
+            data['src'] = '%s/%s' % (base_url, site_path)
+            if not found:
+                warnings_list.append({
+                    'type': 'widget',
+                    'widget_type': 'carousel',
+                    'message': _missing_image_message(image, site_path)
+                })
 
         # Warn if alt text missing
         if 'alt' not in data:
@@ -238,18 +315,22 @@ def parse_carousel_widget(content, file_path, warnings_list):
         # Process caption/credit through markdown (for italics, etc.), then
         # sanitise the result so an author-supplied <script>/<img onerror>/etc.
         # cannot reach the rendered page through these fields.
-        if 'caption' in data:
-            caption_html = markdown.markdown(data['caption'])
-            stripped = re.sub(r'^<p>(.*)</p>$', r'\1', caption_html.strip())
-            data['caption'] = sanitize_caption_html(stripped)
-        if 'credit' in data:
-            credit_html = markdown.markdown(data['credit'])
-            stripped = re.sub(r'^<p>(.*)</p>$', r'\1', credit_html.strip())
-            data['credit'] = sanitize_caption_html(stripped)
+        for field in ('caption', 'credit'):
+            if field in data:
+                data[field] = convert_markdown(
+                    data[field], post_process=_caption_html)
 
         items.append(data)
 
-    # Analyze aspect ratios to determine optimal carousel height
+    return {'items': items, 'size_class': _carousel_size_class(items)}
+
+
+def _carousel_size_class(items):
+    """The carousel's height class, from the tallest image in it.
+
+    An image whose size cannot be read, or whose width is zero, does not
+    count; a carousel with none that can be read is 'default'.
+    """
     aspect_ratios = []
     for item in items:
         dimensions = declared_dimensions(item) or get_image_dimensions(item['image'])
@@ -271,16 +352,20 @@ def parse_carousel_widget(content, file_path, warnings_list):
             size_class = 'tall'  # Square to mild portrait
         else:
             size_class = 'portrait'  # Strong portrait
+    return size_class
 
-    return {'items': items, 'size_class': size_class}
 
-
-def parse_markdown_sections(content):
+def parse_markdown_sections(content, footnote_scope=None):
     """
     Parse content into sections based on ## headers.
 
+    Each section is its own conversion. With *footnote_scope*, section n's
+    footnote anchors carry `<footnote_scope>-<n>`, so two sections that
+    use the same label still link each reference to its own note.
+
     Args:
         content: Markdown text with ## headers
+        footnote_scope: Optional widget id for the sections' note anchors
 
     Returns:
         list: List of dicts with 'title' and 'content' keys
@@ -305,15 +390,20 @@ def parse_markdown_sections(content):
         sections.append(current_section)
 
     # Convert content lists to strings and process markdown
-    for section in sections:
+    for number, section in enumerate(sections, 1):
         content_text = '\n'.join(section['content']).strip()
-        # Convert markdown to HTML
-        section['content_html'] = markdown.markdown(content_text, extensions=['extra', 'nl2br'])
+        section['content_html'] = convert_markdown(
+            content_text, footnote_scope=_section_scope(footnote_scope, number))
 
     return sections
 
 
-def parse_tabs_widget(content, file_path, warnings_list):
+def _section_scope(widget_id, number):
+    """The footnote scope for the *number*th conversion inside a widget."""
+    return '%s-%d' % (widget_id, number) if widget_id else None
+
+
+def parse_tabs_widget(content, file_path, warnings_list, widget_id=None):
     """
     Parse tabs widget content.
 
@@ -329,7 +419,7 @@ def parse_tabs_widget(content, file_path, warnings_list):
     Returns:
         dict: Parsed tabs data with 'tabs' list
     """
-    sections = parse_markdown_sections(content)
+    sections = parse_markdown_sections(content, widget_id)
 
     # Validate tab count
     if len(sections) < 2:
@@ -357,7 +447,7 @@ def parse_tabs_widget(content, file_path, warnings_list):
     return {'tabs': sections}
 
 
-def parse_accordion_widget(content, file_path, warnings_list):
+def parse_accordion_widget(content, file_path, warnings_list, widget_id=None):
     """
     Parse accordion widget content.
 
@@ -373,7 +463,7 @@ def parse_accordion_widget(content, file_path, warnings_list):
     Returns:
         dict: Parsed accordion data with 'panels' list
     """
-    sections = parse_markdown_sections(content)
+    sections = parse_markdown_sections(content, widget_id)
 
     # Validate panel count
     if len(sections) < 2:
@@ -401,7 +491,7 @@ def parse_accordion_widget(content, file_path, warnings_list):
     return {'panels': sections}
 
 
-def parse_bibliography_widget(content, file_path, warnings_list):
+def parse_bibliography_widget(content, file_path, warnings_list, widget_id=None):
     """Parse bibliography widget content.
 
     Expected format:
@@ -411,7 +501,9 @@ def parse_bibliography_widget(content, file_path, warnings_list):
     Author, B. (2019). Title with [link](url). Journal, 1(2), 3-4.
     :::
 
-    Each blank-line-separated block becomes one entry with hanging indent.
+    Each blank-line-separated block becomes one entry with hanging indent,
+    converted on its own; with *widget_id*, entry n's footnote anchors
+    carry `<widget_id>-<n>`.
 
     Returns:
         dict: Parsed bibliography data with 'entries' list
@@ -421,7 +513,8 @@ def parse_bibliography_widget(content, file_path, warnings_list):
         block = block.strip()
         if not block:
             continue
-        html = markdown.markdown(block, extensions=['extra', 'nl2br'])
+        html = convert_markdown(
+            block, footnote_scope=_section_scope(widget_id, len(entries) + 1))
         entries.append({'content_html': html})
 
     if not entries:
@@ -432,6 +525,53 @@ def parse_bibliography_widget(content, file_path, warnings_list):
         })
 
     return {'entries': entries}
+
+
+# What `align:` accepts, folded to lower case and without accents. Right
+# is the default.
+GLOSSARY_CALLOUT_ALIGN = {
+    'right': 'right', 'derecha': 'right',
+    'left': 'left', 'izquierda': 'left',
+}
+
+
+def parse_glossary_widget(content, file_path, warnings_list, widget_id=None):
+    """Parse a glossary callout into the slot the glossary pass fills.
+
+    Expected format:
+    :::glossary
+    entry: term_id
+    align: left
+    :::
+
+    `entry` is resolved later, by `process_glossary_links()`; a missing one
+    reaches it as an empty id and is reported as a missing entry is.
+    `align` is `right` (the default) or `left`, `derecha` or `izquierda`;
+    any other value is reported and falls back to right.
+
+    Returns:
+        str: The slot, as a block of HTML on its own lines.
+    """
+    data = parse_key_value_block(content)
+    entry = data.get('entry', '').strip()
+    raw_align = data.get('align', '').strip()
+    align = 'right'
+    if raw_align:
+        folded = ''.join(ch for ch in unicodedata.normalize('NFKD', raw_align)
+                         if not unicodedata.combining(ch)).casefold()
+        align = GLOSSARY_CALLOUT_ALIGN.get(folded)
+        if align is None:
+            warnings_list.append({
+                'type': 'widget',
+                'widget_type': 'glossary',
+                'message': (f"Glossary callout for '{entry}' has align "
+                            f"'{raw_align}', which is not right or left, so "
+                            f"it is placed on the right")
+            })
+            align = 'right'
+    return ('\n\n<div class="glossary-callout-slot"'
+            f' data-entry="{html.escape(entry, quote=True)}"'
+            f' data-align="{align}"></div>\n\n')
 
 
 def render_widget_html(widget_type, widget_data, widget_id):
@@ -486,7 +626,7 @@ def render_widget_html(widget_type, widget_data, widget_id):
 def process_widgets(text, file_path, warnings_list):
     """
     Find and process :::widget::: blocks in markdown text.
-    Must be called BEFORE markdown.markdown() conversion.
+    Must be called before the text is converted to HTML.
 
     Args:
         text: Raw markdown text
@@ -509,7 +649,8 @@ def process_widgets(text, file_path, warnings_list):
             'carousel': parse_carousel_widget,
             'tabs': parse_tabs_widget,
             'accordion': parse_accordion_widget,
-            'bibliography': parse_bibliography_widget
+            'bibliography': parse_bibliography_widget,
+            'glossary': parse_glossary_widget,
         }
 
         if widget_type not in widget_parsers:
@@ -526,7 +667,16 @@ def process_widgets(text, file_path, warnings_list):
 
         # Parse widget content
         parser = widget_parsers[widget_type]
-        widget_data = parser(content, file_path, warnings_list)
+        if widget_type == 'glossary':
+            # A slot, rendered by the glossary pass rather than here.
+            return parser(content, file_path, warnings_list)
+        if widget_type == 'carousel':
+            widget_data = parser(content, file_path, warnings_list)
+        else:
+            # Sections and entries are converted one by one and share the
+            # page; the widget id keeps their footnote anchors apart.
+            widget_data = parser(content, file_path, warnings_list,
+                                 widget_id=widget_id)
 
         # Render HTML
         html = render_widget_html(widget_type, widget_data, widget_id)

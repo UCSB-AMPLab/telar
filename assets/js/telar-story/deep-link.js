@@ -16,18 +16,21 @@
  * state.steps[index].dataset.step is the CSV step number used by openPanel().
  *
  * All hash writes use history.replaceState exclusively — no pushState calls
- * anywhere. This means back/forward navigation exits the story
- * to the previous page rather than navigating between steps. scrollRestoration
- * is already set to 'manual' in scroll-engine.js, which prevents browser
- * scroll restoration from interfering.
+ * anywhere, so the story's own moves add no history entries and fire no
+ * hashchange. A fragment change from outside (the address bar, a same-page
+ * link, Back/Forward across an entry such a link created) is handled by
+ * handleHashChange. scrollRestoration is already set to 'manual' in
+ * scroll-engine.js, which prevents browser scroll restoration from interfering.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
-import { state } from './state.js';
-import { activateCard } from './card-pool.js';
-import { goToStep } from './navigation.js';
-import { openPanel } from './panels.js';
+import { state, moveSeconds } from './state.js';
+import { setMoveSeconds } from './card-height.js';
+import { activateCard, reconcileStackForJump, reconcilePlatesForJump } from './card-pool.js';
+import { goToStep, jumpButtonsTo, putButtonsOnIntro, updateViewerInfo } from './navigation.js';
+import { closeAllPanels, closePanel, openPanel } from './panels.js';
+import { jumpScrollTo, isMoveInFlight } from './scroll-engine.js';
 
 // ── Deep-link panel-open timer ladder ───────────────────────────────────────────
 
@@ -40,30 +43,37 @@ import { openPanel } from './panels.js';
  */
 let _deepLinkTimers = [];
 
-/** Clear any pending deep-link panel-open timers. Safe to call when empty. */
+/** When a hashchange last closed panels, for the delay before another opens. */
+let _lastPanelCloseAt = -Infinity;
+
+/**
+ * Clear any pending deep-link panel-open timers and the listeners armed to
+ * clear them. Safe to call when nothing is pending.
+ */
 function _cancelDeepLinkTimers() {
   _deepLinkTimers.forEach(clearTimeout);
   _deepLinkTimers = [];
+  window.removeEventListener('wheel', _cancelDeepLinkTimers);
+  window.removeEventListener('keydown', _cancelDeepLinkTimers);
+  window.removeEventListener('touchstart', _cancelDeepLinkTimers);
 }
 
 /**
  * Cancel the deep-link timer ladder on the first genuine user interaction.
  * Listens for wheel / keydown / touchstart — all user-initiated. We deliberately
- * do NOT listen for the Lenis 'scroll' event: applyDeepLinkOnLoad's own
+ * do not listen for the Lenis 'scroll' event: applyDeepLinkOnLoad's own
  * immediate jump emits a 'scroll', which would self-cancel the ladder before any
- * panel opened. The handler clears the timers and removes all three listeners.
- * Must be armed AFTER the jump's scrollTo so it can't be tripped by the jump.
+ * panel opened. Must be armed after the jump's scrollTo so it can't be tripped
+ * by the jump.
+ *
+ * A click reaches none of these, so Back to Start and a contents link cancel
+ * the ladder themselves: they close every panel, and a layer the ladder opened
+ * afterwards would sit on a stack with nothing under it.
  */
 function _armDeepLinkCancellation() {
-  const cancel = () => {
-    _cancelDeepLinkTimers();
-    window.removeEventListener('wheel', cancel);
-    window.removeEventListener('keydown', cancel);
-    window.removeEventListener('touchstart', cancel);
-  };
-  window.addEventListener('wheel', cancel, { passive: true });
-  window.addEventListener('keydown', cancel);
-  window.addEventListener('touchstart', cancel, { passive: true });
+  window.addEventListener('wheel', _cancelDeepLinkTimers, { passive: true });
+  window.addEventListener('keydown', _cancelDeepLinkTimers);
+  window.addEventListener('touchstart', _cancelDeepLinkTimers, { passive: true });
 }
 
 // ── Fragment regex ────────────────────────────────────────────────────────────
@@ -102,7 +112,8 @@ export function parseFragment(hash) {
 /**
  * Build fragment from current state and write via replaceState.
  *
- * Reads state.currentIndex (0-based). If < 0, removes the fragment entirely
+ * Reads state.currentIndex (0-based), the current step in every navigation
+ * mode. If < 0, removes the fragment entirely
  * (intro state). Otherwise builds #s{N} (1-based), and appends l{layer} if
  * a numbered layer panel is open at the top of the panel stack.
  *
@@ -125,6 +136,9 @@ export function writeHash() {
  * @param {number} n - 1-based running number of the clicked glossary link.
  */
 export function writeHashWithGlossary(n) {
+  // The glossary panel carries the entry it shows, so a later fragment change
+  // reads which is open from the panel and not from the last fragment written.
+  document.getElementById('panel-glossary')?.setAttribute('data-deep-link-n', String(n));
   _writeHashFragment(n);
 }
 
@@ -169,31 +183,43 @@ function _writeHashFragment(glossaryN) {
 /**
  * Navigate back to the intro / title card from within the story.
  *
- * Scrolls to position 0 (or activates intro in button mode), restores the
- * intro card via goToStep(-1), hides all viewer plates, and clears the hash.
+ * Closes any open panel first, and cancels any panel a deep link has yet to
+ * open: a panel freezes the story, and the button stays live above one. Then
+ * scrolls to position 0 where the scroll engine runs, restores the intro card
+ * via goToStep(-1), puts the navigation buttons on the intro, hides all
+ * viewer plates, and clears the hash.
  */
 export function navigateToIntro() {
+  _cancelDeepLinkTimers();
+  closeAllPanels();
+  // A jump carries no camera travel: the cards move over the base.
+  setMoveSeconds(moveSeconds(0));
+
   // Hide all active viewer plates
   for (const plate of Object.values(state.viewerPlates)) {
-    plate.classList.remove('is-active');
+    plate.container.classList.remove('is-active');
   }
 
   if (state.lenis) {
-    state.lenis.stop();
-    document.documentElement.scrollTop = 0;
-    state.lenis.animatedScroll = 0;
-    state.lenis.targetScroll = 0;
+    // Through Lenis, which writes the offset with behavior: instant. A direct
+    // scrollTop write is animated under the page's scroll-behavior: smooth,
+    // and WebKit can abandon that animation part way, leaving the story on the
+    // intro and the scroll on the step. The index is stated first, so the
+    // jump's own scroll frame finds the story already on the intro.
     state.currentIndex = -1;
     state.scrollPosition = 0;
-    requestAnimationFrame(() => { state.lenis.start(); });
-  } else {
-    state.currentMobileStep = -1;
-    state.mobileInIntro = true;
-    state.steps.forEach(step => step.classList.remove('mobile-active'));
+    jumpScrollTo(0);
+    if (state.snap) state.snap.currentSnapIndex = 0;
+    state.lenis.stop();
+    // A panel still closing holds the scroll stopped, and its close starts it.
+    requestAnimationFrame(() => { if (!state.isPanelOpen) state.lenis.start(); });
   }
 
   // Use the navigation module to restore intro card visuals
   goToStep(-1, 'backward');
+  // Buttons are present in button navigation and in embed mode, where the
+  // scroll engine runs beside them and does not move them.
+  putButtonsOnIntro();
   writeHash();
 }
 
@@ -201,8 +227,9 @@ export function navigateToIntro() {
  * Navigate to a specific step from within the story (e.g. TOC links).
  *
  * Unlike applyDeepLinkOnLoad (which runs once at page load), this can be
- * called at any time during the story. It jumps the scroll position and
- * activates the target card, then updates the URL hash.
+ * called at any time during the story. It closes any open panel and cancels
+ * any a deep link has yet to open, as Back to Start does, then jumps the
+ * scroll position and activates the target card, then updates the URL hash.
  *
  * @param {number} stepNumber - 1-based step number (matches CSV step column).
  */
@@ -210,14 +237,16 @@ export function navigateToStep(stepNumber) {
   const targetIndex = stepNumber - 1;
   if (targetIndex < 0 || targetIndex >= state.steps.length) return;
 
-  // Hide all active viewer plates before jumping — prevents plates from
-  // nearby steps bleeding through when the target is a title/section card.
-  for (const plate of Object.values(state.viewerPlates)) {
-    plate.classList.remove('is-active');
-  }
+  _cancelDeepLinkTimers();
+  closeAllPanels();
+  setMoveSeconds(moveSeconds(0));
+
+  // Close every plate but the target's before jumping, or one the reader
+  // walked onto earlier is still open behind the step they land on.
+  reconcilePlatesForJump(targetIndex);
 
   if (state.lenis) {
-    const targetPx = (targetIndex + 1) * window.innerHeight;
+    const targetPx = (targetIndex + 1) * state.scrollStepPx;
 
     // scrollTo must jump straight to the target with no animation. An animated
     // scroll drives the per-frame IIIF interpolation (lerpIiifPosition) at each
@@ -227,24 +256,18 @@ export function navigateToStep(stepNumber) {
     // instead of landing exactly on the target position. immediate:true removes
     // the intermediate frames entirely; force:true overrides the Snap plugin's
     // lock/stopped state so the jump isn't blocked.
-    state.lenis.scrollTo(targetPx, { immediate: true, force: true });
+    jumpScrollTo(targetPx);
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned (matches keyboardNav)
 
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
     state.currentIndex = targetIndex;
     state.scrollPosition = targetIndex + 1;
   } else {
-    state.currentMobileStep = targetIndex;
-    state.mobileInIntro = false;
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
-
-    state.steps.forEach((step, i) => {
-      if (i === targetIndex) {
-        step.classList.add('mobile-active');
-      } else {
-        step.classList.remove('mobile-active');
-      }
-    });
+    jumpButtonsTo(targetIndex);
+    updateViewerInfo(targetIndex); // the scroll engine sets the counter in Lenis mode
   }
 
   writeHash();
@@ -274,86 +297,230 @@ export function applyDeepLinkOnLoad() {
   const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
   if (targetIndex < 0) return;
 
+  _jumpToIndex(targetIndex);
+  _scheduleLayerOpen(parsed, targetIndex, 100);
+}
+
+/**
+ * Jump the story to a step with no animation and activate its card.
+ *
+ * Desktop Lenis mode: instant scroll jump to the correct viewport position.
+ * Position model: intro = 0, step 0 = 1 step height, step 1 = 2 …, where a
+ * step's height is the one the scroll surface is laid out in.
+ *
+ * scrollTo must jump straight to the target with no animation — see
+ * navigateToStep for why (an animated scroll can leave the per-frame IIIF
+ * lerp on an interpolated position instead of the authored one).
+ *
+ * @param {number} targetIndex - 0-based step index, already in range.
+ */
+function _jumpToIndex(targetIndex) {
+  setMoveSeconds(moveSeconds(0));
   if (state.lenis) {
-    // Desktop Lenis mode: instant scroll jump to the correct viewport position.
-    // Position model: intro = 0, step 0 = 1 * innerHeight, step 1 = 2 * innerHeight …
-    //
-    // scrollTo must jump straight to the target with no animation — see
-    // navigateToStep for why (an animated scroll can leave the per-frame IIIF
-    // lerp on an interpolated position instead of the authored one).
-    const targetPx = (targetIndex + 1) * window.innerHeight;
+    const targetPx = (targetIndex + 1) * state.scrollStepPx;
     state.lenis.scrollTo(targetPx, { immediate: true, force: true });
     if (state.snap) state.snap.currentSnapIndex = targetIndex + 1; // keep Snap aligned
 
-    // Activate card and sync state
+    // Stack the cards jumped over, then activate the card and sync state
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
     state.currentIndex = targetIndex;
     state.scrollPosition = targetIndex + 1;
   } else {
-    // Button/mobile/iOS mode: no scroll surface — activate card directly
-    state.currentMobileStep = targetIndex;
-    state.mobileInIntro = false;
+    // Button navigation (phones, embeds, iOS): no scroll surface — activate card directly
+    reconcileStackForJump(targetIndex);
     activateCard(targetIndex, 'forward');
+    jumpButtonsTo(targetIndex);
+    updateViewerInfo(targetIndex); // the scroll engine sets the counter in Lenis mode
+  }
+}
 
-    // Ensure the correct step has the mobile-active class
-    state.steps.forEach((step, i) => {
-      if (i === targetIndex) {
-        step.classList.add('mobile-active');
-      } else {
-        step.classList.remove('mobile-active');
-      }
-    });
+/**
+ * Activate the glossary link a fragment names, after the layer holding it is
+ * open: find the link with the matching running number and click it to open
+ * the glossary entry. Best-effort — if the panel content hasn't loaded in time
+ * the click target won't exist and the sub-link is silently skipped.
+ */
+function _scheduleGlossaryClick(parsed, targetIndex, delay) {
+  _deepLinkTimers.push(setTimeout(() => {
+    if (state.currentIndex !== targetIndex) return;
+    const panelContent = document.getElementById('panel-layer' + parsed.layer + '-content');
+    const target = panelContent?.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
+    if (target) target.click();
+  }, delay));
+  _armDeepLinkCancellation();
+}
+
+/**
+ * Open the panel layers a fragment names, after the step is in place.
+ *
+ * Panel applied after step position: step first, then panel via setTimeout to
+ * let the card stack render before Bootstrap Offcanvas opens. Parent layers
+ * open underneath the target: layer2 needs layer1 open first, and glossary
+ * sub-links need their parent layer open underneath.
+ *
+ * @param {{ layer: number|null, subType: string|null, subN: number|null }} parsed
+ * @param {number} targetIndex - 0-based step index the layers belong to.
+ * @param {number} delay - Milliseconds before the first open.
+ */
+function _scheduleLayerOpen(parsed, targetIndex, delay) {
+  if (parsed.layer === null) return;
+  const stepNumber = state.steps[targetIndex].dataset.step;
+  if (!stepNumber) return;
+
+  // Each deferred open also re-checks that we are still on the deep-link
+  // target before acting — a backstop that covers navigation paths the
+  // interaction listener can't (e.g. a nav-button tap).
+  const onTarget = () => state.currentIndex === targetIndex;
+
+  // Open layer1 first if the target is layer2 or deeper
+  if (parsed.layer >= 2) {
+    _deepLinkTimers.push(setTimeout(() => {
+      if (onTarget()) openPanel('layer1', stepNumber);
+    }, delay));
+    delay += 200;
   }
 
-  // Panel state: apply after step position, with delay for card render.
-  // Open parent layers underneath the target: layer2 needs layer1 open first,
-  // and glossary sub-links need their parent layer open underneath.
-  if (parsed.layer !== null) {
-    const stepNumber = state.steps[targetIndex]?.dataset?.step;
-    if (stepNumber) {
-      let delay = 100;
+  // Open the target layer
+  _deepLinkTimers.push(setTimeout(() => {
+    if (onTarget()) openPanel('layer' + parsed.layer, stepNumber);
+  }, delay));
+  delay += 200;
 
-      // Each deferred open also re-checks that we are still on the deep-link
-      // target before acting — a backstop that covers navigation paths the
-      // interaction listener can't (e.g. a mobile nav-button tap), and the lenis
-      // vs button mode use different position fields.
-      const onTarget = () => state.lenis
-        ? state.currentIndex === targetIndex
-        : state.currentMobileStep === targetIndex;
-
-      // Open layer1 first if the target is layer2 or deeper
-      if (parsed.layer >= 2) {
-        _deepLinkTimers.push(setTimeout(() => {
-          if (onTarget()) openPanel('layer1', stepNumber);
-        }, delay));
-        delay += 200;
-      }
-
-      // Open the target layer
-      _deepLinkTimers.push(setTimeout(() => {
-        if (onTarget()) openPanel('layer' + parsed.layer, stepNumber);
-      }, delay));
-      delay += 200;
-
-      // Glossary sub-link activation: after the panel opens, find the
-      // glossary link with the matching running number and click it to open
-      // the glossary entry. Best-effort — if the panel content hasn't loaded
-      // in time the click target won't exist and the sub-link is silently
-      // skipped.
-      if (parsed.subType === 'g' && parsed.subN !== null) {
-        _deepLinkTimers.push(setTimeout(() => {
-          if (!onTarget()) return;
-          const panelContent = document.getElementById('panel-layer' + parsed.layer + '-content');
-          if (panelContent) {
-            const target = panelContent.querySelector(`[data-deep-link-n="${parsed.subN}"]`);
-            if (target) target.click();
-          }
-        }, delay));
-      }
-
-      // Arm cancellation only now that timers are scheduled — and after the
-      // jump above, so the jump's own scroll can't trip it.
-      if (_deepLinkTimers.length) _armDeepLinkCancellation();
-    }
+  if (parsed.subType === 'g' && parsed.subN !== null) {
+    _scheduleGlossaryClick(parsed, targetIndex, delay);
+    return;
   }
+
+  // Arm cancellation only now that timers are scheduled — and after the jump,
+  // so the jump's own scroll can't trip it.
+  _armDeepLinkCancellation();
+}
+
+// ── Fragment changes on a loaded story ────────────────────────────────────────
+
+/** Time for a closing panel's slide-out to end before another opens. */
+const PANEL_CLOSE_WAIT_MS = 400;
+
+/**
+ * The numbered layer on top of the panel stack, or null when none is open.
+ * Glossary entries carry no layer number and are skipped, as in the fragment.
+ */
+function _openLayerNumber() {
+  for (let i = state.panelStack.length - 1; i >= 0; i--) {
+    const m = state.panelStack[i].type.match(/^layer(\d+)$/);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
+
+/** Whether a fragment names the intro: empty, `#`, or a step below 1. */
+function _namesIntro(hash, parsed) {
+  if (hash === '' || hash === '#') return true;
+  return parsed !== null && parsed.step < 1;
+}
+
+/** Go to the intro unless the story is already there with no panel open. */
+function _moveToIntroFromFragment() {
+  if (state.currentIndex !== -1 || state.panelStack.length > 0 || isMoveInFlight()) navigateToIntro();
+}
+
+/** Rewrite a fragment that named a step past the end with the step shown. */
+function _nameLandedStep(parsed, targetIndex) {
+  if (parsed.step - 1 !== targetIndex) writeHash();
+}
+
+/** The glossary entry open over a layer: its running number, -1 if open with none recorded, null if none open. */
+function _openGlossaryN() {
+  if (!state.panelStack.some((p) => p.type === 'glossary')) return null;
+  const n = parseInt(document.getElementById('panel-glossary')?.dataset.deepLinkN, 10);
+  return Number.isNaN(n) ? -1 : n;
+}
+
+/**
+ * Whether a panel is open, opening or closing. Bootstrap refuses a show while
+ * an offcanvas is still hiding, so an open waits while any of these holds.
+ * The stack drops a panel when its close is asked for, so the offcanvas classes
+ * and the time since this handler last closed panels are read as well.
+ */
+function _panelsBusy() {
+  if (state.panelStack.length > 0) return true;
+  if (Date.now() - _lastPanelCloseAt < PANEL_CLOSE_WAIT_MS) return true;
+  return !!document.querySelector('#panel-layer1, #panel-layer2, #panel-glossary')
+    && !!document.querySelector('.offcanvas.show, .offcanvas.showing, .offcanvas.hiding');
+}
+
+/** Delay before an open that follows a possible close, noting a close if one is under way. */
+function _openDelayAfterClose() {
+  if (!_panelsBusy()) return 100;
+  _lastPanelCloseAt = Date.now();
+  return PANEL_CLOSE_WAIT_MS;
+}
+
+/**
+ * The story is on the step the fragment names: bring the panels to the layer
+ * and glossary entry it names, comparing the whole position (layer and
+ * sub-link), and touching only what differs.
+ */
+function _settleOnStep(parsed, targetIndex) {
+  const wantG = parsed.subType === 'g' ? parsed.subN : null;
+  const curG = _openGlossaryN();
+  if (_openLayerNumber() !== parsed.layer) {
+    _cancelDeepLinkTimers();
+    const delay = _openDelayAfterClose();
+    closeAllPanels();
+    writeHash();
+    _scheduleLayerOpen(parsed, targetIndex, delay);
+    return;
+  }
+  if (curG === wantG) {
+    _nameLandedStep(parsed, targetIndex);
+    return;
+  }
+  _cancelDeepLinkTimers();
+  if (curG !== null) {
+    closePanel('glossary');
+    _lastPanelCloseAt = Date.now();
+  }
+  writeHash();
+  if (wantG !== null) _scheduleGlossaryClick(parsed, targetIndex, curG !== null ? PANEL_CLOSE_WAIT_MS : 0);
+}
+
+/**
+ * React to a fragment change the reader did not make by moving the story:
+ * typing a fragment, following a same-page link, or Back/Forward across
+ * entries such a link created.
+ *
+ * The story's own moves write the fragment with replaceState, which fires no
+ * hashchange, so this runs only for a change that came from outside. It moves
+ * through navigateToStep and navigateToIntro, as a contents link and Back to
+ * Start do: they stand down any move in flight, close open panels, and set the
+ * buttons and the counter. Panels the fragment names open through the deep-link
+ * ladder. An empty fragment, `#`, or a step below 1 (`#s0`) is the intro; one
+ * past the last step lands on the last step, as on load. A fragment that is
+ * not a story fragment (`#fn:1` or `#fnref:1` from a kramdown footnote in an
+ * answer or panel, `#credits`) is ignored: no move, no panel close, no
+ * fragment rewrite, because any in-page anchor fires hashchange.
+ * popstate is not listened for: Back across such an entry fires it together
+ * with hashchange, and hashchange alone carries the new fragment.
+ */
+export function handleHashChange() {
+  if (!state.steps.length) return;
+
+  const hash = window.location.hash;
+  const parsed = parseFragment(hash);
+  if (_namesIntro(hash, parsed)) {
+    _moveToIntroFromFragment();
+    return;
+  }
+  if (!parsed) return;
+
+  const targetIndex = Math.min(parsed.step - 1, state.steps.length - 1);
+  if (state.currentIndex === targetIndex && !isMoveInFlight()) {
+    _settleOnStep(parsed, targetIndex);
+    return;
+  }
+  const delay = _openDelayAfterClose();
+  navigateToStep(targetIndex + 1);
+  _scheduleLayerOpen(parsed, targetIndex, delay);
 }

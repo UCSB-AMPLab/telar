@@ -4,9 +4,9 @@
 
 # Navegación
 navigation:
+  stories: "Historias"
   home: "Inicio"
   objects: "Objetos"
-  stories: "Historias"
   glossary: "Glosario"
   about: "Acerca de"
 
@@ -18,14 +18,10 @@ buttons:
   back_to_collection: "← Volver a la colección"
   back_to_glossary: "← Volver al glosario"
   learn_more: "Saber más"
-  read_more: "Leer más"
   view_objects: "Ver todos los objetos"
-  copy: "Copiar"
-  copied: "¡Copiado!"
   close: "Cerrar"
   identify_coordinates: "Identificar coordenadas"
-  copy_coordinates: "Copiar x,y,zoom"
-  go_deeper: "Profundizar más"
+  go_deeper: "Profundizar"
 
 # Marcador de posición genérico de carga (miniaturas de objetos y otro contenido asíncrono)
 loading: "Cargando…"
@@ -42,16 +38,25 @@ object:
     credit: "Crédito"
     iiif_manifest: "Manifiesto IIIF"
     appears_in_stories: "Aparece en historias"
+    format: "Formato"
+    file_size: "Tamaño del archivo"
+    duration: "Duración"
+    provider: "Plataforma"
+    source: "Fuente"
+    view_on_provider: "Ver en"
+    embed_url: "URL para insertar"
+
+  # Mensajes del visor del objeto cuando no puede mostrar el medio
+  errors:
+    audio_not_found: "El archivo de audio no está disponible."
+    embed_unavailable: "No se pudo cargar este video."
+    open_on_drive: "Ábrelo en Google Drive."
 
   # Insignia de créditos (superposición del visor)
   credit_prefix: "Crédito:"
 
   # Controles del visor
   viewer:
-    fullscreen: "Pantalla completa"
-    exit_fullscreen: "Cerrar pantalla completa"
-    thumbnails: "Miniaturas"
-    page: "Página"
     # Paginación para objetos IIIF de varias páginas
     prev_page: "Página anterior"
     next_page: "Página siguiente"
@@ -65,9 +70,6 @@ object:
   coordinates:
     heading: "Instrucciones"
     page_label: "Página"
-    x_label: "X"
-    y_label: "Y"
-    zoom_label: "Zoom"
     copy_page_tooltip: "Copiar número de página"
     instructions_p1: "Usa este panel para identificar las coordenadas de las ubicaciones en una imagen para tu historia. Las coordenadas se actualizan mientras haces paneo o zoom sobre la imagen con el mouse haciendo clic, arrastrando y usando la rueda."
     instructions_p2: "Cuando encuentres una ubicación, anota los valores de X, Y y Zoom para incluirlos en la hoja de cálculo de estructura. También puedes usar los botones de la derecha para copiar las tres coordenadas de una sola vez."
@@ -108,7 +110,6 @@ object:
   video_frame_title: "Video: __TITLE__"
 
   # Miniaturas de objetos
-  no_image: "Sin imagen"
 
 # Etiquetas de contenido de demostración
 demo:
@@ -149,6 +150,7 @@ pages:
   objects_intro_sample_collection: "Hay {count} objetos en la colección. Mira {sample} de ellos a continuación."
   collection_mode_heading: "Explora la colección"
   glossary_intro: "Términos y conceptos clave que aparecen en estas historias."
+  glossary_intro_with_sources: "Palabras clave y fuentes primarias que aparecen en estas historias."
 
 # Default content for the homepage welcome (rendered by index.md via markdownify)
 index_page:
@@ -159,7 +161,7 @@ index_page:
 
     Tres formas de empezar:
 
-    - **Sin código:** configura y gestiona tu sitio desde una interfaz visual con el **[Telar Compositor](https://compositor.telar.org)**
+    - **Sin código:** configura y gestiona tu sitio desde una interfaz visual con el **[Compositor de Telar](https://compositor.telar.org)**
     - **Asistida:** copia la **[plantilla de GitHub](https://github.com/UCSB-AMPLab/telar)** y edita tu contenido en Google Sheets
     - **Manual:** clona la plantilla y edita los archivos CSV y markdown localmente
 
@@ -177,8 +179,6 @@ objects:
   search_placeholder: "Buscar objetos…"
   clear_search: "Limpiar búsqueda"
   filter_by: "Filtrar por:"
-  loading_filters: "Cargando filtros…"
-  no_results: "Ningún objeto coincide con tu búsqueda"
   type: "Tipo"
   medium: "Medio/Género"
   creator: "Creador"
@@ -190,17 +190,39 @@ objects:
   # Etiquetas de tipo de medio en las miniaturas (lectores de pantalla)
   media_video: "Video"
   media_audio: "Audio"
+  no_results: "Ningún objeto coincide con la búsqueda o los filtros"
+  no_options: "No hay opciones"
 
 # Sistema de paneles
 panels:
   default_title: "Título del panel"
-  glossary_term_prefix: "Palabra clave"
+  # Etiqueta que aparece encima del título de cada entrada en el panel
+  # del glosario, según el tipo de entrada. Los tipos se definen en
+  # _data/glossary_kinds.yml.
+  glossary_kind_term: "Palabra clave"
+  glossary_kind_source: "Fuente primaria"
+  glossary_kind_entity: "Persona o entidad"
+  glossary_kind_place: "Lugar"
   glossary_term_title: "Término del glosario"
+
+# Notas al pie. El texto que aparece al pasar el cursor sobre la flecha que
+# devuelve a quien lee al punto donde se citó la nota. El %d es el número de
+# la nota y lo reemplaza Python Markdown, no Telar: una cadena que no tenga
+# exactamente un %d se descarta sin avisar y vuelve el texto en inglés que
+# trae la librería.
+footnotes:
+  backlink_title: "Volver a la nota %d"
 
 # Páginas de términos del glosario
 glossary:
   related_terms: "Términos relacionados"
   appears_in: "Aparece en"
+  # Encabezados de la página del glosario, uno por tipo de entrada.
+  # Los tipos se definen en _data/glossary_kinds.yml.
+  section_terms: "Palabras clave"
+  section_sources: "Fuentes primarias"
+  section_entities: "Personas y entidades"
+  section_places: "Lugares"
 
 # Widgets (controles del carrusel; resueltos por widgets.py durante la construcción)
 widgets:
@@ -212,7 +234,7 @@ widgets:
 empty_states:
   no_stories: "Aún no hay historias disponibles. Agrega historias a tu hoja de cálculo o crea archivos CSV en <code>telar-content/spreadsheets/</code>."
   no_objects: "Aún no hay objetos en la colección. Agrega objetos a tu hoja de cálculo o a <code>telar-content/spreadsheets/objects.csv</code>."
-  no_glossary: "Aún no hay términos en el glosario. Agrega archivos de glosario a <code>telar-content/texts/glossary/</code>."
+  no_glossary: "Aún no hay entradas en el glosario. Agrégalas a tu hoja de cálculo del glosario o como archivos en <code>telar-content/texts/glossary/</code>."
   thumbnail_load_error: "Error al cargar"
 
 # Mensajes de error y advertencias (visibles para el usuario)
@@ -221,7 +243,6 @@ errors:
   image_viewer_unavailable: "⚠️ Visor de imágenes no disponible"
   image_viewer_unavailable_alt: "⚠️ Visor de imágenes no disponible"
   check_objects_csv: "Revisa <code>telar-content/spreadsheets/objects.csv</code> para asegurarte de que el objeto existe y tiene una URL válida de manifiesto IIIF."
-  failed_to_load: "Error al cargar"
   no_image: "Sin imagen"
 
   # Errores de imagen en paneles (mostrados dentro del panel por JS)
@@ -265,7 +286,6 @@ errors:
     local_alternative: "Si la configuración del sitio está mal, primero actualiza <code>_config.yml</code> y luego regenera."
     local_fix_check_config: "Verifica que <code>url</code> y <code>baseurl</code> en <code>_config.yml</code> estén correctos para producción"
     local_fix_run_with_note: "Ejecuta <code>python3 scripts/generate_iiif.py</code> (usará tu configuración actualizada)"
-    local_regenerate_note: "(usará tu configuración actualizada)"
 
   # Errores de configuración de Google Sheets
   google_sheets:
@@ -302,8 +322,6 @@ errors:
     iiif_503: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 503). Error 503 significa \"Service Unavailable\": el servidor IIIF está temporalmente fuera de servicio, quizá por mantenimiento o sobrecarga. Intenta reconstruir tu sitio más tarde."
     iiif_502: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error 502). Error 502 significa \"Bad Gateway\": hay un problema en la infraestructura del servidor IIIF. No es un problema de tu configuración. Intenta reconstruir tu sitio más tarde."
     iiif_error_generic: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no se pudo acceder (error {{ code }})"
-    iiif_unreachable: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no respondió"
-    iiif_slow: "la URL del manifiesto IIIF que especificaste en tu CSV de configuración o en Google Sheets está respondiendo muy lento. Es posible que el servidor de imágenes esté experimentando alta carga o demoras de red. El manifiesto debería seguir funcionando cuando las personas visiten tu sitio."
     iiif_validation_failed: "la URL del manifiesto IIIF que especificaste en tu CSV o en Google Sheets no pasó la validación"
 
     # Etiquetas de error cortas (para listas de advertencia)
@@ -315,8 +333,6 @@ errors:
     short_503: "Error 503: servicio no disponible (intenta más tarde)"
     short_502: "Error 502: problema de conectividad (intenta más tarde)"
     short_error_generic: "Error {{ code }}: no se pudo acceder"
-    short_network_error: "Error de red: no se pudo alcanzar"
-    short_slow: "Respuesta lenta: el servidor podría estar experimentando demoras"
     short_validation_error: "Error de validación: no se pudo validar"
 
     # Errores de fuente de imagen
@@ -338,20 +354,27 @@ errors:
     # Errores de archivo de contenido
     content_missing_label: "Contenido faltante"
     content_file_missing: "Falta el archivo de contenido: <code>{{ file_ref }}</code><br>Agrega este archivo en <code>telar-content/texts/stories/</code> o elimina la referencia del CSV."
-    layer_file_missing_named: "el archivo del panel {{ layer_num }}, <code>{{ filename }}</code>, no se encontró"
     layer_file_missing: "el archivo del panel {{ layer_num }} no se encontró"
 
     # Errores de enlaces al glosario
-    glossary_term_not_found: "el término '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una entrada en tu hoja de cálculo del glosario o en <code>telar-content/texts/glossary/</code>."
-    short_glossary_not_found: "No se encontró este término en el glosario: {{ term_id }}"
-    glossary_load_error: "No se encontró este término en el glosario. Por favor intenta de nuevo"
+    glossary_term_not_found: "la entrada '<strong>{{ term_id }}</strong>' no existe en el glosario. Revisa que coincida con el <code>term_id</code> de una fila de tu hoja de cálculo del glosario o de un archivo de <code>telar-content/texts/glossary/</code>."
+    glossary_term_in_link_text: "la entrada '<strong>{{ term_id }}</strong>' está dentro del texto de un enlace, así que se muestra como texto normal y no abre el glosario. Sácala del enlace para que abra el glosario."
+
+    # Límites de la respuesta de un paso
+    answer_image_dropped: "En `{{ story }}` quitamos una imagen o un elemento incrustado de la respuesta del paso {{ step }}. La respuesta de un paso es texto corrido: pon ese contenido en un panel o conviértelo en el objeto del paso."
+    answer_widget_dropped: "En `{{ story }}` quitamos los widgets (los bloques que empiezan con `:::`) de la respuesta del paso {{ step }}. La respuesta de un paso es texto corrido: pasa esos widgets a un panel."
+    answer_over_hard_limit: "La respuesta del paso {{ step }} de `{{ story }}` es demasiado larga y no cabe en la tarjeta de la historia. Una respuesta puede tener hasta {{ max_paragraphs }} párrafos y {{ limit }} líneas; contamos 53 caracteres por línea y dos líneas más por cada párrafo después del primero. Esta tiene {{ lines }} líneas. La recortamos para que quepa, así que el texto que sobra no aparece en la historia. Acorta la respuesta o pasa los detalles a un panel."
+    answer_footnotes_dropped: "En `{{ story }}` quitamos las notas al pie de la respuesta del paso {{ step }}, tanto el número como el texto de la nota. La respuesta de un paso es texto corrido: pasa la nota a un panel o di en la misma frase lo que decía."
+    answer_markup_flattened: "En `{{ story }}` simplificamos la respuesta del paso {{ step }}: las listas, los títulos y las citas conservan las palabras y pierden el formato; las tablas, los bloques de código y las líneas divisorias desaparecen por completo. La respuesta de un paso es texto corrido: pasa ese contenido a un panel, donde se ve tal como lo escribiste."
+
+    # Coordenadas de un paso
+    coordinate_not_a_number: "En el paso {{ step }} de `{{ story }}`, el valor de `{{ column }}` es `{{ value }}`, que no es un número, así que el visor no puede usarlo para encuadrar el objeto. Escribe un número o deja la celda vacía y usaremos el valor predeterminado."
 
 # Funcionalidad de compartir e incrustar
 share:
   button: "Compartir"
   title: "Compartir"
   copy: "COPIAR"
-  copied: "¡Copiado!"
 
   # Pestañas estilo píldora
   tab_this_story: "esta historia"
@@ -399,25 +422,8 @@ share:
   embed_key_warning: "Este código incluye la clave de acceso, así que cualquiera que lo copie podrá abrir la historia. Úsalo solo en sitios de confianza."
   protected_story_warning: "Esta historia está protegida. Las personas que la reciban necesitarán la clave para verla."
   protected_embed_warning: "Esta historia está protegida. El contenido insertado estará bloqueado hasta que se ingrese la clave."
-
-  # Claves heredadas (mantenidas por compatibilidad)
-  title_site: "Compartir este sitio"
-  tab_link: "Compartir enlaces"
-  tab_embed: "Insertar (*embed*)"
-  copy_link: "Copiar enlace"
-  copy_embed: "Copiar código para insertar (*embed*)"
-  embed_presets: "Tamaños predefinidos"
-  select_story: "Selecciona una historia"
-  share_a_story: "Compartir una historia"
-  select_option: "Seleccionar historia"
-  embed_preview: "Vista previa del código"
-  share_story_heading: "Compartir esta historia"
-  share_site_heading: "Compartir este sitio"
-  help_story_link_homepage: "Copia un enlace directo a una historia para compartirlo por correo electrónico, redes sociales o aplicaciones de mensajería."
-  help_embed_intro_stories: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar admite esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona un tamaño predefinido abajo o indica dimensiones específicas, luego copia el código y pégalo en tu sitio."
-  help_embed_intro_homepage: "Muchos sitios y plataformas, como <a href=\"https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-embed-an-iframe-in-a-page-in-a-course/ta-p/1067\" target=\"_blank\">Canvas</a>, <a href=\"https://docs.moodle.org/es/Bloque_HTML\" target=\"_blank\">Moodle</a> y <a href=\"https://es.wordpress.org/support/article/wordpress-editor/\" target=\"_blank\">WordPress</a>, permiten insertar (*embed*) una versión de otro sitio dentro de una página o entrada. Telar admite esta opción y te permite insertar historias individuales en otros sitios. Para hacerlo, selecciona una historia e indica un tamaño (usando un tamaño predefinido o indicando dimensiones específicas), luego copia el código y pégalo en tu sitio."
-  help_dimensions: "Escribe las dimensiones en píxeles (por ejemplo, 800) o porcentajes (por ejemplo, 100%)."
-  help_embed: "Copia este código y pégalo en tu sitio web, LMS o blog para insertar (*embed*) esta historia."
+  copy_manually: "Copia el texto a mano"
+  copied: "Copiado al portapapeles"
 
 # Pantalla de desbloqueo de historias protegidas
 unlock:
@@ -443,3 +449,4 @@ upgrade:
 # los nombres enlazados (sin llaves, para que funcionen dentro de un argumento default: de Liquid).
 footer:
   built_with: "Hecho con __TELAR__ __VERSION__, un proyecto de __NEOGRANADINA__ y __AMPL__."
+  theme_by: "Tema de __CREATOR__."

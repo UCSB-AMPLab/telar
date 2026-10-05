@@ -1,0 +1,261 @@
+{
+  "budget": 18,
+  "line_chars": 53,
+  "break_lines": 2,
+  "max_paragraphs": 5,
+  "small_type_lines": 15,
+  "cases": [
+    {
+      "name": "a short answer",
+      "html": "<p>one two three</p>",
+      "words": 3,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p>one two three</p>",
+      "small_type": false
+    },
+    {
+      "name": "nothing",
+      "html": "",
+      "words": 0,
+      "paragraphs": 0,
+      "lines": 0,
+      "cut": "",
+      "small_type": false
+    },
+    {
+      "name": "fifty-three characters are one line",
+      "html": "<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>",
+      "words": 1,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>",
+      "small_type": false
+    },
+    {
+      "name": "fifty-four characters are two lines",
+      "html": "<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>",
+      "words": 1,
+      "paragraphs": 1,
+      "lines": 2,
+      "cut": "<p>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</p>",
+      "small_type": false
+    },
+    {
+      "name": "fifteen lines keep the normal type",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159</p>",
+      "words": 159,
+      "paragraphs": 1,
+      "lines": 15,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159</p>",
+      "small_type": false
+    },
+    {
+      "name": "sixteen lines take the smaller type",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160</p>",
+      "words": 160,
+      "paragraphs": 1,
+      "lines": 16,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160</p>",
+      "small_type": true
+    },
+    {
+      "name": "eighteen lines fit",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 w191</p>",
+      "words": 191,
+      "paragraphs": 1,
+      "lines": 18,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 w191</p>",
+      "small_type": true
+    },
+    {
+      "name": "one word over is cut with room for the ellipsis",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 w191 w192</p>",
+      "words": 192,
+      "paragraphs": 1,
+      "lines": 19,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190…</p>",
+      "small_type": true
+    },
+    {
+      "name": "a break between paragraphs counts two lines",
+      "html": "<p>a</p>\n<p>b</p>",
+      "words": 2,
+      "paragraphs": 2,
+      "lines": 4,
+      "cut": "<p>a</p>\n<p>b</p>",
+      "small_type": false
+    },
+    {
+      "name": "the cut keeps the first paragraph and words of the second",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100</p>\n<p>w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180</p>",
+      "words": 180,
+      "paragraphs": 2,
+      "lines": 20,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100</p>\n<p>w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163…</p>",
+      "small_type": true
+    },
+    {
+      "name": "a paragraph that cannot start is dropped",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160</p>\n<p>w161 w162 w163 w164 w165 w166 w167 w168 w169 w170</p>",
+      "words": 170,
+      "paragraphs": 2,
+      "lines": 19,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160…</p>",
+      "small_type": true
+    },
+    {
+      "name": "a link across the cut is dropped whole",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 <a href=\"x\">aaa bb</a> end</p>",
+      "words": 193,
+      "paragraphs": 1,
+      "lines": 19,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190…</p>",
+      "small_type": true
+    },
+    {
+      "name": "a link that ends at the cut is kept whole",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 <a href=\"x\">a b</a> ending</p>",
+      "words": 192,
+      "paragraphs": 1,
+      "lines": 19,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 <a href=\"x\">a b</a>…</p>",
+      "small_type": true
+    },
+    {
+      "name": "an inline element across the cut is closed",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 <em>x yyyyy</em></p>",
+      "words": 192,
+      "paragraphs": 1,
+      "lines": 19,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 <em>x…</em></p>",
+      "small_type": true
+    },
+    {
+      "name": "a line break starts a new line",
+      "html": "<p>a<br />\nb</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "lines": 2,
+      "cut": "<p>a<br />\nb</p>",
+      "small_type": false
+    },
+    {
+      "name": "two line breaks leave an empty line",
+      "html": "<p>a<br><br>b</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "lines": 3,
+      "cut": "<p>a<br><br>b</p>",
+      "small_type": false
+    },
+    {
+      "name": "references are characters, and a no-break space is whitespace",
+      "html": "<p>it&rsquo;s&nbsp;fine</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p>it&rsquo;s&nbsp;fine</p>",
+      "small_type": false
+    },
+    {
+      "name": "a tag inside a word does not split it",
+      "html": "<p>wo<em>rd</em></p>",
+      "words": 1,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p>wo<em>rd</em></p>",
+      "small_type": false
+    },
+    {
+      "name": "paragraph tags separate words",
+      "html": "<p>a</p><p>b</p>",
+      "words": 2,
+      "paragraphs": 2,
+      "lines": 4,
+      "cut": "<p>a</p><p>b</p>",
+      "small_type": false
+    },
+    {
+      "name": "a formula placeholder is one word",
+      "html": "<p>see TLATEX0123456789abEND here</p>",
+      "words": 3,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p>see TLATEX0123456789abEND here</p>",
+      "small_type": false
+    },
+    {
+      "name": "a link holding the whole budget leaves the ellipsis alone",
+      "html": "<p><a href=\"x\">w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084 w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106 w107 w108 w109 w110 w111 w112 w113 w114 w115 w116 w117 w118 w119 w120 w121 w122 w123 w124 w125 w126 w127 w128 w129 w130 w131 w132 w133 w134 w135 w136 w137 w138 w139 w140 w141 w142 w143 w144 w145 w146 w147 w148 w149 w150 w151 w152 w153 w154 w155 w156 w157 w158 w159 w160 w161 w162 w163 w164 w165 w166 w167 w168 w169 w170 w171 w172 w173 w174 w175 w176 w177 w178 w179 w180 w181 w182 w183 w184 w185 w186 w187 w188 w189 w190 w191 w192 w193 w194 w195 w196 w197 w198 w199 w200</a></p>",
+      "words": 200,
+      "paragraphs": 1,
+      "lines": 19,
+      "cut": "…",
+      "small_type": false
+    },
+    {
+      "name": "a comment is not text",
+      "html": "<p>a <!-- b c --> d</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p>a <!-- b c --> d</p>",
+      "small_type": false
+    },
+    {
+      "name": "a quoted attribute may hold a greater-than sign",
+      "html": "<p><span title=\"a > b\">x</span> y</p>",
+      "words": 2,
+      "paragraphs": 1,
+      "lines": 1,
+      "cut": "<p><span title=\"a > b\">x</span> y</p>",
+      "small_type": false
+    },
+    {
+      "name": "five one-word paragraphs fit",
+      "html": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>",
+      "words": 5,
+      "paragraphs": 5,
+      "lines": 13,
+      "cut": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>",
+      "small_type": false
+    },
+    {
+      "name": "six one-word paragraphs fit the lines but not the count",
+      "html": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>\n<p>w6_1</p>",
+      "words": 6,
+      "paragraphs": 6,
+      "lines": 16,
+      "cut": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1…</p>",
+      "small_type": false
+    },
+    {
+      "name": "seven one-word paragraphs keep the first five",
+      "html": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1</p>\n<p>w6_1</p>\n<p>w7_1</p>",
+      "words": 7,
+      "paragraphs": 7,
+      "lines": 19,
+      "cut": "<p>w1_1</p>\n<p>w2_1</p>\n<p>w3_1</p>\n<p>w4_1</p>\n<p>w5_1…</p>",
+      "small_type": false
+    },
+    {
+      "name": "five paragraphs of two full lines fit",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021</p>\n<p>w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042</p>\n<p>w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063</p>\n<p>w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084</p>\n<p>w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105</p>",
+      "words": 105,
+      "paragraphs": 5,
+      "lines": 18,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021</p>\n<p>w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042</p>\n<p>w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063</p>\n<p>w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084</p>\n<p>w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105</p>",
+      "small_type": true
+    },
+    {
+      "name": "a fifth paragraph one word into a third line is cut",
+      "html": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021</p>\n<p>w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042</p>\n<p>w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063</p>\n<p>w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084</p>\n<p>w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105 w106</p>",
+      "words": 106,
+      "paragraphs": 5,
+      "lines": 19,
+      "cut": "<p>w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021</p>\n<p>w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042</p>\n<p>w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063</p>\n<p>w064 w065 w066 w067 w068 w069 w070 w071 w072 w073 w074 w075 w076 w077 w078 w079 w080 w081 w082 w083 w084</p>\n<p>w085 w086 w087 w088 w089 w090 w091 w092 w093 w094 w095 w096 w097 w098 w099 w100 w101 w102 w103 w104 w105…</p>",
+      "small_type": true
+    }
+  ]
+}

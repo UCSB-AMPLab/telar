@@ -15,12 +15,12 @@ change and do nothing when it is not there. The entry version survives
 only where it has to — in `from_versions`, and in bounding the framework
 files to the ones the replaced chain would have written from here.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
-from datetime import date
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus, coerce_change, is_hard_failure
 from .transformations import TRANSFORMATIONS
 
@@ -49,6 +49,8 @@ Copy these three files from the v0.9.0-beta release and replace the ones in your
 - `.github/workflows/telar-tests.yml`
 
 They are at https://github.com/UCSB-AMPLab/telar/tree/v0.9.0-beta/.github/workflows — open each file, click **Raw**, copy the whole contents, and paste it into the file of the same name in your repository.""",
+        'audience': 'local',
+        'kind': 'action',
         'doc_url': 'https://telar.org/docs/setup/upgrading/',
         'critical': True,
     },
@@ -62,6 +64,8 @@ This upgrade moved your content out of `components/` and into `telar-content/`:
 - `components/texts/` → `telar-content/texts/`
 
 Telar takes care of the spreadsheets and the stories. What it cannot fix are the paths you typed yourself: in a page of your own, in an HTML include, or in a link or an image inside a Markdown file. Search the site for `components/` and fix what turns up.""",
+        'audience': 'all',
+        'kind': 'action',
     },
     {
         'description': """**If you use Google Sheets, add the new columns**
@@ -73,6 +77,8 @@ The upgrade has already added the missing columns to the CSV files in your repos
 - **project tab:** a `private` column, for putting a password on a story
 
 You can also start from an up-to-date template: https://bit.ly/telar-template""",
+        'audience': 'google-sheets',
+        'kind': 'action',
     },
     {
         'description': """**If you build the site on your own computer**
@@ -91,6 +97,8 @@ bundle exec jekyll build
 Tiles are generated much faster with libvips installed (`brew install vips` on macOS, `sudo apt-get install libvips-tools` on Debian or Ubuntu). It still works without libvips, only more slowly.
 
 If you publish through GitHub Pages and do not build on your own computer, you can skip this step, but not the workflow files.""",
+        'audience': 'all',
+        'kind': 'action',
     },
 ]
 
@@ -107,6 +115,8 @@ Copia estos tres archivos de la versión v0.9.0-beta y reemplaza los que tengas 
 - `.github/workflows/telar-tests.yml`
 
 Están en https://github.com/UCSB-AMPLab/telar/tree/v0.9.0-beta/.github/workflows — abre cada archivo, haz clic en **Raw**, copia todo el contenido y pégalo en el archivo del mismo nombre en el repositorio.""",
+        'audience': 'local',
+        'kind': 'action',
         'doc_url': 'https://telar.org/guia/configuracion/actualizacion/',
         'critical': True,
     },
@@ -120,6 +130,8 @@ Esta actualización sacó el contenido de `components/` y lo pasó a `telar-cont
 - `components/texts/` → `telar-content/texts/`
 
 De las hojas de cálculo y de las historias se encarga Telar. Lo que no puede arreglar son las rutas que escribiste tú a mano: en una página propia, en un *include* de HTML, o en un enlace o una imagen dentro de un archivo de Markdown. Busca `components/` en el sitio y corrige lo que aparezca.""",
+        'audience': 'all',
+        'kind': 'action',
     },
     {
         'description': """**Si usas Google Sheets, agrega las columnas nuevas**
@@ -131,6 +143,8 @@ La actualización ya les agregó las columnas que faltaban a los archivos CSV de
 - **pestaña del proyecto:** una columna `private`, para ponerle contraseña a una historia
 
 También puedes partir de una plantilla actualizada: https://bit.ly/telar-template""",
+        'audience': 'google-sheets',
+        'kind': 'action',
     },
     {
         'description': """**Si compilas el sitio en tu propio computador**
@@ -149,6 +163,8 @@ bundle exec jekyll build
 Las teselas se generan mucho más rápido si tienes libvips instalado (`brew install vips` en macOS, `sudo apt-get install libvips-tools` en Debian o Ubuntu). Sin libvips también funciona, solo que más lento.
 
 Si publicas con GitHub Pages y no compilas en tu computador, puedes saltarte este paso, pero no el de los flujos de trabajo.""",
+        'audience': 'all',
+        'kind': 'action',
     },
 ]
 
@@ -211,9 +227,9 @@ ENTRY_VERSIONS = (
 # nor a dot, and judging by shape dropped the 43-entry map they belong to.
 #
 # Absent by design:
-#   telar-content/       the site's own writing. The templates among these are
-#                        replaced only by _update_template_content(), after it
-#                        checks the owner has not edited them.
+#   telar-content/       the site's own writing. The hop leaves it as it stands,
+#                        demo content included; the demo-content manual step says
+#                        so rather than anything replacing it.
 #   .github/workflows/   GITHUB_TOKEN cannot write these; they are manual steps.
 #   scripts/upgrade.py   the updater a site runs is downloaded as a verified
 #   scripts/migrations/  release asset and run from a temp dir, so a copy left
@@ -345,6 +361,7 @@ class Migration020to090(BaseMigration):
     from_version = "0.2.0-beta"
     from_versions = list(ENTRY_VERSIONS)
     to_version = "0.9.0-beta"
+    release_date = "2026-03-03"  # tag v0.9.0-beta
     description = "Consolidated upgrade from the pre-v0.9.0 betas"
 
     # The one tag every framework file now comes from.
@@ -384,6 +401,11 @@ class Migration020to090(BaseMigration):
 
         A hard failure stops before the stamp, so a site that does not
         complete keeps the version it started from and re-enters here.
+
+        This method prints nothing. `run_migrations` prints every record
+        it is returned, in the site's language, for every migration in the
+        chain; a step that also printed its own records would report each
+        change twice and would do it in English.
         """
         records: List[ChangeRecord] = []
 
@@ -391,9 +413,10 @@ class Migration020to090(BaseMigration):
             try:
                 changes = transformation(self)
             except Exception as error:
-                print(f"  ✗ Error: {error}")
                 records.append(ChangeRecord(
-                    description=f"{transformation.__name__} aborted: {error}",
+                    description=get_message(
+                        self._detect_language(), 'change_transformation_aborted',
+                        transformation.__name__, error),
                     status=ChangeStatus.FAILED,
                     severity="hard",
                 ))
@@ -402,13 +425,7 @@ class Migration020to090(BaseMigration):
             step_records = [coerce_change(change) for change in changes]
             records.extend(step_records)
 
-            for record in step_records:
-                print(f"  {'✓' if record.status == ChangeStatus.APPLIED else '✗'} "
-                      f"{record.description}")
-
             if any(is_hard_failure(record) for record in step_records):
-                print("  ✗ Stopping: this migration did not complete. "
-                      "The site is left unchanged.")
                 return records
 
         # The one install, after the content work and before the stamp. The
@@ -417,20 +434,15 @@ class Migration020to090(BaseMigration):
         # v0.9.0-beta is entitled to.
         install = self._apply_framework_files(self._files_for_entry())
         records.extend(install)
-        for record in install:
-            print(f"  {'✓' if record.status == ChangeStatus.APPLIED else '✗'} "
-                  f"{record.description}")
 
         if any(is_hard_failure(record) for record in install):
-            print("  ✗ Stopping: the framework files could not be installed. "
-                  "The site is left unchanged.")
             return records
 
         # The one stamp, written only once every step has completed.
-        today = date.today().strftime('%Y-%m-%d')
-        if self._stamp_version(self.to_version, today):
+        stamped = self.release_date
+        if self._stamp_version(self.to_version, stamped):
             records.append(coerce_change(
-                f'Updated _config.yml: version {self.to_version} ({today})'))
+                f'Updated _config.yml: version {self.to_version} ({stamped})'))
 
         return records
 
@@ -453,9 +465,9 @@ class Migration020to090(BaseMigration):
                 for path, (description, last_writer) in FRAMEWORK_FILES_090.items()
                 if last_writer >= entry or not self._file_exists(path)}
 
-    def _stamp_version(self, version, today):
+    def _stamp_version(self, version, stamped):
         """Write the single version stamp this hop is entitled to."""
-        return self._update_config_version(version, today)
+        return self._update_config_version(version, stamped)
 
     def get_manual_steps(self) -> List[Dict[str, str]]:
         """What the owner has to do by hand, in their own language.
@@ -483,5 +495,11 @@ class Migration020to090(BaseMigration):
         who can tell which of it they want.
         """
         if self._detect_language() == 'es':
-            return {'description': DEMO_CONTENT_NOTICE_ES}
-        return {'description': DEMO_CONTENT_NOTICE_EN}
+            return {'description': DEMO_CONTENT_NOTICE_ES,
+                'audience': 'all',
+                'kind': 'optional',
+            }
+        return {'description': DEMO_CONTENT_NOTICE_EN,
+                'audience': 'all',
+                'kind': 'optional',
+            }

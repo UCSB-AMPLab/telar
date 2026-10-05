@@ -2,16 +2,18 @@
 Unit Tests for Post-Build Story Encryption
 
 This module tests scripts/encrypt_protected_stories.py — envelope round-trip,
-sentinel derivation, stub injection, the shape and content gates — and the
-pipeline-side prerequisite check in telar/core.py that refuses to run when
-the build workflow predates the post-build encryption step.
+sentinel derivation, stub injection, the shape and content gates — and
+the pipeline-side prerequisite check in telar/core.py
+that refuses to run when the build workflow predates the post-build
+encryption step.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import base64
 import json
 import os
+import pathlib
 import sys
 
 import pytest
@@ -37,7 +39,8 @@ from encrypt_protected_stories import (
     shape_sweep,
 )
 from telar.encryption import derive_key, encrypt_story
-from telar.core import _check_protected_prerequisites
+from telar.core import (_check_protected_prerequisites,
+                        PROTECTED_PREREQUISITE_EXIT)
 from telar.story_pages import build_manifest, write_manifest
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -161,17 +164,27 @@ class TestFragmentExtraction:
 
 
 class TestInjection:
-    STUB_PAGE = (
-        "<script>\nwindow.storyData = {\"encrypted\": true, \"salt\": \"\", "
-        "\"iv\": \"\", \"ciphertext\": \"" + STUB_TOKEN + "\"};\n"
-        "window.objectsData = {};\n</script>"
-    )
+    """The fixture mirrors what story.html emits for a protected page.
+
+    Both assignments, in the order the layout writes them: the page's claim
+    about which story it is, then the stub it expects to have replaced.
+    """
+
+    @staticmethod
+    def stub_page(identifier="s"):
+        return (
+            "<script>\n"
+            'window.telarStoryId = "%s";\n' % identifier
+            + "window.storyData = {\"encrypted\": true, \"salt\": \"\", "
+            "\"iv\": \"\", \"ciphertext\": \"" + STUB_TOKEN + "\"};\n"
+            "window.objectsData = {};\n</script>"
+        )
 
     def test_replaces_stub_with_envelope(self, tmp_path):
         page = tmp_path / "index.html"
-        page.write_text(self.STUB_PAGE)
+        page.write_text(self.stub_page())
         envelope = encrypt_story({"steps": []}, STORY_KEY, aad="s")
-        inject_envelope(page, envelope)
+        inject_envelope(page, envelope, "s")
         html = page.read_text()
         assert STUB_TOKEN not in html
         assert envelope["ciphertext"] in html
@@ -180,9 +193,62 @@ class TestInjection:
 
     def test_page_without_stub_fails(self, tmp_path):
         page = tmp_path / "index.html"
-        page.write_text("<script>window.storyData = {steps: []};</script>")
+        page.write_text('<script>window.telarStoryId = "s";\n'
+                        "window.storyData = {steps: []};</script>")
         with pytest.raises(GateFailure):
-            inject_envelope(page, encrypt_story([], STORY_KEY))
+            inject_envelope(page, encrypt_story([], STORY_KEY), "s")
+
+    def test_a_page_claiming_another_story_is_refused(self, tmp_path):
+        """The manifest says where a story renders; the page says who it is.
+
+        Swapping two identifiers inside an otherwise valid manifest puts
+        each envelope on the other's page. Both stubs are consumed and no
+        destination conflict occurs, so nothing downstream notices — and
+        the site ships two protected stories that cannot be opened, because
+        the identifier the browser passes as the envelope's additional
+        authenticated data is the one on the page, not the one encrypted.
+        """
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page("the-other-story"))
+
+        with pytest.raises(GateFailure) as failure:
+            inject_envelope(page, encrypt_story({"steps": []}, STORY_KEY,
+                                                aad="s"), "s")
+
+        assert "the-other-story" in str(failure.value)
+
+    def test_the_refused_page_is_left_alone(self, tmp_path):
+        """A gate that has already written is not a gate."""
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page("the-other-story"))
+        before = page.read_text()
+
+        with pytest.raises(GateFailure):
+            inject_envelope(page, encrypt_story({"steps": []}, STORY_KEY,
+                                                aad="s"), "s")
+
+        assert page.read_text() == before
+
+    def test_a_page_that_names_no_story_is_refused(self, tmp_path):
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page().replace(
+            'window.telarStoryId = "s";\n', ''))
+
+        with pytest.raises(GateFailure) as failure:
+            inject_envelope(page, encrypt_story({"steps": []}, STORY_KEY,
+                                                aad="s"), "s")
+
+        assert "telarStoryId" in str(failure.value)
+
+    def test_an_identifier_needing_escapes_still_matches(self, tmp_path):
+        """`jsonify` writes a JSON string, so the claim is parsed as one."""
+        page = tmp_path / "index.html"
+        page.write_text(self.stub_page("acentu\\u00e1da"))
+        envelope = encrypt_story({"steps": []}, STORY_KEY, aad="acentuáda")
+
+        inject_envelope(page, envelope, "acentuáda")
+
+        assert STUB_TOKEN not in page.read_text()
 
 
 class TestSweeps:
@@ -223,7 +289,7 @@ def build_site_fixture(tmp_path, story_id="prot-story", page_slug=None,
     site = tmp_path / site_name
     story_dir = site / "stories" / (page_slug or story_id)
     story_dir.mkdir(parents=True)
-    (story_dir / "index.html").write_text(TestInjection.STUB_PAGE)
+    (story_dir / "index.html").write_text(TestInjection.stub_page(story_id))
 
     fragment_dir = site / FRAGMENT_URL_PREFIX / story_id
     fragment_dir.mkdir(parents=True)
@@ -451,13 +517,86 @@ class TestProcessSite:
         # Jekyll lets a user page declare a story's permalink: it warns
         # about the conflict, then lets that page win the destination. The
         # manifest still names the right path, so what stops the build is
-        # the absence of the protected layout's stub on the page found
-        # there — the second half of what this script trusts.
+        # the page found there, which neither names this story nor carries
+        # the protected layout's stub. Either refusal is enough; the first
+        # is the one that fires.
         site, data_dir, config = build_site_fixture(tmp_path)
         (site / "stories" / "prot-story" / "index.html").write_text(
             "<html><body>a page that is not the story</body></html>"
         )
-        with pytest.raises(GateFailure, match="no stub envelope found"):
+        with pytest.raises(GateFailure, match="does not declare which story"):
+            process_site(site, data_dir, config)
+
+    def test_a_swapped_manifest_fails_closed(self, tmp_path):
+        """Two identifiers exchanged inside an otherwise valid manifest.
+
+        Each envelope goes to the other's page: both stubs are consumed,
+        no destination conflict occurs, and every downstream sweep passes,
+        because nothing leaked — the site simply ships two protected
+        stories that no password can open.
+        """
+        site, data_dir, config = build_site_fixture(tmp_path)
+        other = site / "stories" / "other-story"
+        other.mkdir(parents=True)
+        (other / "index.html").write_text(TestInjection.stub_page("other-story"))
+        # Edited after the fact, because build_manifest derives the URL
+        # from the identifier and so cannot express the swap — which is
+        # the threat exactly: a manifest that did not come from a build.
+        manifest = build_manifest([("prot-story", "_stories/prot-story.md")])
+        manifest['stories']['prot-story']['url'] = '/stories/other-story/'
+        write_manifest(data_dir, manifest)
+
+        # Matched on the gate's own wording: a bare identifier also
+        # appears in the failures a disabled gate would produce later.
+        with pytest.raises(GateFailure, match="but that page is"):
+            process_site(site, data_dir, config)
+
+    def test_two_swapped_stories_fail_closed(self, tmp_path):
+        """The shape the deferral was about, with nothing else to catch it.
+
+        With one story misdirected the shape sweep still fires, because the
+        story left alone keeps its stub. With two exchanged, both stubs are
+        consumed, both fragments are deleted, no destination conflict
+        occurs and every sweep passes — and the site ships two protected
+        stories that no password opens, because the identifier the browser
+        passes as the envelope's additional authenticated data is the one
+        written on the page.
+        """
+        data_dir = tmp_path / "_data"
+        data_dir.mkdir()
+        identifiers = ["story-one", "story-two"]
+        (data_dir / "project.json").write_text(json.dumps(
+            [{"stories": [{"number": str(n), "title": "P", "story_id": i,
+                           "protected": True}
+                          for n, i in enumerate(identifiers, 1)]}]
+        ))
+        for identifier in identifiers:
+            (data_dir / f"{identifier}.json").write_text(json.dumps(STEPS))
+
+        manifest = build_manifest(
+            [(i, f"_stories/{i}.md") for i in identifiers])
+        manifest['stories']['story-one']['url'] = '/stories/story-two/'
+        manifest['stories']['story-two']['url'] = '/stories/story-one/'
+        write_manifest(data_dir, manifest)
+
+        config = tmp_path / "_config.yml"
+        config.write_text(f'story_key: "{STORY_KEY}"\n')
+
+        site = tmp_path / "_site"
+        for identifier in identifiers:
+            story_dir = site / "stories" / identifier
+            story_dir.mkdir(parents=True)
+            (story_dir / "index.html").write_text(
+                TestInjection.stub_page(identifier))
+            fragment_dir = site / FRAGMENT_URL_PREFIX / identifier
+            fragment_dir.mkdir(parents=True)
+            (fragment_dir / "index.html").write_text(
+                f"<html><body>{FRAGMENT_START}<div class='step-data'>steps"
+                f"</div>{FRAGMENT_END}</body></html>"
+            )
+        (site / "index.html").write_text("<html>homepage</html>")
+
+        with pytest.raises(GateFailure, match="but that page is"):
             process_site(site, data_dir, config)
 
     def test_missing_manifest_fails(self, tmp_path):
@@ -547,7 +686,13 @@ WORKFLOW_OLD = "steps:\n  - run: bundle exec jekyll build\n"
 
 
 class TestPipelinePrerequisites:
-    """_check_protected_prerequisites reads _config.yml from the CWD."""
+    """_check_protected_prerequisites reads _config.yml from the CWD.
+
+    The exit code is asserted, not just the exit. It is the signal the
+    upgrade reads to tell "this site has a workflow left to edit" from
+    "the conversion failed", so a refusal that exits 1 would put a site
+    back to being stranded at its old version.
+    """
 
     def _setup(self, tmp_path, monkeypatch, protected=True, key=STORY_KEY):
         monkeypatch.chdir(tmp_path)
@@ -563,15 +708,19 @@ class TestPipelinePrerequisites:
         data_dir = self._setup(tmp_path, monkeypatch)
         workflow = tmp_path / "build.yml"
         workflow.write_text(WORKFLOW_OLD)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exit_info:
             _check_protected_prerequisites(data_dir, workflow_path=workflow)
+
+        assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
 
     def test_missing_workflow_trips_interlock(self, tmp_path, monkeypatch):
         data_dir = self._setup(tmp_path, monkeypatch)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exit_info:
             _check_protected_prerequisites(
                 data_dir, workflow_path=tmp_path / "absent.yml"
             )
+
+        assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
 
     def test_upgraded_workflow_passes(self, tmp_path, monkeypatch):
         data_dir = self._setup(tmp_path, monkeypatch)
@@ -589,5 +738,136 @@ class TestPipelinePrerequisites:
         data_dir = self._setup(tmp_path, monkeypatch, key="")
         workflow = tmp_path / "build.yml"
         workflow.write_text(WORKFLOW_WITH_STEP)
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exit_info:
             _check_protected_prerequisites(data_dir, workflow_path=workflow)
+
+        assert exit_info.value.code == PROTECTED_PREREQUISITE_EXIT
+
+
+
+# A passage of the fixture story's own prose, long enough to be a sentinel.
+QUOTED_PASSAGE = STEPS[1]["question"]
+
+
+class TestGlossaryIsExempt:
+    """A glossary definition may quote a protected story.
+
+    The gate catches a surface nobody meant to publish locked prose on. A
+    definition is not one: an author typed the quotation, and failing the
+    build over it leaves them rewording text the site was always going to
+    publish. Excluded by top-level directory, so a site that renames the
+    glossary permalink is swept rather than skipped -- a build that fails
+    where it need not, never a passage published where nobody looked.
+    """
+
+    def _publish(self, site, where):
+        page = site / where / "index.html"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(f"<html><body><p>{QUOTED_PASSAGE}</p></body></html>")
+
+    def test_a_definition_quoting_a_protected_story_passes(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        self._publish(site, "glossary/unit-fixture")
+
+        assert process_site(site, data_dir, config) == 1
+
+    def test_the_same_passage_off_the_glossary_still_fails(self, tmp_path):
+        site, data_dir, config = build_site_fixture(tmp_path)
+        self._publish(site, "elsewhere")
+
+        with pytest.raises(GateFailure, match="Reword whichever copy"):
+            process_site(site, data_dir, config)
+
+    def test_a_directory_merely_starting_with_glossary_is_swept(self, tmp_path):
+        # The skip is a whole path segment, not a prefix.
+        site, data_dir, config = build_site_fixture(tmp_path)
+        self._publish(site, "glossary-archive")
+
+        with pytest.raises(GateFailure, match="Reword whichever copy"):
+            process_site(site, data_dir, config)
+
+
+class TestProtectedStorySeoIsTextOnly:
+    """The one <meta> a protected story emits itself.
+
+    `story.html` suppresses `{% seo %}` on a protected page and writes the
+    description tag by hand, because jekyll-seo-tag would pull `page.description`
+    and the excerpt into it and put authored content in front of a crawler that
+    the unlock gate exists to keep it from. What it writes instead is
+    `site.description`, which is safe to publish — but it is also the one value
+    an author may legitimately have written markup into, because `index.html`
+    renders it as prose where a link or emphasis is wanted.
+
+    Unfiltered in an attribute that is two separate faults. Markup reaches a
+    crawler as characters; and a double quote anywhere in the description ends
+    the attribute early, so the description is truncated there and the rest of
+    it is parsed as junk attributes on the tag.
+    """
+
+    LAYOUT = pathlib.Path(__file__).resolve().parents[2] / '_layouts' / 'story.html'
+    INDEX = pathlib.Path(__file__).resolve().parents[2] / '_layouts' / 'index.html'
+
+    def _description_meta(self):
+        """The tag itself, not the comment above it explaining why it is there.
+
+        Matching any line that mentions `name="description"` finds the comment
+        first, and a guard reading a comment passes or fails on prose.
+        """
+        lines = [
+            l for l in self.LAYOUT.read_text(encoding='utf-8').splitlines()
+            if l.lstrip().startswith('<meta name="description"')
+        ]
+        assert len(lines) == 1, (
+            f'expected exactly one description meta in story.html, found {len(lines)}'
+        )
+        return lines[0]
+
+    def test_the_description_is_stripped_of_markup(self):
+        assert 'strip_html' in self._description_meta()
+
+    def test_the_description_is_escaped_for_the_attribute(self):
+        # Without this a quote in the description ends content="..." early.
+        assert 'escape_once' in self._description_meta()
+
+    def test_the_index_page_keeps_the_markup(self):
+        """The same value, rendered as prose rather than as an attribute.
+
+        Stripping it here would take away a capability the Compositor offers
+        on that field and the index page legitimately uses, so the two must
+        not be brought into line with each other.
+        """
+        source = self.INDEX.read_text(encoding='utf-8')
+        assert '{{ site.description }}' in source
+        assert 'site.description | strip_html' not in source
+
+    def test_an_attribute_with_a_quote_in_it_parses_whole(self):
+        """The failure the filters prevent, run through a real parser.
+
+        Rendering Liquid is out of reach here, so this asserts the property the
+        filters produce rather than the template: escaped, the whole
+        description survives as one attribute; unescaped, it does not.
+        """
+        from html.parser import HTMLParser
+
+        description = 'A <strong>bold</strong> claim: they call it "the loom" & mean it.'
+
+        def attributes_of(content):
+            found = []
+
+            class Reader(HTMLParser):
+                def handle_starttag(self, tag, attrs):
+                    if tag == 'meta':
+                        found.append(attrs)
+
+            Reader().feed(f'<meta name="description" content="{content}">')
+            return found[0]
+
+        raw = attributes_of(description)
+        assert len(raw) > 2, 'the unescaped case is supposed to break; it did not'
+        assert raw[1][1] != description
+
+        escaped = (description.replace('&', '&amp;').replace('<', '&lt;')
+                   .replace('>', '&gt;').replace('"', '&quot;'))
+        safe = attributes_of(escaped)
+        assert len(safe) == 2
+        assert safe[1] == ('content', description)

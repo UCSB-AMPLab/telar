@@ -10,11 +10,12 @@
  *   onLayoutChange — fires only when the layout mode flips between
  *     'horizontal' and 'vertical'. Wired to window.matchMedia() keyed by
  *     the CSS custom properties (--telar-vertical-min-width,
- *     --telar-vertical-min-aspect) declared on :root in _sass/_responsive.scss.
+ *     --telar-vertical-min-aspect, --telar-card-landscape-max-height,
+ *     --telar-vertical-short-windows) declared on :root in _sass/_responsive.scss.
  *     Subscribers receive { from, to, viewport: {w, h}, isEmbed }. Because the
  *     browser's matchMedia fires only on a genuine flip, no JS-side comparison
  *     is needed — JS-vs-CSS formula drift is structurally impossible.
- *   onViewportResize — fires on every settled resize, debounced 100 ms to
+ *   onViewportResize — fires once a resize has stopped, debounced 100 ms to
  *     match the existing audio-card.js and video-card.js idiom. Subscribers
  *     receive { viewport: {w, h} }.
  *
@@ -28,15 +29,17 @@
  *                                     immediately (no debounce — discrete event)
  *
  * Dispatch order on a mode-flipping event is onLayoutChange first so that
- * mode-flip handlers settle branching state (e.g. layoutMode) before
- * geometry handlers re-read viewport dimensions.
+ * mode-flip handlers set branching state before geometry handlers re-read
+ * viewport dimensions. state.layoutMode is the exception: this module writes
+ * it before the first onLayoutChange subscriber runs, so no subscriber sees
+ * the previous mode.
  *
  * First-call semantics: getLayoutMode() initialises the listener exactly once
- * (via _initOnce()) and returns a synchronous answer. onLayoutChange does NOT
+ * (via _initOnce()) and returns a synchronous answer. onLayoutChange does not
  * broadcast the initial mode — subscribers that need the current value should
  * call getLayoutMode() at subscribe time.
  *
- * @version v1.4.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -69,9 +72,25 @@ function _readBreakpoints() {
 }
 
 /**
+ * The short-window clauses of the vertical layout, from
+ * `--telar-vertical-short-windows` ("488px 1380px, 496px 1380px, …": a max
+ * height and a max width per window), each as a media query clause. None
+ * where the property is unset.
+ *
+ * @param {string} raw - The property's value
+ * @returns {string[]}
+ */
+function shortWindowClauses(raw) {
+  return raw.split(',').map((pair) => pair.trim().split(/\s+/))
+    .filter((pair) => pair.length === 2 && pair.every((v) => Number.isFinite(parseFloat(v))))
+    .map(([h, w]) => `(max-height: ${h}) and (max-width: ${w})`);
+}
+
+/**
  * Derive the current layout mode from the matchMedia list.
  * The MediaQueryList matches when the viewport satisfies either the
- * max-width or the max-aspect-ratio clause — that is, "vertical" layout.
+ * max-width, max-aspect-ratio, max-height or a short-window clause — that is,
+ * "vertical" layout.
  *
  * @returns {'horizontal' | 'vertical'}
  */
@@ -89,6 +108,9 @@ function _dispatchLayoutChange() {
   const prev = _cachedMode;
   _cachedMode = next;
   if (prev !== null && prev !== next) {
+    // state.layoutMode is current before any subscriber runs, whatever order
+    // the subscribers registered in: card geometry and media arrangement read it.
+    state.layoutMode = next;
     const viewport = { w: window.innerWidth, h: window.innerHeight };
     for (const cb of layoutChangeSubs) {
       try { cb({ from: prev, to: next, viewport, isEmbed: state.isEmbed }); }
@@ -122,7 +144,7 @@ function _onResize() {
  * Immediate orientationchange handler — no debounce.
  * Clears any pending resize timer, re-evaluates mode (in case the matchMedia
  * 'change' event lags on some engines), then flushes both subscription
- * surfaces. onLayoutChange fires FIRST so branching state settles before
+ * surfaces. onLayoutChange fires first so branching state is set before
  * geometry handlers run.
  */
 function _onOrientationChange() {
@@ -134,7 +156,7 @@ function _onOrientationChange() {
 /**
  * Initialise the module's listeners exactly once.
  * Reads breakpoints from CSS custom properties, builds the matchMedia query
- * string (both clauses of the @mixin vertical-layout), attaches the
+ * string (every clause of the @mixin vertical-layout), attaches the
  * matchMedia change listener for mode flips, and attaches the resize and
  * orientationchange listeners for continuous geometry.
  */
@@ -143,10 +165,14 @@ function _initOnce() {
   _initialized = true;
   _breakpoints = _readBreakpoints();
   const { verticalMinWidth: minW, verticalMinAspect: minA } = _breakpoints;
+  const maxH = getCardLandscapeMaxHeight();
+  const shortWindows = shortWindowClauses(getComputedStyle(document.documentElement)
+    .getPropertyValue('--telar-vertical-short-windows'));
   // Query string mirrors _sass/_responsive.scss @mixin vertical-layout.
   // Building it from the same CSS vars at runtime makes JS-vs-CSS formula drift
   // structurally impossible.
-  _modeMql = window.matchMedia(`(max-width: ${minW}px), (max-aspect-ratio: ${minA})`);
+  _modeMql = window.matchMedia([`(max-width: ${minW}px)`, `(max-aspect-ratio: ${minA})`,
+    `(max-height: ${maxH}px)`, ...shortWindows].join(', '));
   // Initialise cached mode synchronously from the current matchMedia state.
   _cachedMode = _evaluateMode();
   _modeMql.addEventListener('change', _dispatchLayoutChange);
@@ -183,7 +209,7 @@ export function onLayoutChange(cb) {
 
 /**
  * Subscribe to every debounced viewport resize.
- * Fires on every resize event that has settled for 100 ms. Also fires
+ * Fires once resizing has paused for 100 ms. Also fires
  * immediately on orientationchange (no debounce — discrete event).
  *
  * @param {(ev: { viewport: { w: number, h: number } }) => void} cb
@@ -218,23 +244,33 @@ export function getIsEmbed() {
 }
 
 /**
- * True when the viewport is short enough that the landscape side-card rule in
+ * True when the viewport is short enough that the phone-height side-card rule in
  * `_story.scss` (`@media (max-height: …)`) is active — i.e. the text card is a
- * side card even though getLayoutMode() may report 'vertical' (a landscape phone
- * is < 1024px wide). The threshold is read from the
+ * side card although getLayoutMode() reports 'vertical' (the vertical layout's
+ * height clause is the same threshold). The threshold is read from the
  * `--telar-card-landscape-max-height` custom property so JS and CSS share one
  * source of truth — no hardcoded 480 in JS (same anti-drift pattern as the
  * breakpoint matchMedia above).
  *
  * Consumers: card-pool.js (`_recomputeCardGeometry`) and iiif-card.js
- * (`_deriveCardPlacement` null-rect fallback) — both must agree that a short
- * landscape viewport is side-card, not bottom-card.
+ * (`_deriveCardPlacement` null-rect fallback) — both must agree that a phone-height
+ * window has a side card, not a bottom card.
  *
  * @returns {boolean}
  */
-export function isLandscapeSideCard() {
+export function isPhoneHeightSideCard() {
+  return window.matchMedia(`(max-height: ${getCardLandscapeMaxHeight()}px)`).matches;
+}
+
+/**
+ * The side-card height threshold in px, from `--telar-card-landscape-max-height`
+ * (480 where the property is unset). card-fit.js reads it too, as the height
+ * whose room under the top controls the side card's ceiling keeps above it.
+ *
+ * @returns {number}
+ */
+export function getCardLandscapeMaxHeight() {
   const raw = getComputedStyle(document.documentElement)
     .getPropertyValue('--telar-card-landscape-max-height');
-  const maxH = parseFloat(raw) || 480;
-  return window.matchMedia(`(max-height: ${maxH}px)`).matches;
+  return parseFloat(raw) || 480;
 }

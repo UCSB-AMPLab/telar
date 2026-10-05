@@ -25,6 +25,62 @@ import {
 import v2Manifest from '../fixtures/iiif/manifest-v2.json';
 import v3Manifest from '../fixtures/iiif/manifest-v3.json';
 
+// ── the plain-image fallback ─────────────────────────────────────────────────
+
+describe('a canvas carrying a plain image, with no Image API service', () => {
+  // OpenSeadragon reads a string tile source as a URL to a descriptor it should
+  // fetch and parse. A bare image URL is neither a DZI nor an info.json, so it
+  // fails to open — confirmed against the vendored OSD 6.0.2: the string form
+  // gives "No TileSource was able to open", the object form opens. Both walkers
+  // reach this branch whenever a manifest publishes an image with no service
+  // and no derivable info.json, which is the case these tests exist for.
+
+  const v3PlainImage = {
+    items: [{
+      items: [{
+        items: [{ body: { id: 'https://example.org/img/plate-7.jpg', type: 'Image' } }],
+      }],
+    }],
+  };
+
+  const v2PlainImage = {
+    sequences: [{
+      canvases: [{
+        images: [{ resource: { '@id': 'https://example.org/img/plate-7.jpg' } }],
+      }],
+    }],
+  };
+
+  it('v3 gives a tile source OpenSeadragon can open, not a bare string', () => {
+    const [page] = extractV3Pages(v3PlainImage);
+    expect(page.tileSource).toEqual({
+      type: 'image',
+      url: 'https://example.org/img/plate-7.jpg',
+    });
+  });
+
+  it('v2 gives the same', () => {
+    const [page] = extractV2Pages(v2PlainImage);
+    expect(page.tileSource).toEqual({
+      type: 'image',
+      url: 'https://example.org/img/plate-7.jpg',
+    });
+  });
+
+  it('a service-backed canvas still yields a plain info.json string', () => {
+    // The object form is for the fallback only: an Image API endpoint must keep
+    // handing OSD a descriptor URL, or every tiled object loses deep zoom.
+    const [page] = extractV3Pages({
+      items: [{ items: [{ items: [{ body: {
+        id: 'https://example.org/img/plate-7.jpg',
+        type: 'Image',
+        service: [{ id: 'https://example.org/iiif/plate-7' }],
+      } }] }] }],
+    });
+    expect(page.tileSource).toBe('https://example.org/iiif/plate-7/info.json');
+  });
+});
+
 // ── extractV2Pages ───────────────────────────────────────────────────────────
 
 describe('extractV2Pages', () => {

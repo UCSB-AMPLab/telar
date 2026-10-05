@@ -1,0 +1,17 @@
+{%- comment -%}
+  The glossary page's default introduction. A kind in _data/glossary_kinds.yml
+  may name an introduction for a glossary that has entries of it; the page
+  uses the first such kind's, in the page's order, and pages.glossary_intro
+  when the site has entries of none. Pass the site's language catalogue as
+  `lang`; a key it lacks falls back to English.
+{%- endcomment -%}
+{%- include glossary-kinds-used.html -%}
+{%- assign glossary_intro = include.lang.pages.glossary_intro | default: site.data.languages.en.pages.glossary_intro -%}
+{%- for glossary_kind in glossary_kinds_used -%}
+  {%- if glossary_kind.intro -%}
+    {%- assign glossary_intro_path = glossary_kind.intro | split: "." -%}
+    {%- assign glossary_intro = include.lang[glossary_intro_path.first][glossary_intro_path.last] | default: site.data.languages.en[glossary_intro_path.first][glossary_intro_path.last] -%}
+    {%- break -%}
+  {%- endif -%}
+{%- endfor -%}
+{{ glossary_intro }}

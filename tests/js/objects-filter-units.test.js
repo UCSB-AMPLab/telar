@@ -11,7 +11,7 @@
  * @version v1.7.0
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { escapeHtml } from '../../assets/js/objects-filter/escape.js';
 import { matchesFilters, matchesSearch } from '../../assets/js/objects-filter/matching.js';
@@ -140,34 +140,46 @@ describe('escapeHtml', () => {
     expect(escapeHtml('Western Hemisphere—Maps—Early works to 1800', document))
       .toBe('Western Hemisphere—Maps—Early works to 1800');
   });
+
+  it('builds its element in the document it is given', () => {
+    const other = document.implementation.createHTMLDocument('');
+    const created = vi.spyOn(other, 'createElement');
+    expect(escapeHtml('<i>', other)).toBe('&lt;i&gt;');
+    expect(created).toHaveBeenCalledWith('div');
+  });
+
+  it('is the escaping the story runtime and the share panel use', async () => {
+    const story = await import('../../assets/js/telar-story/utils.js');
+    expect(story.escapeHtml).toBe(escapeHtml);
+  });
 });
 
 describe('getBaseUrl', () => {
-  const at = (pathname) => ({ pathname });
+  const locationAt = (pathname) => ({ pathname });
 
   it('prefers the meta tag over the page path', () => {
     setBaseUrlMeta('/telar');
-    expect(getBaseUrl(document, at('/somewhere/else/'))).toBe('/telar');
+    expect(getBaseUrl(document, locationAt('/somewhere/else/'))).toBe('/telar');
   });
 
   it('reads an empty meta tag as an empty base URL', () => {
     setBaseUrlMeta('');
-    expect(getBaseUrl(document, at('/telar/objects/'))).toBe('');
+    expect(getBaseUrl(document, locationAt('/telar/objects/'))).toBe('');
     expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('derives the base URL from an objects path when the tag is absent', () => {
-    expect(getBaseUrl(document, at('/telar/objects/'))).toBe('/telar');
-    expect(getBaseUrl(document, at('/telar/objects/atlas-allegory/'))).toBe('/telar');
+    expect(getBaseUrl(document, locationAt('/telar/objects/'))).toBe('/telar');
+    expect(getBaseUrl(document, locationAt('/telar/objects/atlas-allegory/'))).toBe('/telar');
     expect(console.warn).toHaveBeenCalledWith(
       '[Telar] meta[name="baseurl"] not found; deriving the base URL from the page path.');
   });
 
   it('derives nothing from a path with no baseurl segment', () => {
-    expect(getBaseUrl(document, at('/objects/'))).toBe('');
+    expect(getBaseUrl(document, locationAt('/objects/'))).toBe('');
   });
 
   it('derives nothing from a path that is not an objects page', () => {
-    expect(getBaseUrl(document, at('/telar/stories/one/'))).toBe('');
+    expect(getBaseUrl(document, locationAt('/telar/stories/one/'))).toBe('');
   });
 });

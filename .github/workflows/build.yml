@@ -34,7 +34,7 @@ name: Build and Deploy Telar Site
 # build time. Sites without audio objects skip audio tool installation and
 # processing entirely — zero friction for image-only sites.
 #
-# Version: v1.7.0
+# Version: v1.8.0
 
 on:
   push:
@@ -95,7 +95,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install libvips (for fast IIIF tile generation)
         run: |
@@ -124,14 +124,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 22: jsdom 30 needs ^22.22.2 and its undici >=22.19.0, and Node 20 is
+      # past end of life. Every engine range in package-lock.json accepts it.
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build JavaScript bundle
+        # esbuild is the only tool a site build needs; vitest and jsdom are
+        # development dependencies for the framework's own test suite, which
+        # no site build runs, so they are omitted. npm install, not npm ci: a
+        # site's package-lock.json can be missing or out of step with its
+        # package.json after an upgrade, and npm ci refuses to build then.
         run: |
-          npm install
+          npm install --omit=dev
           npm run build:js
 
       - name: Fetch data from Google Sheets (if enabled)
@@ -169,11 +176,15 @@ jobs:
         id: detect-audio-changes
         run: |
           NEEDS_AUDIO="true"
+          # Whether this site has audio at all, which is what separates a
+          # legitimately empty cache from a lost one further down.
+          HAVE_AUDIO="true"
 
           # Check if any audio objects exist first
           if ! ls telar-content/objects/*.mp3 telar-content/objects/*.ogg telar-content/objects/*.m4a 2>/dev/null | head -1 | grep -q .; then
             echo "No audio objects found - skipping audio processing"
             NEEDS_AUDIO="false"
+            HAVE_AUDIO="false"
           elif [ "${{ github.event_name }}" = "push" ]; then
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
@@ -195,6 +206,15 @@ jobs:
           else
             echo "Manual trigger - using input parameter (force_audio=${{ inputs.force_audio }})"
             NEEDS_AUDIO="${{ inputs.force_audio }}"
+          fi
+
+          # If the site has audio but the audio cache is empty, reprocess.
+          if [ "$NEEDS_AUDIO" = "false" ] && [ "$HAVE_AUDIO" = "true" ]; then
+            if [ ! -d "cached-audio" ] || [ -z "$(ls -A cached-audio 2>/dev/null)" ]; then
+              echo "⚠️  The audio cache did not answer (expired, or never saved)."
+              echo "✓ Reprocessing rather than deploying without waveforms"
+              NEEDS_AUDIO="true"
+            fi
           fi
 
           echo "needs_audio=$NEEDS_AUDIO" >> $GITHUB_OUTPUT
@@ -251,13 +271,37 @@ jobs:
         run: |
           python scripts/check_jekyll_conflicts.py jekyll-build.log
 
+      # An Actions cache entry is immutable per key, so the key has to move
+      # whenever the tiles would differ. They depend on the image files and
+      # their names (a tile directory is named by object ID), on the objects
+      # sheet (which objects are self-hosted), and on _config.yml (tiles bake
+      # the site's url/baseurl into each info.json `@id`). hashFiles reads
+      # contents only, never paths, so the key is computed here. The objects
+      # sheet fetched from Google Sheets is on disk by now.
+      - name: Hash the IIIF tile inputs
+        id: tile-inputs
+        run: |
+          python3 - <<'EOF'
+          import hashlib, os
+          from pathlib import Path
+
+          digest = hashlib.sha256()
+          objects = Path('telar-content/objects')
+          files = sorted(p for p in objects.rglob('*') if p.is_file()) if objects.is_dir() else []
+          sheets = [Path('telar-content/spreadsheets') / name for name in ('objects.csv', 'objetos.csv')]
+          for path in files + [p for p in sheets + [Path('_config.yml')] if p.is_file()]:
+              digest.update(path.as_posix().encode('utf-8') + b'\0')
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write(f'hash={digest.hexdigest()}\n')
+          EOF
+
       - name: Restore IIIF tiles from cache
         id: cache-iiif
         uses: actions/cache/restore@v6
         with:
           path: cached-iiif/
-          # v0.5.0: Flattened image directory structure - now all images in telar-content/objects/
-          key: iiif-tiles-${{ hashFiles('telar-content/objects/**') }}
+          key: iiif-tiles-${{ steps.tile-inputs.outputs.hash }}
 
       - name: Detect if IIIF regeneration is needed
         id: detect-changes
@@ -273,8 +317,8 @@ jobs:
               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
               # Check if any images, objects.csv, or _config.yml changed
-              # Note: _config.yml added in v0.4.3 - IIIF tiles embed base URL from config (thanks Tara)
-              # v0.5.0: CSV-aware image monitoring - only triggers for images matching object_ids
+              # IIIF tiles embed the base URL from _config.yml, so a change to it
+              # regenerates them. Image changes count only for images matching object_ids.
 
               # Always regenerate if objects.csv or _config.yml changed
               if echo "$CHANGED_FILES" | grep -qE '^telar-content/spreadsheets/objects\.csv$|^_config\.yml$'; then
@@ -319,13 +363,29 @@ jobs:
             NEEDS_IIIF="${{ inputs.force_iiif }}"
           fi
 
+          # The decision so far reads the commit diff, which says whether the
+          # tiles need rebuilding — not whether any tiles exist to fall back on.
+          # GitHub evicts a cache after seven days without access, so a quiet
+          # repository that then receives a commit touching no image would skip
+          # generation, restore nothing, and deploy with every self-hosted image
+          # missing, every step reporting success.
+          if [ "$NEEDS_IIIF" = "false" ]; then
+            if [ -d "telar-content/objects" ] && [ -n "$(ls -A telar-content/objects 2>/dev/null)" ]; then
+              if [ ! -d "cached-iiif" ] || [ -z "$(ls -A cached-iiif 2>/dev/null)" ]; then
+                echo "⚠️  The tile cache did not answer (expired, or never saved)."
+                echo "✓ Regenerating rather than deploying a site without its images"
+                NEEDS_IIIF="true"
+              fi
+            fi
+          fi
+
           echo "needs_iiif=$NEEDS_IIIF" >> $GITHUB_OUTPUT
           echo "IIIF regeneration: $NEEDS_IIIF"
 
       - name: Generate IIIF tiles into _site
         if: steps.detect-changes.outputs.needs_iiif == 'true'
         run: |
-          # v0.5.0: Check if source images directory exists (flattened structure)
+          # Check if the source images directory exists
           if [ -d "telar-content/objects" ]; then
             # Extract URL and baseurl from _config.yml
             SITE_URL=$(python3 -c "import yaml; config=yaml.safe_load(open('_config.yml')); print(config.get('url', ''))")
@@ -334,8 +394,8 @@ jobs:
 
             echo "Generating IIIF tiles with base URL: $FULL_URL"
 
-            # v0.5.0: Removed --source-dir parameter (script now defaults to telar-content/objects/)
-            # v0.5.0: Script is now CSV-driven - only processes objects listed in objects.json
+            # The script defaults to telar-content/objects/ and processes only
+            # the objects listed in objects.json.
             python scripts/generate_iiif.py \
               --output-dir _site/iiif/objects \
               --base-url "$FULL_URL"
@@ -359,8 +419,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: cached-iiif/
-          # v0.5.0: Flattened image directory structure
-          key: iiif-tiles-${{ hashFiles('telar-content/objects/**') }}
+          key: iiif-tiles-${{ steps.tile-inputs.outputs.hash }}
 
       - name: Restore IIIF tiles from cache to _site (when skipping regeneration)
         if: steps.detect-changes.outputs.needs_iiif == 'false'
@@ -371,8 +430,7 @@ jobs:
             cp -r cached-iiif/* _site/iiif/objects/
             echo "✓ IIIF tiles restored successfully"
           else
-            echo "⚠️  Warning: No cached IIIF tiles found. Site may have missing images."
-            echo "⚠️  Run a full build with IIIF regeneration to create tiles."
+            echo "No cached IIIF tiles found, and none needed (site has no objects)."
           fi
 
       - name: Encrypt protected stories

@@ -1,21 +1,32 @@
 /**
- * Telar — HTML escaping for the objects gallery filter.
+ * Telar — HTML escaping.
  *
- * The filter builds its facet options and its chips as HTML strings, so any
- * value coming from the collection's own metadata has to be safe both as text
- * and inside a quoted attribute.
+ * The one implementation for every bundle that builds HTML as a string: the
+ * objects gallery filter (its facet options and chips), the story runtime
+ * (cards and panels, through `telar-story/utils.js`) and the share panel (the
+ * embed code). Each bundle carries its own copy at build time; this source is
+ * the only one.
  *
- * The document is a parameter with a browser default so a test can escape
- * against its own document.
+ * The value is routed through a detached element's textContent, which encodes
+ * `<`, `>` and `&`, and the two quote characters are then escaped as well, so
+ * the result is safe between tags and inside `"..."` or `'...'` attribute
+ * values. `null` and `undefined` become an empty string.
  *
- * Version: v1.7.0
+ * The document is a parameter with a browser default, so a module that is
+ * handed its document, and a test, can escape against their own.
+ *
+ * Version: v1.8.0
  */
 
-/** Escape HTML special characters, quotes included. */
+/**
+ * Escape a value for HTML text or a quoted attribute.
+ *
+ * @param {*} text - The value to escape.
+ * @param {Document} [doc=document] - The document to build the element in.
+ * @returns {string} The escaped string.
+ */
 export function escapeHtml(text, doc = document) {
   const div = doc.createElement('div');
-  div.textContent = text;
-  // textContent -> innerHTML escapes < > &, but NOT quotes; add them so the
-  // result is also safe inside double- or single-quoted HTML attributes.
+  div.textContent = text == null ? '' : String(text);
   return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

@@ -34,7 +34,7 @@ Tile generation backends:
   - iiif library (fallback): Pure Python, no system dependencies.
     Install: pip install iiif
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import os
@@ -53,6 +53,7 @@ from iiif_utils import (
     generate_tiles_libvips, copy_base_image, create_single_canvas_manifest,
     fix_fallback_region_sizes, generate_full_max,
 )
+from telar.csv_utils import IMAGE_EXTENSIONS_ORDERED
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ def generate_iiif_for_image(image_path, output_dir, object_id, base_url, backend
         else:
             _generate_tiles_iiif(processed_path, tiles_dir, object_id, base_url)
 
-        # Copy full-resolution image BEFORE cleaning up temp file
+        # Copy full-resolution image before cleaning up temp file
         copy_base_image(processed_path, tiles_dir, object_id)
     finally:
         # Clean up temporary file if created
@@ -184,17 +185,32 @@ def find_image_for_object(object_id, source_dir):
         Path object if found, None otherwise
     """
     source_path = Path(source_dir)
-    # Priority order: Common formats first, then newer/specialized formats
-    image_extensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.tif', '.tiff', '.pdf']
 
-    for ext in image_extensions:
+    for ext in IMAGE_EXTENSIONS_ORDERED:
         # Check both lowercase and uppercase extensions
         for case_ext in [ext, ext.upper()]:
             image_path = source_path / f"{object_id}{case_ext}"
             if image_path.exists():
-                return image_path
+                return _as_named_on_disk(image_path)
 
     return None
+
+
+def _as_named_on_disk(path):
+    """The same file, under the name the directory holds it by.
+
+    On a case-insensitive filesystem `calib.png` exists when the file is
+    `calib.PNG`, and the name printed would be one the file does not have,
+    and not the one the Linux build prints.
+    """
+    try:
+        entries = [entry.name for entry in path.parent.iterdir()]
+    except OSError:
+        return path
+    if path.name in entries:
+        return path
+    folded = [name for name in entries if name.lower() == path.name.lower()]
+    return path.with_name(folded[0]) if len(folded) == 1 else path
 
 def get_base_url_from_config():
     """
@@ -353,7 +369,8 @@ def _process_object(object_id, source_dir, output_path, base_url, backend):
 
     if not image_file:
         print(f"  ⚠️  No image file found for {object_id}")
-        print(f"      Checked: {object_id}.jpg, .jpeg, .png, .heic, .heif, .webp, .tif, .tiff, .pdf")
+        checked = ', '.join(IMAGE_EXTENSIONS_ORDERED)
+        print(f"      Checked {object_id} with each of: {checked}")
         print(f"      The name before the extension must match {object_id} exactly, including capitalisation.")
         print()
         return 'skipped'

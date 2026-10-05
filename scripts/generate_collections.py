@@ -25,77 +25,63 @@ It creates four types of collection files:
   telar-content/texts/pages/, processed through the widget and glossary
   pipeline.
 
+Glossary generation is in telar/glossary_pages.py and page generation in
+telar/pages.py; this script runs them in order with the rest.
+
+It also derives the theme on-colours (telar/theme_colours.py) into
+_data/telar-build/, which the stylesheet reads. That step belongs to the
+themes, not to any collection, so it runs whatever the feature flags skip.
+
 The script respects development feature flags (skip_stories,
 skip_collections) from _config.yml, which allow developers to
 temporarily suppress certain collections during development.
 Legacy names (hide_stories, hide_collections) are also supported.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import argparse
 import json
-import re
 import shutil
+import sys
 from pathlib import Path
 
-import markdown
-import pandas as pd
 import yaml
 
 # Import processing functions from telar package
-from telar.widgets import process_widgets
-from telar.images import process_images
-from telar.glossary import process_glossary_links, load_glossary_terms
-from telar.markdown import read_markdown_file, process_inline_content
-from telar.core import find_csv_with_fallback
+from telar.core import SHEET_REFUSED_EXIT
+from telar.csv_utils import (OBJECT_FIELDS, ColumnCollisionError,
+                             ReservedColumnError)
 from telar.latex import has_latex
 from telar.media_type import detect_media_type, AUDIO_EXTENSIONS
+from telar import theme_colours
 from telar.story_pages import (
     ManifestError, build_manifest, remove_manifest, stories_permalink,
     write_manifest,
 )
+from telar.frontmatter import _as_text, _frontmatter_block
+from telar.glossary_pages import generate_glossary
+from telar.pages import check_title_keys, generate_pages
+
+# Defined in the modules above, and importable from here too, because tests
+# reach them through this script.
+from telar.frontmatter import FRONTMATTER_PATTERN  # noqa: F401
+from telar.glossary_pages import (  # noqa: F401
+    _generate_glossary_from_csv, _generate_glossary_from_markdown,
+)
+from telar.pages import (  # noqa: F401
+    GENERATED_PAGE_IGNORED_KEYS, TITLE_KEY_SECTION, TITLE_KEY_SOURCES,
+    _parse_page_frontmatter, _strip_generated_page_keys,
+)
 
 # Fields already handled explicitly in generate_objects() frontmatter.
-# Any key NOT in this set is treated as a custom field and written to extra_metadata.
-KNOWN_OBJECT_FIELDS = {
-    'object_id', 'title', 'creator', 'period', 'medium', 'dimensions',
-    'location', 'credit', 'thumbnail', 'iiif_manifest', 'source_url',
-    'source', 'object_warning', 'object_warning_short', 'year',
-    'object_type', 'subjects', 'is_featured_sample', '_demo',
-    'description', 'featured', 'alt_text',
-    # v0.10.0: auto-detected media type and audio metadata
-    'media_type', 'audio_duration', 'audio_filesize', 'audio_format',
-}
-
-
-FRONTMATTER_PATTERN = re.compile(r'^---\s*\n(.*?)\n---\s*\n(.*)$', re.DOTALL)
-
-
-# Control characters that must not survive into a double-quoted YAML scalar,
-# with the escape YAML defines for each. A line break is the dangerous one: the
-# scalar would span lines, and frontmatter is located by splitting on a line
-# that is exactly `---` before any YAML is parsed, so a value could end the
-# block early and spill the rest of the metadata into the page body.
-_YAML_CONTROL = {
-    '\n': '\\n',
-    '\r': '\\r',
-    '\t': '\\t',
-}
-
-
-def _yaml_escape(value):
-    """Escape a string value for safe inclusion in double-quoted YAML.
-
-    Backslashes first: every other replacement introduces one, and doing it
-    later would double them.
-    """
-    s = str(value)
-    s = s.replace('\\', '\\\\')
-    s = s.replace('"', '\\"')
-    for character, escape in _YAML_CONTROL.items():
-        s = s.replace(character, escape)
-    return s
+# Any key not in this set is treated as a custom field and written to extra_metadata.
+# The object fields the build knows about. Two consumers, one meaning:
+# anything outside it is the author's own column and goes to
+# extra_metadata, and a bilingual alias is only applied to an objects
+# sheet when its canonical name is in here. Defined beside the alias map
+# so the scope is derived from the field set rather than listed twice.
+KNOWN_OBJECT_FIELDS = OBJECT_FIELDS
 
 
 def _object_metadata(obj, media_type, source_url):
@@ -119,40 +105,32 @@ def _object_metadata(obj, media_type, source_url):
         'object_warning': obj.get('object_warning', ''),
         'object_warning_short': obj.get('object_warning_short', ''),
     }
-    return ''.join(f'{key}: "{_yaml_escape(str(value))}"\n'
-                   for key, value in fields.items() if value)
+    return {key: _as_text(value) for key, value in fields.items() if value}
 
 
 def _object_flags(obj, is_demo):
     """The optional scalars and the two booleans, in the order written."""
-    lines = ''
+    flags = {}
     if obj.get('year'):
-        lines += f'year: "{obj.get("year")}"\n'
+        flags['year'] = _as_text(obj.get('year'))
     # Frontmatter carries 'medium' only; object_type is not written
     if obj.get('subjects'):
-        lines += f'subjects: "{obj.get("subjects")}"\n'
+        flags['subjects'] = _as_text(obj.get('subjects'))
+    # The only two values on an object page that are genuinely booleans,
+    # and the templates test them as booleans.
     if obj.get('is_featured_sample'):
-        lines += "is_featured_sample: true\n"
+        flags['is_featured_sample'] = True
     if is_demo:
-        lines += "demo: true\n"
-    return lines
+        flags['demo'] = True
+    return flags
 
 
-def _audio_duration(object_id):
-    """Duration from the peaks file process_audio.py writes, if it is there."""
-    peaks_path = Path(f'assets/audio/peaks/{object_id}.json')
-    if not peaks_path.exists():
-        return ''
-    try:
-        with open(peaks_path, 'r') as pf:
-            peaks_data = json.load(pf)
-        duration = peaks_data.get('duration', 0)
-    except (json.JSONDecodeError, KeyError):
-        return ''
-    return f'audio_duration: {duration}\n' if duration else ''
+# The decimal mark a site's language writes. A file size is written into the
+# page as text, so it is formatted here rather than by the reader's browser.
+DECIMAL_MARK = {'es': ','}
 
 
-def _audio_file_details(object_id):
+def _audio_file_details(object_id, decimal_mark='.'):
     """Size and format from the first matching file on disk.
 
     The first match wins: on a case-insensitive filesystem `.mp3` and `.MP3`
@@ -166,10 +144,10 @@ def _audio_file_details(object_id):
         if size_bytes < 1024 * 1024:
             size_str = f'{size_bytes / 1024:.0f} KB'
         else:
-            size_str = f'{size_bytes / (1024 * 1024):.1f} MB'
-        return (f'audio_filesize: "{size_str}"\n'
-                f'audio_format: "{ext.lstrip(".").upper()}"\n')
-    return ''
+            size_str = f'{size_bytes / (1024 * 1024):.1f} MB'.replace('.', decimal_mark)
+        return {'audio_filesize': size_str,
+                'audio_format': ext.lstrip('.').upper()}
+    return {}
 
 
 def _extra_metadata(obj):
@@ -188,32 +166,28 @@ def _extra_metadata(obj):
         if s and s.lower() != 'nan':
             extra[key] = s
 
-    if not extra:
-        return ''
-    lines = "extra_metadata:\n"
-    for key, value in extra.items():
-        lines += f'  {key}: "{_yaml_escape(value)}"\n'
-    return lines
+    return {'extra_metadata': extra} if extra else {}
 
 
-def _object_page(obj):
+def _object_page(obj, decimal_mark='.'):
     """One object's markdown, frontmatter and body."""
     object_id = obj['object_id']
     source_url = obj.get('source_url', '') or ''
     media_type = detect_media_type(source_url, object_id)
 
-    content = f'---\nobject_id: {object_id}\n'
-    content += f'title: "{_yaml_escape(obj.get("title", ""))}"\n'
-    content += _object_metadata(obj, media_type, source_url)
+    fields = {'object_id': _as_text(object_id),
+              'title': _as_text(obj.get('title', ''))}
+    fields.update(_object_metadata(obj, media_type, source_url))
     # Always written: the template branches on it for every type.
-    content += f'media_type: "{media_type}"\n'
-    content += _object_flags(obj, obj.get('_demo', False))
+    fields['media_type'] = _as_text(media_type)
+    fields.update(_object_flags(obj, obj.get('_demo', False)))
 
     if media_type == 'Audio':
-        content += _audio_duration(object_id)
-        content += _audio_file_details(object_id)
+        fields.update(_audio_file_details(object_id, decimal_mark))
 
-    content += _extra_metadata(obj)
+    fields.update(_extra_metadata(obj))
+
+    content = '---\n' + _frontmatter_block(fields)
 
     description = obj.get('description', '')
     if description and has_latex(description):
@@ -236,7 +210,7 @@ def _reset_objects_dir():
     return objects_dir
 
 
-def generate_objects():
+def generate_objects(telar_language='en'):
     """Generate object markdown files from objects.json"""
     if not Path('_data/objects.json').exists():
         print("No objects.json found — skipping object generation")
@@ -254,243 +228,24 @@ def generate_objects():
 
         filepath = objects_dir / f"{object_id}.md"
         with open(filepath, 'w') as f:
-            f.write(_object_page(obj))
+            f.write(_object_page(obj, DECIMAL_MARK.get(telar_language, '.')))
 
         demo_label = " [DEMO]" if obj.get('_demo', False) else ""
         print(f"✓ Generated {filepath}{demo_label}")
 
-def _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms):
-    """Generate glossary files from CSV.
+def generate_theme_colours():
+    """Derive a legible text colour for every theme background.
 
-    Args:
-        csv_path: Path to glossary.csv
-        glossary_dir: Output directory for Jekyll files
-        glossary_terms: Dict of term_id -> title for link processing
+    Writes _data/telar-build/theme-colours.json, which assets/css/telar.scss
+    emits as the --color-on-* custom properties. A site with no _data/themes/
+    gets no file: the stylesheet's own fallbacks render it as before.
     """
-    df = pd.read_csv(csv_path)
+    written = theme_colours.generate('_data')
+    if written is None:
+        print("Skipping theme colors (no _data/themes/)")
+        return
+    print(f"✓ Generated {written}")
 
-    # Normalize column names (lowercase + bilingual mapping)
-    df.columns = df.columns.str.lower().str.strip()
-    from telar.csv_utils import normalize_column_names, is_header_row
-    df = normalize_column_names(df)
-
-    # Filter out instruction columns starting with #
-    df = df[[col for col in df.columns if not col.startswith('#')]]
-
-    # Drop duplicate header row (bilingual CSVs have Spanish aliases in row 2)
-    if len(df) > 0 and is_header_row(df.iloc[0].values):
-        df = df.iloc[1:].reset_index(drop=True)
-
-    required_cols = ['term_id', 'title', 'definition']
-    for col in required_cols:
-        if col not in df.columns:
-            print(f"  ⚠️ glossary.csv missing required column: {col}")
-            return
-
-    for _, row in df.iterrows():
-        term_id = str(row.get('term_id', '')).strip()
-        title = str(row.get('title', '')).strip()
-        definition = str(row.get('definition', '')).strip()
-        related_terms_raw = str(row.get('related_terms', '')).strip()
-
-        if not term_id or not title:
-            continue
-
-        # Skip comment/instruction rows (e.g. "# Make it lower-case...")
-        if term_id.startswith('#'):
-            continue
-
-        # Parse related_terms (pipe-separated)
-        related_terms = []
-        if related_terms_raw and related_terms_raw != 'nan':
-            related_terms = [t.strip() for t in related_terms_raw.split('|') if t.strip()]
-
-        # Process definition: file reference or inline content
-        # If definition looks like a filename (short, no spaces/newlines), try as file first
-        looks_like_filename = ('\n' not in definition and ' ' not in definition
-                               and len(definition) <= 200)
-        if looks_like_filename:
-            file_def = definition if definition.endswith('.md') else f'{definition}.md'
-            glossary_path = file_def if file_def.startswith('glossary/') else f'glossary/{file_def}'
-            content_data = read_markdown_file(glossary_path)
-        else:
-            content_data = None
-
-        if content_data:
-            body = content_data['content']
-        else:
-            # No file found or inline content — treat as inline
-            content_data = process_inline_content(definition)
-            body = content_data['content'] if content_data else ''
-
-        # Process glossary-to-glossary links
-        warnings_list = []
-        processed = process_glossary_links(body, glossary_terms, warnings_list)
-
-        for warning in warnings_list:
-            print(f"  Warning: {warning}")
-
-        # Check definition for LaTeX content
-        latex_flag = ""
-        if has_latex(processed):
-            latex_flag = "\nhas_latex: true"
-
-        # Build related_terms frontmatter
-        related_str = ''
-        if related_terms:
-            related_str = f"\nrelated_terms: {','.join(related_terms)}"
-
-        # Write Jekyll file
-        filepath = glossary_dir / f"{term_id}.md"
-        output_content = f"""---
-term_id: {term_id}
-title: "{_yaml_escape(title)}"{related_str}{latex_flag}
-layout: glossary
----
-
-{processed}
-"""
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(output_content)
-
-        print(f"✓ Generated {filepath}")
-
-
-def _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms):
-    """Generate glossary files from markdown (legacy method).
-
-    Args:
-        md_path: Path to telar-content/texts/glossary/
-        glossary_dir: Output directory for Jekyll files
-        glossary_terms: Dict of term_id -> title for link processing
-    """
-    for source_file in md_path.glob('*.md'):
-        # Read the source markdown file
-        with open(source_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Parse frontmatter and body
-        match = FRONTMATTER_PATTERN.match(content)
-
-        if not match:
-            print(f"Warning: No frontmatter found in {source_file}")
-            continue
-
-        frontmatter_text = match.group(1)
-        body = match.group(2).strip()
-
-        # Extract term_id to determine output filename
-        term_id_match = re.search(r'term_id:\s*(\S+)', frontmatter_text)
-        if not term_id_match:
-            print(f"Warning: No term_id found in {source_file}")
-            continue
-
-        term_id = term_id_match.group(1)
-        filepath = glossary_dir / f"{term_id}.md"
-
-        # Process body through the same pipeline as pages
-        warnings_list = []
-
-        # 1. Process images (size syntax and captions)
-        processed = process_images(body)
-
-        # 2. Convert markdown to HTML
-        processed = markdown.markdown(
-            processed,
-            extensions=['extra', 'nl2br', 'sane_lists']
-        )
-
-        # 3. Process glossary links ([[term]] syntax)
-        processed = process_glossary_links(processed, glossary_terms, warnings_list)
-
-        # Print any warnings
-        for warning in warnings_list:
-            print(f"  Warning: {warning}")
-
-        # Check definition for LaTeX content
-        latex_flag = ""
-        if has_latex(processed):
-            latex_flag = "\nhas_latex: true"
-
-        # Write to collection with layout added
-        output_content = f"""---
-{frontmatter_text}
-layout: glossary{latex_flag}
----
-
-{processed}
-"""
-
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(output_content)
-
-        print(f"✓ Generated {filepath}")
-
-
-def generate_glossary():
-    """Generate glossary markdown files from user content and demo JSON.
-
-    Reads from (in order of precedence):
-    - telar-content/spreadsheets/glossary.csv or glosario.csv (v0.8.0+ preferred)
-    - telar-content/texts/glossary/*.md (legacy markdown files)
-    - _data/demo-glossary.json (demo content from bundle)
-
-    If both CSV and markdown exist, CSV takes precedence and a warning is shown.
-    """
-    glossary_dir = Path('_jekyll-files/_glossary')
-
-    # Clean up old files to remove orphaned glossary terms
-    if glossary_dir.exists():
-        shutil.rmtree(glossary_dir)
-        print(f"✓ Cleaned up old glossary files")
-
-    glossary_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load glossary terms for link processing (enables glossary-to-glossary linking)
-    glossary_terms = load_glossary_terms()
-
-    csv_path = Path(find_csv_with_fallback('telar-content/spreadsheets/glossary', 'glosario'))
-    md_path = Path('telar-content/texts/glossary')
-
-    # 1. Process user glossary from CSV (preferred) or markdown (legacy)
-    if csv_path.exists():
-        # Warn if markdown files also exist
-        if md_path.exists() and any(md_path.glob('*.md')):
-            print(f"  ⚠️ Found both glossary.csv and markdown files. Using CSV.")
-
-        _generate_glossary_from_csv(csv_path, glossary_dir, glossary_terms)
-
-    elif md_path.exists() and any(md_path.glob('*.md')):
-        _generate_glossary_from_markdown(md_path, glossary_dir, glossary_terms)
-
-    # 2. Process demo glossary from JSON
-    demo_glossary_path = Path('_data/demo-glossary.json')
-    if demo_glossary_path.exists():
-        with open(demo_glossary_path, 'r', encoding='utf-8') as f:
-            demo_glossary = json.load(f)
-
-        for term in demo_glossary:
-            term_id = term.get('term_id', '')
-            if not term_id:
-                continue
-
-            filepath = glossary_dir / f"{term_id}.md"
-
-            # Create markdown with frontmatter
-            output_content = f"""---
-term_id: {term_id}
-title: "{_yaml_escape(term.get('title', term_id))}"
-layout: glossary
-demo: true
----
-
-{term.get('content', '')}
-"""
-
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(output_content)
-
-            print(f"✓ Generated {filepath} [DEMO]")
 
 def _story_has_latex(identifier):
     """Check the story's _data JSON metadata for the has_latex flag.
@@ -712,135 +467,6 @@ def generate_stories(config=None):
     print(f"✓ Generated {written} ({len(manifest['stories'])} story pages)")
 
 
-def _parse_page_frontmatter(source_file):
-    """Parse a page markdown file. Returns (frontmatter_text, frontmatter_dict, body) or None on error."""
-    with open(source_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    match = FRONTMATTER_PATTERN.match(content)
-    if not match:
-        print(f"❌ Error: No frontmatter found in {source_file}")
-        print("  Pages must have YAML frontmatter (--- at start and end)")
-        return None
-
-    frontmatter_text = match.group(1)
-    body = match.group(2).strip()
-
-    try:
-        frontmatter_dict = yaml.safe_load(frontmatter_text) or {}
-    except yaml.YAMLError as e:
-        print(f"❌ Error: Invalid YAML frontmatter in {source_file}: {e}")
-        return None
-
-    return frontmatter_text, frontmatter_dict, body
-
-
-def generate_pages(telar_language='en'):
-    """Generate processed page files from user markdown sources.
-
-    Reads from telar-content/texts/pages/*.md, processes widgets and glossary links,
-    and outputs to _jekyll-files/_pages/ for the pages collection.
-
-    Localization: a sister file with frontmatter `localized_for: <canonical>.md`
-    and `language: <code>` is treated as the localized version of <canonical>.md.
-    When `telar_language` matches the sister's `language`, the sister is used
-    in place of the canonical file but is output under the canonical filename
-    (so the URL is the same in both languages). Sister files for other
-    languages are skipped.
-    """
-    source_dir = Path('telar-content/texts/pages')
-    output_dir = Path('_jekyll-files/_pages')
-
-    # Skip if source directory doesn't exist
-    if not source_dir.exists():
-        print("No telar-content/texts/pages/ directory found - skipping page generation")
-        return
-
-    # Clean up old files
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-        print("✓ Cleaned up old page files")
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load glossary terms for link processing
-    glossary_terms = load_glossary_terms()
-
-    # Pass 1: separate canonical pages from localized sisters and build a sister map
-    canonicals = []  # list of source files
-    sisters = {}     # {canonical_filename: {language: source_file}}
-
-    for source_file in source_dir.glob('*.md'):
-        parsed = _parse_page_frontmatter(source_file)
-        if parsed is None:
-            continue
-        _, fm, _ = parsed
-        if fm.get('localized_for'):
-            canonical = fm['localized_for']
-            lang = fm.get('language')
-            if not lang:
-                print(f"  Warning: {source_file.name} has localized_for but no language; skipping")
-                continue
-            sisters.setdefault(canonical, {})[lang] = source_file
-        else:
-            canonicals.append(source_file)
-
-    # Pass 2: for each canonical page, pick the active-language source and process
-    for canonical_file in canonicals:
-        canonical_filename = canonical_file.name
-
-        # If a sister exists for the active language, use it; else use canonical
-        active_sister = sisters.get(canonical_filename, {}).get(telar_language)
-        if active_sister is not None:
-            source_file = active_sister
-            print(f"  Using {source_file.name} for {canonical_filename} (telar_language={telar_language})")
-        else:
-            source_file = canonical_file
-
-        parsed = _parse_page_frontmatter(source_file)
-        if parsed is None:
-            continue
-        frontmatter_text, _, body = parsed
-
-        # Process body through the same pipeline as story layers
-        warnings_list = []
-
-        # 1. Process widgets (:::carousel, :::tabs, :::accordion)
-        processed = process_widgets(body, str(source_file), warnings_list)
-
-        # 2. Process images (size syntax and captions)
-        processed = process_images(processed)
-
-        # 3. Convert markdown to HTML
-        processed = markdown.markdown(
-            processed,
-            extensions=['extra', 'nl2br', 'sane_lists']
-        )
-
-        # 4. Process glossary links ([[term]] syntax)
-        processed = process_glossary_links(processed, glossary_terms, warnings_list)
-
-        # Print any warnings
-        for warning in warnings_list:
-            print(f"  Warning: {warning}")
-
-        # Write processed file to output directory under the canonical filename,
-        # so the URL is stable across languages
-        output_file = output_dir / canonical_filename
-
-        output_content = f"""---
-{frontmatter_text}
----
-
-{processed}
-"""
-
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(output_content)
-
-        print(f"✓ Generated {output_file}")
-
-
 def load_config():
     """Load _config.yml and return the full config dict (empty dict if missing)."""
     config_path = Path('_config.yml')
@@ -901,11 +527,18 @@ def main():
     elif skip_objects_flag:
         print("Skipping objects (--skip-objects)")
     else:
-        generate_objects()
+        generate_objects(telar_language=telar_language)
     print()
 
     # Always generate glossary
-    generate_glossary()
+    glossary_terms = generate_glossary()
+    print()
+
+    # Always derive theme on-colours: the stylesheet reads them whichever
+    # collections a flag suppresses, and a site can switch themes in
+    # _config.yml without a content change, so every theme file is covered
+    # rather than the active one.
+    generate_theme_colours()
     print()
 
     # Generate stories (skip and clean up if skip_stories or skip_collections)
@@ -924,14 +557,13 @@ def main():
 
     # Always generate pages (passes active language so localized sister files
     # like acerca.md/about.md can be selected at build time)
-    generate_pages(telar_language=telar_language)
+    generate_pages(telar_language=telar_language, glossary_terms=glossary_terms)
+    check_title_keys()
 
-    # After generate_pages: it may clean _jekyll-files/_pages/, where the
-    # fragment pages live
-    # Always called: even when stories are skipped, a fragment page left
-    # from an earlier run must be cleared, or it renders plaintext steps that
-    # nothing will encrypt. The function returns after that cleanup when
-    # there is nothing to generate.
+    # Must follow generate_pages, which can clear _jekyll-files/_pages/ where
+    # the fragment pages live, and must run even when stories are skipped: a
+    # fragment page left from an earlier run renders plaintext steps that
+    # nothing will encrypt.
     generate_protected_fragments(skip=skip_stories)
 
     print("-" * 50)
@@ -944,3 +576,9 @@ if __name__ == '__main__':
     except ManifestError as error:
         print(f"\n❌ This site cannot be generated as described:\n  {error}")
         raise SystemExit(1)
+    except (ColumnCollisionError, ReservedColumnError) as error:
+        # Stderr, where the upgrade reads a failed step's reason.
+        source = getattr(error, 'source', None)
+        prefix = f"{source}: " if source else ""
+        print(f"\n❌ {prefix}{error}", file=sys.stderr)
+        raise SystemExit(SHEET_REFUSED_EXIT)

@@ -17,4 +17,4 @@ title_key: navigation.home
   tu contenido de bienvenida aquí en markdown.
 -->
 
-{{ lang.index_page.welcome | markdownify }}
+{{ lang.index_page.welcome | default: site.data.languages.en.index_page.welcome | markdownify }}

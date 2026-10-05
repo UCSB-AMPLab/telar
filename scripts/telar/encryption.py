@@ -21,7 +21,7 @@ Security model:
     the page HTML, making offline attacks feasible. For genuine
     confidentiality, the repository must be private.
 
-Version: v1.6.0
+Version: v1.8.0
 """
 
 import base64
@@ -103,6 +103,39 @@ def encrypt_story(story_data, story_key: str, aad: str = None) -> dict:
     }
 
 
+def story_identifier(story: dict) -> str:
+    """
+    The identifier one story record is known by, or None if it has neither.
+
+    Resolved as generate_collections names the story data file: story_id if
+    present, otherwise the "story-{number}" fallback. The bare number would
+    name "{number}.json" while the real file is "story-{number}.json", and a
+    protected story without a semantic story_id would be left unencrypted.
+    One function so the rule cannot differ between the callers that need it.
+
+    Args:
+        story: One story record from project.json
+
+    Returns:
+        Story identifier string, or None when the record has neither a
+        story_id nor a number
+    """
+    story_id = story.get('story_id')
+    if story_id:
+        return str(story_id)
+    if story.get('number') not in (None, ''):
+        return f"story-{story.get('number')}"
+    return None
+
+
+def _iter_stories(project_data: list):
+    """Yield every story record in project.json."""
+    for item in project_data:
+        if 'stories' in item:
+            for story in item['stories']:
+                yield story
+
+
 def get_protected_stories(project_data: list) -> set:
     """
     Extract set of protected story identifiers from project.json data.
@@ -114,24 +147,10 @@ def get_protected_stories(project_data: list) -> set:
         Set of story identifiers (story_id or story number) that are protected
     """
     protected = set()
-
-    for item in project_data:
-        if 'stories' in item:
-            for story in item['stories']:
-                if story.get('protected'):
-                    # Resolve the identifier the SAME way generate_collections
-                    # names the story data file: story_id if present, otherwise
-                    # the "story-{number}" fallback. Using the bare number here
-                    # (the old behaviour) made the encryptor look for
-                    # "{number}.json" while the real file is "story-{number}.json",
-                    # so a protected story without a semantic story_id was silently
-                    # left unencrypted and shipped as plaintext.
-                    story_id = story.get('story_id')
-                    if story_id:
-                        protected.add(str(story_id))
-                    elif story.get('number') not in (None, ''):
-                        protected.add(f"story-{story.get('number')}")
-
+    for story in _iter_stories(project_data):
+        identifier = story_identifier(story)
+        if identifier and story.get('protected'):
+            protected.add(identifier)
     return protected
 
 

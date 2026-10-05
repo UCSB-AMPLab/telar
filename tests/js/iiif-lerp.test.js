@@ -1,295 +1,525 @@
 /**
- * Tests for lerpIiifPosition — IIIF per-frame scroll interpolation
+ * Tests for lerpIiifPosition — the IIIF viewer's per-frame scroll interpolation
  *
- * Tests the pure interpolation maths: same-object lerp, different-object skip,
- * boundary guards (progress < 0.001, missing stepB, NaN coordinates, not-ready
- * viewer). snapIiifToPosition is mocked; state is imported directly.
+ * The real function, not a copy of it. OpenSeadragon is faked at the boundary
+ * it is reached through — `viewport.fitBounds`, the last call in the chain — so
+ * everything between the scroll engine's call and that point is the shipped
+ * code: the guards, the interpolation, the resting-write rule, and the focal
+ * geometry `snapIiifToPosition` puts them through.
  *
- * Strategy: mock the iiif-card.js module entirely, providing a test-local
- * re-implementation of lerpIiifPosition that uses the mock snapIiifToPosition
- * and reads from the real state module. This tests the interpolation maths
- * exactly as the production code computes them.
+ * `snapIiifToPosition` cannot be mocked from outside: `lerpIiifPosition` calls
+ * it inside its own module, where a module mock does not reach. That is what a
+ * previous version of this file worked around by reimplementing the function
+ * under test, and the copy drifted — it returned at rest where the shipped code
+ * writes the authored endpoint, so every case here asserted the opposite of
+ * what runs.
  *
- * @version v1.0.0-beta
+ * @version v1.8.0
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { state, moveSeconds } from '../../assets/js/telar-story/state.js';
+import {
+  lerpIiifPosition, computeFocalTarget, _deriveCardPlacement,
+  animateIiifToPosition, snapIiifToPosition, stopCameraMove,
+} from '../../assets/js/telar-story/iiif-card.js';
+import { placementTravel } from '../../assets/js/telar-story/camera-travel.js';
+import { setMoveSeconds } from '../../assets/js/telar-story/card-height.js';
+import { makePlate, FAKE_CONTAINER, FAKE_IMAGE } from './iiif-plate-helpers.js';
 
-// ── Hoisted mocks ─────────────────────────────────────────────────────────────
+let fitBounds;
 
-const mocks = vi.hoisted(() => {
-  const mockSnapIiifToPosition = vi.fn();
-
-  return {
-    mockSnapIiifToPosition,
-  };
-});
-
-// ── Imports (after hoisted, before vi.mock) ───────────────────────────────────
-
-// Import state before mocking so we can control viewerCards
-import { state } from '../../assets/js/telar-story/state.js';
-
-// ── lerpIiifPosition under test ────────────────────────────────────────────────
-//
-// Rather than loading the real iiif-card.js (which requires a full DOM/OSD
-// environment), we test the interpolation logic directly here. The function
-// under test is a faithful copy of the production lerpIiifPosition, using our
-// mock snapIiifToPosition and the real state object.
-//
-// This tests the maths and guard conditions precisely.
-
-function lerpIiifPositionUnderTest(stepIndex, progress, stepsData) {
-  if (progress < 0.001) return;
-
-  const stepA = stepsData[stepIndex];
-  const stepB = stepsData[stepIndex + 1];
-  if (!stepA || !stepB) return;
-
-  const objectIdA = stepA.object || stepA.objectId || '';
-  const objectIdB = stepB.object || stepB.objectId || '';
-  if (objectIdA !== objectIdB) return;
-
-  const xA = parseFloat(stepA.x), yA = parseFloat(stepA.y), zA = parseFloat(stepA.zoom);
-  const xB = parseFloat(stepB.x), yB = parseFloat(stepB.y), zB = parseFloat(stepB.zoom);
-
-  if (isNaN(xA) || isNaN(yA) || isNaN(zA)) return;
-  if (isNaN(xB) || isNaN(yB) || isNaN(zB)) return;
-
-  const x    = xA + (xB - xA) * progress;
-  const y    = yA + (yB - yA) * progress;
-  const zoom = zA + (zB - zA) * progress;
-
-  // Find the active viewer card for this scene (not by objectId — repeated objects have
-  // multiple scenes and objectId lookup would find the wrong one on backward nav).
-  const sceneIndex = state.stepToScene[stepIndex];
-  if (sceneIndex === undefined || sceneIndex < 0) return;
-  const viewerCard = state.viewerCards.find(vc => vc.sceneIndex === sceneIndex);
-  if (!viewerCard || !viewerCard.isReady) return;
-
-  mocks.mockSnapIiifToPosition(viewerCard, x, y, zoom);
+/** The centre of the rectangle the viewer was last asked to frame, in image px. */
+function framedCentre() {
+  const rect = fitBounds.mock.calls.at(-1)[0];
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function makeStep(objectId, x, y, zoom) {
   return { object: objectId, x: String(x), y: String(y), zoom: String(zoom) };
 }
 
-function makeViewerCard(objectId, sceneIndex = 0, isReady = true) {
-  return { objectId, sceneIndex, isReady, osdViewer: {} };
-}
+beforeEach(() => {
+  fitBounds = vi.fn();
+  vi.stubGlobal('OpenSeadragon', {
+    Rect: class { constructor(x, y, width, height) { Object.assign(this, { x, y, width, height }); } },
+  });
+  state.viewerPlates = {};
+  state.stepToScene = {};
+  state.cardOverlayRect = null;
+  state.activeTitleCardIndex = null;
+});
 
-function resetState(viewerCards = [], stepToScene = {}) {
-  state.viewerCards = viewerCards;
-  state.stepToScene = stepToScene;
-}
+afterEach(() => {
+  vi.unstubAllGlobals();
+  state.viewerPlates = {};
+});
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── The interpolation ────────────────────────────────────────────────────────
 
-describe('lerpIiifPosition', () => {
+describe('lerpIiifPosition — moving between two steps on one object', () => {
+  const stepsData = [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3)];
+
   beforeEach(() => {
-    mocks.mockSnapIiifToPosition.mockClear();
-    resetState([], {});
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
   });
 
-  it('same-object pair at progress=0.3 interpolates x/y/zoom to 30% between A and B', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  it('frames a point between the two steps own', () => {
+    lerpIiifPosition(0, 0.5, stepsData);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    const mid = framedCentre();
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 }); // stepIndex 0 → sceneIndex 0
+    fitBounds.mockClear();
+    state.viewerPlates[0].restingAt = null;
+    lerpIiifPosition(0, 0.999, stepsData);
+    const late = framedCentre();
 
-    lerpIiifPositionUnderTest(0, 0.3, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).toHaveBeenCalledTimes(1);
-    const [vc, x, y, zoom] = mocks.mockSnapIiifToPosition.mock.calls[0];
-    expect(vc).toBe(viewerCard);
-    // stepA.x=0.5, stepB.x=0.8: 0.5 + (0.8-0.5)*0.3 = 0.5 + 0.09 = 0.59
-    expect(x).toBeCloseTo(0.59, 5);
-    // stepA.y=0.5, stepB.y=0.2: 0.5 + (0.2-0.5)*0.3 = 0.5 - 0.09 = 0.41
-    expect(y).toBeCloseTo(0.41, 5);
-    // stepA.zoom=1.0, stepB.zoom=2.0: 1.0 + (2.0-1.0)*0.3 = 1.3
-    expect(zoom).toBeCloseTo(1.3, 5);
+    // Authored x and y both rise from step A to step B, so a frame later in
+    // the travel is further along both. Asserted as an ordering rather than a
+    // number: what the focal geometry does with a position is its own business
+    // and has its own tests.
+    expect(late.x).toBeGreaterThan(mid.x);
+    expect(late.y).toBeGreaterThan(mid.y);
   });
 
-  it('same-object pair at progress=0.0 (< 0.001) returns early — no snap call', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  it('travels further for a later frame than an earlier one', () => {
+    lerpIiifPosition(0, 0.2, stepsData);
+    const early = framedCentre();
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
+    fitBounds.mockClear();
+    state.viewerPlates[0].restingAt = null;
+    lerpIiifPosition(0, 0.8, stepsData);
+    const late = framedCentre();
 
-    lerpIiifPositionUnderTest(0, 0.0, stepsData);
+    expect(late.x).toBeGreaterThan(early.x);
+  });
+});
 
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+// ── Across zoom 1 ───────────────────────────────────────────────────────────
+
+describe('lerpIiifPosition — between an overview and a detail', () => {
+  // An overview places the image centre and a detail its focal point, so the
+  // viewer is moved between the two settled placements. Traced on motion-check
+  // with this pair, placing the interpolated x/y/zoom moved the image 119 px in
+  // the one frame where the zoom crossed 1.
+  const stepsData = [makeStep('fig1', 0.2, 0.3, 0.8), makeStep('fig1', 0.32, 0.38, 3.2)];
+
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
   });
 
-  it('progress=0.0009 (< 0.001 threshold) returns early', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  /** The image's top-left corner on screen and its scale, from the last frame. */
+  function framedImage() {
+    const rect = fitBounds.mock.calls.at(-1)[0];
+    const s = FAKE_CONTAINER.width / rect.width;
+    return { x: -rect.x * s, y: -rect.y * s, s };
+  }
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
+  function frameAt(stepIndex, progress, steps = stepsData) {
+    state.viewerPlates[0].restingAt = null;
+    lerpIiifPosition(stepIndex, progress, steps);
+    return framedImage();
+  }
 
-    lerpIiifPositionUnderTest(0, 0.0009, stepsData);
+  /** The last frame as a placement anchored at the image's top-left corner. */
+  function framedPlacement() {
+    const rect = fitBounds.mock.calls.at(-1)[0];
+    return {
+      s: FAKE_CONTAINER.width / rect.width,
+      anchorImg: { x: rect.x, y: rect.y },
+      anchorPx: { x: 0, y: 0 },
+    };
+  }
 
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+  /** The reader's uncovered region, as the viewer computes it for these steps. */
+  function readerRegion() {
+    const mode = _deriveCardPlacement(null, window.innerWidth, window.innerHeight);
+    return computeFocalTarget(0.2, 0.3, 0.8, FAKE_IMAGE.width, FAKE_IMAGE.height, null, mode).region;
+  }
+
+  // The move runs over its own duration on an ease-out cubic, so the frames a
+  // reader sees are the travel sampled at 60 fps on that curve. At the speed
+  // limit (1.33 s per unit of travel) the mean is 0.75 S/s and the cubic's
+  // peak three times that, 0.0375 S a frame; 0.05 S leaves a third over it,
+  // because log zoom is not the geodesic and is not exactly the eased mean.
+  // Placing the blended x/y/zoom jumped 119 px in one frame here, 0.27 S.
+  // Above the ceiling a frame is S/60 or more, so the pair is one under it.
+  it('advances the camera under 0.05 of its travel in any frame at 60 fps, whichever way', () => {
+    const region = readerRegion();
+    for (const steps of [stepsData, [...stepsData].reverse()]) {
+      const framedAt = (t) => { frameAt(0, t, steps); return framedPlacement(); };
+      const travel = placementTravel(framedAt(0), framedAt(1), region);
+      expect(moveSeconds(travel)).toBeLessThan(3);
+      const frames = Math.ceil(60 * moveSeconds(travel));
+      let prev = framedAt(0);
+      let worst = 0;
+      for (let k = 1; k <= frames; k++) {
+        const cur = framedAt(1 - (1 - k / frames) ** 3);
+        worst = Math.max(worst, placementTravel(prev, cur, region));
+        prev = cur;
+      }
+      expect(worst / travel).toBeLessThan(0.05);
+    }
   });
 
-  it('same-object pair at progress=1.0 interpolates to exactly stepB values', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  // The last thousandth of the scroll either side moves the camera by less
+  // than one 60 fps frame of the move may, so a step is arrived at, not
+  // jumped to.
+  it('arrives at each step on the framing the step settles on', () => {
+    const region = readerRegion();
+    const framedWith = (t, steps) => { frameAt(0, t, steps); return framedPlacement(); };
+    const settledA = framedWith(0);
+    const settledB = framedWith(0, [stepsData[1], stepsData[1]]);
+    const travel = placementTravel(settledA, settledB, region);
+    expect(placementTravel(framedWith(0.001), settledA, region) / travel).toBeLessThan(0.05);
+    expect(placementTravel(framedWith(0.999), settledB, region) / travel).toBeLessThan(0.05);
+  });
+});
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
+// ── Zoom on one side of 1 ───────────────────────────────────────────────────
 
-    lerpIiifPositionUnderTest(0, 1.0, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).toHaveBeenCalledTimes(1);
-    const [, x, y, zoom] = mocks.mockSnapIiifToPosition.mock.calls[0];
-    expect(x).toBeCloseTo(0.8, 5);
-    expect(y).toBeCloseTo(0.2, 5);
-    expect(zoom).toBeCloseTo(2.0, 5);
+describe('lerpIiifPosition — zooming between two details', () => {
+  // Zoom changes by equal ratios over equal parts of the move, so a zoom from
+  // 2 to 8 is at 4 half way, not at 5: a linear zoom does most of a zoom-in in
+  // the first part of the move.
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
   });
 
-  it('different-object pair returns early — no snap call', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig2', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  const width = () => fitBounds.mock.calls.at(-1)[0].width;
 
-    // Different objects → different scenes; but the early-return on objectId mismatch fires first
-    const viewerCardA = makeViewerCard('fig1', 0);
-    const viewerCardB = makeViewerCard('fig2', 1);
-    resetState([viewerCardA, viewerCardB], { 0: 0, 1: 1 });
+  it('frames zoom 4 half way from zoom 2 to zoom 8', () => {
+    lerpIiifPosition(0, 0.5, [makeStep('fig1', 0.4, 0.4, 2), makeStep('fig1', 0.6, 0.6, 8)]);
+    const halfWay = width();
+    state.viewerPlates[0].restingAt = null;
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.5, 0.5, 4)]);
+    expect(halfWay).toBeCloseTo(width(), 6);
+  });
+});
 
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
+// ── At rest ──────────────────────────────────────────────────────────────────
 
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+describe('lerpIiifPosition — at rest on a step', () => {
+  const stepsData = [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3)];
+
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
   });
 
-  it('missing stepB (last step) returns early — no snap call', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepsData = [stepA]; // no stepB at index 1
+  it('states the step own authored framing rather than one just short of it', () => {
+    // The interpolation stops a fraction of a step short — the scroll settles
+    // and the last frame written is the one before the boundary — so a step
+    // reached this way would otherwise keep the framing of a position just
+    // outside it. At rest the author's own position is stated exactly.
+    lerpIiifPosition(0, 0, stepsData);
+    const atRest = framedCentre();
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
+    fitBounds.mockClear();
+    state.viewerPlates[0].restingAt = null;
+    lerpIiifPosition(0, 0.05, stepsData);
+    const justPast = framedCentre();
 
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+    expect(atRest.x).toBeLessThan(justPast.x);
   });
 
-  it('invalid coordinates in stepA (NaN x) returns early — no snap call', () => {
-    const stepA = { object: 'fig1', x: 'not-a-number', y: '0.5', zoom: '1.0' };
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  it('records what it settled on', () => {
+    lerpIiifPosition(0, 0, stepsData);
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
-
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+    expect(state.viewerPlates[0].restingAt)
+      .toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
   });
 
-  it('invalid coordinates in stepB (NaN y) returns early — no snap call', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = { object: 'fig1', x: '0.8', y: 'bad', zoom: '2.0' };
-    const stepsData = [stepA, stepB];
+  it('writes once per arrival, however long the reader stays', () => {
+    // A snap is a forced layout in OSD, and at rest the same framing is true on
+    // every frame.
+    lerpIiifPosition(0, 0, stepsData);
+    lerpIiifPosition(0, 0, stepsData);
+    lerpIiifPosition(0, 0, stepsData);
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
-
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+    expect(fitBounds).toHaveBeenCalledTimes(1);
   });
 
-  it('viewerCard not found in pool returns early — no snap call', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
-
-    // Empty pool — no viewer card for scene 0
-    resetState([], { 0: 0 });
-
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+  // A scene's last step is a resting place like any other. Without the write a
+  // contents jump to it springs from the framing the reader left, and an
+  // immediate move to it under reduced motion leaves that framing standing.
+  it('states the authored framing on the last step of the story', () => {
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(state.viewerPlates[0].restingAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
   });
 
-  it('viewerCard found but isReady=false returns early — no snap call', () => {
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
-
-    const viewerCard = makeViewerCard('fig1', 0, false); // sceneIndex=0, isReady=false
-    resetState([viewerCard], { 0: 0 });
-
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+  it('states the authored framing on the last step before another object', () => {
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig2', 0.8, 0.8, 3)]);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(state.viewerPlates[0].restingAt).toEqual({ step: 0, x: 0.2, y: 0.2, zoom: 3 });
   });
 
-  it('supports objectId field as alternative to object field', () => {
-    // Some steps may use objectId instead of object
-    const stepA = { objectId: 'fig1', x: '0.5', y: '0.5', zoom: '1.0' };
-    const stepB = { objectId: 'fig1', x: '0.8', y: '0.2', zoom: '2.0' };
-    const stepsData = [stepA, stepB];
+  // A title card still active at the arrival refuses the write. The step is
+  // not settled until a write has reached the viewer, so the next frame at
+  // rest makes it.
+  it('writes on the next frame when the first write at rest is refused', () => {
+    state.activeTitleCardIndex = 0;
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).not.toHaveBeenCalled();
+    expect(state.viewerPlates[0].restingAt).toBeNull();
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], { 0: 0 });
-
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
-
-    expect(mocks.mockSnapIiifToPosition).toHaveBeenCalledTimes(1);
-    const [vc, x, y, zoom] = mocks.mockSnapIiifToPosition.mock.calls[0];
-    expect(vc).toBe(viewerCard);
-    expect(x).toBeCloseTo(0.65, 5);
-    expect(y).toBeCloseTo(0.35, 5);
-    expect(zoom).toBeCloseTo(1.5, 5);
+    state.activeTitleCardIndex = null;
+    lerpIiifPosition(0, 0, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
   });
 
-  it('repeated object (A→B→A): finds the correct scene card by sceneIndex, not objectId', () => {
-    // Story: fig1 (scene 0, step 0-1), fig2 (scene 1, step 2-3), fig1 again (scene 2, step 4-5)
-    // When interpolating between steps 4 and 5 (scene 2), must find scene-2 card, not scene-0 card.
-    const stepA = makeStep('fig1', 0.1, 0.1, 1.0); // step 4
-    const stepB = makeStep('fig1', 0.9, 0.9, 2.0); // step 5
+  it('writes again when the reader comes back to the step', () => {
+    lerpIiifPosition(0, 0, stepsData);
+    lerpIiifPosition(0, 0.5, stepsData);   // moved off: the record is cleared
+    fitBounds.mockClear();
+    lerpIiifPosition(0, 0, stepsData);     // and back
+
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── The guards ───────────────────────────────────────────────────────────────
+
+describe('lerpIiifPosition — what it declines to move', () => {
+  const pair = [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3)];
+
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
+  });
+
+  it('freezes across an object change', () => {
+    // The plate for the next object is the thing that moves, not this viewer.
+    lerpIiifPosition(0, 0.5, [makeStep('fig1', 0.2, 0.2, 3), makeStep('fig2', 0.8, 0.8, 3)]);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('moves nothing past the last step, which has nothing to travel towards', () => {
+    lerpIiifPosition(0, 0.5, [makeStep('fig1', 0.2, 0.2, 3)]);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  // The viewer staying put is defended twice: here, and again in
+  // computeFocalTarget, which returns null for anything non-finite. So the
+  // call count alone cannot say which guard held. `restingAt` can — it is
+  // written before the framing is handed on, so only the guard here keeps it
+  // null — and both are asserted, because both are the behaviour owed.
+  it('leaves the viewer alone when the step it leaves authored no position', () => {
+    lerpIiifPosition(0, 0, [
+      { object: 'fig1', x: '', y: '0.2', zoom: '3' },
+      makeStep('fig1', 0.8, 0.8, 3),
+    ]);
+    expect(fitBounds).not.toHaveBeenCalled();
+    expect(state.viewerPlates[0].restingAt).toBeNull();
+  });
+
+  it('leaves the viewer alone when the step it travels to authored none', () => {
+    lerpIiifPosition(0, 0, [
+      makeStep('fig1', 0.2, 0.2, 3),
+      { object: 'fig1', x: '0.8', y: 'not a number', zoom: '3' },
+    ]);
+    expect(fitBounds).not.toHaveBeenCalled();
+    expect(state.viewerPlates[0].restingAt).toBeNull();
+  });
+
+  it('waits for a viewer that is not ready yet', () => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds, isReady: false }) };
+    lerpIiifPosition(0, 0.5, pair);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('does nothing for a scene with no plate', () => {
+    state.viewerPlates = {};
+    lerpIiifPosition(0, 0.5, pair);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('does nothing before the scene maps are built', () => {
+    state.stepToScene = {};
+    lerpIiifPosition(0, 0.5, pair);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+});
+
+// ── Which plate it moves ─────────────────────────────────────────────────────
+
+describe('lerpIiifPosition — a story that returns to an object', () => {
+  it('moves the viewer for this scene, not the first one holding the object', () => {
+    // fig1 at scenes 0 and 2, with fig2 between. Steps 4 and 5 are the second
+    // run on fig1: an objectId lookup would find the scene-0 plate.
     const stepsData = [
-      makeStep('fig1', 0, 0, 1), makeStep('fig1', 0, 0, 1), // steps 0-1: scene 0
-      makeStep('fig2', 0, 0, 1), makeStep('fig2', 0, 0, 1), // steps 2-3: scene 1
-      stepA, stepB,                                           // steps 4-5: scene 2 (fig1 again)
+      makeStep('fig1', 0, 0, 1), makeStep('fig1', 0, 0, 1),
+      makeStep('fig2', 0, 0, 1), makeStep('fig2', 0, 0, 1),
+      makeStep('fig1', 0.2, 0.2, 3), makeStep('fig1', 0.8, 0.8, 3),
     ];
+    const first = makePlate('fig1', 0, { fitBounds });
+    const second = makePlate('fig1', 2, { fitBounds });
+    const firstFitBounds = vi.fn();
+    first.osdViewer.viewport.fitBounds = firstFitBounds;
 
-    const vcScene0 = makeViewerCard('fig1', 0); // scene 0 card — should NOT be used
-    const vcScene2 = makeViewerCard('fig1', 2); // scene 2 card — should be used
-    // stepToScene: step 4 → scene 2, step 5 → scene 2
-    resetState([vcScene0, vcScene2], { 0: 0, 1: 0, 2: 1, 3: 1, 4: 2, 5: 2 });
+    state.viewerPlates = { 0: first, 1: makePlate('fig2', 1, { fitBounds }), 2: second };
+    state.stepToScene = { 0: 0, 1: 0, 2: 1, 3: 1, 4: 2, 5: 2 };
 
-    lerpIiifPositionUnderTest(4, 0.5, stepsData);
+    lerpIiifPosition(4, 0.5, stepsData);
 
-    expect(mocks.mockSnapIiifToPosition).toHaveBeenCalledTimes(1);
-    const [vc] = mocks.mockSnapIiifToPosition.mock.calls[0];
-    expect(vc).toBe(vcScene2); // must be scene-2 card, not scene-0
-    expect(vc).not.toBe(vcScene0);
+    expect(fitBounds).toHaveBeenCalledTimes(1);      // the scene-2 plate
+    expect(firstFitBounds).not.toHaveBeenCalled();   // not the scene-0 one
+  });
+});
+
+// ── A move with no scroll to pace it ─────────────────────────────────────────
+//
+// On a phone, and on a contents jump's second activation, nothing scrolls, so
+// the camera is moved by an animation of its own: the same interpolation and
+// easing as the scroll's, over the duration of the move the cards are making.
+// OpenSeadragon's springs are left alone, because the reader's own gestures
+// on the image run on them.
+
+describe('animateIiifToPosition — the camera moved without a scroll', () => {
+  let frames;
+  let plate;
+
+  /** Run the frame the animation asked for, at `ms`. */
+  function runFrame(ms) {
+    const queued = frames;
+    frames = [];
+    queued.forEach((cb) => cb(ms));
+  }
+
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal('requestAnimationFrame', (cb) => { frames.push(cb); return frames.length; });
+    plate = makePlate('fig1', 0, { fitBounds });
+    plate.osdViewer.animationTime = 0.4;
+    plate.osdViewer.springStiffness = 6.5;
+    plate.osdViewer.gestureSettingsMouse = {};
+    plate.osdViewer.gestureSettingsTouch = {};
+    plate.osdViewer.viewport.getBounds = () => ({ x: 0, y: 0, width: 1200, height: 960 });
+    plate.osdViewer.viewport.viewportToImageRectangle = (rect) => rect;
+    setMoveSeconds(2);
   });
 
-  it('no stepToScene entry for stepIndex returns early — no snap call', () => {
-    // If state.stepToScene is missing the entry (e.g. not initialised yet), guard fires.
-    const stepA = makeStep('fig1', 0.5, 0.5, 1.0);
-    const stepB = makeStep('fig1', 0.8, 0.2, 2.0);
-    const stepsData = [stepA, stepB];
+  afterEach(() => setMoveSeconds(1.2));
 
-    const viewerCard = makeViewerCard('fig1', 0);
-    resetState([viewerCard], {}); // empty stepToScene — no entry for index 0
+  /** The rectangle a snap to this framing asks for. */
+  function snapRect(x, y, zoom) {
+    const other = makePlate('fig1', 0, { fitBounds: vi.fn() });
+    snapIiifToPosition(other, x, y, zoom);
+    return other.osdViewer.viewport.fitBounds.mock.calls[0][0];
+  }
 
-    lerpIiifPositionUnderTest(0, 0.5, stepsData);
+  it('writes every frame at once and lands on the framing at the duration of the move', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(1000);
+    runFrame(1500);
+    runFrame(2999);
+    expect(frames.length).toBe(1);
+    runFrame(3000);
 
-    expect(mocks.mockSnapIiifToPosition).not.toHaveBeenCalled();
+    expect(fitBounds.mock.calls.length).toBe(4);
+    expect(fitBounds.mock.calls.every(([, immediate]) => immediate === true)).toBe(true);
+    const last = fitBounds.mock.calls.at(-1)[0];
+    const want = snapRect(0.3, 0.4, 3);
+    for (const k of ['x', 'y', 'width', 'height']) expect(last[k]).toBeCloseTo(want[k], 6);
+    expect(frames.length).toBe(0);
+  });
+
+  it('leaves the viewer\'s spring settings as they are', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    runFrame(2000);
+    expect(plate.osdViewer.animationTime).toBe(0.4);
+    expect(plate.osdViewer.springStiffness).toBe(6.5);
+  });
+
+  it('stops a move when a newer one starts', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    const older = frames;
+    frames = [];
+    animateIiifToPosition(plate, 0.6, 0.6, 2);
+    const newer = frames;
+    fitBounds.mockClear();
+    older.forEach((cb) => cb(500));
+    expect(fitBounds).not.toHaveBeenCalled();
+    frames = newer;
+    runFrame(500);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when the reader takes the image, and when the scroll writes it', () => {
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    stopCameraMove(plate);
+    fitBounds.mockClear();
+    runFrame(500);
+    expect(fitBounds).not.toHaveBeenCalled();
+
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    runFrame(0);
+    snapIiifToPosition(plate, 0.5, 0.5, 1);
+    fitBounds.mockClear();
+    runFrame(500);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+});
+
+// ── Reduced motion ───────────────────────────────────────────────────────────
+//
+// Under reduced motion the cards do not slide (their transitions are none) and
+// Lenis makes every programmatic scroll immediate, so the camera follows: it
+// is written at once, wherever it is written from.
+
+describe('animateIiifToPosition — under reduced motion', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query === '(prefers-reduced-motion: reduce)', media: query,
+      addEventListener() {}, removeEventListener() {},
+    }));
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('writes the framing at once, with no frames to follow', () => {
+    const plate = makePlate('fig1', 0, { fitBounds });
+    plate.osdViewer.gestureSettingsMouse = {};
+    plate.osdViewer.gestureSettingsTouch = {};
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(fitBounds.mock.calls[0][1]).toBe(true);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+  });
+});
+
+// ── A viewer the plate lets go of ────────────────────────────────────────────
+
+describe('animateIiifToPosition — across an unload', () => {
+  it('writes nothing to the viewer that replaces the one it was moving', () => {
+    const frames = [];
+    vi.stubGlobal('requestAnimationFrame', (cb) => { frames.push(cb); return frames.length; });
+    const plate = makePlate('fig1', 0, { fitBounds });
+    plate.osdViewer.gestureSettingsMouse = {};
+    plate.osdViewer.gestureSettingsTouch = {};
+    plate.osdViewer.viewport.getBounds = () => ({ x: 0, y: 0, width: 1200, height: 960 });
+    plate.osdViewer.viewport.viewportToImageRectangle = (rect) => rect;
+    plate.container.innerHTML = '';
+
+    animateIiifToPosition(plate, 0.3, 0.4, 3);
+    plate.unload();
+
+    // The same plate is loaded again before the old move's frame runs.
+    const replacement = vi.fn();
+    const again = makePlate('fig1', 0, { fitBounds: replacement });
+    Object.assign(plate, { isReady: true, osdWrapper: again.osdWrapper, osdViewer: again.osdViewer });
+    plate.osdViewer.viewport.getBounds = () => ({ x: 0, y: 0, width: 1200, height: 960 });
+    plate.osdViewer.viewport.viewportToImageRectangle = (rect) => rect;
+
+    frames.forEach((cb) => cb(0));
+    expect(replacement).not.toHaveBeenCalled();
   });
 });

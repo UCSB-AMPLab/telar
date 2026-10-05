@@ -34,11 +34,12 @@ The version stamp (telar.version -> 1.6.1) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed step can
 never leave the site stamped as a version it is not running.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import Dict, List
 
+from .messages import get_message
 from .base import BaseMigration, ChangeRecord, ChangeStatus
 
 
@@ -47,6 +48,7 @@ class Migration160to161(BaseMigration):
 
     from_version = "1.6.0"
     to_version = "1.6.1"
+    release_date = "2026-07-11"  # tag v1.6.1
     description = "Register the missing v1.5.4 -> v1.6.0 migration and repair the upgrade chain; tooling-only, no site changes"
 
     def check_applicable(self) -> bool:
@@ -60,11 +62,8 @@ class Migration160to161(BaseMigration):
         # visible in UPGRADE_SUMMARY.md without implying anything to install.
         return [
             ChangeRecord(
-                description=(
-                    "Upgrade-chain wiring fix (internal): the v1.5.4 -> v1.6.0 migration "
-                    "is now registered in scripts/upgrade.py, so upgrades starting below "
-                    "v1.6.0 no longer stop early at 1.5.4. No files in this site changed."
-                ),
+                description=get_message(
+                    self._detect_language(), 'change_chain_wiring_internal'),
                 status=ChangeStatus.APPLIED,
                 severity="soft",
             ),
@@ -82,6 +81,8 @@ class Migration160to161(BaseMigration):
         return [
             {
                 'description': '''**No action needed.** v1.6.1 only fixes the upgrade tooling itself (a missing registration that made upgrades stop at v1.5.4 and report success, instead of continuing to v1.6.0); it does not change anything in your site.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -90,6 +91,8 @@ class Migration160to161(BaseMigration):
         return [
             {
                 'description': '''**No se requiere ninguna acción.** v1.6.1 solo corrige la propia herramienta de actualización (un registro que faltaba y hacía que las actualizaciones se detuvieran en v1.5.4 y reportaran éxito, en lugar de continuar hasta v1.6.0); no cambia nada en tu sitio.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

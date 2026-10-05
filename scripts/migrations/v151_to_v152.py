@@ -35,7 +35,7 @@ The version stamp (telar.version -> 1.5.2) is not written here. upgrade.py
 applies it once after every migration step succeeds, so a failed fetch can
 never leave the site stamped as a version it is not running.
 
-Version: v1.5.2
+Version: v1.8.0
 """
 
 from typing import Dict, List
@@ -62,6 +62,7 @@ class Migration151to152(BaseMigration):
 
     from_version = "1.5.1"
     to_version = "1.5.2"
+    release_date = "2026-06-13"  # tag v1.5.2
     description = "Validation banner message fixes and homepage warning localisation; display-only"
 
     # Pin framework-file fetches to the v1.5.2 release tag, not the moving
@@ -101,6 +102,8 @@ class Migration151to152(BaseMigration):
 
 - **If you use GitHub Pages:** your site picks up the fix automatically the next time it builds.
 - **If you work with your site locally:** just rebuild your site to use the updated warning messages.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -112,6 +115,8 @@ class Migration151to152(BaseMigration):
 
 - **Si usas GitHub Pages:** tu sitio aplica la corrección automáticamente la próxima vez que se construye.
 - **Si trabajas con tu sitio localmente:** solo vuelve a construir el sitio para usar los mensajes de advertencia actualizados.''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

@@ -16,7 +16,7 @@ Fluid Multimedia Storytelling release:
 ~51 framework files fetched from GitHub, 2 language files fetched,
 1 config value updated (max_viewer_cards 10 -> 8), version bumped.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from typing import List, Dict
@@ -29,6 +29,7 @@ class Migration094to100(BaseMigration):
 
     from_version = "0.9.4-beta"
     to_version = "1.0.0-beta"
+    release_date = "2026-03-25"  # tag v1.0.0-beta
     _TARGET_TAG = "v1.0.0-beta"  # pin framework fetches to the release tag
     description = "Card-stack architecture, video/audio support, Lucide icons, scroll engine"
 
@@ -54,10 +55,9 @@ class Migration094to100(BaseMigration):
 
         # Phase 4: Update version
         print("  Phase 4: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.0.0-beta", today):
-            changes.append(f"Updated _config.yml: version 1.0.0-beta ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.0.0-beta", stamped):
+            changes.append(f"Updated _config.yml: version 1.0.0-beta ({stamped})")
 
         return changes
 
@@ -137,13 +137,8 @@ class Migration094to100(BaseMigration):
             'tests/unit/test_process_audio.py': 'Audio pipeline tests',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} - {description}", branch=self._TARGET_TAG))
 
         return changes
 
@@ -156,13 +151,8 @@ class Migration094to100(BaseMigration):
             '_data/languages/es.yml': 'Spanish strings (clip_picker keys added)',
         }
 
-        for file_path, description in language_files.items():
-            content = self._fetch_from_github(file_path, branch=self._TARGET_TAG)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} - {description}")
-            else:
-                changes.append(f"Warning: Could not fetch {file_path}")
+        changes.extend(self._install_files_one_by_one(
+            language_files, "Updated {path} - {description}", branch=self._TARGET_TAG))
 
         return changes
 
@@ -212,6 +202,8 @@ class Migration094to100(BaseMigration):
                 'description': '''**If you use GitHub Pages:**
 
 Replace your `.github/workflows/build.yml` with the latest version from the Telar repository. The new workflow adds an audio processing step that runs conditionally when audio files are detected. Go to https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, click "Raw", copy the entire file, and replace the contents of `.github/workflows/build.yml` in your repository.''',
+                'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -233,6 +225,8 @@ sudo apt install ffmpeg audiowaveform  # Ubuntu
 ```
 
 Sites without audio objects do not need these tools.''',
+                'audience': 'all',
+                'kind': 'action',
             },
         ]
 
@@ -243,6 +237,8 @@ Sites without audio objects do not need these tools.''',
                 'description': '''**Si usas GitHub Pages:**
 
 Reemplaza tu `.github/workflows/build.yml` con la version mas reciente del repositorio de Telar. El nuevo flujo agrega un paso de procesamiento de audio que se ejecuta condicionalmente cuando se detectan archivos de audio. Ve a https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml, haz clic en "Raw", copia todo el contenido del archivo y reemplaza el contenido de `.github/workflows/build.yml` en tu repositorio.''',
+                'audience': 'local',
+                'kind': 'action',
                 'doc_url': 'https://github.com/UCSB-AMPLab/telar/blob/main/.github/workflows/build.yml'
             },
             {
@@ -264,5 +260,7 @@ sudo apt install ffmpeg audiowaveform  # Ubuntu
 ```
 
 Los sitios sin objetos de audio no necesitan estas herramientas.''',
+                'audience': 'all',
+                'kind': 'action',
             },
         ]

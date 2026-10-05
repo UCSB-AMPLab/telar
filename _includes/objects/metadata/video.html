@@ -1,0 +1,40 @@
+{%- comment -%}
+Where a video is hosted, and its embed URL. A source_url is author-supplied, so
+only http(s) becomes a link -- javascript: and data: are shown as text.
+{%- endcomment -%}
+        {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
+          {% assign provider_name = 'YouTube' %}
+        {% elsif page.source_url contains 'vimeo.com' %}
+          {% assign provider_name = 'Vimeo' %}
+        {% elsif page.source_url contains 'drive.google.com' %}
+          {% assign provider_name = 'Google Drive' %}
+        {% else %}
+          {% assign provider_name = 'Video' %}
+        {% endif %}
+
+        <dl class="row mt-3 border-top pt-3">
+          <dt class="col-sm-4">{{ lang.object.metadata.provider | default: "Provider" }}</dt>
+          <dd class="col-sm-8">{{ provider_name }}</dd>
+
+          <dt class="col-sm-4">{{ lang.object.metadata.source | default: "Source" }}</dt>
+          {%- comment -%} Only render a clickable link for http(s); a javascript:/data: source_url
+          (which can still pass the provider sniff above) degrades to plain text. {%- endcomment -%}
+          {% assign _src_scheme = page.source_url | slice: 0, 5 %}
+          {% if _src_scheme == 'https' or _src_scheme == 'http:' %}
+          <dd class="col-sm-8"><a href="{{ page.source_url }}" target="_blank" rel="noopener">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</a></dd>
+          {% else %}
+          <dd class="col-sm-8">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</dd>
+          {% endif %}
+
+          {% unless provider_name == 'Google Drive' %}
+          <dt class="col-sm-4">{{ lang.object.metadata.embed_url | default: "Embed URL" }}</dt>
+          <dd class="col-sm-8">
+            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
+              <code id="embed-url-display" style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"></code>
+              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.copy_embed_url_tooltip | default: "Copy embed URL" }}">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+              </button>
+            </div>
+          </dd>
+          {% endunless %}
+        </dl>

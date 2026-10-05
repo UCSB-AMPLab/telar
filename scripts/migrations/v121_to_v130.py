@@ -40,7 +40,7 @@ let them keep showing whatever they wrote. EN sites get acerca.md
 in fresh template clones but not via this migration (it would just
 sit unused).
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 import hashlib
@@ -252,6 +252,7 @@ class Migration121to130(BaseMigration):
 
     from_version = "1.2.1"
     to_version = "1.3.0"
+    release_date = "2026-05-10"  # tag v1.3.0
     _TARGET_TAG = "v1.3.0"  # pin framework fetches to the release tag
     description = "i18n hygiene: wire existing lang keys, sister-file localization, multimedia welcome update"
 
@@ -277,7 +278,7 @@ class Migration121to130(BaseMigration):
         changes.extend(self._replace_body_if_default(
             'pages/objects.md', OBJECTS_MD_V121_BODY, OBJECTS_MD_NEW_BODY, 'objects intro'
         ))
-        # acerca.md create runs BEFORE about.md replacement so the gating check
+        # acerca.md is created before about.md is replaced, so the check
         # sees the user's actual about.md (not the freshly-written v1.3.0 body)
         changes.extend(self._create_acerca_for_es_with_default_about())
         changes.extend(self._replace_body_if_default(
@@ -288,10 +289,9 @@ class Migration121to130(BaseMigration):
 
         # Phase 3: Version bump
         print("  Phase 3: Updating version...")
-        from datetime import date
-        today = date.today().strftime("%Y-%m-%d")
-        if self._update_config_version("1.3.0", today):
-            changes.append(f"Updated _config.yml: version 1.3.0 ({today})")
+        stamped = self.release_date
+        if self._update_config_version("1.3.0", stamped):
+            changes.append(f"Updated _config.yml: version 1.3.0 ({stamped})")
 
         return changes
 
@@ -315,13 +315,8 @@ class Migration121to130(BaseMigration):
             'CHANGELOG.md': 'CHANGELOG (v1.3.0 release notes)',
         }
 
-        for file_path, description in framework_files.items():
-            content = self._fetch_from_github(file_path)
-            if content is not None:
-                self._write_file(file_path, content)
-                changes.append(f"Updated {file_path} — {description}")
-            else:
-                changes.append(f"⚠️  Could not fetch {file_path} from GitHub (network or release timing). Update it manually.")
+        changes.extend(self._install_files_one_by_one(
+            framework_files, "Updated {path} — {description}"))
 
         return changes
 
@@ -496,6 +491,8 @@ This release wires up Telar's existing language packs in places that previously 
 The migration changed your user-content files **only when a SHA-256 hash check confirmed the file was byte-for-byte identical to the v1.2.1 default**. If you customised any of those pages (welcome paragraph, about description, glossary or objects intros) — even with whitespace edits — the hash differs and your file is preserved untouched.
 
 A new sister-file convention now localizes the about page: a file named `acerca.md` next to `about.md` in `telar-content/texts/pages/`, carrying frontmatter `localized_for: about.md` and `language: es`, is picked up automatically when `telar_language: es`. For sites with `telar_language: es` whose `about.md` is unchanged from the v1.2.1 default, this migration creates `acerca.md` with the default Spanish content automatically. For sites that customised their `about.md`, the migration skips the create — otherwise the new sister file would shadow your customisation at build time. To add another language, create a sister with `language: <code>` (e.g. `language: fr`).''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/docs'
             },
         ]
@@ -510,6 +507,8 @@ Esta versión cablea los paquetes de idioma de Telar en lugares que antes tenía
 La migración modificó tus archivos de contenido **solo cuando un hash SHA-256 confirmó que el archivo era byte-por-byte idéntico al default de v1.2.1**. Si personalizaste cualquiera de esas páginas (bienvenida, descripción de "Acerca de", introducciones de glosario u objetos) — incluso con cambios de espacios en blanco — el hash difiere y tu archivo se preserva sin tocarlo.
 
 Una nueva convención de "archivo hermano" localiza la página de "Acerca de": un archivo `acerca.md` junto a `about.md` en `telar-content/texts/pages/`, con `localized_for: about.md` y `language: es` en el frontmatter, se usa automáticamente cuando `telar_language: es`. Para sitios con `telar_language: es` cuyo `about.md` no se haya modificado desde el default de v1.2.1, esta migración crea `acerca.md` automáticamente con el contenido español por defecto. Para sitios que personalizaron su `about.md`, la migración no lo crea — si lo hiciera, el nuevo archivo hermano taparía tu personalización al construir el sitio. Para agregar otro idioma, crea un hermano con `language: <código>` (por ejemplo `language: fr`).''',
+                'audience': 'all',
+                'kind': 'note',
                 'doc_url': 'https://telar.org/guia'
             },
         ]

@@ -46,9 +46,23 @@ class TestJekyllSlug:
         ("story-1", "story-1"),
         ("café-años", "café-años"),
         ("___", ""),
+        # Ruby's downcase has no contextual rule; Python's str.lower does.
+        # A whole-string lower-casing sends a word-final sigma to ς and
+        # looks for a page Jekyll never rendered.
+        ("ΟΣ", "οσ"),
+        ("ΟΔΟΣ", "οδοσ"),
     ])
     def test_matches_jekyll_default_mode(self, raw, expected):
         assert jekyll_slug(raw) == expected
+
+    def test_a_final_sigma_is_not_contextual(self):
+        """The guard on the per-character rule, not on the table above.
+
+        `str.lower` on the whole string is the shape that fails, and it
+        fails only for this one letter, so a case list alone would not say
+        why the loop lower-cases a character at a time.
+        """
+        assert jekyll_slug("ΟΣ") != "ΟΣ".lower()
 
 
 class TestStoriesPermalink:

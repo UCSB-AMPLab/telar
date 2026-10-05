@@ -31,6 +31,9 @@ import { resolve } from 'node:path';
 import { vi } from 'vitest';
 
 import { createObjectsFilter } from '../../assets/js/objects-filter/main.js';
+import { el, flush, stubFetch } from './test-helpers.js';
+
+export { el, stubFetch };
 
 // The page loads assets/js/lunr.min.js in its own <script> immediately before
 // the filter, so the filter reads a bare global. Evaluate the vendored file to
@@ -139,7 +142,7 @@ function section(filterType, label) {
 /** The browse-and-search markup of _layouts/objects-index.html, Liquid resolved. */
 export function browseMarkup(records) {
   return `
-<div class="objects-layout">
+<div class="objects-layout" data-no-options="No options available">
   <aside class="objects-sidebar">
     <div class="objects-search-wrapper">
       <input type="text" class="objects-search-input" id="objects-search-input"
@@ -238,29 +241,6 @@ export function setBaseUrlMeta(content) {
   document.head.appendChild(meta);
 }
 
-/** A fetch stub answering from a URL -> body map; anything else rejects. */
-export function stubFetch(responses) {
-  const calls = [];
-  vi.stubGlobal('fetch', vi.fn((url) => {
-    calls.push(url);
-    if (!(url in responses)) return Promise.reject(new Error(`unscripted fetch: ${url}`));
-    const body = responses[url];
-    if (body instanceof Error) return Promise.reject(body);
-    if (body && body.notOk) {
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(body.body) });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
-  }));
-  return calls;
-}
-
-async function flush() {
-  for (let round = 0; round < 3; round++) {
-    for (let i = 0; i < 20; i++) await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}
-
 /** Build a filter over the page as the bundle's tail does, and let it settle. */
 export async function runScript() {
   const filter = createObjectsFilter({
@@ -273,7 +253,6 @@ export async function runScript() {
   await flush();
 }
 
-export const el = (id) => document.getElementById(id);
 export const cards = () => [...document.querySelectorAll('.collection-item')];
 export const order = () => cards().map((card) => card.dataset.objectId);
 export const visible = () => cards().filter((c) => c.style.display !== 'none')

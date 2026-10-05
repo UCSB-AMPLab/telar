@@ -24,6 +24,9 @@
 import { vi } from 'vitest';
 
 import { createSharePanel } from '../../assets/js/share-panel/main.js';
+import { el } from './test-helpers.js';
+
+export { el };
 
 /** The origin the test file is served at; see its @vitest-environment-options. */
 export const ORIGIN = 'https://example.org';
@@ -110,7 +113,7 @@ function siteTab() {
 
 /** The story branch of _includes/share-panel.html, Liquid resolved. */
 export function storyPanelMarkup() {
-  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true">
+  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true" data-copy-manually="Please manually copy the text">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header share-panel-header">
@@ -179,7 +182,7 @@ export function storyPanelMarkup() {
 
 /** The branch every non-story page renders, Liquid resolved. */
 export function otherPanelMarkup() {
-  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true">
+  return `<div class="modal fade" id="panel-share" tabindex="-1" aria-labelledby="panel-share-title" aria-hidden="true" data-copy-manually="Please manually copy the text">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header share-panel-header">
@@ -312,7 +315,6 @@ export function openPanel() {
   el('panel-share').dispatchEvent(new Event('show.bs.modal'));
 }
 
-export const el = (id) => document.getElementById(id);
 export const value = (id) => el(id).value;
 export const hasClass = (id, className) => el(id).classList.contains(className);
 export const icon = (id) => el(id).querySelector('.icon');

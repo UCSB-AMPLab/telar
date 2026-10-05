@@ -1,0 +1,27 @@
+<!--
+  KaTeX Loader Include
+  Hands assets/js/katex-loader.js the CDN config and loads it. The loader
+  fetches KaTeX only when asked: by a story page whose steps or front matter
+  hold LaTeX (include.has_latex), or by the glossary panel when a term it
+  fetches holds maths, on any page that has the panel.
+
+  CDN URLs, version pin, and the delimiter list are read from _data/katex.yml,
+  the single source shared with _includes/katex.html. To bump the KaTeX
+  version, edit _data/katex.yml only. Protected stories carry no readable
+  steps before unlock, so their flag rides front matter.
+
+  Version: v1.8.0
+-->
+<script>
+  window.telarKatexConfig = {
+    hasLatex: {% if include.has_latex %}true{% else %}false{% endif %},
+    cssUrl: {{ site.data.katex.css | jsonify }},
+    urls: [
+      {{ site.data.katex.js | jsonify }},
+      {{ site.data.katex.auto_render | jsonify }},
+      {{ site.data.katex.mhchem | jsonify }}
+    ],
+    delimiters: {{ site.data.katex.delimiters | jsonify }}
+  };
+</script>
+<script src="{{ '/assets/js/katex-loader.js' | relative_url }}"></script>

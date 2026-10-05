@@ -17,9 +17,9 @@
  * viewed:
  * - Embed mode (inside an iframe, detected by embed.js): button navigation.
  * - Vertical viewport (matchMedia-derived, see layout-mode.js): button navigation.
- * - iOS Safari: button navigation (Lenis momentum scroll is unreliable
- *   on iOS; fluid scroll is deferred to button-only).
- * - Desktop (non-iOS): Lenis-powered scroll engine.
+ * - iPhone or iPad (see ios-device.js): button navigation, because Lenis
+ *   momentum scroll is unreliable on iOS.
+ * - Anything else: Lenis-powered scroll engine.
  *
  * For protected stories (v0.8.0+), initialization waits until the story is
  * unlocked via story-unlock.js. The unlock module fires a 'telar:story-unlocked'
@@ -28,7 +28,7 @@
  * This module also sets up window.TelarStory, which exposes internal state
  * and key functions for debugging in the browser console.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 import { state } from './state.js';
@@ -51,6 +51,7 @@ if (typeof window !== 'undefined') {
   window.IiifViewer = IiifViewer;
 }
 import { initializeButtonNavigation } from './navigation.js';
+import { isIOSDevice } from './ios-device.js';
 import { initScrollEngine, getScrollEngineState } from './scroll-engine.js';
 import {
   initializePanels,
@@ -58,7 +59,7 @@ import {
   openPanel,
   closeAllPanels,
 } from './panels.js';
-import { applyDeepLinkOnLoad, navigateToStep, navigateToIntro, writeHash } from './deep-link.js';
+import { applyDeepLinkOnLoad, handleHashChange, navigateToStep, navigateToIntro } from './deep-link.js';
 
 // ── Initialisation ───────────────────────────────────────────────────────────
 
@@ -88,7 +89,11 @@ function initializeStory() {
   // Prefetch manifests in background (async, does not block)
   prefetchStoryManifests();
 
-  // Read card-stack config and initialize card pool (creates all DOM elements)
+  // state.isEmbed is set before the card stack is built, whose first geometry
+  // pass reads it, and so that layout-mode.js callbacks read the correct value.
+  state.isEmbed = window.telarEmbed?.enabled || false;
+
+  // Read card-stack config and initialize the card stack (creates all DOM elements)
   const cardConfig = {
     peekHeight: window.telarConfig?.cardPeekHeight ?? 1,
     messiness: window.telarConfig?.cardMessiness ?? 20,
@@ -96,19 +101,14 @@ function initializeStory() {
   initCardPool(window.storyData, cardConfig);
 
   // Choose navigation mode
-  // state.isEmbed is set first so layout-mode.js callbacks can read the correct value.
-  state.isEmbed = window.telarEmbed?.enabled || false;
   state.layoutMode = getLayoutMode();   // single source of truth — reads CSS vars via layout-mode.js
 
-  // Refresh state.layoutMode + state.cardOverlayRect on every layout flip. Activation-time rect write lives in card-pool.js.
-  onLayoutChange(({ to }) => {
-    state.layoutMode = to;
+  // Refresh state.cardOverlayRect on every layout flip (layout-mode.js has
+  // already updated state.layoutMode). Activation-time rect write lives in card-pool.js.
+  onLayoutChange(() => {
     const activeCard = document.querySelector('.text-card.is-active');
     state.cardOverlayRect = activeCard ? activeCard.getBoundingClientRect() : null;
   });
-
-  // iOS Safari uses button-only navigation — no fluid scroll
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   if (state.isEmbed) {
     initializeButtonNavigation();
@@ -120,17 +120,21 @@ function initializeStory() {
     initScrollEngine(stepCount);
   } else if (state.layoutMode === 'vertical') {
     initializeButtonNavigation();
-  } else if (isIOS) {
-    // iOS desktop (iPad) — use button nav, Lenis momentum scroll is unreliable
+  } else if (isIOSDevice()) {
     initializeButtonNavigation();
   } else {
-    // Lenis-powered continuous scroll engine
+    // Lenis-powered continuous scroll engine. The marker keeps the keyboard
+    // hint on the intro when the window is later narrowed into the vertical
+    // layout, which does not change the navigation.
+    document.documentElement.dataset.navigation = 'scroll';
     const stepCount = (window.storyData?.steps || []).filter(s => !s._metadata).length;
     initScrollEngine(stepCount);
   }
 
   initializePanels();
   applyDeepLinkOnLoad();
+  // Registered once per story load; the engine has no re-init or teardown path.
+  window.addEventListener('hashchange', handleHashChange);
 
   // Wire up nav button (Back to Home on intro, Back to Start elsewhere)
   const btnNav = document.getElementById('btn-nav-back');
@@ -157,6 +161,13 @@ function initializeStory() {
         if (textEl) textEl.textContent = startText;
       }
     };
+
+    // The handler is the only thing that puts the button in one mode or the
+    // other, and by the time it exists the story may already be on a step: a
+    // deep link arrives at its step before this point in the sequence. Read
+    // the state once here rather than waiting for a change that a reader who
+    // landed where they meant to may never make.
+    state.onStepChange(state.currentIndex);
 
     btnNav.addEventListener('click', (e) => {
       if (btnNav.classList.contains('is-start')) {

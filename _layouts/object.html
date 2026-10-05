@@ -7,11 +7,11 @@ layout: default
   _layouts/default.html (the base page frame). One template serves all three media
   types (Image, Video, Audio); the media type,
   injected into frontmatter by generate_collections.py as `page.media_type`, switches which
-  viewer and which author-facing tools appear. This is the large (~1,230-line) object page,
-  long mostly because each media branch carries its own viewer wiring, metadata block, and
-  copy-to-clipboard scripts; the shared algorithmic pieces (theme-colour maths, video embed
-  resolution, coordinate normalisation) live in assets/js/object-theme.js,
-  assets/js/video-embed.js, and assets/js/telar-story/iiif-viewer.js.
+  viewer and which author-facing tools appear. The author tools are includes under
+  _includes/objects/, and the viewer wiring is in the per-type bundles built from
+  assets/js/object-page/; the shared pieces (the audio waveform's theme-colour maths, video
+  embed resolution, the IIIF viewer) live in assets/js/object-theme.js, assets/js/video-embed.js,
+  and assets/js/telar-story/iiif-viewer.js.
 
   What it renders — a two-column layout: a viewer on the left and a metadata sidebar on the
   right. The viewer branches by media type — an OpenSeadragon IIIF viewer for images (with a
@@ -43,6 +43,30 @@ layout: default
 {% comment %}Detect media type from frontmatter (injected by generate_collections.py){% endcomment %}
 {% assign object_media_type = page.media_type | default: 'Image' %}
 
+{%- comment -%}
+  Which way the author panels' ground runs. The panels sit on the theme's
+  button background, and their translucent wells and close icon differ on a
+  dark ground from a light one. That is decided once, at build time, by
+  scripts/telar/theme_colours.py: `light.button` is true when the colour it
+  derived to sit on that background is a light colour, which is the same as
+  saying the background is dark. The panels' own text colour is not decided
+  here at all — it is --color-on-button, the same property the button beside
+  them uses, so the two cannot disagree.
+
+  A theme with no entry in the manifest takes trama's, as assets/css/telar.scss
+  does, and a manifest with neither takes the dark ground.
+{%- endcomment -%}
+{%- assign theme_colours = site.data['telar-build']['theme-colours'] -%}
+{%- assign theme_light = theme_colours.themes[site.telar_theme].light -%}
+{%- unless theme_light -%}
+  {%- assign theme_light = theme_colours.themes.trama.light -%}
+{%- endunless -%}
+{%- if theme_light.button == false -%}
+  {%- assign panel_ground = 'coord-light' -%}
+{%- else -%}
+  {%- assign panel_ground = 'coord-dark' -%}
+{%- endif -%}
+
 
 <div class="container my-5">
   <div class="row">
@@ -66,228 +90,16 @@ layout: default
       <div id="object-viewer" class="viewer-{{ object_media_type | downcase }}"
            {% if object_media_type == 'Image' %}role="img" aria-label="{{ page.alt_text | default: page.title | default: page.object_id | default: 'Image viewer' }}"{% endif %}></div>
 
-      {% if object_media_type == 'Image' %}
-        <!-- Coordinate Tools Button -->
-        {% if page.object_id %}
-        <div class="mt-3">
-          <div id="coordinateButton">
-            <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#coordinatePanel" aria-expanded="false">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg> {{ lang.buttons.identify_coordinates | default: "Identify coordinates" }}
-            </button>
-          </div>
-
-          <!-- Collapsible Coordinate Panel -->
-          <div class="collapse" id="coordinatePanel">
-            <div class="card coordinate-panel">
-              <div class="card-body coordinate-panel-body">
-                <!-- Close Button -->
-                <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#coordinatePanel"></button>
-
-                <div class="row coordinate-panel-row">
-                  <!-- Instructions -->
-                  <div class="col-md-6">
-                    <div class="coordinate-panel-instructions">
-                      <h6 class="coordinate-panel-heading">{{ lang.object.coordinates.heading | default: "Instructions" }}</h6>
-                      <p>
-                        {{ lang.object.coordinates.instructions_p1 | default: "Use this panel to identify the coordinates of locations in an image for your story. Coordinates update as you pan/zoom the image above with your mouse by clicking, dragging, and scrolling." }}
-                      </p>
-                      <p class="mb-0 coord-instructions-single">
-                        {{ lang.object.coordinates.instructions_p2 | default: "Once you identify a location make a note of the X, Y, and Zoom values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all three coordinates at once." }}
-                      </p>
-                      <p class="mb-0 coord-instructions-multi" style="display: none;">
-                        {{ lang.object.coordinates.instructions_p2_multi | default: "Once you identify a location make a note of the X, Y, Zoom, and Page values, so you can include them in your structure spreadsheet. You can also press the buttons to the right to copy all four values at once." }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Current Coordinates Table and Buttons -->
-                  <div class="col-md-6">
-                    <div class="coordinate-panel-values">
-                      <div class="coordinate-panel-values-inner">
-                        <dl class="row mb-0">
-                          <dt class="col-sm-6 coord-page-row coord-label">{{ lang.object.coordinates.page_label | default: "Page" }}</dt>
-                          <dd class="col-sm-6 coord-page-row coord-field">
-                            <code id="coord-page">1</code>
-                            <button class="btn btn-sm coord-copy-btn" id="copy-page" title="{{ lang.object.coordinates.copy_page_tooltip | default: 'Copy page number' }}">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-6 coord-label">X</dt>
-                          <dd class="col-sm-6 coord-field">
-                            <code id="coord-x">0.500</code>
-                            <button class="btn btn-sm coord-copy-btn" id="copy-x" title="{{ lang.object.coordinates.copy_x_tooltip | default: 'Copy X coordinate' }}">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-6 coord-label">Y</dt>
-                          <dd class="col-sm-6 coord-field">
-                            <code id="coord-y">0.500</code>
-                            <button class="btn btn-sm coord-copy-btn" id="copy-y" title="{{ lang.object.coordinates.copy_y_tooltip | default: 'Copy Y coordinate' }}">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-6 coord-label">Zoom</dt>
-                          <dd class="col-sm-6 coord-field">
-                            <code id="coord-zoom">1.0</code>
-                            <button class="btn btn-sm coord-copy-btn" id="copy-zoom" title="{{ lang.object.coordinates.copy_zoom_tooltip | default: 'Copy Zoom level' }}">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-                            </button>
-                          </dd>
-
-                          <!-- Copy Button Rows -->
-                          <dt class="col-sm-6"></dt>
-                          <dd class="col-sm-6 mb-2">
-                            <button class="btn btn-sm btn-copy w-100" id="copy-coords-sheets">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.coordinates.copy_sheets }}
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-6"></dt>
-                          <dd class="col-sm-6 mb-0">
-                            <button class="btn btn-sm btn-copy w-100" id="copy-coords-csv">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.coordinates.copy_csv }}
-                            </button>
-                          </dd>
-                        </dl>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endif %}
-      {% endif %}
-
-      {% if object_media_type == 'Video' %}
-        {% unless page.source_url contains 'drive.google.com' %}
-        <div class="mt-3">
-          <div id="clipPickerButton">
-            <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#clipPanel" aria-expanded="false">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ lang.object.clip_picker.button | default: "Set clip times" }}
-            </button>
-          </div>
-
-          <div class="collapse" id="clipPanel">
-            <div class="card clip-panel coordinate-panel">
-              <div class="card-body clip-panel-body coordinate-panel-body">
-                <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#clipPanel"></button>
-
-                <div class="row coordinate-panel-row">
-                  <div class="col-md-6">
-                    <div class="coordinate-panel-instructions">
-                      <h6 class="coordinate-panel-heading">{{ lang.object.clip_picker.heading | default: "Clip Times" }}</h6>
-                      <p>{{ lang.object.clip_picker.instructions | default: "Use this panel to identify clip start and end times for your story. Play the video to the desired position and press the Set to current time button for each." }}</p>
-                    </div>
-                  </div>
-
-                  <div class="col-md-6">
-                    <div class="coordinate-panel-values">
-                      <div class="coordinate-panel-values-inner">
-                        <dl class="row mb-0">
-                          <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.start | default: "Start" }}</dt>
-                          <dd class="col-sm-8 clip-time-field coord-field">
-                            <code id="clip-start-display">0.000</code>
-                            <button class="btn btn-sm coord-copy-btn" id="set-clip-start" title="{{ lang.object.clip_picker.set_current | default: 'Set to current time' }}" disabled>
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.end | default: "End" }}</dt>
-                          <dd class="col-sm-8 clip-time-field coord-field">
-                            <code id="clip-end-display">0.000</code>
-                            <button class="btn btn-sm coord-copy-btn" id="set-clip-end" title="{{ lang.object.clip_picker.set_current | default: 'Set to current time' }}" disabled>
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-4"></dt>
-                          <dd class="col-sm-8 mb-2">
-                            <button class="btn btn-sm btn-copy w-100" id="copy-clip-sheets">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_sheets | default: "Copy Sheets" }}
-                            </button>
-                          </dd>
-
-                          <dt class="col-sm-4"></dt>
-                          <dd class="col-sm-8 mb-0">
-                            <button class="btn btn-sm btn-copy w-100" id="copy-clip-csv">
-                              <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_csv | default: "Copy CSV" }}
-                            </button>
-                          </dd>
-                        </dl>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endunless %}
-      {% endif %}
-
-      {% if object_media_type == 'Audio' %}
-      <div class="mt-3">
-        <div id="clipPickerButton">
-          <button class="btn btn-developer btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#clipPanel" aria-expanded="false">
-            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ lang.object.clip_picker.button | default: "Set clip times" }}
-          </button>
-        </div>
-
-        <div class="collapse" id="clipPanel">
-          <div class="card clip-panel coordinate-panel">
-            <div class="card-body clip-panel-body coordinate-panel-body">
-              <button type="button" class="btn-close coordinate-panel-close" data-bs-toggle="collapse" data-bs-target="#clipPanel"></button>
-
-              <div class="row coordinate-panel-row">
-                <div class="col-md-6">
-                  <div class="coordinate-panel-instructions">
-                    <h6 class="coordinate-panel-heading">{{ lang.object.clip_picker.heading | default: "Clip Times" }}</h6>
-                    <p>{{ lang.object.clip_picker.audio_instructions | default: "Drag the region handles on the waveform above to set clip start and end times. The highlighted region shows the clip that will play in your story." }}</p>
-                  </div>
-                </div>
-
-                <div class="col-md-6">
-                  <div class="coordinate-panel-values">
-                    <div class="coordinate-panel-values-inner">
-                      <dl class="row mb-0">
-                        <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.start | default: "Start" }}</dt>
-                        <dd class="col-sm-8 clip-time-field coord-field">
-                          <code id="clip-start-display">0.000</code>
-                        </dd>
-
-                        <dt class="col-sm-4 coord-label">{{ lang.object.clip_picker.end | default: "End" }}</dt>
-                        <dd class="col-sm-8 clip-time-field coord-field">
-                          <code id="clip-end-display">0.000</code>
-                        </dd>
-
-                        <dt class="col-sm-4"></dt>
-                        <dd class="col-sm-8 mb-2">
-                          <button class="btn btn-sm btn-copy w-100" id="copy-clip-sheets">
-                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_sheets | default: "Copy Sheets" }}
-                          </button>
-                        </dd>
-
-                        <dt class="col-sm-4"></dt>
-                        <dd class="col-sm-8 mb-0">
-                          <button class="btn btn-sm btn-copy w-100" id="copy-clip-csv">
-                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> {{ lang.object.clip_picker.copy_csv | default: "Copy CSV" }}
-                          </button>
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
+      {%- comment -%}
+      The author tools for this type, and only this type. One case rather than
+      three ifs because they occupy the same slot and are mutually exclusive:
+      adding a type is a line here and a file in _includes/objects/tools/.
+      {%- endcomment -%}
+      {% case object_media_type %}
+        {% when 'Image' %}{% include objects/tools/image.html %}
+        {% when 'Video' %}{% include objects/tools/video.html %}
+        {% when 'Audio' %}{% include objects/tools/audio.html %}
+      {% endcase %}
     </div>
 
     <!-- Object Metadata -->
@@ -347,90 +159,17 @@ layout: default
         {% endfor %}
         {% endif %}
 
-        {% if object_media_type == 'Image' %}
-          {% assign external_source = page.source_url | default: page.iiif_manifest %}
-          {% if external_source and external_source != "" %}
-          <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
-          <dd class="col-sm-8">
-            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
-              <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ external_source }}</code>
-              <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ external_source }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.coordinates.copy_manifest_tooltip | default: 'Copy manifest URL' }}">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-              </button>
-            </div>
-          </dd>
-          {% elsif page.object_id %}
-          <dt class="col-sm-4">{{ lang.object.metadata.iiif_manifest }}</dt>
-          <dd class="col-sm-8">
-            {% assign manifest_url = site.url | append: site.baseurl | append: '/iiif/objects/' | append: page.object_id | append: '/manifest.json' %}
-            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
-              <code style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ manifest_url }}</code>
-              <button class="btn btn-sm" id="copy-manifest" data-manifest="{{ manifest_url }}" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.coordinates.copy_manifest_tooltip | default: 'Copy manifest URL' }}">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-              </button>
-            </div>
-          </dd>
-          {% endif %}
-        {% endif %}
+        {%- comment -%}
+        Not a case like the tools above: the image rows belong inside this
+        shared <dl> and the other two bring their own, so each sits where its
+        markup has to sit.
+        {%- endcomment -%}
+        {% if object_media_type == 'Image' %}{% include objects/metadata/image.html %}{% endif %}
       </dl>
 
-      {% comment %}Video-specific metadata{% endcomment %}
-      {% if object_media_type == 'Video' %}
-        {% if page.source_url contains 'youtube.com' or page.source_url contains 'youtu.be' %}
-          {% assign provider_name = 'YouTube' %}
-        {% elsif page.source_url contains 'vimeo.com' %}
-          {% assign provider_name = 'Vimeo' %}
-        {% elsif page.source_url contains 'drive.google.com' %}
-          {% assign provider_name = 'Google Drive' %}
-        {% else %}
-          {% assign provider_name = 'Video' %}
-        {% endif %}
+      {% if object_media_type == 'Video' %}{% include objects/metadata/video.html %}{% endif %}
 
-        <dl class="row mt-3 border-top pt-3">
-          <dt class="col-sm-4">{{ lang.object.metadata.provider | default: "Provider" }}</dt>
-          <dd class="col-sm-8">{{ provider_name }}</dd>
-
-          <dt class="col-sm-4">{{ lang.object.metadata.source | default: "Source" }}</dt>
-          {%- comment -%} Only render a clickable link for http(s); a javascript:/data: source_url
-          (which can still pass the provider sniff above) degrades to plain text. {%- endcomment -%}
-          {% assign _src_scheme = page.source_url | slice: 0, 5 %}
-          {% if _src_scheme == 'https' or _src_scheme == 'http:' %}
-          <dd class="col-sm-8"><a href="{{ page.source_url }}" target="_blank" rel="noopener">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</a></dd>
-          {% else %}
-          <dd class="col-sm-8">{{ lang.object.metadata.view_on_provider | default: "View on" }} {{ provider_name }}</dd>
-          {% endif %}
-
-          {% unless provider_name == 'Google Drive' %}
-          <dt class="col-sm-4">{{ lang.object.metadata.embed_url | default: "Embed URL" }}</dt>
-          <dd class="col-sm-8">
-            <div style="position: relative; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.5rem 3rem 0.5rem 0.75rem; overflow: hidden;">
-              <code id="embed-url-display" style="color: #2c3e50; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"></code>
-              <button class="btn btn-sm" id="copy-embed-url" style="position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); background-color: transparent; border: none; color: #2c3e50; padding: 0.25rem;" title="{{ lang.object.copy_embed_url_tooltip | default: 'Copy embed URL' }}">
-                <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-              </button>
-            </div>
-          </dd>
-          {% endunless %}
-        </dl>
-      {% endif %}
-
-      {% comment %}Audio-specific metadata{% endcomment %}
-      {% if object_media_type == 'Audio' %}
-        <dl class="row mt-3 border-top pt-3">
-          {% if page.audio_format %}
-          <dt class="col-sm-4">{{ lang.object.metadata.format | default: "Format" }}</dt>
-          <dd class="col-sm-8">{{ page.audio_format }}</dd>
-          {% endif %}
-
-          {% if page.audio_filesize %}
-          <dt class="col-sm-4">{{ lang.object.metadata.file_size | default: "File size" }}</dt>
-          <dd class="col-sm-8">{{ page.audio_filesize }}</dd>
-          {% endif %}
-
-          <dt class="col-sm-4">{{ lang.object.metadata.duration | default: "Duration" }}</dt>
-          <dd class="col-sm-8"><span id="audio-duration-display">--:--</span></dd>
-        </dl>
-      {% endif %}
+      {% if object_media_type == 'Audio' %}{% include objects/metadata/audio.html %}{% endif %}
 
       <!-- Long Description -->
       {% if content %}
@@ -457,11 +196,10 @@ layout: default
   </div>
 </div>
 
-<!-- Object-page helpers: theme-colour maths shared by the author panels and
-     the audio waveform (all media types), and video embed resolution (video
-     only). Classic scripts — parsed before the bundle below, so
-     window.telarObjectTheme / window.telarVideoEmbed are ready. -->
-<script src="{{ '/assets/js/object-theme.js' | relative_url }}"></script>
+<!-- Object-page helpers: the audio waveform's theme-colour maths (audio only) and
+     video embed resolution (video only). Classic scripts — parsed before the
+     type's bundle below, so window.telarObjectTheme / window.telarVideoEmbed
+     are ready. -->
 {% if object_media_type == 'Video' %}
 <script src="{{ '/assets/js/video-embed.js' | relative_url }}"></script>
 {% endif %}
@@ -470,20 +208,47 @@ layout: default
 <script src="{{ '/assets/vendor/openseadragon.min.js' | relative_url }}"></script>
 {% endif %}
 {% if object_media_type == 'Audio' %}
+<script src="{{ '/assets/js/object-theme.js' | relative_url }}"></script>
 <script src="{{ '/assets/js/wavesurfer-loader.js' | relative_url }}"></script>
 {% endif %}
 
 {%- comment -%}
 Everything the object page's JavaScript needs from Liquid, in one JSON block
-read by assets/js/object-page.js (bundled from assets/js/object-page/).
+read by whichever of the object-<type>.js bundles this page loaded, all
+of them built from assets/js/object-page/.
 jsonify quotes and escapes each value; the replace guards against a
 </script> breakout from CSV-derived text. The iframe title and waveform
 label are HTML-escaped here because they land in attribute context.
+
+The audio file's extension is the build's to know: csv_to_json writes
+_data/audio_objects.json as it scans the objects directory, and story.html
+injects the same map as window.audioObjects. Reading it here is what keeps the
+object page from asking the server, one HEAD request per candidate extension,
+for a fact already written down.
 {%- endcomment -%}
+{%- assign audio_extension = site.data.audio_objects[page.object_id] -%}
+{%- if audio_extension -%}
+{%- assign audio_url = site.baseurl | append: '/telar-content/objects/' | append: page.object_id | append: '.' | append: audio_extension -%}
+{%- else -%}
+{%- assign audio_url = '' -%}
+{%- endif -%}
+{%- comment -%}
+The peaks file is Jekyll's to know rather than csv_to_json's. process_audio.py
+writes it, or the build restores it from the audio cache, after the data
+scripts have run and before Jekyll does, so the static files are the one list
+that holds it on every route. A page told there are no peaks does not request
+them, and WaveSurfer decodes the audio itself.
+{%- endcomment -%}
+{%- assign peaks_url = '' -%}
+{%- if audio_extension -%}
+{%- assign peaks_path = '/assets/audio/peaks/' | append: page.object_id | append: '.json' -%}
+{%- assign peaks_file = site.static_files | where: 'path', peaks_path | first -%}
+{%- if peaks_file -%}{%- assign peaks_url = site.baseurl | append: peaks_path -%}{%- endif -%}
+{%- endif -%}
 {% assign external_source = page.source_url | default: page.iiif_manifest %}
 {% assign escaped_title = page.title | escape %}
-{% assign video_frame_title = lang.object.video_frame_title | default: 'Video: __TITLE__' | replace: '__TITLE__', escaped_title %}
-{% assign waveform_label = lang.object.audio_controls.waveform_label | default: 'Audio waveform for __TITLE__' | replace: '__TITLE__', escaped_title %}
+{% assign video_frame_title = lang.object.video_frame_title | default: "Video: __TITLE__" | replace: '__TITLE__', escaped_title %}
+{% assign waveform_label = lang.object.audio_controls.waveform_label | default: "Audio waveform for __TITLE__" | replace: '__TITLE__', escaped_title %}
 <script id="telar-object-data" type="application/json">
 {
   "mediaType": {{ object_media_type | jsonify }},
@@ -491,10 +256,12 @@ label are HTML-escaped here because they land in attribute context.
   "sourceUrl": {{ page.source_url | default: '' | jsonify | replace: '</', '<\/' }},
   "externalSource": {{ external_source | default: '' | jsonify | replace: '</', '<\/' }},
   "baseUrl": {{ site.baseurl | jsonify }},
+  "audioUrl": {{ audio_url | jsonify | replace: '</', '<\/' }},
+  "peaksUrl": {{ peaks_url | jsonify | replace: '</', '<\/' }},
   "videoFrameTitle": {{ video_frame_title | jsonify | replace: '</', '<\/' }},
   "waveformLabel": {{ waveform_label | jsonify | replace: '</', '<\/' }},
   "lang": {
-    "copied": {{ lang.object.coordinates.copied | default: "...copied" | jsonify }},
+    "copied": {{ lang.object.coordinates.copied | default: "Copied!" | jsonify }},
     "viewer": {
       "prev_page": {{ lang.object.viewer.prev_page | jsonify }},
       "next_page": {{ lang.object.viewer.next_page | jsonify }},
@@ -505,13 +272,24 @@ label are HTML-escaped here because they land in attribute context.
     },
     "embedUnavailable": {{ lang.object.errors.embed_unavailable | default: "This video could not be loaded." | jsonify }},
     "openOnDrive": {{ lang.object.errors.open_on_drive | default: "Open it on Google Drive." | jsonify }},
-    "audioNotFound": {{ lang.object.errors.audio_not_found | default: "Audio file not available. Check that the file path in the object CSV is correct." | jsonify }},
-    "play": {{ lang.object.audio_controls.play | default: 'Play audio' | jsonify }},
-    "pause": {{ lang.object.audio_controls.pause | default: 'Pause audio' | jsonify }},
-    "restart": {{ lang.object.audio_controls.restart | default: 'Restart from beginning' | jsonify }},
-    "mute": {{ lang.object.audio_controls.mute | default: 'Mute audio' | jsonify }},
-    "unmute": {{ lang.object.audio_controls.unmute | default: 'Unmute audio' | jsonify }}
+    "audioNotFound": {{ lang.object.errors.audio_not_found | default: "Audio file not available." | jsonify }},
+    "play": {{ lang.object.audio_controls.play | default: "Play audio" | jsonify }},
+    "pause": {{ lang.object.audio_controls.pause | default: "Pause audio" | jsonify }},
+    "restart": {{ lang.object.audio_controls.restart | default: "Restart from beginning" | jsonify }},
+    "mute": {{ lang.object.audio_controls.mute | default: "Mute audio" | jsonify }},
+    "unmute": {{ lang.object.audio_controls.unmute | default: "Unmute audio" | jsonify }}
   }
 }
 </script>
-<script src="{{ '/assets/js/object-page.js' | relative_url }}"></script>
+{%- comment -%}
+One bundle per media type, so an audio page does not download the IIIF viewer
+and a video page does not download either of the others. The three are built
+from the same modules under assets/js/object-page/ and share its boot helper;
+only the entry differs. Adding a type is a line here and an entry beside the
+others.
+{%- endcomment -%}
+{% case object_media_type %}
+  {% when 'Image' %}<script src="{{ '/assets/js/object-image.js' | relative_url }}"></script>
+  {% when 'Video' %}<script src="{{ '/assets/js/object-video.js' | relative_url }}"></script>
+  {% when 'Audio' %}<script src="{{ '/assets/js/object-audio.js' | relative_url }}"></script>
+{% endcase %}

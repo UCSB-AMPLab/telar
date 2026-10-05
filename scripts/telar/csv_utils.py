@@ -16,6 +16,12 @@ to the current "layer1_content". `normalize_column_names()` applies this
 mapping to a DataFrame's columns, printing an info line for each rename
 so the build log shows what happened.
 
+`read_sheet()` is how every site sheet is read. It reads every row to the
+header's width, so a row ending in a trailing comma is neither dropped nor
+turned into a row index that moves every value one column left, and it
+prints a warning naming the sheet and row for any value past the header's
+last column, which is not published.
+
 `is_header_row()` detects duplicate header rows that sometimes appear in
 bilingual CSVs (where the first data row repeats the column names in the
 other language). It checks whether 80% or more of a row's non-empty cells
@@ -40,21 +46,39 @@ rename of the gallery classification column from `object_type` to `medium`
 — with backward-compatible aliases (`tipo_objeto`, `medium_genre`,
 `medio_genero`) so existing spreadsheets continue to work without changes.
 
-Version: v1.6.0
+Version: v1.8.0
 """
 
+import contextlib
+import csv
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 
-# Canonical set of local image/document extensions, shared by the objects and
-# stories processors. Single source of truth so the extension lists used for
-# reference-stripping and on-disk existence checks can no longer drift (a
-# `.bmp`/`.svg` object used to strip correctly but fail the existence check).
-IMAGE_EXTENSIONS = frozenset({
-    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.tif', '.tiff', '.bmp', '.svg', '.pdf',
-})
+# Canonical local image/document extensions, shared by the CSV processors and
+# the tile generator. Every list of image extensions in the build derives from
+# this one: a processor that recognises a file the tiler never searches for
+# produces an object that validates and has no image.
+#
+# Ordered, because the tiler takes the first extension matching an object id and
+# several files can share a stem. The order is the tiler's existing priority, so
+# which file a site already tiles does not change.
+#
+# The Telar Compositor pins its own upload allowlist against this tuple, so the
+# name and the literal shape are load-bearing outside this repository: an author
+# must not be able to upload a file the build cannot tile, or hold a file in
+# their repository that the Compositor refuses. Widening the set here is what
+# lets the Compositor widen; renaming it or building it dynamically breaks a
+# check that runs at their release gate.
+IMAGE_EXTENSIONS_ORDERED = (
+    '.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.tif', '.tiff', '.pdf',
+    '.gif', '.bmp', '.svg',
+)
+
+# Membership form, for reference-stripping and on-disk existence checks.
+IMAGE_EXTENSIONS = frozenset(IMAGE_EXTENSIONS_ORDERED)
 
 
 def build_stem_index(directory):
@@ -114,13 +138,16 @@ COLUMN_NAME_MAPPING = {
     'id_objeto': 'object_id',
     'titulo': 'title',
     'descripcion': 'description',
+    'descripción': 'description',
     'url_fuente': 'source_url',
     'creador': 'creator',
     'periodo': 'period',
     'medio': 'medium',
     'dimensiones': 'dimensions',
     'ubicacion': 'source',
+    'ubicación': 'source',
     'credito': 'credit',
+    'crédito': 'credit',
     'miniatura': 'thumbnail',
     # v0.8.0 gallery filtering columns
     'año': 'year',
@@ -142,10 +169,18 @@ COLUMN_NAME_MAPPING = {
     'orden': 'order',
     'id_historia': 'story_id',
     'subtitulo': 'subtitle',
+    'subtítulo': 'subtitle',
     'firma': 'byline',
+    # Both words in both genders. A header this table does not carry yields
+    # nothing to `row.get('protected', '')`, so the story is never marked
+    # protected and publishes in the clear — and the prerequisite
+    # check that refuses such a build acts on stories already recognised as
+    # protected, so it cannot fire either.
     'private': 'protected',
     'privada': 'protected',
+    'privado': 'protected',
     'protegida': 'protected',
+    'protegido': 'protected',
     'mostrar_secciones': 'show_sections',
 
     # Glossary columns (Spanish -> English)
@@ -156,6 +191,16 @@ COLUMN_NAME_MAPPING = {
     'definicion': 'definition',
     'términos_relacionados': 'related_terms',
     'terminos_relacionados': 'related_terms',
+}
+
+# Aliases one sheet reads and no other. The table above applies to every
+# sheet, and `tipo` is a word an author uses for a column of their own on an
+# objects or story sheet — the type of document, say — which the build would
+# otherwise rename to a name nothing on that sheet reads. A sheet's reader
+# passes its own table as `sheet_aliases`; every other sheet keeps the header
+# as the author wrote it.
+GLOSSARY_COLUMN_ALIASES = {
+    'tipo': 'kind',
 }
 
 
@@ -233,10 +278,189 @@ def get_source_url(row):
     return ''
 
 
-def normalize_column_names(df):
+OBJECT_FIELDS = {
+    'object_id', 'title', 'creator', 'period', 'medium', 'dimensions',
+    'location', 'credit', 'thumbnail', 'iiif_manifest', 'source_url',
+    'source', 'object_warning', 'object_warning_short', 'year',
+    'object_type', 'subjects', 'is_featured_sample', '_demo',
+    'description', 'featured', 'alt_text',
+    # Auto-detected media type and audio metadata. Nothing writes
+    # audio_duration: it stays reserved, so a column of that name is not shown
+    # as custom metadata, while the Compositor's FRAMEWORK_OBJECT_FIELDS holds
+    # it. Its tests/import.server.test.ts reads this set and must agree.
+    'media_type', 'audio_duration', 'audio_filesize', 'audio_format',
+}
+
+
+# Columns whose cells are read as the author typed them. pandas infers a
+# column's dtype from the whole column, so a cell's meaning would otherwise
+# depend on what its neighbours contain: `1` in a numeric column with a blank
+# cell arrives as "1.0" and misses the vocabulary a flag is matched against,
+# while the same `1` in a column with no blank arrives as "1" and matches; and
+# a year typed as 1890 is published as "1890.0" on the strength of a blank
+# cell in another row. The two cases differ in where the damage lands — a flag
+# fails to match, a year is published wrong — and have the same cause, so they
+# have the same remedy.
+#
+# An object id is the third kind: it is a key, matched across two sheets that
+# pandas reads separately and can therefore infer differently from each other,
+# so a numeric id could be `1` in one sheet and "1.0" in the other and a step
+# would lose the object it names. Read as text, both sides hold what the
+# author typed, and a step naming something the site does not have is reported
+# by the reference check rather than silently losing its image.
+TEXT_COLUMNS = frozenset({'featured', 'year', 'object_id', 'object'})
+
+
+def text_column_dtypes():
+    """The pandas dtype map pinning `TEXT_COLUMNS` to text.
+
+    Keyed on the headers as authors write them, English and Spanish alike,
+    because the reader runs before `normalize_column_names()`. pandas ignores
+    keys for columns a given sheet does not have.
+    """
+    headers = set(TEXT_COLUMNS)
+    headers.update(alias for alias, canonical in COLUMN_NAME_MAPPING.items()
+                   if canonical in TEXT_COLUMNS)
+    return {header: str for header in headers}
+
+
+# What `read_sheet` passes on to pandas: the arguments its callers use, and
+# the encoding pair, which the header read and the scan both apply.
+READ_SHEET_ARGUMENTS = frozenset({'on_bad_lines', 'dtype', 'keep_default_na',
+                                  'na_values', 'encoding', 'encoding_errors'})
+
+
+def read_sheet(csv_path, **kwargs):
+    """Read a site sheet into a DataFrame whose columns are the header's.
+
+    Every reader of a site sheet goes through here, and every row is read to
+    the header's width. Left to itself, pandas reads a trailing comma two
+    ways, both of which lose the author's data: in the first data row it
+    takes the first column as the row index, and every value lands one
+    column to the left of its header; in a later row wider than the first
+    it skips the row under `on_bad_lines`, or refuses the sheet where that
+    is left at `error`. `usecols` set to the header's columns reads every
+    row as the header describes it.
+
+    The width is the header pandas itself reads, which is not always the
+    file's first line: pandas skips a line of spaces or tabs. Where pandas
+    cannot read the header, the sheet is read with no column limit, and
+    pandas refuses it as it would have. `usecols` alone already keeps a
+    first row's values under their headers; `index_col=False` states the
+    same for that unlimited read.
+
+    A cut cell that holds a value is text the author typed and the site will
+    not show, so `_report_cells_past_header` names it with its sheet and row.
+
+    Only `READ_SHEET_ARGUMENTS` are accepted. The header is read on its own
+    first, with the encoding arguments alone, so an argument that moves the
+    header or changes how a line splits (`skiprows`, `sep`, `quotechar`,
+    `comment`...) would cut the sheet against a header it does not have.
+
+    Args:
+        csv_path: Path to the sheet
+        **kwargs: Passed to `pd.read_csv`; see `READ_SHEET_ARGUMENTS`
+
+    Returns:
+        pandas.DataFrame
+
+    Raises:
+        TypeError: for an argument not in `READ_SHEET_ARGUMENTS`
+    """
+    refused = sorted(set(kwargs) - READ_SHEET_ARGUMENTS)
+    if refused:
+        raise TypeError(f"read_sheet() does not accept {', '.join(refused)}: "
+                        f"the header it reads the width from would not be the sheet's")
+    encoding = {key: kwargs[key] for key in ('encoding', 'encoding_errors')
+                if key in kwargs}
+    try:
+        width = len(pd.read_csv(csv_path, nrows=0, index_col=False,
+                                **encoding).columns)
+    except (OSError, ValueError):
+        width = 0
+    if width:
+        _report_cells_past_header(csv_path, width, **encoding)
+        kwargs['usecols'] = range(width)
+    return pd.read_csv(csv_path, index_col=False, **kwargs)
+
+
+def _report_cells_past_header(csv_path, width, encoding=None, encoding_errors=None):
+    """Print a warning for each value past the header's `width`.
+
+    `width` is the header pandas reads, so no row of it is past the width,
+    whichever line it sits on; nor is a line of spaces or tabs that pandas
+    skips and `csv` reads as a row of one cell. A row whose first cell
+    starts with `#` is a comment the build drops, so its cells are not
+    reported. Rows are numbered as a spreadsheet numbers them, blank rows
+    included.
+
+    It decodes as pandas does, with the caller's `encoding` and
+    `encoding_errors`, so a sheet pandas reads is one the scan reads. The
+    scan is a report and never a reason to fail: where `csv` cannot
+    read a file, the rows from that point on are left unreported.
+    """
+    sheet = Path(csv_path).name
+    try:
+        with open(csv_path, encoding=encoding or 'utf-8-sig', newline='',
+                  errors=encoding_errors or 'strict') as f, \
+                _field_limit_lifted():
+            for number, row in enumerate(csv.reader(f), start=1):
+                if not row or row[0].strip().startswith('#'):
+                    continue
+                values = [cell.strip() for cell in row[width:] if cell.strip()]
+                if values:
+                    shown = ', '.join(f'"{value}"' for value in values)
+                    print(f"  [WARN] {sheet} row {number} has more cells than the "
+                          f"header row; {shown} past the last column is not published")
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return
+
+
+@contextlib.contextmanager
+def _field_limit_lifted():
+    """Let `csv` read a cell as long as pandas reads, then put the limit back.
+
+    The module refuses a field over 131,072 characters by default; pandas
+    has no such limit. The largest limit the platform accepts is found by
+    halving from `sys.maxsize`.
+    """
+    previous = csv.field_size_limit()
+    limit = sys.maxsize
+    while True:
+        try:
+            csv.field_size_limit(limit)
+            break
+        except OverflowError:
+            limit //= 2
+    try:
+        yield
+    finally:
+        csv.field_size_limit(previous)
+
+
+def normalize_column_names(df, canonical_fields=None, sheet_aliases=None):
     """
     Normalize column names to English using bilingual mapping.
     Supports both English and Spanish column headers (v0.6.0+).
+
+    `canonical_fields` scopes the map to one kind of sheet. The table is
+    shared by every spreadsheet the build reads, so a rule written for the
+    project sheet also renames a column on the objects sheet: an author's
+    own `privado` column — a note that a piece is in a private collection —
+    became `protected`, the name the project sheet uses to mean "encrypt
+    this story". Nothing reads `protected` on an object, so it landed in
+    `extra_metadata`, where the object layout prints the key as the label:
+    a Spanish site showing an English heading the author never wrote.
+
+    The set is the canonical names that sheet's own consumer reads, so it
+    is derived from the thing it describes rather than listed by hand. A
+    rename whose target is not in it is skipped, which leaves the author's
+    own header in place — the safe direction, because the name they typed
+    is the name they meant. Pass None to apply the whole map.
+
+    `sheet_aliases` adds the aliases only this sheet reads (see
+    GLOSSARY_COLUMN_ALIASES) on top of the shared map, refused on the same
+    collisions.
 
     Args:
         df: pandas DataFrame with potentially Spanish column names
@@ -244,13 +468,21 @@ def normalize_column_names(df):
     Returns:
         DataFrame: DataFrame with normalized (English) column names
     """
+    _refuse_reserved_columns(df)
+
     # Create a mapping for this dataframe's columns
+    mapping = {**COLUMN_NAME_MAPPING, **(sheet_aliases or {})}
     rename_map = {}
     for col in df.columns:
         col_lower = col.lower().strip()
-        if col_lower in COLUMN_NAME_MAPPING:
-            rename_map[col] = COLUMN_NAME_MAPPING[col_lower]
-            print(f"  [INFO] Normalized column '{col}' -> '{COLUMN_NAME_MAPPING[col_lower]}'")
+        if (canonical_fields is not None
+                and mapping.get(col_lower) not in canonical_fields):
+            continue
+        if col_lower in mapping:
+            rename_map[col] = mapping[col_lower]
+            print(f"  [INFO] Normalized column '{col}' -> '{mapping[col_lower]}'")
+
+    _refuse_colliding_renames(df, rename_map)
 
     # Rename columns if any mappings found
     if rename_map:
@@ -259,12 +491,126 @@ def normalize_column_names(df):
     return df
 
 
-def is_header_row(row_values):
+class ColumnCollisionError(ValueError):
+    """Two of a sheet's columns claim one canonical name."""
+
+
+# Names the build writes into a record itself, which a spreadsheet must
+# therefore not also write. `_metadata` is the synthetic first element
+# `csv_to_json` prepends to a story's JSON to carry viewer warnings and the
+# LaTeX flag; every consumer -- the shared story-steps include, four places
+# in story.html, five JavaScript modules, the encryptor's sentinel harvest
+# -- identifies that element by this key alone.
+RESERVED_COLUMN_NAMES = frozenset({'_metadata'})
+
+
+class ReservedColumnError(ValueError):
+    """A spreadsheet declares a column name the build reserves for itself."""
+
+
+def _refuse_reserved_columns(df):
+    """Refuse a sheet that writes a name only the build is meant to write.
+
+    A story sheet carrying a column called `_metadata` produces rows with
+    that key, and every consumer reads such a row as the synthetic metadata
+    element rather than as a step: the step is dropped from the published
+    story and the step count drops to match, so nothing looks wrong. The
+    author is told nothing.
+
+    The name is load-bearing beyond story steps, so the refusal is not
+    narrowed to the sheets the sentinel lives on. `telar/demo.py` collects
+    the ids already in `objects.json` by filtering the same key, so an
+    objects sheet carrying the column empties that set and the demo merge
+    stops seeing the site's own objects -- it adds every demo object,
+    including ones whose id the owner is already using.
+
+    The build refuses rather than renaming or stripping. A renamed column
+    can still be forged by a hand-committed CSV, because the decoder and the
+    parser both pass bytes through. Stripping deletes the author's own data
+    on a name match, and a remover destroys content when its sentinel is
+    forged. This adds nothing to the file and removes nothing from it; it
+    stops and says which column to rename.
+    """
+    reserved = sorted({str(col) for col in df.columns
+                       if str(col).lower().strip() in RESERVED_COLUMN_NAMES})
+    if not reserved:
+        return
+
+    named = ', '.join(repr(col) for col in reserved)
+    raise ReservedColumnError(
+        f"This spreadsheet has a column Telar uses for itself: {named}. "
+        "A row in that column is read as Telar's own bookkeeping rather "
+        "than as your content, so the row would disappear from the "
+        "published site without any warning. Rename the column and rebuild."
+    )
+
+
+def _refuse_colliding_renames(df, rename_map):
+    """Refuse a rename that would put two columns under one name.
+
+    A sheet headed both `privado` and `protected`, or both `fuente` and
+    `location`, leaves pandas holding two columns of the same name. Every
+    consumer then reads a Series where it expects a value: `row.get('protected')`
+    returns both cells, and the truth test at the far end raises
+    "The truth value of a Series is ambiguous" — a message that says nothing
+    about the spreadsheet the author has to fix.
+
+    Refusing here fails just as closed and names the two columns, which is the
+    only part the author can act on. There is no safe way to guess which column
+    was meant: for `protected` the two answers are publish and do not publish.
+
+    Two spellings of one header collide on the same terms. Every lookup
+    downstream folds case and trims, so `Note` beside `note` is one column
+    written twice and pandas holds both under one label again. Grouping the
+    sheet's own columns rather than the rename map is what sees it: a caller
+    that folded its headers before calling leaves two identical labels, and
+    a map keyed by label collapses those into a single entry.
+    """
+    claimed = {}
+    for col in df.columns:
+        canonical = rename_map.get(col, str(col).lower().strip())
+        claimed.setdefault(canonical, []).append(str(col))
+
+    collisions = []
+    for canonical, sources in sorted(claimed.items()):
+        if len(sources) > 1:
+            collisions.append((canonical, sorted(sources)))
+
+    if collisions:
+        detail = '; '.join(
+            f"'{canonical}' is claimed by {', '.join(repr(c) for c in cols)}"
+            for canonical, cols in collisions)
+        raise ColumnCollisionError(
+            f"Two columns in this spreadsheet mean the same thing: {detail}. "
+            "Keep one of each and remove the other, then rebuild. If this "
+            "site is edited in the Compositor, publish it again from there "
+            "instead: a current Compositor writes one column for each, and "
+            "this file is not one to edit by hand."
+        )
+
+
+# Spellings of removed columns that a published sheet may still carry. They
+# are not aliases: nothing renames to them and no processor reads them.
+# `is_header_row` scores a row against the column vocabulary, and without these
+# a four-column glossary header carrying one scores 3/4, below the 0.8
+# threshold, so the bilingual Spanish row is read as a glossary term titled
+# `titulo`. A column can leave the vocabulary, but a sheet already published
+# with it cannot, so this set only grows.
+LEGACY_HEADER_SPELLINGS = frozenset({
+    'quoted_in_stories',
+    'citado_en_historias',
+    'citada_en_historias',
+})
+
+
+def is_header_row(row_values, sheet_aliases=None):
     """
     Check if a row contains header names (English or Spanish).
 
     Args:
         row_values: List of cell values from a row
+        sheet_aliases: The aliases only this sheet reads, whose names count
+            as header names here too
 
     Returns:
         bool: True if row appears to be a header row
@@ -275,15 +621,29 @@ def is_header_row(row_values):
     # Also include common column names not in the mapping
     valid_names.update(['x', 'y', 'zoom'])
 
+    # And spellings a published sheet may carry for a column since removed.
+    valid_names.update(LEGACY_HEADER_SPELLINGS)
+
+    if sheet_aliases:
+        valid_names.update(sheet_aliases.keys())
+        valid_names.update(sheet_aliases.values())
+
     # Count how many cells match known column names
+    # A blank cell is absent whichever reader supplied it: the glossary
+    # readers give '' and `csv_to_json` gives NaN (both keep `NA` as text).
+    # Counting '' as populated would lower the score of a header row padded
+    # with empty columns.
     matches = 0
     total = 0
     for val in row_values:
-        if pd.notna(val):
-            val_lower = str(val).lower().strip()
-            total += 1
-            if val_lower in valid_names:
-                matches += 1
+        if pd.isna(val):
+            continue
+        val_lower = str(val).lower().strip()
+        if not val_lower:
+            continue
+        total += 1
+        if val_lower in valid_names:
+            matches += 1
 
     # If 80%+ of non-empty cells are column names, it's a header row.
     # Require at least 3 non-empty cells so a sparse first data row whose two

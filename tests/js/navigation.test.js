@@ -6,7 +6,7 @@
  * behaviour by calling goToStep and initializeButtonNavigation directly.
  * Covered here:
  *   - ArrowDown/Up/PageDown/PageUp/Space call keyboardNav when lenis is set,
- *     and nextStep/prevStep when it is not
+ *     and make the previous/next button's move when it is not
  *   - the same keys scroll the topmost panel instead when one is open, and
  *     which of them cancel the event in that state
  *   - auto-repeat is ignored for story navigation and allowed for panel
@@ -17,7 +17,7 @@
  *   - goToStep's bounds, its card activation, and its intro restoration
  *   - the mobile previous button restoring the intro from step 0
  *
- * @version v1.7.0
+ * @version v1.8.0
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
   const mockStepHasLayer1Content = vi.fn(() => true);
   const mockStepHasLayer2Content = vi.fn(() => false);
   const mockActivateCard = vi.fn();
+  const mockReleaseTitleCardsForIntro = vi.fn();
   const mockInitializeLoadingShimmer = vi.fn();
   const mockAdvanceToStep = vi.fn();
   const mockKeyboardNav = vi.fn();
@@ -40,6 +41,7 @@ const mocks = vi.hoisted(() => {
     mockStepHasLayer1Content,
     mockStepHasLayer2Content,
     mockActivateCard,
+    mockReleaseTitleCardsForIntro,
     mockInitializeLoadingShimmer,
     mockAdvanceToStep,
     mockKeyboardNav,
@@ -57,6 +59,7 @@ vi.mock('../../assets/js/telar-story/panels.js', () => ({
 
 vi.mock('../../assets/js/telar-story/card-pool.js', () => ({
   activateCard: mocks.mockActivateCard,
+  releaseTitleCardsForIntro: mocks.mockReleaseTitleCardsForIntro,
   setCardProgress: vi.fn(),
   initCardPool: vi.fn(),
 }));
@@ -79,6 +82,11 @@ vi.mock('../../assets/js/telar-story/scroll-engine.js', () => ({
   getScrollEngineState: vi.fn(),
 }));
 
+vi.mock('../../assets/js/telar-story/camera-travel.js', () => ({
+  stepTravel: vi.fn(() => 0),
+  travelBetween: vi.fn(() => 1.97),
+}));
+
 vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
   lerpIiifPosition: vi.fn(),
   snapIiifToPosition: vi.fn(),
@@ -86,7 +94,6 @@ vi.mock('../../assets/js/telar-story/iiif-card.js', () => ({
   createIiifCard: vi.fn(),
   getOrCreateIiifCard: vi.fn(),
   activateIiifCard: vi.fn(),
-  deactivateIiifCard: vi.fn(),
   destroyIiifCard: vi.fn(),
 }));
 
@@ -97,7 +104,8 @@ import {
   goToStep,
   initializeButtonNavigation,
 } from '../../assets/js/telar-story/navigation.js';
-import { state } from '../../assets/js/telar-story/state.js';
+import { state, moveSeconds } from '../../assets/js/telar-story/state.js';
+import { IiifPlate } from '../../assets/js/telar-story/plates/iiif-plate.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -162,9 +170,10 @@ function makeTextCard({ rot = 0, offX = 0, offY = 0 } = {}) {
  * @returns {HTMLElement}
  */
 function makeViewerPlate() {
-  const plate = document.createElement('div');
-  plate.className = 'viewer-plate is-active';
-  return plate;
+  const el = document.createElement('div');
+  el.className = 'viewer-plate is-active';
+  el.dataset.cardType = 'iiif';
+  return new IiifPlate(el, 'leviathan', 0, 0);
 }
 
 function resetState(overrides = {}) {
@@ -176,12 +185,12 @@ function resetState(overrides = {}) {
   state.lenis = {}; // truthy — enables keyboardNav path
   state.textCards = {};
   state.viewerPlates = {};
-  state.currentObjectRun = { objectId: null, runPosition: 0 };
+  state.currentObjectScene = { objectId: null, scenePosition: 0 };
   state.onStepChange = null;
-  state.mobileInIntro = false;
-  state.mobileNavButtons = null;
-  state.mobileNavigationCooldown = false;
-  state.currentMobileStep = 0;
+  state.buttonInIntro = false;
+  state.buttonNavButtons = null;
+  state.buttonNavCooldown = false;
+  state.currentButtonStep = 0;
   Object.assign(state, overrides);
 }
 
@@ -289,28 +298,120 @@ describe('Space', () => {
   });
 });
 
-// ── Fallback when snap is null ────────────────────────────────────────────────
+// ── Space on a focused control ───────────────────────────────────────────────
 
-describe('fallback to nextStep/prevStep when lenis is null', () => {
-  it('ArrowDown calls activateCard (via nextStep) when lenis is null', () => {
-    state.lenis = null;
-    // nextStep calls goToStep(state.currentIndex + 1, 'forward')
-    // which calls activateCard — so mockActivateCard should be invoked
-    pressKey('ArrowDown');
+describe('Space on a focused control', () => {
+  /** Dispatch Space from an element, as a focused control does. */
+  function pressSpaceOn(el, extras = {}) {
+    if (!el.isConnected) document.body.appendChild(el);
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true, ...extras });
+    el.dispatchEvent(event);
+    (el.closest('button') || el).remove();
+    return event;
+  }
+
+  const controls = {
+    button: () => document.createElement('button'),
+    summary: () => document.createElement('summary'),
+    'role=button': () => {
+      const el = document.createElement('div');
+      el.setAttribute('role', 'button');
+      return el;
+    },
+    input: () => document.createElement('input'),
+    select: () => document.createElement('select'),
+    textarea: () => document.createElement('textarea'),
+    contenteditable: () => {
+      const el = document.createElement('div');
+      el.setAttribute('contenteditable', 'true');
+      return el;
+    },
+    'child of a button': () => {
+      const button = document.createElement('button');
+      const span = document.createElement('span');
+      button.appendChild(span);
+      document.body.appendChild(button);
+      return span;
+    },
+  };
+
+  for (const [name, make] of Object.entries(controls)) {
+    it(`leaves Space to the browser on a ${name}`, () => {
+      const event = pressSpaceOn(make());
+      expect(event.defaultPrevented).toBe(false);
+      expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
+    });
+  }
+
+  it('leaves Shift+Space to the browser on a button', () => {
+    const event = pressSpaceOn(document.createElement('button'), { shiftKey: true });
+    expect(event.defaultPrevented).toBe(false);
     expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
-    // goToStep calls activateCard with target index
-    expect(mocks.mockActivateCard).toHaveBeenCalledWith(
-      state.currentIndex, // was already advanced; check it was called
-      expect.any(String)
-    );
   });
 
-  it('ArrowUp calls activateCard (via prevStep) when lenis is null', () => {
-    state.lenis = null;
-    state.currentIndex = 2;
+  // Space on a link scrolls the page in a browser rather than following it,
+  // so in a story it moves a step, as it does from the page.
+  it('moves the story on Space from a link', () => {
+    const event = pressSpaceOn(Object.assign(document.createElement('a'), { href: '#x' }));
+    expect(event.defaultPrevented).toBe(true);
+    expect(mocks.mockKeyboardNav).toHaveBeenCalledWith('forward');
+  });
+
+  it('still moves the story on Space from a non-control element', () => {
+    const event = pressSpaceOn(document.createElement('div'));
+    expect(event.defaultPrevented).toBe(true);
+    expect(mocks.mockKeyboardNav).toHaveBeenCalledWith('forward');
+  });
+});
+
+// ── Fallback when snap is null ────────────────────────────────────────────────
+
+/** Steps as elements, as button navigation moves a class between them. */
+function useButtonSteps(currentButtonStep) {
+  state.lenis = null;
+  state.steps = Array.from({ length: 5 }, (_, i) => {
+    const el = document.createElement('div');
+    el.className = 'story-step';
+    el.dataset.step = String(i + 1);
+    return el;
+  });
+  state.stepToScene = {};
+  state.currentButtonStep = currentButtonStep;
+  state.currentIndex = currentButtonStep;
+}
+
+describe('a button move on a phone', () => {
+  it('hands the cards the duration the camera travel asks for, before the card moves', () => {
+    useButtonSteps(0);
+    const stack = document.createElement('div');
+    stack.className = 'card-stack';
+    document.body.appendChild(stack);
+    let atActivation = null;
+    mocks.mockActivateCard.mockImplementationOnce(() => {
+      atActivation = stack.style.getPropertyValue('--card-motion-duration');
+    });
+
+    pressKey('ArrowDown');
+
+    expect(atActivation).toBe(`${moveSeconds(1.97)}s`);
+  });
+});
+
+describe('step keys when lenis is null', () => {
+  it('ArrowDown makes the next button\'s move', () => {
+    useButtonSteps(0);
+    pressKey('ArrowDown');
+    expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
+    expect(mocks.mockActivateCard).toHaveBeenCalledWith(1, 'forward');
+    expect(state.currentIndex).toBe(1);
+  });
+
+  it('ArrowUp makes the previous button\'s move', () => {
+    useButtonSteps(2);
     pressKey('ArrowUp');
     expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
-    expect(mocks.mockActivateCard).toHaveBeenCalled();
+    expect(mocks.mockActivateCard).toHaveBeenCalledWith(1, 'backward');
+    expect(state.currentIndex).toBe(1);
   });
 });
 
@@ -499,7 +600,7 @@ describe('navigation keys with a panel open', () => {
 
 describe('Space with no scroll engine', () => {
   it('advances a step through activateCard', () => {
-    state.lenis = null;
+    useButtonSteps(0);
     pressKey(' ');
 
     expect(mocks.mockKeyboardNav).not.toHaveBeenCalled();
@@ -507,8 +608,7 @@ describe('Space with no scroll engine', () => {
   });
 
   it('goes back a step on Shift+Space', () => {
-    state.lenis = null;
-    state.currentIndex = 2;
+    useButtonSteps(2);
     pressKey(' ', { shiftKey: true });
 
     expect(mocks.mockActivateCard).toHaveBeenCalledWith(1, 'backward');
@@ -672,7 +772,7 @@ describe('goToStep(-1) — intro restoration', () => {
     state.viewerPlates = { leviathan: plate };
     window.storyData = { steps: [], firstObject: 'leviathan' };
 
-    state.currentObjectRun = { objectId: 'leviathan', runPosition: 2 };
+    state.currentObjectScene = { objectId: 'leviathan', scenePosition: 2 };
   });
 
   it('slides the intro card back into view', () => {
@@ -680,7 +780,12 @@ describe('goToStep(-1) — intro restoration', () => {
 
     expect(state.currentIndex).toBe(-1);
     expect(intro.style.transform).toBe('translateY(0)');
-    expect(intro.style.transition).toBe('transform 0.5s ease-out');
+    // The intro travels with the card that covers it, so it takes the card
+    // stack's own duration and curve rather than figures of its own. Both are
+    // read as properties: a move whose pace or easing is retuned must not
+    // leave the intro behind on the old one.
+    expect(intro.style.transition)
+      .toBe('transform var(--card-motion-duration) var(--card-motion-easing)');
   });
 
   it('sends the first text card off the bottom carrying its authored messiness', () => {
@@ -694,14 +799,14 @@ describe('goToStep(-1) — intro restoration', () => {
   it('slides the first object plate down and deactivates it', () => {
     goToStep(-1, 'backward');
 
-    expect(plate.style.transform).toBe('translateY(100%)');
-    expect(plate.classList.contains('is-active')).toBe(false);
+    expect(plate.container.style.transform).toBe('translateY(100%)');
+    expect(plate.container.classList.contains('is-active')).toBe(false);
   });
 
   it('resets the object run and hides the credit badge', () => {
     goToStep(-1, 'backward');
 
-    expect(state.currentObjectRun).toEqual({ objectId: null, runPosition: 0 });
+    expect(state.currentObjectScene).toEqual({ objectId: null, scenePosition: 0 });
     expect(creditBadge.classList.contains('d-none')).toBe(true);
   });
 
@@ -720,13 +825,22 @@ describe('goToStep(-1) — intro restoration', () => {
     expect(mocks.mockActivateCard).not.toHaveBeenCalled();
   });
 
+  // A section card at step 0 is the story's first card, and it is full
+  // viewport: left on screen it hides the intro outright, and the text-card
+  // path above cannot reach it because state.textCards[0] does not exist.
+  it('sends the title cards standing over the intro away', () => {
+    goToStep(-1, 'backward');
+
+    expect(mocks.mockReleaseTitleCardsForIntro).toHaveBeenCalled();
+  });
+
   it('leaves the plates alone when the story names no first object', () => {
     window.storyData = { steps: [] };
 
     goToStep(-1, 'backward');
 
-    expect(plate.style.transform).toBe('');
-    expect(plate.classList.contains('is-active')).toBe(true);
+    expect(plate.container.style.transform).toBe('');
+    expect(plate.container.classList.contains('is-active')).toBe(true);
   });
 
   it('restores a story that has no intro card, no text cards and no plates', () => {
@@ -770,11 +884,14 @@ describe('mobile previous button — restoring the intro', () => {
     document.body.appendChild(creditBadge);
 
     initializeButtonNavigation();
+    // A phone: no scroll engine beside the buttons. In an embed the engine
+    // carries the move back to the intro instead (button-navigation.test.js).
+    state.lenis = null;
 
     // The story boots on the intro; these tests start from step 0 instead.
-    state.mobileInIntro = false;
-    state.currentMobileStep = 0;
-    state.mobileNavButtons.prev.disabled = false;
+    state.buttonInIntro = false;
+    state.currentButtonStep = 0;
+    state.buttonNavButtons.prev.disabled = false;
   }
 
   beforeEach(() => {
@@ -787,15 +904,15 @@ describe('mobile previous button — restoring the intro', () => {
 
   it('slides the intro card back into view', () => {
     buildMobileStory();
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(state.mobileInIntro).toBe(true);
+    expect(state.buttonInIntro).toBe(true);
     expect(intro.style.transform).toBe('translateY(0)');
   });
 
   it('sends the first text card off the bottom carrying its authored messiness', () => {
     buildMobileStory();
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(firstCard.classList.contains('is-active')).toBe(false);
     expect(firstCard.style.transform).toBe('translateY(100vh) rotate(-1deg) translate(5px, 6px)');
@@ -803,41 +920,41 @@ describe('mobile previous button — restoring the intro', () => {
 
   it('slides the first plate down and deactivates it', () => {
     buildMobileStory();
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(plate.style.transform).toBe('translateY(100%)');
-    expect(plate.classList.contains('is-active')).toBe(false);
+    expect(plate.container.style.transform).toBe('translateY(100%)');
+    expect(plate.container.classList.contains('is-active')).toBe(false);
   });
 
   it('resets the object run, hides the credit badge and disables itself', () => {
     buildMobileStory();
-    state.currentObjectRun = { objectId: 'leviathan', runPosition: 1 };
+    state.currentObjectScene = { objectId: 'leviathan', scenePosition: 1 };
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(state.currentObjectRun).toEqual({ objectId: null, runPosition: 0 });
+    expect(state.currentObjectScene).toEqual({ objectId: null, scenePosition: 0 });
     expect(creditBadge.classList.contains('d-none')).toBe(true);
-    expect(state.mobileNavButtons.prev.disabled).toBe(true);
+    expect(state.buttonNavButtons.prev.disabled).toBe(true);
   });
 
   it('does nothing while the navigation cooldown is running', () => {
     buildMobileStory();
-    state.mobileNavigationCooldown = true;
+    state.buttonNavCooldown = true;
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
-    expect(state.mobileInIntro).toBe(false);
+    expect(state.buttonInIntro).toBe(false);
     expect(intro.style.transform).toBe('');
   });
 
   it('does nothing when the intro is already showing', () => {
     buildMobileStory();
-    state.mobileInIntro = true;
+    state.buttonInIntro = true;
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(intro.style.transform).toBe('');
-    expect(plate.style.transform).toBe('');
+    expect(plate.container.style.transform).toBe('');
   });
 
   it('restores a story that has no intro card, no text cards and no plates', () => {
@@ -845,15 +962,15 @@ describe('mobile previous button — restoring the intro', () => {
     state.viewerPlates = {};
     buildMobileStory({ withIntro: false });
 
-    expect(() => state.mobileNavButtons.prev.click()).not.toThrow();
-    expect(state.mobileInIntro).toBe(true);
+    expect(() => state.buttonNavButtons.prev.click()).not.toThrow();
+    expect(state.buttonInIntro).toBe(true);
   });
 
   it('activates no card, because the intro is not a step', () => {
     buildMobileStory();
     mocks.mockActivateCard.mockClear();
 
-    state.mobileNavButtons.prev.click();
+    state.buttonNavButtons.prev.click();
 
     expect(mocks.mockActivateCard).not.toHaveBeenCalled();
   });

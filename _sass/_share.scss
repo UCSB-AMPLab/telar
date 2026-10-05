@@ -7,7 +7,7 @@
  * copy-to-clipboard functionality, embed code generation, and social media
  * sharing links.
  *
- * @version v1.6.0
+ * @version v1.8.0
  */
 
 @use 'responsive' as *;
@@ -244,7 +244,7 @@
 
     &.active {
       background: var(--color-heading);
-      color: white;
+      color: var(--color-on-heading);
     }
 
     &:focus {
@@ -328,7 +328,7 @@
 
     &.active {
       background: var(--color-heading);
-      color: white;
+      color: var(--color-on-heading);
     }
 
     &:focus {
@@ -362,7 +362,7 @@
   .share-copy-btn {
     padding: 0 16px;
     background: var(--color-heading);
-    color: white;
+    color: var(--color-on-heading);
     border: none;
     border-radius: 50px;
     font-size: 0.75rem;

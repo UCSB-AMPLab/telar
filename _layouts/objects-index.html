@@ -113,7 +113,7 @@ layout: default
 
   {% if browse_and_search %}
   {% comment %}Browse and Search Layout Container{% endcomment %}
-  <div class="objects-layout">
+  <div class="objects-layout" data-no-options="{{ lang.objects.no_options | escape }}">
     {% comment %}Sidebar (desktop) / Top controls (mobile){% endcomment %}
     <aside class="objects-sidebar">
       {% comment %}Search input (always visible){% endcomment %}
@@ -234,6 +234,7 @@ layout: default
     {% include object-grid-item.html object=object lang=lang show_filters=true %}
     {% endfor %}
       </div>
+      <p class="objects-no-results" id="objects-no-results" role="status" hidden>{{ lang.objects.no_results }}</p>
     </div>
   </div>
   {% else %}

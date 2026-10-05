@@ -20,7 +20,7 @@ The csv_to_json.py build script (telar package) merges demo content
 into the JSON data alongside the user's real content, marking demo
 items with a _demo flag so the site can style them differently.
 
-Version: v1.5.0
+Version: v1.8.0
 """
 
 import json
@@ -51,6 +51,22 @@ except ImportError:
     pass
 
 
+# The version spellings a site's _config.yml can hold, and the release the
+# demo bundles are keyed by. Kept deliberately close to the upgrade engine's
+# grammar in telar_upgrade.py: one optional git-tag prefix, three components
+# with no leading zeros, ASCII digits only, and -beta preserved in the input
+# because a site really is on "1.0.0-beta" -- it is dropped from the group
+# this script uses, since bundles are published per release number.
+_SITE_VERSION_RE = re.compile(
+    r'[vV]?'
+    r'(?P<release>'
+    r'(?:0|[1-9][0-9]*)\.'
+    r'(?:0|[1-9][0-9]*)\.'
+    r'(?:0|[1-9][0-9]*)'
+    r')'
+    r'(?:-beta)?'
+)
+
 def load_config():
     """
     Load configuration from _config.yml
@@ -73,17 +89,12 @@ def load_config():
         story_interface = config.get('story_interface', {})
         enabled = story_interface.get('include_demo_content', False)
 
-        # Get version and strip -beta suffix
+        # Get version, as the release the demo bundles are keyed by.
         telar = config.get('telar', {})
-        version = telar.get('version', '0.6.0')
-        # Remove -beta, -alpha suffixes for version matching
-        version = version.split('-')[0]
-        # Strip leading v/V — historical Compositor upgrade flows wrote
-        # v-prefixed values into _config.yml. Normalise here so all
-        # downstream consumers (URLs, log lines, version comparison) see a
-        # bare numeric version. parse_version applies the same lenience as
-        # defence-in-depth against entries in the remote versions.json.
-        version = version.lstrip('vV')
+        raw_version = telar.get('version', '0.6.0')
+        match = (_SITE_VERSION_RE.fullmatch(raw_version)
+                 if isinstance(raw_version, str) else None)
+        version = match.group('release') if match else None
 
         # Get language
         language = config.get('telar_language', 'en')
@@ -95,8 +106,8 @@ def load_config():
         if language not in ('en', 'es'):
             print(f"[WARNING] Unrecognised telar_language '{language}'; defaulting to 'en'")
             language = 'en'
-        if not re.fullmatch(r'\d+\.\d+\.\d+', version):
-            print(f"[WARNING] Could not parse version '{version}'; skipping demo-content fetch")
+        if version is None:
+            print(f"[WARNING] Could not parse version '{raw_version}'; skipping demo-content fetch")
             return None
 
         return {
@@ -170,15 +181,13 @@ def find_best_version(site_version, available_versions):
         None: If no compatible version exists
     """
     def parse_version(v):
-        # Tolerate a leading "v" or "V" — historical Compositor upgrade flows
-        # wrote v-prefixed strings into _config.yml, and some bundle indexes
-        # may list versions either way. Strip before splitting on dots.
-        v = v.lstrip('vV')
-        # Reject malformed entries up front so a bad versions.json row is
-        # discarded (caught below) rather than raising mid-comparison.
-        if not re.fullmatch(r'\d+(\.\d+){0,2}', v):
+        # Looser than _SITE_VERSION_RE: rows from the remote versions.json
+        # are compared as numbers, so short forms are padded below; a
+        # repeated prefix is rejected.
+        match = re.fullmatch(r'[vV]?(?P<number>[0-9]+(?:\.[0-9]+){0,2})', v)
+        if match is None:
             raise ValueError(f"Bad version: {v}")
-        ints = tuple(int(p) for p in v.split('.'))
+        ints = tuple(int(p) for p in match.group('number').split('.'))
         # Pad to 3 components so a shorter remote tuple (1, 4) compares equal
         # to (1, 4, 0) rather than sorting as older.
         return ints + (0,) * (3 - len(ints))

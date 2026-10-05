@@ -20,9 +20,15 @@ line as a completed checklist item.
 
 `apply_config_version()` is the single source of truth for rewriting the
 `telar.version` / `telar.release_date` stamp in `_config.yml`. It edits
-text rather than round-tripping YAML so comments and formatting survive,
-and both `BaseMigration` (per migration) and `upgrade.py` (the final
-stamp) call it so the parsing rules cannot drift between two copies.
+text rather than round-tripping YAML, so the rest of the file keeps its
+comments and formatting — the two lines it rewrites are the exception and
+are rewritten whole. Both `BaseMigration` (per migration) and `upgrade.py`
+(the final stamp) call it so the parsing rules cannot drift between two
+copies.
+
+Those types and `apply_config_version()` are defined in `records.py`, with
+the other rules that need no migration instance, and imported back here, so
+they are still imported from this module.
 
 `BaseMigration` itself groups its helpers by concern. File primitives
 (`_read_file`, `_write_file`, `_move_file`, `_file_exists`) work relative
@@ -46,12 +52,10 @@ a crash mid-write is detectable), and written `failed` by `upgrade.py`
 when an upgrade aborts on a HARD failure (so a re-run can tell the user
 they are resuming). A clean success leaves no such file behind.
 
-Version: v1.7.0
+Version: v1.8.0
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 import json
 import os
@@ -62,213 +66,16 @@ import time
 from .messages import get_message
 
 
-class ChangeStatus(str, Enum):
-    """Outcome of a single change a migration attempted."""
-
-    APPLIED = "applied"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-
-
-@dataclass
-class ChangeRecord:
-    """A structured record of one change a migration attempted.
-
-    Replaces the old flat list-of-strings return value so the upgrade
-    pipeline can tell success from failure instead of rendering every
-    string as a completed checklist item.
-
-    Attributes:
-        description: Human-readable description of the change.
-        status: APPLIED, FAILED, or SKIPPED.
-        severity: 'hard' if a FAILED status must abort the upgrade
-            (no version stamp, non-zero exit), 'soft' if it should be
-            surfaced for manual attention but not block the upgrade.
-        category: Which UPGRADE_SUMMARY.md heading this belongs under, one
-            of ChangeCategory. None leaves the summary to guess from the
-            description, which is what it did for every record before this
-            field existed — a rephrased description silently moved a change
-            to "Other".
-    """
-
-    description: str
-    status: ChangeStatus = ChangeStatus.APPLIED
-    severity: str = "soft"
-    category: Optional[str] = None
-
-
-class ChangeCategory:
-    """The UPGRADE_SUMMARY.md headings, as values a record can carry.
-
-    Slugs rather than English titles: the heading a reader sees comes from
-    messages.py under `category_<slug>`, so the record names the section
-    without naming the language.
-    """
-
-    CONFIGURATION = 'configuration'
-    LAYOUTS = 'layouts'
-    INCLUDES = 'includes'
-    STYLES = 'styles'
-    SCRIPTS = 'scripts'
-    DOCUMENTATION = 'documentation'
-    OTHER = 'other'
-
-    # The order the summary prints them in.
-    ORDER = (CONFIGURATION, LAYOUTS, INCLUDES, STYLES, SCRIPTS,
-             DOCUMENTATION, OTHER)
-
-
-# Where a framework file belongs, by path. First match wins, so the
-# specific prefixes precede the extension rules: assets/css/ is a style
-# whatever it is called, and scripts/ is a script even when it holds a .md.
-_CATEGORY_BY_PREFIX = (
-    ('_config.yml', ChangeCategory.CONFIGURATION),
-    ('_data/', ChangeCategory.CONFIGURATION),
-    ('_layouts/', ChangeCategory.LAYOUTS),
-    ('_includes/', ChangeCategory.INCLUDES),
-    ('_sass/', ChangeCategory.STYLES),
-    ('assets/css/', ChangeCategory.STYLES),
-    ('assets/js/', ChangeCategory.SCRIPTS),
-    ('scripts/', ChangeCategory.SCRIPTS),
-    ('tests/', ChangeCategory.SCRIPTS),
-    ('docs/', ChangeCategory.DOCUMENTATION),
+# The records, the categories and the shared rules live in records.py and are
+# re-exported here, the same objects rather than copies, so the migrations,
+# the engine and the tests import from `migrations.base` alone and an
+# isinstance check sees one class.
+from .records import (  # noqa: F401
+    ChangeStatus, FetchOutcome, STRUCTURAL_HTTP_CODES, FetchResult,
+    ChangeRecord, ChangeCategory, category_for_path, MANUAL_STEP_AUDIENCES, MANUAL_STEP_KINDS,
+    UPGRADE_STATE_FILE, LAUNCHER_MARKER, apply_config_version, coerce_change,
+    is_author_step, is_flagged, is_hard_failure,
 )
-
-_CATEGORY_BY_SUFFIX = (
-    ('.scss', ChangeCategory.STYLES),
-    ('.css', ChangeCategory.STYLES),
-    ('.js', ChangeCategory.SCRIPTS),
-    ('.py', ChangeCategory.SCRIPTS),
-    ('.yml', ChangeCategory.CONFIGURATION),
-    ('.md', ChangeCategory.DOCUMENTATION),
-)
-
-# Files whose name is the whole answer.
-_CATEGORY_BY_NAME = {
-    'README.md': ChangeCategory.DOCUMENTATION,
-    'CHANGELOG.md': ChangeCategory.DOCUMENTATION,
-    'LICENSE': ChangeCategory.DOCUMENTATION,
-    'NOTICE': ChangeCategory.DOCUMENTATION,
-    '.gitignore': ChangeCategory.CONFIGURATION,
-    'package.json': ChangeCategory.CONFIGURATION,
-    'requirements.txt': ChangeCategory.CONFIGURATION,
-    'pytest.ini': ChangeCategory.CONFIGURATION,
-    'vitest.config.js': ChangeCategory.CONFIGURATION,
-}
-
-
-def category_for_path(path: str) -> str:
-    """Which summary heading a change to *path* belongs under."""
-    if path in _CATEGORY_BY_NAME:
-        return _CATEGORY_BY_NAME[path]
-    for prefix, category in _CATEGORY_BY_PREFIX:
-        if path == prefix or path.startswith(prefix):
-            return category
-    for suffix, category in _CATEGORY_BY_SUFFIX:
-        if path.endswith(suffix):
-            return category
-    return ChangeCategory.OTHER
-
-
-# Shared name for the in-progress / failed state marker (see the module
-# docstring for the two roles it plays). Lives at the repo root.
-UPGRADE_STATE_FILE = "UPGRADE_STATE.json"
-
-
-def apply_config_version(content, new_version, new_date):
-    """Rewrite telar.version / telar.release_date in _config.yml *content*,
-    preserving comments and formatting (text edit, not a YAML round-trip).
-
-    Single source of truth for the version stamp — both BaseMigration (per
-    migration) and upgrade.py (the final stamp in main()) call this, so the
-    parsing rules cannot drift between copies.
-
-    What the parsing guarantees:
-      - Indent-agnostic: any indented line is treated as inside the `telar:`
-        section; the section ends only at the next non-blank column-0 line, so
-        a single-space indent does not truncate it.
-      - Inserts a release_date line right after version if the section has a
-        version but no release_date.
-
-    Args:
-        content: Full text of _config.yml.
-        new_version: New version string (e.g. "1.5.0").
-        new_date: New release date (e.g. "2026-06-03").
-
-    Returns:
-        (new_content, modified): the rewritten text and whether anything changed.
-    """
-    lines = content.split('\n')
-    modified = False
-    in_telar_section = False
-    version_idx = None
-    release_date_seen = False
-
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-
-        if not in_telar_section:
-            if line.startswith('telar:'):
-                in_telar_section = True
-            continue
-
-        # Inside the telar section. `telar:` is a top-level key, so the section
-        # ends at the next non-blank line back at column 0 (any indentation —
-        # one space, two, or a tab — keeps us inside).
-        indent_len = len(line) - len(line.lstrip())
-        if stripped and indent_len == 0:
-            in_telar_section = False
-            continue
-
-        if stripped.startswith('version:'):
-            lines[i] = f'{line[:indent_len]}version: "{new_version}"'
-            version_idx = i
-            modified = True
-        elif stripped.startswith('release_date:'):
-            lines[i] = f'{line[:indent_len]}release_date: "{new_date}"'
-            release_date_seen = True
-            modified = True
-
-    # Insert a release_date line adjacent to version if the section lacked one.
-    if version_idx is not None and not release_date_seen:
-        vline = lines[version_idx]
-        indent = vline[:len(vline) - len(vline.lstrip())]
-        lines.insert(version_idx + 1, f'{indent}release_date: "{new_date}"')
-        modified = True
-
-    return '\n'.join(lines), modified
-
-
-def coerce_change(change) -> ChangeRecord:
-    """Coerce a migration's return element to a ChangeRecord.
-
-    Migrations converted to the structured contract return ChangeRecord
-    objects directly. Legacy migrations still return plain strings; treat each
-    such string as a soft, already-applied change so the chain keeps working
-    during the incremental conversion.
-
-    One exception: legacy migrations report a failed framework-file fetch as a
-    string containing "Could not fetch". That phrase appears only on fetch
-    failures (other warnings say "Could not move/create/remove/read/update"),
-    so it is safe to map it to a HARD failure — which makes even unconverted
-    migrations fail closed instead of reporting a missing file as done.
-
-    This lives here rather than in upgrade.py because two callers need the
-    same rule: the chain runner, and any migration that runs other migrations
-    internally. A second copy of the "Could not fetch" test would be a rule
-    that can drift.
-    """
-    if isinstance(change, ChangeRecord):
-        return change
-    text = str(change)
-    if "Could not fetch" in text:
-        return ChangeRecord(description=text, status=ChangeStatus.FAILED, severity="hard")
-    return ChangeRecord(description=text, status=ChangeStatus.APPLIED, severity="soft")
-
-
-def is_hard_failure(record: ChangeRecord) -> bool:
-    """True when this record must abort the upgrade."""
-    return record.status == ChangeStatus.FAILED and record.severity == "hard"
 
 
 class BaseMigration(ABC):
@@ -356,7 +163,23 @@ class BaseMigration(ABC):
         Get list of manual steps user must complete.
 
         Returns:
-            List of dicts with keys: 'description', 'doc_url' (optional)
+            List of dicts with keys: 'description', 'audience', 'kind',
+            'doc_url' (optional).
+
+        `audience` says who still has to do the step, and exists because the
+        Compositor does some of them for the user. It is required on every
+        step: a step without it would be shown to everyone, and a default
+        would hide that.
+
+        The question it answers is narrow — *is this step made unnecessary by
+        the Compositor doing it for you?* It is not "who is this step about".
+        A step whose prose already says "if you use GitHub Pages" is still
+        `all`: every reader sees it and the prose sorts them out.
+
+        `kind` says what the step asks of its reader: `action`, `optional`
+        or `note` (see MANUAL_STEP_KINDS). It is required on the same terms:
+        the Compositor shows a step without one apart from the others, and
+        cannot tell its reader that nothing is left to do.
         """
         return []
 
@@ -546,7 +369,8 @@ class BaseMigration(ABC):
         """
         Update telar.version and telar.release_date in _config.yml.
 
-        Uses text-based editing to preserve formatting and comments.
+        Text-based editing, so the file keeps its comments and formatting
+        everywhere except the two lines rewritten -- see apply_config_version.
 
         Args:
             new_version: New version string (e.g., "0.3.4-beta")
@@ -568,7 +392,10 @@ class BaseMigration(ABC):
 
     def _fetch_from_github(self, path: str, branch: Optional[str] = None, timeout: int = 10) -> Optional[str]:
         """
-        Fetch file content from GitHub telar repository.
+        Fetch file content from GitHub telar repository, or None on any failure.
+
+        Callers that need to act on *why* a fetch failed use `_fetch_result`
+        instead.
 
         Args:
             path: Path to file relative to repo root (e.g., "_layouts/story.html")
@@ -591,6 +418,26 @@ class BaseMigration(ABC):
         failure (`upgrade.py`), so a single binary asset in a file map
         stopped the whole chain.
         """
+        return self._fetch_result(path, branch=branch, timeout=timeout).content
+
+    def _fetch_result(self, path: str, branch: Optional[str] = None,
+                      timeout: int = 10) -> FetchResult:
+        """Fetch one file and say what happened, not only whether it worked.
+
+        A 404 and a timeout are the same `None` to a caller that only reads
+        content, and the chain cannot choose between stopping and continuing
+        without telling them apart: one clears on a re-run and the other is
+        the same answer forever.
+
+        Args:
+            path: Path to file relative to repo root.
+            branch: Branch or tag to fetch from; see `_fetch_from_github`.
+            timeout: Socket timeout in seconds.
+
+        Returns:
+            FetchResult — content on success, otherwise the outcome that
+            says whether a re-run could ever produce a different answer.
+        """
         import urllib.request
         import urllib.error
 
@@ -605,17 +452,26 @@ class BaseMigration(ABC):
             with urllib.request.urlopen(url, timeout=timeout) as response:
                 raw = response.read()
             try:
-                return raw.decode('utf-8')
+                return FetchResult(raw.decode('utf-8'), FetchOutcome.OK)
             except UnicodeDecodeError:
-                return raw
+                return FetchResult(raw, FetchOutcome.OK)
+        except urllib.error.HTTPError as e:
+            # Caught before URLError, which it subclasses — this is the only
+            # branch that carries a status code, and the code is the whole
+            # basis for the distinction.
+            outcome = (FetchOutcome.STRUCTURAL if e.code in STRUCTURAL_HTTP_CODES
+                       else FetchOutcome.TRANSIENT)
+            print("  " + get_message(self._detect_language(),
+                                     'fetch_failed_console', path, e))
+            return FetchResult(None, outcome, str(e))
         except urllib.error.URLError as e:
             print("  " + get_message(self._detect_language(),
                                      'fetch_failed_console', path, e))
-            return None
+            return FetchResult(None, FetchOutcome.TRANSIENT, str(e))
         except Exception as e:
             print("  " + get_message(self._detect_language(),
                                      'fetch_error_console', path, e))
-            return None
+            return FetchResult(None, FetchOutcome.TRANSIENT, str(e))
 
     # ------------------------------------------------------------------ #
     # Staged-atomic framework-file installation
@@ -647,19 +503,27 @@ class BaseMigration(ABC):
         """
         return self._TARGET_COMMIT or self._TARGET_TAG or 'main'
 
-    def _fetch_with_retry(self, path: str, branch: str) -> Optional[str]:
-        """Fetch one file, retrying once with backoff before giving up."""
-        content = self._fetch_from_github(path, branch=branch, timeout=self._STAGED_FETCH_TIMEOUT)
+    def _fetch_with_retry(self, path: str, branch: str) -> FetchResult:
+        """Fetch one file, retrying a transient failure once with backoff.
+
+        A structural failure is not retried. The ref is a release tag, so
+        the second request asks the identical question and waits for the
+        identical answer — on a file map with several wrong paths that is
+        the whole backoff paid per path, for nothing.
+        """
+        result = self._fetch_result(path, branch=branch,
+                                    timeout=self._STAGED_FETCH_TIMEOUT)
         attempt = 0
-        while content is None and attempt < self._FETCH_RETRIES:
+        while result.outcome is FetchOutcome.TRANSIENT and attempt < self._FETCH_RETRIES:
             attempt += 1
             time.sleep(min(2 ** attempt, 5))
-            content = self._fetch_from_github(path, branch=branch, timeout=self._STAGED_FETCH_TIMEOUT)
-        return content
+            result = self._fetch_result(path, branch=branch,
+                                        timeout=self._STAGED_FETCH_TIMEOUT)
+        return result
 
     def _fetch_all_staged(
         self, file_map: Dict[str, str], tag: Optional[str] = None
-    ) -> Tuple[Dict[str, Tuple[str, str]], List[ChangeRecord]]:
+    ) -> Tuple[Dict[str, Tuple[str, str]], List[ChangeRecord], List[ChangeRecord]]:
         """Phase A: fetch every file in file_map into memory without writing.
 
         Args:
@@ -667,30 +531,139 @@ class BaseMigration(ABC):
             tag: Release tag to pin to. Falls back to 'main' when None.
 
         Returns:
-            (content_map, failed_records) where content_map maps
-            rel_path -> (content, description) for every successful fetch, and
-            failed_records is a list of HARD ChangeRecords for every fetch that
-            failed. When failed_records is non-empty the caller must write
-            nothing (fail closed).
+            (content_map, blocking, flagged). content_map maps
+            rel_path -> (content, description) for every successful fetch.
+            `blocking` holds a HARD record per transient failure; when it is
+            non-empty the caller must write nothing, because a re-run can
+            still produce the whole set. `flagged` holds a SOFT record per
+            structural failure, which no re-run will change.
         """
         branch = tag if tag else 'main'
         content_map: Dict[str, Tuple[str, str]] = {}
-        failed: List[ChangeRecord] = []
+        blocking: List[ChangeRecord] = []
+        flagged: List[ChangeRecord] = []
 
         for rel_path, description in file_map.items():
-            content = self._fetch_with_retry(rel_path, branch)
-            if content is not None:
-                content_map[rel_path] = (content, description)
+            result = self._fetch_with_retry(rel_path, branch)
+            if result.content is not None:
+                content_map[rel_path] = (result.content, description)
+            elif result.outcome is FetchOutcome.STRUCTURAL:
+                # Not the user's problem to fix and not theirs to retry: the
+                # path is absent from the release the migration pins to, so
+                # the file map is wrong. Flag it and let the chain go on.
+                flagged.append(ChangeRecord(
+                    description=get_message(
+                        self._detect_language(), 'record_fetch_absent',
+                        rel_path, self.to_version),
+                    status=ChangeStatus.FAILED,
+                    severity="soft",
+                    category=category_for_path(rel_path),
+                ))
             else:
-                failed.append(ChangeRecord(
+                # The record names the version, not the ref it was fetched
+                # from. A site owner knows which version they upgraded to;
+                # `main`, which is what the ref is when no tag is declared,
+                # tells them nothing they can act on.
+                blocking.append(ChangeRecord(
                     description=get_message(
                         self._detect_language(), 'record_fetch_failed',
-                        rel_path, branch, description),
+                        rel_path, self.to_version),
                     status=ChangeStatus.FAILED,
                     severity="hard",
                 ))
 
-        return content_map, failed
+        if content_map or not flagged:
+            return content_map, blocking, flagged
+
+        # Nothing in the map arrived and every failure was a 404. One wrong
+        # path in a file map is a wrong file map; every path wrong at once is
+        # a wrong ref, and flagging our way past that would stamp the site
+        # with a version whose files it never received. Stop instead.
+        #
+        # A one-file map whose only file is absent is stopped too, since it
+        # looks identical from inside.
+        return content_map, blocking + [
+            ChangeRecord(description=record.description,
+                         status=ChangeStatus.FAILED,
+                         severity="hard",
+                         category=record.category)
+            for record in flagged], []
+
+    def _install_files_one_by_one(
+        self, file_map: Dict[str, str], template: str,
+        branch: Optional[str] = None,
+    ) -> List[ChangeRecord]:
+        """Fetch and write each file as it arrives, reporting one record each.
+
+        Used by the per-release migrations, which keep their own summary
+        wording. Not atomic: each file is written the moment it arrives.
+
+        What it does share with `_apply_framework_files` is the rule for
+        deciding whether a failure stops the chain. A structural failure is
+        flagged and the chain goes on — unless nothing in the map arrived at
+        all, which is a wrong ref rather than a wrong path and has to stop.
+
+        Args:
+            file_map: {rel_path: description} of framework files.
+            template: Format string for an installed file, taking `path` and
+                `description`. Each migration keeps its own wording.
+            branch: Ref to fetch from; defaults to the migration's own.
+
+        Returns:
+            List[ChangeRecord], one per file in the map.
+        """
+        installed: List[ChangeRecord] = []
+        failures: List[ChangeRecord] = []
+
+        for rel_path, description in file_map.items():
+            result = self._fetch_result(rel_path, branch=branch)
+            if result.content is not None:
+                self._write_file(rel_path, result.content)
+                installed.append(ChangeRecord(
+                    description=template.format(path=rel_path,
+                                                description=description),
+                    status=ChangeStatus.APPLIED,
+                    severity="soft",
+                    category=category_for_path(rel_path),
+                ))
+            else:
+                failures.append(self._record_for_failed_fetch(rel_path, result))
+
+        if not installed and failures:
+            failures = [ChangeRecord(description=record.description,
+                                     status=ChangeStatus.FAILED,
+                                     severity="hard",
+                                     category=record.category)
+                        for record in failures]
+
+        return installed + failures
+
+    def _record_for_failed_fetch(self, rel_path: str,
+                                 result: FetchResult) -> ChangeRecord:
+        """The record a failed fetch becomes, classified by why it failed.
+
+        For a migration that writes its files one at a time rather than
+        through `_apply_framework_files`. Such a migration has already
+        written whatever arrived before this path, so there is no atomic
+        install left to protect and the only question the outcome decides
+        is whether the chain stops.
+        """
+        if result.outcome is FetchOutcome.STRUCTURAL:
+            return ChangeRecord(
+                description=get_message(
+                    self._detect_language(), 'record_fetch_absent',
+                    rel_path, self.to_version),
+                status=ChangeStatus.FAILED,
+                severity="soft",
+                category=category_for_path(rel_path),
+            )
+        return ChangeRecord(
+            description=get_message(
+                self._detect_language(), 'record_fetch_failed',
+                rel_path, self.to_version),
+            status=ChangeStatus.FAILED,
+            severity="hard",
+        )
 
     def _backup_existing(self, rel_paths: List[str]) -> Dict[str, Optional[Union[str, bytes]]]:
         """Read current content of each path for rollback.
@@ -719,10 +692,15 @@ class BaseMigration(ABC):
     def _commit_staged(self, content_map: Dict[str, Tuple[str, str]]) -> List[ChangeRecord]:
         """Phase B core: write all staged files. Raises on write error."""
         records: List[ChangeRecord] = []
-        for rel_path, (content, description) in content_map.items():
+        # The file map's annotation documents why a path is in the set, for
+        # whoever reads the migration. It stays out of the record: the summary
+        # is a file the site commits to its own repository, and a record built
+        # by interpolating English prose cannot be localised at render time.
+        for rel_path, (content, _annotation) in content_map.items():
             self._write_file(rel_path, content)
             records.append(ChangeRecord(
-                description=f"Updated {rel_path} — {description}",
+                description=get_message(self._detect_language(),
+                                        'updated_file', rel_path),
                 status=ChangeStatus.APPLIED,
                 severity="hard",
                 # The path decides the summary heading, so the summary reads
@@ -785,10 +763,13 @@ class BaseMigration(ABC):
         """
         pinned = tag if tag is not None else self._target_ref()
 
-        content_map, failed = self._fetch_all_staged(file_map, tag=pinned)
-        if failed:
-            # Fail closed: a missing required file means write nothing.
-            return failed
+        content_map, blocking, flagged = self._fetch_all_staged(file_map, tag=pinned)
+        if blocking:
+            # Fail closed while a re-run could still complete the set. The
+            # atomic install is worth keeping for exactly this case, and the
+            # structural records ride along so the summary names everything
+            # that did not arrive, not only what stopped the chain.
+            return blocking + flagged
 
         paths = list(content_map.keys())
         backups = self._backup_existing(paths)
@@ -806,7 +787,11 @@ class BaseMigration(ABC):
             )]
 
         self._clear_state_file()
-        return records
+        # Writing the files that did arrive is the part of the atomic
+        # guarantee this trades away, and only for the failure a re-run
+        # cannot clear: the alternative is a site that stops on this step
+        # every time it upgrades, forever.
+        return records + flagged
 
     def _detect_language(self) -> str:
         """

@@ -6,8 +6,14 @@
  * story, object, glossary). Font families and colours come from CSS custom
  * properties set by the theme system in the main stylesheet.
  *
- * @version v1.4.0
+ * @version v1.8.0
  */
+
+// Base typography lives in telar-base, below telar-components: component text
+// colours (panel titles, the TOC cover card) have to be able to override the
+// global heading colour, and an unlayered rule here outranks every layered one
+// no matter its specificity.
+@layer telar-base {
 
 /* Body */
 body {
@@ -47,3 +53,5 @@ a {
     font-size: 2.5rem;
   }
 }
+
+} // end @layer telar-base
