@@ -296,7 +296,7 @@ class TestExcludeEntries:
 
         assert _read(tmp_path, '_config.yml') == text
         assert [(r.status, r.severity) for r in records] == [
-            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'author')]
 
     def test_a_scalar_that_is_every_entry_is_still_rewritten(self, tmp_path, monkeypatch):
         """No single value can be all four entries, so the phase is narrowed
@@ -354,7 +354,7 @@ class TestExcludeEntries:
 
         assert _read(tmp_path, '_config.yml') == text
         assert [(r.status, r.severity) for r in records] == [
-            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'author')]
 
     def test_a_rewrite_that_loses_the_scalar_is_refused(self, tmp_path, monkeypatch):
         """The parse afterwards has to find the scalar first and the
@@ -379,7 +379,7 @@ class TestExcludeEntries:
 
             assert _read(tmp_path, '_config.yml') == text
             assert [(r.status, r.severity) for r in records] == [
-                (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+                (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'author')]
             assert 'telar-content/texts/' in records[0].description
             assert 'tests/, pytest.ini, vitest.config.js' in records[1].description
 
@@ -574,7 +574,7 @@ class TestExcludeWhereJekyllReadsIt:
 
         assert _read(tmp_path, '_config.yml') == text
         assert [(r.status, r.severity) for r in records] == [
-            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'soft')]
+            (ChangeStatus.FAILED, 'hard'), (ChangeStatus.FAILED, 'author')]
 
 
 # ---------- Jekyll reads the rewritten file ----------

@@ -80,9 +80,9 @@ GLOSSARY_SHEETS = ('glossary.csv', 'glosario.csv')
 _BOM = '﻿'
 
 
-def _record(lang, key, *args, status=ChangeStatus.APPLIED) -> ChangeRecord:
+def _record(lang, key, *args, status=ChangeStatus.APPLIED, severity='soft') -> ChangeRecord:
     return ChangeRecord(description=get_message(lang, key, *args), status=status,
-                        severity='soft', category=ChangeCategory.OTHER)
+                        severity=severity, category=ChangeCategory.OTHER)
 
 
 # ---------------------------------------------------------------------- #
@@ -563,7 +563,8 @@ def _change_records(lang, name, change, successor, header, origin,
         records = [_record(lang, 'v180_column_marked_note', column, name, '#' + column)]
         if on_sheets:
             records.append(_record(lang, 'v180_column_marked_in_sheet', column, name,
-                                   '#' + column, status=ChangeStatus.FAILED))
+                                   '#' + column, status=ChangeStatus.FAILED,
+                                   severity='author'))
         return records
     while keeper in successor:
         keeper = successor[keeper]
@@ -574,7 +575,7 @@ def _change_records(lang, name, change, successor, header, origin,
         records = [_record(lang, 'v180_column_dropped_all_empty', column, name, label, label)]
     if on_sheets:
         records.append(_record(lang, 'v180_column_in_sheet', column, name,
-                               status=ChangeStatus.FAILED))
+                               status=ChangeStatus.FAILED, severity='author'))
     return records
 
 
@@ -589,11 +590,12 @@ def _unrepaired_records(lang, name, header, groups, refused) -> List[ChangeRecor
             key = ('v180_column_kept_for_header_row' if reasons[id(group)] == HEADER_ROW
                    else 'v180_column_not_removed')
             records.extend(_record(lang, key, header[index], name,
-                                   status=ChangeStatus.FAILED) for index in dropped)
+                                   status=ChangeStatus.FAILED, severity='author')
+                           for index in dropped)
         else:
             named = ', '.join(f'`{header[index]}`' for index in kept)
             records.append(_record(lang, 'v180_columns_hold_values', name, named,
-                                   status=ChangeStatus.FAILED))
+                                   status=ChangeStatus.FAILED, severity='author'))
     return records
 
 
@@ -604,7 +606,8 @@ def _inside(repo_root: str, path: str) -> bool:
 
 
 def _reserved_column_records(lang, name, header, rules) -> List[ChangeRecord]:
-    return [_record(lang, 'v180_reserved_column', name, column, status=ChangeStatus.FAILED)
+    return [_record(lang, 'v180_reserved_column', name, column, status=ChangeStatus.FAILED,
+                    severity='author')
             for column in header
             if column.lower().strip() in rules.RESERVED_COLUMN_NAMES]
 

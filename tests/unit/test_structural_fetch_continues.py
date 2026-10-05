@@ -587,6 +587,56 @@ class TestTheSummaryShowsTheFlag:
         assert marker in summary
 
 
+class TestAStepForTheOwnerIsAManualStep:
+    """A failure the site's owner resolves is not a fault in the release.
+
+    The flagged section tells the reader to report a fault in Telar, and the
+    Actions issue copies only the manual steps, so a step for the owner filed
+    as a flag sends them to report a bug and never reaches the issue.
+    """
+
+    STEP = ChangeRecord(description='Delete the column `object_type` in the sheet itself.',
+                        status=ChangeStatus.FAILED, severity='author')
+    FLAGGED = TestTheSummaryShowsTheFlag.FLAGGED
+
+    def _summary(self, records, lang='en'):
+        return upgrade.generate_checklist(
+            migrations=[], all_changes=records,
+            from_version='1.0.0', to_version='1.1.0', lang=lang)
+
+    def test_it_is_numbered_among_the_manual_steps(self):
+        summary = self._summary([self.STEP])
+
+        steps = summary[summary.index('## Manual Steps Required'):]
+        assert '1. Delete the column `object_type` in the sheet itself.' in steps
+        assert '- **Manual steps:** 1' in summary
+
+    def test_it_is_not_a_flag(self):
+        summary = self._summary([self.STEP])
+
+        assert 'Files Not Installed' not in summary
+        assert 'Files not installed' not in summary
+
+    def test_a_real_flag_is_still_a_flag(self):
+        summary = self._summary([self.STEP, self.FLAGGED])
+
+        flags = summary[summary.index('## Files Not Installed'):summary.index('## Manual Steps')]
+        assert 'README.md is not part of Telar 1.1.0' in flags
+        assert 'object_type' not in flags
+        assert '- **Files not installed:** 1' in summary
+
+    def test_a_spanish_summary_numbers_it_too(self):
+        summary = self._summary([self.STEP], lang='es')
+
+        assert '1. Delete the column `object_type` in the sheet itself.' in summary
+        assert 'Archivos que no se instalaron' not in summary
+
+    def test_it_is_neither_applied_nor_hard(self):
+        assert not upgrade.is_hard_failure(self.STEP)
+        assert not upgrade.is_flagged(self.STEP)
+        assert upgrade.is_flagged(self.FLAGGED)
+
+
 class TestOneDefinitionOfTheStopRule:
     """Two severities are now load-bearing, so the predicate cannot be copied.
 

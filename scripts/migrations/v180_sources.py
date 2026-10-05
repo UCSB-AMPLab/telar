@@ -706,7 +706,7 @@ def _exclude_failures(lang: str, missing: List[str]) -> List[ChangeRecord]:
                                category=ChangeCategory.CONFIGURATION))
     if others:
         records.append(_record(lang, 'v180_exclude_others_failed', ', '.join(others),
-                               status=ChangeStatus.FAILED,
+                               status=ChangeStatus.FAILED, severity='author',
                                category=ChangeCategory.CONFIGURATION))
     return records
 
@@ -795,7 +795,7 @@ def _drop_page_keys(path, lang, rel_path, lines, bounds, front, drop) -> ChangeR
     named = ', '.join(f'`{key}`' for key in drop)
     if _load_mapping(kept) != expected:
         return _record(lang, 'v180_page_source_refused', rel_path, named,
-                       status=ChangeStatus.FAILED)
+                       status=ChangeStatus.FAILED, severity='author')
     try:
         _write_text(path, ''.join(lines[:start + 1] + kept + lines[end:]))
     except OSError as error:
@@ -877,7 +877,7 @@ def _list_related_terms_in(repo_root, lang, rel_path) -> Optional[ChangeRecord]:
     rewritten = _rewrite_related_terms(lines, bounds, front, value)
     if rewritten is None:
         return _record(lang, 'v180_related_terms_refused', rel_path,
-                       status=ChangeStatus.FAILED)
+                       status=ChangeStatus.FAILED, severity='author')
     try:
         _write_text(path, rewritten)
     except OSError as error:

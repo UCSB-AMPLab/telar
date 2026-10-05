@@ -273,7 +273,7 @@ class TestPageSources:
         records = _strip(tmp_path)
 
         assert _read(tmp_path, 'telar-content/texts/pages/about.md') == PAGE
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'soft')]
+        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'author')]
 
 
 # ---------- Glossary related_terms ----------
@@ -340,7 +340,7 @@ class TestRelatedTerms:
         records = v180_sources.list_related_terms(str(tmp_path), 'en')
 
         assert _read(tmp_path, 'telar-content/texts/glossary/cord.md') == text
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'soft')]
+        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'author')]
 
     def test_a_key_written_twice_has_no_line_to_rewrite(self):
         lines = ['related_terms: a, b\n', 'title: T\n', 'related_terms: c\n']

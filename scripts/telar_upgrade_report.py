@@ -17,7 +17,7 @@ from typing import Dict, List, Optional
 
 from migrations.base import (
     BaseMigration, ChangeCategory, ChangeRecord, ChangeStatus,
-    category_for_path, is_hard_failure,
+    category_for_path, is_author_step, is_flagged, is_hard_failure,
 )
 from migrations.messages import get_message, get_file_count_suffix
 from telar_upgrade_common import _get_date
@@ -105,7 +105,9 @@ def generate_checklist(
     `- [ ]` items so a failure is never reported as completed work, under one
     of two headings: a blocking failure, where the site was not upgraded and
     a re-run is the fix, and a flagged one, where the file is absent from the
-    release, the site was upgraded anyway, and a re-run changes nothing.
+    release, the site was upgraded anyway, and a re-run changes nothing. A
+    failure that is a step for the site's owner (severity 'author') is
+    neither: it is numbered among the manual steps, after the declared ones.
 
     Args:
         migrations: List of migrations that were run
@@ -136,11 +138,14 @@ def generate_checklist(
     # upgraded and a re-run is the fix, and a flagged one means the site was
     # upgraded and a re-run changes nothing.
     failed = [r for r in all_changes if is_hard_failure(r)]
-    flagged = [r for r in all_changes
-               if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
+    flagged = [r for r in all_changes if is_flagged(r)]
 
+    # What the run left for the site's owner to do is a manual step, not a
+    # flag: the flag's text tells the reader to report a fault in Telar.
+    author_steps = [{'description': r.description, 'audience': 'all'}
+                    for r in all_changes if is_author_step(r)]
     manual_steps = _visible_manual_steps(migrations, sheets_enabled)
-    manual_steps = manual_steps + list(extra_manual_steps or [])
+    manual_steps = manual_steps + list(extra_manual_steps or []) + author_steps
 
     # Categorize applied changes
     categorized = _categorize_changes(applied)

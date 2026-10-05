@@ -49,7 +49,7 @@ from migrations.base import (
     BaseMigration, ChangeCategory, ChangeRecord, ChangeStatus,
     UPGRADE_STATE_FILE, apply_config_version,
     coerce_change,
-    is_hard_failure,
+    is_flagged, is_hard_failure,
 )
 from migrations.messages import get_message
 from migrations.discovery import discover_migrations
@@ -658,7 +658,7 @@ def main():
         all_changes.append(ChangeRecord(
             description=get_message(lang, 'record_protected_unencryptable'),
             status=ChangeStatus.FAILED,
-            severity="soft",
+            severity="author",
         ))
 
     soft_warnings = []
@@ -713,8 +713,7 @@ def main():
     # place the run says it happened. Printed after 'upgrade_complete' because
     # the upgrade did complete — the site is at the latest version, carrying a
     # flag — and printing it before would read as the abort it is not.
-    flagged = [r for r in all_changes
-               if r.status == ChangeStatus.FAILED and not is_hard_failure(r)]
+    flagged = [r for r in all_changes if is_flagged(r)]
     if flagged:
         print('\n' + get_message(lang, 'upgrade_completed_with_flags',
                                  len(flagged), LATEST_VERSION))

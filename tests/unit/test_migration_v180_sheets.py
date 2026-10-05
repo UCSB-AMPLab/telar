@@ -158,7 +158,7 @@ class TestMoreThanOneColumnHoldsValues:
         assert _sheet(site, 'objects.csv') == text
         assert len(records) == 1
         assert records[0].status == ChangeStatus.FAILED
-        assert records[0].severity == 'soft'
+        assert records[0].severity == 'author'
         assert '`medium`' in records[0].description
         assert '`object_type`' in records[0].description
 
@@ -517,7 +517,7 @@ class TestTheFileKeepsItsForm:
         records = _repair(site)
 
         assert _sheet(site, 'objects.csv') == text
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'soft')]
+        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'author')]
         assert '`object_type`' in records[0].description
         assert 'by hand' in records[0].description
 
@@ -536,7 +536,7 @@ class TestTheFileKeepsItsForm:
         records = _repair(site)
 
         assert _sheet(site, 'objects.csv') == OBJECTS_EMPTY_OBJECT_TYPE
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'soft')]
+        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'author')]
 
     def test_a_field_over_the_csv_modules_default_limit_is_read(self, tmp_path):
         """pandas reads a cell of any length; the repair must read what it
@@ -591,7 +591,7 @@ class TestTheFileKeepsItsForm:
         records = _repair(site)
 
         assert outside.read_text(encoding='utf-8') == OBJECTS_EMPTY_OBJECT_TYPE
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'soft')]
+        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'author')]
         assert '`object_type`' in records[0].description
 
     def test_a_second_run_changes_nothing(self, tmp_path):
@@ -766,7 +766,7 @@ class TestReportsWithoutRepair:
 
         assert len(records) == 1
         assert records[0].status == ChangeStatus.FAILED
-        assert records[0].severity == 'soft'
+        assert records[0].severity == 'author'
         assert '`my-story.csv`' in records[0].description
         assert '`_metadata`' in records[0].description
 
@@ -779,7 +779,7 @@ class TestReportsWithoutRepair:
         assert _header(site, 'objects.csv') == ['object_id', 'title', 'medium']
         flagged = [r for r in records if r.status == ChangeStatus.FAILED]
         assert len(flagged) == 1
-        assert flagged[0].severity == 'soft'
+        assert flagged[0].severity == 'author'
         assert 'Google Sheet' in flagged[0].description
         assert '`object_type`' in flagged[0].description
 

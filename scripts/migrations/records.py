@@ -5,9 +5,9 @@ The vocabulary a migration reports in, and the rules the chain applies to
 it, none of which needs a migration instance: `ChangeStatus`, `ChangeRecord`
 and `ChangeCategory` with the path-to-heading tables, `FetchOutcome` and
 `FetchResult` for a fetch that produced nothing, the manual-step audiences,
-the launcher marker, the state file's name, `coerce_change` and
-`is_hard_failure`, and `apply_config_version`, the one writer of the
-`telar.version` stamp.
+the launcher marker, the state file's name, `coerce_change`,
+`is_hard_failure`, `is_author_step` and `is_flagged`, and
+`apply_config_version`, the one writer of the `telar.version` stamp.
 
 `base.py` re-exports these names, so `migrations.base` is the one import
 for a migration, the engine and the tests, and holds the migration base
@@ -81,7 +81,11 @@ class ChangeRecord:
         status: APPLIED, FAILED, or SKIPPED.
         severity: 'hard' if a FAILED status must abort the upgrade
             (no version stamp, non-zero exit), 'soft' if it should be
-            surfaced for manual attention but not block the upgrade.
+            surfaced for manual attention but not block the upgrade,
+            'author' if what is left undone is a step for the site's
+            owner rather than a fault in Telar: the summary lists it
+            among the manual steps, which the Actions route copies into
+            the issue the owner reads.
         category: Which UPGRADE_SUMMARY.md heading this belongs under, one
             of ChangeCategory. None leaves the summary to guess from the
             description.
@@ -378,3 +382,15 @@ def coerce_change(change) -> ChangeRecord:
 def is_hard_failure(record: ChangeRecord) -> bool:
     """True when this record must abort the upgrade."""
     return record.status == ChangeStatus.FAILED and record.severity == "hard"
+
+
+def is_author_step(record: ChangeRecord) -> bool:
+    """True when this record is a step the site's owner has to take."""
+    return record.status == ChangeStatus.FAILED and record.severity == "author"
+
+
+def is_flagged(record: ChangeRecord) -> bool:
+    """True when this record failed without stopping the upgrade and is
+    not a step for the site's owner: a fault the release has to fix."""
+    return (record.status == ChangeStatus.FAILED
+            and not is_hard_failure(record) and not is_author_step(record))
