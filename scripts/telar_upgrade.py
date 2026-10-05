@@ -594,6 +594,13 @@ def main():
     if args.dry_run:
         print('\n' + get_message(lang, 'dry_run_mode'))
 
+    # Migrations import the scripts/telar package, and the upgrade.yml a site
+    # carries may install only part of requirements.txt, so the dependencies
+    # are ensured before the first migration as well as before regeneration.
+    # A failure here is not final: the check before regeneration repeats it
+    # and stops the run there.
+    _ensure_regeneration_dependencies(repo_root)
+
     # Run migrations
     print('\n' + get_message(lang, 'applying_migrations'))
     all_changes = run_migrations(migrations, dry_run=args.dry_run)
