@@ -14,7 +14,7 @@
  * writes the authored endpoint, so every case here asserted the opposite of
  * what runs.
  *
- * @version v1.8.0
+ * @version v1.8.1
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -93,6 +93,37 @@ describe('lerpIiifPosition — moving between two steps on one object', () => {
     const late = framedCentre();
 
     expect(late.x).toBeGreaterThan(early.x);
+  });
+});
+
+describe('lerpIiifPosition — between two details near opposite edges', () => {
+  // Both details sit close enough to an edge that the clamp moves each one
+  // to keep the image covering the frame. The move is between those two
+  // placements: at an equal zoom the scale does not change, so every frame's
+  // centre lies on the straight line between the two resting centres. A frame
+  // clamped on its own folds that line along the image's edges instead.
+  const stepsData = [makeStep('fig1', 0.28, 0.30, 1.6), makeStep('fig1', 0.70, 0.69, 1.6)];
+
+  beforeEach(() => {
+    state.viewerPlates = { 0: makePlate('fig1', 0, { fitBounds }) };
+    state.stepToScene = { 0: 0, 1: 0 };
+  });
+
+  const centreAt = (stepIndex, progress) => {
+    fitBounds.mockClear();
+    state.viewerPlates[0].restingAt = null;
+    lerpIiifPosition(stepIndex, progress, stepsData);
+    return framedCentre();
+  };
+
+  it('moves the centre along the straight line between the two resting centres', () => {
+    const from = centreAt(0, 0);
+    const to = centreAt(1, 0);
+    for (const t of [0.1, 0.25, 0.5, 0.75, 0.9]) {
+      const c = centreAt(0, t);
+      expect(c.x).toBeCloseTo(from.x + (to.x - from.x) * t, 6);
+      expect(c.y).toBeCloseTo(from.y + (to.y - from.y) * t, 6);
+    }
   });
 });
 
