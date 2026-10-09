@@ -4,7 +4,7 @@ IIIF manifests, the metadata taken from them, HTTP failures, video hosts and
 the SSL context the fetches use. This is the only part of the processor that
 reaches outside the site.
 
-Version: v1.7.0
+Version: v1.8.1
 """
 
 import json
@@ -64,16 +64,10 @@ def _validate_source_urls(df, previous_objects, warnings):
                 req.add_header('User-Agent', 'Telar/1.0.0-beta (IIIF validator)')
 
                 with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
+                    # The body decides, not the Content-Type: object stores
+                    # serve a manifest uploaded without a type as
+                    # application/octet-stream, and the viewer loads it.
                     content_type = response.headers.get('Content-Type', '')
-
-                    # Check if response is JSON
-                    if 'json' not in content_type.lower():
-                        df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
-                        msg = f"IIIF manifest for object {object_id} does not return JSON (Content-Type: {content_type})"
-                        print(f"  [WARN] {msg}")
-                        warnings.append(msg)
-                        # Don't clear manifest URL - might still work despite wrong content type
-                        continue
 
                     try:
                         data = json.loads(response.read().decode('utf-8'))
@@ -91,9 +85,9 @@ def _validate_source_urls(df, previous_objects, warnings):
                             _apply_manifest_metadata(
                                 df, idx, row, data, object_id)
 
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, UnicodeDecodeError):
                         df.at[idx, 'object_warning'] = get_lang_string('errors.object_warnings.iiif_not_manifest')
-                        msg = f"IIIF manifest for object {object_id} is not valid JSON"
+                        msg = f"IIIF manifest for object {object_id} is not valid JSON (Content-Type: {content_type})"
                         print(f"  [WARN] {msg}")
                         warnings.append(msg)
 
