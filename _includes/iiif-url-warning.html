@@ -14,7 +14,11 @@ configuration to detect and report the mismatch.
 
 All user-facing strings come from lang.errors.iiif_mismatch in
 _data/languages/<telar_language>.yml.
+
+Nothing renders, and the bundle is not loaded, when the site sets
+development-features.hide_warnings.
 {%- endcomment -%}
+{% unless site['development-features'].hide_warnings %}
 {% assign lang = site.data.languages[site.telar_language] | default: site.data.languages.en %}
 {% assign iiif_lang = lang.errors.iiif_mismatch %}
 
@@ -96,3 +100,4 @@ each value.
 }
 </script>
 <script src="{{ '/assets/js/iiif-url-warning.js' | relative_url }}"></script>
+{% endunless %}

@@ -145,7 +145,7 @@ title: Home
   {% endfor %}
 
   {%- comment -%}Google Sheets Warnings{%- endcomment -%}
-  {% if has_gs_issue %}
+  {% if has_gs_issue and site['development-features'].hide_warnings != true %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       {% if gs_error_type == "missing_urls" %}
@@ -168,7 +168,7 @@ title: Home
   {% endif %}
 
   {%- comment -%}Theme Warnings{%- endcomment -%}
-  {% if has_theme_issue %}
+  {% if has_theme_issue and site['development-features'].hide_warnings != true %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       {% if theme_error_type == "not_found" %}
@@ -198,7 +198,7 @@ title: Home
   {% endif %}
 
   {%- comment -%}Object Warnings{%- endcomment -%}
-  {% if has_object_issues %}
+  {% if has_object_issues and site['development-features'].hide_warnings != true %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <div class="alert alert-warning telar-alert" role="alert">
@@ -218,7 +218,7 @@ title: Home
   {% endif %}
 
   {%- comment -%}Story Warnings{%- endcomment -%}
-  {% if stories_with_issues.size > 0 %}
+  {% if stories_with_issues.size > 0 and site['development-features'].hide_warnings != true %}
   <div class="row">
     <div class="col-lg-11 mx-auto">
       <div class="alert alert-warning telar-alert" role="alert">

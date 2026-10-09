@@ -63,7 +63,7 @@ layout: default
     {% endif %}
   {% endfor %}
 
-  {% if objects_with_warnings.size > 0 %}
+  {% if objects_with_warnings.size > 0 and site['development-features'].hide_warnings != true %}
   <div class="row mb-4">
     <div class="col-12">
       <div class="alert alert-warning" role="alert" style="max-width: 800px;">

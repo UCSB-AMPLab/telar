@@ -159,6 +159,11 @@ development-features:
   # Set to true to light up the site with test warnings (test objects, fake errors, etc.)
   christmas_tree_mode: false
 
+  # Hide warnings - keeps build warnings (missing images, IIIF problems,
+  # missing glossary entries) off the published site. The build log still
+  # reports them. Overrides Christmas Tree Mode.
+  hide_warnings: false
+
   # Viewer preloading configuration
   # Controls how story viewers are preloaded for smoother navigation.
   # Higher values = smoother scrolling but more memory usage.
