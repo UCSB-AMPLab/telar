@@ -41,7 +41,7 @@ build workflow that actually runs it — and refuses to run when they are
 missing, so a site can never publish protected content because its workflow
 predates the build-time encryption step.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 import os
@@ -375,8 +375,9 @@ def _cleanup_stale_data_files(data_dir, structures_dir, demo_bundle):
 
     Every JSON file this pipeline writes to _data/ falls into one of three
     buckets: the fixed non-story files (project.json, objects.json,
-    audio_objects.json, demo-glossary.json, glossary_site_kinds.json — each
-    already self-manages its own staleness elsewhere), one file per source CSV in
+    audio_objects.json, glossary_site_kinds.json — each rewritten on every
+    run — and demo-glossary.json, which only a bundle with a glossary
+    writes, so it is removed here when there is none), one file per source CSV in
     telar-content/spreadsheets/ (stem + '.json'), or one file per story_id
     in the fetched demo bundle. A file whose identifier is in none of these
     buckets has nothing left to regenerate it. This runs after CSV
@@ -393,6 +394,11 @@ def _cleanup_stale_data_files(data_dir, structures_dir, demo_bundle):
         'project.json', 'objects.json', 'audio_objects.json', 'demo-glossary.json',
         'glossary_site_kinds.json',
     }
+
+    demo_glossary = data_dir / 'demo-glossary.json'
+    if demo_glossary.exists() and not (demo_bundle and demo_bundle.get('glossary')):
+        demo_glossary.unlink()
+        print(f"  [INFO] Removed stale _data/{demo_glossary.name} (no demo glossary)")
 
     expected_stems = {csv_file.stem for csv_file in structures_dir.glob('*.csv')}
     if demo_bundle:

@@ -11,7 +11,7 @@ entry's related terms, which the entry's page lists.
 A field the bundle does not hold is not written, because the step template
 emits an attribute for any value, and to Liquid an empty string is one.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 import json
@@ -320,3 +320,44 @@ class TestASiteTermAtTheSameAddress:
         answer = _read(site, 'demo-story.json')[0]['answer']
         assert f'>{shown}</a>' in answer
         assert 'Demo title' not in answer
+
+
+class TestAStoryThatListsItsSections:
+
+    def _project(self, site, bundle):
+        (site / 'project.json').write_text(json.dumps([{'stories': []}]), encoding='utf-8')
+        merge_demo_content(bundle)
+        return _read(site, 'project.json')[0]['stories'][0]
+
+    def test_the_flag_reaches_the_project_entry(self, site):
+        project = [{'order': 1, 'story_id': 'demo-story', 'title': 'A demo', 'show_sections': True}]
+        assert self._project(site, _bundle(project=project))['show_sections'] is True
+
+    def test_a_story_without_it_gains_no_field(self, site):
+        assert 'show_sections' not in self._project(site, _bundle())
+
+    @pytest.mark.parametrize('value', [False, 'false', 'no', ''])
+    def test_a_value_that_is_not_true_is_not_carried(self, site, value):
+        project = [{'order': 1, 'story_id': 'demo-story', 'title': 'A demo', 'show_sections': value}]
+        assert 'show_sections' not in self._project(site, _bundle(project=project))
+
+
+class TestTheDemoGlossaryFile:
+    """The demo glossary pages last only as long as a bundle supplies them."""
+
+    def _cleanup(self, tmp_path, bundle):
+        from telar.core import _cleanup_stale_data_files
+        data, sheets = tmp_path / '_data', tmp_path / 'spreadsheets'
+        data.mkdir(); sheets.mkdir()
+        (data / 'demo-glossary.json').write_text('[]', encoding='utf-8')
+        _cleanup_stale_data_files(data, sheets, bundle)
+        return (data / 'demo-glossary.json').exists()
+
+    def test_it_is_removed_when_demo_content_is_off(self, tmp_path):
+        assert not self._cleanup(tmp_path, None)
+
+    def test_it_is_removed_when_the_bundle_has_no_glossary(self, tmp_path):
+        assert not self._cleanup(tmp_path, {'stories': {}})
+
+    def test_it_is_kept_when_the_bundle_has_a_glossary(self, tmp_path):
+        assert self._cleanup(tmp_path, {'stories': {}, 'glossary': {'demo-term': {'term': 'A term'}}})
