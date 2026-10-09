@@ -22,7 +22,7 @@
  * handleHashChange. scrollRestoration is already set to 'manual' in
  * scroll-engine.js, which prevents browser scroll restoration from interfering.
  *
- * @version v1.8.0
+ * @version v1.8.1
  */
 
 import { state, moveSeconds } from './state.js';
@@ -195,10 +195,11 @@ export function navigateToIntro() {
   // A jump carries no camera travel: the cards move over the base.
   setMoveSeconds(moveSeconds(0));
 
-  // Hide all active viewer plates
-  for (const plate of Object.values(state.viewerPlates)) {
-    plate.container.classList.remove('is-active');
-  }
+  // Every card and plate goes where a walk back to the intro would leave it.
+  // Without this, the cards above step 0 stay stacked and the current step's
+  // card and plate stay on screen over the intro.
+  reconcileStackForJump(-1);
+  reconcilePlatesForJump(-1);
 
   if (state.lenis) {
     // Through Lenis, which writes the offset with behavior: instant. A direct
