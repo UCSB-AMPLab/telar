@@ -1,6 +1,6 @@
 {
   "name": "telar",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "A minimal-computing framework for weaving IIIF images, audio, video, and texts into layered visual narratives.",
   "private": true,
   "license": "MIT",
@@ -22,7 +22,7 @@
   },
   "scripts": {
     "build:js": "npm run build:js:story && npm run build:js:object-image && npm run build:js:object-video && npm run build:js:object-audio && npm run build:js:home && npm run build:js:objects-index && npm run build:js:iiif-url-warning && npm run build:js:objects-filter && npm run build:js:share-panel",
-    "build:js:story": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */\"",
+    "build:js:story": "esbuild assets/js/telar-story/main.js --bundle --outfile=assets/js/telar-story.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.1 */\"",
     "build:js:object-image": "esbuild assets/js/object-page/image-entry.js --bundle --outfile=assets/js/object-image.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/object-page/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */\"",
     "build:js:object-video": "esbuild assets/js/object-page/video-entry.js --bundle --outfile=assets/js/object-video.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/object-page/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */\"",
     "build:js:object-audio": "esbuild assets/js/object-page/audio-entry.js --bundle --outfile=assets/js/object-audio.js --format=iife --sourcemap --banner:js=\"/* GENERATED FILE - do not edit. Bundled from assets/js/object-page/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */\"",

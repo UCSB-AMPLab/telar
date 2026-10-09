@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
+/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.1 */
 (() => {
   // assets/js/telar-story/state.js
   var BUTTON_NAV_COOLDOWN = 400;
