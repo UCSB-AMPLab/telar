@@ -23,12 +23,10 @@
  *
  *   Per-frame interpolation — `lerpIiifPosition()` is called every frame by
  *   the scroll engine's rAF loop. For step pairs that share the same object,
- *   it interpolates x/y evenly and zoom by equal ratios between the two steps
- *   based on scroll progress and applies the result via snapIiifToPosition
- *   (immediate=true).
- *   A pair either side of zoom 1 is blended between the two steps' resting
- *   placements instead, because an overview and a detail place different
- *   image points at the region centre.
+ *   it blends the two steps' resting placements by scroll progress, the scale
+ *   by equal ratios, and applies the result at once (immediate=true). Each
+ *   resting placement is already clamped, so the path between them keeps the
+ *   image covering the frame without clamping any frame on its own.
  *   Smoothness comes from Lenis's animatedScroll, not from OSD animations.
  *   Different-object pairs are skipped — the viewer freezes at its last
  *   position while the new plate slides in on top.
@@ -37,7 +35,7 @@
  *   the references and removes the plate element. The viewer uses the
  *   Canvas2D drawer, so there is no WebGL context to release first.
  *
- * @version v1.8.0
+ * @version v1.8.1
  */
 
 import { state } from './state.js';
@@ -838,13 +836,10 @@ function _restsAt(resting, stepIndex, x, y, zoom) {
  * Interpolate IIIF viewer position between two steps based on scroll progress.
  *
  * Called every frame by the scroll engine's rAF loop. For step pairs that
- * share the same object, interpolates x/y evenly and zoom by equal ratios
- * between step A and step B based on the fractional scroll progress (0.0 = at step A, 1.0 =
- * at step B). Applies the interpolated position via snapIiifToPosition
- * with immediate=true, so OSD does not add its own spring animation on top
- * of the per-frame updates. Where one step is at zoom 1 or below and the
- * other above it, the frame is the two resting placements blended
- * (blendPlacements), applied the same way.
+ * share the same object, blends step A's and step B's resting placements
+ * (blendPlacements) by the fractional scroll progress (0.0 = at step A,
+ * 1.0 = at step B), and applies the frame with immediate=true, so OSD does
+ * not add its own spring animation on top of the per-frame updates.
  *
  * Different-object pairs are not interpolated (the viewer freezes at its
  * last position while the new plate slides in on top). Progress below 0.001
@@ -906,18 +901,17 @@ export function lerpIiifPosition(stepIndex, progress, stepsData) {
 /**
  * Put a viewer part of the way from one step's framing to the next.
  *
- * The zoom changes by equal ratios over equal parts of the way, as it does in
- * blendPlacements, and the position moves evenly. Either side of zoom 1 the two
- * steps place different image points (the centre and the focal point), so the
- * frame is the two resting placements blended rather than a placement of the blended x/y/zoom.
+ * The frame is the two resting placements blended (blendPlacements), never a
+ * placement of a blended x/y/zoom. Each resting placement is already clamped to
+ * keep the image covering the frame, and a straight path between two such
+ * placements keeps it covered all the way, so no frame is clamped on its own.
+ * Clamping each frame of a blended x/y instead bends the path along the image's
+ * edges wherever an authored focal sits near one: the camera runs into the edge
+ * and follows it. Either side of zoom 1 the two steps also place different image
+ * points (the centre and the focal point), which only the blend can join.
  */
 function _travel(plate, a, b, t) {
-  if ((a.zoom <= 1) !== (b.zoom <= 1)) {
-    _applyBetween(plate, a, b, t);
-    return;
-  }
-  const along = (from, to) => from + (to - from) * t;
-  snapIiifToPosition(plate, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
+  _applyBetween(plate, a, b, t);
 }
 
 // ── Recompute on resize / layout change ──────────────────────────────────────

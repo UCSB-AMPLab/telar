@@ -16,7 +16,7 @@ nothing is left to do, so the gap must fail here rather than on that screen.
 The classification pinned below is the one approved for the Compositor's
 table, on the same steps, so the two routes describe each step alike.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 import os
@@ -66,6 +66,7 @@ APPROVED = {
     'v161_to_v162': [A, A, N],
     'v162_to_v170': [A, A, O, A, N],
     'v170_to_v180': [A, O, O, A, A, N],
+    'v180_to_v181': [N],
 }
 
 

@@ -36,7 +36,7 @@
  * is unreliable on that platform; the code path falls through to
  * button-only navigation in main.js.
  *
- * @version v1.8.0
+ * @version v1.8.1
  */
 
 import Lenis from 'lenis';
@@ -424,9 +424,10 @@ function armScrubEnd() {
  * Also the handover to programmatic navigation. A keyboard or button move is
  * not the reader's scroll and animates on the transitions `is-scrubbing`
  * suppresses, so a move made mid-gesture ends scrubbing before it starts rather
- * than inheriting a window that would turn its slide into a jump.
+ * than inheriting a window that would turn its slide into a jump. A move that
+ * states its own landing ends scrubbing without the settle.
  */
-function endScrub({ carry = true } = {}) {
+function endScrub({ carry = true, settle = true } = {}) {
   clearTimeout(scrubEndTimer);
   scrubEndTimer = null;
   if (!cardStackEl) return;
@@ -434,7 +435,7 @@ function endScrub({ carry = true } = {}) {
   if (!lenis) return;
 
   const position = lenis.animatedScroll / _stepPx();
-  settleCards(position);
+  if (settle) settleCards(position);
   // Only a reader's own gesture coming to rest is carried to the nearer step.
   // A programmatic move ends scrubbing on its way past and already knows its
   // landing, so carrying it as well would put two moves on one scroll.
@@ -819,8 +820,11 @@ export function keyboardNav(direction) {
   // The keyboard is not the reader's scroll: end scrubbing if it is still on so the
   // move animates on the CSS transitions rather than being written per frame,
   // and without the carry — this move already knows where it is going, so a
-  // carry to the nearer step would put two moves on one scroll.
-  endScrub({ carry: false });
+  // carry to the nearer step would put two moves on one scroll. Nor the settle:
+  // the landing is stated below, and in a burst the scroll is several steps
+  // behind it, so a settle at the scroll's position places every card between
+  // the two for a step the story is leaving, where nothing later reaches them.
+  endScrub({ carry: false, settle: false });
 
   // Clear any active dwell — keyboard overrides scroll dwell
   _clearDwell();

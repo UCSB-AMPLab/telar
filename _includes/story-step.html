@@ -52,7 +52,7 @@ here. English fallback keeps the strings populated if the language is unset.{%- 
     </div>
 
     <!-- Viewer Warning (if object or IIIF manifest is missing) -->
-    {% if include.viewer_warning and include.viewer_warning != "" %}
+    {% if include.viewer_warning and include.viewer_warning != "" and site['development-features'].hide_warnings != true %}
     <div class="alert alert-warning telar-alert mt-3" role="alert">
       <strong>{{ lang.errors.image_viewer_unavailable_alt | default: "⚠️ Image viewer unavailable" }}</strong>
       <p class="mb-0 mt-2">

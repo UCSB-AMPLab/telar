@@ -24,7 +24,7 @@ most phases any migration has. These tests guard:
 The phases' own rules are tested in test_migration_v180_sheets.py,
 test_migration_v180_sources.py. Network fetches are not exercised here.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 import ast
@@ -321,10 +321,13 @@ def _launcher_site(tmp_path, launcher=LAUNCHER, engine=RELEASED_ENGINE, helpers=
 
 
 def _released_engine_hashes():
-    """sha256 of every engine file at every release tag that shipped it."""
+    """sha256 of every engine file at every release tag a site can upgrade
+    from with this migration, that is, every release before 1.8.0."""
     import hashlib
+    import re
     tags = [t for t in _git('tag').stdout.split()
-            if __import__('re').match(r'^v\d+\.\d+\.\d+(-beta)?$', t)]
+            if re.match(r'^v\d+\.\d+\.\d+(-beta)?$', t)
+            and tuple(int(n) for n in re.findall(r'\d+', t)[:3]) < (1, 8, 0)]
     found = {}
     for rel_path in ENGINE_FILES:
         for tag in tags:
@@ -547,12 +550,8 @@ class TestManualSteps:
 
 class TestRegistrationCompleteness:
 
-    def test_discovery_finds_it_and_it_ends_the_chain(self):
+    def test_discovery_finds_it(self):
         assert Migration170to180 in discover_migrations()
-        assert upgrade.MIGRATIONS[-1] is Migration170to180
-
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == Migration170to180.to_version == '1.8.0'
 
     def test_it_follows_the_v170_hop(self):
         chain = list(upgrade.MIGRATIONS)

@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
+/* GENERATED FILE - do not edit. Bundled from assets/js/telar-story/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.1 */
 (() => {
   // assets/js/telar-story/state.js
   var BUTTON_NAV_COOLDOWN = 400;
@@ -918,12 +918,7 @@
     _travel(plate, a, b, progress);
   }
   function _travel(plate, a, b, t) {
-    if (a.zoom <= 1 !== b.zoom <= 1) {
-      _applyBetween(plate, a, b, t);
-      return;
-    }
-    const along = (from, to) => from + (to - from) * t;
-    snapIiifToPosition(plate, along(a.x, b.x), along(a.y, b.y), a.zoom * (b.zoom / a.zoom) ** t);
+    _applyBetween(plate, a, b, t);
   }
   function reSnapActiveViewer() {
     const plate = Object.values(state.viewerPlates).find(
@@ -5831,9 +5826,8 @@
     _cancelDeepLinkTimers();
     closeAllPanels();
     setMoveSeconds(moveSeconds(0));
-    for (const plate of Object.values(state.viewerPlates)) {
-      plate.container.classList.remove("is-active");
-    }
+    reconcileStackForJump(-1);
+    reconcilePlatesForJump(-1);
     if (state.lenis) {
       state.currentIndex = -1;
       state.scrollPosition = 0;
@@ -6217,14 +6211,14 @@
     clearTimeout(scrubEndTimer);
     scrubEndTimer = setTimeout(endScrub, 100);
   }
-  function endScrub({ carry = true } = {}) {
+  function endScrub({ carry = true, settle = true } = {}) {
     clearTimeout(scrubEndTimer);
     scrubEndTimer = null;
     if (!cardStackEl) return;
     cardStackEl.classList.remove("is-scrubbing");
     if (!lenis) return;
     const position = lenis.animatedScroll / _stepPx();
-    settleCards(position);
+    if (settle) settleCards(position);
     if (carry) carryToNearestStep(position);
   }
   function carryToNearestStep(position) {
@@ -6395,7 +6389,7 @@
     }
     const token = beginNav();
     navTargetToken = token;
-    endScrub({ carry: false });
+    endScrub({ carry: false, settle: false });
     _clearDwell();
     const vh = _stepPx();
     const position = lenis.animatedScroll / vh;

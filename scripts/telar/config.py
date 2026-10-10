@@ -20,7 +20,7 @@ code ('en', 'es', etc.) without loading the full string dictionary. This is
 used by IIIF metadata extraction to choose the preferred language when
 reading multilingual manifests.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 from pathlib import Path
@@ -129,3 +129,20 @@ def load_site_language():
         return config.get('telar_language', 'en')
     except Exception:
         return 'en'
+
+
+def warnings_hidden():
+    """Whether the site keeps build warnings off its published pages.
+
+    Set by `development-features.hide_warnings` in _config.yml. The build
+    still reports every warning in its log; only what reaches a page changes.
+    """
+    try:
+        config_path = Path('_config.yml')
+        if not config_path.exists():
+            return False
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+        return (config.get('development-features') or {}).get('hide_warnings') is True
+    except Exception:
+        return False

@@ -80,7 +80,7 @@ layout: default
   <div class="row">
     <!-- Object Viewer -->
     <div class="col-lg-8">
-      {% if page.object_warning and page.object_warning != "" %}
+      {% if page.object_warning and page.object_warning != "" and site['development-features'].hide_warnings != true %}
       <div class="alert alert-danger mb-3" role="alert">
         <strong>{{ lang.errors.image_viewer_unavailable | default: "⚠️ Image Viewer Unavailable" }}</strong>
         <p class="mb-0 mt-2">{{ page.object_warning | markdownify | remove: '<p>' | remove: '</p>' | strip }}</p>

@@ -138,8 +138,8 @@ show_drafts: false
 
 # Telar Settings (version information)
 telar:
-  version: "1.8.0"
-  release_date: "2026-10-04"
+  version: "1.8.1"
+  release_date: "2026-10-09"
 
 # Plugins
 plugins:
@@ -158,6 +158,11 @@ development-features:
   # Christmas Tree Mode - Displays all warning messages for testing multilingual support
   # Set to true to light up the site with test warnings (test objects, fake errors, etc.)
   christmas_tree_mode: false
+
+  # Hide warnings - keeps build warnings (missing images, IIIF problems,
+  # missing glossary entries) off the published site. The build log still
+  # reports them. Overrides Christmas Tree Mode.
+  hide_warnings: false
 
   # Viewer preloading configuration
   # Controls how story viewers are preloaded for smoother navigation.

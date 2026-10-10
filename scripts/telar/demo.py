@@ -36,7 +36,7 @@ Bundle format compatibility: v0.6.0 bundles use `medium`, `dimensions`, and
 `subjects`, `featured`, and `source`. Both formats are supported — new fields
 are populated when present, old fields are ignored gracefully.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 import contextlib
@@ -131,14 +131,19 @@ def _merge_demo_projects(bundle, data_dir):
             # Use order for number field, story_id for identifier (v0.6.0+)
             demo_stories = []
             for proj in bundle['project']:
-                demo_stories.append({
+                story = {
                     'number': str(proj.get('order', '')),
                     'story_id': proj.get('story_id', ''),
                     'title': proj.get('title', ''),
                     'subtitle': proj.get('subtitle', ''),
                     'byline': proj.get('byline', ''),
                     '_demo': True  # Mark as demo content
-                })
+                }
+                # Only a true value lists the story's sections on its intro
+                # card, as in a site's own project sheet; absent otherwise.
+                if proj.get('show_sections') is True:
+                    story['show_sections'] = True
+                demo_stories.append(story)
 
             # Merge: demo stories first, then user stories
             if 'stories' in user_project[0]:

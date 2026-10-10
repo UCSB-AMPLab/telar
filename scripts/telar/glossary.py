@@ -39,7 +39,8 @@ which does not resolve Liquid inside it.
 If a term ID is not found in the glossary, the link is rendered as a
 visible error indicator with a warning emoji, and a warning is appended
 to the `warnings_list` so it appears in the build output and in the
-story's intro panel.
+story's intro panel. A site that sets `development-features.hide_warnings`
+gets the text as written instead of the indicator.
 
 A glossary callout (`:::glossary` in `telar/widgets.py`) reaches this pass
 as a slot, and `process_glossary_links()` resolves its entry the way it
@@ -53,7 +54,7 @@ Term matching is case-insensitive: an author's `[[Term]]` resolves against
 the stored key regardless of casing, and the rendered `data-term-id` is the
 stored key.
 
-Version: v1.8.0
+Version: v1.8.1
 """
 
 import bisect
@@ -67,7 +68,7 @@ from typing import NamedTuple, Optional
 
 import yaml
 
-from telar.config import get_lang_string
+from telar.config import get_lang_string, warnings_hidden
 from telar.widgets import render_widget_html, site_base_url
 from telar.glossary_kinds import (default_kind, front_matter_kind, kind_icon,
                                   kind_text, resolve_kind)
@@ -338,7 +339,11 @@ _CALLOUT_SLOT_RE = re.compile(
 
 
 def _missing_entry(raw_term_id, shown, warnings_list, step_num, layer_name):
-    """The warning and the page marker for an entry the glossary lacks."""
+    """The warning and the page marker for an entry the glossary lacks.
+
+    A site that hides warnings gets the text as written in place of the
+    marker; the warning is reported all the same.
+    """
     if warnings_list is not None:
         warning_msg = get_lang_string('errors.object_warnings.glossary_term_not_found', term_id=raw_term_id)
         warnings_list.append({
@@ -348,6 +353,8 @@ def _missing_entry(raw_term_id, shown, warnings_list, step_num, layer_name):
             'layer': layer_name,
             'message': warning_msg
         })
+    if warnings_hidden():
+        return html.escape(html.unescape(shown))
     return f'<span class="glossary-link-error" data-term-id="{html.escape(raw_term_id, quote=True)}">\u26a0\ufe0f [[{html.escape(html.unescape(shown))}]]</span>'
 
 

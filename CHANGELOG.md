@@ -4,6 +4,27 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-09
+
+Story navigation and warnings patch. Fixes three ways a story could leave cards or images out of place, a valid IIIF manifest reported as invalid, and two details of demo content, and adds a setting that keeps build warnings off the published site.
+
+### Added
+
+- **Hide build warnings.** `hide_warnings` under `development-features` in `_config.yml` keeps build warnings off the published site: those on the home page, the objects page and object pages, a story's warnings, and the IIIF address banner. A link to a missing glossary entry shows its text without the warning marker. The build log still lists every warning. Off by default.
+
+### Fixed
+
+- **Back to Start.** Returning to the intro with Back to Start left the current step's card, and in some stories its image, on screen over the intro.
+- **Fast arrow keys.** Pressing an arrow key several times quickly could leave cards and images stopped part-way across the screen.
+- **Camera between two details.** Scrolling between two steps that zoom into details near opposite edges of an image moved the camera into one edge and along it, instead of straight across.
+- **IIIF manifests served as generic files.** A valid manifest whose server labels it `application/octet-stream`, as some object stores do, showed "Image Viewer Unavailable" on its object page although the viewer loaded it, and its title and description were not filled in from it.
+- **Demo story sections.** A demo story that lists its sections, such as Colonial Landscapes, now shows them on its intro card.
+- **Demo glossary after turning demo content off.** On a site built on your own computer, the demo glossary entries stayed after demo content was turned off. The next build now removes them.
+
+### Notes
+
+- Migration script `scripts/migrations/v180_to_v181.py` upgrades automatically from v1.8.0, and chains through from earlier versions. No manual steps.
+
 ## [1.8.0] - 2026-10-04
 
 Story motion and glossary kinds release. This release changes how a story reads. Moving from one step to the next is now one motion, with text cards that scroll through as the image moves; each card takes the size its answer and the window need, and each answer is held to what its card can show. Glossary entries can now be key terms, primary sources, people or entities, or places, and an entry can sit beside the text as a callout. Links can open a page of a multi-page object or a glossary entry, and the address bar moves the story. The release also fixes what a site could publish wrong without its owner being able to see it: self-hosted images missing after a quiet week, maths broken everywhere but a panel, a carousel image with an unresolved address, and a private story published in the clear because its column was spelled in the masculine (in Spanish-language sites). An upgrade now reports what it did, in the site's language, to the reader each step is for, and a file missing from a release no longer stalls it.

@@ -248,7 +248,7 @@
             {% assign steps = story_data %}
             {% if steps.size > 0 and steps[0]._metadata %}
               {% assign metadata = steps[0] %}
-              {% if metadata.viewer_warnings.size > 0 %}
+              {% if metadata.viewer_warnings.size > 0 and site['development-features'].hide_warnings != true %}
                 <div class="alert alert-warning telar-alert mt-3" role="alert" style="text-align: left;">
                   <strong>{{ lang.errors.story_config_heading }}</strong>
                   <p class="mb-2 mt-2">{{ lang.story.config_issues_heading }}</p>
