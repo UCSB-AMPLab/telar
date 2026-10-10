@@ -4,7 +4,7 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
-## [1.8.1] - 2026-10-XX
+## [1.8.1] - 2026-10-09
 
 Story navigation and warnings patch. Fixes three ways a story could leave cards or images out of place, a valid IIIF manifest reported as invalid, and two details of demo content, and adds a setting that keeps build warnings off the published site.
 

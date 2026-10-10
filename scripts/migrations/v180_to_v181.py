@@ -74,7 +74,7 @@ class Migration180to181(BaseMigration):
 
     from_version = "1.8.0"
     to_version = "1.8.1"
-    release_date = None
+    release_date = "2026-10-09"
     description = ("v1.8.1 framework files: story navigation, IIIF manifest validation, "
                    "the demo content merge, and the switch that hides build warnings")
 
