@@ -46,7 +46,7 @@ def _git(*args):
 
 
 def _tag_exists():
-    return _git('rev-parse', '--verify', '--quiet', f'{TAG}^{{commit}}').returncode == 0
+    return _git('rev-parse', '--verify', '--quiet', f'refs/tags/{TAG}^{{commit}}').returncode == 0
 
 
 # Before the tag exists the release is whatever this branch has committed.
@@ -170,7 +170,7 @@ class TestMigrationMetadata:
     @pytest.mark.xfail(Migration180to181.release_date is None or not _tag_exists(), strict=True,
                        reason='v1.8.1 is tagged after its release candidate is rehearsed')
     def test_the_release_date_is_the_tags(self):
-        dated = _git('log', '-1', '--format=%cs', TAG).stdout.strip()
+        dated = _git('log', '-1', '--format=%cs', f'refs/tags/{TAG}').stdout.strip()
         assert Migration180to181.release_date == dated
 
 
