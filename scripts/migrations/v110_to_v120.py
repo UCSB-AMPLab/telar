@@ -16,6 +16,7 @@ Version: v1.8.0
 
 from typing import List, Dict
 import csv
+import importlib
 import io
 import re
 from .base import BaseMigration
@@ -104,6 +105,22 @@ class Migration110to120(BaseMigration):
 
         return changes
 
+    @staticmethod
+    def _is_header_row(row: List[str]) -> bool:
+        """Whether *row* repeats the column names, as the build reads it.
+
+        The build's own reader answers this where it can be imported; where
+        it cannot, no row but the first counts as a header, which leaves a
+        bilingual sheet with the name in one header row instead of two and
+        never writes it into a story.
+        """
+        try:
+            csv_utils = importlib.import_module('telar.csv_utils')
+        except ImportError:
+            return False
+        return bool(csv_utils.is_header_row(row))
+
+
     def _update_project_csv(self) -> List[str]:
         """Add show_sections column to project.csv if not already present."""
         changes = []
@@ -145,10 +162,15 @@ class Migration110to120(BaseMigration):
         # Determine column name based on language
         col_name = 'mostrar_secciones' if lang == 'es' else 'show_sections'
 
-        # Find insertion point — after the last existing column
-        # (show_sections goes at the end, after protected/private)
+        # The column name goes in the header rows and an empty cell in the
+        # data rows. A sheet may carry a second header row repeating the
+        # names in the other language, so how many header rows there are is
+        # the build's own question, asked of the second row: a sheet with one
+        # header row has a story there, and writing the column's name into it
+        # would put that word in the story's cell.
+        header_rows = 2 if len(rows) > 1 and self._is_header_row(rows[1]) else 1
         for i, row in enumerate(rows):
-            row.append(col_name if i < 2 else '')  # Header rows get column name, data rows get empty
+            row.append(col_name if i < header_rows else '')
 
         # Write back
         output = io.StringIO()
