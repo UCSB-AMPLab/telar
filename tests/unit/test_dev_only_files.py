@@ -1,11 +1,13 @@
 """
 Tests for the Compositor site's dev-only file list.
 
-`scripts/dev-only-files.txt` names the framework's own test infrastructure,
-which a Compositor site must not carry and a site build must not install
-for. These tests pin its contents, check every entry actually exists in
-the template, and check that neither the build workflow nor package.json's
-regular dependencies pull in anything the list names.
+`scripts/dev-only-files.txt` names the framework's own test infrastructure
+and the local copies of the upgrade engine, which a Compositor site must
+not carry and a site build must not install for. These tests pin its
+contents, check every entry actually exists in the template, check that
+every engine module the template holds is listed, and check that neither
+the build workflow nor package.json's regular dependencies pull in
+anything the list names.
 
 Version: v1.8.0
 """
@@ -29,10 +31,15 @@ EXPECTED_ENTRIES = [
     'vitest.config.js',
     'pytest.ini',
     '.github/workflows/telar-tests.yml',
+    'scripts/migrations/',
+    'scripts/telar_upgrade.py',
+    'scripts/telar_upgrade_common.py',
+    'scripts/telar_upgrade_regen.py',
+    'scripts/telar_upgrade_report.py',
 ]
 
 
-def test_list_parses_to_exactly_the_four_entries():
+def test_list_parses_to_exactly_the_expected_entries():
     assert read_dev_only_files() == EXPECTED_ENTRIES
 
 
@@ -52,6 +59,16 @@ def test_every_listed_path_exists_in_the_template():
             assert target.is_dir(), f"{entry} is listed as a directory but is not one"
         else:
             assert target.is_file(), f"{entry} is listed but does not exist"
+
+
+def test_every_engine_module_in_the_template_is_listed():
+    """A new engine module left off the list would reach every new
+    Compositor site, which never runs it."""
+    listed = set(read_dev_only_files())
+    engine = {f'scripts/{p.name}' for p in (REPO_ROOT / 'scripts').glob('telar_upgrade*.py')}
+
+    assert engine, 'no engine module found; the glob no longer matches the template'
+    assert engine - listed == set()
 
 
 def test_build_workflow_does_not_reference_dev_only_files():
