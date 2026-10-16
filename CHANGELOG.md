@@ -6,7 +6,7 @@ All notable changes to Telar will be documented in this file.
 
 ## [1.8.2] - 2026-10-XX
 
-Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a story's title, corrects two parts of the template's glossary, and removes old copies of the upgrade scripts from upgraded sites.
+Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a story's title, corrects two parts of the template's glossary, removes old copies of the upgrade scripts from upgraded sites, and lets sites with many large images finish upgrading.
 
 ### Fixed
 
@@ -15,6 +15,7 @@ Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a stor
 - **The "Telar" glossary entry in two languages.** On sites made from older templates, the glossary entry for "Telar" has its definition in both English and Spanish. Upgrading from your own computer or through GitHub Actions keeps only your site's language, unless you have changed the entry. If your site reads its content from Google Sheets, the upgrade asks you to make the same change in your sheet. Upgrades through the Compositor leave the entry as it is for now.
 - **Old copies of the upgrade scripts.** Sites that upgrade with `scripts/upgrade.py` download the upgrade scripts each time they run. They still kept a copy that never ran: `scripts/telar_upgrade.py` and three helper files. The upgrade now deletes these files once it finishes, unless you have changed them.
 - **Upgrade scripts on new Compositor sites.** Sites created in the Compositor no longer get a copy of the upgrade scripts and migrations.
+- **Sites with many large images could not upgrade.** At the end of an upgrade, Telar regenerates the IIIF tiles for the images your site hosts itself, and stops that step after three minutes. When it ran out of time, the whole upgrade failed and the site stayed at its old version. The upgrade now finishes, and its summary says the tiles were not fully regenerated. This affected upgrades from your own computer and through GitHub Actions.
 
 ### Notes
 
