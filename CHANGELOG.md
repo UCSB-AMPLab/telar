@@ -4,7 +4,7 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
-## [1.8.2] - 2026-10-XX
+## [1.8.2] - 2026-10-16
 
 Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a story's title, corrects two parts of the template's glossary, removes old copies of the upgrade scripts from upgraded sites, and lets sites with many large images finish upgrading.
 

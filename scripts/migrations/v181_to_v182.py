@@ -117,7 +117,7 @@ class Migration181to182(BaseMigration):
 
     from_version = "1.8.1"
     to_version = "1.8.2"
-    release_date = None
+    release_date = "2026-10-16"
     description = "v1.8.2: the glossary's Telar entry and instructions are corrected"
 
     _TARGET_TAG = "v1.8.2"
