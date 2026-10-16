@@ -18,7 +18,7 @@ Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a stor
 
 ### Notes
 
-- Migration script `scripts/migrations/v181_to_v182.py` upgrades automatically from v1.8.1, and chains through from earlier versions. Upgrades with the workflow or from your own computer have one optional step: you can delete `.github/workflows/telar-tests.yml`. It runs Telar's own tests, which are always skipped on your site. Upgrades through the Compositor have no manual steps.
+- Migration script `scripts/migrations/v181_to_v182.py` upgrades automatically from v1.8.1, and chains through from earlier versions. Upgrades with the "Upgrade Telar" workflow or from your own computer have one optional step: you can delete `.github/workflows/telar-tests.yml`. It runs Telar's own tests, which are always skipped on your site. Upgrades through the Compositor have no manual steps.
 
 ## [1.8.1] - 2026-10-09
 
