@@ -674,11 +674,7 @@ def main():
 
     soft_warnings = []
     if not iiif_ok:
-        soft_warnings.append(
-            "IIIF tile regeneration reported an error. Self-hosted object images may "
-            "not display until you run scripts/generate_iiif.py successfully. This did "
-            "not block the upgrade."
-        )
+        soft_warnings.append(get_message(lang, 'soft_warning_iiif'))
 
     # All required steps succeeded — stamp the version exactly once.
     print('\n' + get_message(lang, 'updating_config'))

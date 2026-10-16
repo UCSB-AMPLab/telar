@@ -80,6 +80,10 @@ MESSAGES = {
         'migration_stopped': '✗ Stopping: this migration did not complete.',
         'regeneration_script_error': '⚠️  Warning: {} returned error: {}',
         'regeneration_timeout': '⚠️  Warning: Data regeneration timed out',
+        'regeneration_iiif_timeout': '⚠️  Warning: IIIF tile generation was stopped after {} seconds',
+        'soft_warning_iiif': ('IIIF tiles were not fully regenerated. Self-hosted object '
+                              'images may not display until you run scripts/generate_iiif.py '
+                              'successfully. This did not block the upgrade.'),
         'regeneration_failed': '⚠️  Warning: Data regeneration failed: {}',
         'index_no_frontmatter': '[WARN] index.md has no leading frontmatter '
                                 'delimiter — skipping upgrade-notice insertion',
@@ -482,6 +486,12 @@ MESSAGES = {
                                      'error: {}',
         'regeneration_timeout': '⚠️  Advertencia: Se agotó el tiempo al '
                                 'regenerar los datos',
+        'regeneration_iiif_timeout': '⚠️  Advertencia: La generación de teselas IIIF '
+                                     'se detuvo a los {} segundos',
+        'soft_warning_iiif': ('Las teselas (*tiles*) IIIF no se regeneraron por completo. '
+                              'Es posible que las imágenes de objetos que aloja el propio '
+                              'sitio no se vean hasta que ejecutes scripts/generate_iiif.py '
+                              'y termine sin errores. Esto no impidió la actualización.'),
         'regeneration_failed': '⚠️  Advertencia: Falló la regeneración de '
                                'datos: {}',
         'index_no_frontmatter': '[ADVERTENCIA] index.md no empieza con el '
@@ -533,7 +543,7 @@ MESSAGES = {
         'flagged_needs_attention': 'Archivos que no se instalaron',
         'flagged_section_body': 'Estos archivos no forman parte de la versión nueva de Telar, así que no se pudieron instalar. La actualización **sí** terminó y el sitio quedó en esa versión; volver a ejecutarla no cambia nada. Repórtalos para que se corrija esa versión de Telar.',
         'completed_with_warnings': 'Completados con advertencias',
-        'warnings_section_body': 'Estos pasos no impidieron la actualización, pero conviene revisarlos:',
+        'warnings_section_body': 'Estos pasos no impidieron la actualización, pero vale la pena revisarlos:',
         'manual_steps_required': 'Pasos manuales necesarios',
         'complete_after_merge': 'Por favor completa estos pasos:',
         'no_manual_steps': 'No se requieren pasos manuales',
