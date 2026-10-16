@@ -2,7 +2,7 @@
 Migration from v1.7.0 to v1.8.0.
 
 v1.8.0 is about what a site publishes and what an upgrade tells its owner.
-Nine kinds of change reach an existing site, in this order.
+Eight kinds of change reach an existing site, in this order.
 
 1. Framework files (FRAMEWORK_FILES, installed atomically from the v1.8.0
    tag): every file a site owns that the release adds or changes. The
@@ -42,12 +42,12 @@ Nine kinds of change reach an existing site, in this order.
    will cut, or strip of content an answer cannot show, is named in the
    summary before the first build runs.
 
-9. The stale engine (Phase 9): a launcher site's leftover
-   `scripts/telar_upgrade.py` and its three helpers are removed.
-
 Phases 3 to 8 are in `v180_sources.py` and `v180_sheets.py`; each is
 idempotent, so a run that stops at regeneration and is repeated after the
 author fixes the cause completes.
+
+A launcher site's leftover copy of the engine is removed by the engine once
+the whole upgrade has succeeded (`stale_engine.py`), not by this migration.
 
 Not delivered:
 
@@ -68,19 +68,17 @@ Not delivered:
 The version stamp (telar.version -> 1.8.0) is not written here. The engine
 applies it once after every migration step and the regeneration succeed.
 
-Version: v1.8.0
+Version: v1.8.2
 """
 
-import ast
-import hashlib
 import os
-import sys
 from typing import Dict, List
 
 from .messages import get_message
-from .base import BaseMigration, ChangeRecord, ChangeStatus, LAUNCHER_MARKER
+from .base import BaseMigration, ChangeRecord, ChangeStatus
 from .records import ChangeCategory, category_for_path
 from . import v180_sheets, v180_sources
+from .stale_engine import ENGINE_FILES  # noqa: F401  (the manifest builder reads it here)
 
 
 # Fetched from the v1.8.0 tag and written atomically as one set.
@@ -253,53 +251,8 @@ REMOVED_FILES = [
 # Jekyll publishes it as part of the site.
 STALE_MANIFEST = 'migration.json'
 
-# The engine a site made from a template before the engine left it. The
-# launcher downloads a verified engine for each run, so on a launcher site
-# these are dead copies whose version numbers suggest otherwise.
-ENGINE_FILES = [
-    'scripts/telar_upgrade.py',
-    'scripts/telar_upgrade_common.py',
-    'scripts/telar_upgrade_regen.py',
-    'scripts/telar_upgrade_report.py',
-]
-
-# The sha256 of every copy of those files a release put in a site: the
-# v1.7.0 engine, and no helper, since no release shipped one. Phase 9
-# deletes a file only when its bytes are one of these, so a file a site
-# wrote or edited itself stays. Computed from the release tags, and
-# recomputed from them by the tests.
-RELEASED_ENGINE_SHA256 = {
-    'scripts/telar_upgrade.py': {
-        '046378e5f279fedc646f7e158a206689ac98838775c3779d13ec0160d792f18e',  # v1.7.0
-    },
-}
-
-# The modules the engine runs as. A file any of them was loaded from is the
-# engine that is running, and is never deleted.
-_ENGINE_MODULES = ('__main__', 'telar_upgrade', 'telar_upgrade_common',
-                   'telar_upgrade_regen', 'telar_upgrade_report')
-
-# The scripts directory this module was imported from. Compared with the
-# site's own before Phase 9 deletes anything.
-_ENGINE_SCRIPTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 _DOCS = 'https://telar.org/docs/setup/upgrading/'
 _GUIA = 'https://telar.org/guia/configuracion/actualizacion/'
-
-def _running_engine_files() -> set:
-    """Every file, resolved, the running engine was started or loaded from."""
-    paths = [sys.argv[0]] if sys.argv and sys.argv[0] else []
-    for name in _ENGINE_MODULES:
-        loaded = getattr(sys.modules.get(name), '__file__', None)
-        if loaded:
-            paths.append(loaded)
-    return {os.path.realpath(path) for path in paths}
-
-
-def _sha256(path: str) -> str:
-    with open(path, 'rb') as handle:
-        return hashlib.sha256(handle.read()).hexdigest()
-
 
 class Migration170to180(BaseMigration):
     """Migration from v1.7.0 to v1.8.0 — the framework files, the removals, and the in-place edits to site-owned files the release needs."""
@@ -338,8 +291,6 @@ class Migration170to180(BaseMigration):
             print(f"  {label}...")
             changes.extend(phase(self.repo_root, lang))
 
-        print("  Phase 9: Removing the stale upgrade engine...")
-        changes.extend(self._remove_stale_engine())
         return changes
 
     @staticmethod
@@ -414,72 +365,6 @@ class Migration170to180(BaseMigration):
         except OSError as error:
             return error
         return True
-
-    # ------------------------------------------------------------------ #
-    # Phase 9
-    # ------------------------------------------------------------------ #
-
-    def _remove_stale_engine(self) -> List[ChangeRecord]:
-        """Delete a launcher site's leftover copy of the released engine.
-
-        Three guards. The site's `scripts/upgrade.py` must assign the
-        launcher marker at module level: without the launcher, the site's
-        copy of the engine is the only thing it can upgrade with, and a
-        comment or string carrying the marker's text does not make a file a
-        launcher. No file the running engine was loaded or started from is
-        touched, and nothing is touched when this module itself was loaded
-        from the site's `scripts/`. And a file goes only when its bytes are
-        a copy a release shipped; any other is the site's own, left in
-        place and reported. Absent files are a no-op. Soft throughout.
-        """
-        if not self._site_runs_the_launcher() or self._running_from_the_site():
-            return []
-        lang = self._detect_language()
-        running = _running_engine_files()
-        records = []
-        for rel_path in ENGINE_FILES:
-            path = os.path.join(self.repo_root, rel_path)
-            if os.path.isfile(path) and os.path.realpath(path) not in running:
-                records.append(self._stale_engine_record(lang, rel_path, path))
-        return records
-
-    def _stale_engine_record(self, lang, rel_path, path) -> ChangeRecord:
-        # A link is something the site set up, whatever its target holds.
-        if os.path.islink(path) or \
-                _sha256(path) not in RELEASED_ENGINE_SHA256.get(rel_path, set()):
-            description = get_message(lang, 'v180_engine_kept', rel_path)
-            status = ChangeStatus.APPLIED
-        else:
-            outcome = self._delete(rel_path)
-            if outcome is True:
-                description = get_message(lang, 'v180_engine_removed', rel_path)
-                status = ChangeStatus.APPLIED
-            else:
-                description = get_message(lang, 'v180_engine_not_removed', rel_path, outcome)
-                status = ChangeStatus.FAILED
-        return ChangeRecord(description=description, status=status, severity='soft',
-                            category=ChangeCategory.SCRIPTS)
-
-    def _site_runs_the_launcher(self) -> bool:
-        """Whether the site's scripts/upgrade.py assigns LAUNCHER_MARKER to
-        the name LAUNCHER_MARKER at module level. Parsed, never run."""
-        content = self._read_file('scripts/upgrade.py')
-        if not isinstance(content, str):
-            return False
-        try:
-            tree = ast.parse(content)
-        except (SyntaxError, ValueError):
-            return False
-        return any(isinstance(node, ast.Assign)
-                   and any(isinstance(t, ast.Name) and t.id == 'LAUNCHER_MARKER'
-                           for t in node.targets)
-                   and isinstance(node.value, ast.Constant)
-                   and node.value.value == LAUNCHER_MARKER
-                   for node in tree.body)
-
-    def _running_from_the_site(self) -> bool:
-        site_scripts = os.path.realpath(os.path.join(self.repo_root, 'scripts'))
-        return site_scripts == os.path.realpath(_ENGINE_SCRIPTS_DIR)
 
     # ------------------------------------------------------------------ #
     # Manual steps
