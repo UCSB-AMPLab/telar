@@ -16,7 +16,7 @@ files. These tests guard:
 
 Network fetches are not exercised here.
 
-Version: v1.8.1
+Version: v1.8.2
 """
 
 import os
@@ -206,12 +206,8 @@ class TestManualSteps:
 
 class TestRegistrationCompleteness:
 
-    def test_discovery_finds_it_and_it_ends_the_chain(self):
+    def test_discovery_finds_it(self):
         assert Migration180to181 in discover_migrations()
-        assert upgrade.MIGRATIONS[-1] is Migration180to181
-
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == Migration180to181.to_version == '1.8.1'
 
     def test_it_follows_the_v180_hop(self):
         chain = list(upgrade.MIGRATIONS)

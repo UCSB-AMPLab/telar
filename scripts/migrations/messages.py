@@ -26,7 +26,7 @@ grammatical number matters in the summary: it returns the singular or
 plural of "file" in the active language so category headings read
 naturally ("1 file" / "2 files", "1 archivo" / "2 archivos").
 
-Version: v1.8.0
+Version: v1.8.2
 """
 
 MESSAGES = {
@@ -269,6 +269,9 @@ MESSAGES = {
         'change_gitignore_section': 'Updated .gitignore — {}',
         'change_removed_not_telar': 'Removed {} — no longer part of Telar',
         'change_could_not_remove': 'Could not remove {}: {}',
+        'change_glossary_telar_one_language': "{}: the Telar entry now has only your site's language",
+        'change_glossary_instructions': '{}: the instruction rows now name '
+                                        'telar-content/texts/glossary/',
         'change_kept_uncheckable': 'Kept {} — could not check whether it had been edited',
         'change_kept_edited': 'Kept {} — edited on this site',
         'change_removed_demo_term': 'Removed {} — withdrawn demo glossary term',
@@ -675,6 +678,10 @@ MESSAGES = {
         'change_gitignore_section': 'Se actualizó .gitignore: sección {}',
         'change_removed_not_telar': 'Se eliminó {}: ya no forma parte de Telar',
         'change_could_not_remove': 'No se pudo eliminar {}: {}',
+        'change_glossary_telar_one_language': '{}: la entrada sobre Telar quedó solo en el idioma de '
+                                              'tu sitio',
+        'change_glossary_instructions': '{}: las filas de instrucciones ahora indican la carpeta '
+                                        'telar-content/texts/glossary/',
         'change_kept_uncheckable': 'Se conservó {}: no se pudo comprobar si lo habías editado',
         'change_kept_edited': 'Se conservó {}: tiene cambios hechos en este sitio',
         'change_removed_demo_term': 'Se eliminó {}: era un término del glosario de demostración '
