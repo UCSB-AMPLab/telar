@@ -3,15 +3,18 @@ Dev-Only File List
 
 This module deals with reading `scripts/dev-only-files.txt`, the single list
 naming the files a site made through the Compositor does not carry — the
-framework's own test infrastructure, present in the template only because
-the template is also the framework's development repository.
+framework's own test infrastructure and the local copies of the upgrade
+engine, present in the template only because the template is also the
+framework's development repository.
 
 Two callers read the list through this module: the unit test that pins its
 contents against the template, and the release tooling that turns it into
 `migration.json` delete operations when a release ships, so an existing
 Compositor site loses the same files on upgrade that a new one never
-receives. The command-line migration does not use it — that route leaves
-the files in place, and a local user keeps the complete template.
+receives. The command-line upgrade does not read it: that route keeps the
+test infrastructure, and once an upgrade has succeeded on a site that runs
+the launcher, removes `scripts/migrations/` and the released copies of the
+engine on its own.
 
 `read_dev_only_files()` is the only function. It parses the list's format:
 one repository-relative path per line, a line starting with `#` is a note
@@ -21,7 +24,7 @@ does not check that they exist, sort them, or strip a trailing slash, since
 a caller building a delete operation needs to know a directory was written
 as one.
 
-Version: v1.8.0
+Version: v1.8.2
 """
 
 from pathlib import Path

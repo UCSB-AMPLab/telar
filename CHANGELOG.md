@@ -4,6 +4,23 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-10-16
+
+Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a story's title, corrects two parts of the template's glossary, removes old copies of the upgrade scripts from upgraded sites, and lets sites with many large images finish upgrading.
+
+### Fixed
+
+- **Story title replaced by "show_sections".** Upgrading a site from a version before 1.2.0 added a `show_sections` column to `project.csv`. If the sheet had a single header row, the upgrade wrote the column's name into the first story's row. The upgrade now checks whether the second row is a header before writing to it.
+- **Glossary instructions.** The instruction rows at the top of `glossary.csv` said to put glossary files in `/components/texts/glossary/`. Since 1.8.0 they belong in `/telar-content/texts/glossary/`. The upgrade corrects these rows unless you have changed them.
+- **The "Telar" glossary entry in two languages.** On sites made from older templates, the glossary entry for "Telar" has its definition in both English and Spanish. The upgrade keeps only your site's language, unless you have changed the entry. If your site reads its content from Google Sheets, the upgrade asks you to make the same change in your sheet.
+- **Old copies of the upgrade scripts.** Sites that upgrade with `scripts/upgrade.py` download the upgrade scripts each time they run. They still kept a copy that never ran: `scripts/telar_upgrade.py` and three helper files. The upgrade now deletes these files once it finishes, unless you have changed them.
+- **Upgrade scripts on new Compositor sites.** Sites created in the Compositor no longer get a copy of the upgrade scripts and migrations.
+- **Sites with many large images could not upgrade.** At the end of an upgrade, Telar regenerates the IIIF tiles for the images your site hosts itself, and stops that step after three minutes. When it ran out of time, the whole upgrade failed and the site stayed at its old version. The upgrade now finishes, and its summary says the tiles were not fully regenerated. This affected upgrades from your own computer and through GitHub Actions.
+
+### Notes
+
+- Migration script `scripts/migrations/v181_to_v182.py` upgrades automatically from v1.8.1, and chains through from earlier versions. Upgrades with the "Upgrade Telar" workflow or from your own computer have one optional step: you can delete `.github/workflows/telar-tests.yml`. It runs Telar's own tests, which are always skipped on your site. Upgrades through the Compositor have no manual steps.
+
 ## [1.8.1] - 2026-10-09
 
 Story navigation and warnings patch. Fixes three ways a story could leave cards or images out of place, a valid IIIF manifest reported as invalid, and two details of demo content, and adds a setting that keeps build warnings off the published site.

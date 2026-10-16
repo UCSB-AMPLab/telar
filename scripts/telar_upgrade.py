@@ -24,9 +24,12 @@ previews what would happen without making changes.
 This is the engine, not the entry point. A site's `scripts/upgrade.py` is a
 launcher that downloads a verified copy of this file for the newest release
 and runs it from a temp dir, so the version of this module that runs is
-never the one sitting in the site. See scripts/upgrade.py.
+never the one sitting in the site. See scripts/upgrade.py. Once an upgrade
+has succeeded on a launcher site, the engine removes the site's own
+`scripts/migrations/` and its released copies of this engine, which no run
+uses.
 
-Version: v1.8.0
+Version: v1.8.2
 
 Usage:
     python scripts/telar_upgrade.py              # Normal upgrade
@@ -54,6 +57,7 @@ from migrations.base import (
 from migrations.messages import get_message
 from migrations.discovery import discover_migrations
 from migrations.records import LAUNCHER_MARKER
+from migrations.stale_engine import remove_stale_engine
 
 # The shared helpers, the summary and the data regeneration live in the three
 # telar_upgrade_* modules beside this one, which the tooling tarball carries
@@ -670,11 +674,7 @@ def main():
 
     soft_warnings = []
     if not iiif_ok:
-        soft_warnings.append(
-            "IIIF tile regeneration reported an error. Self-hosted object images may "
-            "not display until you run scripts/generate_iiif.py successfully. This did "
-            "not block the upgrade."
-        )
+        soft_warnings.append(get_message(lang, 'soft_warning_iiif'))
 
     # All required steps succeeded — stamp the version exactly once.
     print('\n' + get_message(lang, 'updating_config'))
@@ -702,6 +702,7 @@ def main():
 
     # Only now, with the whole upgrade behind us. See _retire_local_migrations.
     all_changes.extend(_retire_local_migrations(repo_root, lang))
+    all_changes.extend(remove_stale_engine(repo_root, lang))
 
     # Generate and write summary
     summary = generate_checklist(

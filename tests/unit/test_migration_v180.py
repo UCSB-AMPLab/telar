@@ -14,8 +14,7 @@ most phases any migration has. These tests guard:
     build imports is in the set or unchanged since v1.7.0;
   - fail-closed ordering: a failed framework install runs no later phase,
     and a successful one runs them all, in order;
-  - the removals, the stale manifest, and the stale engine with its two
-    guards;
+  - the removals and the stale manifest;
   - metadata, the six manual steps with their `kind` and `audience`, and
     registration at the end of the chain;
   - one run over a whole 1.7.0-shaped site, and a second that changes
@@ -24,7 +23,7 @@ most phases any migration has. These tests guard:
 The phases' own rules are tested in test_migration_v180_sheets.py,
 test_migration_v180_sources.py. Network fetches are not exercised here.
 
-Version: v1.8.1
+Version: v1.8.2
 """
 
 import ast
@@ -40,12 +39,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'
 
 from migrations import v170_to_v180
 from migrations.v170_to_v180 import (
-    ENGINE_FILES, FRAMEWORK_FILES, REMOVED_FILES, STALE_MANIFEST, Migration170to180,
+    FRAMEWORK_FILES, REMOVED_FILES, STALE_MANIFEST, Migration170to180,
 )
 from migrations.v162_to_v170 import Migration162to170
 from migrations.base import ChangeRecord, ChangeStatus, MANUAL_STEP_AUDIENCES, MANUAL_STEP_KINDS
 from migrations.messages import MESSAGES, get_message
-from migrations.records import LAUNCHER_MARKER
 
 import telar_upgrade as upgrade
 from migrations.discovery import discover_migrations
@@ -231,7 +229,7 @@ def _instrumented(tmp_path, monkeypatch, framework_status):
             if hasattr(module, name):
                 monkeypatch.setattr(module, name,
                                     lambda root, lang, name=name: calls.append(name) or [])
-    for name in ('_remove_superseded_files', '_remove_stale_manifest', '_remove_stale_engine'):
+    for name in ('_remove_superseded_files', '_remove_stale_manifest'):
         monkeypatch.setattr(m, name, lambda *a, name=name: calls.append(name) or [])
     return m, calls
 
@@ -251,8 +249,7 @@ class TestFailClosedOrdering:
 
         m.apply()
 
-        assert calls == ['_remove_superseded_files', '_remove_stale_manifest',
-                         *PHASES, '_remove_stale_engine']
+        assert calls == ['_remove_superseded_files', '_remove_stale_manifest', *PHASES]
 
 
 # ---------- Phase 2: removals ----------
@@ -302,162 +299,6 @@ class TestRemovals:
         assert [r.description for r in records] == [
             get_message('en', 'v180_removed_stale_manifest')]
         assert m._remove_stale_manifest() == []
-
-
-# ---------- Phase 9: the stale engine ----------
-
-RELEASED_ENGINE = _git('show', 'v1.7.0:scripts/telar_upgrade.py').stdout
-LAUNCHER = f"LAUNCHER_MARKER = '{LAUNCHER_MARKER}'\n"
-
-
-def _launcher_site(tmp_path, launcher=LAUNCHER, engine=RELEASED_ENGINE, helpers=False):
-    (tmp_path / '_config.yml').write_text('telar_language: "en"\n', encoding='utf-8')
-    _touch(tmp_path, 'scripts/upgrade.py', launcher)
-    _touch(tmp_path, ENGINE_FILES[0], engine)
-    if helpers:
-        for rel_path in ENGINE_FILES[1:]:
-            _touch(tmp_path, rel_path, '# a helper\n')
-    return Migration170to180(str(tmp_path))
-
-
-def _released_engine_hashes():
-    """sha256 of every engine file at every release tag a site can upgrade
-    from with this migration, that is, every release before 1.8.0."""
-    import hashlib
-    import re
-    tags = [t for t in _git('tag').stdout.split()
-            if re.match(r'^v\d+\.\d+\.\d+(-beta)?$', t)
-            and tuple(int(n) for n in re.findall(r'\d+', t)[:3]) < (1, 8, 0)]
-    found = {}
-    for rel_path in ENGINE_FILES:
-        for tag in tags:
-            blob = subprocess.run(['git', '-C', str(REPO_ROOT), 'show', f'{tag}:{rel_path}'],
-                                  capture_output=True)
-            if blob.returncode == 0:
-                found.setdefault(rel_path, set()).add(hashlib.sha256(blob.stdout).hexdigest())
-    return found
-
-
-class TestStaleEngine:
-
-    def test_the_engine_and_the_launcher_share_the_marker(self):
-        assert upgrade.LAUNCHER_MARKER is LAUNCHER_MARKER
-        assert LAUNCHER in (REPO_ROOT / 'scripts' / 'upgrade.py').read_text(encoding='utf-8')
-
-    def test_the_files_are_the_engine_and_its_helpers(self):
-        assert ENGINE_FILES == ['scripts/telar_upgrade.py', 'scripts/telar_upgrade_common.py',
-                                'scripts/telar_upgrade_regen.py', 'scripts/telar_upgrade_report.py']
-        assert all((REPO_ROOT / p).is_file() for p in ENGINE_FILES)
-
-    def test_the_released_copies_are_every_tagged_copy(self):
-        """Recomputed from the tags: only v1.7.0 shipped the engine to a
-        site, and no release shipped the helpers."""
-        assert v170_to_v180.RELEASED_ENGINE_SHA256 == _released_engine_hashes()
-        assert set(v170_to_v180.RELEASED_ENGINE_SHA256) == {'scripts/telar_upgrade.py'}
-
-    def test_a_launcher_site_loses_the_released_engine(self, tmp_path):
-        m = _launcher_site(tmp_path)
-
-        records = m._remove_stale_engine()
-
-        assert not (tmp_path / ENGINE_FILES[0]).exists()
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.APPLIED, 'soft')]
-        assert 'Removed' in records[0].description
-
-    @pytest.mark.parametrize('engine', [RELEASED_ENGINE + '# mine\n', '# my own engine\n',
-                                        RELEASED_ENGINE.replace('\n', '\r\n')],
-                             ids=['edited', 'own', 'crlf'])
-    def test_a_file_that_is_not_a_released_copy_stays_and_is_reported(self, tmp_path, engine):
-        m = _launcher_site(tmp_path, engine=engine)
-
-        records = m._remove_stale_engine()
-
-        assert (tmp_path / ENGINE_FILES[0]).read_bytes() == engine.encode('utf-8')
-        assert [r.severity for r in records] == ['soft']
-        assert 'not a copy Telar released' in records[0].description
-
-    def test_helpers_no_release_shipped_stay_and_are_reported(self, tmp_path):
-        m = _launcher_site(tmp_path, helpers=True)
-
-        records = m._remove_stale_engine()
-
-        assert all((tmp_path / p).exists() for p in ENGINE_FILES[1:])
-        assert len(records) == 4
-        assert sum('not a copy Telar released' in r.description for r in records) == 3
-
-    def test_a_link_with_the_released_bytes_behind_it_stays(self, tmp_path):
-        """A link is something the site set up, whatever it points at."""
-        m = _launcher_site(tmp_path)
-        engine = tmp_path / ENGINE_FILES[0]
-        target = tmp_path / 'kept-engine.py'
-        engine.rename(target)
-        engine.symlink_to(target)
-
-        records = m._remove_stale_engine()
-
-        assert engine.is_symlink() and target.exists()
-        assert [r.description for r in records] == [
-            get_message('en', 'v180_engine_kept', ENGINE_FILES[0])]
-
-    @pytest.mark.parametrize('launcher', [
-        f'# {LAUNCHER_MARKER}\n',
-        f'print("{LAUNCHER_MARKER}")\n',
-        f"OTHER = '{LAUNCHER_MARKER}'\n",
-        f"def f():\n    LAUNCHER_MARKER = '{LAUNCHER_MARKER}'\n",
-        f"LAUNCHER_MARKER = '{LAUNCHER_MARKER}'  (\n",
-        '# the engine itself\n',
-    ], ids=['comment', 'string', 'other-name', 'not-module-level', 'syntax-error', 'absent'])
-    def test_only_the_marker_assignment_makes_a_launcher_site(self, tmp_path, launcher):
-        m = _launcher_site(tmp_path, launcher=launcher)
-
-        assert m._remove_stale_engine() == []
-        assert (tmp_path / ENGINE_FILES[0]).exists()
-
-    def test_an_engine_running_from_the_site_keeps_them(self, tmp_path, monkeypatch):
-        m = _launcher_site(tmp_path)
-        monkeypatch.setattr(v170_to_v180, '_ENGINE_SCRIPTS_DIR', str(tmp_path / 'scripts'))
-
-        assert m._remove_stale_engine() == []
-        assert (tmp_path / ENGINE_FILES[0]).exists()
-
-    def test_the_file_the_process_was_started_from_is_kept(self, tmp_path, monkeypatch):
-        m = _launcher_site(tmp_path)
-        monkeypatch.setattr(sys, 'argv', [str(tmp_path / 'scripts' / '..' / ENGINE_FILES[0])])
-
-        assert m._remove_stale_engine() == []
-        assert (tmp_path / ENGINE_FILES[0]).exists()
-
-    def test_the_file_the_engine_module_was_loaded_from_is_kept(self, tmp_path, monkeypatch):
-        """Compared resolved: the site is reached through a link, and the
-        engine was loaded through its real path."""
-        site = tmp_path / 'site'
-        site.mkdir()
-        _launcher_site(site)
-        (tmp_path / 'link').symlink_to(site)
-        m = Migration170to180(str(tmp_path / 'link'))
-        running = type(sys)('telar_upgrade')
-        running.__file__ = str(site.resolve() / ENGINE_FILES[0])
-        monkeypatch.setitem(sys.modules, 'telar_upgrade', running)
-
-        assert m._remove_stale_engine() == []
-        assert (site / ENGINE_FILES[0]).exists()
-
-    def test_absent_files_and_a_second_run_are_silent(self, tmp_path):
-        m = _launcher_site(tmp_path)
-
-        assert len(m._remove_stale_engine()) == 1
-        assert m._remove_stale_engine() == []
-
-    def test_a_failure_is_soft(self, tmp_path, monkeypatch):
-        m = _launcher_site(tmp_path)
-
-        def _boom(path):
-            raise OSError(errno.EACCES, 'Permission denied')
-        monkeypatch.setattr(os, 'remove', _boom)
-
-        records = m._remove_stale_engine()
-
-        assert [(r.status, r.severity) for r in records] == [(ChangeStatus.FAILED, 'soft')]
 
 
 # ---------- Metadata ----------
@@ -578,8 +419,6 @@ SITE = {
     'pages/glossary.md': '---\nlayout: glossary-index\n---\n\n{{ lang.pages.glossary_intro }}\n',
     'migration.json': '{"to_version": "1.5.4"}\n',
     'assets/js/object-page.js': '// old bundle\n',
-    'scripts/upgrade.py': LAUNCHER,
-    'scripts/telar_upgrade.py': RELEASED_ENGINE,
     'telar-content/spreadsheets/objects.csv': 'object_id,title,medium,object_type\nm,M,Ink,\n',
     'telar-content/spreadsheets/my-story.csv': ('step,object,question,answer\n'
                                                 '1,m,Q?,' + ' '.join(['word'] * 300) + '\n'),
@@ -609,7 +448,6 @@ class TestOneRunOverASite:
 
         assert not any(r.status == ChangeStatus.FAILED for r in records)
         assert 'migration.json' not in after and 'assets/js/object-page.js' not in after
-        assert 'scripts/telar_upgrade.py' not in after
         assert b'default: site.data' in after['index.md']
         assert b'glossary-intro.html' in after['pages/glossary.md']
         assert after['telar-content/spreadsheets/objects.csv'].startswith(b'object_id,title,medium\n')

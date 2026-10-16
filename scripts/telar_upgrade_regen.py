@@ -10,7 +10,7 @@ Ships in the release tooling tarball beside telar_upgrade.py, never in a
 site: the requirements manifest it prefers is the tarball's own, found
 beside the scripts/ directory this module sits in.
 
-Version: v1.8.0
+Version: v1.8.2
 """
 
 import os
@@ -20,6 +20,11 @@ from typing import List, Tuple
 
 from migrations.messages import get_message
 from telar_upgrade_common import PROTECTED_PREREQUISITE_EXIT, _get_lang
+
+# How long tile generation may run. A site with many large local images can
+# need longer, and the upgrade is complete without its tiles, so running out
+# of time is a tile failure, never a failed upgrade.
+IIIF_TIMEOUT_SECONDS = 180
 
 
 def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool, bool]:
@@ -107,21 +112,7 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool, bool]:
 
         # Run generate_iiif.py (regenerates IIIF tiles for local images).
         # SOFT: a failure here does not block the upgrade.
-        iiif_ok = True
-        generate_iiif = os.path.join(scripts_dir, 'generate_iiif.py')
-        if os.path.exists(generate_iiif):
-            result = subprocess.run(
-                [sys.executable, generate_iiif],
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-                timeout=180  # Longer timeout for tile generation
-            )
-
-            if result.returncode != 0:
-                print('  ' + get_message(lang, 'regeneration_script_error',
-                                         'generate_iiif.py', result.stderr))
-                iiif_ok = False
+        iiif_ok = _regenerate_iiif_tiles(repo_root, scripts_dir, lang)
 
         return (True, iiif_ok, protected_blocked)
 
@@ -131,6 +122,35 @@ def _regenerate_data_files(repo_root: str) -> Tuple[bool, bool, bool]:
     except Exception as e:
         print('  ' + get_message(lang, 'regeneration_failed', e))
         return (False, True, False)
+
+
+def _regenerate_iiif_tiles(repo_root: str, scripts_dir: str, lang: str) -> bool:
+    """Run generate_iiif.py; False if it failed or ran out of time.
+
+    Running out of time is a tile failure like any other, so it is caught
+    here rather than by the caller, whose timeout handling fails the upgrade.
+    """
+    import subprocess
+
+    generate_iiif = os.path.join(scripts_dir, 'generate_iiif.py')
+    if not os.path.exists(generate_iiif):
+        return True
+    try:
+        result = subprocess.run(
+            [sys.executable, generate_iiif],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=IIIF_TIMEOUT_SECONDS
+        )
+    except subprocess.TimeoutExpired:
+        print('  ' + get_message(lang, 'regeneration_iiif_timeout', IIIF_TIMEOUT_SECONDS))
+        return False
+    if result.returncode != 0:
+        print('  ' + get_message(lang, 'regeneration_script_error',
+                                 'generate_iiif.py', result.stderr))
+        return False
+    return True
 
 
 # Import names that data regeneration transitively requires. csv_to_json.py and

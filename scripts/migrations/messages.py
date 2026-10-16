@@ -26,7 +26,7 @@ grammatical number matters in the summary: it returns the singular or
 plural of "file" in the active language so category headings read
 naturally ("1 file" / "2 files", "1 archivo" / "2 archivos").
 
-Version: v1.8.0
+Version: v1.8.2
 """
 
 MESSAGES = {
@@ -80,6 +80,10 @@ MESSAGES = {
         'migration_stopped': '✗ Stopping: this migration did not complete.',
         'regeneration_script_error': '⚠️  Warning: {} returned error: {}',
         'regeneration_timeout': '⚠️  Warning: Data regeneration timed out',
+        'regeneration_iiif_timeout': '⚠️  Warning: IIIF tile generation was stopped after {} seconds',
+        'soft_warning_iiif': ('IIIF tiles were not fully regenerated. Self-hosted object '
+                              'images may not display until you run scripts/generate_iiif.py '
+                              'successfully. This did not block the upgrade.'),
         'regeneration_failed': '⚠️  Warning: Data regeneration failed: {}',
         'index_no_frontmatter': '[WARN] index.md has no leading frontmatter '
                                 'delimiter — skipping upgrade-notice insertion',
@@ -269,6 +273,9 @@ MESSAGES = {
         'change_gitignore_section': 'Updated .gitignore — {}',
         'change_removed_not_telar': 'Removed {} — no longer part of Telar',
         'change_could_not_remove': 'Could not remove {}: {}',
+        'change_glossary_telar_one_language': "{}: the Telar entry now has only your site's language",
+        'change_glossary_instructions': '{}: the instruction rows now name '
+                                        'telar-content/texts/glossary/',
         'change_kept_uncheckable': 'Kept {} — could not check whether it had been edited',
         'change_kept_edited': 'Kept {} — edited on this site',
         'change_removed_demo_term': 'Removed {} — withdrawn demo glossary term',
@@ -479,6 +486,12 @@ MESSAGES = {
                                      'error: {}',
         'regeneration_timeout': '⚠️  Advertencia: Se agotó el tiempo al '
                                 'regenerar los datos',
+        'regeneration_iiif_timeout': '⚠️  Advertencia: La generación de teselas IIIF '
+                                     'se detuvo a los {} segundos',
+        'soft_warning_iiif': ('Las teselas (*tiles*) IIIF no se regeneraron por completo. '
+                              'Es posible que las imágenes de objetos que aloja el propio '
+                              'sitio no se vean hasta que ejecutes scripts/generate_iiif.py '
+                              'y termine sin errores. Esto no impidió la actualización.'),
         'regeneration_failed': '⚠️  Advertencia: Falló la regeneración de '
                                'datos: {}',
         'index_no_frontmatter': '[ADVERTENCIA] index.md no empieza con el '
@@ -530,7 +543,7 @@ MESSAGES = {
         'flagged_needs_attention': 'Archivos que no se instalaron',
         'flagged_section_body': 'Estos archivos no forman parte de la versión nueva de Telar, así que no se pudieron instalar. La actualización **sí** terminó y el sitio quedó en esa versión; volver a ejecutarla no cambia nada. Repórtalos para que se corrija esa versión de Telar.',
         'completed_with_warnings': 'Completados con advertencias',
-        'warnings_section_body': 'Estos pasos no impidieron la actualización, pero conviene revisarlos:',
+        'warnings_section_body': 'Estos pasos no impidieron la actualización, pero vale la pena revisarlos:',
         'manual_steps_required': 'Pasos manuales necesarios',
         'complete_after_merge': 'Por favor completa estos pasos:',
         'no_manual_steps': 'No se requieren pasos manuales',
@@ -675,6 +688,10 @@ MESSAGES = {
         'change_gitignore_section': 'Se actualizó .gitignore: sección {}',
         'change_removed_not_telar': 'Se eliminó {}: ya no forma parte de Telar',
         'change_could_not_remove': 'No se pudo eliminar {}: {}',
+        'change_glossary_telar_one_language': '{}: la entrada sobre Telar quedó solo en el idioma de '
+                                              'tu sitio',
+        'change_glossary_instructions': '{}: las filas de instrucciones ahora indican la carpeta '
+                                        'telar-content/texts/glossary/',
         'change_kept_uncheckable': 'Se conservó {}: no se pudo comprobar si lo habías editado',
         'change_kept_edited': 'Se conservó {}: tiene cambios hechos en este sitio',
         'change_removed_demo_term': 'Se eliminó {}: era un término del glosario de demostración '
