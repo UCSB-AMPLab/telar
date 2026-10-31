@@ -18,7 +18,7 @@ These tests guard:
 
 Network fetches are not exercised here.
 
-Version: v1.8.2
+Version: v1.8.3
 """
 
 import csv
@@ -362,13 +362,16 @@ class TestMetadataAndSteps:
 
 class TestRegistration:
 
-    def test_discovery_finds_it_and_it_ends_the_chain(self):
+    def test_discovery_finds_it(self):
         assert Migration181to182 in discover_migrations()
-        assert upgrade.MIGRATIONS[-1] is Migration181to182
 
     def test_it_follows_the_v181_hop(self):
         chain = list(upgrade.MIGRATIONS)
         assert chain[chain.index(Migration180to181) + 1] is Migration181to182
 
-    def test_latest_version_matches_chain_terminus(self):
-        assert upgrade.LATEST_VERSION == '1.8.2'
+    def test_full_chain_resolves_to_latest_version(self):
+        current = upgrade.MIGRATIONS[0].from_version
+        for MigrationClass in upgrade.MIGRATIONS:
+            assert MigrationClass.from_version == current
+            current = MigrationClass.to_version
+        assert current == upgrade.LATEST_VERSION

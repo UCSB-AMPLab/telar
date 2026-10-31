@@ -27,7 +27,7 @@ Four guards, each against a way the deletion could cost the site something:
 Soft throughout: a tidy-up cannot be the reason a completed upgrade reports
 failure. Absent files are a no-op, so a second run reports nothing.
 
-Version: v1.8.2
+Version: v1.8.3
 """
 
 import ast
@@ -55,15 +55,17 @@ RELEASED_ENGINE_SHA256 = {
     'scripts/telar_upgrade.py': {
         '046378e5f279fedc646f7e158a206689ac98838775c3779d13ec0160d792f18e',  # v1.7.0
         'dd0821da5131ce12f0d4a7b3ea73b464e56ec8eae91fa9a131cad289796824db',  # v1.8.0, v1.8.1
+        '655cc39e99781551c8a05cf75d78b9f9c92bbe01e45bfaabb4b65a6f06904135',  # v1.8.2
     },
     'scripts/telar_upgrade_common.py': {
-        'eb0ddd903f51d587827da298f55afcd37b11f2e929a813f5dc34ec263513ccb2',  # v1.8.0, v1.8.1
+        'eb0ddd903f51d587827da298f55afcd37b11f2e929a813f5dc34ec263513ccb2',  # v1.8.0, v1.8.1, v1.8.2
     },
     'scripts/telar_upgrade_regen.py': {
         '194b99fa14c5978170e9e4e7147ff765fcd624c9c890be69868c8256f15e5e6f',  # v1.8.0, v1.8.1
+        '4136c55376fac317f296529346ea193038d56286f37f388bc3fa4db7e8bc84eb',  # v1.8.2
     },
     'scripts/telar_upgrade_report.py': {
-        '1c970f55131349028c1335b20826d93bba93415f23d19a2038ed369446cdfaac',  # v1.8.0, v1.8.1
+        '1c970f55131349028c1335b20826d93bba93415f23d19a2038ed369446cdfaac',  # v1.8.0, v1.8.1, v1.8.2
     },
 }
 
