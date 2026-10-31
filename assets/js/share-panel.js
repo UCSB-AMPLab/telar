@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
+/* GENERATED FILE - do not edit. Bundled from assets/js/share-panel/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.3 */
 (() => {
   // assets/js/share-panel/warnings.js
   function warningState(currentStoryProtected, storyKey, includeKey, currentStoryUrl) {
@@ -274,8 +274,8 @@
     function updateSiteUrl() {
       const shareSiteUrlInput = doc.getElementById("share-site-url-input");
       if (!shareSiteUrlInput) return;
-      const pathParts = win.location.pathname.split("/").filter((p) => p);
-      const baseUrl = win.location.origin + (pathParts.length > 0 ? "/" + pathParts[0] + "/" : "/");
+      const baseurlMeta = doc.querySelector('meta[name="baseurl"]');
+      const baseUrl = win.location.origin + (baseurlMeta ? baseurlMeta.content : "") + "/";
       shareSiteUrlInput.value = baseUrl;
     }
     function handlePresetChange(event) {

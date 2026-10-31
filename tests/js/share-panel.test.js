@@ -16,7 +16,7 @@
  * between them with `history.replaceState`, which is what the script reads for
  * the story URL, the deep-link fragment and the site URL alike.
  *
- * @version v1.7.0
+ * @version v1.8.3
  */
 
 // @vitest-environment-options { "url": "https://example.org/telar/" }
@@ -87,6 +87,39 @@ describe('binding', () => {
     expect(selectOptions()).toEqual([{ value: '', text: 'Choose a story...', protected: undefined }]);
     el('share-copy-link-btn').click();
     expect(writes).toEqual([]);
+  });
+});
+
+describe('the site URL follows the layout baseurl', () => {
+  it('is the origin and the baseurl on a site served under /telar', async () => {
+    storyPage();
+    await runScript();
+    openPanel();
+    expect(value('share-site-url-input')).toBe(`${ORIGIN}/telar/`);
+  });
+
+  it('is the origin alone on a site served at the domain root', async () => {
+    renderPage({
+      path: '/stories/allegorical-woman/',
+      bodyClass: 'story-page',
+      markup: storyPanelMarkup(),
+      baseurl: '',
+    });
+    await runScript();
+    openPanel();
+    expect(value('share-site-url-input')).toBe(`${ORIGIN}/`);
+  });
+
+  it('keeps a baseurl of more than one segment whole', async () => {
+    renderPage({
+      path: '/site/telar/stories/allegorical-woman/',
+      bodyClass: 'story-page',
+      markup: storyPanelMarkup(),
+      baseurl: '/site/telar',
+    });
+    await runScript();
+    openPanel();
+    expect(value('share-site-url-input')).toBe(`${ORIGIN}/site/telar/`);
   });
 });
 

@@ -9,7 +9,7 @@
  * base path extraction in both manifest URL building and panel content
  * formatting.
  *
- * @version v1.8.0
+ * @version v1.8.3
  */
 
 // Escaping has one implementation for every bundle, in objects-filter/escape.js.
@@ -29,10 +29,8 @@ export { escapeHtml } from '../objects-filter/escape.js';
  */
 export function getBasePath() {
   const pathParts = window.location.pathname.split('/').filter(p => p);
-  if (pathParts.length >= 2) {
-    return '/' + pathParts.slice(0, -2).join('/');
-  }
-  return '';
+  const prefix = pathParts.slice(0, -2);
+  return prefix.length > 0 ? '/' + prefix.join('/') : '';
 }
 
 /**

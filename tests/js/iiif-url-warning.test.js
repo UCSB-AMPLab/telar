@@ -13,7 +13,7 @@
  * the local-development and production cases below differ only by the origin
  * injected, which is what proves the injection reaches the code under test.
  *
- * @version v1.7.0
+ * @version v1.8.3
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -483,6 +483,29 @@ describe('the pure helpers', () => {
         .toBe('https://example.org/telar');
       expect(siteUrlFromLocation({ origin: 'https://example.org', pathname: '/telar/objects/a/' }))
         .toBe('https://example.org/telar');
+    });
+
+    describe('with the layout baseurl meta tag', () => {
+      const docWith = (content) => {
+        const doc = document.implementation.createHTMLDocument('');
+        const meta = doc.createElement('meta');
+        meta.setAttribute('name', 'baseurl');
+        meta.setAttribute('content', content);
+        doc.head.appendChild(meta);
+        return doc;
+      };
+
+      it('uses the baseurl, not the first path segment', () => {
+        expect(siteUrlFromLocation(
+          { origin: 'https://example.org', pathname: '/stories/a/' }, docWith('')))
+          .toBe('https://example.org');
+        expect(siteUrlFromLocation(
+          { origin: 'https://example.org', pathname: '/telar/stories/a/' }, docWith('/telar')))
+          .toBe('https://example.org/telar');
+        expect(siteUrlFromLocation(
+          { origin: 'https://example.org', pathname: '/site/telar/' }, docWith('/site/telar')))
+          .toBe('https://example.org/site/telar');
+      });
     });
 
     it('adds nothing for a site served at the origin root', () => {

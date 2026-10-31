@@ -33,7 +33,7 @@
  *
  * Bundled by esbuild into assets/js/share-panel.js; see assets/js/README.md.
  *
- * Version: v1.8.0
+ * Version: v1.8.3
  */
 
 import { warningState, setWarning } from './warnings.js';
@@ -420,8 +420,10 @@ export function createSharePanel({
     const shareSiteUrlInput = doc.getElementById('share-site-url-input');
     if (!shareSiteUrlInput) return;
 
-    const pathParts = win.location.pathname.split('/').filter(p => p);
-    const baseUrl = win.location.origin + (pathParts.length > 0 ? '/' + pathParts[0] + '/' : '/');
+    // The layout's baseurl is the site's prefix; the first path segment is
+    // only that prefix on a site served under one.
+    const baseurlMeta = doc.querySelector('meta[name="baseurl"]');
+    const baseUrl = win.location.origin + (baseurlMeta ? baseurlMeta.content : '') + '/';
     shareSiteUrlInput.value = baseUrl;
   }
 

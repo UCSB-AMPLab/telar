@@ -5,7 +5,7 @@
  * getBasePath and fixImageUrls need jsdom for window.location and
  * document.createElement.
  *
- * @version v1.8.0
+ * @version v1.8.3
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -51,9 +51,14 @@ describe('getBasePath', () => {
     expect(getBasePath()).toBe('/telar');
   });
 
-  it('returns slash when path has exactly two segments', () => {
+  it('returns an empty string for a site at the domain root', () => {
     window.location = { pathname: '/stories/story-1/' };
-    expect(getBasePath()).toBe('/');
+    expect(getBasePath()).toBe('');
+  });
+
+  it('builds a root-relative URL with no doubled slash at a domain root', () => {
+    window.location = { pathname: '/stories/story-1/' };
+    expect(`${getBasePath()}/telar-content/objects/a.mp3`).toBe('/telar-content/objects/a.mp3');
   });
 
   it('returns empty string for single segment', () => {

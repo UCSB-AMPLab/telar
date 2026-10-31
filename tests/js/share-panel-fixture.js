@@ -18,7 +18,7 @@
  * `_jekyll-files/_stories/` holds them: their titles, their permalinks, and
  * the one that carries `protected: true`.
  *
- * @version v1.7.0
+ * @version v1.8.3
  */
 
 import { vi } from 'vitest';
@@ -245,11 +245,19 @@ export function storiesBlockFor(stories = STORIES) {
 }
 
 /**
- * Put a page in place: its path, its body class, its title, and its markup.
- * The share panel reads all four, and only the markup through an id.
+ * Put a page in place: its path, its body class, its title, its markup and the
+ * baseurl meta tag the layouts emit. The share panel reads all five, and only
+ * the markup through an id.
  */
-export function renderPage({ path, bodyClass = '', title = 'Telar', markup = '' }) {
+export function renderPage({
+  path, bodyClass = '', title = 'Telar', markup = '', baseurl = BASEURL,
+}) {
   window.history.replaceState({}, '', path);
+  document.head.querySelectorAll('meta[name="baseurl"]').forEach((meta) => meta.remove());
+  const baseurlMeta = document.createElement('meta');
+  baseurlMeta.setAttribute('name', 'baseurl');
+  baseurlMeta.setAttribute('content', baseurl);
+  document.head.appendChild(baseurlMeta);
   document.body.className = bodyClass;
   document.title = title;
   document.body.innerHTML = markup;
@@ -367,4 +375,5 @@ export function resetTimersMocksAndDom() {
   document.body.innerHTML = '';
   document.body.className = '';
   document.head.querySelectorAll('meta[property="og:title"]').forEach((meta) => meta.remove());
+  document.head.querySelectorAll('meta[name="baseurl"]').forEach((meta) => meta.remove());
 }

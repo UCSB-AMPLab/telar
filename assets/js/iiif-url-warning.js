@@ -1,4 +1,4 @@
-/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-url-warning/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.0 */
+/* GENERATED FILE - do not edit. Bundled from assets/js/iiif-url-warning/ by esbuild. Rebuild: npm run build:js (see assets/js/README.md). @version v1.8.3 */
 (() => {
   // assets/js/iiif-url-warning/main.js
   function readWarningData(doc = document) {
@@ -11,7 +11,9 @@
       return null;
     }
   }
-  function siteUrlFromLocation(location) {
+  function siteUrlFromLocation(location, doc = globalThis.document) {
+    const baseurlMeta = doc && doc.querySelector('meta[name="baseurl"]');
+    if (baseurlMeta) return location.origin + baseurlMeta.content;
     const pathParts = location.pathname.split("/").filter((p) => p);
     const baseurl = pathParts.length > 0 ? "/" + pathParts[0] : "";
     return location.origin + baseurl;

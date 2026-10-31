@@ -37,7 +37,7 @@
  *
  * Bundled by esbuild into assets/js/iiif-url-warning.js; see assets/js/README.md.
  *
- * Version: v1.7.0
+ * Version: v1.8.3
  */
 
 /**
@@ -55,8 +55,13 @@ export function readWarningData(doc = document) {
   }
 }
 
-/** The site URL a page is served at: its origin plus the first path segment. */
-export function siteUrlFromLocation(location) {
+/**
+ * The site URL a page is served at: its origin plus the layout's baseurl. A
+ * page without the baseurl meta tag falls back to its first path segment.
+ */
+export function siteUrlFromLocation(location, doc = globalThis.document) {
+  const baseurlMeta = doc && doc.querySelector('meta[name="baseurl"]');
+  if (baseurlMeta) return location.origin + baseurlMeta.content;
   const pathParts = location.pathname.split('/').filter(p => p);
   const baseurl = pathParts.length > 0 ? '/' + pathParts[0] : '';
   return location.origin + baseurl;
