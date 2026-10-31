@@ -4,6 +4,20 @@ All notable changes to Telar will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-10-31
+
+Build and domain root patch. Fixes the build failing on GitHub's newer Ubuntu 26.04 runners, and images, audio and share links that did not resolve on a site served at the root of its domain.
+
+### Fixed
+
+- **Build failing on Ubuntu 26.04 runners.** GitHub's runners are moving to Ubuntu 26.04. On them, the build tried to compile the `google-protobuf` gem from source and failed. `Gemfile.lock` now includes the `x86_64-linux` platform, so the build installs prebuilt gems instead.
+- **Images and audio in story panels on a site at a domain root.** On a site served at the root of its domain, with `baseurl: ""` in `_config.yml`, the addresses of images, audio and IIIF tiles in story panels began with two slashes, which a browser reads as another website, so they did not load.
+- **Share links on a site at a domain root.** The share panel and the IIIF address banner took the first segment of the page address as the site's base path, which on a site at a domain root is the name of a story or page. They now use the `baseurl` from `_config.yml`.
+
+### Notes
+
+- Migration script `scripts/migrations/v182_to_v183.py` upgrades automatically from v1.8.2, and chains through from earlier versions. No manual steps.
+
 ## [1.8.2] - 2026-10-16
 
 Upgrade cleanup patch. Fixes a column name that an old upgrade wrote over a story's title, corrects two parts of the template's glossary, removes old copies of the upgrade scripts from upgraded sites, and lets sites with many large images finish upgrading.
