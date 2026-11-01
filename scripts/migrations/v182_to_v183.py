@@ -91,7 +91,7 @@ class Migration182to183(BaseMigration):
 
     from_version = "1.8.2"
     to_version = "1.8.3"
-    release_date = None  # tag v1.8.3 — fill in at Phase 4
+    release_date = "2026-10-31"
     description = ("v1.8.3 framework files: prebuilt gems on Ubuntu 26.04 runners, and "
                    "image, audio and share paths for a site at a domain root")
 
